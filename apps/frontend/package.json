@@ -1,0 +1,6 @@
+{
+  "name": "@coachify/frontend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Planned Next.js App Router, React and TypeScript frontend. Dependencies and scripts are intentionally not configured."
+}

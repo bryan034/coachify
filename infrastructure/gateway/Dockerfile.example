@@ -1,0 +1,3 @@
+# STRUCTURE ONLY: not a runnable Dockerfile.
+# Future: select a supported NGINX image and copy the completed nginx.conf.
+# Do not implement application business logic inside the gateway.

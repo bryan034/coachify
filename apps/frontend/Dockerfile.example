@@ -1,0 +1,6 @@
+# STRUCTURE ONLY: this file has no build instructions and is not runnable.
+# Future stages:
+# 1. Install pinned frontend dependencies in a supported Node.js image.
+# 2. Build the Next.js application.
+# 3. Run its server in a separate runtime stage.
+# Google sign-in secrets must be supplied at runtime, not baked into the image.

@@ -1,0 +1,9 @@
+{
+  "name": "coachify",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Structure-only Coachify monorepo; no application implementation yet.",
+  "workspaces": [
+    "apps/frontend"
+  ]
+}

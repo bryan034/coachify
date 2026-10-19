@@ -1,0 +1,80 @@
+@startuml CoachifyArchitecture
+title Coachify — Dockerised MVP Architecture
+top to bottom direction
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam ArrowColor #52667C
+skinparam packageStyle rectangle
+skinparam nodeBackgroundColor #F5F8FC
+skinparam nodeBorderColor #B9C8DA
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #B9C8DA
+skinparam databaseBackgroundColor #EEF4FA
+skinparam databaseBorderColor #52667C
+skinparam noteBackgroundColor #F8FAFC
+skinparam noteBorderColor #D6DFE9
+
+actor "Student" as Student
+cloud "Managed authentication\nExternal identity provider" as Identity
+cloud "External LLM API\nUsed by CV, career and roadmap services" as LLM
+
+node "Docker Compose environment — 9 containers" as Docker {
+  node "Web frontend\n<<container>>\nForms, roadmap editor and dashboard" as Web
+  node "API gateway\n<<container>>\nRouting, token checks and request limits" as Gateway
+
+  rectangle "Private backend service network — 6 containers" as Backend {
+    node "Student profile service\n<<container>>\n/api/v1/profile\nOwns profile database" as Profile
+    node "CV ingestion service\n<<container>>\n/api/v1/cv\nOwns ingestion database" as CV
+    node "Career assessment service\n<<container>>\n/api/v1/career\nOwns career database" as Career
+    node "Roadmap and task service\n<<container>>\n/api/v1/roadmaps\nOwns roadmap database" as Roadmap
+    node "Progress dashboard service\n<<container>>\n/api/v1/dashboard\nStateless API aggregation" as Dashboard
+    node "Review and scheduling service\n<<container>>\n/api/v1/reviews and /review-schedules\nOwns review database; includes scheduler" as Review
+
+    Profile -[hidden]right-> CV
+    CV -[hidden]right-> Career
+    Roadmap -[hidden]right-> Dashboard
+    Dashboard -[hidden]right-> Review
+    Profile -[hidden]down-> Roadmap
+    CV -[hidden]down-> Dashboard
+    Career -[hidden]down-> Review
+  }
+
+  database "PostgreSQL\n<<container>>\n5 logical databases, separate credentials\nprofile | ingestion | career | roadmap | review" as DB
+  storage "Private temporary CV volume\nOnly CV ingestion can access uploads\nVolume, not an additional container" as Uploads
+}
+
+Student --> Web : Use application
+Student ..> Identity : Sign in
+Web --> Gateway : /api/v1 over HTTPS
+Gateway ..> Identity : Validate tokens using cached signing keys
+Gateway --> Backend : Route to the appropriate service
+Backend --> LLM : CV extraction / assessment / plan generation only
+Backend --> DB : Five data-owning services use only their own database
+Backend --> Uploads : CV service only
+
+note right of Backend
+  Internal calls use private authenticated HTTP APIs.
+  CV -> Profile: import clarified contributions.
+  Career -> Profile: versioned capabilities.
+  Roadmap -> Profile / Career: planning inputs.
+  Dashboard -> Roadmap / Career / Review: aggregate progress.
+  Review -> Profile / Career / Roadmap: analyse and adapt.
+  Roadmap -> Review: check automatic-application policy.
+end note
+
+note bottom of Docker
+  Completing or reopening a task saves history in the roadmap service.
+  The frontend automatically refetches the dashboard; no LLM generation is needed.
+  Scheduled reviews analyse pace separately and propose or apply revisions.
+  Only the frontend and gateway publish host ports. No shared-table access.
+end note
+
+legend bottom
+  Solid arrows: application/API/data connections
+  Dashed arrows: authentication connections
+  Each named service is its own container; external providers are outside Docker.
+endlegend
+@enduml

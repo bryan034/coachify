@@ -1,0 +1,7 @@
+# Structure-only project metadata. Select and pin dependencies before implementation.
+[project]
+name = "coachify-cv-service"
+version = "0.0.0"
+description = "Structure-only cv ingestion service; planned FastAPI application."
+requires-python = ">=3.12"
+dependencies = []

@@ -1,0 +1,5 @@
+# STRUCTURE ONLY: no executable build instructions.
+# Future: choose a supported pinned Python image for dashboard-service.
+# Install this service's declared dependencies, then copy its own app package.
+# Add a real ASGI entry point before configuring a FastAPI server command.
+# Supply runtime secrets through environment configuration; never bake them in.

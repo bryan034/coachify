@@ -1,0 +1,15 @@
+# STRUCTURE ONLY: commented route map; not an active configuration.
+# /                              -> frontend:3000
+# /api/v1/profile and descendants -> profile-service:8000
+# /api/v1/cv/                     -> cv-service:8000
+# /api/v1/career/                 -> career-service:8000
+# /api/v1/roadmaps and descendants -> roadmap-service:8000
+# /api/v1/dashboard               -> dashboard-service:8000
+# /api/v1/reviews and descendants -> review-service:8000
+# /api/v1/review-schedules/       -> review-service:8000
+# /internal/v1/                   -> reject at public entry point
+# /health/                        -> do not publicly forward service health routes
+#
+# Future implementation: HTTPS termination, routing, upload limits, proxy headers,
+# timeouts, and request IDs. Identity policy depends on the chosen auth integration.
+# The gateway is not the sole enforcement point for resource ownership.

@@ -1,0 +1,9 @@
+# Contract shell only: no endpoint or request/response schema is implemented.
+openapi: 3.1.0
+info:
+  title: Coachify Progress dashboard API
+  version: 0.0.0
+  description: Structure-only contract shell. Public prefix /api/v1/dashboard.
+servers:
+  - url: /api/v1
+paths: {}

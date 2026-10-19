@@ -1,0 +1,4 @@
+// Configuration placeholder for the future runnable Next.js application.
+// Select and pin supported Next.js, React, TypeScript and Node.js versions first.
+// Then create next.config.ts with the selected deployment settings.
+// Business endpoints remain in FastAPI services, not Next.js route handlers.

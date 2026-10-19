@@ -1,0 +1,39 @@
+# Local operating-system and editor state
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Secrets and environment files (examples remain trackable)
+.env
+.env.*
+!.env.example
+
+# Node / Next.js / TypeScript generated output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python dependencies and generated output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Runtime data and working files
+runtime/
+uploads/
+mongo-data/
+logs/
+*.log
+work/

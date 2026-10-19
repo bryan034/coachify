@@ -1,0 +1,94 @@
+# INACTIVE STRUCTURE-ONLY BLUEPRINT.
+# Dockerfile.example files contain comments only; these builds are not runnable.
+# Paths below are relative to this file in infrastructure/docker/.
+# Do not copy secrets into this file. Runtime/image versions are selected later.
+name: coachify
+
+services:
+  gateway:
+    profiles: [scaffold]
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile.example
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-8080}:80"
+    networks: [web, backend]
+
+  frontend:
+    profiles: [scaffold]
+    build:
+      context: ../../apps/frontend
+      dockerfile: Dockerfile.example
+    expose: ["3000"]
+    networks: [web]
+
+  profile-service:
+    profiles: [scaffold]
+    build:
+      context: ../../services/profile-service
+      dockerfile: Dockerfile.example
+    expose: ["8000"]
+    networks: [backend, database]
+
+  cv-service:
+    profiles: [scaffold]
+    build:
+      context: ../../services/cv-service
+      dockerfile: Dockerfile.example
+    expose: ["8000"]
+    volumes:
+      - cv_uploads:/app/uploads
+    networks: [backend, database]
+
+  career-service:
+    profiles: [scaffold]
+    build:
+      context: ../../services/career-service
+      dockerfile: Dockerfile.example
+    expose: ["8000"]
+    networks: [backend, database]
+
+  roadmap-service:
+    profiles: [scaffold]
+    build:
+      context: ../../services/roadmap-service
+      dockerfile: Dockerfile.example
+    expose: ["8000"]
+    networks: [backend, database]
+
+  dashboard-service:
+    profiles: [scaffold]
+    build:
+      context: ../../services/dashboard-service
+      dockerfile: Dockerfile.example
+    expose: ["8000"]
+    networks: [backend]
+
+  review-service:
+    profiles: [scaffold]
+    build:
+      context: ../../services/review-service
+      dockerfile: Dockerfile.example
+    expose: ["8000"]
+    networks: [backend, database]
+
+  mongodb:
+    profiles: [local-db]
+    image: mongo:${MONGODB_IMAGE_TAG:-SELECT_SUPPORTED_VERSION}
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-}
+    volumes:
+      - mongodb_data:/data/db
+    networks: [database]
+    # Configure service-scoped application users and local credentials later.
+
+networks:
+  web: {}
+  backend: {}
+  database:
+    internal: true
+
+volumes:
+  cv_uploads: {}
+  mongodb_data: {}
