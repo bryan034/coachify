@@ -9,7 +9,7 @@
 
 ## What is deliberately absent
 
-No application logic, runnable entry points, UI, endpoint handlers, database clients/queries, Google OAuth, LLM calls, background-job execution, scheduled tasks, tests, live databases, or deployed infrastructure. Dependencies and image versions have not been selected or installed. A normal build cannot succeed until actual startup/UI code is added.
+No application logic, runnable entry points, UI, endpoint handlers, database clients/queries, Google OAuth, LLM calls, background-job execution, scheduled tasks, tests, live databases, or deployed infrastructure. Frontend runtime/test dependencies and backend test dependencies are now configured; application implementations are still absent. A normal build cannot succeed until actual startup/UI code is added.
 
 ## Source organisation
 
@@ -19,6 +19,6 @@ Each FastAPI service has `app/api/v1`, `app/schemas`, `app/domain`, `app/clients
 
 ## Next implementation stage
 
-Select versions and dependency pins, implement minimal valid entry points, and activate runtime configuration before building product functionality. Agree the identity/session provider and how Google sign-in is verified by FastAPI. Preserve backend ownership checks and service boundaries even if Next.js supplies server-rendered pages.
+Implement minimal valid entry points and meaningful tests, and activate runtime configuration before building product functionality. Agree the identity/session provider and how Google sign-in is verified by FastAPI. Preserve backend ownership checks and service boundaries even if Next.js supplies server-rendered pages.
 
-Do not add secrets to tracked examples. Do not put uploaded CVs in Next.js `public/` or the source tree. No Git repository was initialised, dependencies installed, or containers launched during scaffolding.
+Do not add secrets to tracked examples. Do not put uploaded CVs in Next.js `public/` or the source tree. The original scaffolding did not initialise Git, install dependencies, or launch containers. See `testing.md` for the subsequently added CI setup.
