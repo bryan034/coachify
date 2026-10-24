@@ -81,7 +81,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }
   // BFCache restoration and background tabs must revalidate before showing private content.
   function hidden() { if (!activeToken.current) return; if (document.visibilityState === 'hidden') { setProfile(null); setLoading(true); } else reload(); }
-  function restored() { if (activeToken.current) { setProfile(null); setLoading(true); reload(); } }
+  function restored(event: PageTransitionEvent) { if (event.persisted && activeToken.current) { setProfile(null); setLoading(true); reload(); } }
   window.addEventListener('storage', changed); window.addEventListener('coachify:expired', expired);
   document.addEventListener('visibilitychange', hidden); window.addEventListener('pageshow', restored);
   return () => { window.removeEventListener('storage', changed); window.removeEventListener('coachify:expired', expired); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pageshow', restored); };

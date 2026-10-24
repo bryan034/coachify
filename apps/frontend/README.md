@@ -15,6 +15,7 @@ webfont files and is not bundled.
 |---|---|
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
+| `/career-goal` | J01/J06/J07 temporary pasted text, URL and PDF/DOCX/TXT previews; no save or AI analysis |
 | `/onboarding` | P13/P14 initial setup, Save progress and explicit Finish setup |
 | `/profile` | P01–P08 editing, planning preferences, directory search, save/retry/context review |
 | `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
@@ -34,7 +35,9 @@ successful save. Account screens use the implemented Profile account endpoints.
 mode, profile and load/retry states. Workspace routes withhold private content until
 the session is validated. Session bearers survive same-tab reload in sessionStorage;
 Google credentials are exchanged only during account access. Logout, expiry and
-account changes clear private state and drafts, including other tabs. Failed logout
+account changes clear private state and drafts, including other tabs. Normal initial
+`pageshow` events preserve drafts; back/forward-cache restores hide private content
+until the session and profile are revalidated. Failed logout
 stays locally locked and offers retry. Local mode uses explicit synthetic email/password accounts and a captured-email
 inbox; Google setup is unnecessary. Its chooser only prefills email. Sign out is available in the sidebar.
 
@@ -45,7 +48,9 @@ go to `/dashboard`, and `/profile` remains available for ordinary edits. A parti
 save never completes setup; errors remain recoverable. Cross-tab completion hints
 trigger server readback rather than trusting a browser flag.
 
-All API access uses `src/lib/api/profile.ts` through `/api/v1/profile` at the gateway.
+Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
+`src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
+content stays in page memory and is discarded on reload/leave.
 FastAPI owns validation, resource ownership and database writes. See
 [application setup](../../docs/setup.md) for environment and Docker setup.
 

@@ -86,3 +86,22 @@ test('older incomplete readback cannot replace newer confirmed setup',async()=>{
  expect(screen.getByTestId('profile')).toHaveTextContent('Newer confirmed course');
  expect(screen.getByTestId('complete')).toHaveTextContent('true');
 });
+
+
+test('back-forward cached pages hide private data until session and profile are revalidated',async()=>{
+ render(<ProfileProvider><Probe/></ProfileProvider>);
+ await waitFor(()=>expect(screen.getByTestId('loading')).toHaveTextContent('false'));
+ fireEvent.click(screen.getByText('Create',{exact:true}));
+ await waitFor(()=>expect(screen.getByTestId('profile')).toHaveTextContent('Private course'));
+ let release:((response:Response)=>void)|undefined;
+ privateRead=()=>new Promise(resolve=>{release=resolve;});
+ const validations=requests.filter(url=>url.endsWith('/auth/session')).length;
+ act(()=>window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));
+ expect(screen.getByTestId('profile')).toHaveTextContent('empty');
+ expect(screen.getByTestId('loading')).toHaveTextContent('true');
+ await waitFor(()=>expect(release).toBeTypeOf('function'));
+ expect(requests.filter(url=>url.endsWith('/auth/session'))).toHaveLength(validations+1);
+ await act(async()=>{release!(new Response(JSON.stringify({version:2,education:{course:'Revalidated private course'}})));});
+ await waitFor(()=>expect(screen.getByTestId('loading')).toHaveTextContent('false'));
+ expect(screen.getByTestId('profile')).toHaveTextContent('Revalidated private course');
+});
