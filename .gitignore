@@ -37,3 +37,7 @@ mongo-data/
 logs/
 *.log
 work/
+
+# Browser test artifacts
+playwright-report/
+test-results/

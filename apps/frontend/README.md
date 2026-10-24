@@ -2,7 +2,7 @@
 
 Planned stack: Next.js App Router, React, TypeScript, and a Node.js runtime.
 
-This folder contains no UI implementation. Source files are comment-only placeholders, not valid completed Next.js pages or layouts. No frontend dependencies or scripts have been installed/configured. There is no Google OAuth implementation.
+This folder contains no UI implementation. Source files are comment-only placeholders, not valid completed Next.js pages or layouts. Frontend runtime and test dependencies/scripts are configured; see `tests/README.md` for commands. There is no Google OAuth implementation.
 
 ## Directories
 
@@ -27,4 +27,4 @@ This folder contains no UI implementation. Source files are comment-only placeho
 
 The initial API client will use `/api/v1` in the browser and an internal gateway URL from server-side code. FastAPI owns business logic and domain database access. No parallel Next.js implementations of roadmap or assessment APIs are planned. Authentication callback route handlers may be added once the identity integration is selected.
 
-`next.config.ts.example` and `Dockerfile.example` are configuration notes, not active runtime configuration. Select dependencies and add real components and configuration in the next implementation stage.
+`next.config.ts.example` and `Dockerfile.example` are configuration notes, not active runtime configuration. Add real components and runtime configuration in the next implementation stage.

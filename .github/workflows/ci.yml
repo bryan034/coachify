@@ -1,0 +1,101 @@
+name: Coachify CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-unit:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck --workspace apps/frontend
+      - run: npm run test --workspace apps/frontend
+
+  frontend-e2e:
+    name: Frontend browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/frontend
+      - run: npm run test:e2e --workspace apps/frontend
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: |
+            apps/frontend/playwright-report/
+            apps/frontend/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  backend:
+    name: Backend tests (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [profile, cv, career, roadmap, dashboard, review]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[test]'
+      - name: Run pytest (allow empty suites)
+        shell: bash
+        run: |
+          status=0
+          python -m pytest || status=$?
+          if [ "$status" -eq 5 ]; then
+            echo "No pytest tests collected; passing this service."
+            exit 0
+          fi
+          exit "$status"
+
+  test-gate:
+    name: Test gate
+    if: ${{ always() }}
+    needs: [frontend-unit, frontend-e2e, backend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every test job to pass
+        env:
+          UNIT_RESULT: ${{ needs.frontend-unit.result }}
+          E2E_RESULT: ${{ needs.frontend-e2e.result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+        run: |
+          test "$UNIT_RESULT" = success
+          test "$E2E_RESULT" = success
+          test "$BACKEND_RESULT" = success
