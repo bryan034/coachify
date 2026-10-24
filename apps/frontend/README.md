@@ -1,30 +1,53 @@
 # Frontend
 
-Planned stack: Next.js App Router, React, TypeScript, and a Node.js runtime.
+Next.js App Router, React, TypeScript, and a Node.js runtime.
 
-P07/P08 are implemented at `/profile`; other page routes are reserved placeholders. Frontend runtime and test dependencies/scripts are configured; see `tests/README.md` for commands. Google sign-in and profile API access are implemented for this slice; see `../../docs/development/profile-setup.md`.
+The first workspace UI adapts `docs/design/coachify-web-v1.html` into reusable
+React components, shared navigation and responsive styles. Fonts are bundled in
+`public/fonts/` with the Inter OFL licence; no runtime font request is needed.
+Typography uses Inter throughout, with medium-weight headings and tighter spacing
+inspired by Revolut. Revolut’s exact Aeonik Pro heading face requires licensed
+webfont files and is not bundled.
 
-## Directories
+## Screens and data
 
-| Directory | Intended responsibility |
+| URL | Status |
 |---|---|
-| `src/app/` | Next.js file-based pages and shared layouts |
-| `src/app/(auth)/` | Login-related pages; the group name is omitted from URLs |
-| `src/app/(workspace)/` | Student screens sharing the workspace layout |
-| `src/components/ui/` | Reusable interface primitives |
-| `src/components/layout/` | Sidebar, header, and other shared page framing |
-| `src/features/` | Feature-specific components and presentation logic |
-| `src/lib/api/` | Future typed HTTP clients for FastAPI through the gateway |
-| `src/lib/auth/` | Future identity/session integration |
-| `src/hooks/` | Future reusable React hooks |
-| `src/types/` | Future frontend type definitions |
-| `src/styles/` | Styles |
-| `public/` | Public static assets only; never uploaded CVs |
+| `/`, `/dashboard` | Home with live saved background from the profile API |
+| `/profile` | P01–P03 and P07/P08 editing, directory search, save/retry/context review |
+| `/roadmap` | Presentation and local filters; planning actions disabled |
+| `/cv` | Resume/skills/tracker layout; upload and assessment unavailable |
+| `/chats` | Chats/socials layout and local filters; requests unavailable |
+| `/calendar` | Current week/month views; events and task actions unavailable |
+| `/career`, `/reviews` | Matching placeholders for existing reserved routes |
+| `/login` | Redirects to inline account controls at `/profile` |
 
-## Planned page URLs
+Draft names, scores, achievements, applications, contacts and events are replaced
+with empty states. Unimplemented service actions do not make API calls or imply a
+successful save. No new backend endpoints are introduced by this UI integration.
 
-`/`, `/login`, `/dashboard`, `/profile`, `/cv`, `/career`, `/roadmap`, `/reviews`.
+## Profile and authentication
 
-The initial API client will use `/api/v1` in the browser and an internal gateway URL from server-side code. FastAPI owns business logic and domain database access. No parallel Next.js implementations of roadmap or assessment APIs are planned. Authentication callback route handlers may be added once the identity integration is selected.
+`ProfileProvider` in the workspace layout owns the in-memory Google token, validated
+server auth mode, saved profile, school categories and reload/error state. It stays
+mounted during Next.js client navigation. Home and the sidebar show saved values;
+profile drafts remain local to the editor until PATCH succeeds. Unsaved edits are
+not retained when navigating away. Refresh clears Google credentials and requires
+sign-in again; no token is stored in local/session storage. Local-test mode needs
+no Google configuration. Account controls appear inline on Home and My profile.
 
-`next.config.ts.example` and `Dockerfile.example` are configuration notes, not active runtime configuration. Add real components and runtime configuration in the next implementation stage.
+All API access uses `src/lib/api/profile.ts` through `/api/v1/profile` at the gateway.
+FastAPI owns validation, resource ownership and database writes. See
+`../../docs/development/profile-setup.md` for environment and Docker setup.
+
+## Structure
+
+- `src/app/`: file-based routes and shared workspace layout.
+- `src/components/layout/`: shared sidebar/navigation and workspace frame.
+- `src/components/ui/`: icons, headings, empty states and disabled actions.
+- `src/features/`: profile logic and feature-specific screen presentation.
+- `src/lib/api/`, `src/lib/auth/`: API client and Google identity integration.
+- `src/styles/`: draft design tokens, responsive primitives and profile form styling.
+- `public/`: public assets only; never uploaded CVs.
+
+See `tests/README.md` for unit, browser and disposable full-stack test commands.

@@ -1,2 +1,3 @@
-// Reserved route; feature implementation is pending.
-export default function ReservedPage() { return <main><p>This feature is not available yet.</p><a href="/profile">Go to your profile</a></main>; }
+import { redirect } from 'next/navigation';
+// The first design uses inline account controls in the workspace.
+export default function Login() { redirect('/profile'); }

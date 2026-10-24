@@ -2,7 +2,7 @@ name: coachify-profile
 services:
   gateway:
     image: nginx:1.28-alpine
-    ports: ["127.0.0.1:8080:80"]
+    ports: ["127.0.0.1:${GATEWAY_PORT:-8080}:80"]
     volumes: ["../gateway/nginx.conf:/etc/nginx/nginx.conf:ro"]
     depends_on: [frontend, profile-service]
     networks: [web, backend]

@@ -20,6 +20,6 @@ Sources:
 `singapore-tertiary.json` is the small manually reviewed supplement. International
 records are suggestions, not a complete/official/accreditation register. Former
 institutions and non-university providers can appear upstream. Missing schools
-must not make a user ineligible; P01 will provide custom entry.
+must not make a user ineligible; P01 supports custom entry.
 
 See `docs/development/profile-setup.md` from the repository root for refresh steps.

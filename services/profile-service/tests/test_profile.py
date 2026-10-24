@@ -192,3 +192,142 @@ def test_changing_fixed_identity_uses_separate_profile(monkeypatch):
     with TestClient(create_app(repo)) as client:
         assert client.get("/api/v1/profile").json()["version"] == 0
         assert client.get("/api/v1/profile/versions/1").status_code == 404
+
+
+@pytest.mark.parametrize("category", ["secondary", "ite", "polytechnic", "junior_college", "university"])
+def test_custom_education_roundtrip_for_every_category(client, category):
+    body = payload(school_category=category, education={
+        "institution": {"kind": "custom", "name": "  École Test — International  ", "country_code": "FR"},
+        "course": "  Computing & Design (Double Programme)  ", "study_year": 5,
+    })
+    response = client.patch("/api/v1/profile", json=body)
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved["education"]["institution"]["name"] == "École Test — International"
+    assert saved["education"]["institution"]["id"] is None
+    assert saved["education"]["course"] == "Computing & Design (Double Programme)"
+    assert saved["education"]["study_year"] == 5
+    assert saved["education"]["study_year_label"] == ({"secondary": "Secondary", "junior_college": "JC"}.get(category, "Year") + " 5")
+    assert saved["current_study_year"] == 5
+    assert client.get("/api/v1/profile").json() == saved
+
+
+def test_catalogue_identity_is_resolved_by_server(client):
+    from app.domain.schools import snapshot
+    row = next(r for r in snapshot()["institutions"] if "university" in r["categories"])
+    body = payload(education={"institution": {"kind": "catalogue", "id": row["id"]}})
+    response = client.patch("/api/v1/profile", json=body)
+    assert response.status_code == 200
+    school = response.json()["education"]["institution"]
+    assert school["name"] == row["name"] and school["id"] == row["id"]
+    assert school["snapshot_date"] == snapshot()["snapshot_date"]
+    forged = payload(expected_version=1, education={"institution": {"kind": "catalogue", "id": row["id"], "name": "Forged"}})
+    assert client.patch("/api/v1/profile", json=forged).status_code == 422
+
+
+@pytest.mark.parametrize("education", [
+    {"institution": {"kind": "catalogue", "id": "missing"}},
+    {"institution": {"kind": "custom", "name": "   "}},
+    {"institution": {"kind": "custom", "name": "School\u0000"}},
+    {"institution": {"kind": "custom", "name": "Valid", "country_code": "invalid"}},
+    {"institution": None}, {"course": False}, {"course": "   "}, {"course": "bad\nname"},
+    {"study_year": 0}, {"study_year": -1}, {"study_year": 1.5},
+    {"study_year": "2"}, {"study_year": None}, {"study_year": True},
+    {"owner": "bob"},
+])
+def test_bad_education_does_not_change_saved_profile(client, education):
+    original = client.patch("/api/v1/profile", json=payload()).json()
+    response = client.patch("/api/v1/profile", json={"expected_version": 1, "education": education})
+    assert response.status_code == 422, response.text
+    assert isinstance(response.json()["detail"], list)
+    assert client.get("/api/v1/profile").json() == original
+
+
+def test_category_mismatch_rejects_catalogue_institution(client):
+    from app.domain.schools import snapshot
+    row = next(r for r in snapshot()["institutions"] if r["categories"] == ["polytechnic"])
+    response = client.patch("/api/v1/profile", json=payload(education={"institution": {"kind": "catalogue", "id": row["id"]}}))
+    assert response.status_code == 422
+
+
+def test_independent_field_updates_history_and_context_review(client):
+    first = client.patch("/api/v1/profile", json=payload(education={
+        "institution": {"kind": "custom", "name": "School A"}, "course": "Computer Science", "study_year": 6,
+    })).json()
+    changed = client.patch("/api/v1/profile", json={"expected_version": 1, "education": {"course": "Arts & Computing"}})
+    assert changed.status_code == 200, changed.text
+    second = changed.json()
+    assert second["education"]["institution"] == first["education"]["institution"]
+    assert second["education"]["study_year"] == 6
+    assert second["occupational_status"] == "student"
+    assert second["school_category"] == "university"
+    assert client.get("/api/v1/profile/versions/1").json() == first
+    assert client.patch("/api/v1/profile", json={"expected_version": 1, "education": {"course": "Stale"}}).status_code == 409
+    third = client.patch("/api/v1/profile", json={"expected_version": 2, "occupational_status": "employed"}).json()
+    assert third["education"] == second["education"]
+    assert third["current_study_year"] is None
+    assert third["education_review_required"]
+    fourth = client.patch("/api/v1/profile", json={"expected_version": 3, "occupational_status": "student"}).json()
+    assert fourth["current_study_year"] is None  # Not silently reactivated.
+    rejected = client.patch("/api/v1/profile", json={"expected_version": 4, "education": {"course": "New course"}})
+    assert rejected.status_code == 422
+    confirmed = client.patch("/api/v1/profile", json={"expected_version": 4, "confirm_education_context": True}).json()
+    assert confirmed["current_study_year"] == 6
+    assert not confirmed["education_review_required"]
+
+
+def test_changed_institution_prompts_review_of_retained_course_and_year(client):
+    client.patch("/api/v1/profile", json=payload(education={"institution": {"kind": "custom", "name": "Old school"}, "course": "Design", "study_year": 2}))
+    response = client.patch("/api/v1/profile", json={"expected_version": 1, "education": {"institution": {"kind": "custom", "name": "New school"}}}).json()
+    assert response["education"]["course"] == "Design"
+    assert response["education_review_required"]
+    assert response["current_study_year"] is None
+
+
+def test_category_switch_cannot_silently_relabel_year(client):
+    client.patch("/api/v1/profile", json=payload(education={"institution": {"kind": "custom", "name": "School"}, "study_year": 5}))
+    changed = client.patch("/api/v1/profile", json={"expected_version": 1, "school_category": "junior_college"}).json()
+    assert changed["education"]["study_year_label"] == "Year 5"
+    assert changed["education"]["category"] == "university"
+    assert client.patch("/api/v1/profile", json={"expected_version": 2, "confirm_education_context": True}).status_code == 422
+    reviewed = client.patch("/api/v1/profile", json={"expected_version": 2, "confirm_education_context": True, "education": {"study_year": 2}}).json()
+    assert reviewed["education"]["study_year_label"] == "JC 2"
+    assert reviewed["education"]["category"] == "junior_college"
+
+
+def test_nonstudent_optional_course_and_institution_without_current_year(client):
+    response = client.patch("/api/v1/profile", json=payload(occupational_status="unemployed", school_category=None, education={"institution": None, "course": None}))
+    assert response.status_code == 200
+    assert response.json()["education"]["context"] == "last"
+    assert client.patch("/api/v1/profile", json={"expected_version": 1, "education": {"study_year": 1}}).status_code == 422
+
+
+def test_education_noop_retry_and_owner_isolation(client):
+    body = payload(education={"course": "Design", "study_year": 1})
+    first = client.patch("/api/v1/profile", json=body).json()
+    noop = client.patch("/api/v1/profile", json={"expected_version": 1, "education": {"course": "Design"}}).json()
+    assert noop == first
+    client.app.dependency_overrides[current_owner] = lambda: "google:bob"
+    assert client.get("/api/v1/profile").json()["education"]["course"] is None
+    assert client.get("/api/v1/profile/versions/1").status_code == 404
+
+
+def test_text_normalisation_precedes_length_validation(client):
+    text = "A" * 300
+    response = client.patch("/api/v1/profile", json=payload(education={
+        "institution": {"kind": "custom", "name": "  " + text + "  "}, "course": "  " + text + "  ",
+    }))
+    assert response.status_code == 200, response.text
+    assert response.json()["education"]["course"] == text
+
+
+def test_auth_config_reports_only_server_mode_and_cannot_enable_local_mode(monkeypatch):
+    monkeypatch.delenv("AUTH_MODE", raising=False)
+    with TestClient(create_app(MemoryRepository())) as client:
+        assert client.get("/api/v1/profile/auth-config?mode=local_test").json() == {"mode": "google"}
+        assert client.get("/api/v1/profile").status_code == 401
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("AUTH_MODE", "local_test")
+    with TestClient(create_app(MemoryRepository())) as client:
+        assert client.get("/api/v1/profile/auth-config").json() == {"mode": "local_test"}
+        assert client.get("/api/v1/profile").status_code == 200

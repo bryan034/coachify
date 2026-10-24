@@ -19,8 +19,8 @@ npm run test:e2e --workspace apps/frontend
 ```
 
 The browser runner first discovers tests. If none exist it passes without starting
-Next.js. When tests exist, Playwright builds and starts the frontend. The frontend now builds; reserved pages remain placeholders. Only Chromium is configured.
-Browser tests mock Google/API boundaries; real MongoDB is exercised in a separate backend integration job.
+Next.js. When tests exist, Playwright builds and starts the frontend. The frontend builds the first workspace UI; unavailable services use empty states. Only Chromium is configured.
+Browser tests cover the workspace, profile save/retry, Google navigation and mobile layout using boundary fixtures. A separate full-stack browser job exercises the actual gateway, profile service and disposable MongoDB.
 
 For each service, create an isolated Python environment, then run from its directory:
 

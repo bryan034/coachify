@@ -30,6 +30,20 @@ def test_real_mongodb_roundtrip_concurrency_and_restart():
         assert restored.version("alice", 1)["education_context"] == "current"
         assert restored.current("alice")["education_context"] == "last"
         assert restored.current("alice")["education_review_required"]
+        restored.update("alice", ProfilePatch(expected_version=2, school_category="university", education={
+            "institution": {"kind": "custom", "name": "International Test University"},
+            "course": "Design & Computing",
+        }))
+        separate_client = MongoClient(os.environ["MONGODB_TEST_URI"], serverSelectionTimeoutMS=5000)
+        try:
+            reconnected = ProfileRepository(separate_client[name])
+            latest = reconnected.current("alice")
+            assert latest["education"]["institution"]["name"] == "International Test University"
+            assert latest["education"]["course"] == "Design & Computing"
+            assert latest["education"]["context"] == "last"
+            assert reconnected.version("alice", 1)["education"]["institution"] is None
+        finally:
+            separate_client.close()
     finally:
         client.drop_database(name)
         client.close()

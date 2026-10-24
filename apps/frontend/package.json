@@ -2,7 +2,7 @@
   "name": "@coachify/frontend",
   "version": "0.0.0",
   "private": true,
-  "description": "Next.js frontend scaffold with Vitest and Playwright test tooling; application implementation pending.",
+  "description": "Coachify Next.js workspace UI with profile APIs, Vitest and Playwright.",
   "dependencies": {
     "next": "16.4.3",
     "react": "19.3.1",
