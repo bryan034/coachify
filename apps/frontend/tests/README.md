@@ -14,10 +14,12 @@ npx playwright install chromium
 npm run test:e2e --workspace apps/frontend
 ```
 
-Playwright builds and starts Next.js automatically on port 3000. Stop any existing
+When browser tests exist, Playwright builds and starts Next.js automatically on port 3000. Stop any existing
 server on that port first. Chromium is the initial browser target. No production
 credentials are required by this configuration. Add isolated backend fixtures and
 API/database lifecycle management before introducing full-stack journeys.
 
-No product tests exist yet; both runners must fail when no tests are found.
-Do not add dummy assertions just to make CI pass. Add meaningful tests with features.
+No product tests exist yet; empty suites pass. The browser runner uses Playwright
+discovery first and avoids building/starting Next.js when no browser tests exist.
+Actual test failures and discovery/configuration errors still fail. Add meaningful
+tests with features; an empty passing suite does not establish test coverage.

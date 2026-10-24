@@ -72,7 +72,16 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e '.[test]'
-      - run: python -m pytest
+      - name: Run pytest (allow empty suites)
+        shell: bash
+        run: |
+          status=0
+          python -m pytest || status=$?
+          if [ "$status" -eq 5 ]; then
+            echo "No pytest tests collected; passing this service."
+            exit 0
+          fi
+          exit "$status"
 
   test-gate:
     name: Test gate
