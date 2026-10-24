@@ -32,3 +32,12 @@ def countries():
     rows = snapshot()["institutions"]
     names = {r["country_code"]: r["country"] for r in rows if "university" in r["categories"]}
     return [{"code": code, "name": name} for code, name in sorted(names.items(), key=lambda x: x[1])]
+
+
+@lru_cache(maxsize=1)
+def institution_index():
+    return {row["id"]: row for row in snapshot()["institutions"]}
+
+
+def institution_by_id(identifier):
+    return institution_index().get(identifier)

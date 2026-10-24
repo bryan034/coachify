@@ -2,8 +2,8 @@
 
 Implemented: occupational status, school category, owner-scoped profile save/read,
 append-only versions, local school suggestions and international university search.
-P01–P03 institution/course/year entry and downstream roadmap integration remain
-future work. The form previews the conditional wording those fields will use.
+P01–P03 institution/course/year entry is implemented. Downstream roadmap integration
+remains future work. See `education-profile.md` for field and context semantics.
 
 ## You do not need to download school files
 
@@ -12,7 +12,7 @@ Hipo MIT licence. School data is reference data in the service image, not MongoD
 There are 10,404 suggestions from Singapore MOE and a worldwide community directory,
 covering 200 country codes. This is not an exhaustive or accredited-university register.
 Some records may be historical or misclassified upstream. Institution suggestions do
-not establish enrolment, qualifications or eligibility. Custom institution entry is P01.
+not establish enrolment, qualifications or eligibility. Custom institution entry is supported by P01.
 
 The five P08 categories are school/qualification groups, not a verification system.
 Mixed-level Singapore institutions can appear in multiple relevant categories.

@@ -7,7 +7,10 @@ export async function profileApi<T>(path: string, init: RequestInit = {}, token?
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    const message = typeof body.detail === 'string' ? body.detail : 'Please check your selections and try again.';
+    const message = typeof body.detail === 'string' ? body.detail
+      : Array.isArray(body.detail) ? body.detail.map((error: { loc?: (string | number)[]; msg?: string }) =>
+        `${error.loc?.filter(p => p !== 'body').join('.') || 'Profile'}: ${error.msg || 'Invalid value'}`).join(' ')
+      : 'Please check your selections and try again.';
     throw new ApiError(message, response.status);
   }
   return response.json();

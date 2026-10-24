@@ -13,7 +13,8 @@ development-only fixed identity without Google credentials. Real sign-in remains
 are configured. Browser automation mocks the external identity/API boundaries;
 backend integration tests exercise real MongoDB separately.
 
-P01–P03 institution/course/year entry, CV ingestion, target-job assessment,
+P01–P03 institution/course/year entry is implemented; see [education details](education-profile.md).
+CV ingestion, target-job assessment,
 roadmaps, dashboards and reviews remain unimplemented. Reserved page routes have
 minimal exports so the frontend builds; they do not implement those features.
 No live external AI calls, scheduled execution, production deployment or roadmap

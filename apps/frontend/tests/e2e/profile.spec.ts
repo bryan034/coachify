@@ -8,7 +8,7 @@ test('save, reload, browse international schools, switch status and retry', asyn
     { id: 'university', label: 'University' },
   ];
   let saved = { version: 0, occupational_status: null as string | null, school_category: null as string | null,
-    education_context: null as string | null, education_review_required: false, education: {} };
+    education_context: null as string | null, education_review_required: false, education: {} as Record<string, unknown> };
   let failSave = false;
   await page.route('https://accounts.google.com/gsi/client', route => route.fulfill({ contentType: 'application/javascript', body: `window.google = { accounts: { id: {
     initialize: function(options) { this.callback = options.callback; },
@@ -25,8 +25,10 @@ test('save, reload, browse international schools, switch status and retry', asyn
     if (route.request().method() === 'PATCH') {
       if (failSave) return route.fulfill({ status: 503, json: { detail: 'Temporary save failure. Retry.' } });
       const input = route.request().postDataJSON();
+      if (input.education?.institution?.kind === 'catalogue') input.education.institution = { kind: 'catalogue', id: 'test-harvard', name: 'Harvard University', country_code: 'US' };
       expect(input.expected_version).toBe(saved.version);
       saved = { ...saved, occupational_status: input.occupational_status, school_category: input.school_category,
+        education: { ...saved.education, ...input.education },
         version: saved.version + 1, education_context: input.occupational_status === 'student' ? 'current' : 'last', education_review_required: saved.version > 0 };
     }
     return route.fulfill({ json: saved });
@@ -39,12 +41,18 @@ test('save, reload, browse international schools, switch status and retry', asyn
   await page.getByRole('radio', { name: 'Use this category: University' }).check();
   await page.getByRole('searchbox', { name: 'Search schools' }).fill('Harvard');
   await page.getByRole('combobox', { name: 'Country / territory' }).selectOption('US');
-  await expect(page.getByText('Harvard University')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select Harvard University' })).toBeVisible();
+  await page.getByRole('button', { name: 'Select Harvard University' }).click();
+  await page.getByRole('checkbox', { name: 'No applicable named course/programme' }).uncheck();
+  await page.getByRole('textbox', { name: 'What course are you studying?' }).fill('Computing & Design');
+  await page.getByRole('spinbutton', { name: /Current study level/ }).fill('6');
   await page.getByRole('button', { name: 'Save background' }).click();
   await expect(page.getByText('Profile saved.')).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Sign in with Google (test)' }).click();
   await expect(page.getByRole('radio', { name: 'Student', exact: true })).toBeChecked();
+  await expect(page.getByRole('textbox', { name: 'What course are you studying?' })).toHaveValue('Computing & Design');
+  await expect(page.getByRole('spinbutton', { name: /Current study level/ })).toHaveValue('6');
   await page.getByRole('radio', { name: 'Employed', exact: true }).check();
   await expect(page.getByText('Where did you last study?')).toBeVisible();
   await expect(page.getByText(/Please review your education details/)).toBeVisible();

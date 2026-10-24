@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiError, profileApi } from '@/lib/api/profile';
 import { GoogleSignIn } from '@/lib/auth/google-sign-in';
 import { SchoolBrowser } from './school-browser';
+import { EducationFields, editorFrom, educationPayload, type EducationEditor } from './education-fields';
+import type { Institution } from './types';
 import { educationQuestions, statuses, type Category, type OccupationalStatus, type Profile, type SchoolCategory } from './types';
 
 export function ProfileForm() {
@@ -11,6 +13,9 @@ export function ProfileForm() {
   const [status, setStatus] = useState<OccupationalStatus | ''>('');
   const [category, setCategory] = useState<SchoolCategory | ''>('');
   const [categories, setCategories] = useState<Category[]>([]);
+  const [editor, setEditor] = useState<EducationEditor>(() => editorFrom({}));
+  const [institutionDirty, setInstitutionDirty] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const [expanded, setExpanded] = useState<SchoolCategory[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -31,11 +36,16 @@ export function ProfileForm() {
     setLoading(true); setError(''); setProfile(null); setMessage(''); setConflict(false);
     profileApi<Profile>('', { signal: controller.signal }, token).then(p => {
       setProfile(p); setStatus(p.occupational_status || ''); setCategory(p.school_category || '');
+      setEditor(editorFrom(p.education)); setInstitutionDirty(false); setConfirmed(false);
     }).catch(e => { if (e.name !== 'AbortError') setError(e.message || 'Profile could not load. Please retry.'); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [token, retry]);
   const contextChanged = !!profile?.occupational_status && (status !== profile.occupational_status || (category || null) !== profile.school_category);
+  function chooseInstitution(institution: Institution, selectedCategory: Category['id']) {
+    setCategory(selectedCategory); setInstitutionDirty(true); setMessage('');
+    setEditor(previous => ({ ...previous, institution: { kind: 'catalogue', id: institution.id }, institutionName: institution.name, custom: false }));
+  }
   async function save(event: FormEvent) {
     event.preventDefault(); setError(''); setMessage('');
     if (!status) { setError('Choose your occupational status.'); return; }
@@ -43,10 +53,13 @@ export function ProfileForm() {
     if (!token || !profile) { setError('Sign in and load your profile before saving.'); return; }
     setSaving(true);
     try {
+      const education = educationPayload(editor, institutionDirty, status);
       const updated = await profileApi<Profile>('', { method: 'PATCH', body: JSON.stringify({
         expected_version: profile.version, occupational_status: status, school_category: category || null,
+        ...(Object.keys(education).length ? { education } : {}),
+        ...(confirmed ? { confirm_education_context: true } : {}),
       }) }, token);
-      setProfile(updated); setConflict(false); setMessage('Profile saved.');
+      setProfile(updated); setEditor(editorFrom(updated.education)); setInstitutionDirty(false); setConfirmed(false); setConflict(false); setMessage('Profile saved.');
     } catch (e) {
       setConflict(e instanceof ApiError && e.status === 409);
       setError(e instanceof Error ? e.message : 'Saving failed. Your selections are retained; please retry.');
@@ -54,7 +67,7 @@ export function ProfileForm() {
   }
   function signOut() {
     window.google?.accounts.id.disableAutoSelect();
-    setToken(undefined); setProfile(null); setStatus(''); setCategory(''); setError(''); setMessage(''); setConflict(false);
+    setEditor(editorFrom({})); setInstitutionDirty(false); setConfirmed(false); setToken(undefined); setProfile(null); setStatus(''); setCategory(''); setError(''); setMessage(''); setConflict(false);
   }
   return <main className="profile-shell">
     <header><a className="brand" href="/profile">coachify<span>·</span></a><span className="eyebrow">YOUR STARTING POINT</span></header>
@@ -70,7 +83,7 @@ export function ProfileForm() {
         <legend>What is your occupational status?</legend><p className="muted">Choose the option that best describes you today.</p>
         <div className="status-grid">{statuses.map(s => <label key={s.id} className={status === s.id ? 'status-option selected' : 'status-option'}>
           <input type="radio" name="occupational_status" value={s.id} checked={status === s.id}
-            onChange={() => { setStatus(s.id); setMessage(''); }} />{s.label}</label>)}</div>
+            onChange={() => { setStatus(s.id); setConfirmed(false); setMessage(''); }} />{s.label}</label>)}</div>
       </fieldset>
       {status && <fieldset className="card" disabled={saving || loading}>
         <legend>{educationQuestions(status).institution}</legend>
@@ -81,12 +94,16 @@ export function ProfileForm() {
         }}>
           <summary>{c.label}</summary><div className="category-content"><label className="category-choice">
             <input type="radio" name="school_category" value={c.id} checked={category === c.id}
-              onChange={() => { setCategory(c.id); setMessage(''); }} />Use this category: {c.label}</label>
-            {expanded.includes(c.id) && <SchoolBrowser category={c.id} />}</div></details>)}
+              onChange={() => { setCategory(c.id); setConfirmed(false); setMessage(''); }} />Use this category: {c.label}</label>
+            {expanded.includes(c.id) && <SchoolBrowser category={c.id} onSelect={institution => chooseInstitution(institution, c.id)} />}</div></details>)}
         {status !== 'student' && <label className="category-choice no-education"><input type="radio" name="school_category" value=""
-          checked={!category} onChange={() => { setCategory(''); setMessage(''); }} />No applicable previous education</label>}
+          checked={!category} onChange={() => { setCategory(''); setConfirmed(false); setMessage(''); }} />No applicable previous education</label>}
+        <EducationFields status={status} category={category} editor={editor} setEditor={setEditor}
+          onInstitutionDirty={() => { setInstitutionDirty(true); setMessage(''); }} />
       </fieldset>}
       {(contextChanged || profile?.education_review_required) && <p role="status" className="notice">Please review your education details for this status and category. Previously saved education is retained; it has not been moved or relabelled.</p>}
+      {(contextChanged || profile?.education_review_required) && <label className="review-confirm"><input type="checkbox" disabled={saving || loading} checked={confirmed}
+        onChange={event => setConfirmed(event.target.checked)} />I have reviewed the education details for this status and category.</label>}
       {error && <p role="alert" className="error">{error}</p>}
       {message && <p role="status" className="success">{message}</p>}
       {(conflict || (token && !profile && !loading) || categories.length === 0) && <button type="button" disabled={saving} onClick={() => setRetry(n => n + 1)}>

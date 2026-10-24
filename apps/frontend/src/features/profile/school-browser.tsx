@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { profileApi } from '@/lib/api/profile';
-import type { SchoolCategory, SchoolResults } from './types';
+import type { Institution, SchoolCategory, SchoolResults } from './types';
 
-export function SchoolBrowser({ category }: { category: SchoolCategory }) {
+export function SchoolBrowser({ category, onSelect }: { category: SchoolCategory; onSelect?: (institution: Institution) => void }) {
   const [query, setQuery] = useState('');
   const [country, setCountry] = useState('');
   const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
@@ -41,12 +41,12 @@ export function SchoolBrowser({ category }: { category: SchoolCategory }) {
     {error && <p role="alert">{error} <button type="button" onClick={() => setRetry(n => n + 1)}>Retry directory</button></p>}
     {results && <>
       <p aria-live="polite">{results.total.toLocaleString()} {results.total === 1 ? 'suggestion' : 'suggestions'} · snapshot {results.snapshot_date}</p>
-      <ul>{results.items.map(s => <li key={s.id}>{s.name} <span className="muted">{s.country}</span></li>)}</ul>
+      <ul>{results.items.map(s => <li key={s.id}>{onSelect ? <button type="button" onClick={() => onSelect(s)}>Select {s.name}</button> : s.name} <span className="muted">{s.country}</span></li>)}</ul>
       {results.total === 0 && <p>No matching institution. An unlisted school remains valid.</p>}
       <div className="pagination"><button type="button" disabled={page === 0} onClick={() => setPage(n => n - 1)}>Previous</button>
         <button type="button" disabled={(page + 1) * 25 >= results.total} onClick={() => setPage(n => n + 1)}>Next</button></div>
       <p className="muted">{results.coverage_note}</p>
     </>}
-    <p className="muted">Choose a school category to save here. You do not need to select an individual institution in this step.</p>
+    <p className="muted">Select a suggestion, or enter your institution’s name below if it is not listed.</p>
   </div>;
 }

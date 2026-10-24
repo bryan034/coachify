@@ -19,7 +19,8 @@ beforeEach(() => {
     if (url.includes('school-categories')) return new Response(JSON.stringify(categories));
     if (init?.method === 'PATCH') {
       if (fail) return new Response(JSON.stringify({ detail: 'Storage unavailable. Retry.' }), { status: 503 });
-      saved = { ...saved, ...JSON.parse(init.body as string), version: 1 };
+      const input = JSON.parse(init.body as string);
+      saved = { ...saved, ...input, education: { ...(saved.education as object), ...input.education }, version: Number(saved.version) + 1 };
     }
     return new Response(JSON.stringify(saved));
   }));
@@ -65,4 +66,31 @@ test('question mapping applies to all statuses', () => {
   for (const status of ['national_service', 'unemployed', 'employed'] as const) {
     expect(educationQuestions(status)).toEqual({ institution: 'Where did you last study?', course: 'What course did you study?', showYear: false });
   }
+});
+
+
+test('custom institution, course and extended year survive a failed save and retry', async () => {
+  render(<ProfileForm />);
+  fireEvent.click(screen.getByText('Test sign in'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('radio', { name: 'Student' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Use this category: University', hidden: true }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'My institution is not listed' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Institution name' }), { target: { value: 'Unlisted International College' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'No applicable named course/programme' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'What course are you studying?' }), { target: { value: 'Computing & Design' } });
+  fireEvent.change(screen.getByRole('spinbutton', { name: /Current study level/ }), { target: { value: '6' } });
+  fail = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
+  await screen.findByText('Storage unavailable. Retry.');
+  expect(screen.getByRole('textbox', { name: 'Institution name' })).toHaveValue('Unlisted International College');
+  expect(screen.getByRole('spinbutton', { name: /Current study level/ })).toHaveValue(6);
+  fail = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
+  await screen.findByText('Profile saved.');
+  expect(saved.education).toMatchObject({ institution: { kind: 'custom', name: 'Unlisted International College' }, course: 'Computing & Design', study_year: 6 });
+  fireEvent.click(screen.getByRole('radio', { name: 'Unemployed' }));
+  expect(screen.getByRole('textbox', { name: 'What course did you study?' })).toHaveValue('Computing & Design');
+  expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+  expect(screen.getByText(/Previous study year retained: 6/)).toBeInTheDocument();
 });

@@ -2,7 +2,7 @@
 
 Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
-**Status:** P07/P08 occupational status and school category are implemented with profile persistence and local/international school snapshots. Other product features remain scaffolded. Google sign-in requires your Web Client ID. See [setup instructions](docs/development/profile-setup.md).
+**Status:** P01–P03 education entry and P07/P08 occupational status/category are implemented with profile persistence and local/international school snapshots. Other product features remain scaffolded. Google sign-in requires your Web Client ID. See [setup instructions](docs/development/profile-setup.md).
 
 ## Stack
 

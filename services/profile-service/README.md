@@ -2,7 +2,7 @@
 
 FastAPI service for P07/P08 occupational status and school category. Owns canonical
 profile versions in MongoDB `coachify_profile`; other services remain scaffolded.
-P01–P03 profile entry is pending. Snapshot-based Singapore/international school
+P01–P03 institution/course/year entry is implemented; see the education-profile guide. Snapshot-based Singapore/international school
 lookup is implemented here without a school directory collection in MongoDB.
 
 Implemented routes:

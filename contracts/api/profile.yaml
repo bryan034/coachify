@@ -157,6 +157,23 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
+    CatalogueInstitution:
+      properties:
+        kind:
+          type: string
+          const: catalogue
+          title: Kind
+        id:
+          type: string
+          maxLength: 80
+          minLength: 1
+          title: Id
+      additionalProperties: false
+      type: object
+      required:
+      - kind
+      - id
+      title: CatalogueInstitution
     CategoryView:
       properties:
         id:
@@ -182,6 +199,97 @@ components:
       - code
       - name
       title: CountryView
+    CustomInstitution:
+      properties:
+        kind:
+          type: string
+          const: custom
+          title: Kind
+        name:
+          type: string
+          maxLength: 300
+          title: Name
+        country_code:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{2}$
+          - type: 'null'
+          title: Country Code
+      additionalProperties: false
+      type: object
+      required:
+      - kind
+      - name
+      title: CustomInstitution
+    EducationPatch:
+      properties:
+        institution:
+          anyOf:
+          - oneOf:
+            - $ref: '#/components/schemas/CatalogueInstitution'
+            - $ref: '#/components/schemas/CustomInstitution'
+            discriminator:
+              propertyName: kind
+              mapping:
+                catalogue: '#/components/schemas/CatalogueInstitution'
+                custom: '#/components/schemas/CustomInstitution'
+          - type: 'null'
+          title: Institution
+        course:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Course
+        study_year:
+          anyOf:
+          - type: integer
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Study Year
+      additionalProperties: false
+      type: object
+      title: EducationPatch
+    EducationView:
+      properties:
+        institution:
+          anyOf:
+          - $ref: '#/components/schemas/SavedInstitution'
+          - type: 'null'
+        course:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Course
+        study_year:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Study Year
+        study_year_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Study Year Label
+        study_year_category:
+          anyOf:
+          - $ref: '#/components/schemas/SchoolCategory'
+          - type: 'null'
+        category:
+          anyOf:
+          - $ref: '#/components/schemas/SchoolCategory'
+          - type: 'null'
+        context:
+          anyOf:
+          - type: string
+            enum:
+            - current
+            - last
+          - type: 'null'
+          title: Context
+      additionalProperties: true
+      type: object
+      title: EducationView
     HTTPValidationError:
       properties:
         detail:
@@ -274,16 +382,25 @@ components:
           minimum: 0.0
           title: Expected Version
         occupational_status:
-          $ref: '#/components/schemas/OccupationalStatus'
+          anyOf:
+          - $ref: '#/components/schemas/OccupationalStatus'
+          - type: 'null'
         school_category:
           anyOf:
           - $ref: '#/components/schemas/SchoolCategory'
           - type: 'null'
+        education:
+          anyOf:
+          - $ref: '#/components/schemas/EducationPatch'
+          - type: 'null'
+        confirm_education_context:
+          type: boolean
+          title: Confirm Education Context
+          default: false
       additionalProperties: false
       type: object
       required:
       - expected_version
-      - occupational_status
       title: ProfilePatch
     ProfileView:
       properties:
@@ -311,13 +428,47 @@ components:
           title: Education Review Required
           default: false
         education:
-          additionalProperties: true
-          type: object
-          title: Education
+          $ref: '#/components/schemas/EducationView'
+        current_study_year:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Current Study Year
       type: object
       required:
       - version
       title: ProfileView
+    SavedInstitution:
+      properties:
+        kind:
+          type: string
+          enum:
+          - catalogue
+          - custom
+          title: Kind
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Id
+        name:
+          type: string
+          title: Name
+        country_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Country Code
+        snapshot_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Snapshot Date
+      type: object
+      required:
+      - kind
+      - name
+      title: SavedInstitution
     SchoolCategory:
       type: string
       enum:
