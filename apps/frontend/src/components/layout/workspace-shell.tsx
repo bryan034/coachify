@@ -7,6 +7,7 @@ import { useProfile } from '@/features/profile/profile-provider';
 import { statuses, studyYearLabel } from '@/features/profile/types';
 const nav = [
  { href: '/dashboard', label: 'Home', icon: 'home' },
+ { href: '/career-goal', label: 'Career Goal', icon: 'brief' },
  { href: '/roadmap', label: 'Roadmap', icon: 'road' },
  { href: '/cv', label: 'Resume & Tracker', icon: 'doc' },
  { href: '/chats', label: 'Chats & Socials', icon: 'chat' },

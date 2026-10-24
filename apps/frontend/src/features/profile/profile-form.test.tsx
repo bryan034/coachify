@@ -78,7 +78,7 @@ test('custom institution, course and extended year survive a failed save and ret
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
   fireEvent.click(screen.getByRole('radio', { name: 'Student' }));
-  fireEvent.click(screen.getByText('University', { exact: true }));
+  fireEvent.click(await screen.findByText('University', { exact: true }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'My institution is not listed' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Institution name' }), { target: { value: 'Unlisted International College' } });
   fireEvent.change(screen.getByRole('textbox', { name: 'What course are you studying?' }), { target: { value: 'Computing & Design' } });

@@ -1,7 +1,7 @@
 # Run Coachify locally
 
 Use Docker Desktop, Node.js 24 and Python 3.12. The active local stack contains
-NGINX, the Next.js frontend, the Profile API and MongoDB. Other backend services
+NGINX, the Next.js frontend, the Profile API, the Career preview API and MongoDB. Other backend services
 are placeholders. See the [API overview](api/README.md) and individual service
 READMEs for feature details.
 
@@ -110,6 +110,26 @@ validation. Sign-out/account changes clear other tabs, which require explicit
 sign-in. Deploy behind HTTPS; the local Compose file is a development deployment,
 not a complete public production hosting configuration. School lookups still need
 no API key or download.
+
+## Career Goal previews
+
+The normal Compose command also builds and starts `career-service`. No new
+credentials, MongoDB users or Groq key are required. Open `/career-goal` after
+sign-in and initial profile setup. Paste a description, import a public URL, or
+upload a PDF/DOCX/TXT document. All previews are temporary; refreshing or leaving
+the page discards them. No descriptions or original files are saved in MongoDB.
+Only future approved structured information will be persisted after its schema
+is agreed. The [Career service README](../services/career-service/README.md)
+explains endpoints and current limitations.
+
+Career verifies sessions through Profile over the internal Docker network. Its
+private temporary upload directory is a bounded tmpfs, not a persistent volume.
+If running Career independently, install `.[test]` from `services/career-service` in a
+separate Python environment, set `PROFILE_SERVICE_URL=http://localhost:8080` with
+the Profile stack already running, then run `uvicorn app.main:app --port 8001
+--no-access-log` from the Career service directory (one command line). Explicitly
+load any service-specific environment file when running outside Compose. Use a
+verified Coachify session for API tests. There are no save/analysis endpoints yet.
 
 ## Stop without deleting data
 

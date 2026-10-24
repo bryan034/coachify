@@ -7,7 +7,7 @@ service below; its README lists individual endpoints grouped by Jira story.
 |---|---|---|---|
 | `/api/v1/profile` | Email/password access, verification, onboarding, background, education, planning preferences and profile versions | [profile-service](../../services/profile-service/README.md) | Available |
 | `/api/v1/cv` | CV upload, extraction and clarification of personal contributions | [cv-service](../../services/cv-service/README.md) | Planned |
-| `/api/v1/career` | Target job requirements, capability assessment and skill gaps | [career-service](../../services/career-service/README.md) | Planned |
+| `/api/v1/career` | Temporary authenticated job URL/document previews for Career Goal; interpretation and skill gaps remain planned | [career-service](../../services/career-service/README.md) | Preview imports available |
 | `/api/v1/roadmaps` | Roadmap generation, milestones, task progress and revisions | [roadmap-service](../../services/roadmap-service/README.md) | Planned |
 | `/api/v1/dashboard` | Daily, weekly, monthly and whole-roadmap progress | [dashboard-service](../../services/dashboard-service/README.md) | Planned |
 | `/api/v1/reviews`, `/api/v1/review-schedules` | Manual or scheduled pace reviews and adaptation preferences | [review-service](../../services/review-service/README.md) | Planned |

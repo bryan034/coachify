@@ -9,6 +9,7 @@ test('P13 uses canonical completion, guards deep links and distinguishes profile
   if(path.endsWith('/school-categories'))return route.fulfill({json:[{id:'university',label:'University'}]});
   if(path.endsWith('/auth/session'))return route.fulfill({json:{id:'synthetic',name:'Synthetic',provider:'local_test',email_verified:true}});
   if(outage)return route.fulfill({status:503,json:{detail:'Synthetic profile outage'}});
+  if(path.endsWith('/planning-inputs'))return route.fulfill({json:{profile_version:7,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
   return route.fulfill({json:{version:7,onboarding_complete:complete,onboarding_state:complete?'complete':'legacy_unconfirmed',occupational_status:'employed',school_category:'university',education_context:'last',education_review_required:false,education:{institution:{kind:'custom',name:'Synthetic Legacy School'},course:'Synthetic legacy course'}}});
  });
  await page.goto('/dashboard');

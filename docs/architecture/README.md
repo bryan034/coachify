@@ -1,6 +1,6 @@
 # Current Coachify architecture
 
-This is the current design: Next.js App Router + React + TypeScript frontend, NGINX gateway, six Python FastAPI services, and MongoDB. It supersedes PostgreSQL/frontend-runtime assumptions in the earlier `outputs/` documents. P01–P08 are implemented in the frontend/profile slice; other services remain placeholders.
+This is the current design: Next.js App Router + React + TypeScript frontend, NGINX gateway, six Python FastAPI services, and MongoDB. It supersedes PostgreSQL/frontend-runtime assumptions in the earlier `outputs/` documents. P01–P16 are implemented in the frontend/profile slice. Career currently prepares temporary URL/document previews; interpretation and the remaining services are planned.
 
 ```mermaid
 flowchart TB
@@ -34,11 +34,11 @@ flowchart TB
     Frontend -. Initial server-side API reads via internal gateway .-> Gateway
     Profile --> Atlas
     CV --> Atlas
-    Career --> Atlas
+    Career -. Future structured information only .-> Atlas
     Roadmap --> Atlas
     Review --> Atlas
     CV --> LLM
-    Career --> LLM
+    Career -. Future interpretation .-> LLM
     Roadmap --> LLM
 ```
 
@@ -59,3 +59,12 @@ flowchart TB
 The profile slice supports verified email/password accounts and optional Google. New accounts complete an emailed OTP step before obtaining a revocable 24-hour Coachify session. Development uses a private Mailpit inbox; production uses authenticated encrypted SMTP. Canonical profile completion controls initial onboarding and workspace access. Session bearers live in tab-scoped sessionStorage and are validated before private data loads. Sign-out/account changes clear other tabs. Set the matching Google Web Client ID on both sides for Google mode. See the [application setup guide](../setup.md) for setup and remaining integration limits.
 
 See [service boundaries](service-boundaries.md), [API planning](../api/README.md), and [MongoDB guidance](../../infrastructure/mongodb/README.md).
+
+## Career preview slice — J01/J06/J07
+
+Career Goal has three temporary input methods; no LLM or Career database is used.
+Career validates sessions via the Profile API and returns URL/document previews.
+Original uploads use private tmpfs and are closed/deleted after processing. Source
+text exists only in request/process/browser memory, with no persistence. Future
+structured extraction/storage awaits its agreed schema. This intentionally defers
+earlier saved-source/interpretation criteria.

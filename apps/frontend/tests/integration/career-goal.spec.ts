@@ -1,0 +1,22 @@
+import {test,expect} from '@playwright/test';
+import {createLocalAccount} from './account-helpers';
+test('Career previews validate real sessions, read a document and discard source on reload',async({page})=>{
+ await createLocalAccount(page,'Synthetic Career user');
+ await page.getByRole('radio',{name:'Employed',exact:true}).check();
+ await page.getByRole('radio',{name:'No applicable previous education'}).check();
+ await page.getByRole('button',{name:'Finish setup',exact:true}).click();
+ await expect(page).toHaveURL(/\/dashboard$/);
+ await page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true}).click();
+ await page.getByRole('tab',{name:'Upload document'}).click();
+ const source='Synthetic analyst\nResponsibilities\n• Research & communicate findings.\nSQL or Python.';
+ await page.getByLabel('Job description document',{exact:true}).setInputFiles({name:'role.txt',mimeType:'text/plain',buffer:Buffer.from(source)});
+ await page.getByRole('button',{name:'Read document'}).click();
+ await expect(page.getByRole('textbox',{name:'Review and edit the preview'})).toHaveValue(source);
+ await page.getByRole('tab',{name:'Job URL'}).click();await page.getByLabel('Job description URL',{exact:true}).fill('http://127.0.0.1/job');
+ await page.getByRole('button',{name:'Import job page'}).click();await expect(page.getByRole('tabpanel').getByRole('alert')).toContainText('Private, local and internal');
+ await page.getByRole('tab',{name:'Paste description'}).click();await page.getByRole('textbox',{name:'Job description',exact:true}).fill(source);
+ const stored=await page.evaluate(()=>JSON.stringify([Object.entries(localStorage),Object.entries(sessionStorage)]));expect(stored).not.toContain('Synthetic analyst');
+ page.once('dialog',dialog=>dialog.accept());await page.reload();
+ await expect(page.getByRole('textbox',{name:'Job description',exact:true})).toHaveValue('');
+ const signedOut=await page.request.post('/api/v1/career/imports/url',{data:{url:'https://example.test/job'}});expect(signedOut.status()).toBe(401);
+});

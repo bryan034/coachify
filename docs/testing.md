@@ -80,3 +80,14 @@ SMTP pointed at the disposable Mailpit container as in `.env.example`. This suit
 profile. Boundary-fixture browser tests use
 `NEXT_PUBLIC_GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com`, a test-only
 public identifier, when running `npm run test:e2e --workspace apps/frontend`.
+
+## Career input/previews
+
+Run Career pytest from `services/career-service` in a separate virtual environment
+(`python -m pip install -e ".[test]"`, then `python -m pytest`). The existing CI
+career matrix job now runs these tests. Do not collect Profile and Career together
+in one Python process because both use an `app` package. Frontend tests cover
+three methods, Unicode, failure recovery, method-switch races and temporary state.
+The full-stack Career browser test uses the usual disposable Compose stack and
+Mailpit variables; no Groq key or live website is used. Career imports are rate
+limited at the gateway; use synthetic sources and discard only test-stack data.

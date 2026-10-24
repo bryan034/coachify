@@ -1,9 +1,199 @@
-# Contract shell only: no endpoint or request/response schema is implemented.
 openapi: 3.1.0
 info:
-  title: Coachify Career assessment API
-  version: 0.0.0
-  description: Structure-only contract shell. Public prefix /api/v1/career.
-servers:
-  - url: /api/v1
-paths: {}
+  title: Coachify Career preview API
+  description: Temporary authenticated URL/document previews; no persistence or AI
+    interpretation.
+  version: 0.1.0
+paths:
+  /api/v1/career/imports/url:
+    post:
+      tags:
+      - J06 URL preview
+      summary: Url
+      operationId: url_api_v1_career_imports_url_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UrlInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preview'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '413':
+          description: Content Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '422':
+          description: Unprocessable Content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+      security:
+      - HTTPBearer: []
+  /api/v1/career/imports/document:
+    post:
+      tags:
+      - J07 document preview
+      summary: Document
+      operationId: document_api_v1_career_imports_document_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              properties:
+                file:
+                  type: string
+                  format: binary
+              additionalProperties: false
+              type: object
+              required:
+              - file
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preview'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '413':
+          description: Content Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '422':
+          description: Unprocessable Content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+      security:
+      - HTTPBearer: []
+components:
+  schemas:
+    ImportErrorView:
+      properties:
+        detail:
+          type: string
+          title: Detail
+      type: object
+      required:
+      - detail
+      title: ImportErrorView
+    Preview:
+      properties:
+        kind:
+          type: string
+          enum:
+          - url
+          - document
+          title: Kind
+        text:
+          type: string
+          maxLength: 20000
+          minLength: 1
+          title: Text
+        source_name:
+          type: string
+          title: Source Name
+        source_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Url
+        notices:
+          items:
+            type: string
+          type: array
+          title: Notices
+      type: object
+      required:
+      - kind
+      - text
+      - source_name
+      title: Preview
+    UrlInput:
+      properties:
+        url:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Url
+      additionalProperties: false
+      type: object
+      required:
+      - url
+      title: UrlInput
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer

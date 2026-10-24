@@ -2,7 +2,7 @@
 
 Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
-**Status:** P01–P16 education, planning preferences, email/password access, email verification and initial onboarding are implemented with profile persistence and local/international school snapshots. The first workspace UI is integrated; unimplemented features use empty states and disabled actions. The current local setup uses email/password and OTP; no Google OAuth credentials are needed. See [setup instructions](docs/setup.md).
+**Status:** P01–P16 education, planning preferences, email/password access, email verification and initial onboarding are implemented with profile persistence and local/international school snapshots. Career Goal input/previews for J01/J06/J07 are available without persistence or AI interpretation. The first workspace UI is integrated; unimplemented features use empty states and disabled actions. The current local setup uses email/password and OTP; no Google OAuth credentials are needed. See [setup instructions](docs/setup.md).
 
 ## Stack
 
@@ -13,7 +13,7 @@ Career-readiness planner for users in Singapore, including students, National Se
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
 - Account access: email/password accounts with OTP email verification, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
-- AI provider and application hosting: not selected.
+- AI provider planned: Groq; no AI integration is active in the current preview slice. Application hosting is not selected.
 
 ## Repository layout
 
@@ -48,4 +48,4 @@ The current documentation under `docs/` reflects the Next.js and MongoDB decisio
 
 ## Implementation scope
 
-Use the active `infrastructure/docker/compose.yaml` for the implemented profile slice. Files ending in `.example` remain inactive planning templates. Other services retain source placeholders. The profile API contract is implemented; remaining contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.
+Use the active `infrastructure/docker/compose.yaml` for the implemented profile slice. Files ending in `.example` remain inactive planning templates. Career supports temporary URL/document previews without database writes or AI calls; other services retain source placeholders. The profile API contract is implemented; remaining contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.

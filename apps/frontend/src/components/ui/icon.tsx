@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 const paths: Record<string, ReactNode> = {
+ link: <><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2"/></>,
  home: <path d="M3 11l9-7 9 7v9H14v-6h-4v6H3z" />,
  road: <><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/></>,
  doc: <><path d="M14 3H5v18h14V8zM14 3v5h5M9 13h6M9 17h4"/></>,
