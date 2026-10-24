@@ -22,12 +22,12 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   }
   return route.fulfill({json:saved});
  });
- await page.goto('/profile');
+ await page.goto('/profile/edit');
 
  await expect(page.getByRole('button',{name:'Save background'})).toBeEnabled();
- await page.getByRole('radio',{name:'Student',exact:true}).check();
- await page.getByText('University',{exact:true}).click();
- await page.getByRole('checkbox',{name:'My institution is not listed'}).check();
+ await page.getByRole('combobox',{name:'Occupational status'}).selectOption('student');
+ await page.getByRole('combobox',{name:'Education path'}).selectOption('university');
+ await page.getByRole('button',{name:'My institution is not listed'}).click();
  await page.getByRole('textbox',{name:'Institution name'}).fill('Synthetic College');
  await page.getByRole('textbox',{name:'What course are you studying?'}).fill('Design & Computing');
  await page.getByRole('spinbutton',{name:/Current study level/}).fill('3');

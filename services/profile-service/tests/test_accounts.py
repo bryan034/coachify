@@ -406,6 +406,8 @@ def test_pending_account_resumes_verification_only_after_password_proof(setup):
 
 def finish_setup(client,headers,version=0,key=None,**changes):
     body={'expected_version':version,'occupational_status':'employed','school_category':None,'no_previous_education':True,**changes}
+    if body['occupational_status']=='employed' and 'employment' not in body:
+        body['employment']={'employer':'Synthetic employer','role':'Synthetic analyst','industry':'Synthetic industry'}
     return client.post(BASE+'/onboarding/complete',headers={**headers,'Idempotency-Key':key or uuid4().hex},json=body)
 
 
@@ -428,7 +430,7 @@ def test_student_completion_requires_institution_and_current_year_but_not_course
 def test_explicit_no_previous_education_path_persists(setup,status):
     client,_=setup
     _,headers,_,_=register(client)
-    result=finish_setup(client,headers,occupational_status=status)
+    result=finish_setup(client,headers,occupational_status=status,**({'previously_employed':False} if status=='unemployed' else {}))
     assert result.status_code==200
     assert result.json()['no_previous_education'] is True
     assert result.json()['onboarding_complete']
@@ -539,7 +541,7 @@ def test_concurrent_finish_and_partial_save_cannot_overwrite_or_downgrade_comple
     assert sorted(results)==[200,409]
     current=client.get(BASE,headers=headers).json()
     if not current['onboarding_complete']:
-        finished=finish_setup(client,headers,version=current['version'],key='reconciled-finish',occupational_status=current['occupational_status'])
+        finished=finish_setup(client,headers,version=current['version'],key='reconciled-finish',occupational_status=current['occupational_status'],previously_employed=False)
         assert finished.status_code==200
         assert finished.json()['occupational_status']=='unemployed'
     latest=client.get(BASE,headers=headers).json()

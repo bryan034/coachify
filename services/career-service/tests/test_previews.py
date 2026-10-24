@@ -19,10 +19,12 @@ AUTH={'Authorization':'Bearer synthetic-session'}
 TEXT='Analyst — 数据\nResponsibilities\n• Research and communicate findings.\nRequirements\nPython or SQL.'
 
 
-def profile(status=200, body=None):
+def profile(status=200, body=None, setup_status=200, setup_body=None):
     def handle(request):
-        assert request.url.path == '/api/v1/profile/auth/session'
         assert request.headers['Authorization'] == AUTH['Authorization']
+        if request.url.path == '/api/v1/profile':
+            return httpx.Response(setup_status,json=setup_body if setup_body is not None else {'onboarding_complete':True})
+        assert request.url.path == '/api/v1/profile/auth/session'
         return httpx.Response(status,json=body if body is not None else {'id':'synthetic-account','email_verified':True})
     return httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(handle))
 
@@ -72,6 +74,15 @@ def test_profile_outage_returns_recoverable_error():
     upstream=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(outage))
     with TestClient(create_app(upstream)) as client:
         assert client.post(BASE+'/url',json={'url':'https://example.test/job'},headers=AUTH).status_code==503
+
+
+@pytest.mark.parametrize('status,body,expected',[(200,{},403),(200,{'onboarding_complete':False,'version':12},403),
+    (200,{'onboarding_complete':'true'},403),(401,{},401),(503,{},503),(200,[],503)])
+def test_imports_require_canonical_onboarding_before_processing(status,body,expected):
+    def no_processing(*args):raise AssertionError('unfinished accounts must not process sources')
+    with TestClient(create_app(profile(setup_status=status,setup_body=body),no_processing)) as client:
+        assert client.post(BASE+'/url',json={'url':'https://example.test/job'},headers=AUTH).status_code==expected
+        assert client.post(BASE+'/document',files={'file':('role.txt',TEXT,'text/plain')},headers=AUTH).status_code==expected
 
 
 @pytest.mark.parametrize('extension,mime,data,expected',[

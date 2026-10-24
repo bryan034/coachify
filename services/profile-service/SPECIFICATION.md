@@ -174,7 +174,8 @@ truth. The [README](README.md) lists available endpoints, and the
   existence, populated fields, a nonzero version and client flags are never proof.
   GET distinguishes `missing`, `incomplete`, `legacy_unconfirmed` and `complete`.
   Legacy snapshots without the marker remain unconfirmed with all values intact.
-- `/onboarding` reuses the ordinary profile form. Protected deep links route an
+- `/onboarding` presents the same profile fields in a dedicated question-by-question
+  flow without workspace navigation. Protected deep links route an
   unfinished account there; completed users opening it return to `/dashboard` and
   can edit `/profile` voluntarily. Loading, expired authentication and unavailable
   profile storage are distinct. Outages offer retry instead of assuming no profile.
@@ -219,3 +220,56 @@ OTP verification before receiving a session. OTP proves inbox access; the Gmail
 sender does not restrict recipient domains. Synthetic addresses remain supported
 in explicit local-test mode for automated tests.
 Real delivery uses authenticated encrypted Gmail SMTP; Mailpit is capture-only.
+
+## Employment and profile summary
+
+- Profile owns `employment.employer`, `employment.role`, `employment.industry` and
+  nullable boolean `previously_employed`. PATCH merges supplied work fields only;
+  text is trimmed, limited to 300 characters and rejects blank/control characters.
+  Explicit null clears a text field. Work edits apply to Employed status, or to
+  Unemployed with an explicitly true previous-employment answer. Other statuses
+  retain historical details without treating them as current work.
+- Entering Unemployed from another status resets the previous-employment answer to
+  unanswered unless supplied explicitly. Never infer it from retained work details.
+  A false answer preserves historical details but hides them and prevents work edits.
+- Initial completion requires company, role and industry for Employed, or Unemployed
+  with previous employment. Unemployed users must explicitly answer yes/no first.
+  The UI asks each question separately before education. Existing completed profiles
+  stay completed; missing new fields can be added in ordinary editing.
+- Public `/companies` and `/industries` searches use bundled reference JSON with
+  case/accent-insensitive matching, query length up to 150 and limit 1–100. These
+  suggestions never restrict accepted profile text. Search is independent of MongoDB
+  and external network services; failure does not prevent manual entry.
+- `/profile` is a summary with inline editing, save and cancel. `/profile/edit`
+  remains available for direct links and planning preferences. Student status alone
+  permits a study-year row; its value uses canonical current-study-year context.
+  Non-students see last education; employed users see current employment, and unemployed users with a confirmed work history see previous employment.
+- `auth-config.development_tools_enabled` comes solely from the validated server
+  environment. It is false in production, including when browser/query flags ask
+  otherwise. The development onboarding replay never PATCHes a profile, posts
+  completion or clears the canonical completion marker. No reset endpoint exists.
+
+## Graduation year and larger employer directory
+
+- `education.graduation_year` is a nullable strict integer, 1900 through the current
+  year in Singapore. It can be edited for Unemployed + `previously_employed=false`
+  with a selected last institution. Other statuses retain historical values but
+  cannot change them or display them as current information.
+- This branch asks graduation immediately after school, before optional course.
+  Initial completion requires the year when education applies; explicit no previous
+  education skips it. Existing completed accounts remain completed. Ordinary edits
+  can clear it; a changed school marks retained graduation information for review.
+  The profile summary/editor use the same versioned Profile API and MongoDB history.
+- Company suggestions use the bundled employee-ranked Wikidata snapshot; name
+  search preserves that ordering and returns a bounded list, not the entire file.
+  Latest dated non-deprecated counts take priority over older/undated observations.
+  Dates, country codes and provenance stay in the snapshot. Identical names are
+  deduplicated; flagged outliers remain searchable without a ranking count. These
+  are approximate historical reference counts, not a live global employer ranking.
+  See [snapshot sources and refresh](app/data/README.md#employment-reference-snapshot).
+
+The Singapore employer supplement also retains businesses without employee counts.
+Its reviewed seed IDs and country/headquarters source queries live alongside the
+reference snapshot. Refresh preserves these names and their Singapore-source flag;
+unknown headcounts sort after known counts. The public search response remains
+`id`/`name`; reference metadata is not stored in user profiles or MongoDB.

@@ -45,11 +45,25 @@ def revise_profile(previous: dict | None, patch: ProfilePatch) -> dict:
         current["no_previous_education"] = patch.no_previous_education
     elif status == "student" or category is not None:
         current["no_previous_education"] = False
+    # A status change must never infer previous employment from retained work details.
+    if status == "unemployed" and status != original.get("occupational_status"):
+        current["previously_employed"] = None
+    if "previously_employed" in fields:
+        if status != "unemployed" or patch.previously_employed is None:
+            raise ProfileValidationError("previously_employed", "Answer yes or no to previous employment only when unemployed.")
+        current["previously_employed"] = patch.previously_employed
+    if "employment" in fields:
+        if not (status == "employed" or (status == "unemployed" and current.get("previously_employed") is True)):
+            raise ProfileValidationError("employment", "Work details apply to current employment or confirmed previous employment.")
+        employment = deepcopy(current.get("employment", {}))
+        for name in patch.employment.model_fields_set:
+            employment[name] = getattr(patch.employment, name)
+        current["employment"] = employment
     context = "current" if status == "student" else "last"
     context_changed = (status != original.get("occupational_status") or category != original.get("school_category"))
     current["education_context"] = context
     education = deepcopy(current.get("education", {}))
-    had_education = any(education.get(k) is not None for k in ("institution", "course", "study_year"))
+    had_education = any(education.get(k) is not None for k in ("institution", "course", "study_year", "graduation_year"))
     review = bool(current.get("education_review_required")) or (context_changed and original.get("occupational_status") is not None)
     update = patch.education
     supplied = update.model_fields_set if update else set()
@@ -74,13 +88,19 @@ def revise_profile(previous: dict | None, patch: ProfilePatch) -> dict:
                 "country_code": institution.country_code, "snapshot_date": None}
     if "course" in supplied:
         education["course"] = update.course
+    if "graduation_year" in supplied:
+        if not (status == "unemployed" and current.get("previously_employed") is False):
+            raise ProfileValidationError("education.graduation_year", "Graduation year applies to unemployed users who have not worked before.")
+        if update.graduation_year is not None and (not education.get("institution") or category is None or current.get("no_previous_education")):
+            raise ProfileValidationError("education.graduation_year", "Choose your last school before adding graduation year.")
+        education["graduation_year"] = update.graduation_year
     if "study_year" in supplied:
         if status != "student":
             raise ProfileValidationError("education.study_year", "Only students can set a current study year; previous study information is retained.")
         education.update(study_year=update.study_year, study_year_label=year_label(category, update.study_year), study_year_category=category)
     institution_changed = ("institution" in supplied and education.get("institution") != original.get("education", {}).get("institution"))
     dependent_values_retained = institution_changed and any(
-        education.get(key) is not None and key not in supplied for key in ("course", "study_year"))
+        education.get(key) is not None and key not in supplied for key in ("course", "study_year", "graduation_year"))
     if supplied or patch.confirm_education_context:
         if had_education and review and patch.confirm_education_context:
             institution = education.get("institution")
@@ -112,12 +132,20 @@ def complete_onboarding(previous: dict | None, patch: ProfilePatch) -> dict:
     current = deepcopy(revise_profile(previous, patch))
     status, category = current.get("occupational_status"), current.get("school_category")
     education = current.get("education", {})
+    if status == "unemployed" and current.get("previously_employed") is None:
+        raise ProfileValidationError("previously_employed", "Tell us whether you were previously employed before finishing setup.")
+    if status == "employed" or (status == "unemployed" and current.get("previously_employed") is True):
+        for field in ("employer", "role", "industry"):
+            if not current.get("employment", {}).get(field):
+                raise ProfileValidationError(f"employment.{field}", "Enter your employer, role and industry before finishing setup.")
     no_education = status != "student" and category is None and current.get("no_previous_education") is True
     if not no_education:
         if category is None:
             raise ProfileValidationError("school_category", "Choose your school category or explicitly select no previous education.")
         if not education.get("institution"):
             raise ProfileValidationError("education.institution", "Enter or select your institution before finishing setup.")
+        if status == "unemployed" and current.get("previously_employed") is False and not education.get("graduation_year"):
+            raise ProfileValidationError("education.graduation_year", "Enter your graduation year before finishing setup.")
         if current.get("education_review_required"):
             raise ProfileValidationError("confirm_education_context", "Review the education details before finishing setup.")
         if status == "student" and (not education.get("study_year") or education.get("study_year_category") != category):

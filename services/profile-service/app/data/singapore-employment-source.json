@@ -1,0 +1,29 @@
+{
+  "retrieved": "2026-10-25",
+  "source": "Wikidata CC0",
+  "country_query": "SELECT DISTINCT ?company ?companyLabel WHERE {\n VALUES ?type { wd:Q4830453 wd:Q783794 wd:Q891723 wd:Q6881511 wd:Q167037 wd:Q726870 wd:Q18127 wd:Q2085381 wd:Q134161 wd:Q730038 wd:Q778575 }\n ?company wdt:P17 wd:Q334; wdt:P31 ?type.\n FILTER NOT EXISTS { ?company wdt:P576 ?dissolved }\n SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,mul\" }\n}",
+  "headquarters_query": "SELECT DISTINCT ?company ?companyLabel WHERE {\n VALUES ?type { wd:Q4830453 wd:Q783794 wd:Q891723 wd:Q6881511 wd:Q167037 wd:Q726870 wd:Q18127 wd:Q2085381 wd:Q134161 wd:Q730038 wd:Q778575 }\n { ?company wdt:P159 wd:Q334 } UNION { ?company wdt:P159/wdt:P17 wd:Q334 }\n ?company wdt:P31 ?type.\n FILTER NOT EXISTS { ?company wdt:P576 ?dissolved }\n SERVICE wikibase:label { bd:serviceParam wikibase:language \"en,mul\" }\n}",
+  "selection": "Businesses with Singapore headquarters, or Singapore country and no conflicting headquarters country. Employee count not required. Exclude entities with recorded dissolution.",
+  "accepted_seed_count": 713,
+  "manual_supplement": [
+    {
+      "id": "Q16909913",
+      "source_url": "https://www.wikidata.org/wiki/Q16909913"
+    },
+    {
+      "id": "Q21096017",
+      "source_url": "https://www.wikidata.org/wiki/Q21096017"
+    },
+    {
+      "id": "Q3267863",
+      "source_url": "https://www.wikidata.org/wiki/Q3267863"
+    },
+    {
+      "id": "Q4140545",
+      "source_url": "https://www.wikidata.org/wiki/Q4140545"
+    }
+  ],
+  "additional_headquarters_verification": {
+    "Q16909913": "https://www.venture.com.sg/about/"
+  }
+}

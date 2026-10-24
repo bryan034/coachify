@@ -83,7 +83,7 @@ def create_app(profile_client=None, processor=run_preview):
     @app.get('/health', include_in_schema=False)
     async def health(): return {'status':'ok'}
 
-    errors = {status: {'model': ImportErrorView} for status in (400,401,413,415,422,429,503)}
+    errors = {status: {'model': ImportErrorView} for status in (400,401,403,413,415,422,429,503)}
 
     @app.post('/api/v1/career/imports/url', response_model=Preview, responses=errors, tags=['J06 URL preview'])
     async def url(data: UrlInput, request: Request, account=Depends(authenticated)):

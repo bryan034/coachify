@@ -28,7 +28,8 @@ are rejected, not truncated. Source limits and parser safeguards are described i
 
 ## Access and scope
 
-Both endpoints require the existing Coachify session as `Authorization: Bearer …`.
+Both endpoints require the existing Coachify session as `Authorization: Bearer …`
+and server-confirmed initial setup completion. Unfinished accounts receive 403.
 Preview responses use `Cache-Control: no-store`. Upload originals may be spooled
 into private temporary storage and are closed/deleted after each request. Text is
 not written to MongoDB, browser storage, logs or saved processing records.

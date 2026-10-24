@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createLocalAccount } from './account-helpers';
+import { createLocalAccount, fillCurrentEmployment } from './account-helpers';
 
 test('P09–P12 register, switch A/B, restore history, revoke and protect back/reload', async ({ page }) => {
  await page.goto('/');
@@ -9,8 +9,9 @@ test('P09–P12 register, switch A/B, restore history, revoke and protect back/r
  const who = await (await a.get('/api/v1/profile/auth/session')).json();
  expect((await a.finish({expected_version:0,occupational_status:'employed',school_category:'university',education:{institution:{kind:'custom',name:'Synthetic A school'},course:'Synthetic A course'}})).ok()).toBe(true);
  await page.goto('/profile');
+ await page.getByRole('button',{name:'Edit profile',exact:false}).click();
  await expect(page.getByRole('textbox', {name:'What course did you study?'})).toHaveValue('Synthetic A course');
- await page.getByRole('button', {name:'Sign out',exact:true}).first().click();
+ await page.getByRole('button', {name:/^(Sign out|Exit setup and sign out)$/}).first().click();
  await expect(page).toHaveURL(/\/$/);
  expect((await a.get('/api/v1/profile')).status()).toBe(401);
  await page.goto('/profile');
@@ -19,7 +20,7 @@ test('P09–P12 register, switch A/B, restore history, revoke and protect back/r
  await expect(page.getByText('Synthetic A school',{exact:true})).toHaveCount(0);
  const b = await createLocalAccount(page, 'Synthetic account B');
  await expect((await b.get('/api/v1/profile')).json()).resolves.toMatchObject({version:0});
- await page.getByRole('button', {name:'Sign out',exact:true}).first().click();
+ await page.getByRole('button', {name:/^(Sign out|Exit setup and sign out)$/}).first().click();
  await expect(page).toHaveURL(/\/$/);
  await page.goto('/login');
  await page.getByRole('textbox',{name:'Email address',exact:true}).fill(a.email);
@@ -28,6 +29,7 @@ test('P09–P12 register, switch A/B, restore history, revoke and protect back/r
  await expect(page).toHaveURL(/\/dashboard$/);
  await expect(page.locator('[aria-label="Saved background"]')).toContainText('Synthetic A school');
  await page.getByRole('link',{name:'My profile'}).click();
+ await page.getByRole('button',{name:'Edit profile',exact:false}).click();
  await expect(page.getByRole('textbox',{name:'What course did you study?'})).toHaveValue('Synthetic A course');
  await expect(page.getByText('Synthetic account B',{exact:true})).toHaveCount(0);
 });
@@ -36,7 +38,7 @@ test('logout failure stays locked across reload and old retry does not clear B',
  const a = await createLocalAccount(page,'Synthetic logout A');
  let fail = true;
  await page.route('**/api/v1/profile/auth/logout', route => fail ? route.fulfill({status:503,json:{detail:'Synthetic termination outage'}}) : route.continue());
- await page.getByRole('button',{name:'Sign out',exact:true}).first().click();
+ await page.getByRole('button',{name:/^(Sign out|Exit setup and sign out)$/}).first().click();
  await expect(page).toHaveURL(/\/$/);
  await expect(page.getByRole('main').getByRole('alert')).toContainText('Server sign-out could not be confirmed');
  await page.reload();
@@ -48,7 +50,7 @@ test('logout failure stays locked across reload and old retry does not clear B',
  expect((await page.request.post('/api/v1/profile/auth/logout',{headers:a.headers})).ok()).toBe(true);
  expect((await b.get('/api/v1/profile')).ok()).toBe(true);
  await page.reload();
- await expect(page.getByRole('button',{name:'Finish setup'})).toBeEnabled();
+ await expect(page.getByRole('heading',{name:'Where are you right now?'})).toBeVisible();
 });
 
 test('another tab signing out clears private UI and drafts', async ({ page, context }) => {
@@ -59,12 +61,15 @@ test('another tab signing out clears private UI and drafts', async ({ page, cont
  await other.goto('/');
  await other.evaluate(value => sessionStorage.setItem('coachify.session',value!),stored);
  await other.goto('/profile');
- await expect(other.getByRole('button',{name:'Finish setup'})).toBeEnabled();
- await other.getByRole('radio',{name:'Employed',exact:true}).check();
- await other.getByRole('textbox',{name:'What course did you study?'}).fill('Private unsaved draft');
+ await expect(other.getByRole('heading',{name:'Where are you right now?'})).toBeVisible();
+ await other.getByRole('button',{name:'Employed',exact:true}).click();
+ await fillCurrentEmployment(other);
+ await other.getByRole('button',{name:'University',exact:true}).click();
+ await other.getByRole('button',{name:'My school isn’t listed'}).click();
+ await other.getByRole('textbox',{name:'School name'}).fill('Private unsaved draft');
  await page.bringToFront();
- await expect(page.getByRole('button',{name:'Sign out',exact:true}).first()).toBeVisible();
- await page.getByRole('button',{name:'Sign out',exact:true}).first().click();
+ await expect(page.getByRole('button',{name:/^(Sign out|Exit setup and sign out)$/}).first()).toBeVisible();
+ await page.getByRole('button',{name:/^(Sign out|Exit setup and sign out)$/}).first().click();
  await other.bringToFront();
  await expect(other).toHaveURL(/\/$/);
  await expect(other.getByRole('textbox')).toHaveCount(0);
@@ -74,18 +79,19 @@ test('another tab signing out clears private UI and drafts', async ({ page, cont
 
 test('P13/P14 partial setup stays guarded and another tab observes completion',async({page,context})=>{
  const api=await createLocalAccount(page,'Synthetic onboarding tabs');
- await page.getByRole('radio',{name:'Employed',exact:true}).check();
- await page.getByRole('radio',{name:'No applicable previous education'}).check();
- await page.getByRole('button',{name:'Save progress',exact:true}).click();
- await expect(page.getByText('Profile saved.')).toBeVisible();
+ await page.getByRole('button',{name:'Employed',exact:true}).click();
+ await fillCurrentEmployment(page);
+ await page.getByRole('button',{name:'No applicable previous education'}).click();
+ await expect(page.getByRole('button',{name:'Enter Coachify',exact:true})).toBeEnabled();
  expect((await(await api.get('/api/v1/profile')).json()).onboarding_complete).toBe(false);
+ expect((await page.request.post('/api/v1/career/imports/url',{headers:api.headers,data:{url:'https://example.test/job'}})).status()).toBe(403);
  await page.goto('/roadmap');await expect(page).toHaveURL(/\/onboarding$/);
  const stored=await page.evaluate(()=>sessionStorage.getItem('coachify.session'));
  const other=await context.newPage();await other.goto('/');
  await other.evaluate(value=>sessionStorage.setItem('coachify.session',value!),stored);
- await other.goto('/onboarding');await expect(other.getByRole('button',{name:'Finish setup'})).toBeEnabled();
- await page.bringToFront();await expect(page.getByRole('button',{name:'Finish setup'})).toBeEnabled();
- await page.getByRole('button',{name:'Finish setup'}).click();await expect(page).toHaveURL(/\/dashboard$/);
+ await other.goto('/onboarding');await expect(other.getByRole('button',{name:'Enter Coachify'})).toBeEnabled();
+ await page.bringToFront();await expect(page.getByRole('button',{name:'Enter Coachify'})).toBeEnabled();
+ await page.getByRole('button',{name:'Enter Coachify'}).click();await expect(page).toHaveURL(/\/dashboard$/);
  await other.bringToFront();await expect(other).toHaveURL(/\/dashboard$/);
  await other.goto('/onboarding');await expect(other).toHaveURL(/\/dashboard$/);
  const saved=await(await api.get('/api/v1/profile')).json();expect(saved.onboarding_complete).toBe(true);

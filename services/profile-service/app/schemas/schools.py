@@ -37,3 +37,4 @@ class AuthConfigView(BaseModel):
     email_password_enabled: bool
     google_enabled: bool
     email_verification_required: bool = True
+    development_tools_enabled: bool = False

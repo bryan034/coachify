@@ -15,9 +15,11 @@ test('P09–P16 Google entry, OTP verification, initial setup, reload and logout
    const input=route.request().postDataJSON();expect(input.credential).toBe('verified-google-'+nonce);accessToken=input.session_token;expect(accessToken.length).toBeGreaterThanOrEqual(32);completed++;return route.fulfill({json:{verification_required:true,challenge_id:'synthetic-challenge',masked_email:'s***@example.test',expires_at:new Date(Date.now()+600000).toISOString(),resend_at:new Date(Date.now()+60000).toISOString()}});
   }
   if(path.endsWith('/auth/verify-email')){expect(route.request().postDataJSON().code).toBe('123456');return route.fulfill({json:account});}
-  if(path.endsWith('/onboarding/complete')){profile={...profile,...route.request().postDataJSON(),version:1,onboarding_complete:true};return route.fulfill({json:profile});}
+  if(route.request().method()==='PATCH'){profile={...profile,...route.request().postDataJSON(),version:profile.version+1};return route.fulfill({json:profile});}
+  if(path.endsWith('/onboarding/complete')){profile={...profile,...route.request().postDataJSON(),version:profile.version+1,onboarding_complete:true};return route.fulfill({json:profile});}
   if(path.endsWith('/auth/logout')){ended=true;return route.fulfill({json:{ok:true}});}
   if(path.endsWith('/auth/session'))return route.fulfill({status:ended?401:200,json:ended?{detail:'Ended'}:account});
+  if(path.endsWith('/companies')||path.endsWith('/industries'))return route.fulfill({json:[]});
   if(path.endsWith('/planning-inputs'))return route.fulfill({json:{profile_version:0,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
   privateReads++;expect(route.request().headers().authorization).toBe('Bearer '+accessToken);return route.fulfill({json:profile});
  });
@@ -35,10 +37,16 @@ test('P09–P16 Google entry, OTP verification, initial setup, reload and logout
  await expect(page).toHaveURL(/\/onboarding$/);
  expect(completed).toBe(1);
  await page.reload();
- await expect(page.getByRole('button',{name:'Finish setup'})).toBeEnabled();
- await page.getByRole('radio',{name:'Employed',exact:true}).check();
- await page.getByRole('radio',{name:'No applicable previous education'}).check();
- await page.getByRole('button',{name:'Finish setup',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Where are you right now?'})).toBeVisible();
+ await page.getByRole('button',{name:'Employed',exact:true}).click();
+ await page.getByRole('textbox',{name:'Place of employment'}).fill('Synthetic company');
+ await page.getByRole('button',{name:'Continue',exact:true}).click();
+ await page.getByRole('textbox',{name:'Role',exact:true}).fill('Synthetic analyst');
+ await page.getByRole('button',{name:'Continue',exact:true}).click();
+ await page.getByRole('textbox',{name:'Industry',exact:true}).fill('Synthetic industry');
+ await page.getByRole('button',{name:'Continue',exact:true}).click();
+ await page.getByRole('button',{name:'No applicable previous education'}).click();
+ await page.getByRole('button',{name:'Enter Coachify',exact:true}).click();
  await expect(page).toHaveURL(/\/dashboard$/);
  expect(completed).toBe(1);
  await page.getByRole('button',{name:'Sign out',exact:true}).first().click();

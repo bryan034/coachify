@@ -36,6 +36,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportErrorView'
+        '403':
+          description: Initial setup is incomplete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
         '413':
           description: Content Too Large
           content:
@@ -102,6 +108,12 @@ paths:
                 $ref: '#/components/schemas/ImportErrorView'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '403':
+          description: Initial setup is incomplete
           content:
             application/json:
               schema:
