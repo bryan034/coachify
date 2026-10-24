@@ -45,6 +45,9 @@ jobs:
       - run: npx playwright install --with-deps chromium
         working-directory: apps/frontend
       - run: npm run test:e2e --workspace apps/frontend
+        env:
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: test-client.apps.googleusercontent.com
+          NEXT_TELEMETRY_DISABLED: '1'
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -83,10 +86,33 @@ jobs:
           fi
           exit "$status"
 
+  profile-integration:
+    name: Profile MongoDB integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports: [27017:27017]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[test]'
+        working-directory: services/profile-service
+      - run: python -m pytest
+        working-directory: services/profile-service
+        env:
+          MONGODB_TEST_URI: mongodb://localhost:27017
+
   test-gate:
     name: Test gate
     if: ${{ always() }}
-    needs: [frontend-unit, frontend-e2e, backend]
+    needs: [frontend-unit, frontend-e2e, backend, profile-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -95,7 +121,9 @@ jobs:
           UNIT_RESULT: ${{ needs.frontend-unit.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
+          INTEGRATION_RESULT: ${{ needs.profile-integration.result }}
         run: |
           test "$UNIT_RESULT" = success
           test "$E2E_RESULT" = success
           test "$BACKEND_RESULT" = success
+          test "$INTEGRATION_RESULT" = success

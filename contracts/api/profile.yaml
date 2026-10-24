@@ -1,9 +1,359 @@
-# Contract shell only: no endpoint or request/response schema is implemented.
+# Generated from profile-service app.openapi(); keep in sync with the implemented routes.
 openapi: 3.1.0
 info:
-  title: Coachify Student profile API
-  version: 0.0.0
-  description: Structure-only contract shell. Public prefix /api/v1/profile.
-servers:
-  - url: /api/v1
-paths: {}
+  title: Coachify profile API
+  description: Google bearer authentication by default. Explicit local_test mode uses
+    a fixed server identity only in development; see docs/development/profile-setup.md.
+  version: 0.1.0
+paths:
+  /api/v1/profile/school-categories:
+    get:
+      summary: School Categories
+      operationId: school_categories_api_v1_profile_school_categories_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/CategoryView'
+                type: array
+                title: Response School Categories Api V1 Profile School Categories
+                  Get
+  /api/v1/profile/school-countries:
+    get:
+      summary: School Countries
+      operationId: school_countries_api_v1_profile_school_countries_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/CountryView'
+                type: array
+                title: Response School Countries Api V1 Profile School Countries Get
+  /api/v1/profile/institutions:
+    get:
+      summary: Institutions
+      operationId: institutions_api_v1_profile_institutions_get
+      parameters:
+      - name: category
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/SchoolCategory'
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 150
+          default: ''
+          title: Q
+      - name: country
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{2}$
+          - type: 'null'
+          title: Country
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstitutionResults'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile:
+    get:
+      summary: Get Profile
+      operationId: get_profile_api_v1_profile_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+      security:
+      - HTTPBearer: []
+    patch:
+      summary: Patch Profile
+      operationId: patch_profile_api_v1_profile_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePatch'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/profile/versions/{version}:
+    get:
+      summary: Get Version
+      operationId: get_version_api_v1_profile_versions__version__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    CategoryView:
+      properties:
+        id:
+          $ref: '#/components/schemas/SchoolCategory'
+        label:
+          type: string
+          title: Label
+      type: object
+      required:
+      - id
+      - label
+      title: CategoryView
+    CountryView:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+      type: object
+      required:
+      - code
+      - name
+      title: CountryView
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    InstitutionResults:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/InstitutionView'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+        snapshot_date:
+          type: string
+          title: Snapshot Date
+        coverage_note:
+          type: string
+          title: Coverage Note
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      - snapshot_date
+      - coverage_note
+      title: InstitutionResults
+    InstitutionView:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        categories:
+          items:
+            $ref: '#/components/schemas/SchoolCategory'
+          type: array
+          title: Categories
+        country_code:
+          type: string
+          title: Country Code
+        country:
+          type: string
+          title: Country
+        domains:
+          items:
+            type: string
+          type: array
+          title: Domains
+        source:
+          type: string
+          title: Source
+      type: object
+      required:
+      - id
+      - name
+      - categories
+      - country_code
+      - country
+      - domains
+      - source
+      title: InstitutionView
+    OccupationalStatus:
+      type: string
+      enum:
+      - student
+      - national_service
+      - unemployed
+      - employed
+      title: OccupationalStatus
+    ProfilePatch:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        occupational_status:
+          $ref: '#/components/schemas/OccupationalStatus'
+        school_category:
+          anyOf:
+          - $ref: '#/components/schemas/SchoolCategory'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - occupational_status
+      title: ProfilePatch
+    ProfileView:
+      properties:
+        version:
+          type: integer
+          title: Version
+        occupational_status:
+          anyOf:
+          - $ref: '#/components/schemas/OccupationalStatus'
+          - type: 'null'
+        school_category:
+          anyOf:
+          - $ref: '#/components/schemas/SchoolCategory'
+          - type: 'null'
+        education_context:
+          anyOf:
+          - type: string
+            enum:
+            - current
+            - last
+          - type: 'null'
+          title: Education Context
+        education_review_required:
+          type: boolean
+          title: Education Review Required
+          default: false
+        education:
+          additionalProperties: true
+          type: object
+          title: Education
+      type: object
+      required:
+      - version
+      title: ProfileView
+    SchoolCategory:
+      type: string
+      enum:
+      - secondary
+      - ite
+      - polytechnic
+      - junior_college
+      - university
+      title: SchoolCategory
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer

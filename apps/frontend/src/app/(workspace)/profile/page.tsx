@@ -1,1 +1,2 @@
-// Placeholder: Student profile page. No profile behaviour is implemented.
+import { ProfileForm } from '@/features/profile/profile-form';
+export default function ProfilePage() { return <ProfileForm />; }

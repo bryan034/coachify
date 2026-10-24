@@ -19,7 +19,9 @@ server on that port first. Chromium is the initial browser target. No production
 credentials are required by this configuration. Add isolated backend fixtures and
 API/database lifecycle management before introducing full-stack journeys.
 
-No product tests exist yet; empty suites pass. The browser runner uses Playwright
+P07/P08 component tests and a browser journey are implemented; empty suites still pass. The browser runner uses Playwright
 discovery first and avoids building/starting Next.js when no browser tests exist.
 Actual test failures and discovery/configuration errors still fail. Add meaningful
 tests with features; an empty passing suite does not establish test coverage.
+
+For the browser suite, set NEXT_PUBLIC_GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com (a test-only public identifier). See docs/development/profile-setup.md from the root for fixtures and real sign-in setup.

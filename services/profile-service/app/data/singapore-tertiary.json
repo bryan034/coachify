@@ -1,0 +1,82 @@
+[
+  {
+    "name": "ITE College Central",
+    "categories": [
+      "ite"
+    ],
+    "country_code": "SG",
+    "country": "Singapore",
+    "domains": [],
+    "source": "ite"
+  },
+  {
+    "name": "ITE College East",
+    "categories": [
+      "ite"
+    ],
+    "country_code": "SG",
+    "country": "Singapore",
+    "domains": [],
+    "source": "ite"
+  },
+  {
+    "name": "ITE College West",
+    "categories": [
+      "ite"
+    ],
+    "country_code": "SG",
+    "country": "Singapore",
+    "domains": [],
+    "source": "ite"
+  },
+  {
+    "name": "Nanyang Polytechnic",
+    "categories": [
+      "polytechnic"
+    ],
+    "country_code": "SG",
+    "country": "Singapore",
+    "domains": [],
+    "source": "moe-psei"
+  },
+  {
+    "name": "Ngee Ann Polytechnic",
+    "categories": [
+      "polytechnic"
+    ],
+    "country_code": "SG",
+    "country": "Singapore",
+    "domains": [],
+    "source": "moe-psei"
+  },
+  {
+    "name": "Republic Polytechnic",
+    "categories": [
+      "polytechnic"
+    ],
+    "country_code": "SG",
+    "country": "Singapore",
+    "domains": [],
+    "source": "moe-psei"
+  },
+  {
+    "name": "Singapore Polytechnic",
+    "categories": [
+      "polytechnic"
+    ],
+    "country_code": "SG",
+    "country": "Singapore",
+    "domains": [],
+    "source": "moe-psei"
+  },
+  {
+    "name": "Temasek Polytechnic",
+    "categories": [
+      "polytechnic"
+    ],
+    "country_code": "SG",
+    "country": "Singapore",
+    "domains": [],
+    "source": "moe-psei"
+  }
+]

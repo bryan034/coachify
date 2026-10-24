@@ -1,0 +1,89 @@
+{
+  "info": {
+    "name": "Coachify local P07/P08",
+    "description": "Development-only fixed identity. Set APP_ENV=development and AUTH_MODE=local_test on the server. No Google credentials or Authorization header needed. Run Read profile before Save background to capture the current version.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "profileVersion",
+      "value": "0"
+    }
+  ],
+  "item": [
+    {
+      "name": "School categories",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/profile/school-categories"
+      }
+    },
+    {
+      "name": "International university search",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/profile/institutions?category=university&country=US&q=harvard"
+      }
+    },
+    {
+      "name": "Read profile",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/profile"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeded\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.collectionVariables.set(\"profileVersion\", pm.response.json().version);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Save background",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeded\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.collectionVariables.set(\"profileVersion\", pm.response.json().version);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/v1/profile",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expected_version\": {{profileVersion}},\n  \"occupational_status\": \"student\",\n  \"school_category\": \"university\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
