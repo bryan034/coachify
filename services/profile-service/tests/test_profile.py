@@ -295,7 +295,7 @@ def test_text_normalisation_precedes_length_validation(client):
 def test_auth_config_reports_only_server_mode_and_cannot_enable_local_mode(monkeypatch):
     monkeypatch.delenv("AUTH_MODE", raising=False)
     with TestClient(create_app(MemoryRepository())) as client:
-        assert client.get("/api/v1/profile/auth-config?mode=local_test").json() == {"mode": "google", "email_password_enabled": True, "google_enabled": False, "email_verification_required": True}
+        assert client.get("/api/v1/profile/auth-config?mode=local_test").json() == {"mode": "email", "email_password_enabled": True, "google_enabled": False, "email_verification_required": True}
         assert client.get("/api/v1/profile").status_code == 401
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("AUTH_MODE", "local_test")
