@@ -2,7 +2,7 @@
 
 Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
-**Status:** P01–P08 education, status and planning preferences are implemented with profile persistence and local/international school snapshots. The first workspace UI is integrated; unimplemented features use empty states and disabled actions. Google sign-in requires your Web Client ID. See [setup instructions](docs/setup.md).
+**Status:** P01–P16 education, planning preferences, email/password access, email verification and initial onboarding are implemented with profile persistence and local/international school snapshots. The first workspace UI is integrated; unimplemented features use empty states and disabled actions. The current local setup uses email/password and OTP; no Google OAuth credentials are needed. See [setup instructions](docs/setup.md).
 
 ## Stack
 
@@ -12,7 +12,7 @@ Career-readiness planner for users in Singapore, including students, National Se
 - Database: MongoDB, with separate databases and credentials for data-owning services.
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
-- Google sign-in: JavaScript button and FastAPI ID-token verification implemented for the profile slice; real credentials must be configured. Tokens are kept in memory, not a persistent app session.
+- Account access: email/password accounts with OTP email verification, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
 - AI provider and application hosting: not selected.
 
 ## Repository layout

@@ -2,7 +2,7 @@
 
 | Service | Story groups | Owned data |
 |---|---|---|
-| Profile | P01-P08; profile corrections following ingestion | Canonical education, experiences, personal contributions, capabilities, declared deadline/capacity/temporary availability, profile versions |
+| Profile | P01-P16; profile corrections following ingestion | Accounts/email verification/revocable sessions, canonical onboarding and education, experiences, personal contributions, capabilities, declared deadline/capacity/temporary availability, profile versions |
 | CV | C01-C08 | Ingestion state, provisional extraction, clarification questions/answers, processing operations |
 | Career | J01-J05; G01-G07 | Target job descriptions, requirements, assessment versions, capability gaps |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Consumed planning-input snapshots, milestones, tasks, progress history, proposed/applied revisions |

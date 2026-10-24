@@ -14,47 +14,102 @@ From the repository root, copy the environment example if you do not already hav
 cp -n infrastructure/docker/.env.example infrastructure/docker/.env
 ```
 
-For local testing without Google, keep these values:
+The example uses email/password sign-in and sends OTPs to real inboxes through
+Gmail SMTP. Fill in these values before starting:
+
+| Variable | What to enter |
+|---|---|
+| `SMTP_USERNAME`, `SMTP_FROM` | Your Gmail sender address (use the same address for both). |
+| `SMTP_PASSWORD` | That sender's Google App Password, without spaces. |
+| `OTP_HASH_SECRET` | Generate once with `openssl rand -hex 32`. |
+| `MONGO_ROOT_PASSWORD`, `PROFILE_DB_PASSWORD` | Generate each separately with `openssl rand -hex 24`. Preserve existing values when reusing your database. |
+
+Keep the supplied `APP_ENV=development`, `AUTH_MODE=email`, SMTP host, port and
+security values. No Google OAuth variables or Mailpit variables are needed.
+Each teammate keeps their own ignored `.env` and credentials.
+
+MongoDB data survives rebuilds in its volume. Changing an environment password
+does not update database users already stored in that volume. Only the gateway
+exposes a loopback port; the API and MongoDB stay private.
+
+## Local email/password sign-in and real Gmail delivery
+
+Google sign-in is disabled for the current local setup. Users register with their
+email address and a Coachify password, then verify the email with an OTP.
+
+To use real accounts locally, edit the ignored `infrastructure/docker/.env`:
 
 ```dotenv
 APP_ENV=development
-AUTH_MODE=local_test
-LOCAL_TEST_USER_ID=coachify-local-user
-GOOGLE_CLIENT_ID=
+AUTH_MODE=email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURITY=starttls
+SMTP_USERNAME=YOUR_SENDER@gmail.com
+SMTP_PASSWORD=YOUR_GOOGLE_APP_PASSWORD
+SMTP_FROM=YOUR_SENDER@gmail.com
 ```
 
-Fill `MONGO_ROOT_PASSWORD` and `PROFILE_DB_PASSWORD` with two different random hex
-passwords (generate each with `openssl rand -hex 24`). Each teammate can run their
-own local database and keep their own `.env`; personal passwords need not be shared.
-Keep real environment files and database data out of Git.
+Keep your existing MongoDB passwords and `OTP_HASH_SECRET`. Fill in the values
+above before rebuilding. `SMTP_FROM` should match the sender mailbox. Use the
+Google App Password without its display spaces, not your normal Gmail password.
+Keep credentials in this ignored file; do not paste them in chat or commit them.
+Each developer supplies their own credentials.
 
-```sh
-docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up --build -d
-```
+1. Enable 2-Step Verification on the sender's Google account, then generate a
+   [Google App Password](https://myaccount.google.com/apppasswords). If the option
+   is unavailable, check Google's account/organisation restrictions or use
+   another authenticated SMTP provider. No OAuth project, client ID, client
+   secret or Gmail API is required to send these verification emails.
+2. Rebuild after saving your environment settings:
 
-Open **http://localhost:8080**. Only the gateway exposes a loopback port; the backend
-and database stay private. MongoDB data survives container rebuilds in a volume.
-Changing an environment password does not change users in an existing volume;
-update those users deliberately. Do not delete a volume containing data you need.
+   ```sh
+   docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up --build -d
+   docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml --profile development stop mailpit
+   docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
+   ```
 
-Local-test mode currently uses one fixed identity for all requests to that private
-instance. Changing `LOCAL_TEST_USER_ID` and restarting selects another synthetic
-profile; it is not an account-login flow. Account creation, logout and multi-account
-onboarding are backlog work. Local mode is rejected unless `APP_ENV=development`.
-This Compose setup is not a public production deployment.
+Open `http://localhost:8080/register`. Enter any valid email address and a Coachify password.
+Gmail is only the outgoing mail provider; recipients can use other providers.
+The OTP goes to that registered address, not necessarily `SMTP_USERNAME`. Check
+that inbox (and spam folder), verify the code, and complete initial setup. Sign in
+later with the same email and Coachify password; no Google account popup appears.
+There is no development account chooser in email mode. Switching from local-test
+or Google mode invalidates sessions from that mode; existing provider-specific
+records are preserved and are not automatically merged by email. An account
+created through Google does not automatically acquire a password.
 
-## Google access
+Mailpit is optional capture-only infrastructure, not a forwarding service. With
+these settings the backend sends directly to Gmail SMTP and Mailpit is unused.
+Automated tests continue using fake mail/Mailpit so they do not email real users.
+No Gmail API, client secret or new Python package is needed. Gmail settings are
+checked for authentication and encryption even in development.
 
-For Google mode, set `AUTH_MODE=google`. In Google Cloud Console create an OAuth
-**Web application** client, configure the branding/audience and add your test users
-where required. Add `http://localhost:8080` as an authorised JavaScript origin.
-Set `GOOGLE_CLIENT_ID` to that Web Client ID and rebuild the stack so frontend and
-backend receive matching configuration. No client secret or callback redirect URI
-is used by the current Google button/ID-token flow.
+References: [App Password requirements](https://support.google.com/mail/answer/185833),
+[Gmail SMTP transport](https://developers.google.com/workspace/gmail/imap/imap-smtp).
 
-Tokens remain in browser memory; reload/expiry requires sign-in again. Persistent
-application sessions are not implemented. For deployment, configure HTTPS and the
-actual origin. School lookups require no runtime API key or extra download.
+## Production email/password
+
+Set `APP_ENV=production`, keep `AUTH_MODE=email`, and configure:
+
+| Variable | What to supply |
+|---|---|
+| `AUTH_MODE` | `email` for email/password sign-in. |
+| `SMTP_HOST`, `SMTP_PORT` | Your mail provider's SMTP hostname and port. |
+| `SMTP_SECURITY` | `starttls` (commonly port 587) or `ssl` (commonly 465). |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | Provider-issued SMTP credentials, server-side only. |
+| `SMTP_FROM` | A sender address authorised by your provider. |
+| `OTP_HASH_SECRET` | A random server-only key of at least 32 characters. |
+
+Use the SMTP settings from your chosen provider; no particular paid provider or
+API key is required by the code. A real mailbox delivery test needs those settings.
+Production rejects plaintext/development SMTP and incomplete configuration.
+
+Sessions last 24 hours and survive same-tab reload in sessionStorage after server
+validation. Sign-out/account changes clear other tabs, which require explicit
+sign-in. Deploy behind HTTPS; the local Compose file is a development deployment,
+not a complete public production hosting configuration. School lookups still need
+no API key or download.
 
 ## Stop without deleting data
 

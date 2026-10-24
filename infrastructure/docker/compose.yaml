@@ -17,15 +17,26 @@ services:
     build: ../../services/profile-service
     environment:
       APP_ENV: ${APP_ENV:-production}
-      AUTH_MODE: ${AUTH_MODE:-google}
-      LOCAL_TEST_USER_ID: ${LOCAL_TEST_USER_ID:-coachify-local-user}
+      AUTH_MODE: ${AUTH_MODE:-email}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      OTP_HASH_SECRET: ${OTP_HASH_SECRET:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       MONGODB_URI: mongodb://coachify_profile:${PROFILE_DB_PASSWORD:?Set PROFILE_DB_PASSWORD}@mongodb:27017/coachify_profile
       MONGODB_DATABASE: coachify_profile
     depends_on:
       mongodb:
         condition: service_healthy
     networks: [backend, database]
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    profiles: [development]
+    ports: ["127.0.0.1:${MAILPIT_PORT:-8025}:8025"]
+    networks: [backend]
   mongodb:
     image: mongo:8.0
     environment:

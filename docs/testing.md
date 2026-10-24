@@ -20,7 +20,7 @@ npm run test:e2e --workspace apps/frontend
 
 The browser runner first discovers tests. If none exist it passes without starting
 Next.js. When tests exist, Playwright builds and starts the frontend. The frontend builds the first workspace UI; unavailable services use empty states. Only Chromium is configured.
-Browser tests cover the workspace, profile save/retry, Google navigation and mobile layout using boundary fixtures. A separate full-stack browser job exercises the actual gateway, profile service and disposable MongoDB.
+Browser tests cover public entry, nonce-bound Google access, session reload/logout, workspace editing and mobile layout using boundary fixtures. A separate full-stack browser job exercises the actual gateway, profile service and disposable MongoDB.
 
 For each service, create an isolated Python environment, then run from its directory:
 
@@ -64,19 +64,19 @@ Local CI configuration does not publish a branch or modify GitHub settings.
 
 Set `MONGODB_TEST_URI` to a disposable MongoDB instance when running the profile
 suite to include database tests. They create/drop randomly named `coachify_test_*`
-databases. Never use a production connection for tests.
+and `coachify_accounts_test_*` databases. Never use a production connection for tests.
 
 The `local-ui-integration` job provisions a disposable Docker stack and tests
-browser → gateway → API → MongoDB, including save/reload and planning-conflict
-recovery. For a manually provisioned **disposable** local-test stack on port 8081:
+browser → gateway → API → MongoDB, including SMTP-to-Mailpit OTP verification, email/password A/B isolation, canonical onboarding, history restoration, logout/replay, cross-tab cleanup and profile/planning saves. For a manually provisioned **disposable** local-test stack on port 8081:
 
 ```sh
 cd apps/frontend
-PROFILE_E2E_BASE_URL=http://localhost:8081 npx playwright test --config playwright.integration.config.ts
+PROFILE_E2E_BASE_URL=http://localhost:8081 MAILPIT_BASE_URL=http://localhost:8026 npx playwright test --config playwright.integration.config.ts
 ```
 
-Use a separate Compose project, database volume and local identity, and set
-`GATEWAY_PORT=8081`. This suite writes synthetic data; do not target your personal
+Use a separate Compose project and database volume, and set
+`GATEWAY_PORT=8081`, `MAILPIT_PORT=8026` and `COMPOSE_PROFILES=development`, with
+SMTP pointed at the disposable Mailpit container as in `.env.example`. This suite writes synthetic data; do not target your personal
 profile. Boundary-fixture browser tests use
 `NEXT_PUBLIC_GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com`, a test-only
 public identifier, when running `npm run test:e2e --workspace apps/frontend`.

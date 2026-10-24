@@ -21,13 +21,15 @@ credentials are required by this configuration.
 The separate `playwright.integration.config.ts` runs `tests/integration/` against
 `PROFILE_E2E_BASE_URL`. It requires a disposable Docker local-test stack and writes
 profile data through the real API into MongoDB. CI provisions and removes that stack
-in the `local-ui-integration` job. See [application testing guide](../../../docs/testing.md).
+in the `local-ui-integration` job. These tests create explicit synthetic local accounts and cover switching, revocation and cross-tab logout. See [application testing guide](../../../docs/testing.md).
 
-P07/P08 component tests and a browser journey are implemented; empty suites still pass. The browser runner uses Playwright
+P01–P16 component tests and a browser journey are implemented; empty suites still pass. The browser runner uses Playwright
 discovery first and avoids building/starting Next.js when no browser tests exist.
 Actual test failures and discovery/configuration errors still fail. Add meaningful
 tests with features; an empty passing suite does not establish test coverage.
 
 For the browser suite, set NEXT_PUBLIC_GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com (a test-only public identifier). See the [setup guide](../../../docs/setup.md) for real sign-in and the [testing guide](../../../docs/testing.md) for fixtures.
 
-Workspace browser checks cover navigation, shared Google identity, saved background on Home, unavailable service controls, connection failure/retry, and mobile overflow. The week/month and roadmap filters are presentation-only and do not call unfinished services.
+Workspace browser checks cover navigation, validated account sessions, public access pages, session reload/logout, saved background on Home, unavailable service controls, connection failure/retry, and mobile overflow. The week/month and roadmap filters are presentation-only and do not call unfinished services.
+
+Full-stack account tests additionally require `MAILPIT_BASE_URL` for the disposable captured-email inbox. They verify actual SMTP OTP delivery, password sign-in, guarded setup and cross-tab completion.

@@ -111,37 +111,31 @@ def test_database_failure_is_retryable(client):
     assert client.patch("/api/v1/profile", json=payload()).status_code == 200
 
 
-def test_auth_rejects_missing_and_invalid_token(monkeypatch):
-    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client")
-    with TestClient(create_app(MemoryRepository())) as client:
-        assert client.get("/api/v1/profile").status_code == 401
-        with patch("app.core.auth.id_token.verify_oauth2_token", side_effect=ValueError("bad token")):
-            assert client.get("/api/v1/profile", headers={"Authorization": "Bearer invalid"}).status_code == 401
-        with patch("app.core.auth.id_token.verify_oauth2_token", return_value={"iss": "evil", "sub": "alice"}):
-            assert client.get("/api/v1/profile", headers={"Authorization": "Bearer invalid"}).status_code == 401
-        with patch("app.core.auth.id_token.verify_oauth2_token", return_value={"iss": "https://accounts.google.com", "sub": "alice"}) as verify:
-            assert client.patch("/api/v1/profile", json=payload(), headers={"Authorization": "Bearer verified-by-mock"}).status_code == 200
-            assert verify.call_args.args[2] == "test-client"
-        with patch("app.core.auth.id_token.verify_oauth2_token", side_effect=TransportError("offline")):
-            assert client.get("/api/v1/profile", headers={"Authorization": "Bearer invalid"}).status_code == 503
+def test_google_claim_verification_requires_audience_issuer_subject_and_attempt_nonce(monkeypatch):
+    from app.core.auth import verify_google
+    from fastapi import HTTPException
+    for claims in ({"iss": "evil", "sub": "alice", "nonce": "nonce"},
+                   {"iss": "accounts.google.com", "nonce": "nonce"},
+                   {"iss": "accounts.google.com", "sub": "alice", "nonce": "wrong"}):
+        with patch("app.core.auth.id_token.verify_oauth2_token", return_value=claims):
+            with pytest.raises(HTTPException) as error:
+                verify_google("token", "client", "nonce")
+            assert error.value.status_code == 401
+    with patch("app.core.auth.id_token.verify_oauth2_token", return_value={"iss": "https://accounts.google.com", "sub": "alice", "nonce": "nonce"}) as verify:
+        assert verify_google("token", "client", "nonce")["sub"] == "alice"
+        assert verify.call_args.args[2] == "client"
+    with patch("app.core.auth.id_token.verify_oauth2_token", side_effect=TransportError("offline")):
+        with pytest.raises(HTTPException) as error:
+            verify_google("token", "client", "nonce")
+        assert error.value.status_code == 503
 
 
-def test_local_identity_needs_no_google_and_ignores_caller_identity(monkeypatch):
+def test_local_mode_no_longer_auto_authenticates_or_accepts_caller_owner(monkeypatch):
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("AUTH_MODE", "local_test")
-    monkeypatch.setenv("LOCAL_TEST_USER_ID", "postman-user")
-    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
-    repo = MemoryRepository()
-    with patch("app.core.auth.id_token.verify_oauth2_token") as verify:
-        with TestClient(create_app(repo)) as client:
-            assert client.get("/api/v1/profile").status_code == 200
-            saved = client.patch("/api/v1/profile", json=payload()).json()
-            response = client.get("/api/v1/profile?user_id=google:bob", headers={
-                "Authorization": "Bearer ignored-in-local-mode", "X-User-Id": "google:bob",
-            })
-            assert response.json() == saved
-            assert set(repo.records) == {"local_test:postman-user"}
-        verify.assert_not_called()
+    monkeypatch.setenv("LOCAL_TEST_USER_ID", "ignored-old-setting")
+    with TestClient(create_app(MemoryRepository())) as client:
+        assert client.get("/api/v1/profile?user_id=alice", headers={"X-User-Id": "alice"}).status_code == 401
 
 
 @pytest.mark.parametrize("environment", [None, "production", "staging", "test", "Development"])
@@ -151,17 +145,7 @@ def test_local_identity_refuses_non_development_startup(monkeypatch, environment
         monkeypatch.delenv("APP_ENV", raising=False)
     else:
         monkeypatch.setenv("APP_ENV", environment)
-    with pytest.raises(RuntimeError, match="APP_ENV=development"):
-        with TestClient(create_app(MemoryRepository())):
-            pass
-
-
-@pytest.mark.parametrize("identity", ["", "bad:user", "bad user", "x" * 65])
-def test_local_identity_rejects_invalid_fixed_id(monkeypatch, identity):
-    monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("AUTH_MODE", "local_test")
-    monkeypatch.setenv("LOCAL_TEST_USER_ID", identity)
-    with pytest.raises(RuntimeError, match="LOCAL_TEST_USER_ID"):
+    with pytest.raises(RuntimeError, match="APP_ENV"):
         with TestClient(create_app(MemoryRepository())):
             pass
 
@@ -179,19 +163,6 @@ def test_unknown_auth_mode_cannot_enable_bypass(monkeypatch):
     with pytest.raises(RuntimeError, match="AUTH_MODE"):
         with TestClient(create_app(MemoryRepository())):
             pass
-
-
-def test_changing_fixed_identity_uses_separate_profile(monkeypatch):
-    monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("AUTH_MODE", "local_test")
-    repo = MemoryRepository()
-    monkeypatch.setenv("LOCAL_TEST_USER_ID", "alice")
-    with TestClient(create_app(repo)) as client:
-        assert client.patch("/api/v1/profile", json=payload()).status_code == 200
-    monkeypatch.setenv("LOCAL_TEST_USER_ID", "bob")
-    with TestClient(create_app(repo)) as client:
-        assert client.get("/api/v1/profile").json()["version"] == 0
-        assert client.get("/api/v1/profile/versions/1").status_code == 404
 
 
 @pytest.mark.parametrize("category", ["secondary", "ite", "polytechnic", "junior_college", "university"])
@@ -324,10 +295,10 @@ def test_text_normalisation_precedes_length_validation(client):
 def test_auth_config_reports_only_server_mode_and_cannot_enable_local_mode(monkeypatch):
     monkeypatch.delenv("AUTH_MODE", raising=False)
     with TestClient(create_app(MemoryRepository())) as client:
-        assert client.get("/api/v1/profile/auth-config?mode=local_test").json() == {"mode": "google"}
+        assert client.get("/api/v1/profile/auth-config?mode=local_test").json() == {"mode": "google", "email_password_enabled": True, "google_enabled": False, "email_verification_required": True}
         assert client.get("/api/v1/profile").status_code == 401
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("AUTH_MODE", "local_test")
     with TestClient(create_app(MemoryRepository())) as client:
-        assert client.get("/api/v1/profile/auth-config").json() == {"mode": "local_test"}
-        assert client.get("/api/v1/profile").status_code == 200
+        assert client.get("/api/v1/profile/auth-config").json() == {"mode": "local_test", "email_password_enabled": True, "google_enabled": False, "email_verification_required": True}
+        assert client.get("/api/v1/profile").status_code == 401

@@ -200,3 +200,29 @@ h2,h3{font-family:var(--font-heading);letter-spacing:-.02em}
 .planning-readiness{padding:16px 20px;background:var(--side);border-radius:12px;margin-top:20px;font-size:12px}
 .planning-readiness ul{padding-left:18px;margin:8px 0}.planning-readiness p{margin-top:10px}
 @media(max-width:600px){.planning-card>.row{align-items:stretch;flex-direction:column}.period-list li{align-items:stretch;flex-direction:column}.planning-card .row .btn{width:100%}}
+
+/* Public account entry uses the same typography, cards and controls as the workspace. */
+.access-page{min-height:100dvh;background:radial-gradient(ellipse at 18% 80%,var(--gbg),transparent 45%),var(--side)}
+.access-header{display:flex;align-items:center;justify-content:space-between;padding:28px 6vw;border-bottom:1px solid var(--line)}
+.access-header .brand{margin:0}
+.access-main{max-width:1280px;margin:auto;padding:80px 6vw;display:grid;grid-template-columns:1.1fr 1fr;gap:72px;align-items:center}
+.access-intro h1{font-size:clamp(36px,4.2vw,58px);line-height:1.12;margin:26px 0 20px;letter-spacing:-.045em;font-weight:600}
+.access-intro h1 span{color:var(--mute)}
+.access-intro>p{font-size:17px;line-height:1.7;color:var(--mute);max-width:400px}
+.access-preview{margin-top:36px;padding:26px;max-width:420px;transform:rotate(-2deg)}
+.access-preview h2{margin:18px 0 10px;font-size:25px;font-weight:500}
+.access-steps{display:grid;gap:14px;margin-top:24px;color:var(--mute);font-size:12px}
+.access-steps span:first-child{color:var(--green);font-weight:600}
+.access-card{padding:38px;min-height:360px}
+.access-card h2{font-size:30px;font-weight:500;letter-spacing:-.035em;margin:16px 0 12px}
+.access-card>.muted{line-height:1.65;margin-bottom:28px}
+.access-actions,.access-form{display:grid;gap:16px;margin:26px 0}
+.access-form label{font-weight:600}
+.access-form input,.access-form select{width:100%;border:1px solid var(--line);border-radius:12px;padding:14px;background:white;font:inherit}
+.access-form .btn{width:100%;margin-top:8px;justify-content:space-between}
+.access-note{padding:12px 14px;border-radius:12px;background:var(--soft);line-height:1.6;color:var(--mute);font-size:12px}
+.access-switch{margin:26px 0 20px}.text-link{text-decoration:underline;text-underline-offset:3px}
+.access-page :focus-visible{outline:3px solid var(--blue);outline-offset:4px}
+@media(max-width:800px){.access-main{grid-template-columns:1fr;padding:34px 22px;gap:32px}.access-preview{display:none}.access-intro h1{font-size:36px}.access-card{padding:26px}.access-header{padding:22px}.access-intro>p{font-size:15px}}
+
+.access-google{display:grid;gap:14px;margin:20px 0}.access-form input[autocomplete="one-time-code"]{font-size:28px;letter-spacing:.4em;text-align:center}.setup-actions{display:flex;gap:12px;flex-wrap:wrap}

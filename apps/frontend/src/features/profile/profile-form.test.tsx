@@ -4,6 +4,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { ProfileForm } from './profile-form';
 import { ProfileProvider } from './profile-provider';
 import { educationQuestions } from './types';
+vi.mock('next/navigation', () => ({useRouter:()=>({replace:vi.fn()})}));
 vi.mock('@/lib/auth/google-sign-in', () => ({ GoogleSignIn: ({ onCredential }: { onCredential: (t: string) => void }) => <button onClick={() => onCredential('test-only')}>Test sign in</button> }));
 vi.mock('./school-browser', () => ({ SchoolBrowser: () => <p>Directory browser</p> }));
 const categories = [
@@ -19,6 +20,7 @@ let configFails: boolean;
 beforeEach(() => {
   saved = initial; fail = false; mode = 'google'; configFails = false;
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+    if (url.endsWith('/auth/session')) return new Response(JSON.stringify({id:'synthetic',name:'Synthetic',provider:mode,onboarding_complete:false}));
     if (url.includes('planning-inputs')) return new Response(JSON.stringify({ profile_version: saved.version, planning_revision: 0, ready: false, issues: [], availability_periods: [] }));
     if (url.includes('auth-config')) return new Response(JSON.stringify(configFails ? { detail: 'Unavailable' } : { mode }), { status: configFails ? 503 : 200 });
     if (url.includes('school-categories')) return new Response(JSON.stringify(categories));
@@ -35,7 +37,6 @@ test('no default status, exact options, student category validation and save ret
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
   expect(screen.getAllByRole('radio')).toHaveLength(4);
   expect(screen.getAllByRole('radio').every(r => !(r as HTMLInputElement).checked)).toBe(true);
-  fireEvent.click(await screen.findByText('Test sign in'));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
   fireEvent.click(screen.getByRole('radio', { name: 'Student' }));
   expect(screen.getByText('Where are you studying?')).toBeInTheDocument();
@@ -55,7 +56,6 @@ test('no default status, exact options, student category validation and save ret
 test('nonstudent can leave school unanswered; status changes prompt review', async () => {
   saved = { ...initial, version: 1, occupational_status: 'student', school_category: 'university' };
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
-  fireEvent.click(await screen.findByText('Test sign in'));
   await waitFor(() => expect(screen.getByRole('radio', { name: 'Student' })).toBeChecked());
   fireEvent.click(screen.getByRole('radio', { name: 'Employed' }));
   expect(screen.getByText('Where did you last study?')).toBeInTheDocument();
@@ -76,7 +76,6 @@ test('question mapping applies to all statuses', () => {
 
 test('custom institution, course and extended year survive a failed save and retry', async () => {
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
-  fireEvent.click(await screen.findByText('Test sign in'));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
   fireEvent.click(screen.getByRole('radio', { name: 'Student' }));
   fireEvent.click(screen.getByText('University', { exact: true }));
@@ -100,7 +99,7 @@ test('custom institution, course and extended year survive a failed save and ret
 });
 
 
-test('local server mode loads and saves without Google or a bearer token', async () => {
+test('local account session loads and saves without Google', async () => {
   mode = 'local_test';
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
@@ -111,20 +110,21 @@ test('local server mode loads and saves without Google or a bearer token', async
   expect(saved.occupational_status).toBe('employed');
   const writes = vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'PATCH');
   expect(writes).toHaveLength(1);
-  expect(writes[0][1]?.headers).not.toHaveProperty('Authorization');
+  expect(writes[0][1]?.headers).toHaveProperty('Authorization', 'Bearer synthetic-session-token');
 });
 
 test('configuration failure does not unlock saving or fall back to local mode', async () => {
   configFails = true;
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
-  await screen.findByText('We could not connect to your profile. Please retry.');
+  await screen.findByText('Unavailable');
   expect(screen.getByRole('button', { name: 'Save background' })).toBeDisabled();
   expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/profile') && !init?.method)).toBe(false);
 });
 
 test('Google server mode still requires sign-in before loading a private profile', async () => {
+  sessionStorage.clear();
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
-  await screen.findByText('Test sign in');
+  await waitFor(() => expect(screen.getByRole('button', {name:'Save background'})).toBeDisabled());
   expect(screen.getByRole('button', { name: 'Save background' })).toBeDisabled();
   expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/profile'))).toBe(false);
 });

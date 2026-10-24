@@ -116,7 +116,12 @@ jobs:
     env:
       APP_ENV: development
       AUTH_MODE: local_test
-      LOCAL_TEST_USER_ID: ci-ui-test
+      COMPOSE_PROFILES: development
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      SMTP_SECURITY: plain
+      SMTP_FROM: no-reply@coachify.test
+      MAILPIT_PORT: '8026'
       GOOGLE_CLIENT_ID: ''
       GATEWAY_PORT: '8081'
       MONGO_ROOT_PASSWORD: ci-only-root-password
@@ -137,6 +142,7 @@ jobs:
         working-directory: apps/frontend
         env:
           PROFILE_E2E_BASE_URL: http://localhost:8081
+          MAILPIT_BASE_URL: http://localhost:8026
       - name: Service logs on failure
         if: ${{ failure() }}
         run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml logs --tail=100
