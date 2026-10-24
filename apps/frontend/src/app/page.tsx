@@ -1,2 +1,2 @@
-import { redirect } from 'next/navigation';
-export default function Home() { redirect('/dashboard'); }
+import { EntryPage } from '@/features/auth/access-screen';
+export default function Page() { return <EntryPage/>; }

@@ -1,13 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test('save, reload, browse international schools, switch status and retry', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.setItem('coachify.access-epoch','1'); sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
   // Only the Google and HTTP boundaries are mocked. Production has no test-auth path.
   const categories = [
     { id: 'secondary', label: 'Secondary School' }, { id: 'ite', label: 'Institute of Technical Education' },
     { id: 'polytechnic', label: 'Polytechnic / Diploma' }, { id: 'junior_college', label: 'Junior College' },
     { id: 'university', label: 'University' },
   ];
-  let saved = { version: 0, occupational_status: null as string | null, school_category: null as string | null,
+  let saved = { version: 0, onboarding_complete:true, occupational_status: null as string | null, school_category: null as string | null,
     education_context: null as string | null, education_review_required: false, education: {} as Record<string, unknown> };
   let failSave = false;
   await page.route('https://accounts.google.com/gsi/client', route => route.fulfill({ contentType: 'application/javascript', body: `window.google = { accounts: { id: {
@@ -16,6 +17,8 @@ test('save, reload, browse international schools, switch status and retry', asyn
   } } };` }));
   await page.route('**/api/v1/profile**', async route => {
     const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/auth/session')) return route.fulfill({json:{id:'synthetic',name:'Synthetic',provider:'local_test',onboarding_complete:false}});
+    if (url.pathname.endsWith('/auth/logout')) return route.fulfill({json:{ok:true}});
   if (url.pathname.endsWith('/planning-inputs')) return route.fulfill({json:{profile_version:saved.version,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
     if (url.pathname.endsWith('auth-config')) return route.fulfill({ json: { mode: 'google' } });
     if (url.pathname.endsWith('school-categories')) return route.fulfill({ json: categories });
@@ -36,7 +39,6 @@ test('save, reload, browse international schools, switch status and retry', asyn
     return route.fulfill({ json: saved });
   });
   await page.goto('/profile');
-  await page.getByRole('button', { name: 'Sign in with Google (test)' }).click();
   await expect(page.getByRole('button', { name: 'Save background' })).toBeEnabled();
   await page.getByRole('radio', { name: 'Student', exact: true }).check();
   await page.getByText('University', { exact: true }).click();
@@ -50,7 +52,6 @@ test('save, reload, browse international schools, switch status and retry', asyn
   await page.getByRole('button', { name: 'Save background' }).click();
   await expect(page.getByText('Profile saved.')).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Sign in with Google (test)' }).click();
   await expect(page.getByRole('radio', { name: 'Student', exact: true })).toBeChecked();
   await expect(page.getByRole('textbox', { name: 'What course are you studying?' })).toHaveValue('Computing & Design');
   await expect(page.getByRole('spinbutton', { name: /Current study level/ })).toHaveValue('6');
@@ -68,11 +69,11 @@ test('save, reload, browse international schools, switch status and retry', asyn
   // Client-side workspace navigation preserves the in-memory Google identity.
   await page.getByRole('link', { name: 'Home', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Welcome to Coachify' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out' }).first()).toBeVisible();
   await page.getByRole('link', { name: 'My profile' }).click();
   await expect(page.getByRole('button', { name: 'Save background' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByRole('button', { name: 'Save background' })).toBeDisabled();
-  await expect(page.getByRole('radio', { name: 'Student', exact: true })).not.toBeChecked();
+  await page.getByRole('button', { name: 'Sign out' }).first().click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('button', { name: 'Save background' })).toHaveCount(0);
 
 });

@@ -9,7 +9,7 @@ test.each([
  { status: 'employed', currentYear: null, expected: 'Computing & Design' },
 ])('Home shows independent education fields for $status without inventing a current year', async ({status,currentYear,expected})=>{
  vi.stubGlobal('fetch',vi.fn(async(url:string)=>new Response(JSON.stringify(
-  url.endsWith('/auth-config') ? {mode:'local_test'} : url.endsWith('/school-categories') ? [] : {
+  url.endsWith('/auth/session') ? {id:'synthetic',name:'Synthetic',provider:'local_test',onboarding_complete:false} : url.endsWith('/auth-config') ? {mode:'local_test'} : url.endsWith('/school-categories') ? [] : {
    version:1,occupational_status:status,school_category:'university',current_study_year:currentYear,
    education_review_required:false,education:{course:'Computing & Design',study_year:6},
   }

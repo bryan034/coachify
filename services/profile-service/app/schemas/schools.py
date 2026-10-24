@@ -33,4 +33,7 @@ class InstitutionResults(BaseModel):
 
 
 class AuthConfigView(BaseModel):
-    mode: Literal["google", "local_test"]
+    mode: Literal["google", "email", "local_test"]
+    email_password_enabled: bool
+    google_enabled: bool
+    email_verification_required: bool = True

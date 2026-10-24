@@ -1,3 +1,2 @@
-import { redirect } from 'next/navigation';
-// The first design uses inline account controls in the workspace.
-export default function Login() { redirect('/profile'); }
+import { AccessScreen } from '@/features/auth/access-screen';
+export default function Page() { return <AccessScreen intent="login"/>; }

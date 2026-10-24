@@ -1,6 +1,9 @@
 export type OccupationalStatus = 'student' | 'national_service' | 'unemployed' | 'employed';
 export type SchoolCategory = 'secondary' | 'ite' | 'polytechnic' | 'junior_college' | 'university';
 export type Profile = {
+  onboarding_complete?: boolean; onboarding_completed_at?: string | null;
+  onboarding_state?: 'missing' | 'incomplete' | 'legacy_unconfirmed' | 'complete';
+  no_previous_education?: boolean;
   application_date?: string | null; application_time_zone?: string | null;
   weekly_hours?: number | null; availability_periods?: AvailabilityPeriod[]; planning_revision?: number;
   version: number; occupational_status: OccupationalStatus | null;

@@ -1,9 +1,9 @@
-# Generated from profile-service app.openapi(); keep in sync with the implemented routes.
+# Generated from the Profile FastAPI application.
 openapi: 3.1.0
 info:
   title: Coachify profile API
-  description: Google bearer authentication by default. Explicit local_test mode uses
-    a fixed server identity only in development; see services/profile-service/README.md.
+  description: Verified email/password accounts, optional Google, and revocable owner-scoped
+    sessions.
   version: 0.1.0
 paths:
   /api/v1/profile/auth-config:
@@ -119,6 +119,45 @@ paths:
     patch:
       summary: Patch Profile
       operationId: patch_profile_api_v1_profile_patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
+          - type: 'null'
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePatch'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/onboarding/complete:
+    post:
+      tags:
+      - P13–P14 initial setup
+      summary: Finish Onboarding
+      operationId: finish_onboarding_api_v1_profile_onboarding_complete_post
       security:
       - HTTPBearer: []
       parameters:
@@ -345,19 +384,261 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/auth/local-accounts:
+    get:
+      tags:
+      - P09–P16 account access
+      summary: Local Accounts
+      operationId: local_accounts_api_v1_profile_auth_local_accounts_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Choice'
+                type: array
+                title: Response Local Accounts Api V1 Profile Auth Local Accounts
+                  Get
+  /api/v1/profile/auth/attempts:
+    post:
+      tags:
+      - P09–P16 account access
+      summary: Begin
+      operationId: begin_api_v1_profile_auth_attempts_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Begin'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Nonce'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/auth/attempts/cancel:
+    post:
+      tags:
+      - P09–P16 account access
+      summary: Cancel
+      operationId: cancel_api_v1_profile_auth_attempts_cancel_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Attempt'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Done'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/auth/complete:
+    post:
+      tags:
+      - P09–P16 account access
+      summary: Complete
+      operationId: complete_api_v1_profile_auth_complete_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Complete'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/AccountView'
+                - $ref: '#/components/schemas/PendingVerification'
+                title: Response Complete Api V1 Profile Auth Complete Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/auth/verify-email:
+    post:
+      tags:
+      - P09–P16 account access
+      summary: Verify
+      operationId: verify_api_v1_profile_auth_verify_email_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Verify'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/auth/resend-verification:
+    post:
+      tags:
+      - P09–P16 account access
+      summary: Resend
+      operationId: resend_api_v1_profile_auth_resend_verification_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerificationAccess'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingVerification'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/auth/session:
+    get:
+      tags:
+      - P09–P16 account access
+      summary: Session
+      operationId: session_api_v1_profile_auth_session_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountView'
+      security:
+      - HTTPBearer: []
+  /api/v1/profile/auth/logout:
+    post:
+      tags:
+      - P09–P16 account access
+      summary: Logout
+      operationId: logout_api_v1_profile_auth_logout_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Done'
+      security:
+      - HTTPBearer: []
 components:
   schemas:
+    AccountView:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        email:
+          type: string
+          title: Email
+        email_verified:
+          type: boolean
+          title: Email Verified
+        provider:
+          type: string
+          enum:
+          - google
+          - local_test
+          - email
+          title: Provider
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+      type: object
+      required:
+      - id
+      - name
+      - email
+      - email_verified
+      - provider
+      - expires_at
+      title: AccountView
+    Attempt:
+      properties:
+        flow_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Flow Id
+        attempt_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Attempt Id
+      additionalProperties: false
+      type: object
+      required:
+      - flow_id
+      - attempt_id
+      title: Attempt
     AuthConfigView:
       properties:
         mode:
           type: string
           enum:
           - google
+          - email
           - local_test
           title: Mode
+        email_password_enabled:
+          type: boolean
+          title: Email Password Enabled
+        google_enabled:
+          type: boolean
+          title: Google Enabled
+        email_verification_required:
+          type: boolean
+          title: Email Verification Required
+          default: true
       type: object
       required:
       - mode
+      - email_password_enabled
+      - google_enabled
       title: AuthConfigView
     AvailabilityPeriod:
       properties:
@@ -382,6 +663,39 @@ components:
       - end_date
       - weekly_hours
       title: AvailabilityPeriod
+    Begin:
+      properties:
+        flow_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Flow Id
+        attempt_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Attempt Id
+        intent:
+          type: string
+          enum:
+          - login
+          - register
+          title: Intent
+        generation:
+          type: integer
+          maximum: 9007199254740991.0
+          minimum: 1.0
+          title: Generation
+      additionalProperties: false
+      type: object
+      required:
+      - flow_id
+      - attempt_id
+      - intent
+      - generation
+      title: Begin
     CapacityWindow:
       properties:
         start_date:
@@ -430,6 +744,75 @@ components:
       - id
       - label
       title: CategoryView
+    Choice:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        email:
+          type: string
+          title: Email
+      type: object
+      required:
+      - id
+      - name
+      - email
+      title: Choice
+    Complete:
+      properties:
+        flow_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Flow Id
+        attempt_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Attempt Id
+        session_token:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Session Token
+        name:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Name
+        email:
+          anyOf:
+          - type: string
+            maxLength: 254
+          - type: 'null'
+          title: Email
+        password:
+          anyOf:
+          - type: string
+            maxLength: 128
+            minLength: 12
+          - type: 'null'
+          title: Password
+        credential:
+          anyOf:
+          - type: string
+            maxLength: 12000
+          - type: 'null'
+          title: Credential
+      additionalProperties: false
+      type: object
+      required:
+      - flow_id
+      - attempt_id
+      - session_token
+      title: Complete
     CountryView:
       properties:
         code:
@@ -465,6 +848,15 @@ components:
       - kind
       - name
       title: CustomInstitution
+    Done:
+      properties:
+        ok:
+          type: boolean
+          title: Ok
+      type: object
+      required:
+      - ok
+      title: Done
     EducationPatch:
       properties:
         institution:
@@ -611,6 +1003,15 @@ components:
       - domains
       - source
       title: InstitutionView
+    Nonce:
+      properties:
+        nonce:
+          type: string
+          title: Nonce
+      type: object
+      required:
+      - nonce
+      title: Nonce
     OccupationalStatus:
       type: string
       enum:
@@ -619,6 +1020,34 @@ components:
       - unemployed
       - employed
       title: OccupationalStatus
+    PendingVerification:
+      properties:
+        verification_required:
+          type: boolean
+          const: true
+          title: Verification Required
+        challenge_id:
+          type: string
+          title: Challenge Id
+        masked_email:
+          type: string
+          title: Masked Email
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+        resend_at:
+          type: string
+          format: date-time
+          title: Resend At
+      type: object
+      required:
+      - verification_required
+      - challenge_id
+      - masked_email
+      - expires_at
+      - resend_at
+      title: PendingVerification
     PeriodCreate:
       properties:
         expected_version:
@@ -815,6 +1244,11 @@ components:
           anyOf:
           - $ref: '#/components/schemas/EducationPatch'
           - type: 'null'
+        no_previous_education:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: No Previous Education
         confirm_education_context:
           type: boolean
           title: Confirm Education Context
@@ -829,6 +1263,28 @@ components:
         version:
           type: integer
           title: Version
+        onboarding_complete:
+          type: boolean
+          title: Onboarding Complete
+          default: false
+        onboarding_completed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Onboarding Completed At
+        onboarding_state:
+          type: string
+          enum:
+          - missing
+          - incomplete
+          - legacy_unconfirmed
+          - complete
+          title: Onboarding State
+          default: missing
+        no_previous_education:
+          type: boolean
+          title: No Previous Education
+          default: false
         application_date:
           anyOf:
           - type: string
@@ -950,6 +1406,72 @@ components:
       - msg
       - type
       title: ValidationError
+    VerificationAccess:
+      properties:
+        flow_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Flow Id
+        attempt_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Attempt Id
+        session_token:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Session Token
+      additionalProperties: false
+      type: object
+      required:
+      - flow_id
+      - attempt_id
+      - session_token
+      title: VerificationAccess
+    Verify:
+      properties:
+        flow_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Flow Id
+        attempt_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Attempt Id
+        session_token:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Session Token
+        challenge_id:
+          type: string
+          maxLength: 128
+          minLength: 32
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Challenge Id
+        code:
+          type: string
+          pattern: ^[0-9]{6}$
+          title: Code
+      additionalProperties: false
+      type: object
+      required:
+      - flow_id
+      - attempt_id
+      - session_token
+      - challenge_id
+      - code
+      title: Verify
   securitySchemes:
     HTTPBearer:
       type: http

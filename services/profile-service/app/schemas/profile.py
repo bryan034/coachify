@@ -104,6 +104,7 @@ class ProfilePatch(BaseModel):
     occupational_status: OccupationalStatus | None = None
     school_category: SchoolCategory | None = None
     education: EducationPatch | None = None
+    no_previous_education: Annotated[bool, Field(strict=True)] | None = None
     confirm_education_context: Annotated[bool, Field(strict=True)] = False
 
     @model_validator(mode="after")
@@ -122,6 +123,10 @@ class ProfilePatch(BaseModel):
 
 class ProfileView(BaseModel):
     version: int
+    onboarding_complete: bool = False
+    onboarding_completed_at: str | None = None
+    onboarding_state: Literal["missing", "incomplete", "legacy_unconfirmed", "complete"] = "missing"
+    no_previous_education: bool = False
     application_date: CalendarDate | None = None
     application_time_zone: str | None = None
     weekly_hours: float | None = None

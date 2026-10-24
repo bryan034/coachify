@@ -4,7 +4,7 @@ from pymongo import DESCENDING
 from app.domain.planning import revise_period
 from app.domain.errors import ProfileValidationError
 from pymongo.errors import DuplicateKeyError
-from app.domain.profile import revise_profile
+from app.domain.profile import revise_profile, complete_onboarding
 from app.schemas.profile import ProfilePatch
 
 
@@ -111,3 +111,7 @@ class ProfileRepository:
                 raise ProfileValidationError("weekly_hours", "Save your normal weekly availability before managing periods.")
             return revise_period(previous, operation, identifier, changes)
         return self.mutate(owner, expected_version, transform, mutation_id, fingerprint)
+
+    def finish_onboarding(self, owner, patch, mutation_id):
+        fingerprint = self.fingerprint("onboarding", patch.model_dump(mode="json", exclude_unset=True))
+        return self.mutate(owner, patch.expected_version, lambda previous: complete_onboarding(previous, patch), mutation_id, fingerprint)

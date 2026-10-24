@@ -2,10 +2,13 @@ import { test, expect } from '@playwright/test';
 
 const categories = [{ id: 'university', label: 'University' }, { id: 'secondary', label: 'Secondary School' }];
 test('workspace uses saved profile data, preserves navigation and leaves missing services disconnected', async ({ page }) => {
+ await page.addInitScript(() => { localStorage.setItem('coachify.access-epoch','1'); sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
  const apiCalls: string[] = [];
- let saved = { version: 0, occupational_status: null as string | null, school_category: null as string | null, education_context: null as string | null, education_review_required: false, education: {} as Record<string, unknown>, current_study_year: null as number | null };
+ let saved = { version: 0, onboarding_complete:true, occupational_status: null as string | null, school_category: null as string | null, education_context: null as string | null, education_review_required: false, education: {} as Record<string, unknown>, current_study_year: null as number | null };
  await page.route('**/api/**', async route => {
-  const url = new URL(route.request().url()); apiCalls.push(url.pathname);
+  const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/auth/session')) return route.fulfill({json:{id:'synthetic',name:'Synthetic',provider:'local_test',onboarding_complete:false}});
+    if (url.pathname.endsWith('/auth/logout')) return route.fulfill({json:{ok:true}}); apiCalls.push(url.pathname);
   expect(url.pathname.startsWith('/api/v1/profile')).toBe(true);
   if (url.pathname.endsWith('/planning-inputs')) return route.fulfill({json:{profile_version:saved.version,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
   if(url.pathname.endsWith('/auth-config')) return route.fulfill({json:{mode:'local_test'}});
@@ -19,10 +22,8 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   }
   return route.fulfill({json:saved});
  });
- await page.goto('/');
- await expect(page).toHaveURL(/\/dashboard$/);
- await expect(page.getByRole('heading',{name:'Welcome to Coachify'})).toBeVisible();
- await page.getByRole('link',{name:'My profile'}).click();
+ await page.goto('/profile');
+
  await expect(page.getByRole('button',{name:'Save background'})).toBeEnabled();
  await page.getByRole('radio',{name:'Student',exact:true}).check();
  await page.getByText('University',{exact:true}).click();
@@ -67,7 +68,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
 test('profile connection errors offer retry without enabling writes', async ({page})=>{
  await page.route('**/api/v1/profile**',route=>route.fulfill({status:503,json:{detail:'Unavailable'}}));
  await page.goto('/profile');
- await expect(page.getByRole('main').getByRole('alert')).toHaveText('We could not connect to your profile. Please retry.');
- await expect(page.getByRole('button',{name:'Save background'})).toBeDisabled();
- await expect(page.getByRole('button',{name:'Retry loading'})).toBeEnabled();
+ await expect(page.getByRole('main').getByRole('alert')).toContainText('Unavailable');
+ await expect(page.getByRole('button',{name:'Save background'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Retry connection'})).toBeEnabled();
 });

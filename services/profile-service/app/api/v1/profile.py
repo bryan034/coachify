@@ -22,7 +22,9 @@ def repository(request: Request):
 @router.get("/auth-config", response_model=AuthConfigView)
 def auth_config(request: Request):
     # Describes the validated server mode; this endpoint cannot change authentication.
-    return {"mode": request.app.state.auth_settings.mode}
+    settings = request.app.state.auth_settings
+    return {"mode": settings.mode, "email_password_enabled": True,
+            "google_enabled": settings.mode == "google" and bool(settings.google_client_id), "email_verification_required": True}
 
 
 @router.get("/school-categories", response_model=list[CategoryView])
@@ -76,6 +78,13 @@ def patch_profile(patch: ProfilePatch, owner: Annotated[str, Depends(current_own
         key = request_key(idempotency_key)
         return write_result(lambda: repo.update(owner, patch, mutation_id=key))
     return write_result(lambda: repo.update(owner, patch))
+
+
+@router.post("/onboarding/complete", response_model=ProfileView, tags=["P13–P14 initial setup"])
+def finish_onboarding(patch: ProfilePatch, owner: Annotated[str, Depends(current_owner)],
+                      idempotency_key: MutationKey = None, repo=Depends(repository)):
+    key = request_key(idempotency_key)
+    return write_result(lambda: repo.finish_onboarding(owner, patch, key))
 
 
 @router.post("/availability-periods", response_model=ProfileView, status_code=201)

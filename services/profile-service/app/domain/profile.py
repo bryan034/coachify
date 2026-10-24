@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import datetime, timezone
 from app.domain.errors import ProfileValidationError
 from app.domain.planning import revise_planning
 from app.domain.schools import institution_by_id, snapshot
@@ -12,6 +13,8 @@ def year_label(category, year):
 
 def present_profile(profile: dict | None) -> dict:
     result = deepcopy(profile or ProfileView(version=0).model_dump(mode="json"))
+    result["onboarding_state"] = ("missing" if profile is None else "complete" if profile.get("onboarding_complete") is True
+                                  else "incomplete" if "onboarding_complete" in profile else "legacy_unconfirmed")
     education = result.get("education", {})
     active = (result.get("occupational_status") == "student"
               and not result.get("education_review_required")
@@ -34,6 +37,14 @@ def revise_profile(previous: dict | None, patch: ProfilePatch) -> dict:
         raise ProfileValidationError("occupational_status", "Choose your occupational status before saving education.")
     if status == "student" and category is None:
         raise ProfileValidationError("school_category", "Choose a school category for a student profile.")
+    if "no_previous_education" in fields:
+        if patch.no_previous_education is None:
+            raise ProfileValidationError("no_previous_education", "Confirm whether previous education applies.")
+        if patch.no_previous_education and (status == "student" or category is not None):
+            raise ProfileValidationError("no_previous_education", "No previous education applies only to non-students without a school category.")
+        current["no_previous_education"] = patch.no_previous_education
+    elif status == "student" or category is not None:
+        current["no_previous_education"] = False
     context = "current" if status == "student" else "last"
     context_changed = (status != original.get("occupational_status") or category != original.get("school_category"))
     current["education_context"] = context
@@ -86,7 +97,32 @@ def revise_profile(previous: dict | None, patch: ProfilePatch) -> dict:
     # A derived response field is not persisted as a stale second source of truth.
     current.pop("current_study_year", None)
     original.pop("current_study_year", None)
+    current.pop("onboarding_state", None)
+    original.pop("onboarding_state", None)
     if current == original:
         return previous or current
     current["version"] = patch.expected_version + 1
+    return current
+
+
+def complete_onboarding(previous: dict | None, patch: ProfilePatch) -> dict:
+    # Completion is an explicit atomic field in the same immutable profile snapshot.
+    if previous and previous.get("onboarding_complete") is True:
+        return previous
+    current = deepcopy(revise_profile(previous, patch))
+    status, category = current.get("occupational_status"), current.get("school_category")
+    education = current.get("education", {})
+    no_education = status != "student" and category is None and current.get("no_previous_education") is True
+    if not no_education:
+        if category is None:
+            raise ProfileValidationError("school_category", "Choose your school category or explicitly select no previous education.")
+        if not education.get("institution"):
+            raise ProfileValidationError("education.institution", "Enter or select your institution before finishing setup.")
+        if current.get("education_review_required"):
+            raise ProfileValidationError("confirm_education_context", "Review the education details before finishing setup.")
+        if status == "student" and (not education.get("study_year") or education.get("study_year_category") != category):
+            raise ProfileValidationError("education.study_year", "Enter your current study level/year for this school category.")
+    if no_education:
+        current["education_review_required"] = False
+    current.update(onboarding_complete=True, onboarding_completed_at=datetime.now(timezone.utc).isoformat())
     return current
