@@ -19,6 +19,7 @@ let configFails: boolean;
 beforeEach(() => {
   saved = initial; fail = false; mode = 'google'; configFails = false;
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+    if (url.includes('planning-inputs')) return new Response(JSON.stringify({ profile_version: saved.version, planning_revision: 0, ready: false, issues: [], availability_periods: [] }));
     if (url.includes('auth-config')) return new Response(JSON.stringify(configFails ? { detail: 'Unavailable' } : { mode }), { status: configFails ? 503 : 200 });
     if (url.includes('school-categories')) return new Response(JSON.stringify(categories));
     if (init?.method === 'PATCH') {
@@ -94,7 +95,7 @@ test('custom institution, course and extended year survive a failed save and ret
   expect(saved.education).toMatchObject({ institution: { kind: 'custom', name: 'Unlisted International College' }, course: 'Computing & Design', study_year: 6 });
   fireEvent.click(screen.getByRole('radio', { name: 'Unemployed' }));
   expect(screen.getByRole('textbox', { name: 'What course did you study?' })).toHaveValue('Computing & Design');
-  expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+  expect(screen.queryByRole('spinbutton', { name: /Current study level/ })).not.toBeInTheDocument();
   expect(screen.getByText(/Previous study year retained: 6/)).toBeInTheDocument();
 });
 

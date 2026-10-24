@@ -1,0 +1,275 @@
+{
+  "info": {
+    "name": "Coachify P04\u2013P06 planning preferences",
+    "description": "Use a disposable local-test account with a saved occupational status. Read profile first; update dates/time zone before use. No Google keys required in explicit development mode.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "profileVersion",
+      "value": "0"
+    },
+    {
+      "key": "periodId",
+      "value": ""
+    },
+    {
+      "key": "applicationDate",
+      "value": "2030-06-01"
+    },
+    {
+      "key": "timeZone",
+      "value": "Asia/Singapore"
+    },
+    {
+      "key": "periodStart",
+      "value": "2030-02-01"
+    },
+    {
+      "key": "periodEnd",
+      "value": "2030-02-07"
+    },
+    {
+      "key": "retryMutationKey",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.variables.set(\"mutationKey\", pm.collectionVariables.get(\"retryMutationKey\") || pm.variables.replaceIn(\"{{$guid}}\"));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Read profile",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/profile"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code >= 200 && pm.response.code < 300) {",
+              "  const body = pm.response.json();",
+              "  if (body.version !== undefined) pm.collectionVariables.set(\"profileVersion\", body.version);",
+              "  if (body.availability_periods && body.availability_periods.length) pm.collectionVariables.set(\"periodId\", body.availability_periods[0].id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Save deadline (adjust future date and device zone)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{mutationKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/profile",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expected_version\": {{profileVersion}},\n  \"application_date\": \"{{applicationDate}}\",\n  \"time_zone\": \"{{timeZone}}\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code >= 200 && pm.response.code < 300) {",
+              "  const body = pm.response.json();",
+              "  if (body.version !== undefined) pm.collectionVariables.set(\"profileVersion\", body.version);",
+              "  if (body.availability_periods && body.availability_periods.length) pm.collectionVariables.set(\"periodId\", body.availability_periods[0].id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Save normal weekly hours",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{mutationKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/profile",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expected_version\": {{profileVersion}},\n  \"weekly_hours\": 14\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code >= 200 && pm.response.code < 300) {",
+              "  const body = pm.response.json();",
+              "  if (body.version !== undefined) pm.collectionVariables.set(\"profileVersion\", body.version);",
+              "  if (body.availability_periods && body.availability_periods.length) pm.collectionVariables.set(\"periodId\", body.availability_periods[0].id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Add reduced period",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{mutationKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/profile/availability-periods",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expected_version\": {{profileVersion}},\n  \"start_date\": \"{{periodStart}}\",\n  \"end_date\": \"{{periodEnd}}\",\n  \"weekly_hours\": 7\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code >= 200 && pm.response.code < 300) {",
+              "  const body = pm.response.json();",
+              "  if (body.version !== undefined) pm.collectionVariables.set(\"profileVersion\", body.version);",
+              "  if (body.availability_periods && body.availability_periods.length) pm.collectionVariables.set(\"periodId\", body.availability_periods[0].id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Edit reduced hours",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{mutationKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/profile/availability-periods/{{periodId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expected_version\": {{profileVersion}},\n  \"weekly_hours\": 3.5\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code >= 200 && pm.response.code < 300) {",
+              "  const body = pm.response.json();",
+              "  if (body.version !== undefined) pm.collectionVariables.set(\"profileVersion\", body.version);",
+              "  if (body.availability_periods && body.availability_periods.length) pm.collectionVariables.set(\"periodId\", body.availability_periods[0].id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read planning inputs",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/profile/planning-inputs?time_zone={{timeZone}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code >= 200 && pm.response.code < 300) {",
+              "  const body = pm.response.json();",
+              "  if (body.version !== undefined) pm.collectionVariables.set(\"profileVersion\", body.version);",
+              "  if (body.availability_periods && body.availability_periods.length) pm.collectionVariables.set(\"periodId\", body.availability_periods[0].id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete period",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{mutationKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/profile/availability-periods/{{periodId}}?expected_version={{profileVersion}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code >= 200 && pm.response.code < 300) {",
+              "  const body = pm.response.json();",
+              "  if (body.version !== undefined) pm.collectionVariables.set(\"profileVersion\", body.version);",
+              "  if (body.availability_periods && body.availability_periods.length) pm.collectionVariables.set(\"periodId\", body.availability_periods[0].id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

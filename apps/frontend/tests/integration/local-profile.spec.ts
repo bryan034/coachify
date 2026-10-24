@@ -14,6 +14,8 @@ test('local UI saves to MongoDB and restores after reload without Google', async
   await expect(page.getByRole('searchbox')).toHaveCount(0);
   await page.getByRole('textbox', { name: 'What course are you studying?' }).fill('Computing & Design');
   await page.getByRole('spinbutton', { name: /Current study level/ }).fill('6');
+  const review = page.getByRole('checkbox', { name: /I have reviewed the education details/ });
+  if (await review.isVisible()) await review.check();
   const write = page.waitForResponse(r => r.request().method() === 'PATCH' && r.url().endsWith('/api/v1/profile'));
   await page.getByRole('button', { name: 'Save background' }).click();
   expect((await write).status()).toBe(200);

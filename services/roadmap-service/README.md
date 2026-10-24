@@ -2,11 +2,11 @@
 
 Planned framework: Python FastAPI. Public route reservation: `/api/v1/roadmaps`.
 
-User stories: P04-P06, R01-R09, E01-E07, T01-T06 and A02-A04.
+User stories: R01-R09, E01-E07, T01-T06 and A02-A04.
 
 ## Responsibility
 
-Goal constraints, availability, generated plans, milestones, tasks, status history and revisions.
+Consumed profile planning-input snapshots, generated plans, milestones, tasks, status history and revisions.
 
 Planned MongoDB database: `coachify_roadmap`; service-scoped credentials only.
 
@@ -27,3 +27,5 @@ Structure only. `app/main.py` is a comment-only placeholder, not an ASGI applica
 - `workers`: future durable background operation execution; no queue technology is selected.
 
 `tests/` reserves future verification work. `Dockerfile.example` and `.env.example` are inactive templates. No `/internal/v1` endpoint is implemented.
+
+P04–P06 declared deadline/capacity/period inputs are implemented in the Profile service, per the revised Jira criteria. Roadmap scheduling remains unimplemented.

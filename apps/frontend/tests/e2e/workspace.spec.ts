@@ -7,6 +7,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.route('**/api/**', async route => {
   const url = new URL(route.request().url()); apiCalls.push(url.pathname);
   expect(url.pathname.startsWith('/api/v1/profile')).toBe(true);
+  if (url.pathname.endsWith('/planning-inputs')) return route.fulfill({json:{profile_version:saved.version,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
   if(url.pathname.endsWith('/auth-config')) return route.fulfill({json:{mode:'local_test'}});
   if(url.pathname.endsWith('/school-categories')) return route.fulfill({json:categories});
   if(url.pathname.endsWith('/institutions')) return route.fulfill({json:{items:[],total:0,offset:0,limit:25,snapshot_date:'2026-10-24',coverage_note:'Test fixture'}});
@@ -52,7 +53,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
  await page.getByRole('button',{name:'Courses',exact:true}).click();
  await expect(page.getByRole('heading',{name:'No courses to show yet'})).toBeVisible();
- await expect(page.getByRole('button',{name:'6 months',exact:true})).toBeDisabled();
+ await expect(page.getByRole('link',{name:'Edit planning preferences →'})).toBeVisible();
  expect(apiCalls.every(p=>p.startsWith('/api/v1/profile'))).toBe(true);
  // Mobile navigation and calendar scrolling stay inside their containers.
  await page.setViewportSize({width:390,height:844});

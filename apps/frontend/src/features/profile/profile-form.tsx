@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, profileApi } from '@/lib/api/profile';
+import { PlanningPreferences } from './planning-preferences';
 import { AccountPanel } from './account-panel';
 import { useProfile } from './profile-provider';
 import { PageTitle } from '@/components/ui/workspace-ui';
@@ -21,11 +22,12 @@ export function ProfileForm() {
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const educationSource = JSON.stringify([profile?.occupational_status, profile?.school_category, profile?.education, profile?.education_review_required]);
   useEffect(() => {
     setStatus(profile?.occupational_status || ''); setCategory(profile?.school_category || '');
     setEditor(editorFrom(profile?.education || {})); setInstitutionDirty(false); setConfirmed(false);
     setConflict(false); setError('');
-  }, [profile]);
+  }, [educationSource]);
   const needsSignIn = authMode === 'google' && !token;
   const contextChanged = !!profile?.occupational_status && (status !== profile.occupational_status || (category || null) !== profile.school_category);
   function chooseInstitution(institution: Institution, selectedCategory: Category['id']) {
@@ -93,6 +95,7 @@ export function ProfileForm() {
       <div className="save-row"><span className="muted">Your answers can be updated later.</span><button className="primary" type="submit" disabled={saving || loading || !(authMode === 'local_test' || (authMode === 'google' && token)) || !profile || conflict || !!configError || categories.length === 0}>
         {saving ? 'Saving…' : 'Save background'}</button></div>
     </form>
+    <PlanningPreferences/>
     <footer>School suggestions use local snapshots. Contains information from MOE’s <a href="https://data.gov.sg/datasets/d_688b934f82c1059ed0a6993d2a829089/view">General information of schools</a>, accessed 24 October 2026, under the <a href="https://data.gov.sg/open-data-licence">Singapore Open Data Licence</a>. International suggestions: <a href="https://github.com/Hipo/university-domains-list">Hipo university directory (MIT)</a>. Neither source verifies enrolment or accreditation.</footer>
   </section>;
 }
