@@ -6,6 +6,17 @@ info:
     a fixed server identity only in development; see docs/development/profile-setup.md.
   version: 0.1.0
 paths:
+  /api/v1/profile/auth-config:
+    get:
+      summary: Auth Config
+      operationId: auth_config_api_v1_profile_auth_config_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
   /api/v1/profile/school-categories:
     get:
       summary: School Categories
@@ -157,6 +168,18 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
+    AuthConfigView:
+      properties:
+        mode:
+          type: string
+          enum:
+          - google
+          - local_test
+          title: Mode
+      type: object
+      required:
+      - mode
+      title: AuthConfigView
     CatalogueInstitution:
       properties:
         kind:

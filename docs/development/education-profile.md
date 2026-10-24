@@ -78,11 +78,11 @@ API tests cover all categories, catalogue/custom inputs, invalid values, indepen
 updates, context transitions, history, owner isolation and stale writes. Real MongoDB
 integration verifies education across a separate connection. Component/browser tests
 exercise entry, catalogue selection, extended years, reload and failed-save retry.
-Browser tests mock external Google/API boundaries; the real database is verified
-separately. The production Next.js build and TypeScript checks are also run.
+The Google browser journey mocks Google/API boundaries. A separate local-mode
+browser test uses the real gateway, API and MongoDB to verify saving and reload. The production Next.js build and TypeScript checks are also run.
 
-No new API keys are needed. The local test mode supports Postman; the browser still
-uses Google sign-in. Course entry is free text rather than a maintained catalogue.
+No new API keys are needed. Local test mode supports both the browser and Postman without Google.
+Google mode continues to require sign-in. Course entry is free text rather than a maintained catalogue.
 Assessment/roadmap services remain unimplemented: profile versions prepare their
 future freshness checks, but no cross-service roadmap flagging or generation is
 implemented here. Jira statuses are unchanged.

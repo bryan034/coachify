@@ -6,13 +6,19 @@ from app.domain.profile import ProfileValidationError, present_profile
 from app.repositories.profile import VersionConflict
 from app.schemas.profile import ProfilePatch, ProfileView, SchoolCategory
 
-from app.schemas.schools import CategoryView, CountryView, InstitutionResults
+from app.schemas.schools import AuthConfigView, CategoryView, CountryView, InstitutionResults
 
 router = APIRouter(prefix="/api/v1/profile")
 
 
 def repository(request: Request):
     return request.app.state.repository
+
+
+@router.get("/auth-config", response_model=AuthConfigView)
+def auth_config(request: Request):
+    # Describes the validated server mode; this endpoint cannot change authentication.
+    return {"mode": request.app.state.auth_settings.mode}
 
 
 @router.get("/school-categories", response_model=list[CategoryView])

@@ -13647,6 +13647,17 @@
       "id": "school_a1374441971ae1ea3c2371dc"
     },
     {
+      "name": "CATHOLIC HIGH SCHOOL",
+      "categories": [
+        "secondary"
+      ],
+      "country_code": "SG",
+      "country": "Singapore",
+      "domains": [],
+      "source": "moe",
+      "id": "school_ddbb45ab14d20c2be6f11756"
+    },
+    {
       "name": "CATHOLIC JUNIOR COLLEGE",
       "categories": [
         "junior_college"
@@ -16043,6 +16054,17 @@
       "domains": [],
       "source": "moe",
       "id": "school_989a3de17fce01f2aec3a7f9"
+    },
+    {
+      "name": "CHIJ ST. NICHOLAS GIRLS' SCHOOL",
+      "categories": [
+        "secondary"
+      ],
+      "country_code": "SG",
+      "country": "Singapore",
+      "domains": [],
+      "source": "moe",
+      "id": "school_c4d66797a9fca53e15155ce9"
     },
     {
       "name": "CHIJ ST. THERESA'S CONVENT",
@@ -59057,6 +59079,17 @@
       ],
       "source": "hipo",
       "id": "school_1c9e83be367203ecae7d822c"
+    },
+    {
+      "name": "MARIS STELLA HIGH SCHOOL",
+      "categories": [
+        "secondary"
+      ],
+      "country_code": "SG",
+      "country": "Singapore",
+      "domains": [],
+      "source": "moe",
+      "id": "school_70d315028d62f92daad29d04"
     },
     {
       "name": "Marist College",

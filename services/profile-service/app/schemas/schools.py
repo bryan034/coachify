@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel
 from app.schemas.profile import SchoolCategory
 
@@ -29,3 +30,7 @@ class InstitutionResults(BaseModel):
     limit: int
     snapshot_date: str
     coverage_note: str
+
+
+class AuthConfigView(BaseModel):
+    mode: Literal["google", "local_test"]

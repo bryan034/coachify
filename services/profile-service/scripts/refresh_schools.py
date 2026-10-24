@@ -39,7 +39,8 @@ def build(moe, universities):
     for row in moe["result"]["records"]:
         level = row["mainlevel_code"]
         categories = []
-        if "SECONDARY" in level or "S1" in level:
+        # Mixed primary/secondary schools use P1-S4 rather than S1.
+        if "SECONDARY" in level or re.search(r"\bS[1-5]\b", level):
             categories.append("secondary")
         if "JUNIOR COLLEGE" in level or "JC" in level or "CENTRALISED" in level:
             categories.append("junior_college")

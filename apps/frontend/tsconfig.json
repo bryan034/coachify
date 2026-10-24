@@ -37,7 +37,8 @@
     "tests/**/*.tsx",
     "playwright.config.ts",
     "vitest.config.mts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    "playwright.integration.config.ts"
   ],
   "exclude": [
     "node_modules"

@@ -1,2 +1,2 @@
-// Reserved route; feature implementation is pending.
-export default function ReservedPage() { return <main><p>This feature is not available yet.</p><a href="/profile">Go to your profile</a></main>; }
+import { RoadmapPreview } from '@/features/roadmap/roadmap-preview';
+export default function RoadmapPage() { return <RoadmapPreview/>; }

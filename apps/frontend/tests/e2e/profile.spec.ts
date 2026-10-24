@@ -16,6 +16,7 @@ test('save, reload, browse international schools, switch status and retry', asyn
   } } };` }));
   await page.route('**/api/v1/profile**', async route => {
     const url = new URL(route.request().url());
+    if (url.pathname.endsWith('auth-config')) return route.fulfill({ json: { mode: 'google' } });
     if (url.pathname.endsWith('school-categories')) return route.fulfill({ json: categories });
     if (url.pathname.endsWith('school-countries')) return route.fulfill({ json: [{ code: 'US', name: 'United States' }] });
     if (url.pathname.endsWith('institutions')) return route.fulfill({ json: {
@@ -38,7 +39,6 @@ test('save, reload, browse international schools, switch status and retry', asyn
   await expect(page.getByRole('button', { name: 'Save background' })).toBeEnabled();
   await page.getByRole('radio', { name: 'Student', exact: true }).check();
   await page.getByText('University', { exact: true }).click();
-  await page.getByRole('radio', { name: 'Use this category: University' }).check();
   await page.getByRole('searchbox', { name: 'Search schools' }).fill('Harvard');
   await page.getByRole('combobox', { name: 'Country / territory' }).selectOption('US');
   await expect(page.getByRole('button', { name: 'Select Harvard University' })).toBeVisible();
@@ -64,4 +64,14 @@ test('save, reload, browse international schools, switch status and retry', asyn
   failSave = false;
   await page.getByRole('button', { name: 'Save background' }).click();
   await expect(page.getByText('Profile saved.')).toBeVisible();
+  // Client-side workspace navigation preserves the in-memory Google identity.
+  await page.getByRole('link', { name: 'Home', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Welcome to Coachify' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await page.getByRole('link', { name: 'My profile' }).click();
+  await expect(page.getByRole('button', { name: 'Save background' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('button', { name: 'Save background' })).toBeDisabled();
+  await expect(page.getByRole('radio', { name: 'Student', exact: true })).not.toBeChecked();
+
 });

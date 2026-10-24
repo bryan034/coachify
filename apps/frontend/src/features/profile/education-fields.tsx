@@ -12,7 +12,7 @@ export function editorFrom(education: Education): EducationEditor {
   return { institution: school ? (school.kind === 'catalogue' ? { kind: 'catalogue', id: school.id! }
     : { kind: 'custom', name: school.name, country_code: school.country_code }) : undefined,
     institutionName: school?.name || '', custom: school?.kind === 'custom',
-    course: education.course || '', courseDirty: false, noCourse: !education.course,
+    course: education.course || '', courseDirty: false, noCourse: false,
     year: education.study_year == null ? '' : String(education.study_year), yearDirty: false, yearCategory: education.study_year_category, yearLabel: education.study_year_label };
 }
 export function educationPayload(editor: EducationEditor, dirtyInstitution: boolean, status: OccupationalStatus): EducationDraft {
@@ -35,7 +35,7 @@ export function EducationFields({ status, category, editor, setEditor, onInstitu
 }) {
   const questions = educationQuestions(status);
   return <section className="education-fields" aria-label="Education details">
-    <h2>Education details</h2>
+    <h2>Your education</h2>
     <label><input type="checkbox" checked={editor.custom} onChange={event => {
       setEditor({ ...editor, custom: event.target.checked, institutionName: '', institution: event.target.checked ? undefined : null });
       onInstitutionDirty();
@@ -47,7 +47,7 @@ export function EducationFields({ status, category, editor, setEditor, onInstitu
       setEditor({ ...editor, institution: null, institutionName: '', custom: false }); onInstitutionDirty();
     }}>Clear institution</button>}
     <label>{questions.course}<input type="text" maxLength={300} value={editor.course}
-      disabled={editor.noCourse} onChange={event => setEditor({ ...editor, course: event.target.value, courseDirty: true })} /></label>
+      disabled={editor.noCourse} onChange={event => setEditor({ ...editor, course: event.target.value, courseDirty: true, noCourse: false })} /></label>
     <label><input type="checkbox" checked={editor.noCourse}
       onChange={event => setEditor({ ...editor, noCourse: event.target.checked, courseDirty: true })} />No applicable named course/programme</label>
     {questions.showYear ? <label>Current study level/year<input type="number" min="1" step="1" value={editor.year}

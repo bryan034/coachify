@@ -319,3 +319,15 @@ def test_text_normalisation_precedes_length_validation(client):
     }))
     assert response.status_code == 200, response.text
     assert response.json()["education"]["course"] == text
+
+
+def test_auth_config_reports_only_server_mode_and_cannot_enable_local_mode(monkeypatch):
+    monkeypatch.delenv("AUTH_MODE", raising=False)
+    with TestClient(create_app(MemoryRepository())) as client:
+        assert client.get("/api/v1/profile/auth-config?mode=local_test").json() == {"mode": "google"}
+        assert client.get("/api/v1/profile").status_code == 401
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("AUTH_MODE", "local_test")
+    with TestClient(create_app(MemoryRepository())) as client:
+        assert client.get("/api/v1/profile/auth-config").json() == {"mode": "local_test"}
+        assert client.get("/api/v1/profile").status_code == 200

@@ -32,3 +32,26 @@ def test_snapshot_ids_and_provenance():
     assert len({r["id"] for r in data["institutions"]}) == len(data["institutions"])
     assert data["sources"]["hipo"]["revision"]
     assert all(set(r) == {"id", "name", "country_code", "country", "categories", "domains", "source"} for r in data["institutions"])
+
+
+def test_secondary_snapshot_includes_mixed_primary_secondary_schools():
+    expected = {"CATHOLIC HIGH SCHOOL", "CHIJ ST. NICHOLAS GIRLS' SCHOOL", "MARIS STELLA HIGH SCHOOL"}
+    with TestClient(create_app(repository=object())) as client:
+        result = client.get("/api/v1/profile/institutions", params={"category": "secondary", "limit": 100}).json()
+        assert result["total"] == 147
+        rows = result["items"] + client.get("/api/v1/profile/institutions", params={"category": "secondary", "limit": 100, "offset": 100}).json()["items"]
+        assert expected <= {row["name"] for row in rows}
+
+
+def test_refresh_classifies_secondary_levels_without_including_primary_only():
+    import runpy
+    build = runpy.run_path(str(Path(__file__).parents[1] / "scripts" / "refresh_schools.py"))["build"]
+    levels = ["PRIMARY", "MIXED LEVEL (P1-S4)", "MIXED LEVEL (S1-JC2)", "SECONDARY (S1-S5)", "JUNIOR COLLEGE"]
+    records = [{"school_name": level, "mainlevel_code": level} for level in levels]
+    data = build({"result": {"records": records, "total": len(records)}}, [{"name": "Synthetic University", "alpha_two_code": "ZZ", "country": "Test", "domains": []}])
+    rows = {row["name"]: row["categories"] for row in data["institutions"]}
+    assert "PRIMARY" not in rows
+    assert rows["MIXED LEVEL (P1-S4)"] == ["secondary"]
+    assert rows["MIXED LEVEL (S1-JC2)"] == ["secondary", "junior_college"]
+    assert rows["SECONDARY (S1-S5)"] == ["secondary"]
+    assert rows["JUNIOR COLLEGE"] == ["junior_college"]
