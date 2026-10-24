@@ -1,0 +1,52 @@
+name: coachify-profile
+services:
+  gateway:
+    image: nginx:1.28-alpine
+    ports: ["127.0.0.1:8080:80"]
+    volumes: ["../gateway/nginx.conf:/etc/nginx/nginx.conf:ro"]
+    depends_on: [frontend, profile-service]
+    networks: [web, backend]
+  frontend:
+    build:
+      context: ../..
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    networks: [web]
+  profile-service:
+    build: ../../services/profile-service
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      AUTH_MODE: ${AUTH_MODE:-google}
+      LOCAL_TEST_USER_ID: ${LOCAL_TEST_USER_ID:-coachify-local-user}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      MONGODB_URI: mongodb://coachify_profile:${PROFILE_DB_PASSWORD:?Set PROFILE_DB_PASSWORD}@mongodb:27017/coachify_profile
+      MONGODB_DATABASE: coachify_profile
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks: [backend, database]
+  mongodb:
+    image: mongo:8.0
+    environment:
+      # Docker Desktop kernels 6.19+ need the rseq compatibility setting.
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+      MONGO_INITDB_ROOT_USERNAME: coachify_admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+      PROFILE_DB_PASSWORD: ${PROFILE_DB_PASSWORD:?Set PROFILE_DB_PASSWORD}
+    volumes:
+      - profile_data:/data/db
+      - ../mongodb/init-profile.js:/docker-entrypoint-initdb.d/init-profile.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [database]
+networks:
+  web: {}
+  backend: {}
+  database:
+    internal: true
+volumes:
+  profile_data: {}

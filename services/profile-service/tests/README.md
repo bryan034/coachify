@@ -1,3 +1,3 @@
-# Student profile tests
+# Profile tests
 
-Reserved for future service-level tests. No tests or test application have been implemented.
+API and snapshot tests use pytest. MongoDB integration requires MONGODB_TEST_URI pointing at a disposable instance. See the repository root docs/development/profile-setup.md for commands and fixture boundaries.

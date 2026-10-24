@@ -1,8 +1,8 @@
 # Coachify
 
-Structure-only scaffold for a personalised career-readiness planner for university students in Singapore.
+Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
-**Status:** directories, source placeholders, configuration templates, and architecture documentation only. There are no implemented UI components, HTTP endpoints, authentication flows, database connections, LLM integrations, schedulers, or application workers. Dependencies have not been installed. This is not yet a runnable application.
+**Status:** P07/P08 occupational status and school category are implemented with profile persistence and local/international school snapshots. Other product features remain scaffolded. Google sign-in requires your Web Client ID. See [setup instructions](docs/development/profile-setup.md).
 
 ## Stack
 
@@ -12,7 +12,7 @@ Structure-only scaffold for a personalised career-readiness planner for universi
 - Database: MongoDB, with separate databases and credentials for data-owning services.
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
-- Google sign-in: planned; provider, session integration, and backend token validation are not implemented.
+- Google sign-in: JavaScript button and FastAPI ID-token verification implemented for the profile slice; real credentials must be configured. Tokens are kept in memory, not a persistent app session.
 - AI provider and application hosting: not selected.
 
 ## Repository layout
@@ -45,11 +45,6 @@ work/                       Ignored working files, not application source
 
 The current documentation under `docs/` reflects the Next.js and MongoDB decisions. Earlier files under `outputs/` may show the previously proposed PostgreSQL architecture and are retained as historical deliverables.
 
-## Scaffold conventions
+## Implementation scope
 
-- `.py`, `.tsx`, and `.css` source placeholders contain comments only. Empty Python package markers establish future import boundaries.
-- `package.json` and `pyproject.toml` files contain project metadata only. Runtime dependencies and lockfiles will be added when the runnable skeleton is implemented.
-- Files ending in `.example`, including Dockerfiles, are illustrative configuration templates. They do not start Coachify.
-- The OpenAPI contracts intentionally have empty `paths` objects; their existence does not imply endpoints have been implemented.
-- Real environment files, credentials, CV uploads, and database data must stay out of source control.
-- No Git repository has been initialised or remote configured by this scaffold.
+Use the active `infrastructure/docker/compose.yaml` for the P07/P08 slice. Files ending in `.example` remain inactive planning templates. Other services retain source placeholders. The profile API contract is implemented; remaining contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.

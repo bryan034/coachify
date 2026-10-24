@@ -2,11 +2,9 @@
 
 ## Current state
 
-The repository contains comment-only application placeholders and no product test
-cases. Empty test suites pass CI by policy; actual test failures and discovery or
-configuration errors still fail. A passing empty suite does not establish coverage.
-Add meaningful tests alongside application implementations. No application business
-logic was added by this CI change.
+P07/P08 now have component, browser and API tests plus real MongoDB integration.
+Other services still have empty suites. Empty suites pass; real failures do not.
+See [profile setup](profile-setup.md) for current commands and fixture boundaries.
 
 ## Local commands
 
@@ -21,9 +19,8 @@ npm run test:e2e --workspace apps/frontend
 ```
 
 The browser runner first discovers tests. If none exist it passes without starting
-Next.js. When tests exist, Playwright builds and starts the frontend. The scaffold currently cannot
-build because pages and layouts lack implementations. Only Chromium is configured.
-There are no live backend fixtures, credentials, or databases in browser tests yet.
+Next.js. When tests exist, Playwright builds and starts the frontend. The frontend now builds; reserved pages remain placeholders. Only Chromium is configured.
+Browser tests mock Google/API boundaries; real MongoDB is exercised in a separate backend integration job.
 
 For each service, create an isolated Python environment, then run from its directory:
 
@@ -35,7 +32,7 @@ python -m pytest
 Each service's `tests/` directory is the pytest discovery root. Raw pytest exits 5
 when no tests are collected; CI treats only that code as success. All other
 nonzero exit codes fail. Add MongoDB fixtures and CI service containers when database integration
-tests are introduced; the current workflow does not start MongoDB or the API stack.
+tests are introduced; the profile integration job starts MongoDB; other unit jobs do not.
 
 ## Automation
 

@@ -2,7 +2,7 @@
 
 Planned stack: Next.js App Router, React, TypeScript, and a Node.js runtime.
 
-This folder contains no UI implementation. Source files are comment-only placeholders, not valid completed Next.js pages or layouts. Frontend runtime and test dependencies/scripts are configured; see `tests/README.md` for commands. There is no Google OAuth implementation.
+P07/P08 are implemented at `/profile`; other page routes are reserved placeholders. Frontend runtime and test dependencies/scripts are configured; see `tests/README.md` for commands. Google sign-in and profile API access are implemented for this slice; see `../../docs/development/profile-setup.md`.
 
 ## Directories
 

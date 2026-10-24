@@ -14,13 +14,20 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
       ]
-    }
+    },
+    "allowJs": true,
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "include": [
     "next-env.d.ts",
@@ -30,7 +37,8 @@
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "playwright.config.ts",
-    "vitest.config.mts"
+    "vitest.config.mts",
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

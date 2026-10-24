@@ -1,5 +1,8 @@
 # Docker deployment structure
 
+P07/P08 now have an active four-container setup in `infrastructure/docker/compose.yaml`, with `infrastructure/gateway/nginx.conf` and `infrastructure/mongodb/init-profile.js`. See `docs/development/profile-setup.md` from the repository root. The remaining notes below describe the original scaffold templates.
+
+
 `compose.yaml.example` is an intentionally inactive deployment blueprint. It uses a `scaffold` profile for application services, and references comment-only Dockerfile examples. It cannot build or start a working Coachify application. Do not interpret Compose schema validity as application readiness.
 
 ## Planned components

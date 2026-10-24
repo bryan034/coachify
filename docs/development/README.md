@@ -1,24 +1,20 @@
 # Development status
 
-## What exists
+P07/P08 now have a working Next.js profile section, FastAPI/MongoDB persistence,
+Google ID-token verification, snapshot-based school browsing and an active local
+four-container Compose setup. Test tooling and CI include frontend unit/browser
+checks, backend unit tests and a real MongoDB integration job.
 
-- Next.js/React/TypeScript frontend directory structure and commented page/layout placeholders.
-- Six independently organised Python service packages.
-- Project metadata, environment examples, ignore rules, and Docker/NGINX templates.
-- Current architecture, API route planning, and empty OpenAPI contracts.
+Start here: [P07/P08 setup and credentials](profile-setup.md).
 
-## What is deliberately absent
+School data is already downloaded; no school API key is needed at runtime. Google
+sign-in needs a Web Client ID; local Postman testing can instead use the explicit
+development-only fixed identity without Google credentials. Real sign-in remains unverified until credentials
+are configured. Browser automation mocks the external identity/API boundaries;
+backend integration tests exercise real MongoDB separately.
 
-No application logic, runnable entry points, UI, endpoint handlers, database clients/queries, Google OAuth, LLM calls, background-job execution, scheduled tasks, tests, live databases, or deployed infrastructure. Frontend runtime/test dependencies and backend test dependencies are now configured; application implementations are still absent. A normal build cannot succeed until actual startup/UI code is added.
-
-## Source organisation
-
-Each FastAPI service has `app/api/v1`, `app/schemas`, `app/domain`, `app/clients`, and `app/core`. Data-owning services also have `app/repositories`. CV, career, roadmap, and review have worker placeholders. CV additionally has parsing and clarification folders; roadmap has planning and revisions; review has scheduling. Dashboard deliberately has no repository, database credential, or worker folder.
-
-`__init__.py` package markers are empty. Other Python, TypeScript/TSX and CSS source placeholders are comments only. `tests/README.md` reserves a future test location; it is not a test suite.
-
-## Next implementation stage
-
-Implement minimal valid entry points and meaningful tests, and activate runtime configuration before building product functionality. Agree the identity/session provider and how Google sign-in is verified by FastAPI. Preserve backend ownership checks and service boundaries even if Next.js supplies server-rendered pages.
-
-Do not add secrets to tracked examples. Do not put uploaded CVs in Next.js `public/` or the source tree. The original scaffolding did not initialise Git, install dependencies, or launch containers. See `testing.md` for the subsequently added CI setup.
+P01–P03 institution/course/year entry, CV ingestion, target-job assessment,
+roadmaps, dashboards and reviews remain unimplemented. Reserved page routes have
+minimal exports so the frontend builds; they do not implement those features.
+No live external AI calls, scheduled execution, production deployment or roadmap
+freshness integration exists. Keep durable agent rules in root AGENTS.md.

@@ -1,1 +1,2 @@
-// Placeholder: Shared student workspace layout. No UI or access check is implemented.
+import type { ReactNode } from 'react';
+export default function WorkspaceLayout({ children }: { children: ReactNode }) { return <>{children}</>; }

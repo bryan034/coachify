@@ -1,0 +1,59 @@
+import { test, expect } from '@playwright/test';
+
+test('save, reload, browse international schools, switch status and retry', async ({ page }) => {
+  // Only the Google and HTTP boundaries are mocked. Production has no test-auth path.
+  const categories = [
+    { id: 'secondary', label: 'Secondary School' }, { id: 'ite', label: 'Institute of Technical Education' },
+    { id: 'polytechnic', label: 'Polytechnic / Diploma' }, { id: 'junior_college', label: 'Junior College' },
+    { id: 'university', label: 'University' },
+  ];
+  let saved = { version: 0, occupational_status: null as string | null, school_category: null as string | null,
+    education_context: null as string | null, education_review_required: false, education: {} };
+  let failSave = false;
+  await page.route('https://accounts.google.com/gsi/client', route => route.fulfill({ contentType: 'application/javascript', body: `window.google = { accounts: { id: {
+    initialize: function(options) { this.callback = options.callback; },
+    renderButton: function(el) { const b = document.createElement('button'); b.textContent = 'Sign in with Google (test)'; b.onclick = () => this.callback({ credential: 'test-token' }); el.appendChild(b); }, disableAutoSelect: function() {}
+  } } };` }));
+  await page.route('**/api/v1/profile**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('school-categories')) return route.fulfill({ json: categories });
+    if (url.pathname.endsWith('school-countries')) return route.fulfill({ json: [{ code: 'US', name: 'United States' }] });
+    if (url.pathname.endsWith('institutions')) return route.fulfill({ json: {
+      items: [{ id: 'test-harvard', name: 'Harvard University', country: 'United States', country_code: 'US' }], total: 1, offset: 0, limit: 25,
+      snapshot_date: '2026-10-24', coverage_note: 'Test directory boundary fixture.',
+    } });
+    if (route.request().method() === 'PATCH') {
+      if (failSave) return route.fulfill({ status: 503, json: { detail: 'Temporary save failure. Retry.' } });
+      const input = route.request().postDataJSON();
+      expect(input.expected_version).toBe(saved.version);
+      saved = { ...saved, occupational_status: input.occupational_status, school_category: input.school_category,
+        version: saved.version + 1, education_context: input.occupational_status === 'student' ? 'current' : 'last', education_review_required: saved.version > 0 };
+    }
+    return route.fulfill({ json: saved });
+  });
+  await page.goto('/profile');
+  await page.getByRole('button', { name: 'Sign in with Google (test)' }).click();
+  await expect(page.getByRole('button', { name: 'Save background' })).toBeEnabled();
+  await page.getByRole('radio', { name: 'Student', exact: true }).check();
+  await page.getByText('University', { exact: true }).click();
+  await page.getByRole('radio', { name: 'Use this category: University' }).check();
+  await page.getByRole('searchbox', { name: 'Search schools' }).fill('Harvard');
+  await page.getByRole('combobox', { name: 'Country / territory' }).selectOption('US');
+  await expect(page.getByText('Harvard University')).toBeVisible();
+  await page.getByRole('button', { name: 'Save background' }).click();
+  await expect(page.getByText('Profile saved.')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Sign in with Google (test)' }).click();
+  await expect(page.getByRole('radio', { name: 'Student', exact: true })).toBeChecked();
+  await page.getByRole('radio', { name: 'Employed', exact: true }).check();
+  await expect(page.getByText('Where did you last study?')).toBeVisible();
+  await expect(page.getByText(/Please review your education details/)).toBeVisible();
+  await page.getByRole('radio', { name: 'No applicable previous education' }).check();
+  failSave = true;
+  await page.getByRole('button', { name: 'Save background' }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('Temporary save failure. Retry.');
+  await expect(page.getByRole('radio', { name: 'Employed', exact: true })).toBeChecked();
+  failSave = false;
+  await page.getByRole('button', { name: 'Save background' }).click();
+  await expect(page.getByText('Profile saved.')).toBeVisible();
+});
