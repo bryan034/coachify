@@ -29,7 +29,7 @@ def create_app(repository=None):
             if client is not None:
                 client.close()
 
-    app = FastAPI(title="Coachify profile API", version="0.1.0", description="Google bearer authentication by default. Explicit local_test mode uses a fixed server identity only in development; see docs/development/profile-setup.md.", lifespan=lifespan)
+    app = FastAPI(title="Coachify profile API", version="0.1.0", description="Google bearer authentication by default. Explicit local_test mode uses a fixed server identity only in development; see services/profile-service/README.md.", lifespan=lifespan)
     app.include_router(router)
 
     @app.exception_handler(RequestValidationError)

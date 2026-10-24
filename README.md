@@ -2,7 +2,7 @@
 
 Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
-**Status:** P01–P08 education, status and planning preferences are implemented with profile persistence and local/international school snapshots. The first workspace UI is integrated; unimplemented features use empty states and disabled actions. Google sign-in requires your Web Client ID. See [setup instructions](docs/development/profile-setup.md).
+**Status:** P01–P08 education, status and planning preferences are implemented with profile persistence and local/international school snapshots. The first workspace UI is integrated; unimplemented features use empty states and disabled actions. Google sign-in requires your Web Client ID. See [setup instructions](docs/setup.md).
 
 ## Stack
 
@@ -28,7 +28,7 @@ services/review-service/    Pace reviews and scheduling
 infrastructure/gateway/     NGINX configuration template
 infrastructure/mongodb/     Local database and Atlas guidance
 infrastructure/docker/      Compose deployment template
-contracts/api/              Empty OpenAPI contracts for future endpoints
+contracts/api/              Profile OpenAPI contract and future service shells
 docs/                       Current design and development guidance
 outputs/                    Earlier architecture deliverables
 work/                       Ignored working files, not application source
@@ -39,7 +39,8 @@ work/                       Ignored working files, not application source
 - [Current architecture](docs/architecture/README.md)
 - [Service ownership and story mapping](docs/architecture/service-boundaries.md)
 - [API route plan](docs/api/README.md)
-- [Development and implementation status](docs/development/README.md)
+- [Run the application](docs/setup.md)
+- [Tests and CI](docs/testing.md)
 - [Frontend structure](apps/frontend/README.md)
 - [Docker template](infrastructure/docker/README.md)
 
@@ -47,4 +48,4 @@ The current documentation under `docs/` reflects the Next.js and MongoDB decisio
 
 ## Implementation scope
 
-Use the active `infrastructure/docker/compose.yaml` for the P07/P08 slice. Files ending in `.example` remain inactive planning templates. Other services retain source placeholders. The profile API contract is implemented; remaining contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.
+Use the active `infrastructure/docker/compose.yaml` for the implemented profile slice. Files ending in `.example` remain inactive planning templates. Other services retain source placeholders. The profile API contract is implemented; remaining contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.

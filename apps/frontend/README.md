@@ -38,7 +38,7 @@ no Google configuration. Account controls appear inline on Home and My profile.
 
 All API access uses `src/lib/api/profile.ts` through `/api/v1/profile` at the gateway.
 FastAPI owns validation, resource ownership and database writes. See
-`../../docs/development/profile-setup.md` for environment and Docker setup.
+[application setup](../../docs/setup.md) for environment and Docker setup.
 
 ## Structure
 
@@ -52,4 +52,4 @@ FastAPI owns validation, resource ownership and database writes. See
 
 See `tests/README.md` for unit, browser and disposable full-stack test commands.
 
-P04–P06 use `PlanningPreferences` and the existing Profile API. See `../../docs/development/planning-preferences.md` for versioned writes, idempotency, date-zone rules and the planning snapshot.
+P04–P06 use `PlanningPreferences` and the existing Profile API. See the [Profile service README](../../services/profile-service/README.md) for its endpoints and service rules.

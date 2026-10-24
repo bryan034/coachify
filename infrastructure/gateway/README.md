@@ -1,6 +1,6 @@
 # NGINX gateway
 
-P07/P08 now have an active four-container setup in `infrastructure/docker/compose.yaml`, with `infrastructure/gateway/nginx.conf` and `infrastructure/mongodb/init-profile.js`. See `docs/development/profile-setup.md` from the repository root. The remaining notes below describe the original scaffold templates.
+The profile slice now has an active four-container setup in `infrastructure/docker/compose.yaml`, with `infrastructure/gateway/nginx.conf` and `infrastructure/mongodb/init-profile.js`. See the [application setup guide](../../docs/setup.md). The remaining notes below describe the original scaffold templates.
 
 
 The gateway is a separate planned container. It routes public page requests to the Next.js frontend and `/api/v1` requests to the appropriate FastAPI service.

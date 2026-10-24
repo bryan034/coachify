@@ -1,5 +1,8 @@
 # API contracts
 
-One empty OpenAPI document per backend service. All `paths` objects are deliberately empty because no HTTP endpoint has been implemented. Review public resource ownership and private service identity before defining operations.
+`profile.yaml` describes the implemented Profile API and is generated from the
+FastAPI application. Other service contracts remain empty shells.
 
-The public server prefix is `/api/v1`. Internal `/internal/v1` endpoints will be designed separately and blocked at the public gateway.
+Individual endpoint explanations live in each service README; the
+[API overview](../../docs/api/README.md) maps prefixes to services. Keep schemas
+aligned with implementation. Private internal routes stay behind the gateway.

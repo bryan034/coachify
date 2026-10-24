@@ -1,25 +1,15 @@
 # Progress dashboard service
 
-Planned framework: Python FastAPI. Public route reservation: `/api/v1/dashboard`.
+Brings together progress from the other services so users can see how they are doing.
 
-User stories: D01-D06.
+## API by Jira story
 
-## Responsibility
+**No API endpoints are implemented yet.** The `/api/v1/dashboard` prefix is reserved.
 
-Stateless aggregation of live roadmap progress, assessed requirements and dated review analysis.
+| Jira stories | Planned purpose |
+|---|---|
+| D01–D06 | Show progress and remaining work across daily, weekly, monthly and whole-roadmap goals. |
 
-Stateless: no database, repository layer or MongoDB credentials.
+The dashboard will read other services through their APIs; it will not own a separate database.
 
-## Current status
-
-Structure only. `app/main.py` is a comment-only placeholder, not an ASGI application. There are no endpoints, schemas, database connections, LLM requests, jobs, authentication checks or application logic. No dependencies have been installed or selected in `pyproject.toml`.
-
-## Package responsibilities
-
-- `api/v1`: future HTTP route definitions.
-- `schemas`: future request and response definitions.
-- `domain`: future business operations.
-- `clients`: future calls to other services or external providers.
-- `core`: future environment, logging, identity and local configuration utilities.
-
-`tests/` reserves future verification work. `Dockerfile.example` and `.env.example` are inactive templates. No `/internal/v1` endpoint is implemented.
+See the [application API overview](../../docs/api/README.md) and [service boundaries](../../docs/architecture/service-boundaries.md).

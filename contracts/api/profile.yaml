@@ -3,7 +3,7 @@ openapi: 3.1.0
 info:
   title: Coachify profile API
   description: Google bearer authentication by default. Explicit local_test mode uses
-    a fixed server identity only in development; see docs/development/profile-setup.md.
+    a fixed server identity only in development; see services/profile-service/README.md.
   version: 0.1.0
 paths:
   /api/v1/profile/auth-config:
