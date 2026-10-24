@@ -13,6 +13,14 @@ export async function inboxCode(page:Page,email:string){
  if(!code)throw new Error('Synthetic verification mail contained no code.');
  return code;
 }
+export async function fillCurrentEmployment(page: Page) {
+ await page.getByRole('textbox',{name:'Place of employment'}).fill('Synthetic company');
+ await page.getByRole('button',{name:'Continue',exact:true}).click();
+ await page.getByRole('textbox',{name:'Role',exact:true}).fill('Synthetic analyst');
+ await page.getByRole('button',{name:'Continue',exact:true}).click();
+ await page.getByRole('textbox',{name:'Industry',exact:true}).fill('Synthetic industry');
+ await page.getByRole('button',{name:'Continue',exact:true}).click();
+}
 export async function createLocalAccount(page: Page, name = 'Synthetic test account') {
  const email=`synthetic-${crypto.randomUUID()}@example.test`;
  await page.goto('/register');
@@ -24,13 +32,13 @@ export async function createLocalAccount(page: Page, name = 'Synthetic test acco
  await page.getByRole('textbox',{name:'Verification code'}).fill(await inboxCode(page,email));
  await page.getByRole('button',{name:'Verify email',exact:true}).click();
  await expect(page).toHaveURL(/\/onboarding$/);
- await expect(page.getByRole('button', { name: 'Finish setup' })).toBeEnabled();
+ await expect(page.getByRole('heading', { name: 'Where are you right now?' })).toBeVisible();
  const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('coachify.session')!).token as string);
  const headers = { Authorization: `Bearer ${token}` };
  return {
   token,headers,email,password:TEST_PASSWORD,
   get: (path: string) => page.request.get(path, { headers }),
   patch: (path: string, options: { data: object; headers?: Record<string, string> }) => page.request.patch(path, { ...options, headers: { ...headers, ...options.headers } }),
-  finish: (data:object) => page.request.post('/api/v1/profile/onboarding/complete',{data,headers:{...headers,'Idempotency-Key':crypto.randomUUID()}}),
+  finish: (data:Record<string, unknown> & {occupational_status?:string;employment?:object}) => page.request.post('/api/v1/profile/onboarding/complete',{data:{...(data.occupational_status==='employed'?{employment:{employer:'Synthetic company',role:'Synthetic analyst',industry:'Synthetic industry'}}:{}),...data},headers:{...headers,'Idempotency-Key':crypto.randomUUID()}}),
  };
 }

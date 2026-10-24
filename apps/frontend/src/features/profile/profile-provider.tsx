@@ -8,7 +8,7 @@ type Mode = 'google' | 'email' | 'local_test';
 export type Verification = { verification_required: true; challenge_id: string; masked_email: string; expires_at: string; resend_at: string };
 type Credentials = { name?: string; email?: string; password?: string; credential?: string };
 type Session = {
- mode: Mode | null; googleEnabled: boolean; verification: Verification | null; token?: string; account: Account | null; profile: Profile | null; categories: Category[];
+ mode: Mode | null; googleEnabled: boolean; developmentToolsEnabled: boolean; verification: Verification | null; token?: string; account: Account | null; profile: Profile | null; categories: Category[];
  loading: boolean; configError: string; loadError: string; logoutError: string;
  beginAccess: (intent: 'login' | 'register') => Promise<Access>;
  completeAccess: (input: Credentials) => Promise<boolean>;
@@ -29,6 +29,7 @@ function nextEpoch() {
 export function ProfileProvider({ children }: { children: ReactNode }) {
  const [mode, setMode] = useState<Mode | null>(null);
  const [googleEnabled, setGoogleEnabled] = useState(false);
+ const [developmentToolsEnabled, setDevelopmentToolsEnabled] = useState(false);
  const [verification, setVerification] = useState<Verification | null>(null);
  const latestProfile = useRef<Profile | null>(null);
  const currentAccount = useRef<Account | null>(null);
@@ -88,16 +89,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  }, [cancelAccess, clear, reload, signOut]);
  useEffect(() => {
   const controller = new AbortController(); const id = ++operation.current;
-  setLoading(true); setConfigError(''); setLoadError(''); setProfile(null);
+  setDevelopmentToolsEnabled(false); setLoading(true); setConfigError(''); setLoadError(''); setProfile(null);
   async function load() {
    try {
     const [options, auth] = await Promise.all([
      profileApi<Category[]>('/school-categories', { signal: controller.signal }),
-     profileApi<{ mode: Mode; google_enabled?: boolean }>('/auth-config', { signal: controller.signal }),
+     profileApi<{ mode: Mode; google_enabled?: boolean; development_tools_enabled?: boolean }>('/auth-config', { signal: controller.signal }),
     ]);
     if (controller.signal.aborted || id !== operation.current) return;
     if (!['google', 'email', 'local_test'].includes(auth.mode)) throw new Error('Invalid account configuration.');
-    setCategories(options); setMode(auth.mode); setGoogleEnabled(auth.google_enabled === true);
+    setCategories(options); setMode(auth.mode); setGoogleEnabled(auth.google_enabled === true); setDevelopmentToolsEnabled(auth.development_tools_enabled === true);
     if (sessionStorage.getItem(PENDING)) { setLogoutError('Sign-out is pending. Retry sign-out or explicitly sign in again.'); return; }
     let stored: { token: string; epoch: string } | null;
     try { stored = JSON.parse(sessionStorage.getItem(SESSION) || 'null'); }
@@ -187,7 +188,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const timer = expiry === null ? undefined : window.setTimeout(() => { if (activeToken.current === token) signOut(); }, Math.max(0, expiry));
   return () => { controller.abort(); clearInterval(poll); if (timer !== undefined) clearTimeout(timer); };
  }, [token, account, signOut]);
- return <Context.Provider value={{ mode, googleEnabled, verification, token, account, profile, categories, loading, configError, loadError, logoutError, beginAccess, completeAccess, verifyEmail, resendVerification, cancelAccess, signOut, retryLogout, reload, setProfile: acceptProfile }}>{children}</Context.Provider>;
+ return <Context.Provider value={{ mode, googleEnabled, developmentToolsEnabled, verification, token, account, profile, categories, loading, configError, loadError, logoutError, beginAccess, completeAccess, verifyEmail, resendVerification, cancelAccess, signOut, retryLogout, reload, setProfile: acceptProfile }}>{children}</Context.Provider>;
 }
 export function useProfile() {
  const session = useContext(Context); if (!session) throw new Error('ProfileProvider is required.'); return session;

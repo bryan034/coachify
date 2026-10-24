@@ -26,8 +26,8 @@ beforeEach(()=>{
 async function form(){
  render(<ProfileProvider><WorkspaceGuard><ProfileForm initialSetup/></WorkspaceGuard></ProfileProvider>);
  await waitFor(()=>expect(screen.getByRole('button',{name:'Finish setup'})).toBeEnabled());
- fireEvent.click(screen.getByRole('radio',{name:'Employed'}));
- fireEvent.click(screen.getByRole('radio',{name:'No applicable previous education'}));
+ fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'employed' } });
+ fireEvent.change(screen.getByRole('combobox', { name: 'Education path' }), { target: { value: 'none' } });
 }
 test('Save progress does not complete onboarding; explicit Finish setup does',async()=>{
  await form();fireEvent.click(screen.getByRole('button',{name:'Save progress'}));
@@ -38,7 +38,7 @@ test('Save progress does not complete onboarding; explicit Finish setup does',as
 });
 test('uncommitted finish failure preserves the draft and never redirects',async()=>{
  await form();failure='uncommitted';fireEvent.click(screen.getByRole('button',{name:'Finish setup'}));
- await screen.findByText('Synthetic storage outage');expect(screen.getByRole('radio',{name:'Employed'})).toBeChecked();
+ await screen.findByText('Synthetic storage outage');expect(screen.getByRole('combobox', { name: 'Occupational status' })).toHaveValue('employed');
  expect(saved.onboarding_complete).toBe(false);expect(replace).not.toHaveBeenCalled();
 });
 test('lost committed completion is confirmed by canonical readback',async()=>{

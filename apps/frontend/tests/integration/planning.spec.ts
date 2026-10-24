@@ -8,7 +8,7 @@ test('planning preferences persist, detect conflicts, prorate capacity and never
  const setup=await api.finish({expected_version:before.version,occupational_status:'employed',school_category:'university',no_previous_education:false,education:{institution:{kind:'custom',name:'Synthetic planning college'},course:'Saved course'}});
  expect(setup.ok()).toBe(true);
  const education=(await setup.json()).education;
- await page.goto('/profile');
+ await page.goto('/profile/edit');
  const prefs=page.getByRole('region',{name:'Planning preferences'});
  await expect(prefs.getByRole('button',{name:'Save weekly availability',exact:true})).toBeEnabled();
  // A planning save must not reset unrelated, unsaved education input.

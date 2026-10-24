@@ -1,2 +1,2 @@
-import { ProfileForm } from '@/features/profile/profile-form';
-export default function ProfilePage() { return <ProfileForm />; }
+import { ProfileDashboard } from '@/features/profile/profile-dashboard';
+export default function ProfilePage() { return <ProfileDashboard />; }

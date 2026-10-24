@@ -2,7 +2,8 @@ from typing import Annotated
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header
 from app.core.auth import current_owner
-from app.domain import schools
+from app.domain import schools, employment
+from app.schemas.employment import EmploymentOption
 from app.domain.profile import ProfileValidationError, present_profile
 from app.repositories.profile import VersionConflict, MutationConflict
 from app.domain.errors import PeriodNotFound
@@ -24,7 +25,8 @@ def auth_config(request: Request):
     # Describes the validated server mode; this endpoint cannot change authentication.
     settings = request.app.state.auth_settings
     return {"mode": settings.mode, "email_password_enabled": True,
-            "google_enabled": settings.mode == "google" and bool(settings.google_client_id), "email_verification_required": True}
+            "google_enabled": settings.mode == "google" and bool(settings.google_client_id), "email_verification_required": True,
+            "development_tools_enabled": settings.environment == "development"}
 
 
 @router.get("/school-categories", response_model=list[CategoryView])
@@ -42,6 +44,16 @@ def institutions(category: SchoolCategory, q: str = Query("", max_length=150),
                  country: str | None = Query(None, pattern="^[A-Z]{2}$"),
                  offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
     return schools.search(category, q.strip(), country, offset, limit)
+
+
+@router.get("/companies", response_model=list[EmploymentOption])
+def companies(q: str = Query("", max_length=150), limit: int = Query(20, ge=1, le=100)):
+    return employment.search("companies", q, limit)
+
+
+@router.get("/industries", response_model=list[EmploymentOption])
+def industries(q: str = Query("", max_length=150), limit: int = Query(20, ge=1, le=100)):
+    return employment.search("industries", q, limit)
 
 
 @router.get("", response_model=ProfileView)

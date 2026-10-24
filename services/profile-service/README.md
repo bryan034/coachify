@@ -8,7 +8,7 @@ assessments and roadmaps can use their saved information. P01–P16 are availabl
 | Endpoint | What it does |
 |---|---|
 | `GET /api/v1/profile` | Load your latest saved details. |
-| `PATCH /api/v1/profile` | Save changes to background, education, application date or weekly hours. |
+| `PATCH /api/v1/profile` | Save changes to background, employment, education, application date or weekly hours. |
 | `GET /api/v1/profile/versions/{version}` | Read an earlier saved profile. |
 
 ## Education choices — P01–P03, P07/P08
@@ -21,6 +21,16 @@ assessments and roadmaps can use their saved information. P01–P16 are availabl
 
 Users can also enter an unlisted institution. Students provide current education;
 other occupational statuses use their last education.
+
+## Employment suggestions — background / initial setup
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/profile/companies?q=...&limit=20` | Search 7,120 international/Singapore employers (including a 713-entry Singapore supplement), prioritised by reported employee count. |
+| `GET /api/v1/profile/industries?q=...&limit=20` | Search common industry suggestions. |
+
+Both fields also accept manual names. Reference lists stay in JSON, outside MongoDB;
+only the user's selected or typed answers are saved. No external API key is needed.
 
 ## Planning preferences — P04–P06
 
@@ -63,7 +73,7 @@ or email/password sign-in with real Gmail delivery; see the [setup guide](../../
 `GET /api/v1/profile` includes canonical `onboarding_complete` and `onboarding_state`.
 Partial PATCH saves do not complete setup. Students provide category, institution
 and current year; other statuses can explicitly choose no previous education.
-Course and planning inputs are optional. Ordinary edits preserve initial completion.
+Employed users also provide employer, role and industry. Unemployed users answer whether they have worked before; a yes adds the same questions about their last job. A no asks graduation year after the last school, unless no previous education applies. Graduation year is saved with education and can be edited later. Course and planning inputs are optional. Ordinary edits preserve initial completion.
 
 ## Email verification — P16
 
@@ -76,6 +86,10 @@ Pending accounts have no private session. Codes expire in 10 minutes, allow five
 incorrect guesses and are replaced on resend. Local mail appears at localhost:8025.
 
 ## Environment and legacy data — P15
+
+`auth-config` exposes `development_tools_enabled` only when `APP_ENV=development`,
+regardless of sign-in mode. This enables a browser-only onboarding preview; it does
+not reset or write profile data. No extra environment variable is needed.
 
 `local_test` is development-only. `email` enables email/password production access;
 `google` adds Google access. Production requires encrypted authenticated SMTP and a

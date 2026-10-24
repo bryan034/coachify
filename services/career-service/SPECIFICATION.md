@@ -22,7 +22,9 @@ behaviour is browser-managed, not a saved Coachify draft.
 Only POST `/api/v1/career/imports/url` and `/api/v1/career/imports/document` are
 publicly routed. `/health` is container-only. Each import validates the session by
 calling Profile's existing `/api/v1/profile/auth/session` over the private backend
-network, forwarding the bearer. Require a verified account, reject revoked or
+network, forwarding the bearer. It then reads `/api/v1/profile` and requires the
+canonical `onboarding_complete=true` marker before processing (otherwise 403).
+Require a verified account, reject revoked or
 invalid sessions and fail closed on Profile outages/malformed responses. No client
 owner ID, shared database access, new auth bypass or new Google flow is used.
 

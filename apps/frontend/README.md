@@ -16,8 +16,10 @@ webfont files and is not bundled.
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
 | `/career-goal` | J01/J06/J07 temporary pasted text, URL and PDF/DOCX/TXT previews; no save or AI analysis |
-| `/onboarding` | P13/P14 initial setup, Save progress and explicit Finish setup |
-| `/profile` | P01–P08 editing, planning preferences, directory search, save/retry/context review |
+| `/onboarding` | P13/P14 full-screen question-by-question setup, ending with Enter Coachify |
+| `/profile` | Occupation, education and employment summary with inline Edit profile, Save changes and Cancel |
+| `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
+| `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
 | `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
 | `/cv` | Resume/skills/tracker layout; upload and assessment unavailable |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
@@ -48,6 +50,23 @@ go to `/dashboard`, and `/profile` remains available for ordinary edits. A parti
 save never completes setup; errors remain recoverable. Cross-tab completion hints
 trigger server readback rather than trusting a browser flag.
 
+Setup shows status, education path, school, optional course, student year and review
+one screen at a time in a clean full-screen layout. A persistent bottom progress
+bar shows the current step; there is no setup sidebar. Forward/back transitions
+use a short fade and vertical slide, with reduced-motion support. Long questions
+scroll above the progress footer. X signs out. Student status
+and path save together; other new answers save at step boundaries. Changes to
+retained education needing context review wait for final confirmation. Saved
+answers resume after reload; unsaved typing is discarded, and an empty optional
+course may be offered again. Only **Enter Coachify** completes setup. Employed users also answer separate
+workplace and role questions; both are required for new setup completion.
+
+University search starts with a name and an editable country suggestion from
+browser locale/time zone, not verified location. Matching schools are grouped
+under country headings with name-only buttons; **Show more schools** extends the
+same groups. Unlisted schools can be entered manually. Keyboard focus, responsive
+layouts and reduced-motion preferences are supported.
+
 Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
 `src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
 content stays in page memory and is discarded on reload/leave.
@@ -67,3 +86,31 @@ FastAPI owns validation, resource ownership and database writes. See
 See `tests/README.md` for unit, browser and disposable full-stack test commands.
 
 P04–P06 use `PlanningPreferences` and the existing Profile API. See the [Profile service README](../../services/profile-service/README.md) for its endpoints and service rules.
+
+**Edit profile** opens a single-column form directly on `/profile`, with stacked
+status, employment and education fields. School search stays collapsed until you
+change the school or select a new education path. Clearing the optional course
+removes it; only students see a study-year field. Country search uses **All countries**.
+**Save changes** uses the versioned Profile PATCH API and returns to the updated
+summary after success. Failed saves keep the draft; **Cancel** discards unsaved
+changes. `/profile/edit` remains available for direct links and planning preferences.
+Reloading `/profile` returns to the saved summary.
+
+The profile dashboard shows the current student year only for Student status, and
+workplace/role only for Employed status. Earlier completed accounts may add missing
+work details through **Edit profile** without repeating real onboarding.
+
+**Preview onboarding** appears only when the Profile backend reports
+`development_tools_enabled=true` (`APP_ENV=development`, including email mode).
+The guarded preview starts from empty answers, makes no profile writes and never
+resets completion. Exit/finish returns to the profile without signing out.
+Production hides the button and redirects direct preview URLs to the profile.
+
+Onboarding uses 75% of desktop viewport width, with mobile gutters. Employment asks
+company, role and industry on separate screens. Unemployed users first answer
+whether they have worked before; a yes collects last-job details, a no skips to
+education. Profile summaries and the single-page editor distinguish previous from
+current work. Company/industry suggestions come from Profile reference endpoints;
+manual entry works even when the suggestion service is unavailable.
+
+Never-employed unemployed users with a last school answer graduation year immediately after choosing it. The year is saved in education, displayed on My profile and editable in the same single-page form. Explicit no previous education skips this question.

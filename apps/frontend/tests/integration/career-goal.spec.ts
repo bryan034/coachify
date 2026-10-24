@@ -1,10 +1,11 @@
 import {test,expect} from '@playwright/test';
-import {createLocalAccount} from './account-helpers';
+import {createLocalAccount,fillCurrentEmployment} from './account-helpers';
 test('Career previews validate real sessions, read a document and discard source on reload',async({page})=>{
  await createLocalAccount(page,'Synthetic Career user');
- await page.getByRole('radio',{name:'Employed',exact:true}).check();
- await page.getByRole('radio',{name:'No applicable previous education'}).check();
- await page.getByRole('button',{name:'Finish setup',exact:true}).click();
+ await page.getByRole('button',{name:'Employed',exact:true}).click();
+ await fillCurrentEmployment(page);
+ await page.getByRole('button',{name:'No applicable previous education'}).click();
+ await page.getByRole('button',{name:'Enter Coachify',exact:true}).click();
  await expect(page).toHaveURL(/\/dashboard$/);
  await page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true}).click();
  await page.getByRole('tab',{name:'Upload document'}).click();

@@ -35,18 +35,18 @@ beforeEach(() => {
 
 test('no default status, exact options, student category validation and save retry', async () => {
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
-  expect(screen.getAllByRole('radio')).toHaveLength(4);
-  expect(screen.getAllByRole('radio').every(r => !(r as HTMLInputElement).checked)).toBe(true);
+  expect(screen.getByRole('combobox', {name:'Occupational status'})).toHaveValue('');
+  expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['Choose your status','Student','National Service','Unemployed','Employed']);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
-  fireEvent.click(screen.getByRole('radio', { name: 'Student' }));
-  expect(screen.getByText('Where are you studying?')).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'student' } });
+  expect(screen.getByText('Current education')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Choose a school category');
-  fireEvent.click(screen.getByText('University', { exact: true }));
+  fireEvent.change(screen.getByRole('combobox', {name:'Education path'}), {target:{value:'university'}});
   fail = true;
   fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
   await screen.findByText('Storage unavailable. Retry.');
-  expect(screen.getByText('Selected')).toBeInTheDocument();
+  expect(screen.getByRole('combobox', {name:'Education path'})).toBeInTheDocument();
   expect(screen.queryByText('Profile saved.')).not.toBeInTheDocument();
   fail = false;
   fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
@@ -56,11 +56,11 @@ test('no default status, exact options, student category validation and save ret
 test('nonstudent can leave school unanswered; status changes prompt review', async () => {
   saved = { ...initial, version: 1, occupational_status: 'student', school_category: 'university' };
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
-  await waitFor(() => expect(screen.getByRole('radio', { name: 'Student' })).toBeChecked());
-  fireEvent.click(screen.getByRole('radio', { name: 'Employed' }));
-  expect(screen.getByText('Where did you last study?')).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Occupational status' })).toHaveValue('student'));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'employed' } });
+  expect(screen.getByText('Last education')).toBeInTheDocument();
   expect(screen.getByText(/Please review your education details/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('radio', { name: 'No applicable previous education' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Education path' }), { target: { value: 'none' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
   await screen.findByText('Profile saved.');
   expect(saved.school_category).toBeNull();
@@ -77,9 +77,9 @@ test('question mapping applies to all statuses', () => {
 test('custom institution, course and extended year survive a failed save and retry', async () => {
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
-  fireEvent.click(screen.getByRole('radio', { name: 'Student' }));
-  fireEvent.click(await screen.findByText('University', { exact: true }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'My institution is not listed' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'student' } });
+  fireEvent.change(await screen.findByRole('combobox', {name:'Education path'}), {target:{value:'university'}});
+  fireEvent.click(screen.getByRole('button', { name: 'My institution is not listed' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Institution name' }), { target: { value: 'Unlisted International College' } });
   fireEvent.change(screen.getByRole('textbox', { name: 'What course are you studying?' }), { target: { value: 'Computing & Design' } });
   fireEvent.change(screen.getByRole('spinbutton', { name: /Current study level/ }), { target: { value: '6' } });
@@ -92,10 +92,10 @@ test('custom institution, course and extended year survive a failed save and ret
   fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
   await screen.findByText('Profile saved.');
   expect(saved.education).toMatchObject({ institution: { kind: 'custom', name: 'Unlisted International College' }, course: 'Computing & Design', study_year: 6 });
-  fireEvent.click(screen.getByRole('radio', { name: 'Unemployed' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'unemployed' } });
   expect(screen.getByRole('textbox', { name: 'What course did you study?' })).toHaveValue('Computing & Design');
   expect(screen.queryByRole('spinbutton', { name: /Current study level/ })).not.toBeInTheDocument();
-  expect(screen.getByText(/Previous study year retained: 6/)).toBeInTheDocument();
+  expect(screen.queryByText(/Previous study year retained:/)).not.toBeInTheDocument();
 });
 
 
@@ -104,7 +104,7 @@ test('local account session loads and saves without Google', async () => {
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
   expect(screen.queryByText('Test sign in')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('radio', { name: 'Employed' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'employed' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
   await screen.findByText('Profile saved.');
   expect(saved.occupational_status).toBe('employed');
@@ -133,12 +133,27 @@ test('Google server mode still requires sign-in before loading a private profile
 test('initial pageshow cannot restart profile loading or erase an unsaved status choice', async () => {
   render(<ProfileProvider><ProfileForm /></ProfileProvider>);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
-  fireEvent.click(screen.getByRole('radio', { name: 'Student' }));
-  expect(await screen.findByText('Where are you studying?')).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'student' } });
+  expect(await screen.findByText('Current education')).toBeInTheDocument();
   const calls = vi.mocked(fetch).mock.calls.length;
   await act(async () => { window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })); });
-  expect(screen.getByRole('radio', { name: 'Student' })).toBeChecked();
-  expect(screen.getByText('Where are you studying?')).toBeInTheDocument();
+  expect(screen.getByRole('combobox', { name: 'Occupational status' })).toHaveValue('student');
+  expect(screen.getByText('Current education')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled();
   expect(vi.mocked(fetch).mock.calls).toHaveLength(calls);
+});
+
+test('saved school stays compact until Change school is chosen and a blank optional course clears it', async () => {
+  saved = { ...initial, version: 2, occupational_status: 'student', school_category: 'university', education: { institution: {kind:'catalogue',id:'synthetic-school',name:'Synthetic school'}, course: 'Old course', study_year:3,study_year_category:'university' } };
+  render(<ProfileProvider><ProfileForm /></ProfileProvider>);
+  await screen.findByText('Synthetic school', {exact:true});
+  expect(screen.queryByText('Directory browser')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', {name:'Change school'}));
+  expect(screen.getByText('Directory browser')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', {name:'Close school search'}));
+  expect(screen.queryByText('Directory browser')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', {name:'What course are you studying?'}), {target:{value:''}});
+  fireEvent.click(screen.getByRole('button', {name:'Save background'}));
+  await screen.findByText('Profile saved.');
+  expect(saved.education).toMatchObject({institution:{name:'Synthetic school'},course:null});
 });

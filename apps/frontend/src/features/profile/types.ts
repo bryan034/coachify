@@ -4,6 +4,8 @@ export type Profile = {
   onboarding_complete?: boolean; onboarding_completed_at?: string | null;
   onboarding_state?: 'missing' | 'incomplete' | 'legacy_unconfirmed' | 'complete';
   no_previous_education?: boolean;
+  employment?: { employer: string | null; role: string | null; industry?: string | null };
+  previously_employed?: boolean | null;
   application_date?: string | null; application_time_zone?: string | null;
   weekly_hours?: number | null; availability_periods?: AvailabilityPeriod[]; planning_revision?: number;
   version: number; occupational_status: OccupationalStatus | null;
@@ -26,11 +28,11 @@ export function educationQuestions(status: OccupationalStatus) {
 export type SavedInstitution = { kind: 'catalogue' | 'custom'; id: string | null; name: string; country_code: string | null; snapshot_date?: string | null };
 export type InstitutionInput = { kind: 'catalogue'; id: string } | { kind: 'custom'; name: string; country_code?: string | null } | null;
 export type Education = {
-  institution?: SavedInstitution | null; course?: string | null; study_year?: number | null;
+  institution?: SavedInstitution | null; course?: string | null; study_year?: number | null; graduation_year?: number | null;
   study_year_label?: string | null; study_year_category?: SchoolCategory | null;
   category?: SchoolCategory | null; context?: 'current' | 'last' | null;
 };
-export type EducationDraft = { institution?: InstitutionInput; course?: string | null; study_year?: number };
+export type EducationDraft = { institution?: InstitutionInput; course?: string | null; study_year?: number; graduation_year?: number | null };
 export function studyYearLabel(category: SchoolCategory | '', year: number) {
   return `${category === 'secondary' ? 'Secondary' : category === 'junior_college' ? 'JC' : 'Year'} ${year}`;
 }

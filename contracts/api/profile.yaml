@@ -1,4 +1,3 @@
-# Generated from the Profile FastAPI application.
 openapi: 3.1.0
 info:
   title: Coachify profile API
@@ -97,6 +96,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InstitutionResults'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/companies:
+    get:
+      summary: Companies
+      operationId: companies_api_v1_profile_companies_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 150
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmploymentOption'
+                title: Response Companies Api V1 Profile Companies Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/industries:
+    get:
+      summary: Industries
+      operationId: industries_api_v1_profile_industries_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 150
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmploymentOption'
+                title: Response Industries Api V1 Profile Industries Get
         '422':
           description: Validation Error
           content:
@@ -634,6 +709,10 @@ components:
           type: boolean
           title: Email Verification Required
           default: true
+        development_tools_enabled:
+          type: boolean
+          title: Development Tools Enabled
+          default: false
       type: object
       required:
       - mode
@@ -883,6 +962,13 @@ components:
             exclusiveMinimum: 0.0
           - type: 'null'
           title: Study Year
+        graduation_year:
+          anyOf:
+          - type: integer
+            maximum: 9999.0
+            minimum: 1900.0
+          - type: 'null'
+          title: Graduation Year
       additionalProperties: false
       type: object
       title: EducationPatch
@@ -902,6 +988,11 @@ components:
           - type: integer
           - type: 'null'
           title: Study Year
+        graduation_year:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Graduation Year
         study_year_label:
           anyOf:
           - type: string
@@ -926,6 +1017,61 @@ components:
       additionalProperties: true
       type: object
       title: EducationView
+    EmploymentOption:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+      type: object
+      required:
+      - id
+      - name
+      title: EmploymentOption
+    EmploymentPatch:
+      properties:
+        employer:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Employer
+        role:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Role
+        industry:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Industry
+      additionalProperties: false
+      type: object
+      title: EmploymentPatch
+    EmploymentView:
+      properties:
+        employer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Employer
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        industry:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Industry
+      type: object
+      title: EmploymentView
     HTTPValidationError:
       properties:
         detail:
@@ -1244,6 +1390,15 @@ components:
           anyOf:
           - $ref: '#/components/schemas/EducationPatch'
           - type: 'null'
+        employment:
+          anyOf:
+          - $ref: '#/components/schemas/EmploymentPatch'
+          - type: 'null'
+        previously_employed:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Previously Employed
         no_previous_education:
           anyOf:
           - type: boolean
@@ -1285,6 +1440,11 @@ components:
           type: boolean
           title: No Previous Education
           default: false
+        previously_employed:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Previously Employed
         application_date:
           anyOf:
           - type: string
@@ -1331,6 +1491,8 @@ components:
           default: false
         education:
           $ref: '#/components/schemas/EducationView'
+        employment:
+          $ref: '#/components/schemas/EmploymentView'
         current_study_year:
           anyOf:
           - type: integer
