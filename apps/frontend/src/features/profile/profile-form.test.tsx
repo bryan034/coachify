@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { ProfileForm } from './profile-form';
 import { ProfileProvider } from './profile-provider';
@@ -127,4 +127,18 @@ test('Google server mode still requires sign-in before loading a private profile
   await waitFor(() => expect(screen.getByRole('button', {name:'Save background'})).toBeDisabled());
   expect(screen.getByRole('button', { name: 'Save background' })).toBeDisabled();
   expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/profile'))).toBe(false);
+});
+
+
+test('initial pageshow cannot restart profile loading or erase an unsaved status choice', async () => {
+  render(<ProfileProvider><ProfileForm /></ProfileProvider>);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('radio', { name: 'Student' }));
+  expect(await screen.findByText('Where are you studying?')).toBeInTheDocument();
+  const calls = vi.mocked(fetch).mock.calls.length;
+  await act(async () => { window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })); });
+  expect(screen.getByRole('radio', { name: 'Student' })).toBeChecked();
+  expect(screen.getByText('Where are you studying?')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled();
+  expect(vi.mocked(fetch).mock.calls).toHaveLength(calls);
 });

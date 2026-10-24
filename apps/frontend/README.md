@@ -35,7 +35,9 @@ successful save. Account screens use the implemented Profile account endpoints.
 mode, profile and load/retry states. Workspace routes withhold private content until
 the session is validated. Session bearers survive same-tab reload in sessionStorage;
 Google credentials are exchanged only during account access. Logout, expiry and
-account changes clear private state and drafts, including other tabs. Failed logout
+account changes clear private state and drafts, including other tabs. Normal initial
+`pageshow` events preserve drafts; back/forward-cache restores hide private content
+until the session and profile are revalidated. Failed logout
 stays locally locked and offers retry. Local mode uses explicit synthetic email/password accounts and a captured-email
 inbox; Google setup is unnecessary. Its chooser only prefills email. Sign out is available in the sidebar.
 
