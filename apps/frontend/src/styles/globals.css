@@ -187,3 +187,16 @@ body{line-height:1.5;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:
 /* Revolut-inspired type rhythm; Inter is the bundled, licensed family. */
 h2,h3{font-family:var(--font-heading);letter-spacing:-.02em}
 .nav a{font-weight:500}
+
+/* P04–P06 planning inputs */
+.planning-preferences{border-top:1px solid var(--line);margin-top:40px;padding-top:8px;scroll-margin-top:20px}
+.planning-description{margin-bottom:22px;max-width:720px;line-height:1.7}
+.planning-card{margin-bottom:20px}.planning-card h3{font-size:16px}.planning-card>p{margin:8px 0 18px}
+.planning-card label{display:block;font-size:12px;font-weight:500;margin:16px 0}
+.planning-card input{display:block;width:100%;min-width:0;background:white;color:var(--text);border:1px solid #d5d8dd;border-radius:9px;padding:11px 12px;margin-top:6px}
+.planning-card .row{flex-wrap:wrap}.planning-card .btn{white-space:normal;text-align:center;height:auto;min-height:40px}
+.period-list{list-style:none}.period-list li{padding:16px 0;border-top:1px solid var(--line)}.period-list strong{font-size:13px}
+.period-editor{background:var(--side);border-radius:12px;padding:18px;margin-top:20px}.period-editor h4{font-weight:600}
+.planning-readiness{padding:16px 20px;background:var(--side);border-radius:12px;margin-top:20px;font-size:12px}
+.planning-readiness ul{padding-left:18px;margin:8px 0}.planning-readiness p{margin-top:10px}
+@media(max-width:600px){.planning-card>.row{align-items:stretch;flex-direction:column}.period-list li{align-items:stretch;flex-direction:column}.planning-card .row .btn{width:100%}}

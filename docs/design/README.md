@@ -7,20 +7,14 @@ components, Next.js page navigation and existing profile endpoints.
 The visual reference defines the sidebar, typography, colour tokens, cards, tables
 and responsive layouts. Sample users and activity are not live application data:
 the integrated screens use empty states until the relevant service is implemented.
-Timeframe, upload, bookings, networking, event and task mutation controls are disabled.
-Roadmap/expert filters and week/month calendar toggles change presentation only.
+Profile and planning-preference controls are connected to the Profile service;
+the Roadmap screen shows their saved summary. Upload, bookings, networking,
+event/task mutations and roadmap generation remain unavailable. Roadmap/expert
+filters and week/month calendar toggles change presentation only.
 
-Current connections:
-
-- `GET /api/v1/profile/auth-config`: validated auth mode.
-- `GET /api/v1/profile`: saved background for Home, sidebar and editor.
-- `PATCH /api/v1/profile`: editor save using expected version.
-- `GET /api/v1/profile/school-categories`: school category choices.
-- `GET /api/v1/profile/school-countries`: university search filter.
-- `GET /api/v1/profile/institutions`: paginated school snapshot search.
-
-The existing historical-version endpoint remains available to API clients; no
-history viewer is introduced here. No routes are added to the backend.
+See the [Profile service README](../../services/profile-service/README.md) for
+available endpoints and service rules. Endpoint lists are maintained there rather
+than duplicated in this design guide.
 
 Google sign-in stays inline; `/login` redirects to My profile. Local-test mode
 continues to work without Google. Profile saves update the shared workspace state.

@@ -22,4 +22,21 @@ records are suggestions, not a complete/official/accreditation register. Former
 institutions and non-university providers can appear upstream. Missing schools
 must not make a user ineligible; P01 supports custom entry.
 
-See `docs/development/profile-setup.md` from the repository root for refresh steps.
+## Refresh
+
+With Profile service dependencies installed, run from `services/profile-service`:
+
+```sh
+python scripts/refresh_schools.py
+```
+
+The script fetches MOE and the pinned Hipo revision, checks the inputs and replaces
+`schools.json` after a successful build. Optional `--moe-file` and
+`--universities-file` arguments accept downloaded JSON. MOE works at public limits
+without a key; `DATA_GOV_SG_API_KEY` is optional for higher limits.
+
+Review the diff and counts, run service tests, then rebuild the service. The current
+snapshot includes 147 secondary schools, including mixed-level P1–S4 institutions.
+IDs derive from country/name; reconcile renames explicitly without rewriting saved
+user declarations. Updating Hipo requires reviewing its new revision and licence.
+School data loads once per process; restart/redeploy after a refresh.

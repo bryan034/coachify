@@ -21,13 +21,13 @@ credentials are required by this configuration.
 The separate `playwright.integration.config.ts` runs `tests/integration/` against
 `PROFILE_E2E_BASE_URL`. It requires a disposable Docker local-test stack and writes
 profile data through the real API into MongoDB. CI provisions and removes that stack
-in the `local-ui-integration` job. See `docs/development/profile-setup.md`.
+in the `local-ui-integration` job. See [application testing guide](../../../docs/testing.md).
 
 P07/P08 component tests and a browser journey are implemented; empty suites still pass. The browser runner uses Playwright
 discovery first and avoids building/starting Next.js when no browser tests exist.
 Actual test failures and discovery/configuration errors still fail. Add meaningful
 tests with features; an empty passing suite does not establish test coverage.
 
-For the browser suite, set NEXT_PUBLIC_GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com (a test-only public identifier). See docs/development/profile-setup.md from the root for fixtures and real sign-in setup.
+For the browser suite, set NEXT_PUBLIC_GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com (a test-only public identifier). See the [setup guide](../../../docs/setup.md) for real sign-in and the [testing guide](../../../docs/testing.md) for fixtures.
 
 Workspace browser checks cover navigation, shared Google identity, saved background on Home, unavailable service controls, connection failure/retry, and mobile overflow. The week/month and roadmap filters are presentation-only and do not call unfinished services.

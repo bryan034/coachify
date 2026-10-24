@@ -1,29 +1,18 @@
 # Roadmap and tasks service
 
-Planned framework: Python FastAPI. Public route reservation: `/api/v1/roadmaps`.
+Turns career gaps and saved planning preferences into actionable tasks and milestones.
 
-User stories: P04-P06, R01-R09, E01-E07, T01-T06 and A02-A04.
+## API by Jira story
 
-## Responsibility
+**No API endpoints are implemented yet.** The `/api/v1/roadmaps` prefix is reserved.
 
-Goal constraints, availability, generated plans, milestones, tasks, status history and revisions.
+| Jira stories | Planned purpose |
+|---|---|
+| R01–R09 | Generate a roadmap that fits the target role, deadline and capacity. |
+| E01–E07 | Add, edit, move or remove roadmap tasks. |
+| T01–T06 | View the plan and track task progress. |
+| A02–A04 | Review, apply or dismiss proposed roadmap changes. |
 
-Planned MongoDB database: `coachify_roadmap`; service-scoped credentials only.
+P04–P06 deadline and availability inputs belong to the [Profile service](../profile-service/README.md). This service will use those saved inputs for scheduling.
 
-## Current status
-
-Structure only. `app/main.py` is a comment-only placeholder, not an ASGI application. There are no endpoints, schemas, database connections, LLM requests, jobs, authentication checks or application logic. No dependencies have been installed or selected in `pyproject.toml`.
-
-## Package responsibilities
-
-- `api/v1`: future HTTP route definitions.
-- `schemas`: future request and response definitions.
-- `domain`: future business operations.
-- `clients`: future calls to other services or external providers.
-- `core`: future environment, logging, identity and local configuration utilities.
-- `repositories`: future access to this service's MongoDB database only.
-- `planning`: reserved for planning responsibilities; no implementation.
-- `revisions`: reserved for revisions responsibilities; no implementation.
-- `workers`: future durable background operation execution; no queue technology is selected.
-
-`tests/` reserves future verification work. `Dockerfile.example` and `.env.example` are inactive templates. No `/internal/v1` endpoint is implemented.
+See the [application API overview](../../docs/api/README.md) and [service boundaries](../../docs/architecture/service-boundaries.md).

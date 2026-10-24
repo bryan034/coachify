@@ -1,0 +1,102 @@
+import { test, expect } from '@playwright/test';
+const future = (days:number) => new Date(Date.now()+days*86400000).toISOString().slice(0,10);
+
+test('planning preferences persist, detect conflicts, prorate capacity and never overwrite education', async({page})=>{
+ const before=await (await page.request.get('/api/v1/profile')).json();
+ const setup=await page.request.patch('/api/v1/profile',{data:{expected_version:before.version,occupational_status:'employed'}});
+ expect(setup.ok()).toBe(true);
+ const education=(await setup.json()).education;
+ await page.goto('/profile');
+ const prefs=page.getByRole('region',{name:'Planning preferences'});
+ await expect(prefs.getByRole('button',{name:'Save weekly availability',exact:true})).toBeEnabled();
+ // A planning save must not reset unrelated, unsaved education input.
+ await page.getByRole('textbox',{name:'What course did you study?'}).fill('Unsaved education draft');
+ await prefs.getByRole('spinbutton',{name:'Normal hours per week',exact:true}).fill('14');
+ await prefs.getByRole('button',{name:'Save weekly availability',exact:true}).click();
+ await expect(prefs.getByText('Weekly availability saved.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('textbox',{name:'What course did you study?'})).toHaveValue('Unsaved education draft');
+ // Commit a real write, then lose its HTTP response: the UI must reuse its key.
+ const retryKeys:string[]=[];
+ page.on('request',r=>{if(r.method()==='PATCH'&&r.postDataJSON()?.weekly_hours===14.25)retryKeys.push(r.headers()['idempotency-key']);});
+ await page.route('**/api/v1/profile',async route=>{await route.fetch();await route.abort('failed');},{times:1});
+ await prefs.getByLabel('Normal hours per week',{exact:true}).fill('14.25');
+ await prefs.getByRole('button',{name:'Save weekly availability',exact:true}).click();
+ await expect(prefs.getByRole('alert')).toBeVisible();
+ const committed=(await (await page.request.get('/api/v1/profile')).json()).version;
+ await expect(prefs.getByLabel('Normal hours per week',{exact:true})).toHaveValue('14.25');
+ await prefs.getByRole('button',{name:'Save weekly availability',exact:true}).click();
+ await expect(prefs.getByText('Weekly availability saved.',{exact:true})).toBeVisible();
+ expect(retryKeys).toHaveLength(2);expect(retryKeys[0]).toBe(retryKeys[1]);
+ expect((await (await page.request.get('/api/v1/profile')).json()).version).toBe(committed);
+ await prefs.getByLabel('Normal hours per week',{exact:true}).fill('14');
+ await prefs.getByRole('button',{name:'Save weekly availability',exact:true}).click();
+ await expect(prefs.getByText('Weekly availability saved.',{exact:true})).toBeVisible();
+ await prefs.getByLabel('Application date',{exact:true}).fill(future(90));
+ await prefs.getByRole('button',{name:'Save application date',exact:true}).click();
+ await expect(prefs.getByText('Application date saved.',{exact:true})).toBeVisible();
+ await prefs.getByRole('button',{name:'Add reduced period',exact:true}).click();
+ await prefs.getByLabel('Start date (Singapore)',{exact:true}).fill(future(3));
+ await prefs.getByLabel('End date (Singapore)',{exact:true}).fill(future(4));
+ await prefs.getByLabel('Reduced hours per week',{exact:true}).fill('7');
+ await prefs.getByRole('button',{name:'Save reduced period',exact:true}).click();
+ await expect(prefs.getByText('Reduced availability saved.',{exact:true})).toBeVisible();
+ let saved=await (await page.request.get('/api/v1/profile')).json();
+ expect(saved.education).toEqual(education);
+ const snapshot=await (await page.request.get(`/api/v1/profile/planning-inputs?time_zone=Asia%2FSingapore&start_date=${future(2)}&end_date=${future(8)}`)).json();
+ expect(snapshot.capacity_window.available_hours).toBe(12);
+ expect(snapshot.profile_version).toBe(saved.version);
+ const version=saved.version;
+ // A no-op budget save does not create another version.
+ await prefs.getByRole('button',{name:'Save weekly availability',exact:true}).click();
+ await expect(prefs.getByText('Weekly availability saved.',{exact:true})).toBeVisible();
+ expect((await (await page.request.get('/api/v1/profile')).json()).version).toBe(version);
+ // Stale-version conflicts keep the user's draft while another session updates.
+ await prefs.getByLabel('Application date',{exact:true}).fill(future(100));
+ const other=await page.request.patch('/api/v1/profile',{headers:{'Idempotency-Key':crypto.randomUUID()},data:{expected_version:version,weekly_hours:15.5}});
+ expect(other.ok()).toBe(true);
+ await prefs.getByRole('button',{name:'Save application date',exact:true}).click();
+ await expect(prefs.getByRole('alert')).toContainText('changed elsewhere');
+ await expect(prefs.getByLabel('Application date',{exact:true})).toHaveValue(future(100));
+ await prefs.getByRole('button',{name:'Load latest saved values (keep planning drafts)',exact:true}).click();
+ await expect(prefs.getByText(/Latest saved values loaded/)).toBeVisible();
+ await expect(prefs.getByLabel('Application date',{exact:true})).toHaveValue(future(100));
+ await prefs.getByRole('button',{name:'Save application date',exact:true}).click();
+ await expect(prefs.getByText('Application date saved.',{exact:true})).toBeVisible();
+ // Inclusive overlapping endpoints fail and retain the editor for correction.
+ await prefs.getByRole('button',{name:'Add reduced period',exact:true}).click();
+ await prefs.getByLabel('Start date (Singapore)',{exact:true}).fill(future(4));
+ await prefs.getByLabel('End date (Singapore)',{exact:true}).fill(future(5));
+ await prefs.getByLabel('Reduced hours per week',{exact:true}).fill('0');
+ await prefs.getByRole('button',{name:'Save reduced period',exact:true}).click();
+ await expect(prefs.getByRole('alert')).toContainText('overlaps');
+ await expect(prefs.getByLabel('Start date (Singapore)',{exact:true})).toHaveValue(future(4));
+ await prefs.getByLabel('Start date (Singapore)',{exact:true}).fill(future(5));
+ await prefs.getByRole('button',{name:'Save reduced period',exact:true}).click();
+ await expect(prefs.getByText('Reduced availability saved.',{exact:true})).toBeVisible();
+ await prefs.getByLabel('Normal hours per week',{exact:true}).fill('6');
+ await prefs.getByRole('button',{name:'Save weekly availability',exact:true}).click();
+ await expect(prefs.getByText(/Review this period:/)).toBeVisible();
+ await prefs.getByRole('button',{name:`Edit period ${future(3)}`,exact:true}).click();
+ await prefs.getByLabel('Reduced hours per week',{exact:true}).fill('3');
+ await prefs.getByRole('button',{name:'Save reduced period',exact:true}).click();
+ await expect(prefs.getByText('Reduced availability saved.',{exact:true})).toBeVisible();
+ await expect(prefs.getByText(/Review this period:/)).toHaveCount(0);
+ await page.reload();
+ await expect(prefs.getByLabel('Application date',{exact:true})).toHaveValue(future(100));
+ await expect(prefs.getByLabel('Normal hours per week',{exact:true})).toHaveValue('6');
+ await expect(prefs.getByRole('button',{name:/^Delete period/})).toHaveCount(2);
+ await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
+ await expect(page.getByText('6 hours/week',{exact:true})).toBeVisible();
+ await expect(page.getByText('2 saved',{exact:true})).toBeVisible();
+ await page.getByRole('link',{name:'Edit planning preferences →'}).click();
+ for(const d of [future(3),future(5)]){
+  await prefs.getByRole('button',{name:`Delete period ${d}`,exact:true}).click();
+  await expect(prefs.getByRole('button',{name:`Delete period ${d}`,exact:true})).toHaveCount(0);
+ }
+ saved=await (await page.request.get('/api/v1/profile')).json();
+ expect(saved.availability_periods).toEqual([]);
+ expect(saved.education).toEqual(education);
+ expect((await (await page.request.get(`/api/v1/profile/versions/${version}`)).json()).availability_periods).toHaveLength(1);
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});

@@ -1,19 +1,16 @@
-# API route plan
+# API overview
 
-The profile routes for P07/P08 are implemented; remaining routes below are reservations. Public APIs use `/api/v1`; private service-to-service APIs will use `/internal/v1` and must not be routed from the public gateway.
+The browser sends API requests through the gateway. Each prefix belongs to the
+service below; its README lists individual endpoints grouped by Jira story.
 
-| Prefix | Owning service | Planned resource groups |
-|---|---|---|
-| `/api/v1/profile` | Profile | Profile, profile items, versions |
-| `/api/v1/cv` | CV | Ingestions, provisional items, clarifications, completion, operations |
-| `/api/v1/career` | Career | Targets, requirements, assessments, corrections, operations |
-| `/api/v1/roadmaps` | Roadmap | Constraints, availability exceptions, generations, tasks, task status, revisions, operations |
-| `/api/v1/dashboard` | Dashboard | Current progress with day/week/month/all period selection |
-| `/api/v1/reviews` | Review | Manual reviews, results, review operations |
-| `/api/v1/review-schedules` | Review | Frequency, pause/resume, timezone, approval preferences |
+| Main prefix | What it leads to | Service folder | Status |
+|---|---|---|---|
+| `/api/v1/profile` | Background, education, planning preferences and saved profile versions | [profile-service](../../services/profile-service/README.md) | Available |
+| `/api/v1/cv` | CV upload, extraction and clarification of personal contributions | [cv-service](../../services/cv-service/README.md) | Planned |
+| `/api/v1/career` | Target job requirements, capability assessment and skill gaps | [career-service](../../services/career-service/README.md) | Planned |
+| `/api/v1/roadmaps` | Roadmap generation, milestones, task progress and revisions | [roadmap-service](../../services/roadmap-service/README.md) | Planned |
+| `/api/v1/dashboard` | Daily, weekly, monthly and whole-roadmap progress | [dashboard-service](../../services/dashboard-service/README.md) | Planned |
+| `/api/v1/reviews`, `/api/v1/review-schedules` | Manual or scheduled pace reviews and adaptation preferences | [review-service](../../services/review-service/README.md) | Planned |
 
-Page routes such as `/profile`, `/cv`, and `/roadmap` belong to Next.js and are distinct from these API paths. Profile authentication uses Google ID bearer tokens, with no app-session endpoint.
-
-`contracts/api/profile.yaml` is generated from the implemented API. The other five contracts remain shells with empty `paths`. Fill in schemas and operations as endpoints are designed and implemented. The earlier endpoint catalogue under `outputs/coachify-architecture.md` is a planning reference only; its PostgreSQL deployment description is superseded by the current MongoDB design.
-
-Future contracts must address resource ownership, input validation, version conflicts, idempotent writes, operation/retry state, and preservation of saved inputs. There is no dashboard-generation endpoint: task changes cause the frontend to refetch current dashboard data.
+Page URLs such as `/profile` and `/roadmap` belong to the frontend. They are not API
+endpoints. Private `/internal/v1` routes are not exposed through the gateway.

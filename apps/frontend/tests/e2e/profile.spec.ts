@@ -16,6 +16,7 @@ test('save, reload, browse international schools, switch status and retry', asyn
   } } };` }));
   await page.route('**/api/v1/profile**', async route => {
     const url = new URL(route.request().url());
+  if (url.pathname.endsWith('/planning-inputs')) return route.fulfill({json:{profile_version:saved.version,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
     if (url.pathname.endsWith('auth-config')) return route.fulfill({ json: { mode: 'google' } });
     if (url.pathname.endsWith('school-categories')) return route.fulfill({ json: categories });
     if (url.pathname.endsWith('school-countries')) return route.fulfill({ json: [{ code: 'US', name: 'United States' }] });

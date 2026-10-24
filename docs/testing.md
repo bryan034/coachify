@@ -2,9 +2,9 @@
 
 ## Current state
 
-P07/P08 now have component, browser and API tests plus real MongoDB integration.
+The profile slice has component, browser and API tests plus real MongoDB integration.
 Other services still have empty suites. Empty suites pass; real failures do not.
-See [profile setup](profile-setup.md) for current commands and fixture boundaries.
+See [application setup](setup.md) and the affected service README for setup and service details.
 
 ## Local commands
 
@@ -31,8 +31,8 @@ python -m pytest
 
 Each service's `tests/` directory is the pytest discovery root. Raw pytest exits 5
 when no tests are collected; CI treats only that code as success. All other
-nonzero exit codes fail. Add MongoDB fixtures and CI service containers when database integration
-tests are introduced; the profile integration job starts MongoDB; other unit jobs do not.
+nonzero exit codes fail. The profile integration job starts MongoDB; ordinary
+backend unit jobs do not.
 
 ## Automation
 
@@ -59,3 +59,24 @@ Availability depends on GitHub plan/repository visibility. Workflow files alone 
 not enable branch protection. Push events verify merged code after the merge;
 required PR checks are what prevent failing code from merging in the first place.
 Local CI configuration does not publish a branch or modify GitHub settings.
+
+## Real MongoDB and full-stack checks
+
+Set `MONGODB_TEST_URI` to a disposable MongoDB instance when running the profile
+suite to include database tests. They create/drop randomly named `coachify_test_*`
+databases. Never use a production connection for tests.
+
+The `local-ui-integration` job provisions a disposable Docker stack and tests
+browser → gateway → API → MongoDB, including save/reload and planning-conflict
+recovery. For a manually provisioned **disposable** local-test stack on port 8081:
+
+```sh
+cd apps/frontend
+PROFILE_E2E_BASE_URL=http://localhost:8081 npx playwright test --config playwright.integration.config.ts
+```
+
+Use a separate Compose project, database volume and local identity, and set
+`GATEWAY_PORT=8081`. This suite writes synthetic data; do not target your personal
+profile. Boundary-fixture browser tests use
+`NEXT_PUBLIC_GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com`, a test-only
+public identifier, when running `npm run test:e2e --workspace apps/frontend`.

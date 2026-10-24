@@ -1,6 +1,6 @@
 # Current Coachify architecture
 
-This is the current design: Next.js App Router + React + TypeScript frontend, NGINX gateway, six Python FastAPI services, and MongoDB. It supersedes PostgreSQL/frontend-runtime assumptions in the earlier `outputs/` documents. P07/P08 are implemented in the frontend/profile slice; other services remain placeholders.
+This is the current design: Next.js App Router + React + TypeScript frontend, NGINX gateway, six Python FastAPI services, and MongoDB. It supersedes PostgreSQL/frontend-runtime assumptions in the earlier `outputs/` documents. P01–P08 are implemented in the frontend/profile slice; other services remain placeholders.
 
 ```mermaid
 flowchart TB
@@ -56,6 +56,6 @@ flowchart TB
 
 ## Authentication status
 
-The profile slice uses the Google JavaScript sign-in button and verifies ID tokens in FastAPI. Set the matching Web Client ID on both sides. Tokens are memory-only; persistent app sessions are not implemented. See `docs/development/profile-setup.md` for setup and remaining integration limits.
+The profile slice uses the Google JavaScript sign-in button and verifies ID tokens in FastAPI. Set the matching Web Client ID on both sides. Tokens are memory-only; persistent app sessions are not implemented. See the [application setup guide](../setup.md) for setup and remaining integration limits.
 
 See [service boundaries](service-boundaries.md), [API planning](../api/README.md), and [MongoDB guidance](../../infrastructure/mongodb/README.md).

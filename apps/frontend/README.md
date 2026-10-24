@@ -14,8 +14,8 @@ webfont files and is not bundled.
 | URL | Status |
 |---|---|
 | `/`, `/dashboard` | Home with live saved background from the profile API |
-| `/profile` | P01–P03 and P07/P08 editing, directory search, save/retry/context review |
-| `/roadmap` | Presentation and local filters; planning actions disabled |
+| `/profile` | P01–P08 editing, planning preferences, directory search, save/retry/context review |
+| `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
 | `/cv` | Resume/skills/tracker layout; upload and assessment unavailable |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
 | `/calendar` | Current week/month views; events and task actions unavailable |
@@ -38,7 +38,7 @@ no Google configuration. Account controls appear inline on Home and My profile.
 
 All API access uses `src/lib/api/profile.ts` through `/api/v1/profile` at the gateway.
 FastAPI owns validation, resource ownership and database writes. See
-`../../docs/development/profile-setup.md` for environment and Docker setup.
+[application setup](../../docs/setup.md) for environment and Docker setup.
 
 ## Structure
 
@@ -51,3 +51,5 @@ FastAPI owns validation, resource ownership and database writes. See
 - `public/`: public assets only; never uploaded CVs.
 
 See `tests/README.md` for unit, browser and disposable full-stack test commands.
+
+P04–P06 use `PlanningPreferences` and the existing Profile API. See the [Profile service README](../../services/profile-service/README.md) for its endpoints and service rules.

@@ -1,3 +1,4 @@
+from app.schemas.planning import CalendarDate, DeviceZone, BaseHours, AvailabilityPeriod
 from enum import StrEnum
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
@@ -97,6 +98,9 @@ class EducationView(BaseModel):
 class ProfilePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_version: Annotated[int, Field(strict=True, ge=0)]
+    application_date: CalendarDate | None = None
+    time_zone: DeviceZone | None = None
+    weekly_hours: BaseHours | None = None
     occupational_status: OccupationalStatus | None = None
     school_category: SchoolCategory | None = None
     education: EducationPatch | None = None
@@ -104,6 +108,9 @@ class ProfilePatch(BaseModel):
 
     @model_validator(mode="after")
     def validate_supplied_fields(self):
+        for name in ("application_date", "time_zone", "weekly_hours"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null.")
         if "occupational_status" in self.model_fields_set and self.occupational_status is None:
             raise ValueError("Occupational status cannot be null.")
         if "education" in self.model_fields_set and self.education is None:
@@ -115,6 +122,11 @@ class ProfilePatch(BaseModel):
 
 class ProfileView(BaseModel):
     version: int
+    application_date: CalendarDate | None = None
+    application_time_zone: str | None = None
+    weekly_hours: float | None = None
+    availability_periods: list[AvailabilityPeriod] = Field(default_factory=list)
+    planning_revision: int = 0
     occupational_status: OccupationalStatus | None = None
     school_category: SchoolCategory | None = None
     education_context: Literal["current", "last"] | None = None

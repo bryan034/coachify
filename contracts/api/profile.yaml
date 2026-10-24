@@ -3,7 +3,7 @@ openapi: 3.1.0
 info:
   title: Coachify profile API
   description: Google bearer authentication by default. Explicit local_test mode uses
-    a fixed server identity only in development; see docs/development/profile-setup.md.
+    a fixed server identity only in development; see services/profile-service/README.md.
   version: 0.1.0
 paths:
   /api/v1/profile/auth-config:
@@ -107,6 +107,8 @@ paths:
     get:
       summary: Get Profile
       operationId: get_profile_api_v1_profile_get
+      security:
+      - HTTPBearer: []
       responses:
         '200':
           description: Successful Response
@@ -114,17 +116,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProfileView'
-      security:
-      - HTTPBearer: []
     patch:
       summary: Patch Profile
       operationId: patch_profile_api_v1_profile_patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProfilePatch'
-        required: true
       responses:
         '200':
           description: Successful Response
@@ -138,8 +152,173 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/availability-periods:
+    post:
+      summary: Add Period
+      operationId: add_period_api_v1_profile_availability_periods_post
       security:
       - HTTPBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
+          - type: 'null'
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PeriodCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/availability-periods/{period_id}:
+    patch:
+      summary: Edit Period
+      operationId: edit_period_api_v1_profile_availability_periods__period_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: period_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Period Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
+          - type: 'null'
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PeriodEdit'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Delete Period
+      operationId: delete_period_api_v1_profile_availability_periods__period_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: period_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Period Id
+      - name: expected_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Expected Version
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
+          - type: 'null'
+          title: Idempotency-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/profile/planning-inputs:
+    get:
+      summary: Get Planning Inputs
+      operationId: get_planning_inputs_api_v1_profile_planning_inputs_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: time_zone
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+          title: Time Zone
+      - name: start_date
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start Date
+      - name: end_date
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End Date
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanningInputs'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/profile/versions/{version}:
     get:
       summary: Get Version
@@ -180,6 +359,48 @@ components:
       required:
       - mode
       title: AuthConfigView
+    AvailabilityPeriod:
+      properties:
+        id:
+          type: string
+          title: Id
+        start_date:
+          type: string
+          title: Start Date
+        end_date:
+          type: string
+          title: End Date
+        weekly_hours:
+          type: number
+          maximum: 168.0
+          minimum: 0.0
+          title: Weekly Hours
+      type: object
+      required:
+      - id
+      - start_date
+      - end_date
+      - weekly_hours
+      title: AvailabilityPeriod
+    CapacityWindow:
+      properties:
+        start_date:
+          type: string
+          title: Start Date
+        end_date:
+          type: string
+          title: End Date
+        available_hours:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Available Hours
+      type: object
+      required:
+      - start_date
+      - end_date
+      - available_hours
+      title: CapacityWindow
     CatalogueInstitution:
       properties:
         kind:
@@ -398,12 +619,190 @@ components:
       - unemployed
       - employed
       title: OccupationalStatus
+    PeriodCreate:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        start_date:
+          type: string
+          title: Start Date
+        end_date:
+          type: string
+          title: End Date
+        weekly_hours:
+          type: number
+          maximum: 168.0
+          minimum: 0.0
+          title: Weekly Hours
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - start_date
+      - end_date
+      - weekly_hours
+      title: PeriodCreate
+    PeriodEdit:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        start_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End Date
+        weekly_hours:
+          anyOf:
+          - type: number
+            maximum: 168.0
+            minimum: 0.0
+          - type: 'null'
+          title: Weekly Hours
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      title: PeriodEdit
+    PlanningInputs:
+      properties:
+        profile_version:
+          type: integer
+          title: Profile Version
+        planning_revision:
+          type: integer
+          title: Planning Revision
+        application_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Application Date
+        application_time_zone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Application Time Zone
+        validation_time_zone:
+          type: string
+          title: Validation Time Zone
+        validation_date:
+          type: string
+          title: Validation Date
+        capacity_as_of_date:
+          type: string
+          title: Capacity As Of Date
+        weekly_hours:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Weekly Hours
+        hours_unit:
+          type: string
+          title: Hours Unit
+          default: hours_per_week
+        availability_periods:
+          items:
+            $ref: '#/components/schemas/AvailabilityPeriod'
+          type: array
+          title: Availability Periods
+        capacity_time_zone:
+          type: string
+          title: Capacity Time Zone
+          default: Asia/Singapore
+        week_start:
+          type: string
+          title: Week Start
+          default: Monday
+        week_end:
+          type: string
+          title: Week End
+          default: Sunday
+        period_boundaries:
+          type: string
+          title: Period Boundaries
+          default: inclusive
+        proration:
+          type: string
+          title: Proration
+          default: weekly_hours / 7 per covered calendar date; period rate replaces
+            base rate
+        ready:
+          type: boolean
+          title: Ready
+        issues:
+          items:
+            $ref: '#/components/schemas/PlanningIssue'
+          type: array
+          title: Issues
+        capacity_window:
+          anyOf:
+          - $ref: '#/components/schemas/CapacityWindow'
+          - type: 'null'
+      type: object
+      required:
+      - profile_version
+      - planning_revision
+      - application_date
+      - application_time_zone
+      - validation_time_zone
+      - validation_date
+      - capacity_as_of_date
+      - weekly_hours
+      - availability_periods
+      - ready
+      - issues
+      title: PlanningInputs
+    PlanningIssue:
+      properties:
+        field:
+          type: string
+          title: Field
+        message:
+          type: string
+          title: Message
+        period_ids:
+          items:
+            type: string
+          type: array
+          title: Period Ids
+      type: object
+      required:
+      - field
+      - message
+      title: PlanningIssue
     ProfilePatch:
       properties:
         expected_version:
           type: integer
           minimum: 0.0
           title: Expected Version
+        application_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Application Date
+        time_zone:
+          anyOf:
+          - type: string
+            maxLength: 100
+            minLength: 1
+          - type: 'null'
+          title: Time Zone
+        weekly_hours:
+          anyOf:
+          - type: number
+            maximum: 168.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Weekly Hours
         occupational_status:
           anyOf:
           - $ref: '#/components/schemas/OccupationalStatus'
@@ -430,6 +829,30 @@ components:
         version:
           type: integer
           title: Version
+        application_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Application Date
+        application_time_zone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Application Time Zone
+        weekly_hours:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Weekly Hours
+        availability_periods:
+          items:
+            $ref: '#/components/schemas/AvailabilityPeriod'
+          type: array
+          title: Availability Periods
+        planning_revision:
+          type: integer
+          title: Planning Revision
+          default: 0
         occupational_status:
           anyOf:
           - $ref: '#/components/schemas/OccupationalStatus'

@@ -1,5 +1,11 @@
 # Backend services
 
-Six independent future FastAPI applications. Each service has its own Python project, Docker build context and configuration. The current packages contain only empty markers or comments. No service is runnable.
+Coachify has six FastAPI service directories. The Profile service is runnable;
+the other five currently contain placeholders.
 
-See each service README and the ownership map in `docs/architecture/service-boundaries.md`. Dependencies, framework versions and workers are implemented later.
+Each service README explains its purpose and lists available endpoints by Jira
+story. Planned functionality is labelled explicitly. Detailed service rules live
+inside that service's folder.
+
+See the [API overview](../docs/api/README.md) for prefixes and the
+[service boundaries](../docs/architecture/service-boundaries.md) for ownership.

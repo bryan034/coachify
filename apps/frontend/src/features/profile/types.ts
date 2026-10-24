@@ -1,6 +1,8 @@
 export type OccupationalStatus = 'student' | 'national_service' | 'unemployed' | 'employed';
 export type SchoolCategory = 'secondary' | 'ite' | 'polytechnic' | 'junior_college' | 'university';
 export type Profile = {
+  application_date?: string | null; application_time_zone?: string | null;
+  weekly_hours?: number | null; availability_periods?: AvailabilityPeriod[]; planning_revision?: number;
   version: number; occupational_status: OccupationalStatus | null;
   school_category: SchoolCategory | null; education_context: 'current' | 'last' | null;
   education_review_required: boolean; education: Education; current_study_year?: number | null;
@@ -29,3 +31,10 @@ export type EducationDraft = { institution?: InstitutionInput; course?: string |
 export function studyYearLabel(category: SchoolCategory | '', year: number) {
   return `${category === 'secondary' ? 'Secondary' : category === 'junior_college' ? 'JC' : 'Year'} ${year}`;
 }
+
+export type AvailabilityPeriod = { id: string; start_date: string; end_date: string; weekly_hours: number };
+export type PlanningInputs = {
+ profile_version: number; planning_revision: number; application_date: string | null;
+ weekly_hours: number | null; validation_time_zone: string; capacity_time_zone: string;
+ ready: boolean; issues: { field: string; message: string; period_ids?: string[] }[];
+};
