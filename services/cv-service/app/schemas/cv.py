@@ -111,3 +111,16 @@ class CvSnapshot(Document):
 def unique_skills(skills):
     if len({s.skill_id for s in skills}) != len(skills):
         raise ValueError('Duplicate canonical skill IDs.')
+
+
+class CvSummary(Contract):
+    id: DomainId = Field(alias='_id')
+    user_id: AccountId
+    file_name: Text
+    extraction_status: Literal['pending', 'processing', 'succeeded', 'failed']
+    extraction_version: Text
+    version: int = Field(strict=True, ge=1)
+
+
+class CvList(Contract):
+    items: list[CvSummary] = Field(max_length=50)

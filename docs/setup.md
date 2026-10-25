@@ -158,6 +158,18 @@ AI_API_KEY=YOUR_PRIVATE_GROQ_KEY
 AI_RESPONSE_MODE=json_object
 ```
 
+Model access depends on your account. Verify the exact ID in Groq's authenticated
+`GET /openai/v1/models` list; a model appearing in public documentation does not
+guarantee access. This account was verified with `AI_MODEL=openai/gpt-oss-120b`
+and `AI_RESPONSE_MODE=json_object`. If you receive `model_unavailable`, choose an
+accessible model and recreate Career; restarting alone does not reload Compose env.
+Never print your API key or full `.env` while debugging. JD extraction on the
+supported Groq GPT-OSS models uses a native strict schema even when the general
+mode is `json_object`; no environment change is required. An `invalid_output`
+response now has a safe `diagnostic.reason`, such as `schema_validation` or
+`source_quote`, without JD/model contents. It automatically attempts one bounded
+correction before showing the error.
+
 Keep `AI_ENABLED=false` if you only need current previews. No credentials are
 needed for automated AI tests. Only Career receives the key; never prefix it
 `NEXT_PUBLIC_` or commit it. The service's
@@ -169,7 +181,45 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
 ```
 
-SCRUM-310 adds models and opt-in repositories; no new database users or application
-MongoDB passwords are needed yet. Later persistence stories must provision a
-separate scoped Career/CV credential and wire the repository to its own database.
-Existing Profile credentials and data remain unchanged.
+SCRUM-310 defines the models; J08/J09 now connect Career persistence and CV reads
+using separate service credentials. See the setup section below. Profile data is unchanged.
+
+## J08/J09 database setup
+
+Add two new **different** random passwords to your ignored infrastructure `.env`
+(generate each with `openssl rand -hex 24`):
+
+```dotenv
+CAREER_DB_PASSWORD=YOUR_NEW_RANDOM_PASSWORD
+CV_DB_PASSWORD=ANOTHER_NEW_RANDOM_PASSWORD
+```
+
+Keep existing MongoDB/SMTP/OTP credentials. Compose runs `mongodb-career-init` to
+create missing Career and CV database users on new **or existing** volumes. It
+verifies existing credentials and never resets passwords or removes data. Do not
+use `down -v` to apply this change. Rebuild the whole stack because CV reads and
+gateway routing are now included:
+
+```sh
+docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up --build -d
+docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
+```
+
+For exploration turns set `AI_ENABLED=true` and your own `AI_MODEL`/`AI_API_KEY`.
+Without AI configuration transient JD import previews still work;
+exploration and JD extraction/clarification require a configured provider. Open
+Career Goal → Explore careers, or select **Extract career goal** after preparing a JD
+to use the same chat page. Extraction sends the JD to the configured AI; results
+remain temporary candidates until a future publishing workflow. Use a processed CV if one exists, continue
+without one, or attach a temporary CV with the accuracy warning. Dedicated Resume
+& Tracker uploads remain planned. Temporary originals/text are discarded; saved
+progress may require the same CV to be reattached after reload. Every confirmed
+goal stays requirements pending until J03/J10 skill generation is implemented.
+
+## Docker hot reload
+
+Use the opt-in [development Compose override](../infrastructure/docker/README.md#hot-reload-during-development)
+for Next.js Fast Refresh and Python API reload without rebuilding for source edits.
+It keeps the base production-style configuration available and retains MongoDB data.
+Run the startup commands yourself with your private settings; agents must not load
+or inspect your environment files. Dependencies/image changes still need rebuilding.

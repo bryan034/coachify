@@ -107,3 +107,5 @@ reads require the device `time_zone`; optional `start_date` and `end_date` give 
 - [Run the application](../../docs/setup.md) · [Run tests](../../docs/testing.md)
 - [Detailed service rules](SPECIFICATION.md) · [School data](app/data/README.md)
 - [Request/response schemas](../../contracts/api/profile.yaml)
+
+For Python code reload in Docker, use the [development Compose override](../../infrastructure/docker/README.md#hot-reload-during-development). Dependency changes need a rebuild; JSON snapshot changes need an API restart.

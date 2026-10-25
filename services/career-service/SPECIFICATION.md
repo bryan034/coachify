@@ -1,27 +1,27 @@
-# Temporary Career Goal previews
+# Career Goal previews and exploration
 
 ## Current scope
 
 The user's revised scope on 25 October 2026 supersedes the earlier source-storage
-plan for this iteration. Implement input/previews for J01, J06 and J07 only. Raw
-or extracted text must not be persisted. The preview endpoints do not perform AI processing or save structured goals.
+plan for J01/J06/J07 previews. J08 exploration and J09 goal confirmation are also
+implemented. Raw or extracted source text must not be persisted. The preview endpoints do not perform AI processing or save structured goals.
 Internal AI/provider and data-contract foundations are described in
-[ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). Full Jira
-criteria for saved source recovery/interpretation remain deferred, not fulfilled.
+[ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). Saved-source recovery and JD interpretation criteria remain deferred; J08/J09
+structured exploration/goal persistence is implemented separately.
 
 Career owns input processing. The frontend uses `/career-goal`, directly below
 Home, with three methods. Each draft stays in React memory and survives switching
 methods while the page remains mounted. Auth/account changes remount or remove
 private state. Imports are aborted/ignored after method switch or unmount. Sidebar
 link navigation warns before discard; browser refresh/tab close uses beforeunload
-where supported. Reload/leave loses input. No source data goes into localStorage,
+where supported. Reload/leave loses input. No preview source data goes into localStorage,
 sessionStorage, Next.js server caches or MongoDB. Browser document history/undo
 behaviour is browser-managed, not a saved Coachify draft.
 
 ## API and authentication
 
-Only POST `/api/v1/career/imports/url` and `/api/v1/career/imports/document` are
-publicly routed. `/health` is container-only. Each import validates the session by
+The original preview POST routes remain available; J08/J09 routes are listed in
+the service README and generated OpenAPI contract. `/health` is container-only. Each import validates the session by
 calling Profile's existing `/api/v1/profile/auth/session` over the private backend
 network, forwarding the bearer. It then reads `/api/v1/profile` and requires the
 canonical `onboarding_complete=true` marker before processing (otherwise 403).
@@ -66,7 +66,7 @@ disabled for imports; request bodies/URL fields/documents are not logged.
 ## Storage and Docker
 
 The Career container is non-root, read-only, on the backend network only and has
-optional backend-only AI settings and no runtime MongoDB connection. Private `/tmp` is a bounded 32 MiB tmpfs with
+backend-only AI settings and a scoped MongoDB connection for J08/J09. Private `/tmp` is a bounded 32 MiB tmpfs with
 0700 access for the service user. Multipart files use generated spool names and
 are always closed by the form context on success/failure. No named upload volume
 or original-file retention is introduced. Request/child buffers expire with the
@@ -78,5 +78,12 @@ lifecycle. TMPDIR can be changed for direct service runs; keep it private.
 The provider adapter and structured schemas are now defined. Later J stories
 will connect confirmed source in memory to the internal adapter. Persist only the approved
 structured information and agreed provenance. Do not quietly reintroduce source
-text persistence to fulfil earlier criteria. Chat and generalized skill guidance
-remain separate backlog stories.
+text persistence to fulfil earlier criteria. The shared chat route supports J08 adaptive career exploration and temporary
+J02/J03 JD extraction/review. Reviewed JD text is sent only on explicit extraction
+or chat actions. Outputs are Pydantic-validated candidates with source grounding;
+changes require user approval. No canonical skill registry, confirmed skill
+persistence or J04/J05 condition editing is supplied by this temporary workflow.
+
+J08 optional-CV exploration and J09 confirmation are implemented as described in
+[ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md); this document retains the existing
+preview/parser safeguards. No source text is written to domain records.

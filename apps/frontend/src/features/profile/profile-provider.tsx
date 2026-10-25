@@ -9,7 +9,7 @@ export type Verification = { verification_required: true; challenge_id: string; 
 type Credentials = { name?: string; email?: string; password?: string; credential?: string };
 type Session = {
  mode: Mode | null; googleEnabled: boolean; developmentToolsEnabled: boolean; verification: Verification | null; token?: string; account: Account | null; profile: Profile | null; categories: Category[];
- loading: boolean; configError: string; loadError: string; logoutError: string;
+ sessionError: string; loading: boolean; configError: string; loadError: string; logoutError: string;
  beginAccess: (intent: 'login' | 'register') => Promise<Access>;
  completeAccess: (input: Credentials) => Promise<boolean>;
  verifyEmail: (code: string) => Promise<boolean>; resendVerification: () => Promise<void>;
@@ -44,10 +44,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  const [configError, setConfigError] = useState('');
  const [loadError, setLoadError] = useState('');
  const [logoutError, setLogoutError] = useState('');
+ const [sessionError,setSessionError]=useState('');
  const [retry, setRetry] = useState(0);
  const reload = useCallback(() => setRetry(n => n + 1), []);
  const clear = useCallback(() => {
-  operation.current++; latestProfile.current = null; currentAccount.current = null; activeToken.current = undefined; setToken(undefined); setAccount(null); setProfile(null); setLoadError('');
+  operation.current++; latestProfile.current = null; currentAccount.current = null; activeToken.current = undefined; setToken(undefined); setAccount(null); setProfile(null); setLoadError(''); setSessionError('');
   sessionStorage.removeItem(SESSION);
  }, []);
  const cancelAccess = useCallback(() => {
@@ -80,12 +81,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   function expired(event: Event) {
    if ((event as CustomEvent).detail === activeToken.current) signOut();
   }
-  // BFCache restoration and background tabs must revalidate before showing private content.
-  function hidden() { if (!activeToken.current) return; if (document.visibilityState === 'hidden') { setProfile(null); setLoading(true); } else reload(); }
+  // A normal tab switch must not unmount forms. BFCache restoration still performs a full check.
   function restored(event: PageTransitionEvent) { if (event.persisted && activeToken.current) { setProfile(null); setLoading(true); reload(); } }
   window.addEventListener('storage', changed); window.addEventListener('coachify:expired', expired);
-  document.addEventListener('visibilitychange', hidden); window.addEventListener('pageshow', restored);
-  return () => { window.removeEventListener('storage', changed); window.removeEventListener('coachify:expired', expired); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pageshow', restored); };
+  window.addEventListener('pageshow', restored);
+  return () => { window.removeEventListener('storage', changed); window.removeEventListener('coachify:expired', expired); window.removeEventListener('pageshow', restored); };
  }, [cancelAccess, clear, reload, signOut]);
  useEffect(() => {
   const controller = new AbortController(); const id = ++operation.current;
@@ -176,19 +176,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   if (!token || !account) return;
   const controller = new AbortController();
   async function validate() {
-   try { await profileApi<Account>('/auth/session', { signal: controller.signal }, token); }
+   try { await profileApi<Account>('/auth/session', { signal: controller.signal }, token); if(activeToken.current===token&&!controller.signal.aborted)setSessionError(''); }
    catch (error) {
     if (controller.signal.aborted || activeToken.current !== token) return;
     if (error instanceof ApiError && error.status === 401) signOut();
-    else { setProfile(null); setConfigError('Session validation unavailable. Retry connection before continuing.'); }
+    else setSessionError('Session validation unavailable. Reconnect before continuing; your draft is still in this tab.');
    }
   }
-  const poll = window.setInterval(() => { void validate(); }, 30_000);
+  const visible=()=>{if(document.visibilityState==='visible')void validate();};
+  document.addEventListener('visibilitychange',visible);
+  const poll = window.setInterval(() => { if(document.visibilityState==='visible')void validate(); }, 30_000);
   const expiry = account.expires_at ? Date.parse(account.expires_at) - Date.now() : null;
   const timer = expiry === null ? undefined : window.setTimeout(() => { if (activeToken.current === token) signOut(); }, Math.max(0, expiry));
-  return () => { controller.abort(); clearInterval(poll); if (timer !== undefined) clearTimeout(timer); };
+  return () => { controller.abort(); document.removeEventListener('visibilitychange',visible); clearInterval(poll); if (timer !== undefined) clearTimeout(timer); };
  }, [token, account, signOut]);
- return <Context.Provider value={{ mode, googleEnabled, developmentToolsEnabled, verification, token, account, profile, categories, loading, configError, loadError, logoutError, beginAccess, completeAccess, verifyEmail, resendVerification, cancelAccess, signOut, retryLogout, reload, setProfile: acceptProfile }}>{children}</Context.Provider>;
+ return <Context.Provider value={{ mode, googleEnabled, developmentToolsEnabled, verification, token, account, profile, categories, sessionError, loading, configError, loadError, logoutError, beginAccess, completeAccess, verifyEmail, resendVerification, cancelAccess, signOut, retryLogout, reload, setProfile: acceptProfile }}>{children}</Context.Provider>;
 }
 export function useProfile() {
  const session = useContext(Context); if (!session) throw new Error('ProfileProvider is required.'); return session;

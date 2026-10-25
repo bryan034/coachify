@@ -237,11 +237,20 @@ class CareerGoal(Document):
     non_skill_requirements: list[NonSkillRequirement] = Field(default_factory=list, max_length=100)
     requirements_source: Literal['pasted_jd', 'url_jd', 'document_jd', 'career_exploration']
     generation_version: Text
-    generation: Generation
+    generation: Generation | None = None
+    readiness: Literal['ready', 'pending'] = 'ready'
+    exploration_draft_id: DomainId | None = None
+    exploration_draft_version: Version | None = None
+    source_cv_id: DomainId | None = None
+    source_cv_version: Version | None = None
+    source_extraction_version: Text | None = None
+    source_profile_version: Version | None = None
 
     @model_validator(mode='after')
     def scenario(self):
         unique_skills(self.skills)
+        if self.readiness == 'ready' and (not self.skills or self.generation is None):
+            raise ValueError('Ready goals need validated skills and generation provenance.')
         if (self.target_type == 'career_exploration') != (self.requirements_source == 'career_exploration'):
             raise ValueError('Target type and requirements source disagree.')
         if self.target_type == 'career_exploration' and any(s.origin == 'employer' for s in self.skills):
@@ -366,7 +375,7 @@ def mongo_document(model: Document):
         return value
     data = bson_dates(model.model_dump(by_alias=True, mode='python'))
     data['_id'] = ObjectId(model.id)
-    for name in ('cv_id', 'career_goal_id', 'selected_career_goal_id', 'result_id'):
+    for name in ('cv_id', 'career_goal_id', 'selected_career_goal_id', 'result_id', 'exploration_draft_id', 'source_cv_id'):
         if data.get(name):
             data[name] = ObjectId(data[name])
     if 'research_ids' in data:

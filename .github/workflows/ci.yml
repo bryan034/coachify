@@ -154,6 +154,8 @@ jobs:
       GATEWAY_PORT: '8081'
       MONGO_ROOT_PASSWORD: ci-only-root-password
       PROFILE_DB_PASSWORD: ci-only-profile-password
+      CAREER_DB_PASSWORD: ci-only-career-password
+      CV_DB_PASSWORD: ci-only-cv-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

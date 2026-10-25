@@ -1,32 +1,23 @@
-# MongoDB storage plan
+# MongoDB service storage
 
-The profile slice now has an active four-container setup in `infrastructure/docker/compose.yaml`, with `infrastructure/gateway/nginx.conf` and `infrastructure/mongodb/init-profile.js`. See the [application setup guide](../../docs/setup.md). The remaining notes below describe the original scaffold templates.
+The active Compose stack uses separate `coachify_profile`, `coachify_career` and
+`coachify_ingestion` databases and scoped service users. Profile initialisation runs
+on a fresh volume. The one-shot `mongodb-career-init` job also creates missing
+Career/CV users on existing volumes, without resetting existing credentials or data.
+Root credentials are supplied only to MongoDB and that setup job, not application services.
 
+See [application setup](../../docs/setup.md) for passwords and startup commands.
+Preserve existing password values when reusing a volume; changing `.env` does not
+change a stored database password. No volume deletion is needed for J08/J09.
 
-No database instance, user, collection, index, or connection code is created by this scaffold.
+Career owns `career_goals`, public `interview_research`, private `skill_gap_analyses`
+and operational selection/processing records. CV owns `cvs`; its read API is active,
+while dedicated upload/extraction remains planned. Services use authenticated APIs
+to access foreign records. Confirmed goals preserve historical revisions; drafts
+use expected versions and safe retries. Indexes are installed by their owning workers.
 
-## Ownership
-
-| Service | Planned database |
-|---|---|
-| Profile | `coachify_profile` |
-| CV ingestion | `coachify_ingestion` |
-| Career assessment | `coachify_career` |
-| Roadmap and tasks | `coachify_roadmap` |
-| Review and scheduling | `coachify_review` |
-
-The dashboard service is stateless and has no MongoDB credentials. Each data-owning service will receive its own database-scoped credentials. Services use APIs to request another service's records rather than reading its collections.
-
-## Local development
-
-A local MongoDB container will write database files to a named volume mounted at `/data/db`. Its data persists independently of replacing the container. Use the `local-db` profile in the future completed Compose configuration. Never use a root credential as a normal application-service credential.
-
-## Production proposal
-
-Use MongoDB Atlas via private service environment configuration. Atlas manages its own database storage, so an Atlas deployment does not use the local `mongodb_data` volume. Hosting for Next.js and FastAPI is separate.
-
-Indexes, validation, and any transaction/topology requirements are implementation work. They must be designed for MongoDB, not copied from the older PostgreSQL proposal.
-
-## CV uploads are separate
-
-The `cv_uploads` volume temporarily holds the original PDF/DOCX. Extracted text and clarified student information are stored in MongoDB. Only the CV service mounts this upload volume. Original files are deleted after successful extraction and persistence; cleanup is not implemented yet.
+CV attachments on Career Goal are temporary private parser/request buffers, not
+MongoDB file storage or dedicated CV extraction. Only bounded structured progress,
+filename/hash and approved provenance are saved; full raw JD/CV text is not stored.
+MongoDB data persists in the named Docker volume. Production may use Atlas with
+service-scoped credentials; it would not use this local database volume.

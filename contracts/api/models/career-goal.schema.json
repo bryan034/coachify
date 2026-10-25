@@ -399,7 +399,101 @@
       "type": "string"
     },
     "generation": {
-      "$ref": "#/$defs/Generation"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Generation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "readiness": {
+      "default": "ready",
+      "enum": [
+        "ready",
+        "pending"
+      ],
+      "title": "Readiness",
+      "type": "string"
+    },
+    "exploration_draft_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exploration Draft Id"
+    },
+    "exploration_draft_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exploration Draft Version"
+    },
+    "source_cv_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Cv Id"
+    },
+    "source_cv_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Cv Version"
+    },
+    "source_extraction_version": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Extraction Version"
+    },
+    "source_profile_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Profile Version"
     }
   },
   "required": [
@@ -413,8 +507,7 @@
     "field",
     "role",
     "requirements_source",
-    "generation_version",
-    "generation"
+    "generation_version"
   ],
   "title": "CareerGoal",
   "type": "object"

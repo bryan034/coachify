@@ -1,28 +1,30 @@
-# CV ingestion service
+# CV service
 
-Turns a CV into a profile that reflects what the user actually contributed.
+Owns structured CV records and exposes private reads for career exploration.
+Dedicated upload, extraction and clarification remain planned.
 
-## API by Jira story
+## Saved CV context — J08 dependency
 
-**No API endpoints are implemented yet.** The `/api/v1/cv` prefix is reserved.
+- `GET /api/v1/cv` — List the signed-in user's saved CV metadata (up to 50); excludes skill evidence and private file references.
+- `GET /api/v1/cv/{id}` — Read one owned CV and its extraction/effective skill version.
 
-| Jira stories | Planned purpose |
-|---|---|
-| C01–C02 | Upload a CV and review the extracted information. |
-| C03–C05 | Clarify project roles, work responsibilities and ambiguous claims. |
-| C06–C08 | Correct details, add missing capabilities or skip a clarification. |
+Both routes verify the session and onboarding through Profile, enforce ownership
+and return no-store responses. Career uses these APIs instead of reading this database.
 
-See the [application API overview](../../docs/api/README.md) and [service boundaries](../../docs/architecture/service-boundaries.md).
+## Upload and review — C01–C09
+
+Upload, extraction, clarification and global analysis-CV selection endpoints are
+not implemented. The Resume & Tracker page explains this and links to Career Goal,
+which accepts an optional **temporary** attachment with an accuracy warning.
+Career attachments do not create CV records here.
 
 ## Data contracts — SCRUM-310
 
-The CV document/embedded skill schemas and an owner-scoped MongoDB repository are
-implemented. Upload, extraction and clarification endpoints remain planned.
-`user_id` uses the existing Profile account UUID; CV IDs use ObjectIds. Original
-files are optional private references, and a user's contribution declaration is
-sufficient without proof. No raw file content is persisted by these contracts.
+Schemas and owner-scoped repositories use the Profile account UUID for `user_id`
+and ObjectIds for CV IDs. Unknown proficiency stays null; a user's contribution
+declaration needs no proof. Original-file references are optional and private.
+See the [CV schema](../../contracts/api/models/cv.schema.json),
+[read API contract](../../contracts/api/cv.yaml) and
+[integration rules](../career-service/ANALYSIS_CONTRACTS.md).
 
-See the [CV JSON Schema](../../contracts/api/models/cv.schema.json) and
-[shared integration rules](../career-service/ANALYSIS_CONTRACTS.md). The repository
-is not connected to a running ingestion service yet; no database credentials are
-needed for schema-only tests. `MONGODB_TEST_URI` enables disposable database tests.
+For Python code reload in Docker, use the [development Compose override](../../infrastructure/docker/README.md#hot-reload-during-development). Dependency changes need a rebuild; JSON snapshot changes need an API restart.

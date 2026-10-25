@@ -1,9 +1,437 @@
-# Endpoint shell; CV document schema is defined in models/cv.schema.json.
-openapi: 3.1.0
-info:
-  title: Coachify CV ingestion API
-  version: 0.0.0
-  description: Planned CV ingestion endpoints. Record contracts exist; public prefix /api/v1/cv is not routed yet.
-servers:
-  - url: /api/v1
-paths: {}
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Coachify CV read API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/cv": {
+      "get": {
+        "tags": [
+          "J08 saved CV context"
+        ],
+        "summary": "List Cvs",
+        "operationId": "list_cvs_api_v1_cv_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cv/{identifier}": {
+      "get": {
+        "tags": [
+          "J08 saved CV context"
+        ],
+        "summary": "Get Cv",
+        "operationId": "get_cv_api_v1_cv__identifier__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CvList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CvSummary"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CvList"
+      },
+      "CvSkill": {
+        "properties": {
+          "skill_id": {
+            "type": "string",
+            "maxLength": 120,
+            "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$",
+            "title": "Skill Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Category"
+          },
+          "proficiency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "beginner",
+                  "intermediate",
+                  "advanced",
+                  "expert"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proficiency"
+          },
+          "experience_months": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1200.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience Months"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Evidence"
+          },
+          "evidence_type": {
+            "type": "string",
+            "enum": [
+              "cv",
+              "user_declaration"
+            ],
+            "title": "Evidence Type"
+          },
+          "explicit": {
+            "type": "boolean",
+            "title": "Explicit"
+          },
+          "original_evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "skill_id",
+          "name",
+          "category",
+          "evidence",
+          "evidence_type",
+          "explicit"
+        ],
+        "title": "CvSkill"
+      },
+      "CvSnapshot": {
+        "properties": {
+          "_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "analysis-v1",
+            "title": "Schema Version",
+            "default": "analysis-v1"
+          },
+          "skill_mapping_version": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Skill Mapping Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "user_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+            "title": "User Id"
+          },
+          "file_name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "File Name"
+          },
+          "file_type": {
+            "type": "string",
+            "enum": [
+              "pdf",
+              "docx",
+              "txt"
+            ],
+            "title": "File Type"
+          },
+          "file_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Url"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/CvSkill"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Skills"
+          },
+          "extraction_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Extraction Status"
+          },
+          "extraction_version": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Extraction Version"
+          },
+          "profile_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Profile Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "_id",
+          "version",
+          "skill_mapping_version",
+          "created_at",
+          "updated_at",
+          "user_id",
+          "file_name",
+          "file_type",
+          "extraction_status",
+          "extraction_version",
+          "profile_version"
+        ],
+        "title": "CvSnapshot",
+        "description": "CV API boundary snapshot, not permission to query the CV database."
+      },
+      "CvSummary": {
+        "properties": {
+          "_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+            "title": "User Id"
+          },
+          "file_name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "File Name"
+          },
+          "extraction_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Extraction Status"
+          },
+          "extraction_version": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Extraction Version"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "_id",
+          "user_id",
+          "file_name",
+          "extraction_status",
+          "extraction_version",
+          "version"
+        ],
+        "title": "CvSummary"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

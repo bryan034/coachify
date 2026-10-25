@@ -102,3 +102,23 @@ random `coachify_analysis_test_*` / `coachify_cv_test_*` databases, checking rea
 BSON, indexes, private ownership and idempotent/versioned writes. Use only a
 disposable MongoDB. The required `analysis-integration` CI matrix runs both suites
 against MongoDB; ordinary backend jobs skip only their database-dependent tests.
+
+J08/J09 add fake-provider + real MongoDB flow tests, CV API ownership checks,
+component/browser adaptive chat and JD handoff checks, and a full-stack confirmed-goal reload
+check. The disposable Compose test stack also needs `CAREER_DB_PASSWORD` and
+`CV_DB_PASSWORD`; CI supplies synthetic values. Real Groq credentials are never
+used by automated tests. Goal-flow tests create/drop `coachify_goals_test_*` DBs.
+
+JD review tests use synthetic AI outputs for source-quote checks, proposed additions,
+invalid history, empty results and recoverable failures. Browser coverage checks
+automatic document reading, the shared chat and explicit proposal approval. Activity
+tests verify drafts survive tab switches, interaction renews the five-minute deadline,
+and expiry blocks the mounted workspace until explicit refresh.
+
+Docker hot-reload verification uses an isolated Compose project with `/dev/null`
+as its environment-file source and explicit synthetic settings. A disposable client
+component verifies an edited label updates through the gateway HMR socket while
+preserving a counter and avoiding page navigation. Temporary API probes verify
+Python edits reload in Profile, Career and CV. Probes are restored/removed afterward;
+no private environment files or live account data are used. The production frontend
+Docker target is built separately to check that the dev target remains opt-in.

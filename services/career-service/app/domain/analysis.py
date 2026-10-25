@@ -12,6 +12,8 @@ def validate_inputs(owner: str, expected: InputVersions, cv: CvSnapshot | None,
         raise ContractConflict('A referenced CV or career goal is unavailable.')
     if cv.user_id != owner or goal.user_id != owner:
         raise ContractConflict('Input ownership mismatch.')
+    if goal.readiness != 'ready':
+        raise ContractConflict('The selected career goal still needs skill requirements.')
     if cv.extraction_status != 'succeeded':
         raise ContractConflict('Select a successfully extracted CV.')
     actual = InputVersions(cv_id=cv.id, cv_version=cv.version, extraction_version=cv.extraction_version,

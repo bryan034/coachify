@@ -1,6 +1,8 @@
 """Provider-neutral payloads. Only transient requests may contain source text."""
 from typing import Literal
 from pydantic import Field, model_validator
+from app.schemas.goals import ExplorationOutput
+from app.schemas.jd import JDExtraction, JDReply
 from app.schemas.analysis import (Contract, Evidence, GapResult, InputVersions, InterviewSkill,
     NonSkillRequirement, ResearchContext, ResearchSource, TargetSkill, Text, SkillId, CvSkill, SourceUrl)
 
@@ -35,11 +37,11 @@ class GapOutput(Contract):
 
 
 class AIInput(Contract):
-    stage: Literal['extraction', 'chat', 'guidance', 'research', 'gap_analysis']
+    stage: Literal['extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat']
     source_text: str | None = Field(default=None, min_length=1, max_length=20000, repr=False)
     conversation: list[Message] = Field(default_factory=list, max_length=30, repr=False)
     # Callers build this from authenticated, approved structured snapshots.
-    context: str = Field(default='', max_length=20000, repr=False)
+    context: str = Field(default='', max_length=40000, repr=False)
     sources: list[ResearchSource] = Field(default_factory=list, max_length=100)
     source_urls: list[SourceUrl] = Field(default_factory=list, max_length=10)
     versions: InputVersions | None = None
@@ -51,10 +53,10 @@ class AIInput(Contract):
 
     @model_validator(mode='after')
     def input_for_stage(self):
-        if self.stage == 'extraction' and not self.source_text:
+        if self.stage in ('extraction','jd_extraction','jd_chat') and not self.source_text:
             raise ValueError('Extraction requires transient JD text.')
-        if self.stage != 'extraction' and self.source_text is not None:
-            raise ValueError('Raw JD text is only accepted by the extraction stage.')
+        if self.stage not in ('extraction','jd_extraction','jd_chat') and self.source_text is not None:
+            raise ValueError('Raw JD text is only accepted by transient JD extraction/review stages.')
         if self.stage == 'chat' and not self.conversation:
             raise ValueError('Chat requires a conversation.')
         if self.stage == 'gap_analysis' and self.versions is None:
@@ -65,4 +67,4 @@ class AIInput(Contract):
 
 
 OUTPUTS = {'extraction': TargetOutput, 'chat': ChatOutput, 'guidance': TargetOutput,
-           'research': ResearchOutput, 'gap_analysis': GapOutput}
+           'research': ResearchOutput, 'gap_analysis': GapOutput, 'exploration': ExplorationOutput, 'jd_extraction':JDExtraction, 'jd_chat':JDReply}

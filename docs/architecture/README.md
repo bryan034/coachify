@@ -3,9 +3,10 @@
 Use the focused design references below for the next CV, JD/skills-analysis and
 roadmap work. The repository also retains the broader six-service scaffold for
 future expansion. P01–P16 are implemented in the frontend/profile slice; Career
-currently prepares temporary URL/document previews; internal AI and data-contract
-foundations are implemented. User-facing structured interpretation,
-research, gap analysis and roadmap generation remain planned.
+now supports adaptive optional-CV exploration and explicit goal saving through one
+shared chat page (including temporary JD skill extraction/review), alongside temporary
+URL/document previews and CV read APIs. Dedicated CV extraction, published JD skills, research,
+gap analysis and roadmap generation remain planned.
 
 ## Working design references
 
@@ -102,5 +103,6 @@ Career Goal has three temporary input methods; no LLM or Career database is used
 Career validates sessions via the Profile API and returns URL/document previews.
 Original uploads use private tmpfs and are closed/deleted after processing. Source
 text exists only in request/process/browser memory, with no persistence. Future
-structured extraction/storage awaits its agreed schema. This intentionally defers
-earlier saved-source/interpretation criteria.
+structured skill review now uses explicit AI extraction/chat requests, separately
+from import previews. Canonical mapping and publication remain planned. Full source
+persistence stays intentionally excluded.

@@ -117,3 +117,33 @@ interview_research *-- Generation : provenance
 skill_gap_analyses *-- Generation : provenance
 skill_gap_analyses *-- InputVersions : pins
 InputVersions *-- ResearchVersion : pins
+
+class Answer {
+    +String status [answered|partial|skipped]
+    +String value?
+    +String quote?
+}
+class Turn {
+    +String question
+    +Answer answer
+    +String reply
+}
+class RoleSuggestion {
+    +String role
+    +String field
+    +String rationale
+    +String uncertainty
+}
+class CvContext {
+    +String mode
+    +ObjectId cv_id?
+    +String filename?
+    +Number version?
+    +String extraction_version?
+    +Number profile_version?
+    +String attachment_sha256?
+}
+career_goals *-- Answer : draft answers
+career_goals *-- Turn : draft turns
+career_goals *-- RoleSuggestion : draft suggestions
+career_goals *-- CvContext : optional context
