@@ -3,7 +3,8 @@
 ## Current state
 
 The profile slice has component, browser and API tests plus real MongoDB integration.
-Other services still have empty suites. Empty suites pass; real failures do not.
+Career has preview/AI/contract tests and CV has contract tests; Roadmap, Dashboard
+and Review still have empty suites. Empty suites pass; real failures do not.
 See [application setup](setup.md) and the affected service README for setup and service details.
 
 ## Local commands
@@ -91,3 +92,33 @@ three methods, Unicode, failure recovery, method-switch races and temporary stat
 The full-stack Career browser test uses the usual disposable Compose stack and
 Mailpit variables; no Groq key or live website is used. Career imports are rate
 limited at the gateway; use synthetic sources and discard only test-stack data.
+
+## AI and analysis contracts
+
+The Career suite tests the Groq-compatible adapter through fake HTTP responses;
+no live key, external provider calls or billing are needed. Career and CV each
+validate the exported MongoDB schemas. Their `MONGODB_TEST_URI` tests create/drop
+random `coachify_analysis_test_*` / `coachify_cv_test_*` databases, checking real
+BSON, indexes, private ownership and idempotent/versioned writes. Use only a
+disposable MongoDB. The required `analysis-integration` CI matrix runs both suites
+against MongoDB; ordinary backend jobs skip only their database-dependent tests.
+
+J08/J09 add fake-provider + real MongoDB flow tests, CV API ownership checks,
+component/browser adaptive chat and JD handoff checks, and a full-stack confirmed-goal reload
+check. The disposable Compose test stack also needs `CAREER_DB_PASSWORD` and
+`CV_DB_PASSWORD`; CI supplies synthetic values. Real Groq credentials are never
+used by automated tests. Goal-flow tests create/drop `coachify_goals_test_*` DBs.
+
+JD review tests use synthetic AI outputs for source-quote checks, proposed additions,
+invalid history, empty results and recoverable failures. Browser coverage checks
+automatic document reading, the shared chat and explicit proposal approval. Activity
+tests verify drafts survive tab switches, interaction renews the five-minute deadline,
+and expiry blocks the mounted workspace until explicit refresh.
+
+Docker hot-reload verification uses an isolated Compose project with `/dev/null`
+as its environment-file source and explicit synthetic settings. A disposable client
+component verifies an edited label updates through the gateway HMR socket while
+preserving a counter and avoiding page navigation. Temporary API probes verify
+Python edits reload in Profile, Career and CV. Probes are restored/removed afterward;
+no private environment files or live account data are used. The production frontend
+Docker target is built separately to check that the dev target remains opt-in.

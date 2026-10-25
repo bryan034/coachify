@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { ProfileForm } from './profile-form';
-import { ProfileProvider } from './profile-provider';
+import { ProfileProvider, useProfile } from './profile-provider';
 import { educationQuestions } from './types';
 vi.mock('next/navigation', () => ({useRouter:()=>({replace:vi.fn()})}));
 vi.mock('@/lib/auth/google-sign-in', () => ({ GoogleSignIn: ({ onCredential }: { onCredential: (t: string) => void }) => <button onClick={() => onCredential('test-only')}>Test sign in</button> }));
@@ -156,4 +156,33 @@ test('saved school stays compact until Change school is chosen and a blank optio
   fireEvent.click(screen.getByRole('button', {name:'Save background'}));
   await screen.findByText('Profile saved.');
   expect(saved.education).toMatchObject({institution:{name:'Synthetic school'},course:null});
+});
+
+
+test('loaded profile fields are populated before editing and saving unlock', async () => {
+  saved = { ...initial, version: 1, occupational_status: 'student', school_category: 'university' };
+  const editorStates: { populated: boolean; locked: boolean }[] = [];
+  function ReadinessCheck() {
+    const { profile, loading } = useProfile();
+    // Observe the commit before passive effects populate the editor. A user must
+    // never be offered an editable form whose loaded values can still overwrite it.
+    React.useLayoutEffect(() => {
+      if (!profile || loading) return;
+      const status = screen.getByRole('combobox', { name: 'Occupational status' }) as HTMLSelectElement;
+      editorStates.push({
+        populated: status.value === profile.occupational_status,
+        locked: status.matches(':disabled') && (screen.getByRole('button', { name: 'Save background' }) as HTMLButtonElement).disabled,
+      });
+    }, [profile, loading]);
+    return null;
+  }
+  render(<ProfileProvider><ProfileForm /><ReadinessCheck /></ProfileProvider>);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
+  expect(editorStates.length).toBeGreaterThan(0);
+  expect(editorStates.every(state => state.populated || state.locked)).toBe(true);
+  expect(screen.getByRole('combobox', { name: 'Occupational status' })).toHaveValue('student');
+  fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'employed' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
+  await screen.findByText('Profile saved.');
+  expect(saved.occupational_status).toBe('employed');
 });

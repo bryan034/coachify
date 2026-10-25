@@ -31,8 +31,10 @@ export function ProfileForm({ initialSetup = false, onSaved, onCancel }: {
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [initializedSource, setInitializedSource] = useState<string | null>(null);
   const educationSource = JSON.stringify([profile?.occupational_status, profile?.school_category, profile?.education, profile?.education_review_required, profile?.no_previous_education, profile?.employment, profile?.previously_employed]);
   useEffect(() => {
+    setInitializedSource(educationSource);
     if (preserveDraft.current) { preserveDraft.current=false; return; }
     setIndustry(profile?.employment?.industry || ''); setPreviouslyEmployed(profile?.previously_employed ?? null);
     setEmployer(profile?.employment?.employer || ''); setRole(profile?.employment?.role || '');
@@ -88,7 +90,9 @@ export function ProfileForm({ initialSetup = false, onSaved, onCancel }: {
       setError(e instanceof Error?e.message:'Saving failed. Your selections are retained; please retry.');
     } finally {setSaving(false);}
   }
-  const disabled = saving || loading || !authMode || needsSignIn || !profile || !!configError;
+  // Loading the profile and populating the editor commit separately. Keep edits
+  // locked until that population finishes, so it cannot overwrite a new selection.
+  const disabled = saving || loading || initializedSource !== educationSource || !authMode || needsSignIn || !profile || !!configError;
   function changeCategory(value: string) {
     setNoPrevious(value === 'none'); setCategory(value === 'none' ? '' : value as SchoolCategory);
     setExpanded(value && value !== 'none' && value !== category ? value as SchoolCategory : null); setConfirmed(false); setMessage('');

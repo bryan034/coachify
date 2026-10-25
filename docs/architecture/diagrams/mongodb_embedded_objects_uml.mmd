@@ -9,7 +9,8 @@ class CvSkill {
     +Number experience_months?
     +String context?
     +String evidence
-    +String evidence_type?
+    +String original_evidence?
+    +String evidence_type
     +Boolean explicit
 }
 
@@ -48,6 +49,7 @@ class ResearchSource {
     +Date published_date?
     +String role_match?
     +String reliability?
+    +String report_group
 }
 
 class GapResult {
@@ -66,7 +68,7 @@ class cvs {
     +CvSkill[] skills
 }
 
-class career_targets {
+class career_goals {
     +TargetSkill[] skills
 }
 
@@ -81,7 +83,67 @@ class skill_gap_analyses {
 }
 
 cvs *-- CvSkill : embeds
-career_targets *-- TargetSkill : embeds
+career_goals *-- TargetSkill : embeds
 interview_research *-- InterviewSkill : embeds
 interview_research *-- ResearchSource : embeds
 skill_gap_analyses *-- GapResult : embeds
+
+class Generation {
+    +String provider
+    +String model
+    +String prompt_version
+    +String schema_version
+    +Date generated_at
+}
+
+class InputVersions {
+    +ObjectId cv_id
+    +Number cv_version
+    +String extraction_version
+    +Number profile_version
+    +ObjectId career_goal_id
+    +Number career_goal_version
+    +String generation_version
+    +ResearchVersion[] research
+}
+
+class ResearchVersion {
+    +ObjectId id
+    +Number version
+}
+
+career_goals *-- Generation : provenance
+interview_research *-- Generation : provenance
+skill_gap_analyses *-- Generation : provenance
+skill_gap_analyses *-- InputVersions : pins
+InputVersions *-- ResearchVersion : pins
+
+class Answer {
+    +String status [answered|partial|skipped]
+    +String value?
+    +String quote?
+}
+class Turn {
+    +String question
+    +Answer answer
+    +String reply
+}
+class RoleSuggestion {
+    +String role
+    +String field
+    +String rationale
+    +String uncertainty
+}
+class CvContext {
+    +String mode
+    +ObjectId cv_id?
+    +String filename?
+    +Number version?
+    +String extraction_version?
+    +Number profile_version?
+    +String attachment_sha256?
+}
+career_goals *-- Answer : draft answers
+career_goals *-- Turn : draft turns
+career_goals *-- RoleSuggestion : draft suggestions
+career_goals *-- CvContext : optional context

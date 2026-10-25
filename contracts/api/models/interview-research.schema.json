@@ -1,0 +1,408 @@
+{
+  "$defs": {
+    "Generation": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "prompt_version": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "analysis-v1",
+          "default": "analysis-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "prompt_version",
+        "generated_at"
+      ],
+      "title": "Generation",
+      "type": "object"
+    },
+    "InterviewSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_id": {
+          "maxLength": 120,
+          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$",
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "category": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "interview_stage": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interview Stage"
+        },
+        "assessment_type": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assessment Type"
+        },
+        "difficulty": {
+          "default": "unknown",
+          "enum": [
+            "introductory",
+            "intermediate",
+            "advanced",
+            "unknown"
+          ],
+          "title": "Difficulty",
+          "type": "string"
+        },
+        "question_patterns": {
+          "items": {
+            "maxLength": 600,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Question Patterns",
+          "type": "array"
+        },
+        "independent_report_count": {
+          "maximum": 1200,
+          "minimum": 0,
+          "title": "Independent Report Count",
+          "type": "integer"
+        },
+        "source_ids": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "skill_id",
+        "name",
+        "category",
+        "independent_report_count",
+        "source_ids"
+      ],
+      "title": "InterviewSkill",
+      "type": "object"
+    },
+    "ResearchSource": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "employer",
+            "reddit",
+            "glassdoor",
+            "other"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence"
+        },
+        "reported_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reported Date"
+        },
+        "published_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published Date"
+        },
+        "role_match": {
+          "default": "unknown",
+          "enum": [
+            "exact",
+            "related",
+            "unknown"
+          ],
+          "title": "Role Match",
+          "type": "string"
+        },
+        "reliability": {
+          "default": "unverified",
+          "enum": [
+            "official",
+            "anecdotal",
+            "unverified"
+          ],
+          "title": "Reliability",
+          "type": "string"
+        },
+        "report_group": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Report Group",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "platform",
+        "url",
+        "report_group"
+      ],
+      "title": "ResearchSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "company": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Company"
+    },
+    "field": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Field",
+      "type": "string"
+    },
+    "role": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Role",
+      "type": "string"
+    },
+    "location": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Location"
+    },
+    "seniority_level": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Seniority Level"
+    },
+    "_id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "analysis-v1",
+      "default": "analysis-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "skill_mapping_version": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Skill Mapping Version",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "skills": {
+      "items": {
+        "$ref": "#/$defs/InterviewSkill"
+      },
+      "maxItems": 200,
+      "title": "Skills",
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/ResearchSource"
+      },
+      "maxItems": 100,
+      "title": "Sources",
+      "type": "array"
+    },
+    "research_status": {
+      "enum": [
+        "pending",
+        "processing",
+        "succeeded",
+        "no_findings",
+        "failed"
+      ],
+      "title": "Research Status",
+      "type": "string"
+    },
+    "last_researched_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Researched At"
+    },
+    "generation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Generation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "field",
+    "role",
+    "_id",
+    "version",
+    "skill_mapping_version",
+    "created_at",
+    "updated_at",
+    "research_status"
+  ],
+  "title": "InterviewResearch",
+  "type": "object"
+}

@@ -3,8 +3,8 @@
 | Service | Story groups | Owned data |
 |---|---|---|
 | Profile | P01-P16; profile corrections following ingestion | Accounts/email verification/revocable sessions, canonical onboarding and education, experiences, personal contributions, capabilities, declared deadline/capacity/temporary availability, profile versions |
-| CV | C01-C08 | Ingestion state, provisional extraction, clarification questions/answers, processing operations |
-| Career | J01-J05; G01-G07 | Target job descriptions, requirements, assessment versions, capability gaps |
+| CV | C01-C09; SCRUM-310 | cvs, ingestion state, provisional extraction, clarification questions/answers, processing operations |
+| Career | J01-J13; G01-G07; SCRUM-282/310 | career_goals, interview_research, skill_gap_analyses, private exploration/operation state; raw JD text stays transient |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Consumed planning-input snapshots, milestones, tasks, progress history, proposed/applied revisions |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
 | Review | A01 orchestration; S01-S06 | Manual/scheduled review state, pace analysis, schedules, approval preferences |
@@ -18,7 +18,7 @@
 - Dashboard -> Roadmap/Career/Review: current progress and dated pace analysis.
 - Review -> Profile/Career/Roadmap: read inputs, request a revision, request authorised application.
 
-Records are read through APIs, never another service's collections. Public endpoints verify ownership. Internal calls require authenticated service identities and owner context. P07/P08 profile ownership and MongoDB access are implemented; the other service integrations remain planned.
+Records are read through APIs, never another service's collections. Public endpoints verify ownership. Internal calls require authenticated service identities and owner context. P07/P08 profile ownership and MongoDB access are implemented; CV/Career data contracts and the internal AI adapter are implemented; the other service API integrations remain planned.
 
 ## P04–P06 ownership decision
 
