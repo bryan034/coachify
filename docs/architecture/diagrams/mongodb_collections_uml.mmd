@@ -49,6 +49,15 @@ class career_goals {
     +String[] interests
     +String[] preferences
     +TargetSkill[] skills
+    +NonSkillRequirement[] non_skill_requirements
+    +String summary?
+    +String[] responsibilities
+    +ReviewContent content? [review]
+    +ReviewContent baseline? [review]
+    +Map metadata_origins? [review]
+    +Boolean requirements_need_review
+    +ObjectId source_review_id?
+    +Number source_review_version?
     +String requirements_source
     +String generation_version
     +Generation generation
@@ -104,4 +113,4 @@ career_goals "1" --> "0..*" skill_gap_analyses : evaluated in
 interview_research "0..*" --> "0..*" skill_gap_analyses : referenced by
 
 note for users "Logical authority: existing Profile accounts; no collection rename or auth migration."
-note for career_goals "Confirmed goals are immutable; versioned exploration drafts share this collection. Draft role/field may be unknown; confirmed role/field are required. Drafts retain adaptive topic context, current focus/question, total_turns and latest 30 turns. Structured progress and bounded evidence only; no raw JD/CV text."
+note for career_goals "Confirmed goals are immutable; versioned exploration drafts and requirement_review records share this collection. Review content/baseline are structured values only; immutable goals reference the exact source review version. Draft role/field may be unknown; confirmed role/field are required. Drafts retain adaptive topic context, current focus/question, total_turns and latest 30 turns. Structured progress and bounded evidence only; no raw JD/CV text."

@@ -16,7 +16,7 @@ webfont files and is not bundled.
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
 | `/career-goal` | Choose exploration or prepare a transient JD preview from text, URL or a document |
-| `/career-goal/chat` | One agent conversation page: adaptive J08 exploration/J09 goal review, or extracted JD skills with clarification and proposed additions |
+| `/career-goal/chat` | One agent conversation page: adaptive J08 exploration/J09 goal review, or saved JD role/skill/condition reviews with clarification, editing and confirmation |
 | `/onboarding` | P13/P14 full-screen question-by-question setup, ending with Enter Coachify |
 | `/profile` | Occupation, education and employment summary with inline Edit profile, Save changes and Cancel |
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
@@ -72,10 +72,18 @@ Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
 `src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
 content stays in the account-scoped Career route provider, never browser storage.
 **Extract career goal** carries a prepared JD into the shared chat page and calls
-the configured AI. Users can clarify extracted requirements, remove items or apply
-proposed additions; JD facts and suggestions stay distinct. This temporary review
-is not a published goal. Selecting a document automatically reads it, with retry
-after failure. Refresh requires re-adding its source. Exploration uses live agent follow-ups, keeps
+the configured AI. The review shows role context, responsibilities, conditions and
+skills with supporting summaries. Subsequent chat sends this structured context
+and recent turns instead of resending the original JD. Users can ask about the job,
+clarify requirements, remove items or apply proposed additions; stated requirements,
+inferred skills and user additions stay distinct. Extracted reviews now save to
+MongoDB and reopen using `?review={id}` or the Career Goal saved-review list.
+Edit review is a single-column form with Save, Cancel, Reset, skill/condition
+reclassification and shared AND/OR groups. Chat uses the saved ID/version; the
+backend loads its authoritative context. Explicit confirmation selects the goal,
+including its reviewed skills and conditions. Changing role/context requires
+requirements acknowledgement. Unknown mappings keep gap analysis pending. Selecting a document automatically reads it, with retry
+after failure. Refresh restores saved structured reviews; the original source must be re-added only for a fresh extraction. Exploration uses live agent follow-ups, keeps
 partial answers unresolved, and restores saved conversation context by draft ID.
 Confirming a suggested direction is explicit; its skill requirements remain pending.
 FastAPI owns validation, resource ownership and database writes. See

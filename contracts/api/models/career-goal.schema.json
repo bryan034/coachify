@@ -54,8 +54,10 @@
         "category": {
           "enum": [
             "qualification",
+            "experience",
             "eligibility",
             "location",
+            "work_condition",
             "other"
           ],
           "title": "Category",
@@ -104,6 +106,71 @@
           ],
           "title": "Group Operator",
           "type": "string"
+        },
+        "origin": {
+          "default": "employer",
+          "enum": [
+            "employer",
+            "generated_guidance",
+            "user_declaration"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "correction": {
+          "default": "extracted",
+          "enum": [
+            "extracted",
+            "user"
+          ],
+          "title": "Correction",
+          "type": "string"
+        },
+        "source_urls": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Source Urls",
+          "type": "array"
+        },
+        "minimum_months": {
+          "anyOf": [
+            {
+              "maximum": 1200,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum Months"
+        },
+        "maximum_months": {
+          "anyOf": [
+            {
+              "maximum": 1200,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Months"
+        },
+        "completion_status": {
+          "default": "unspecified",
+          "enum": [
+            "completed",
+            "in_progress",
+            "unspecified"
+          ],
+          "title": "Completion Status",
+          "type": "string"
         }
       },
       "required": [
@@ -120,9 +187,63 @@
       "additionalProperties": false,
       "properties": {
         "skill_id": {
-          "maxLength": 120,
-          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$",
-          "title": "Skill Id",
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Id"
+        },
+        "item_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item Id"
+        },
+        "group_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group Id"
+        },
+        "group_operator": {
+          "default": "all",
+          "enum": [
+            "all",
+            "any"
+          ],
+          "title": "Group Operator",
+          "type": "string"
+        },
+        "correction": {
+          "default": "extracted",
+          "enum": [
+            "extracted",
+            "user"
+          ],
+          "title": "Correction",
           "type": "string"
         },
         "name": {
@@ -225,7 +346,6 @@
         }
       },
       "required": [
-        "skill_id",
         "name",
         "category",
         "priority",
@@ -382,6 +502,30 @@
       "title": "Non Skill Requirements",
       "type": "array"
     },
+    "summary": {
+      "anyOf": [
+        {
+          "maxLength": 600,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary"
+    },
+    "responsibilities": {
+      "items": {
+        "maxLength": 600,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Responsibilities",
+      "type": "array"
+    },
     "requirements_source": {
       "enum": [
         "pasted_jd",
@@ -442,6 +586,36 @@
       ],
       "default": null,
       "title": "Exploration Draft Version"
+    },
+    "source_review_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Review Id"
+    },
+    "source_review_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Review Version"
+    },
+    "requirements_need_review": {
+      "default": false,
+      "title": "Requirements Need Review",
+      "type": "boolean"
     },
     "source_cv_id": {
       "anyOf": [

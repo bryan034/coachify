@@ -95,7 +95,11 @@ class CvSkill(Contract):
 
 
 class TargetSkill(Contract):
-    skill_id: SkillId
+    skill_id: SkillId | None = None
+    item_id: Text | None = None
+    group_id: Text | None = None
+    group_operator: Literal['all', 'any'] = 'all'
+    correction: Literal['extracted', 'user'] = 'extracted'
     name: Text
     category: Text
     priority: Priority
@@ -108,19 +112,31 @@ class TargetSkill(Contract):
 
     @model_validator(mode='after')
     def grounded_employer(self):
-        if self.origin == 'employer' and (not self.evidence or self.priority == 'suggested'):
+        if self.origin == 'employer' and self.priority == 'suggested':
             raise ValueError('Employer requirements need evidence and stated priority.')
         return self
 
 
 class NonSkillRequirement(Contract):
     requirement_id: Text
-    category: Literal['qualification', 'eligibility', 'location', 'other']
+    category: Literal['qualification', 'experience', 'eligibility', 'location', 'work_condition', 'other']
     description: Evidence
     priority: Priority
     evidence: Evidence
     group_id: Text | None = None
     group_operator: Literal['all', 'any'] = 'all'
+    origin: Literal['employer', 'generated_guidance', 'user_declaration'] = 'employer'
+    correction: Literal['extracted', 'user'] = 'extracted'
+    source_urls: list[SourceUrl] = Field(default_factory=list, max_length=10)
+    minimum_months: Count | None = None
+    maximum_months: Count | None = None
+    completion_status: Literal['completed', 'in_progress', 'unspecified'] = 'unspecified'
+
+    @model_validator(mode='after')
+    def ordered_range(self):
+        if self.minimum_months is not None and self.maximum_months is not None and self.minimum_months > self.maximum_months:
+            raise ValueError('Minimum duration exceeds maximum duration.')
+        return self
 
 
 class ResearchSource(Contract):
@@ -235,12 +251,17 @@ class CareerGoal(Document):
     preferences: list[Text] = Field(default_factory=list, max_length=30)
     skills: list[TargetSkill] = Field(default_factory=list, max_length=200)
     non_skill_requirements: list[NonSkillRequirement] = Field(default_factory=list, max_length=100)
+    summary: Evidence | None = None
+    responsibilities: list[Evidence] = Field(default_factory=list, max_length=20)
     requirements_source: Literal['pasted_jd', 'url_jd', 'document_jd', 'career_exploration']
     generation_version: Text
     generation: Generation | None = None
     readiness: Literal['ready', 'pending'] = 'ready'
     exploration_draft_id: DomainId | None = None
     exploration_draft_version: Version | None = None
+    source_review_id: DomainId | None = None
+    source_review_version: Version | None = None
+    requirements_need_review: bool = False
     source_cv_id: DomainId | None = None
     source_cv_version: Version | None = None
     source_extraction_version: Text | None = None
@@ -249,7 +270,7 @@ class CareerGoal(Document):
     @model_validator(mode='after')
     def scenario(self):
         unique_skills(self.skills)
-        if self.readiness == 'ready' and (not self.skills or self.generation is None):
+        if self.readiness == 'ready' and (not self.skills or self.generation is None or self.requirements_need_review or any(s.skill_id is None for s in self.skills)):
             raise ValueError('Ready goals need validated skills and generation provenance.')
         if (self.target_type == 'career_exploration') != (self.requirements_source == 'career_exploration'):
             raise ValueError('Target type and requirements source disagree.')
@@ -264,7 +285,8 @@ def canonical_url(url):
 
 
 def unique_skills(skills):
-    if len({s.skill_id for s in skills}) != len(skills):
+    known = [s.skill_id for s in skills if s.skill_id is not None]
+    if len(set(known)) != len(known):
         raise ValueError('Duplicate canonical skill IDs.')
 
 
@@ -375,7 +397,7 @@ def mongo_document(model: Document):
         return value
     data = bson_dates(model.model_dump(by_alias=True, mode='python'))
     data['_id'] = ObjectId(model.id)
-    for name in ('cv_id', 'career_goal_id', 'selected_career_goal_id', 'result_id', 'exploration_draft_id', 'source_cv_id'):
+    for name in ('cv_id', 'career_goal_id', 'selected_career_goal_id', 'result_id', 'exploration_draft_id', 'source_review_id', 'source_cv_id'):
         if data.get(name):
             data[name] = ObjectId(data[name])
     if 'research_ids' in data:

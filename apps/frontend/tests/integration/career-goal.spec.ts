@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {createLocalAccount,fillCurrentEmployment} from './account-helpers';
 test('Career previews validate real sessions, read a document and discard source on reload',async({page})=>{
- await createLocalAccount(page,'Synthetic Career user');
+ const account=await createLocalAccount(page,'Synthetic Career user');
  await page.getByRole('button',{name:'Employed',exact:true}).click();
  await fillCurrentEmployment(page);
  await page.getByRole('button',{name:'No applicable previous education'}).click();
@@ -16,11 +16,18 @@ test('Career previews validate real sessions, read a document and discard source
  await page.getByRole('button',{name:'Import job page'}).click();await expect(page.getByRole('tabpanel').getByRole('alert')).toContainText('Private, local and internal');
  await page.getByRole('tab',{name:'Paste description'}).click();await page.getByRole('textbox',{name:'Job description',exact:true}).fill(source);
  const stored=await page.evaluate(()=>JSON.stringify([Object.entries(localStorage),Object.entries(sessionStorage)]));expect(stored).not.toContain('Synthetic analyst');
+ const extraction=page.waitForResponse(response=>response.url().endsWith('/api/v1/career/jd/extract')&&response.request().method()==='POST');
  await page.getByRole('button',{name:'Extract career goal'}).click();
  await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
- await expect(page.getByRole('log')).toContainText('Let’s review the skills');
+ const response=await extraction;
+ expect(response.status()).toBe(503);
+ expect(await response.json()).toMatchObject({code:'not_configured'});
  await expect(page.getByRole('log').getByRole('alert')).toContainText('AI is disabled');
  await expect(page.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Retry extraction',exact:true})).toBeEnabled();
+ const goals=await account.get('/api/v1/career/goals');
+ expect(goals.ok()).toBe(true);
+ expect((await goals.json()).reviews).toEqual([]);
  await page.reload();await expect(page.getByRole('log')).toContainText('no longer available');
  const signedOut=await page.request.post('/api/v1/career/imports/url',{data:{url:'https://example.test/job'}});expect(signedOut.status()).toBe(401);
 });

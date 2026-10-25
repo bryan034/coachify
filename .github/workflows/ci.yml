@@ -142,6 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      AI_ENABLED: 'false'
       APP_ENV: development
       AUTH_MODE: local_test
       COMPOSE_PROFILES: development
@@ -173,6 +174,14 @@ jobs:
         env:
           PROFILE_E2E_BASE_URL: http://localhost:8081
           MAILPIT_BASE_URL: http://localhost:8026
+      - name: Upload local integration test artifacts
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: local-ui-integration-results
+          path: apps/frontend/test-results/integration/
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Service logs on failure
         if: ${{ failure() }}
         run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml logs --tail=100

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Coachify Career API",
-    "description": "Transient JD previews, optional-CV conversational exploration and explicit structured goal persistence. Temporary JD skill extraction and review do not publish goals.",
+    "description": "Transient JD previews, optional-CV conversational exploration and explicit structured goal persistence. JD reviews persist structured requirements; confirmation explicitly selects the reviewed goal.",
     "version": "0.2.0"
   },
   "paths": {
@@ -300,19 +300,35 @@
     "/api/v1/career/jd/extract": {
       "post": {
         "tags": [
-          "J02/J03 transient skill review"
+          "J02\u2013J04 extraction and chat"
         ],
         "summary": "Extract",
         "operationId": "extract_api_v1_career_jd_extract_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/JDSource"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -335,18 +351,13 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/career/jd/messages": {
       "post": {
         "tags": [
-          "J02/J03 transient skill review"
+          "J02\u2013J04 extraction and chat"
         ],
         "summary": "Message",
         "operationId": "message_api_v1_career_jd_messages_post",
@@ -389,6 +400,119 @@
         ]
       }
     },
+    "/api/v1/career/goals/{goal_id}": {
+      "get": {
+        "tags": [
+          "J02\u2013J04 requirement review"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_career_goals__goal_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JDExtractionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/review": {
+      "patch": {
+        "tags": [
+          "J02\u2013J04 requirement review"
+        ],
+        "summary": "Save",
+        "operationId": "save_api_v1_career_goals__goal_id__review_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveReview"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JDExtractionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/career/imports/url": {
       "post": {
         "tags": [
@@ -412,7 +536,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Preview"
+                  "$ref": "#/components/schemas/JDPreview"
                 }
               }
             }
@@ -538,7 +662,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Preview"
+                  "$ref": "#/components/schemas/JDPreview"
                 }
               }
             }
@@ -769,6 +893,74 @@
             ],
             "title": "Company"
           },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "seniority_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seniority Level"
+          },
+          "job_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Url"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "responsibilities": {
+            "items": {
+              "type": "string",
+              "maxLength": 600,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Responsibilities"
+          },
+          "non_skill_requirements": {
+            "items": {
+              "$ref": "#/components/schemas/NonSkillRequirement"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Non Skill Requirements"
+          },
           "skills": {
             "items": {
               "$ref": "#/components/schemas/ReviewSkill"
@@ -790,53 +982,91 @@
       },
       "JDExtractionResult": {
         "properties": {
+          "review_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Review Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "specific_job",
+              "career_exploration"
+            ],
+            "title": "Target Type"
+          },
           "extraction": {
             "$ref": "#/components/schemas/JDExtraction"
           },
+          "baseline": {
+            "$ref": "#/components/schemas/JDExtraction"
+          },
+          "metadata_origins": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "user"
+              ]
+            },
+            "type": "object",
+            "title": "Metadata Origins"
+          },
+          "requirements_need_review": {
+            "type": "boolean",
+            "title": "Requirements Need Review"
+          },
+          "is_confirmed": {
+            "type": "boolean",
+            "title": "Is Confirmed"
+          },
           "generation": {
-            "$ref": "#/components/schemas/Generation"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Generation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "review_id",
+          "version",
+          "target_type",
           "extraction",
+          "baseline",
+          "metadata_origins",
+          "requirements_need_review",
+          "is_confirmed",
           "generation"
         ],
         "title": "JDExtractionResult"
       },
       "JDMessage": {
         "properties": {
-          "text": {
+          "review_id": {
             "type": "string",
-            "maxLength": 20000,
-            "minLength": 1,
-            "title": "Text"
+            "title": "Review Id"
           },
-          "source_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Url"
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
           },
           "message": {
             "type": "string",
             "maxLength": 600,
             "minLength": 1,
             "title": "Message"
-          },
-          "skills": {
-            "items": {
-              "$ref": "#/components/schemas/ReviewSkill"
-            },
-            "type": "array",
-            "maxItems": 60,
-            "title": "Skills"
           },
           "conversation": {
             "items": {
@@ -850,9 +1080,9 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "text",
-          "message",
-          "skills"
+          "review_id",
+          "expected_version",
+          "message"
         ],
         "title": "JDMessage"
       },
@@ -860,7 +1090,7 @@
         "properties": {
           "reply": {
             "type": "string",
-            "maxLength": 600,
+            "maxLength": 4000,
             "minLength": 1,
             "title": "Reply"
           },
@@ -870,7 +1100,8 @@
                 "items": {
                   "$ref": "#/components/schemas/ReviewSkill"
                 },
-                "type": "array"
+                "type": "array",
+                "maxItems": 60
               },
               {
                 "type": "null"
@@ -891,7 +1122,7 @@
         "properties": {
           "text": {
             "type": "string",
-            "maxLength": 20000,
+            "maxLength": 8000,
             "minLength": 1,
             "title": "Text"
           },
@@ -905,6 +1136,16 @@
               }
             ],
             "title": "Source Url"
+          },
+          "source_kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "url",
+              "document"
+            ],
+            "title": "Source Kind",
+            "default": "text"
           }
         },
         "additionalProperties": false,
@@ -913,6 +1154,144 @@
           "text"
         ],
         "title": "JDSource"
+      },
+      "NonSkillRequirement": {
+        "properties": {
+          "requirement_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Requirement Id"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "qualification",
+              "experience",
+              "eligibility",
+              "location",
+              "work_condition",
+              "other"
+            ],
+            "title": "Category"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "required",
+              "preferred",
+              "suggested"
+            ],
+            "title": "Priority"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Evidence"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "group_operator": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Group Operator",
+            "default": "all"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "employer",
+              "generated_guidance",
+              "user_declaration"
+            ],
+            "title": "Origin",
+            "default": "employer"
+          },
+          "correction": {
+            "type": "string",
+            "enum": [
+              "extracted",
+              "user"
+            ],
+            "title": "Correction",
+            "default": "extracted"
+          },
+          "source_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Source Urls"
+          },
+          "minimum_months": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1200.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Months"
+          },
+          "maximum_months": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1200.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maximum Months"
+          },
+          "completion_status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "in_progress",
+              "unspecified"
+            ],
+            "title": "Completion Status",
+            "default": "unspecified"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requirement_id",
+          "category",
+          "description",
+          "priority",
+          "evidence"
+        ],
+        "title": "NonSkillRequirement"
       },
       "Preview": {
         "properties": {
@@ -973,7 +1352,7 @@
           },
           "content": {
             "type": "string",
-            "maxLength": 600,
+            "maxLength": 4000,
             "minLength": 1,
             "title": "Content"
           }
@@ -988,6 +1367,71 @@
       },
       "ReviewSkill": {
         "properties": {
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "skill_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Id"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "group_operator": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Group Operator",
+            "default": "all"
+          },
+          "correction": {
+            "type": "string",
+            "enum": [
+              "extracted",
+              "user"
+            ],
+            "title": "Correction",
+            "default": "extracted"
+          },
+          "source_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Source Urls"
+          },
           "name": {
             "type": "string",
             "maxLength": 160,
@@ -1189,6 +1633,29 @@
             "type": "boolean",
             "title": "Replace Current",
             "default": false
+          },
+          "review_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Id"
+          },
+          "expected_review_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Review Version"
           }
         },
         "additionalProperties": false,
@@ -1200,6 +1667,51 @@
           "field"
         ],
         "title": "SaveGoal"
+      },
+      "SaveReview": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JDExtraction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "metadata",
+                  "all"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reset"
+          },
+          "acknowledge_context": {
+            "type": "boolean",
+            "title": "Acknowledge Context",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "SaveReview"
       },
       "SendAnswer": {
         "properties": {
@@ -1341,6 +1853,53 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "JDPreview": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "url",
+              "document"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "notices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text",
+          "source_name"
+        ],
+        "title": "JDPreview"
       }
     },
     "securitySchemes": {

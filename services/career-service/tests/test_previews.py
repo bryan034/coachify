@@ -312,3 +312,43 @@ def test_redirect_destination_robots_is_checked_before_job_content():
     with patch('socket.getaddrinfo',public_dns),pytest.raises(ValueError,match='restricts'):
         job_url.import_url('https://example.test/job',fetch)
     assert requested==['https://example.test/robots.txt','https://example.test/job','https://other.test/robots.txt']
+
+
+def test_jobposting_retains_metadata_outside_description_for_semantic_extraction():
+    import json
+    job={'@type':'JobPosting','title':'Junior Data Analyst','description':'<p>Analyse reports with SQL.</p>',
+         'hiringOrganization':{'name':'Example Analytics'},
+         'jobLocation':[{'address':{'addressLocality':'Singapore','addressCountry':{'name':'Singapore'}}},
+                        {'address':{'addressLocality':'London','addressCountry':'GB'}}],
+         'jobLocationType':'TELECOMMUTE','employmentType':'FULL_TIME',
+         'qualifications':'<p>Degree preferred.</p>','skills':['SQL','Communication']}
+    text=job_url.extract_page(('<script type="application/ld+json">'+json.dumps(job)+'</script>').encode())
+    assert 'Company: Example Analytics' in text
+    assert 'Singapore' in text and 'London, GB' in text
+    assert 'Work arrangement: TELECOMMUTE' in text and 'Employment type: FULL_TIME' in text
+    assert 'Qualifications: Degree preferred.' in text and 'Skills: SQL; Communication' in text
+    assert 'Analyse reports with SQL.' in text and '<p>' not in text
+
+
+@pytest.mark.parametrize('length,status',[(8000,200),(8001,422)])
+def test_jd_character_cap_does_not_reduce_temporary_cv_limit(length,status):
+    def processor(*args): return {'kind':'url','source_name':'Synthetic job','text':'🧭'*length,'notices':[]}
+    with fixture_client(processor) as client:
+        result=client.post(BASE+'/document',files={'file':('role.txt',b'synthetic','text/plain')},headers=AUTH)
+        assert result.status_code==status
+        cv=client.post('/api/v1/career/explorations/cv/document',files={'file':('cv.txt',b'synthetic','text/plain')},headers=AUTH)
+        assert cv.status_code==200
+        result=client.post(BASE+'/url',json={'url':'https://example.test/job'},headers=AUTH)
+        assert result.status_code==status
+
+
+@pytest.mark.parametrize('scope',['user','provider'])
+def test_rate_error_exposes_only_safe_origin_and_cooldown(scope):
+    from app.ai.adapter import AIError
+    def processor(*args): raise AIError('rate_limited',True,limit_scope=scope,retry_after=37)
+    with fixture_client(processor) as client:
+        response=client.post(BASE+'/url',json={'url':'https://example.test/job'},headers=AUTH)
+        assert response.status_code==429
+        assert response.json()['limit_scope']==scope
+        assert response.json()['retry_after']==37
+        assert response.headers['Retry-After']=='37'

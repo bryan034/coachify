@@ -1,0 +1,14 @@
+{
+  "version": "skills-v1",
+  "skills": [
+    {"id":"language.sql","names":["SQL","Structured Query Language"],"categories":["Technical","Language","Programming","Programming language"]},
+    {"id":"language.python","names":["Python"],"categories":["Technical","Language","Programming","Programming language"]},
+    {"id":"language.java","names":["Java"],"categories":["Technical","Language","Programming","Programming language"]},
+    {"id":"language.javascript","names":["JavaScript"],"categories":["Technical","Language","Programming","Programming language"]},
+    {"id":"tool.excel","names":["Excel","Microsoft Excel"],"categories":["Technical","Tool","Software","Productivity"]},
+    {"id":"tool.git","names":["Git"],"categories":["Technical","Tool","Version control"]},
+    {"id":"interpersonal.communication","names":["Communication","Communication skills"],"categories":["Interpersonal","Soft skill","Soft skills","Communication"]},
+    {"id":"interpersonal.teamwork","names":["Teamwork","Team collaboration"],"categories":["Interpersonal","Soft skill","Soft skills"]},
+    {"id":"analytical.problem_solving","names":["Problem solving","Problem-solving"],"categories":["Analytical","Interpersonal","Soft skill","Soft skills"]}
+  ]
+}

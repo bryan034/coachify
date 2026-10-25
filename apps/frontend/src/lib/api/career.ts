@@ -27,8 +27,8 @@ export type GoalDraft = {
 export type SavedGoal = { _id:string; version:number; target_type:'specific_job'|'career_exploration';role:string;field:string;
  company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
  skills:{name:string;priority:string;origin:string}[];interests:string[];preferences:string[];readiness:'pending'|'ready';
- exploration_draft_id:string|null;exploration_draft_version:number|null };
-export type CurrentGoal = {selection_version:number;goal:SavedGoal|null;dependent_results_need_review:boolean};
+ source_review_id?:string|null;source_review_version?:number|null;requirements_need_review?:boolean; exploration_draft_id:string|null;exploration_draft_version:number|null };
+export type CurrentGoal = {review_selection?:{id:string;version:number}|null;selection_version:number;goal:SavedGoal|null;dependent_results_need_review:boolean};
 export type CareerContext = {cvs:{id:string;filename:string;status:string;version:number;extraction_version:string}[];cv_service_available:boolean;ai_available:boolean};
 export async function careerApi<T>(path:string,token:string, options:RequestInit={}):Promise<T>{
  const response=await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/career${path}`,{
@@ -46,6 +46,9 @@ export async function importExplorationCV(file:File,token:string,signal:AbortSig
  return careerApi<CareerPreview>('/explorations/cv/document',token,{method:'POST',body,signal});
 }
 
-export type ReviewSkill={name:string;category:string;priority:'required'|'preferred'|'suggested';required_proficiency?:string|null;required_experience_months?:number|null;context?:string|null;evidence?:string|null;origin:'employer'|'generated_guidance'|'user_declaration'};
-export type JDExtraction={role:string|null;field:string|null;company:string|null;skills:ReviewSkill[]};
-export type JDReview={extraction:JDExtraction;generation:unknown;turns:{message:string;reply:string}[];proposals:ReviewSkill[]|null};
+export type ReviewSkill={item_id?:string|null;skill_id?:string|null;group_id?:string|null;group_operator?:'all'|'any';correction?:'extracted'|'user';source_urls?:string[];name:string;category:string;priority:'required'|'preferred'|'suggested';required_proficiency?:string|null;required_experience_months?:number|null;context?:string|null;evidence?:string|null;origin:'employer'|'generated_guidance'|'user_declaration'};
+export type ReviewCondition={requirement_id:string;category:string;description:string;priority:string;evidence:string;group_id:string|null;group_operator:'all'|'any';origin?:'employer'|'generated_guidance'|'user_declaration';correction?:'extracted'|'user';source_urls?:string[];minimum_months?:number|null;maximum_months?:number|null;completion_status?:'completed'|'in_progress'|'unspecified'};
+export type JDExtraction={role:string|null;field:string|null;company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
+ summary:string|null;responsibilities:string[];non_skill_requirements:ReviewCondition[];skills:ReviewSkill[]};
+export type SavedReview={review_id:string;version:number;target_type:'specific_job'|'career_exploration';extraction:JDExtraction;baseline:JDExtraction;metadata_origins:Record<string,'extracted'|'user'>;requirements_need_review:boolean;is_confirmed:boolean;generation:unknown};
+export type JDReview=SavedReview&{turns:{message:string;reply:string}[];proposals:ReviewSkill[]|null};

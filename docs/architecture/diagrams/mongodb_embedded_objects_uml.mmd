@@ -15,7 +15,11 @@ class CvSkill {
 }
 
 class TargetSkill {
-    +String skill_id
+    +String item_id?
+    +String skill_id? [null_while_pending]
+    +String group_id?
+    +String group_operator [all|any]
+    +String correction [extracted|user]
     +String name
     +String category
     +String priority
@@ -70,6 +74,38 @@ class cvs {
 
 class career_goals {
     +TargetSkill[] skills
+    +NonSkillRequirement[] non_skill_requirements
+    +ReviewContent content? [review]
+    +ReviewContent baseline? [review]
+}
+
+class NonSkillRequirement {
+    +String requirement_id
+    +String category
+    +String description
+    +String priority
+    +String evidence
+    +String origin
+    +String correction [extracted|user]
+    +String[] source_urls
+    +String group_id?
+    +String group_operator [all|any]
+    +Number minimum_months?
+    +Number maximum_months?
+    +String completion_status
+}
+
+class ReviewContent {
+    +String role?
+    +String field?
+    +String company?
+    +String location?
+    +String seniority_level?
+    +String job_url?
+    +String summary?
+    +String[] responsibilities
+    +TargetSkill[] skills
+    +NonSkillRequirement[] non_skill_requirements
 }
 
 class interview_research {
@@ -84,6 +120,10 @@ class skill_gap_analyses {
 
 cvs *-- CvSkill : embeds
 career_goals *-- TargetSkill : embeds
+career_goals *-- NonSkillRequirement : embeds
+career_goals *-- ReviewContent : draft content and baseline
+ReviewContent *-- TargetSkill
+ReviewContent *-- NonSkillRequirement
 interview_research *-- InterviewSkill : embeds
 interview_research *-- ResearchSource : embeds
 skill_gap_analyses *-- GapResult : embeds

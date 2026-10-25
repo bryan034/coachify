@@ -137,13 +137,19 @@ class SaveGoal(Contract):
     seniority_level: Text | None = None
     job_url: SourceUrl | None = None
     replace_current: bool = False
+    review_id: DomainId | None = None
+    expected_review_version: int | None = Field(default=None, strict=True, ge=1)
     # Skills/provenance are server-owned; later J03/J10 workers supply them.
 
     @model_validator(mode='after')
     def draft_version(self):
+        if (self.review_id is None) != (self.expected_review_version is None):
+            raise ValueError('A review reference needs its expected version.')
+        if self.review_id and self.draft_id:
+            raise ValueError('Choose a review or an exploration draft.')
         if (self.draft_id is None) != (self.expected_draft_version is None):
             raise ValueError('A draft reference needs its expected version.')
-        if self.target_type == 'career_exploration' and self.draft_id is None:
+        if self.target_type == 'career_exploration' and self.draft_id is None and self.review_id is None:
             raise ValueError('Review an exploration draft before confirming.')
         return self
 

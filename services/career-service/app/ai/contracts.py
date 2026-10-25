@@ -2,14 +2,14 @@
 from typing import Literal
 from pydantic import Field, model_validator
 from app.schemas.goals import ExplorationOutput
-from app.schemas.jd import JDExtraction, JDReply
+from app.schemas.jd import ChatText, JDExtraction, JDReply
 from app.schemas.analysis import (Contract, Evidence, GapResult, InputVersions, InterviewSkill,
     NonSkillRequirement, ResearchContext, ResearchSource, TargetSkill, Text, SkillId, CvSkill, SourceUrl)
 
 
 class Message(Contract):
     role: Literal['user', 'assistant']
-    content: Evidence
+    content: ChatText
 
 
 class TargetOutput(Contract):
@@ -37,8 +37,8 @@ class GapOutput(Contract):
 
 
 class AIInput(Contract):
-    stage: Literal['extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat']
-    source_text: str | None = Field(default=None, min_length=1, max_length=20000, repr=False)
+    stage: Literal['extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat', 'jd_edit']
+    source_text: str | None = Field(default=None, min_length=1, max_length=8000, repr=False)
     conversation: list[Message] = Field(default_factory=list, max_length=30, repr=False)
     # Callers build this from authenticated, approved structured snapshots.
     context: str = Field(default='', max_length=40000, repr=False)
@@ -53,12 +53,14 @@ class AIInput(Contract):
 
     @model_validator(mode='after')
     def input_for_stage(self):
-        if self.stage in ('extraction','jd_extraction','jd_chat') and not self.source_text:
+        if self.stage in ('extraction','jd_extraction') and not self.source_text:
             raise ValueError('Extraction requires transient JD text.')
-        if self.stage not in ('extraction','jd_extraction','jd_chat') and self.source_text is not None:
-            raise ValueError('Raw JD text is only accepted by transient JD extraction/review stages.')
-        if self.stage == 'chat' and not self.conversation:
+        if self.stage not in ('extraction','jd_extraction') and self.source_text is not None:
+            raise ValueError('Raw JD text is only accepted by extraction stages.')
+        if self.stage in ('chat', 'jd_chat', 'jd_edit') and not self.conversation:
             raise ValueError('Chat requires a conversation.')
+        if self.stage in ('jd_chat', 'jd_edit') and not self.context:
+            raise ValueError('JD chat requires extracted career-goal context.')
         if self.stage == 'gap_analysis' and self.versions is None:
             raise ValueError('Gap analysis requires pinned input versions.')
         if self.stage == 'research' and (self.conversation or self.context or self.cv_skills or self.target_skills or self.interview_skills or self.source_urls or self.versions or not self.public_context):

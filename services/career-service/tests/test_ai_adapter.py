@@ -86,7 +86,7 @@ def test_malformed_or_injected_model_output_never_publishes(documents, defect):
 
 
 @pytest.mark.parametrize('status,code,attempts', [(401,'provider_auth',1), (400,'provider_configuration',1),
-    (429,'rate_limited',2), (503,'unavailable',2)])
+    (429,'rate_limited',1), (503,'unavailable',2)])
 def test_provider_errors_are_bounded_and_do_not_leak_content(status, code, attempts):
     async def invoke():
         calls=[]
@@ -154,6 +154,70 @@ def test_rate_and_context_limits_do_not_call_provider():
     asyncio.run(invoke())
 
 
+def test_default_rate_limit_allows_ten_operations_per_user_per_minute():
+    async def invoke():
+        calls=[]
+        def handler(req):
+            calls.append(req)
+            return response({'reply':'Hi'})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter=AIAdapter(settings(),client)
+            request=AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}])
+            for _ in range(10):
+                await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
+            with pytest.raises(AIError,match='rate_limited') as caught:
+                await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
+            assert caught.value.limit_scope=='user'
+            assert len(calls)==10
+    asyncio.run(invoke())
+
+
+def test_oversized_request_trims_history_and_context_but_keeps_current_message():
+    async def invoke():
+        sent=[]
+        def handler(req):
+            sent.append(json.loads(req.content))
+            return response({'reply':'Hi'})
+        context=json.dumps({'summary':'context-'+'x'*30000},ensure_ascii=False)
+        conversation=[
+            {'role':'user','content':'old-user-'+'a'*2500},
+            {'role':'assistant','content':'old-assistant-'+'b'*2500},
+            {'role':'user','content':'middle-user-'+'c'*2500},
+            {'role':'assistant','content':'middle-assistant-'+'d'*2500},
+            {'role':'user','content':'CURRENT MESSAGE — keep this intact'},
+        ]
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter=AIAdapter(settings(context_tokens=35000,max_output_tokens=128),client)
+            request=AIInput(stage='chat',context=context,conversation=conversation)
+            await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
+        sent_input=json.loads(sent[0]['messages'][1]['content'])
+        assert [message['content'] for message in sent_input['conversation']] == ['CURRENT MESSAGE — keep this intact']
+        trimmed=json.loads(sent_input['context'])
+        assert trimmed['_context_truncated'] is True
+        assert trimmed['summary'].endswith('…[truncated]')
+        assert 'old-user-' not in json.dumps(sent_input)
+        assert sent_input['conversation'][-1]['content']=='CURRENT MESSAGE — keep this intact'
+    asyncio.run(invoke())
+
+
+def test_oversized_context_trims_without_truncating_the_jd():
+    jd='Complete job description. ' + 'JD text ' * 900
+    async def invoke():
+        sent=[]
+        def handler(req):
+            sent.append(json.loads(req.content))
+            return response({'role':'Analyst','field':'Data','company':None,'skills':[]})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter=AIAdapter(settings(context_tokens=50000),client)
+            await adapter.generate(
+                AIInput(stage='jd_extraction',source_text=jd,context=json.dumps({'summary':'x'*39000})),
+                Operation('owner','1','jd_extraction'),current_revision=lambda:'1')
+        sent_input=json.loads(sent[0]['messages'][1]['content'])
+        assert sent_input['source_text']==jd
+        assert json.loads(sent_input['context'])['_context_truncated'] is True
+    asyncio.run(invoke())
+
+
 def test_timeout_and_no_secret_repr():
     async def invoke():
         async def handler(_): raise httpx.ReadTimeout('secret provider body')
@@ -170,6 +234,7 @@ def test_config_is_server_only_explicit_and_validated(monkeypatch):
     monkeypatch.setenv('AI_ENABLED','true'); monkeypatch.setenv('AI_API_KEY','fixture-key')
     monkeypatch.setenv('AI_MODEL','fixture-model')
     assert AISettings.from_env().model == 'fixture-model'
+    assert AISettings().requests_per_minute == 10
     for overrides in [{'base_url':'http://insecure.test'}, {'model':''}, {'response_mode':'unsupported'}, {'retries':5}]:
         with pytest.raises(ValidationError): settings(**overrides)
     with pytest.raises(ValidationError):
@@ -242,12 +307,14 @@ def test_exploration_uses_validated_role_rationale_and_uncertainty():
     with pytest.raises(AIError,match='invalid_output'):
         run(request,{'reply':'Hi','interests':[], 'preferences':[], 'suggestions':[{'role':'Analyst','field':'Data'}]})
 
-@pytest.mark.parametrize('stage,output',[('jd_extraction',{'role':'Analyst','field':'Data','company':None,'skills':[{'name':'SQL','category':'Technical','priority':'required','evidence':'SQL required','origin':'employer'}]}),('jd_chat',{'reply':'SQL is used to query data.','proposed_skills':None})])
+@pytest.mark.parametrize('stage,output',[('jd_extraction',{'role':'Analyst','field':'Data','company':None,'skills':[{'name':'SQL','category':'Technical','priority':'required','evidence':'SQL required','origin':'employer'}]}),('jd_chat',{'reply':'SQL is used to query data.','edit_requested':False})])
 def test_jd_review_uses_provider_neutral_structured_output(stage,output):
-    result,seen,_=run(AIInput(stage=stage,source_text='SQL required'),output)
+    request=AIInput(stage=stage,source_text='SQL required') if stage=='jd_extraction' else AIInput(
+        stage=stage,context=json.dumps({'career_goal':{'role':'Analyst','skills':['SQL']}}),conversation=[{'role':'user','content':'What is SQL?'}])
+    result,seen,_=run(request,output)
     body=json.loads(seen[0].content)
-    assert 'Do not assign canonical skill IDs' in body['messages'][0]['content']
-    assert 'SQL required' in body['messages'][1]['content']
+    assert 'Do not invent facts' in body['messages'][0]['content']
+    assert ('SQL required' if stage=='jd_extraction' else 'career_goal') in body['messages'][1]['content']
     assert result.data.model_dump()['skills' if stage=='jd_extraction' else 'reply']
 
 @pytest.mark.parametrize('status,provider_code,expected',[(404,'model_not_found','model_unavailable'),(400,'model_decommissioned','model_unavailable'),(400,'json_validate_failed','invalid_output'),(400,'context_length_exceeded','context_limit'),(422,'unsupported_parameter','provider_configuration')])
@@ -280,7 +347,7 @@ def test_jd_extraction_uses_native_strict_schema_on_known_groq_models(model):
     result,seen,_=run(AIInput(stage='jd_extraction',source_text='SQL required'),{'role':'Analyst','field':'Data','company':None,'skills':[]},model=model)
     format=json.loads(seen[0].content)['response_format']
     assert format['type']=='json_schema' and format['json_schema']['strict'] is True
-    skill=format['json_schema']['schema']['$defs']['ReviewSkill']
+    skill=format['json_schema']['schema']['$defs']['ExtractedSkill']
     assert skill['required']==list(skill['properties']) and skill['additionalProperties'] is False
     _,other,_=run(AIInput(stage='jd_extraction',source_text='SQL required'),{'role':'Analyst','field':'Data','company':None,'skills':[]},model=model,provider='compatible',base_url='https://other.example.test/v1')
     assert json.loads(other[0].content)['response_format']['type']=='json_object'
@@ -326,3 +393,63 @@ def test_jd_retry_rechecks_revision_before_another_provider_call():
                 await adapter.generate(AIInput(stage='jd_extraction',source_text='Synthetic analyst'),Operation('fixture','1','jd_extraction'),current_revision=lambda:revision[0])
             assert len(calls)==1
     asyncio.run(invoke())
+
+
+def test_jd_chat_requires_structured_context_and_never_accepts_raw_jd():
+    with pytest.raises(ValidationError):
+        AIInput(stage='jd_chat',source_text='Private JD',context='{}',conversation=[{'role':'user','content':'Hi'}])
+    with pytest.raises(ValidationError):
+        AIInput(stage='jd_chat',conversation=[{'role':'user','content':'Hi'}])
+    request=AIInput(stage='jd_chat',context='{"career_goal":{"role":"Analyst"}}',conversation=[{'role':'user','content':'Explain my target role.'}])
+    _,seen,_=run(request,{'reply':'An analyst interprets information.','edit_requested':False})
+    payload=json.loads(seen[0].content)
+    assert 'Use the supplied career_goal context' in payload['messages'][0]['content']
+    assert json.loads(payload['messages'][1]['content']).get('source_text') is None
+
+
+
+def test_ten_per_user_limit_and_window_reset():
+    async def invoke():
+        now=[100.0]
+        async with httpx.AsyncClient() as client:
+            adapter=AIAdapter(settings(),client,clock=lambda:now[0])
+            assert adapter.settings.requests_per_minute==10
+            for _ in range(10): adapter._limit('one')
+            adapter._limit('two')
+            with pytest.raises(AIError) as error: adapter._limit('one')
+            assert error.value.limit_scope=='user' and error.value.retry_after==60
+            now[0]+=60
+            adapter._limit('one')
+    asyncio.run(invoke())
+
+
+@pytest.mark.parametrize('header,expected',[('37.2',38),('invalid',None),('nan',None),('-1',None)])
+def test_provider_cooldown_is_returned_without_retry(header,expected):
+    async def invoke():
+        calls=[]
+        def handler(req):
+            calls.append(req)
+            return httpx.Response(429,headers={'retry-after':header},text='private provider body')
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter=AIAdapter(settings(),client)
+            with pytest.raises(AIError) as error:
+                await adapter.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}]),Operation('owner','1','chat'),current_revision=lambda:'1')
+            assert len(calls)==1 and error.value.limit_scope=='provider'
+            assert error.value.retry_after==expected
+    asyncio.run(invoke())
+
+
+def test_native_schema_is_not_duplicated_and_unused_inputs_are_omitted():
+    async def invoke():
+        async with httpx.AsyncClient() as client:
+            adapter=AIAdapter(settings(model='openai/gpt-oss-120b'),client)
+            payload=adapter._payload(AIInput(stage='jd_extraction',source_text='SQL required'))
+            assert 'JSON schema:' not in payload['messages'][0]['content']
+            assert payload['response_format']['type']=='json_schema'
+            assert json.loads(payload['messages'][1]['content'])=={'stage':'jd_extraction','source_text':'SQL required'}
+    asyncio.run(invoke())
+
+
+def test_ai_jd_character_boundary():
+    assert len(AIInput(stage='jd_extraction',source_text='🧭'*8000).source_text)==8000
+    with pytest.raises(ValidationError): AIInput(stage='jd_extraction',source_text='🧭'*8001)

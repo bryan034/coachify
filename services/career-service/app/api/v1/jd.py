@@ -1,55 +1,87 @@
-"""Transient authenticated JD extraction/review. Never writes sources or candidates."""
+"""Transient authenticated JD interpretation and context-based conversation."""
 import json
-import re
 from fastapi import APIRouter, Depends, Request
-from app.api.v1.goals import owner
+from app.api.v1.goals import owner, request_key, identifier
+from app.api.v1.reviews import store, view
+from app.repositories.goals import fingerprint, GoalError
+from starlette.concurrency import run_in_threadpool
 from app.ai.adapter import Operation, AIError
 from app.ai.contracts import AIInput, Message
 from app.schemas.jd import JDSource, JDMessage, JDExtractionResult, JDReply
-router=APIRouter(prefix='/api/v1/career/jd',tags=['J02/J03 transient skill review'])
+router=APIRouter(prefix='/api/v1/career/jd',tags=['J02–J04 extraction and chat'])
 
 
-def grounded(skills,text,message='',existing=()):
-    if len({s.name.casefold().strip() for s in skills})!=len(skills):
-        raise AIError('invalid_output',True,reason='duplicate_skill',fields=('name',))
+def validate_skills(skills, message='', existing=(), *, extraction=False):
+    if len({(' '.join(s.name.casefold().split()),' '.join(s.category.casefold().split())) for s in skills}) != len(skills):
+        raise AIError('invalid_output', True, reason='duplicate_skill', fields=('name',))
     for skill in skills:
-        if skill.origin=='employer':
-            if not skill.evidence or skill.priority=='suggested':
-                raise AIError('invalid_output',True,reason='source_quote',fields=('evidence',))
-            if skill.evidence not in text:
-                # Document line wrapping/NBSP differences are harmless only when
-                # every non-whitespace character still matches a contiguous source span.
-                match=re.search(r'\s+'.join(re.escape(word) for word in skill.evidence.split()),text)
-                if not match or len(match.group(0))>600:
-                    raise AIError('invalid_output',True,reason='source_quote',fields=('evidence',))
-                skill.evidence=match.group(0)
-        if skill.origin=='user_declaration' and skill not in existing and (not skill.evidence or skill.evidence not in message):
-            raise AIError('invalid_output',True,reason='source_quote',fields=('evidence',))
-        if skill.origin=='generated_guidance' and (skill.priority!='suggested' or skill.evidence is not None):
-            raise AIError('invalid_output',True,reason='unexpected_origin',fields=('origin',))
+        if skill.origin == 'employer' and skill.priority == 'suggested':
+            raise AIError('invalid_output', True, reason='unexpected_origin', fields=('origin', 'priority'))
+        # Supporting explanations may summarize the JD. Exact substring matching
+        # is not a test of semantic accuracy and rejected legitimate interpretations.
+        if skill.origin == 'user_declaration' and (extraction or (
+                skill not in existing and (not skill.evidence or skill.evidence not in message))):
+            raise AIError('invalid_output', True, reason='source_quote', fields=('evidence',))
+        if skill.origin == 'generated_guidance' and (skill.priority != 'suggested' or skill.evidence is not None):
+            raise AIError('invalid_output', True, reason='unexpected_origin', fields=('origin',))
 
-def validate_extraction(output,text):
-    if any(s.origin!='employer' for s in output.skills):
-        raise AIError('invalid_output',True,reason='unexpected_origin',fields=('origin',))
-    grounded(output.skills,text)
 
-@router.post('/extract',response_model=JDExtractionResult)
-async def extract(body:JDSource,request:Request,account=Depends(owner)):
-    result=await request.app.state.ai.generate(AIInput(stage='jd_extraction',source_text=body.text),
-        Operation(account,'transient','jd_extraction'),current_revision=lambda:'transient',
-        validate_output=lambda output:validate_extraction(output,body.text))
-    validate_extraction(result.data,body.text)
-    return {'extraction':result.data.model_dump(mode='json'),'generation':result.generation.model_dump(mode='json')}
+def validate_extraction(output, source_url):
+    validate_skills(output.skills, extraction=True)
+    # Provenance comes from the input transport, not an AI-generated URL.
+    output.job_url = source_url
 
-@router.post('/messages',response_model=JDReply)
-async def message(body:JDMessage,request:Request,account=Depends(owner)):
-    grounded(body.skills,body.text,existing=body.skills)
-    # Message validates speaker/content bounds, rejecting malformed client histories.
-    history=[Message.model_validate(m.model_dump()) for m in body.conversation]
-    result=await request.app.state.ai.generate(AIInput(stage='jd_chat',source_text=body.text,
-        context=json.dumps({'reviewed_skills':[s.model_dump(mode='json') for s in body.skills]}),
-        conversation=[*history,Message(role='user',content=body.message)]),
-        Operation(account,'transient','jd_chat'),current_revision=lambda:'transient')
-    if result.data.proposed_skills is not None:
-        grounded(result.data.proposed_skills,body.text,body.message,body.skills)
+
+@router.post('/extract', response_model=JDExtractionResult)
+async def extract(body: JDSource, request: Request, account=Depends(owner), key=Depends(request_key)):
+    repository=store(request)
+    digest=fingerprint(body.model_dump(mode='json'))
+    existing=await run_in_threadpool(repository.replay_extraction,account,key,digest)
+    if existing: return view(existing)
+    result = await request.app.state.ai.generate(AIInput(stage='jd_extraction', source_text=body.text,
+        source_urls=[body.source_url] if body.source_url else []),
+        Operation(account, 'transient', 'jd_extraction'), current_revision=lambda: 'transient',
+        validate_output=lambda output: validate_extraction(output, body.source_url))
+    validate_extraction(result.data, body.source_url)
+    draft=await run_in_threadpool(repository.create,account,key,digest,result.data,result.generation,'url' if body.source_url else body.source_kind)
+    return view(draft)
+
+
+@router.post('/messages', response_model=JDReply)
+async def message(body: JDMessage, request: Request, account=Depends(owner)):
+    repository=store(request)
+    draft=await run_in_threadpool(repository.get,identifier(body.review_id),account)
+    if draft.version != body.expected_version:
+        raise GoalError('This review changed. Reload the saved context before chatting.')
+    context=draft.content
+    validate_skills(context.skills, existing=context.skills)
+    history = [Message.model_validate(m.model_dump()) for m in body.conversation]
+
+    def validate_reply(output):
+        if output.proposed_skills is None:
+            return
+        # The model does not own IDs, provenance or unchanged employer evidence.
+        # Preserve the authoritative item when it merely paraphrases its explanation.
+        facts=('name','category','priority','required_proficiency','required_experience_months')
+        normalized=[]
+        for skill in output.proposed_skills:
+            if skill.origin=='employer':
+                matches=[s for s in context.skills if s.origin=='employer' and all(getattr(s,f)==getattr(skill,f) for f in facts)]
+                if len(matches)!=1:
+                    raise AIError('invalid_output',True,reason='unexpected_origin',fields=('origin',))
+                normalized.append(matches[0].model_copy(deep=True))
+            else:
+                if not any(s.item_id==skill.item_id for s in context.skills): skill.item_id=None
+                normalized.append(skill)
+        output.proposed_skills=normalized
+        validate_skills(output.proposed_skills, body.message, context.skills)
+
+    result = await request.app.state.ai.generate(AIInput(stage='jd_chat',
+        context=json.dumps({'career_goal': context.model_dump(mode='json')}),
+        conversation=[*history, Message(role='user', content=body.message)]),
+        Operation(account, str(draft.version), 'jd_chat'), current_revision=lambda: str(draft.version),
+        validate_output=validate_reply)
+    validate_reply(result.data)
+    if await run_in_threadpool(repository.version,draft.id,account) != draft.version:
+        raise GoalError('The review changed while answering. Reload its context.')
     return result.data.model_dump(mode='json')
