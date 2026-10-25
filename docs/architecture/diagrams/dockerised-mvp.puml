@@ -86,8 +86,8 @@ legend bottom
   Dashboard, review/scheduling and future services are intentionally omitted;
   extend this diagram when their scope is agreed.
   Current implementation: Profile/auth, temporary Career JD previews,
-  optional-CV exploration, temporary JD skill review, goal confirmation, CV reads and data contracts.
-  Dedicated CV extraction, published JD skills, research, gap analysis and roadmap generation are planned.
+  optional-CV exploration, persisted structured JD review, explicit goal confirmation, CV reads and data contracts.
+  Dedicated CV extraction, broader skill mapping, research, gap analysis and roadmap generation are planned.
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend
 @enduml

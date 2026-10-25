@@ -6,7 +6,7 @@ The user's revised scope on 25 October 2026 supersedes the earlier source-storag
 plan for J01/J06/J07 previews. J08 exploration and J09 goal confirmation are also
 implemented. Raw or extracted source text must not be persisted. The preview endpoints do not perform AI processing or save structured goals.
 Internal AI/provider and data-contract foundations are described in
-[ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). Saved-source recovery and JD interpretation criteria remain deferred; J08/J09
+[ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). Raw-source recovery stays excluded; J02–J04 structured review and J08/J09
 structured exploration/goal persistence is implemented separately.
 
 Career owns input processing. The frontend uses `/career-goal`, directly below
@@ -35,7 +35,7 @@ disabled for imports; request bodies/URL fields/documents are not logged.
 
 ## Limits and processing
 
-- Descriptions: 20,000 Unicode code points. Pasted input can be edited above the
+- Job descriptions: 8,000 Unicode code points (temporary CV previews remain 20,000). Pasted input can be edited above the
   limit with a clear error; it is neither submitted nor silently truncated.
   Imported over-limit previews are rejected with a paste-one-description fallback.
 - URL input: at most 2,048 characters; request at most 16 KiB.
@@ -48,6 +48,8 @@ disabled for imports; request bodies/URL fields/documents are not logged.
   job page is requested. Never use supplied credentials, cookies or page scripts.
 - HTML extraction prefers one JobPosting JSON-LD description, otherwise a
   description/main/article/body text preview with navigation/scripts excluded.
+  Available JobPosting company, job location, work arrangement, employment type,
+  industry, qualifications, skills and responsibilities are preserved as labelled text.
   This is best-effort text preparation, not semantic job/skill interpretation;
   users review completeness and remove unrelated content. A URL cannot guarantee
   a real job listing. Blocked/login/paywall/CAPTCHA/JS-only or inaccessible content
@@ -73,17 +75,14 @@ or original-file retention is introduced. Request/child buffers expire with the
 request/process; cleanup after abrupt termination is handled by tmpfs/container
 lifecycle. TMPDIR can be changed for direct service runs; keep it private.
 
-## Future boundary
+## Structured review boundary — J02–J04
 
-The provider adapter and structured schemas are now defined. Later J stories
-will connect confirmed source in memory to the internal adapter. Persist only the approved
-structured information and agreed provenance. Do not quietly reintroduce source
-text persistence to fulfil earlier criteria. The shared chat route supports J08 adaptive career exploration and temporary
-J02/J03 JD extraction/review. Reviewed JD text is sent only on explicit extraction
-or chat actions. Outputs are Pydantic-validated candidates with source grounding;
-changes require user approval. No canonical skill registry, confirmed skill
-persistence or J04/J05 condition editing is supplied by this temporary workflow.
-
-J08 optional-CV exploration and J09 confirmation are implemented as described in
-[ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md); this document retains the existing
-preview/parser safeguards. No source text is written to domain records.
+Explicit JD extraction now saves a structured review with metadata, skills,
+non-skill conditions, provenance and a bounded reset baseline. The shared chat
+loads that owner-checked review by ID/version; it does not accept raw JD text or
+client-authored context. Supporting summaries and labelled inferences remain
+permitted. Saved review editing, reclassification and confirmation follow
+[ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). Preview parsing still makes no AI
+calls or database writes. Sources remain transient, and reload restores only
+structured information. Research, gap analysis, roadmap generation and J10
+exploration skill generation remain future work.

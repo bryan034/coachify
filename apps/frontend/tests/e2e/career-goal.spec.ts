@@ -12,7 +12,7 @@ async function workspace(page:Page){
 test('Career Goal supports three temporary inputs, recovery and responsive navigation',async({page})=>{
  await workspace(page);const calls:string[]=[];
  await page.route('**/api/v1/career/**',route=>{
-  const path=new URL(route.request().url()).pathname;calls.push(path);
+  const path=new URL(route.request().url()).pathname;if(route.request().method()==='GET')return route.fulfill({json:{goals:[],reviews:[]}});calls.push(path);
   expect(route.request().headers().authorization).toBe('Bearer synthetic-session');
   if(path.endsWith('/url')){
    const {url}=route.request().postDataJSON();
@@ -127,33 +127,57 @@ test('one agent chat adapts follow-ups, confirms a direction and restores progre
  await expect(page.getByText('Selected goal: Data analyst',{exact:true})).toBeVisible();
 });
 
-test('selected JD extracts skills on the shared page and reviews proposed additions',async({page})=>{
- await workspace(page);const calls:string[]=[];
- await page.route('**/api/v1/career/**',route=>{const path=new URL(route.request().url()).pathname;calls.push(path);
-  if(path.endsWith('/jd/extract'))return route.fulfill({json:{extraction:{role:'Analyst',field:'Data',company:null,skills:[{name:'SQL',category:'Technical',priority:'required',origin:'employer',evidence:'SQL'}]},generation:{}}});
-  return route.fulfill({json:{reply:'Python can be an additional learning goal; it is not stated in this JD.',proposed_skills:[{name:'SQL',category:'Technical',priority:'required',origin:'employer',evidence:'SQL'},{name:'Python',category:'Technical',priority:'suggested',origin:'generated_guidance',evidence:null}]}});
+test('JD review saves skills and conditions, restores after reload and confirms explicitly',async({page})=>{
+ await workspace(page);const calls:string[]=[];let created=false;
+ const extraction={role:'Analyst',field:'Data',company:null as string|null,location:'Singapore',seniority_level:'Junior',job_url:null,summary:'Interpret business data.',responsibilities:['Build useful reports.'],non_skill_requirements:[] as unknown[],skills:[{item_id:'sql-item',skill_id:'language.sql',name:'SQL',category:'Technical',priority:'required',origin:'employer',evidence:'SQL'}]};
+ let review={review_id:'000000000000000000000081',version:1,target_type:'specific_job',extraction,baseline:structuredClone(extraction),metadata_origins:{},requirements_need_review:false,is_confirmed:false,generation:{}};
+ let current:{selection_version:number;goal:Record<string,unknown>|null;dependent_results_need_review:boolean}={selection_version:0,goal:null,dependent_results_need_review:false};
+ await page.route('**/api/v1/career/**',route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/goals/current'))return route.fulfill({json:current});
+  if(path.endsWith('/goals'))return route.fulfill({json:{goals:[],reviews:created?[{review_id:review.review_id,role:'Analyst',version:review.version}]:[]}});
+  if(route.request().method()==='GET')return route.fulfill({json:review});
+  calls.push(path);
+  if(path.endsWith('/jd/extract')){created=true;expect(route.request().headers()['idempotency-key']).toBeTruthy();return route.fulfill({json:review});}
+  if(path.endsWith('/review')){const body=route.request().postDataJSON();expect(body.expected_version).toBe(review.version);review={...review,version:review.version+1,extraction:body.content};return route.fulfill({json:review});}
+  if(path.endsWith('/confirm')){const body=route.request().postDataJSON();expect(body.review_id).toBe(review.review_id);expect(body.expected_review_version).toBe(review.version);current={selection_version:1,goal:{_id:'000000000000000000000082',role:'Analyst',source_review_id:review.review_id,source_review_version:review.version},dependent_results_need_review:false};return route.fulfill({json:current});}
+  expect(route.request().postDataJSON()).toMatchObject({review_id:review.review_id,expected_version:review.version});
+  expect(route.request().postDataJSON()).not.toHaveProperty('text');expect(route.request().postDataJSON()).not.toHaveProperty('context');
+  return route.fulfill({json:{reply:'Python can be an additional learning goal; it is not stated in this JD.',proposed_skills:[...review.extraction.skills,{name:'Python',category:'Technical',priority:'suggested',origin:'generated_guidance',evidence:null}]}});
  });
  await page.goto('/career-goal');
  await page.getByRole('textbox',{name:'Job description',exact:true}).fill('Synthetic analyst requires SQL and research.');
  await page.getByRole('button',{name:'Extract career goal'}).click();
- await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
  await expect(page.getByRole('heading',{name:'Skills to review'})).toBeVisible();
+ await expect(page).toHaveURL(new RegExp('review='+review.review_id));
  await page.getByRole('textbox',{name:'Message Coachify'}).fill('Add Python as a suggested learning goal.');
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole('heading',{name:'Proposed skill changes'})).toBeVisible();
  await expect(page.getByRole('region',{name:'Extracted career skills'})).not.toContainText('Python');
  await page.getByRole('button',{name:'Apply proposed changes'}).click();
  await expect(page.getByRole('region',{name:'Extracted career skills'})).toContainText('Python');
- await page.screenshot({path:test.info().outputPath('jd-review-desktop.png'),fullPage:true});
+ await page.getByRole('button',{name:'Edit review',exact:true}).click();
+ await page.getByRole('textbox',{name:'Company',exact:true}).fill('Example Company');
+ await page.getByRole('checkbox',{name:/I have reviewed the requirements/}).check();
+ await page.getByRole('button',{name:'Add condition'}).click();
+ await page.getByRole('textbox',{name:'Condition',exact:true}).fill('One to three years of relevant experience.');
+ await page.getByRole('textbox',{name:'Condition supporting context'}).fill('Relevant work experience.');
+ await page.getByRole('spinbutton',{name:'Minimum experience (months)'}).fill('12');
+ await page.getByRole('spinbutton',{name:'Maximum experience (months)'}).fill('36');
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:test.info().outputPath('jd-review-editor-mobile.png'),fullPage:true});
+ await page.getByRole('button',{name:'Save review',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Non-skill requirements'})).toContainText('One to three years');
+ await page.screenshot({path:test.info().outputPath('jd-review-desktop.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:test.info().outputPath('jd-review-mobile.png'),fullPage:true});
- await page.getByRole('button',{name:'View description'}).click();
- await page.getByText('View selected description',{exact:true}).click();
- await expect(page.getByText('Synthetic analyst requires SQL and research.',{exact:true})).toBeVisible();
  expect(await page.evaluate(()=>JSON.stringify([Object.entries(localStorage),Object.entries(sessionStorage)]))).not.toContain('requires SQL');
- await page.reload();await expect(page.getByRole('log')).toContainText('no longer available');
- expect(calls).toEqual(['/api/v1/career/jd/extract','/api/v1/career/jd/messages']);
+ await page.reload();await expect(page.getByRole('region',{name:'Extracted career skills'})).toContainText('Python');
+ await expect(page.getByRole('region',{name:'Non-skill requirements'})).toContainText('12–36 months');
+ await page.getByRole('button',{name:'Confirm and save goal'}).click();await expect(page.getByText('Career goal confirmed and saved.')).toBeVisible();
+ expect(calls.filter(p=>p.endsWith('/jd/extract'))).toHaveLength(1);
+ expect(calls.filter(p=>p.endsWith('/review'))).toHaveLength(2);
 });
 
 test('switching tabs keeps JD work and five-minute inactivity requires an explicit refresh',async({page,context})=>{

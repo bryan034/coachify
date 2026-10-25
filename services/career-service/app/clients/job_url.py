@@ -10,6 +10,7 @@ from urllib.parse import urlsplit, urljoin, urlunsplit
 from urllib.robotparser import RobotFileParser
 from bs4 import BeautifulSoup
 from app.domain.documents import validate_text
+from app.schemas.preview import MAX_JD_TEXT
 
 MAX_DOWNLOAD = 2 * 1024 * 1024
 AGENT = 'CoachifyPreview/1.0'
@@ -95,6 +96,51 @@ def html_text(markup):
     return re.sub(r'\n[ \t]*\n(?:[ \t]*\n)+', '\n\n', text).strip()
 
 
+def posting_context(job):
+    """Keep public JobPosting facts that often sit outside description HTML."""
+    def readable(value):
+        if isinstance(value, str):
+            return html_text(value)
+        if isinstance(value, list):
+            return '; '.join(filter(None, (readable(item) for item in value)))
+        return ''
+
+    lines = []
+    organization = job.get('hiringOrganization')
+    if isinstance(organization, dict) and isinstance(organization.get('name'), str):
+        lines.append('Company: ' + readable(organization['name']))
+    locations = job.get('jobLocation', [])
+    if not isinstance(locations, list):
+        locations = [locations]
+    names = []
+    for location in locations:
+        if not isinstance(location, dict):
+            continue
+        address = location.get('address')
+        if isinstance(address, dict):
+            parts = []
+            for key in ('addressLocality', 'addressRegion', 'addressCountry'):
+                value = address.get(key)
+                if isinstance(value, dict):
+                    value = value.get('name')
+                if readable(value):
+                    parts.append(readable(value))
+            if parts:
+                names.append(', '.join(parts))
+        elif readable(address or location.get('name')):
+            names.append(readable(address or location.get('name')))
+    if names:
+        lines.append('Job location: ' + '; '.join(names))
+    for key, label in (('jobLocationType', 'Work arrangement'), ('employmentType', 'Employment type'),
+            ('industry', 'Industry'), ('occupationalCategory', 'Occupation'),
+            ('qualifications', 'Qualifications'), ('educationRequirements', 'Education requirements'),
+            ('experienceRequirements', 'Experience requirements'), ('skills', 'Skills'), ('responsibilities', 'Responsibilities')):
+        text = readable(job.get(key))
+        if text:
+            lines.append(label + ': ' + text)
+    return '\n'.join(lines)
+
+
 def extract_page(data):
     soup = BeautifulSoup(data, 'html.parser')
     jobs = []
@@ -112,11 +158,11 @@ def extract_page(data):
         raise ValueError('This page contains multiple jobs. Open one job listing or paste one description.')
     if jobs and jobs[0].get('description'):
         title = jobs[0].get('title')
-        text = (str(title) + '\n\n' if title else '') + html_text(str(jobs[0]['description']))
+        text = '\n\n'.join(filter(None, [html_text(title) if isinstance(title, str) else '', posting_context(jobs[0]), html_text(str(jobs[0]['description']))]))
     else:
         text = html_text(str(soup))
     if not text.strip(): raise ValueError('No readable description was found. The site may require JavaScript or sign-in; paste the description or upload a document.')
-    return validate_text(text)
+    return validate_text(text, max_text=MAX_JD_TEXT)
 
 
 def import_url(url, fetch=request_page):

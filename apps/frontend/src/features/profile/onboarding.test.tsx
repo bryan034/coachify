@@ -32,6 +32,7 @@ async function form(){
 test('Save progress does not complete onboarding; explicit Finish setup does',async()=>{
  await form();fireEvent.click(screen.getByRole('button',{name:'Save progress'}));
  await screen.findByText('Profile saved.');expect(saved.onboarding_complete).toBe(false);expect(replace).not.toHaveBeenCalled();
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Finish setup'})).toBeEnabled());
  fireEvent.click(screen.getByRole('button',{name:'Finish setup'}));
  await waitFor(()=>expect(replace).toHaveBeenCalledWith('/dashboard'));
  expect(saved.no_previous_education).toBe(true);expect(saved.onboarding_complete).toBe(true);

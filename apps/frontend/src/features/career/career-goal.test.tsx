@@ -7,7 +7,7 @@ vi.mock('next/navigation',()=>({useRouter:()=>({push,replace:vi.fn()})}));
 const renderPage=(node:React.ReactNode)=>(render(<CareerSessionProvider>{node}</CareerSessionProvider>));
 import { importCareer } from '@/lib/api/career';
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-session'})}));
-vi.mock('@/lib/api/career',()=>({importCareer:vi.fn()}));
+vi.mock('@/lib/api/career',()=>({importCareer:vi.fn(),careerApi:vi.fn(async()=>({goals:[],reviews:[]}))}));
 afterEach(()=>{vi.restoreAllMocks();vi.mocked(importCareer).mockClear();});
 const preview={kind:'url' as const,text:'Analyst\n• SQL or Python',source_name:'Synthetic Jobs',source_url:'https://example.test/job',notices:['Check for missing content.']};
 
@@ -26,10 +26,10 @@ describe('temporary Career Goal inputs',()=>{
  });
  it('counts Unicode characters and retains over-limit input instead of truncating it',()=>{
   renderPage(<CareerGoal/>);
-  fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:'🧭'.repeat(20_001)}});
+  fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:'🧭'.repeat(8_001)}});
   expect(screen.getByRole('textbox',{name:'Job description'})).toHaveAttribute('aria-invalid','true');
-  expect(screen.getByText('20,001 / 20,000 characters')).toBeVisible();
-  expect(screen.getByRole('textbox',{name:'Job description'})).toHaveValue('🧭'.repeat(20_001));
+  expect(screen.getByText('8,001 / 8,000 characters')).toBeVisible();
+  expect(screen.getByRole('textbox',{name:'Job description'})).toHaveValue('🧭'.repeat(8_001));
  });
  it('imports an editable URL preview and keeps it through a failed replacement',async()=>{
   vi.mocked(importCareer).mockResolvedValueOnce(preview).mockRejectedValueOnce(new Error('This site blocks automated access.'));

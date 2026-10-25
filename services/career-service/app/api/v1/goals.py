@@ -163,7 +163,8 @@ async def current(request: Request, account=Depends(owner)):
 @router.get('/goals')
 async def goals(request: Request, account=Depends(owner)):
     result=await run_in_threadpool(store(request).list,account)
-    return {'goals':[g.model_dump(mode='json',by_alias=True) for g in result['goals']],
+    reviews=await run_in_threadpool(lambda:list(store(request).goals.find({'user_id':account,'record_type':'requirement_review'}).sort('updated_at',-1).limit(20)))
+    return {'reviews':[{'review_id':str(r['_id']),'role':r['content']['role'],'version':r['version']} for r in reviews], 'goals':[g.model_dump(mode='json',by_alias=True) for g in result['goals']],
             'explorations':[draft_view(d) for d in result['explorations']]}
 
 
@@ -171,6 +172,15 @@ async def goals(request: Request, account=Depends(owner)):
 async def confirm(body: SaveGoal, request: Request, account=Depends(owner), key=Depends(request_key)):
     replay=await run_in_threadpool(store(request).replay_confirmation,account,key,body)
     if replay is not None: return jsonable_encoder(replay,by_alias=True)
+    if body.review_id:
+        from app.api.v1.reviews import store as review_store
+        repository=review_store(request)
+        draft=await run_in_threadpool(repository.claim_confirmation,body.review_id,account,body.expected_review_version,key)
+        try:
+            goal=repository.goal(draft,account,key,body)
+            return jsonable_encoder(await run_in_threadpool(store(request).confirm,account,key,body,goal),by_alias=True)
+        finally:
+            await run_in_threadpool(repository.release_confirmation,body.review_id,account,key)
     if body.draft_id:
         draft=await run_in_threadpool(store(request).draft,body.draft_id,account)
         if draft.cv.mode=='saved':

@@ -109,8 +109,11 @@ check. The disposable Compose test stack also needs `CAREER_DB_PASSWORD` and
 `CV_DB_PASSWORD`; CI supplies synthetic values. Real Groq credentials are never
 used by automated tests. Goal-flow tests create/drop `coachify_goals_test_*` DBs.
 
-JD review tests use synthetic AI outputs for source-quote checks, proposed additions,
-invalid history, empty results and recoverable failures. Browser coverage checks
+JD review tests use synthetic AI outputs for semantic supporting summaries,
+labelled inferences, structured job fields and URL metadata, context-only chat,
+proposal approval, invalid history, empty results and recoverable failures. They
+verify raw JD text is excluded from chat requests and unknown requirements are not
+promoted to employer facts; they do not establish live-model extraction accuracy. Browser coverage checks
 automatic document reading, the shared chat and explicit proposal approval. Activity
 tests verify drafts survive tab switches, interaction renews the five-minute deadline,
 and expiry blocks the mounted workspace until explicit refresh.
@@ -122,3 +125,10 @@ preserving a counter and avoiding page navigation. Temporary API probes verify
 Python edits reload in Profile, Career and CV. Probes are restored/removed afterward;
 no private environment files or live account data are used. The production frontend
 Docker target is built separately to check that the dev target remains opt-in.
+
+J02–J04 add saved review editing, reset/cancel, atomic skill/condition reclassification,
+source/metadata provenance, mapping-pending states, guarded confirmation, version
+conflicts and immutable history. Career MongoDB tests use random
+`coachify_reviews_test_*` databases. Browser fixtures cover extract → chat proposal →
+review save → reload → explicit confirmation, including mobile layout. External AI
+remains mocked; these checks do not establish live-model semantic accuracy.

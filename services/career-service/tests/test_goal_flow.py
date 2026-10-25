@@ -137,7 +137,7 @@ def test_owner_isolation_and_client_cannot_assign_skills(flow):
     assert client.get(BASE+'/explorations/'+draft['_id'],headers=headers(owner='other')).status_code==404
     assert client.post(BASE+'/explorations',json={'consent':True,'user_id':OTHER},headers=headers()).status_code==422
     assert client.post(BASE+'/goals/confirm',json={**confirm_body(),'skills':[{'name':'fake'}]},headers=headers()).status_code==422
-    assert client.get(BASE+'/goals',headers=headers(owner='other')).json()=={'goals':[],'explorations':[]}
+    assert client.get(BASE+'/goals',headers=headers(owner='other')).json()=={'goals':[],'explorations':[],'reviews':[]}
     assert client.post(BASE+'/explorations',json={'consent':True}).status_code==401
 
 

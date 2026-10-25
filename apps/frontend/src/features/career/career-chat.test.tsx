@@ -2,7 +2,7 @@ import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {CareerChat} from './career-chat';
 import {CareerSessionProvider,useCareerSession} from './career-session';
-import {careerApi,importExplorationCV,type GoalDraft} from '@/lib/api/career';
+import {careerApi,importExplorationCV,type GoalDraft,type JDExtraction} from '@/lib/api/career';
 const push=vi.fn();const search=new URLSearchParams();
 vi.mock('next/navigation',()=>({useRouter:()=>({push}),useSearchParams:()=>search}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-session'})}));
@@ -10,12 +10,19 @@ vi.mock('@/lib/api/career',()=>({careerApi:vi.fn(),importExplorationCV:vi.fn()})
 const base:GoalDraft={_id:'000000000000000000000001',version:1,answers:{},turns:[],interests:[],preferences:[],suggestions:[],
  next_question:'aspirations',question_text:'What would you like to achieve?',context_complete:false,
  cv:{mode:'none',filename:null,cv_id:null,version:null,extraction_version:null}};
+const extracted:JDExtraction={role:'Engineer',field:'Software',company:null,location:'Singapore',seniority_level:'Junior',job_url:null,
+ summary:'Build and maintain backend services.',responsibilities:['Develop reliable APIs.'],
+ non_skill_requirements:[{requirement_id:'degree',category:'qualification',description:'A relevant degree is preferred.',priority:'preferred',evidence:'A related degree is a plus.',group_id:null,group_operator:'all'}],
+ skills:[{name:'Python',category:'Technical',priority:'required',origin:'employer',evidence:'Backend programming with Python.'}]};
+const savedReview=()=>({review_id:'000000000000000000000081',version:1,target_type:'specific_job',extraction:structuredClone(extracted),baseline:structuredClone(extracted),metadata_origins:{},requirements_need_review:false,is_confirmed:false,generation:{}});
+let activeReview= savedReview();
 const calls:{path:string;body:Record<string,unknown>}[]=[];
 let fail=false;let selected=false;
 beforeEach(()=>{
- search.delete('source');search.delete('exploration');calls.length=0;fail=false;selected=false;vi.mocked(careerApi).mockClear();vi.mocked(importExplorationCV).mockClear();
+ search.delete('source');search.delete('exploration');search.delete('review');activeReview=savedReview();calls.length=0;fail=false;selected=false;vi.mocked(careerApi).mockClear();vi.mocked(importExplorationCV).mockClear();
  vi.mocked(careerApi).mockImplementation(async(path,_token,options)=>{
-  if(path==='/jd/extract')return {extraction:{role:'Engineer',field:'Software',company:null,skills:[{name:'Python',category:'Technical',priority:'required',origin:'employer',evidence:'Python'}]},generation:{}} as never;
+  if(path==='/jd/extract'||path===`/goals/${activeReview.review_id}`)return activeReview as never;
+  if(options?.method==='PATCH'){const body=JSON.parse(options.body as string);activeReview={...activeReview,extraction:body.content,version:activeReview.version+1};return activeReview as never;}
   if(path==='/jd/messages')return {reply:'Python is a programming language.',proposed_skills:null} as never;
   if(options?.method==='POST'){
    const body=JSON.parse(options.body as string);calls.push({path,body});
@@ -63,15 +70,78 @@ describe('shared career agent chat',()=>{
   search.set('source','jd');render(<CareerSessionProvider><ShowJD/></CareerSessionProvider>);
   fireEvent.click(screen.getByRole('button',{name:'Select test JD'}));
   expect(await screen.findByRole('heading',{name:'Skills to review'})).toBeVisible();
+  expect(screen.getByText('Build and maintain backend services.')).toBeVisible();
+  expect(screen.getByText('Develop reliable APIs.')).toBeVisible();
+  expect(screen.getByText('Singapore')).toBeVisible();
+  expect(screen.getByText('Junior')).toBeVisible();
+  expect(screen.getByText(/A relevant degree is preferred/)).toBeVisible();
+  expect(screen.getByText(/Supporting context: Backend programming with Python/)).toBeVisible();
   const composer=screen.getByRole('textbox',{name:'Message Coachify'});
   fireEvent.change(composer,{target:{value:'What is Python?'}});
   fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   expect(await screen.findByText('Python is a programming language.')).toBeVisible();
+  const request=JSON.parse(vi.mocked(careerApi).mock.calls.find(c=>c[0]==='/jd/messages')![2]!.body as string);
+  expect(request).toMatchObject({review_id:activeReview.review_id,expected_version:1,message:'What is Python?'});
+  expect(request).not.toHaveProperty('context');
+  expect(request).not.toHaveProperty('text');
+  expect(request).not.toHaveProperty('source_url');
   expect(vi.mocked(careerApi).mock.calls.some(c=>c[0]==='/goals/confirm')).toBe(false);
  });
- it('does not silently switch to exploration when a temporary JD is lost',()=>{
+ it('sends only approved skill changes as the next conversation context',async()=>{
+  const original=vi.mocked(careerApi).getMockImplementation()!;
+  const addition={name:'Communication',category:'Interpersonal',priority:'suggested',origin:'generated_guidance',evidence:null};
+  vi.mocked(careerApi).mockImplementation(async(path,token,options)=>path==='/jd/messages'
+   ?{reply:'Communication can help you explain API designs.',proposed_skills:[...extracted.skills,addition]} as never
+   :original(path,token,options));
+  search.set('source','jd');render(<CareerSessionProvider><ShowJD/></CareerSessionProvider>);
+  fireEvent.click(screen.getByRole('button',{name:'Select test JD'}));
+  await screen.findByRole('heading',{name:'Skills to review'});
+  const composer=screen.getByRole('textbox',{name:'Message Coachify'});
+  fireEvent.change(composer,{target:{value:'Suggest another skill.'}});
+  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  await screen.findByRole('button',{name:'Apply proposed changes'});
+  expect(screen.getByRole('region',{name:'Extracted career skills'})).not.toHaveTextContent('Communication');
+  fireEvent.click(screen.getByRole('button',{name:'Apply proposed changes'}));
+  await waitFor(()=>expect(screen.getByRole('region',{name:'Extracted career skills'})).toHaveTextContent('Communication'));
+  expect(screen.getByText(/Inferred \/ suggested/)).toBeVisible();
+  fireEvent.change(composer,{target:{value:'Why does that matter?'}});
+  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.filter(c=>c[0]==='/jd/messages')).toHaveLength(2));
+  const request=JSON.parse(vi.mocked(careerApi).mock.calls.filter(c=>c[0]==='/jd/messages')[1][2]!.body as string);
+  expect(activeReview.extraction.skills).toEqual([...extracted.skills,addition]);
+  expect(request.expected_version).toBe(2);
+  expect(request).not.toHaveProperty('context');
+  expect(request.conversation).toEqual([{role:'user',content:'Suggest another skill.'},{role:'assistant',content:'Communication can help you explain API designs.'}]);
+  expect(request).not.toHaveProperty('text');
+ });
+ it('restores a saved review without a JD and chats against its saved version',async()=>{
+  search.set('review',activeReview.review_id);mount();
+  await screen.findByRole('heading',{name:'Skills to review'});
+  expect(vi.mocked(careerApi).mock.calls.some(c=>c[0]==='/jd/extract')).toBe(false);
+  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Explain the responsibilities.'}});
+  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  await screen.findByText('Python is a programming language.');
+  const body=JSON.parse(vi.mocked(careerApi).mock.calls.find(c=>c[0]==='/jd/messages')![2]!.body as string);
+  expect(body.review_id).toBe(activeReview.review_id);expect(body.expected_version).toBe(1);
+  expect(body).not.toHaveProperty('text');expect(body).not.toHaveProperty('context');
+ });
+ it('retains failed review edits and reuses the save key on retry',async()=>{
+  const original=vi.mocked(careerApi).getMockImplementation()!;let reject=true;
+  vi.mocked(careerApi).mockImplementation(async(path,token,options)=>{if(options?.method==='PATCH'&&reject)throw new Error('Storage temporarily unavailable.');return original(path,token,options);});
+  search.set('review',activeReview.review_id);mount();
+  fireEvent.click(await screen.findByRole('button',{name:'Edit review'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Company'}),{target:{value:'Example Company'}});
+  fireEvent.click(screen.getByRole('button',{name:'Save review'}));
+  await screen.findByText('Storage temporarily unavailable.');
+  expect(screen.getByRole('textbox',{name:'Company'})).toHaveValue('Example Company');
+  const first=vi.mocked(careerApi).mock.calls.find(c=>c[2]?.method==='PATCH')![2]!.headers;
+  reject=false;fireEvent.click(screen.getByRole('button',{name:'Save review'}));
+  await screen.findByText('Review saved.');
+  expect(vi.mocked(careerApi).mock.calls.filter(c=>c[2]?.method==='PATCH')[1][2]!.headers).toEqual(first);
+ });
+ it('does not silently switch to exploration when a temporary JD is lost',async()=>{
   search.set('source','jd');mount();
-  expect(screen.getByText(/Your selected job description was temporary/)).toBeVisible();
+  expect(await screen.findByText(/Your selected job description was temporary/)).toBeVisible();
   expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
  });
  it('requires explicit replacement when reviewing a suggested role',async()=>{
