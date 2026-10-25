@@ -3,18 +3,20 @@
 Use the focused design references below for the next CV, JD/skills-analysis and
 roadmap work. The repository also retains the broader six-service scaffold for
 future expansion. P01–P16 are implemented in the frontend/profile slice; Career
-currently prepares temporary URL/document previews. Structured interpretation,
+currently prepares temporary URL/document previews; internal AI and data-contract
+foundations are implemented. User-facing structured interpretation,
 research, gap analysis and roadmap generation remain planned.
 
 ## Working design references
 
 | File | Purpose |
 |---|---|
-| [MongoDB collections](diagrams/mongodb_collections_uml.mmd) | Supplied skills-service model: users, cvs, career_targets, interview_research and skill_gap_analyses, with ID references. |
+| [MongoDB collections](diagrams/mongodb_collections_uml.mmd) | Supplied skills-service model: users, cvs, career_goals, interview_research and skill_gap_analyses, with ID references. |
 | [Embedded objects](diagrams/mongodb_embedded_objects_uml.mmd) | Supplied CvSkill, TargetSkill, InterviewSkill, ResearchSource and GapResult structures embedded in those collections. |
 | [Dockerised CV/JD/roadmap architecture](diagrams/dockerised-mvp.puml) | Scoped MongoDB design for CV ingestion, JD/career/skills analysis and roadmap services, with existing frontend/gateway/Profile dependencies. Expand as more services are designed. |
 
-The two Mermaid sources are copied unchanged. Open `.mmd` files in a Mermaid
+The Mermaid sources follow the supplied design, with collection naming and
+identity/version/provenance details aligned to the implemented contracts. Open `.mmd` files in a Mermaid
 preview and `.puml` files in a PlantUML preview. These are design references;
 implementation status and detailed API contracts remain in the owning service.
 The skills-service model spans CV and Career responsibilities in the current

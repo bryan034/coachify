@@ -1,6 +1,6 @@
 # Docker deployment structure
 
-The active slice includes Profile, Career preview imports and a development-only Mailpit inbox in `infrastructure/docker/compose.yaml`, with `infrastructure/gateway/nginx.conf` and `infrastructure/mongodb/init-profile.js`. See the [application setup guide](../../docs/setup.md). Career uses a read-only container and private, bounded temporary tmpfs; it does not connect to MongoDB or an AI provider. The remaining notes below describe the original scaffold templates.
+The active slice includes Profile, Career preview imports and a development-only Mailpit inbox in `infrastructure/docker/compose.yaml`, with `infrastructure/gateway/nginx.conf` and `infrastructure/mongodb/init-profile.js`. See the [application setup guide](../../docs/setup.md). Career uses a read-only container and private, bounded temporary tmpfs; it does not connect to MongoDB. Its internal AI adapter is configured through backend-only `AI_*` settings, disabled by default; preview endpoints do not call it. The remaining notes below describe the original scaffold templates.
 
 
 `compose.yaml.example` is an intentionally inactive deployment blueprint. It uses a `scaffold` profile for application services, and references comment-only Dockerfile examples. It cannot build or start a working Coachify application. Do not interpret Compose schema validity as application readiness.

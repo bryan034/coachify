@@ -36,6 +36,19 @@ services:
     build: ../../services/career-service
     environment:
       PROFILE_SERVICE_URL: http://profile-service:8000
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_PROVIDER: ${AI_PROVIDER:-groq}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.groq.com/openai/v1}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_RESPONSE_MODE: ${AI_RESPONSE_MODE:-json_object}
+      AI_TOKEN_PARAMETER: ${AI_TOKEN_PARAMETER:-max_completion_tokens}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-20}
+      AI_RETRIES: ${AI_RETRIES:-1}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-4096}
+      AI_CONTEXT_TOKENS: ${AI_CONTEXT_TOKENS:-65536}
+      AI_REQUESTS_PER_MINUTE: ${AI_REQUESTS_PER_MINUTE:-6}
+      AI_CONCURRENCY: ${AI_CONCURRENCY:-2}
       TMPDIR: /tmp
     depends_on: [profile-service]
     networks: [backend]

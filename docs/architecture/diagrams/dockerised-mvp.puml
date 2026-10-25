@@ -34,7 +34,7 @@ node "Docker Compose — focused design" {
 
   node "MongoDB — local development" as Mongo <<Docker container>> {
     database "CV-owned database\ncvs" as CVDB
-    database "Career-owned database\ncareer_targets\ninterview_research\nskill_gap_analyses" as CareerDB
+    database "Career-owned database\ncareer_goals\ninterview_research\nskill_gap_analyses" as CareerDB
     database "Roadmap-owned database\nPlans, milestones and task history\nSchema to be expanded" as RoadmapDB
   }
   artifact "Service-private temporary CV storage\nOriginal-file cleanup per policy" as Uploads <<Private storage>>
@@ -64,7 +64,7 @@ Career --> Sources : Bounded permitted research retrieval
 Roadmap --> LLM : Personalised roadmap generation
 
 note bottom of Career
-  One career_targets model: specific_job or career_exploration.
+  One career_goals model: specific_job or career_exploration.
   company may be null. Interview research is reusable public context;
   private CV/chat data must not enter that shared research.
   Persist structured output and bounded evidence, not full raw JD text.
@@ -85,7 +85,8 @@ legend bottom
   Existing Profile/auth is shown only as an external dependency.
   Dashboard, review/scheduling and future services are intentionally omitted;
   extend this diagram when their scope is agreed.
-  Current implementation: Profile/auth and temporary Career JD previews.
+  Current implementation: Profile/auth, temporary Career JD previews,
+  internal AI adapter and CV/Career data contracts (not workflow endpoints).
   Structured extraction, research, gap analysis and roadmap generation are planned.
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend

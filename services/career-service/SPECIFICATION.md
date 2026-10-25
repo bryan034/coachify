@@ -4,8 +4,9 @@
 
 The user's revised scope on 25 October 2026 supersedes the earlier source-storage
 plan for this iteration. Implement input/previews for J01, J06 and J07 only. Raw
-or extracted text must not be persisted. No AI provider, extraction schema,
-structured information, target save or assessment is implemented yet. Full Jira
+or extracted text must not be persisted. The preview endpoints do not perform AI processing or save structured goals.
+Internal AI/provider and data-contract foundations are described in
+[ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). Full Jira
 criteria for saved source recovery/interpretation remain deferred, not fulfilled.
 
 Career owns input processing. The frontend uses `/career-goal`, directly below
@@ -65,7 +66,7 @@ disabled for imports; request bodies/URL fields/documents are not logged.
 ## Storage and Docker
 
 The Career container is non-root, read-only, on the backend network only and has
-no MongoDB/LLM environment settings. Private `/tmp` is a bounded 32 MiB tmpfs with
+optional backend-only AI settings and no runtime MongoDB connection. Private `/tmp` is a bounded 32 MiB tmpfs with
 0700 access for the service user. Multipart files use generated spool names and
 are always closed by the form context on success/failure. No named upload volume
 or original-file retention is introduced. Request/child buffers expire with the
@@ -74,8 +75,8 @@ lifecycle. TMPDIR can be changed for direct service runs; keep it private.
 
 ## Future boundary
 
-Once the extraction schema is agreed, add a separately specified provider
-integration to interpret confirmed source in memory. Persist only the approved
+The provider adapter and structured schemas are now defined. Later J stories
+will connect confirmed source in memory to the internal adapter. Persist only the approved
 structured information and agreed provenance. Do not quietly reintroduce source
 text persistence to fulfil earlier criteria. Chat and generalized skill guidance
 remain separate backlog stories.

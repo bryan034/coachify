@@ -1,10 +1,10 @@
-# Structure-only project metadata. Select and pin dependencies before implementation.
+# CV schema contracts; ingestion endpoints remain planned.
 [project]
 name = "coachify-cv-service"
 version = "0.0.0"
-description = "Structure-only cv ingestion service; planned FastAPI application."
+description = "CV MongoDB contracts; ingestion endpoints remain planned."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["pydantic==2.14.1", "pymongo==4.19.0"]
 
 [build-system]
 requires = ["setuptools>=75,<81"]

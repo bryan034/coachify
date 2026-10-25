@@ -3,7 +3,8 @@
 ## Current state
 
 The profile slice has component, browser and API tests plus real MongoDB integration.
-Other services still have empty suites. Empty suites pass; real failures do not.
+Career has preview/AI/contract tests and CV has contract tests; Roadmap, Dashboard
+and Review still have empty suites. Empty suites pass; real failures do not.
 See [application setup](setup.md) and the affected service README for setup and service details.
 
 ## Local commands
@@ -91,3 +92,13 @@ three methods, Unicode, failure recovery, method-switch races and temporary stat
 The full-stack Career browser test uses the usual disposable Compose stack and
 Mailpit variables; no Groq key or live website is used. Career imports are rate
 limited at the gateway; use synthetic sources and discard only test-stack data.
+
+## AI and analysis contracts
+
+The Career suite tests the Groq-compatible adapter through fake HTTP responses;
+no live key, external provider calls or billing are needed. Career and CV each
+validate the exported MongoDB schemas. Their `MONGODB_TEST_URI` tests create/drop
+random `coachify_analysis_test_*` / `coachify_cv_test_*` databases, checking real
+BSON, indexes, private ownership and idempotent/versioned writes. Use only a
+disposable MongoDB. The required `analysis-integration` CI matrix runs both suites
+against MongoDB; ordinary backend jobs skip only their database-dependent tests.

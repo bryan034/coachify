@@ -1,0 +1,421 @@
+{
+  "$defs": {
+    "Generation": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "prompt_version": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "analysis-v1",
+          "default": "analysis-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "prompt_version",
+        "generated_at"
+      ],
+      "title": "Generation",
+      "type": "object"
+    },
+    "NonSkillRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "requirement_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "qualification",
+            "eligibility",
+            "location",
+            "other"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "priority": {
+          "enum": [
+            "required",
+            "preferred",
+            "suggested"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "evidence": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "group_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group Id"
+        },
+        "group_operator": {
+          "default": "all",
+          "enum": [
+            "all",
+            "any"
+          ],
+          "title": "Group Operator",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requirement_id",
+        "category",
+        "description",
+        "priority",
+        "evidence"
+      ],
+      "title": "NonSkillRequirement",
+      "type": "object"
+    },
+    "TargetSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_id": {
+          "maxLength": 120,
+          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$",
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "category": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "priority": {
+          "enum": [
+            "required",
+            "preferred",
+            "suggested"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "required_proficiency": {
+          "anyOf": [
+            {
+              "enum": [
+                "beginner",
+                "intermediate",
+                "advanced",
+                "expert"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Proficiency"
+        },
+        "required_experience_months": {
+          "anyOf": [
+            {
+              "maximum": 1200,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Experience Months"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence"
+        },
+        "origin": {
+          "enum": [
+            "employer",
+            "generated_guidance",
+            "user_declaration"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "source_urls": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Source Urls",
+          "type": "array"
+        }
+      },
+      "required": [
+        "skill_id",
+        "name",
+        "category",
+        "priority",
+        "origin"
+      ],
+      "title": "TargetSkill",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "_id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "analysis-v1",
+      "default": "analysis-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "skill_mapping_version": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Skill Mapping Version",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "user_id": {
+      "title": "User Id",
+      "type": "string"
+    },
+    "target_type": {
+      "enum": [
+        "specific_job",
+        "career_exploration"
+      ],
+      "title": "Target Type",
+      "type": "string"
+    },
+    "field": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Field",
+      "type": "string"
+    },
+    "role": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Role",
+      "type": "string"
+    },
+    "company": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Company"
+    },
+    "location": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Location"
+    },
+    "seniority_level": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Seniority Level"
+    },
+    "job_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Job Url"
+    },
+    "interests": {
+      "items": {
+        "maxLength": 160,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Interests",
+      "type": "array"
+    },
+    "preferences": {
+      "items": {
+        "maxLength": 160,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Preferences",
+      "type": "array"
+    },
+    "skills": {
+      "items": {
+        "$ref": "#/$defs/TargetSkill"
+      },
+      "maxItems": 200,
+      "title": "Skills",
+      "type": "array"
+    },
+    "non_skill_requirements": {
+      "items": {
+        "$ref": "#/$defs/NonSkillRequirement"
+      },
+      "maxItems": 100,
+      "title": "Non Skill Requirements",
+      "type": "array"
+    },
+    "requirements_source": {
+      "enum": [
+        "pasted_jd",
+        "url_jd",
+        "document_jd",
+        "career_exploration"
+      ],
+      "title": "Requirements Source",
+      "type": "string"
+    },
+    "generation_version": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Generation Version",
+      "type": "string"
+    },
+    "generation": {
+      "$ref": "#/$defs/Generation"
+    }
+  },
+  "required": [
+    "_id",
+    "version",
+    "skill_mapping_version",
+    "created_at",
+    "updated_at",
+    "user_id",
+    "target_type",
+    "field",
+    "role",
+    "requirements_source",
+    "generation_version",
+    "generation"
+  ],
+  "title": "CareerGoal",
+  "type": "object"
+}

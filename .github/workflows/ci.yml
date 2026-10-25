@@ -93,7 +93,7 @@ jobs:
     services:
       mongodb:
         image: mongo:8.0
-        ports: [27017:27017]
+        ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
           --health-interval 5s --health-timeout 5s --health-retries 20
@@ -106,6 +106,34 @@ jobs:
         working-directory: services/profile-service
       - run: python -m pytest
         working-directory: services/profile-service
+        env:
+          MONGODB_TEST_URI: mongodb://localhost:27017
+
+  analysis-integration:
+    name: Analysis MongoDB contracts (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [career, cv]
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate contracts and MongoDB repositories
+        working-directory: services/${{ matrix.service }}-service
+        run: |
+          python -m pip install -e '.[test]'
+          python -m pytest
         env:
           MONGODB_TEST_URI: mongodb://localhost:27017
 
@@ -153,7 +181,7 @@ jobs:
   test-gate:
     name: Test gate
     if: ${{ always() }}
-    needs: [frontend-unit, frontend-e2e, backend, profile-integration, local-ui-integration]
+    needs: [frontend-unit, frontend-e2e, backend, profile-integration, analysis-integration, local-ui-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -163,6 +191,7 @@ jobs:
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           LOCAL_UI_RESULT: ${{ needs.local-ui-integration.result }}
+          ANALYSIS_RESULT: ${{ needs.analysis-integration.result }}
           INTEGRATION_RESULT: ${{ needs.profile-integration.result }}
         run: |
           test "$UNIT_RESULT" = success
@@ -170,3 +199,4 @@ jobs:
           test "$BACKEND_RESULT" = success
           test "$INTEGRATION_RESULT" = success
           test "$LOCAL_UI_RESULT" = success
+          test "$ANALYSIS_RESULT" = success

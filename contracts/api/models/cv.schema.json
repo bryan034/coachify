@@ -1,0 +1,227 @@
+{
+  "$defs": {
+    "CvSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_id": {
+          "maxLength": 120,
+          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$",
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "category": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "proficiency": {
+          "anyOf": [
+            {
+              "enum": [
+                "beginner",
+                "intermediate",
+                "advanced",
+                "expert"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proficiency"
+        },
+        "experience_months": {
+          "anyOf": [
+            {
+              "maximum": 1200,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experience Months"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context"
+        },
+        "evidence": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "evidence_type": {
+          "enum": [
+            "cv",
+            "user_declaration"
+          ],
+          "title": "Evidence Type",
+          "type": "string"
+        },
+        "explicit": {
+          "title": "Explicit",
+          "type": "boolean"
+        },
+        "original_evidence": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original Evidence"
+        }
+      },
+      "required": [
+        "skill_id",
+        "name",
+        "category",
+        "evidence",
+        "evidence_type",
+        "explicit"
+      ],
+      "title": "CvSkill",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "CV API boundary snapshot, not permission to query the CV database.",
+  "properties": {
+    "_id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "analysis-v1",
+      "default": "analysis-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "skill_mapping_version": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Skill Mapping Version",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "user_id": {
+      "title": "User Id",
+      "type": "string"
+    },
+    "file_name": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "File Name",
+      "type": "string"
+    },
+    "file_type": {
+      "enum": [
+        "pdf",
+        "docx",
+        "txt"
+      ],
+      "title": "File Type",
+      "type": "string"
+    },
+    "file_url": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "File Url"
+    },
+    "skills": {
+      "items": {
+        "$ref": "#/$defs/CvSkill"
+      },
+      "maxItems": 200,
+      "title": "Skills",
+      "type": "array"
+    },
+    "extraction_status": {
+      "enum": [
+        "pending",
+        "processing",
+        "succeeded",
+        "failed"
+      ],
+      "title": "Extraction Status",
+      "type": "string"
+    },
+    "extraction_version": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Extraction Version",
+      "type": "string"
+    },
+    "profile_version": {
+      "minimum": 1,
+      "title": "Profile Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_id",
+    "version",
+    "skill_mapping_version",
+    "created_at",
+    "updated_at",
+    "user_id",
+    "file_name",
+    "file_type",
+    "extraction_status",
+    "extraction_version",
+    "profile_version"
+  ],
+  "title": "CvSnapshot",
+  "type": "object"
+}

@@ -2,7 +2,7 @@ classDiagram
 direction TB
 
 class users {
-    +ObjectId _id [PK]
+    +String id [canonical_UUID]
     +String name
     +String email
     +String auth_provider
@@ -11,21 +11,28 @@ class users {
 }
 
 class cvs {
+    +Number version
+    +String schema_version
+    +String skill_mapping_version
     +ObjectId _id [PK]
-    +ObjectId user_id [FK]
+    +String user_id [Profile_UUID]
     +String file_name
-    +String file_url
+    +String file_url?
     +String file_type
     +CvSkill[] skills
     +String extraction_status
     +String extraction_version
+    +Number profile_version
     +Date created_at
     +Date updated_at
 }
 
-class career_targets {
+class career_goals {
+    +Number version
+    +String schema_version
+    +String skill_mapping_version
     +ObjectId _id [PK]
-    +ObjectId user_id [FK]
+    +String user_id [Profile_UUID]
     +String target_type
     +String field
     +String role
@@ -38,11 +45,15 @@ class career_targets {
     +TargetSkill[] skills
     +String requirements_source
     +String generation_version
+    +Generation generation
     +Date created_at
     +Date updated_at
 }
 
 class interview_research {
+    +Number version
+    +String schema_version
+    +String skill_mapping_version
     +ObjectId _id [PK]
     +String company?
     +String field
@@ -52,30 +63,39 @@ class interview_research {
     +InterviewSkill[] skills
     +ResearchSource[] sources
     +String research_status
-    +Date last_researched_at
+    +Date last_researched_at?
+    +Generation generation?
     +Date created_at
     +Date updated_at
 }
 
 class skill_gap_analyses {
+    +Number version
+    +String schema_version
+    +String skill_mapping_version
     +ObjectId _id [PK]
-    +ObjectId user_id [FK]
+    +String user_id [Profile_UUID]
     +ObjectId cv_id [FK]
-    +ObjectId career_target_id [FK]
+    +ObjectId career_goal_id [FK]
     +ObjectId[] research_ids
     +GapResult[] job_skill_gaps
     +GapResult[] interview_prep_gaps
     +String analysis_status
     +String analysis_version
+    +InputVersions inputs
+    +Generation generation
     +String summary
     +Date created_at
     +Date updated_at
 }
 
 users "1" --> "0..*" cvs : owns
-users "1" --> "0..*" career_targets : creates
+users "1" --> "0..*" career_goals : creates
 users "1" --> "0..*" skill_gap_analyses : receives
 
 cvs "1" --> "0..*" skill_gap_analyses : used in
-career_targets "1" --> "0..*" skill_gap_analyses : evaluated in
+career_goals "1" --> "0..*" skill_gap_analyses : evaluated in
 interview_research "0..*" --> "0..*" skill_gap_analyses : referenced by
+
+note for users "Logical authority: existing Profile accounts; no collection rename or auth migration."
+note for career_goals "Structured fields and bounded evidence only; no raw JD text. Optional non_skill_requirements extension."

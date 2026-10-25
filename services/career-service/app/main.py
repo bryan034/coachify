@@ -1,4 +1,4 @@
-"""Authenticated temporary previews. No database, LLM, source logging or saved operations."""
+"""Authenticated temporary previews, with an internal opt-in AI adapter."""
 import asyncio
 import os
 from contextlib import asynccontextmanager
@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from app.core.auth import bearer, current_account
+from app.ai.adapter import AIAdapter
+from app.ai.config import AISettings
 from app.domain.preview import run_preview
 from app.schemas.preview import MAX_BODY, MAX_FILE, Preview, UrlInput, ImportErrorView
 
@@ -42,6 +44,13 @@ def create_app(profile_client=None, processor=run_preview):
     @asynccontextmanager
     async def lifespan(app):
         app.state.slots = asyncio.Semaphore(2)
+        async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as ai_client:
+            app.state.ai = AIAdapter(AISettings.from_env(), ai_client)
+            async with profile_lifespan(app):
+                yield
+
+    @asynccontextmanager
+    async def profile_lifespan(app):
         if profile_client is not None:
             app.state.profile_client = profile_client
             yield

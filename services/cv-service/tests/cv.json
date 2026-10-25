@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "skill_mapping_version": "skills-v1",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z",
+  "_id": "000000000000000000000001",
+  "user_id": "11111111-1111-4111-8111-111111111111",
+  "file_name": "synthetic.txt",
+  "file_type": "txt",
+  "skills": [
+    {
+      "skill_id": "language.sql",
+      "name": "SQL",
+      "category": "language",
+      "proficiency": null,
+      "experience_months": null,
+      "evidence": "I wrote the SQL query only.",
+      "original_evidence": "Delivered the entire data platform.",
+      "evidence_type": "user_declaration",
+      "explicit": true
+    }
+  ],
+  "extraction_status": "succeeded",
+  "extraction_version": "extract-1",
+  "profile_version": 1
+}

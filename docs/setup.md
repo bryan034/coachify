@@ -140,3 +140,36 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 The MongoDB container includes an `rseq` compatibility setting for this machine's
 Docker Desktop kernel. Review the deployment environment before production.
 See [testing](testing.md) for automated checks and disposable test stacks.
+
+## Optional Groq configuration
+
+SCRUM-282 adds the backend adapter; existing JD previews still make no AI calls.
+To prepare the adapter, create a key in the
+[Groq console](https://console.groq.com/keys), choose an available model from
+[Groq's models page](https://console.groq.com/docs/models), and set these in your
+ignored `infrastructure/docker/.env`:
+
+```dotenv
+AI_ENABLED=true
+AI_PROVIDER=groq
+AI_BASE_URL=https://api.groq.com/openai/v1
+AI_MODEL=YOUR_SUPPORTED_MODEL_ID
+AI_API_KEY=YOUR_PRIVATE_GROQ_KEY
+AI_RESPONSE_MODE=json_object
+```
+
+Keep `AI_ENABLED=false` if you only need current previews. No credentials are
+needed for automated AI tests. Only Career receives the key; never prefix it
+`NEXT_PUBLIC_` or commit it. The service's
+[contract guide](../services/career-service/ANALYSIS_CONTRACTS.md) explains response
+modes and limits. Rebuild Career after editing settings:
+
+```sh
+docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up --build -d --no-deps career-service
+docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
+```
+
+SCRUM-310 adds models and opt-in repositories; no new database users or application
+MongoDB passwords are needed yet. Later persistence stories must provision a
+separate scoped Career/CV credential and wire the repository to its own database.
+Existing Profile credentials and data remain unchanged.

@@ -1,8 +1,8 @@
 # Career service
 
 Prepares temporary job-description previews for the **Career Goal** page. It uses
-Profile's session API to authenticate imports. It has no database connection or
-LLM integration in this iteration.
+Profile's session API to authenticate imports. Preview endpoints have no database writes or AI calls. Internal AI and MongoDB
+contract foundations are available for later Career Goal stories.
 
 ## Pasted description — J01
 
@@ -35,6 +35,16 @@ into private temporary storage and are closed/deleted after each request. Text i
 not written to MongoDB, browser storage, logs or saved processing records.
 
 This is the input/preview slice of J01/J06/J07. Saved goals, restart recovery,
-interpretation and J02–J05 review are not implemented. No Groq key is required.
-Future MongoDB records will contain approved structured fields after that schema
-is defined. See [setup](../../docs/setup.md) and [the API contract](../../contracts/api/career.yaml).
+interpretation and J02–J05 review are not implemented. No Groq key is required for previews.
+MongoDB contracts now accept approved structured fields and bounded evidence;
+full raw/extracted JD text is rejected. See [setup](../../docs/setup.md) and [the API contract](../../contracts/api/career.yaml).
+
+## AI and data foundations — SCRUM-282 / SCRUM-310
+
+A configurable Groq adapter, validated collection models and opt-in repositories
+are implemented internally. **No new HTTP endpoints** are exposed. They support
+`career_goals`, public interview research and versioned gap analyses; CV owns its
+own records. Existing user accounts are reused.
+
+See [configuration and contracts](ANALYSIS_CONTRACTS.md). AI stays disabled by
+default; later chat/extraction stories will connect it to the frontend.

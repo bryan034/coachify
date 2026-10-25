@@ -1,9 +1,9 @@
-# Contract shell only: no endpoint or request/response schema is implemented.
+# Endpoint shell; CV document schema is defined in models/cv.schema.json.
 openapi: 3.1.0
 info:
   title: Coachify CV ingestion API
   version: 0.0.0
-  description: Structure-only contract shell. Public prefix /api/v1/cv.
+  description: Planned CV ingestion endpoints. Record contracts exist; public prefix /api/v1/cv is not routed yet.
 servers:
   - url: /api/v1
 paths: {}

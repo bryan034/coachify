@@ -13,7 +13,7 @@ Career-readiness planner for users in Singapore, including students, National Se
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
 - Account access: email/password accounts with OTP email verification, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
-- AI provider planned: Groq; no AI integration is active in the current preview slice. Application hosting is not selected.
+- AI provider: Groq adapter implemented internally; preview endpoints do not call AI. Application hosting is not selected.
 
 ## Repository layout
 
@@ -48,4 +48,4 @@ The current documentation under `docs/` reflects the Next.js and MongoDB decisio
 
 ## Implementation scope
 
-Use the active `infrastructure/docker/compose.yaml` for the implemented profile slice. Files ending in `.example` remain inactive planning templates. Career supports temporary URL/document previews without database writes or AI calls; other services retain source placeholders. The profile API contract is implemented; remaining contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.
+Use the active `infrastructure/docker/compose.yaml` for the implemented profile slice. Files ending in `.example` remain inactive planning templates. Career supports temporary URL/document previews without database writes or AI calls; CV/analysis MongoDB contracts and opt-in repositories are implemented; other services retain source placeholders. Profile and preview API contracts are implemented; remaining endpoint contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.
