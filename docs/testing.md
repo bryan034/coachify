@@ -132,3 +132,9 @@ conflicts and immutable history. Career MongoDB tests use random
 `coachify_reviews_test_*` databases. Browser fixtures cover extract → chat proposal →
 review save → reload → explicit confirmation, including mobile layout. External AI
 remains mocked; these checks do not establish live-model semantic accuracy.
+
+The Local UI and MongoDB job uploads `local-ui-integration-results` for seven days,
+including retained failure traces and error context. Its Career preview journey
+keeps AI disabled: it asserts the real extraction API returns `503/not_configured`,
+the UI preserves retry controls and disables chat, and no review was saved. It does
+not depend on introductory wording or use live Groq credentials.
