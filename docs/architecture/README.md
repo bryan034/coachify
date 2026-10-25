@@ -1,6 +1,40 @@
-# Current Coachify architecture
+# Coachify architecture
 
-This is the current design: Next.js App Router + React + TypeScript frontend, NGINX gateway, six Python FastAPI services, and MongoDB. It supersedes PostgreSQL/frontend-runtime assumptions in the earlier `outputs/` documents. P01–P16 are implemented in the frontend/profile slice. Career currently prepares temporary URL/document previews; interpretation and the remaining services are planned.
+Use the focused design references below for the next CV, JD/skills-analysis and
+roadmap work. The repository also retains the broader six-service scaffold for
+future expansion. P01–P16 are implemented in the frontend/profile slice; Career
+currently prepares temporary URL/document previews. Structured interpretation,
+research, gap analysis and roadmap generation remain planned.
+
+## Working design references
+
+| File | Purpose |
+|---|---|
+| [MongoDB collections](diagrams/mongodb_collections_uml.mmd) | Supplied skills-service model: users, cvs, career_targets, interview_research and skill_gap_analyses, with ID references. |
+| [Embedded objects](diagrams/mongodb_embedded_objects_uml.mmd) | Supplied CvSkill, TargetSkill, InterviewSkill, ResearchSource and GapResult structures embedded in those collections. |
+| [Dockerised CV/JD/roadmap architecture](diagrams/dockerised-mvp.puml) | Scoped MongoDB design for CV ingestion, JD/career/skills analysis and roadmap services, with existing frontend/gateway/Profile dependencies. Expand as more services are designed. |
+
+The two Mermaid sources are copied unchanged. Open `.mmd` files in a Mermaid
+preview and `.puml` files in a PlantUML preview. These are design references;
+implementation status and detailed API contracts remain in the owning service.
+The skills-service model spans CV and Career responsibilities in the current
+checkout: map collection ownership through Jira contract task SCRUM-310 and the
+[service boundaries](service-boundaries.md), rather than creating duplicate user
+or profile authorities. `users` refers to the existing account authority;
+`[FK]` denotes an application-validated ID reference. Private file retention and
+optional/version/provenance details must be reconciled with the current contracts.
+
+The supplied PlantUML source was an older six-service PostgreSQL diagram. Its
+[unchanged original](diagrams/reference/dockerised-mvp.puml) is retained for
+traceability. The active sibling diagram uses MongoDB and the requested three
+core services. It does not remove the existing Profile/auth implementation or
+require future dashboard/review services to be built now.
+
+## Broader service scaffold — future context
+
+The overview below preserves the wider six-service plan. It is not the focused
+three-service implementation scope and supersedes the PostgreSQL assumptions in
+earlier `outputs/` documents.
 
 ```mermaid
 flowchart TB

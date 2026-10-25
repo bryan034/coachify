@@ -1,0 +1,87 @@
+classDiagram
+direction TB
+
+class CvSkill {
+    +String skill_id
+    +String name
+    +String category
+    +String proficiency?
+    +Number experience_months?
+    +String context?
+    +String evidence
+    +String evidence_type?
+    +Boolean explicit
+}
+
+class TargetSkill {
+    +String skill_id
+    +String name
+    +String category
+    +String priority
+    +String required_proficiency?
+    +Number required_experience_months?
+    +String context?
+    +String evidence?
+    +String origin
+    +String[] source_urls
+}
+
+class InterviewSkill {
+    +String skill_id
+    +String name
+    +String category
+    +String interview_stage?
+    +String assessment_type?
+    +String difficulty?
+    +String[] question_patterns
+    +Number independent_report_count
+    +String[] source_ids
+}
+
+class ResearchSource {
+    +String source_id
+    +String platform
+    +String url
+    +String title?
+    +String evidence?
+    +Date reported_date?
+    +Date published_date?
+    +String role_match?
+    +String reliability?
+}
+
+class GapResult {
+    +String skill_id
+    +String name
+    +String gap_type
+    +String match_status
+    +String importance?
+    +String cv_proficiency?
+    +String required_proficiency?
+    +String explanation
+    +String recommendation?
+}
+
+class cvs {
+    +CvSkill[] skills
+}
+
+class career_targets {
+    +TargetSkill[] skills
+}
+
+class interview_research {
+    +InterviewSkill[] skills
+    +ResearchSource[] sources
+}
+
+class skill_gap_analyses {
+    +GapResult[] job_skill_gaps
+    +GapResult[] interview_prep_gaps
+}
+
+cvs *-- CvSkill : embeds
+career_targets *-- TargetSkill : embeds
+interview_research *-- InterviewSkill : embeds
+interview_research *-- ResearchSource : embeds
+skill_gap_analyses *-- GapResult : embeds

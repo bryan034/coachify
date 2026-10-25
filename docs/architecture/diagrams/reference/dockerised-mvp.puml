@@ -1,0 +1,131 @@
+@startuml coachify_dockerised_mvp
+title Coachify — Dockerised MVP architecture
+top to bottom direction
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam defaultFontName SansSerif
+skinparam nodesep 35
+skinparam ranksep 40
+skinparam ArrowColor #285F91
+skinparam nodeBackgroundColor #F4F8FC
+skinparam nodeBorderColor #8DA6BC
+skinparam componentBackgroundColor white
+skinparam databaseBackgroundColor #EFF6FA
+
+actor "Student browser\nCV, target role, tasks and progress" as Browser
+
+cloud "External providers" {
+  component "Managed authentication\nSign-in and access tokens" as Auth
+  component "LLM API\nCV extraction, career assessment\nand roadmap generation only" as LLM
+}
+
+node "Docker Compose environment" as Compose {
+  node "Web frontend" as Web <<Docker container>> {
+    artifact "Forms, roadmap editor,\npersistent dashboard" as WebUI
+  }
+  node "API gateway" as Gateway <<Docker container>> {
+    artifact "Routing, token validation,\nrequest and upload limits" as GatewayRules
+  }
+
+  node "Private backend network" as Backend {
+    node "Student profile service" as Profile <<Docker container>> {
+      artifact "/api/v1/profile\nEducation, experience, contributions, skills\nOwns: profile database" as ProfileAPI
+    }
+    node "CV ingestion service" as CV <<Docker container>> {
+      artifact "/api/v1/cv\nUpload, extract, clarify personal contribution\nOwns: ingestion database" as CVAPI
+    }
+    node "Career assessment service" as Career <<Docker container>> {
+      artifact "/api/v1/career\nJob requirements, strengths and capability gaps\nOwns: career database" as CareerAPI
+    }
+    node "Roadmap and task service" as Roadmap <<Docker container>> {
+      artifact "/api/v1/roadmaps\nGenerate, edit, track tasks and apply revisions\nOwns: roadmap database" as RoadmapAPI
+    }
+    node "Progress dashboard service" as Dashboard <<Docker container>> {
+      artifact "/api/v1/dashboard\nDaily, weekly, monthly and whole-plan views\nStateless: reads through service APIs" as DashboardAPI
+    }
+    node "Review and scheduling service" as Review <<Docker container>> {
+      artifact "/api/v1/reviews + /review-schedules\nPace analysis, scheduled reviews, adaptation\nOwns: review database + scheduler" as ReviewAPI
+    }
+  }
+
+  node "PostgreSQL — one container" as PostgreSQL <<Docker container>> {
+    database "profile" as ProfileDB
+    database "ingestion" as IngestionDB
+    database "career" as CareerDB
+    database "roadmap" as RoadmapDB
+    database "review" as ReviewDB
+  }
+
+  artifact "Temporary CV uploads\nCV service only\nNot an additional container" as Uploads <<Private volume>>
+}
+
+Browser --> Web : Use application
+Browser ..> Auth : Sign in
+Web --> Gateway : /api/v1
+Gateway ..> Auth : Validate token
+
+Gateway --> Profile : Route requests
+Gateway --> CV : Route requests
+Gateway --> Career : Route requests
+Gateway --> Roadmap : Route requests
+Gateway --> Dashboard : Route requests
+Gateway --> Review : Route requests
+
+' A dependency arrow points from the API caller to the service it calls.
+CV --> Profile : Import clarified contributions
+Career --> Profile : Read versioned capabilities
+Roadmap --> Profile : Read planning inputs
+Roadmap --> Career : Read assessment
+Dashboard --> Roadmap : Read live task progress
+Dashboard --> Career : Read analysis
+Dashboard --> Review : Read review information
+Review --> Profile : Read planning inputs
+Review --> Career : Read assessment
+Review --> Roadmap : Analyse pace / request revisions
+Roadmap --> Review : Verify automatic-application policy
+
+CV --> LLM : CV extraction
+Career --> LLM : Career assessment
+Roadmap --> LLM : Roadmap generation
+
+Profile --> ProfileDB : Own data access
+CV --> IngestionDB : Own data access
+Career --> CareerDB : Own data access
+Roadmap --> RoadmapDB : Own data access
+Review --> ReviewDB : Own data access
+CV --> Uploads : Temporary file access
+
+note right of Gateway
+  Only web / gateway are exposed.
+  Backend service-to-service HTTP is authenticated.
+end note
+
+note bottom of PostgreSQL
+  Five logical databases; separate service credentials.
+  Dashboard accesses data through service APIs.
+end note
+
+note bottom of Roadmap
+  Task completed / reopened:
+  save task history, then automatically refetch dashboard.
+  No LLM is required for progress updates.
+end note
+
+note bottom of Review
+  Scheduled reviews run separately:
+  analyse pace, propose a revision, then approve or apply
+  according to the student's policy.
+end note
+
+legend bottom
+  |= Notation |= Meaning |
+  | Solid arrow | Application, API or data connection |
+  | Dashed arrow | Authentication |
+  Six backend services; nine Docker containers total.
+  External providers and the private volume are not containers.
+  Status: proposed architecture transcribed from the supplied image.
+  Source diagram date: 18 October 2026.
+  PostgreSQL is retained from that image; the newer MongoDB proposal is separate.
+endlegend
+@enduml
