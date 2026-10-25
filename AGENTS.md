@@ -10,6 +10,7 @@
 ## Architecture and safety
 
 - Stack: Next.js/React/TypeScript, FastAPI services, NGINX, MongoDB and Docker. Follow [service boundaries](docs/architecture/service-boundaries.md).
+- Before building CV, JD/skills-analysis or roadmap features, read the [MongoDB collections](docs/architecture/diagrams/mongodb_collections_uml.mmd), [embedded objects](docs/architecture/diagrams/mongodb_embedded_objects_uml.mmd) and [three-service architecture](docs/architecture/diagrams/dockerised-mvp.puml). Reconcile them with Jira and service contracts; keep the diagrams current as services are added.
 - Keep domain logic in backend services. Access another service’s data through its API, never its database. Keep schemas, contracts and frontend types consistent.
 - Enforce authentication, ownership and input validation in the backend. Handle failures, retries and concurrent updates without losing data.
 - Keep secrets and personal data out of Git, browser bundles, logs and fixtures; use synthetic test data. Keep databases/internal APIs private and credentials out of images.

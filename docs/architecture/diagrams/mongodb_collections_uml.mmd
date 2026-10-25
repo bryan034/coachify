@@ -1,0 +1,81 @@
+classDiagram
+direction TB
+
+class users {
+    +ObjectId _id [PK]
+    +String name
+    +String email
+    +String auth_provider
+    +Date created_at
+    +Date updated_at
+}
+
+class cvs {
+    +ObjectId _id [PK]
+    +ObjectId user_id [FK]
+    +String file_name
+    +String file_url
+    +String file_type
+    +CvSkill[] skills
+    +String extraction_status
+    +String extraction_version
+    +Date created_at
+    +Date updated_at
+}
+
+class career_targets {
+    +ObjectId _id [PK]
+    +ObjectId user_id [FK]
+    +String target_type
+    +String field
+    +String role
+    +String company?
+    +String location?
+    +String seniority_level?
+    +String job_url?
+    +String[] interests
+    +String[] preferences
+    +TargetSkill[] skills
+    +String requirements_source
+    +String generation_version
+    +Date created_at
+    +Date updated_at
+}
+
+class interview_research {
+    +ObjectId _id [PK]
+    +String company?
+    +String field
+    +String role
+    +String location?
+    +String seniority_level?
+    +InterviewSkill[] skills
+    +ResearchSource[] sources
+    +String research_status
+    +Date last_researched_at
+    +Date created_at
+    +Date updated_at
+}
+
+class skill_gap_analyses {
+    +ObjectId _id [PK]
+    +ObjectId user_id [FK]
+    +ObjectId cv_id [FK]
+    +ObjectId career_target_id [FK]
+    +ObjectId[] research_ids
+    +GapResult[] job_skill_gaps
+    +GapResult[] interview_prep_gaps
+    +String analysis_status
+    +String analysis_version
+    +String summary
+    +Date created_at
+    +Date updated_at
+}
+
+users "1" --> "0..*" cvs : owns
+users "1" --> "0..*" career_targets : creates
+users "1" --> "0..*" skill_gap_analyses : receives
+
+cvs "1" --> "0..*" skill_gap_analyses : used in
+career_targets "1" --> "0..*" skill_gap_analyses : evaluated in
+interview_research "0..*" --> "0..*" skill_gap_analyses : referenced by

@@ -1,0 +1,92 @@
+@startuml coachify_dockerised_mvp
+title Coachify — CV, JD / skills analysis and roadmap design
+left to right direction
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam defaultFontName SansSerif
+skinparam ArrowColor #285F91
+skinparam nodeBackgroundColor #F4F8FC
+skinparam nodeBorderColor #8DA6BC
+skinparam componentBackgroundColor white
+skinparam databaseBackgroundColor #EFF6FA
+
+actor "User browser" as Browser
+component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nOutside this three-service scope" as Profile
+cloud "Configured LLM provider\nGroq initially; server-side adapter" as LLM
+cloud "Permitted public interview sources\nCompany sites, Reddit, Glassdoor\nAvailability and access restrictions apply" as Sources
+
+node "Docker Compose — focused design" {
+  node "Next.js / React / TypeScript" as Web <<Docker container>>
+  node "NGINX API gateway" as Gateway <<Docker container>>
+
+  package "Private backend network" {
+    node "CV analyser\nservices/cv-service" as CV <<Docker container>> {
+      artifact "Upload, extract structured skills,\nclarify personal contributions\n/api/v1/cv (planned)" as CVAPI
+    }
+    node "JD / career and skills analyser\nservices/career-service" as Career <<Docker container>> {
+      artifact "Specific job or career exploration\nStructured target skills, interview research, gaps\n/api/v1/career" as CareerAPI
+    }
+    node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
+      artifact "Generate plans from versioned analyses\nEdit plans and track task progress\n/api/v1/roadmaps (planned)" as RoadmapAPI
+    }
+  }
+
+  node "MongoDB — local development" as Mongo <<Docker container>> {
+    database "CV-owned database\ncvs" as CVDB
+    database "Career-owned database\ncareer_targets\ninterview_research\nskill_gap_analyses" as CareerDB
+    database "Roadmap-owned database\nPlans, milestones and task history\nSchema to be expanded" as RoadmapDB
+  }
+  artifact "Service-private temporary CV storage\nOriginal-file cleanup per policy" as Uploads <<Private storage>>
+}
+
+Browser --> Web : Use application
+Web --> Gateway : /api/v1 requests
+Gateway --> Profile : Existing account / profile routes
+Gateway --> CV : CV routes (planned)
+Gateway --> Career : Career routes
+Gateway --> Roadmap : Roadmap routes (planned)
+
+' API dependencies point from caller to the service it calls.
+CV --> Profile : Validate account / import clarified contributions
+Career --> Profile : Validate session / read selected context
+Career --> CV : Read effective CV skills and extraction version
+Roadmap --> Profile : Read deadline and availability
+Roadmap --> Career : Read selected versioned gap analysis
+
+CV --> CVDB : Own records only
+Career --> CareerDB : Own records only
+Roadmap --> RoadmapDB : Own records only
+CV --> Uploads : Temporary original access
+CV --> LLM : Structured CV extraction
+Career --> LLM : Target skills / research synthesis / gap analysis
+Career --> Sources : Bounded permitted research retrieval
+Roadmap --> LLM : Personalised roadmap generation
+
+note bottom of Career
+  One career_targets model: specific_job or career_exploration.
+  company may be null. Interview research is reusable public context;
+  private CV/chat data must not enter that shared research.
+  Persist structured output and bounded evidence, not full raw JD text.
+  JD originals/previews use service-private temporary parsing storage.
+end note
+
+note bottom of Mongo
+  Separate service-owned databases and credentials.
+  No cross-service collection queries; use authenticated APIs.
+  Production may replace local MongoDB with MongoDB Atlas.
+  The users collection in the UML maps to the existing
+  Profile/account authority outside this diagram's three-service scope.
+end note
+
+legend bottom
+  Focused design direction, not a deployment or implementation claim.
+  Core scope: CV analyser, JD/career/skills analyser, roadmap service.
+  Existing Profile/auth is shown only as an external dependency.
+  Dashboard, review/scheduling and future services are intentionally omitted;
+  extend this diagram when their scope is agreed.
+  Current implementation: Profile/auth and temporary Career JD previews.
+  Structured extraction, research, gap analysis and roadmap generation are planned.
+  Collection and embedded-object schemas: sibling mongodb_*.mmd files.
+endlegend
+@enduml
