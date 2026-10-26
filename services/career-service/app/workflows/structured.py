@@ -29,6 +29,7 @@ def structured_node(node):
                 except AIError as error:
                     if error.code not in ('invalid_output','incomplete_output'): raise
                     attempt += 1
+                    if attempt > 6:raise  # Never spend tokens indefinitely repairing the same node.
                     feedback = {'reason': error.reason or ('incomplete_json' if error.code=='incomplete_output' else 'response_envelope'),
                                 'fields': list(error.fields), 'violations': list(error.violations)}
                     validation_feedback.set(feedback)

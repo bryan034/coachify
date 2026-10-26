@@ -26,7 +26,8 @@ class QuestionStore:
     def fetch(self,owner,row,topic,include_evidence=False):
         if topic not in GOAL_FIELDS:raise ValueError('Unsupported question topic')
         w=row['workspace'];goal=self.goal(owner,w['review_id'],GOAL_FIELDS[topic])
-        identifier=w['research_id']
+        identifier=w.get('research_id')
+        if not identifier:return goal,{}
         linked=self.research.linked(owner,str(row['goal_id']))
         if identifier not in linked:raise GoalError('Research reference was not found for this goal.',404)
         fields={'research_status':1,'sources.source_id':1,'sources.url':1,'sources.title':1}

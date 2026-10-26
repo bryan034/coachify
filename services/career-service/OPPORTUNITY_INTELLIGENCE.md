@@ -41,8 +41,9 @@ the optional `GEMINI_ENABLED` chat switch. Its Brave client always uses LLM Cont
 with the existing key, independently of the legacy `BRAVE_SEARCH_MODE` selection.
 No SDK or other dependency was added. No environment files are read or edited.
 
-The local 4,000-input and completed 7,000-token/user/rolling-minute rules remain
-Groq-only. Evidence is selected as complete entries within the configured token
+The atomic 7,000-token/user/rolling-minute admission budget is Groq-only.
+In-flight input/output reservations reconcile to actual usage; there is no separate
+4,000-input cap. Evidence is selected as complete entries within the configured token
 budget; oversized inputs are never silently sent. Model corrections are bounded
 for this pipeline independently of the legacy chat recovery policy.
 
@@ -200,3 +201,10 @@ normal checks.
 `tests/test_opportunity_startup.py` specifically covers research startup with
 Gemini chat disabled, each legacy Brave mode, missing credentials, explicit
 research disablement, and safe availability diagnostics.
+
+An invalid claim is excluded without discarding independently valid cited findings;
+a wholly invalid batch still receives only bounded repairs. Polling no longer restarts
+the legacy graph after this durable worker takes ownership. Provider cooldown and
+local Groq-window waits are distinguished. Saved-goal chat is available during research
+waits/failures, using Gemini coordination when configured. No provider `Retry-After`
+value is shortened to pretend a provider quota has reset.

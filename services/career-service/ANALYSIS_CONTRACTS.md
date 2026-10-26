@@ -163,35 +163,25 @@ extra proposal call within its original operation deadline. Prompt/schema output
 | `BRAVE_API_KEY` | Required for Brave research |
 | `BRAVE_SEARCH_MODE` | llm_context (default); search and answers require compatible API access |
 
-Coachify applies exactly two model-usage limits:
+Coachify applies a Groq-only **7,000-token per-user rolling 60-second allowance**.
+Every HTTP attempt atomically reserves estimated input plus bounded output capacity.
+Parallel branches and replicas cannot independently admit the same remaining capacity.
+Completion reconciles the reservation to reported usage (including reasoning once),
+releasing unused output. If counters are absent, observed input/output is tokenized.
+There is no separate 4,000-input cap: input must leave at least 128 output tokens within
+7,000. The full JD/current message is preserved; oversized input returns `input_limit`.
 
-- Each outgoing Groq HTTP attempt has at most **4,000 estimated input tokens**,
-  including system/task instructions, user data, recent turns and response schema.
-  `o200k_harmony` tokenizes the serialized messages/schema/tools, with no extra output
-  reservation or arbitrary 512-token allowance. This is a local estimate; Groq's
-  framing/schema accounting can differ. Older turns and eligible explanatory context
-  may be trimmed, but the full JD and current user message are preserved. If the
-  request still exceeds the cap, return HTTP 422 `input_limit`: shorten it, rather
-  than waiting for a minute refresh.
-- Each authenticated user has **7,000 completed input + output tokens per rolling
-  60 seconds** for Groq only, shared across their extraction, research, exploration, chat, corrections
-  and retries and across service replicas. Admission checks only whether accumulated
-  usage is already >=7,000; it does not reserve the next input or maximum output.
-  At 6,999 used, a <=4,000-input call may proceed and take usage over 7,000. Concurrent
-  in-flight calls may also cross the threshold; this policy is not a strict spending cap.
-
-`ai_user_usage` stores hashed owner IDs and timestamped numeric usage entries only.
-Atomic pipeline appends prevent lost usage across replicas, and a TTL index removes
-inactive records; the application explicitly excludes entries older than 60 seconds.
-Completed usage is anchored at response time. Valid Groq prompt/completion/total
-counters take precedence, including reasoning once. If counters are unavailable,
-use tokenized input plus observable answer/reasoning; failed/unknown network outcomes
-charge estimated input only, never a possible maximum response. Connection failures before processing and provider 401/403/429
-rejections are not charged. Gemini neither checks nor writes this ledger and has no local 4,000-input or 7,000/minute cap; provider quotas, configured context windows, output limits and timeouts still apply. No prompts, response text or credentials enter this ledger.
+`ai_user_usage` contains only hashed owners, numeric usage, IDs and timestamps.
+Completed entries expire from the rolling window after 60 seconds. In-flight/crashed
+reservations conservatively expire after 120 seconds. An unknown read failure counts
+possible paid output; explicit rejection/5xx counts input only. Connection failures and
+401/403/429 responses release capacity. Atomic compare-and-update admission and
+pipeline settlement prevent races; TTL removes inactive ledgers. Gemini never checks
+or consumes this ledger. Provider quotas, context/output limits and timeouts remain.
+Local tokenizer estimates can differ from provider accounting.
 
 A blocked user receives HTTP 429 `rate_limited`, `limit_scope=user`, and Retry-After /
-retry_after giving the seconds until sufficient older usage expires for usage to fall
-below 7,000. Each entry expires individually; there is no calendar-minute reset.
+retry_after giving the seconds until sufficient capacity is available for the next complete request. Each entry expires individually; there is no calendar-minute reset.
 The app automatically waits for both local rolling usage and provider HTTP 429 resets.
 `Prefer: respond-async` on workspace JD/message POSTs returns HTTP 202 with an
 owner-scoped operation ID. Both require a UUID Idempotency-Key in this mode. Poll
@@ -227,11 +217,10 @@ input while mounted and can retry. This mode uses the current single Career work
 replicated deployment needs affinity or a shared job registry before distributing polls.
 Previously validated current goals/research stay durable throughout waits/failures.
 
-There is no fixed requests/minute limit, global 8,000-token gate, maximum-output
-reservation or model-call concurrency gate. Legacy AI_TOKENS_PER_MINUTE,
+There is no fixed requests/minute limit or global 8,000-token gate. Output capacity is
+reserved only in flight and reconciled to actual usage. Legacy AI_TOKENS_PER_MINUTE,
 AI_REQUESTS_PER_MINUTE and AI_CONCURRENCY variables remain ignored. Old ai_token_budgets
-records remain untouched and unused. The two new limits are constants, not new .env
-settings. The Docker image bundles its tokenizer cache to avoid runtime downloads.
+records remain untouched and unused. The Groq allowance is constant, not a new configuration setting. The Docker image bundles its tokenizer cache to avoid runtime downloads.
 
 Task output caps remain bounded by AI_MAX_OUTPUT_TOKENS: chat 1024, interview synthesis
 2048 and JD extraction defaults to 4096. Timeouts, context/input validation, bounded
@@ -420,7 +409,7 @@ Employment type is additive structured JD/goal metadata with `unknown` default.
 Explicit chat `mode=refine` uses the validated edit workflow without requiring
 completed interview research; ordinary questions retain their evidence gate.
 Opportunity-specific schema repair/search/retry/deadline budgets are bounded,
-while the existing Groq 4k/7k and independent Gemini provider policies remain.
+with atomic Groq 7k admission and independent Gemini provider quotas.
 Research uses the configured Gemini key independently of `GEMINI_ENABLED` (chat),
 and a dedicated Brave LLM Context client independently of the legacy Brave mode.
 `OPPORTUNITY_ENABLED=false` explicitly disables research. Availability diagnostics
@@ -429,3 +418,11 @@ Opportunity evaluation cursors and invalid-response repair counts persist across
 quota pauses. The workspace propagates category quota/error codes and actual retry
 delays. Global timeout, validation and state errors have distinct safe codes and end
 the loading state without discarding saved findings.
+
+## Conversational Career Discovery
+
+See [Career Discovery](CAREER_DISCOVERY.md) for the implemented two-graph flow,
+shared `ReviewStore.goal` / `GoalStore.persist_target` path, owner-scoped durable
+sessions/evidence, explicit confirmation, provider routing and API contracts.
+Saved-goal chat remains usable during research waits or failures. Workspace polling
+leaves an existing Opportunity worker in control of its status and retry deadline.

@@ -33,6 +33,8 @@ from app.api.v1.opportunity import router as opportunity_router
 from app.workflows.operations import Operations,OperationConflict
 from app.api.v1.workspace import router as workspace_router
 from app.repositories.reviews import ReviewStore
+from app.workflows.discovery import DiscoveryEngine
+from app.api.v1.discovery import router as discovery_router
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from app.domain.preview import run_preview
@@ -101,12 +103,16 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
             opportunity_settings=OpportunitySettings.from_env()
             opportunity_ai=opportunity_models(primary,context,gemini,opportunity_settings,ai_client)
             app.state.opportunities=OpportunityEngine(app,db,opportunity_settings,opportunity_ai) if db is not None else None
+            app.state.discovery=DiscoveryEngine(app,db,opportunity_ai,app.state.opportunities.source) if db is not None else None
+            # Gemini coordination remains usable while Groq reasoning is quota-limited.
+            app.state.chat_ai=opportunity_ai if getattr(opportunity_ai,'context_enabled',False) else app.state.ai
             async with httpx.AsyncClient(base_url=os.getenv('CV_SERVICE_URL','http://cv-service:8000'),
                     timeout=5, trust_env=False, follow_redirects=False) as cv_http:
                 app.state.cv = cv_client or CvClient(cv_http)
                 try:
                     async with profile_lifespan(app): yield
                 finally:
+                    if app.state.discovery is not None:await app.state.discovery.close()
                     if app.state.opportunities is not None:await app.state.opportunities.close()
                     await app.state.operations.close()
                     if app.state.workflow is not None: await app.state.workflow.close()
@@ -126,6 +132,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     app = FastAPI(title='Coachify Career API', version='0.2.0', lifespan=lifespan,
         description='One automatically saved career workspace per account. LangGraph interprets JDs, coordinates Brave research, then enables context-grounded chat. Exploration follows a separate graph.')
     app.add_middleware(BodyLimit)
+    app.include_router(discovery_router)
     app.include_router(opportunity_router)
     app.include_router(workspace_router)
     app.include_router(goals_router)
@@ -158,7 +165,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                   'incomplete_output':'The AI response ended before it was complete, possibly at its output limit. No incomplete result was saved; retry the request.',
                   'output_limit':'The AI response exceeded the allowed response size. Your inputs and saved progress are unchanged.',
                   'unavailable':'The AI provider is temporarily unavailable. Your inputs and saved progress are unchanged; retry shortly.',
-                  'input_limit':f'This request contains {error.input_count} estimated input tokens; the limit is 4,000 per AI request, including instructions and response schema. Shorten the description or conversation and retry. Your saved progress is unchanged.',
+                  'input_limit':f'This request contains {error.input_count} estimated input tokens; the Groq allowance is 7,000 tokens per minute including input and output; this input leaves insufficient output space. Shorten the description or conversation and retry. Your saved progress is unchanged.',
                   'context_limit':'This request exceeds the configured model or token allowance. Shorten the description/chat context or check the configured model context window. Saved progress is unchanged.'}
         detail=messages.get(error.code,'The assistant could not complete this turn. Your saved progress is unchanged; retry shortly.')
         payload={'detail':detail,'code':error.code}

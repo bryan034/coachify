@@ -1,5 +1,90 @@
 {
   "$defs": {
+    "DiscoveryEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "research_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Research Id",
+          "type": "string"
+        },
+        "selected_area": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Selected Area",
+          "type": "string"
+        },
+        "related_roles": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Related Roles",
+          "type": "array"
+        },
+        "specificity": {
+          "enum": [
+            "field",
+            "role_area",
+            "specialisation"
+          ],
+          "title": "Specificity",
+          "type": "string"
+        },
+        "listings_analysed": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Listings Analysed",
+          "type": "integer"
+        },
+        "employers_analysed": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Employers Analysed",
+          "type": "integer"
+        },
+        "coverage": {
+          "enum": [
+            "good",
+            "limited",
+            "insufficient"
+          ],
+          "title": "Coverage",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "researched_at": {
+          "format": "date-time",
+          "title": "Researched At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "research_id",
+        "selected_area",
+        "related_roles",
+        "specificity",
+        "listings_analysed",
+        "employers_analysed",
+        "coverage",
+        "source_ids",
+        "researched_at"
+      ],
+      "title": "DiscoveryEvidence",
+      "type": "object"
+    },
     "Generation": {
       "additionalProperties": false,
       "properties": {
@@ -100,7 +185,8 @@
               "enum": [
                 "employer",
                 "generated_guidance",
-                "user_declaration"
+                "user_declaration",
+                "market_research"
               ],
               "type": "string"
             },
@@ -145,7 +231,8 @@
           "enum": [
             "employer",
             "generated_guidance",
-            "user_declaration"
+            "user_declaration",
+            "market_research"
           ],
           "title": "Origin",
           "type": "string"
@@ -322,7 +409,8 @@
               "enum": [
                 "employer",
                 "generated_guidance",
-                "user_declaration"
+                "user_declaration",
+                "market_research"
               ],
               "type": "string"
             },
@@ -397,7 +485,8 @@
           "enum": [
             "employer",
             "generated_guidance",
-            "user_declaration"
+            "user_declaration",
+            "market_research"
           ],
           "title": "Origin",
           "type": "string"
@@ -453,6 +542,17 @@
       "format": "date-time",
       "title": "Updated At",
       "type": "string"
+    },
+    "discovery": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DiscoveryEvidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "user_id": {
       "title": "User Id",

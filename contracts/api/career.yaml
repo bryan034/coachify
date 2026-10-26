@@ -6,6 +6,268 @@
     "version": "0.2.0"
   },
   "paths": {
+    "/api/v1/career/discoveries/current": {
+      "get": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Current",
+        "operationId": "current_api_v1_career_discoveries_current_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/career/discoveries": {
+      "post": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Start",
+        "operationId": "start_api_v1_career_discoveries_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartDiscovery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/discoveries/{session_id}": {
+      "get": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Get",
+        "operationId": "get_api_v1_career_discoveries__session_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/discoveries/{session_id}/messages": {
+      "post": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Message",
+        "operationId": "message_api_v1_career_discoveries__session_id__messages_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/discoveries/{session_id}/research": {
+      "post": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Research",
+        "operationId": "research_api_v1_career_discoveries__session_id__research_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchDiscovery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/career/goals/{goal_id}/opportunity-research": {
       "get": {
         "tags": [
@@ -1672,6 +1934,16 @@
             "format": "date-time",
             "title": "Updated At"
           },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoveryEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "user_id": {
             "type": "string",
             "pattern": "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
@@ -2058,7 +2330,6 @@
           },
           "model_calls": {
             "type": "integer",
-            "maximum": 20.0,
             "minimum": 0.0,
             "title": "Model Calls",
             "default": 0
@@ -2172,6 +2443,66 @@
         ],
         "title": "CurrentCareerGoal"
       },
+      "Decision": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "ASK_CLARIFICATION",
+              "SUGGEST_ROLES",
+              "CONFIRM_AREA",
+              "START_RESEARCH"
+            ],
+            "title": "Action"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Scope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Recommendations"
+          },
+          "reply": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Reply"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action",
+          "scope",
+          "question",
+          "reply"
+        ],
+        "title": "Decision"
+      },
       "Direction": {
         "properties": {
           "expected_version": {
@@ -2193,6 +2524,345 @@
           "index"
         ],
         "title": "Direction"
+      },
+      "DiscoveryEvidence": {
+        "properties": {
+          "research_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Research Id"
+          },
+          "selected_area": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Selected Area"
+          },
+          "related_roles": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Related Roles"
+          },
+          "specificity": {
+            "type": "string",
+            "enum": [
+              "field",
+              "role_area",
+              "specialisation"
+            ],
+            "title": "Specificity"
+          },
+          "listings_analysed": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Listings Analysed"
+          },
+          "employers_analysed": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Employers Analysed"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "good",
+              "limited",
+              "insufficient"
+            ],
+            "title": "Coverage"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Source Ids"
+          },
+          "researched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Researched At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "research_id",
+          "selected_area",
+          "related_roles",
+          "specificity",
+          "listings_analysed",
+          "employers_analysed",
+          "coverage",
+          "source_ids",
+          "researched_at"
+        ],
+        "title": "DiscoveryEvidence"
+      },
+      "DiscoveryMessage": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "message"
+        ],
+        "title": "DiscoveryMessage"
+      },
+      "DiscoverySession": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "conversation",
+              "researching",
+              "waiting",
+              "failed",
+              "review",
+              "confirmed"
+            ],
+            "title": "Status"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Decision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Scope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "related_roles": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Related Roles"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchSource"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Sources"
+          },
+          "stats": {
+            "items": {
+              "$ref": "#/components/schemas/SkillFrequency"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Stats"
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 600,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Warnings"
+          },
+          "listings_analysed": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Listings Analysed"
+          },
+          "employers_analysed": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Employers Analysed"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "good",
+                  "limited",
+                  "insufficient"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "provider"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "groq",
+                  "gemini",
+                  "brave"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JDExtractionResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "status",
+          "stage",
+          "decision",
+          "scope",
+          "related_roles",
+          "sources",
+          "stats",
+          "warnings",
+          "listings_analysed",
+          "employers_analysed",
+          "coverage",
+          "error_code",
+          "limit_scope",
+          "provider",
+          "retry_after",
+          "review"
+        ],
+        "title": "DiscoverySession"
+      },
+      "DiscoveryView": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoverySession"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "available",
+          "session"
+        ],
+        "title": "DiscoveryView"
       },
       "Finding": {
         "properties": {
@@ -2962,6 +3632,16 @@
       },
       "JDExtractionResult": {
         "properties": {
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoveryEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "review_id": {
             "type": "string",
             "pattern": "^[0-9a-f]{24}$",
@@ -3264,7 +3944,8 @@
                 "enum": [
                   "employer",
                   "generated_guidance",
-                  "user_declaration"
+                  "user_declaration",
+                  "market_research"
                 ]
               },
               {
@@ -3306,7 +3987,8 @@
             "enum": [
               "employer",
               "generated_guidance",
-              "user_declaration"
+              "user_declaration",
+              "market_research"
             ],
             "title": "Origin",
             "default": "employer"
@@ -3392,6 +4074,37 @@
               "succeeded"
             ],
             "title": "Status"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "provider",
+                  "user"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "groq",
+                  "gemini",
+                  "brave"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
           },
           "retry_after": {
             "anyOf": [
@@ -3860,6 +4573,36 @@
         ],
         "title": "ResearchCoverage"
       },
+      "ResearchDiscovery": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "const": true,
+            "title": "Confirmed"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "scope",
+          "confirmed"
+        ],
+        "title": "ResearchDiscovery"
+      },
       "ResearchRequest": {
         "properties": {
           "expected_version": {
@@ -4169,7 +4912,8 @@
                 "enum": [
                   "employer",
                   "generated_guidance",
-                  "user_declaration"
+                  "user_declaration",
+                  "market_research"
                 ]
               },
               {
@@ -4239,7 +4983,8 @@
             "enum": [
               "employer",
               "generated_guidance",
-              "user_declaration"
+              "user_declaration",
+              "market_research"
             ],
             "title": "Origin"
           }
@@ -4450,6 +5195,63 @@
         ],
         "title": "SaveReview"
       },
+      "Scope": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Field"
+          },
+          "area": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Area"
+          },
+          "specificity": {
+            "type": "string",
+            "enum": [
+              "field",
+              "role_area",
+              "specialisation"
+            ],
+            "title": "Specificity",
+            "default": "field"
+          },
+          "career_stage": {
+            "type": "string",
+            "enum": [
+              "internship",
+              "entry_level",
+              "experienced",
+              "unspecified"
+            ],
+            "title": "Career Stage",
+            "default": "unspecified"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "area"
+        ],
+        "title": "Scope"
+      },
       "SendAnswer": {
         "properties": {
           "expected_version": {
@@ -4496,6 +5298,95 @@
         ],
         "title": "SendAnswer"
       },
+      "SkillFrequency": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Id"
+          },
+          "requirement_type": {
+            "type": "string",
+            "enum": [
+              "core",
+              "specialisation",
+              "optional"
+            ],
+            "title": "Requirement Type"
+          },
+          "mention_count": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Mention Count"
+          },
+          "sample_size": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Sample Size"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Source Ids"
+          },
+          "original_terms": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Original Terms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "skill_id",
+          "requirement_type",
+          "mention_count",
+          "sample_size",
+          "source_ids",
+          "original_terms"
+        ],
+        "title": "SkillFrequency"
+      },
+      "StartDiscovery": {
+        "properties": {
+          "consent": {
+            "type": "boolean",
+            "const": true,
+            "title": "Consent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "consent"
+        ],
+        "title": "StartDiscovery"
+      },
       "StartExploration": {
         "properties": {
           "consent": {
@@ -4534,6 +5425,43 @@
           "consent"
         ],
         "title": "StartExploration"
+      },
+      "Suggestion": {
+        "properties": {
+          "area": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Area"
+          },
+          "explanation": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Explanation"
+          },
+          "typical_work": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Typical Work"
+          },
+          "difference": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Difference"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "area",
+          "explanation",
+          "typical_work",
+          "difference"
+        ],
+        "title": "Suggestion"
       },
       "Summary": {
         "properties": {
@@ -4668,7 +5596,8 @@
                 "enum": [
                   "employer",
                   "generated_guidance",
-                  "user_declaration"
+                  "user_declaration",
+                  "market_research"
                 ]
               },
               {
@@ -4738,7 +5667,8 @@
             "enum": [
               "employer",
               "generated_guidance",
-              "user_declaration"
+              "user_declaration",
+              "market_research"
             ],
             "title": "Origin"
           },
@@ -5040,6 +5970,37 @@
               }
             ],
             "title": "Error"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "provider",
+                  "user"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "groq",
+                  "gemini",
+                  "brave"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
           },
           "retry_after": {
             "anyOf": [

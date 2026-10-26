@@ -12,6 +12,7 @@ from app.domain.questions import REFUSAL,MISSING
 from app.repositories.questions import QuestionStore,GOAL_FIELDS
 from app.schemas.jd import JDReply
 from app.workflows.structured import structured_node
+from app.ai.routing import chat_models
 
 
 async def semantic_chat(request,account,row,body):
@@ -20,7 +21,7 @@ async def semantic_chat(request,account,row,body):
     revision=str(body.expected_version)
     async def generate(stage,context,history=(),question=None,validate=None):
         await thread(repo.check,account,body.session_id,body.expected_version)
-        result=await request.app.state.ai.generate(AIInput(stage=stage,
+        result=await chat_models(request.app.state).generate(AIInput(stage=stage,
             context=json.dumps(jsonable_encoder(context),separators=(',',':')),
             conversation=[*history,Message(role='user',content=question or body.message)]),
             Operation(account,revision,stage),current_revision=lambda:revision,validate_output=validate)

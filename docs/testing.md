@@ -166,16 +166,16 @@ with a disposable `MONGODB_TEST_URI` to include these database-backed tests.
 
 LangGraph single-workspace checks use real disposable MongoDB with synthetic models
 and Brave HTTP responses. They cover automatic current-goal saves, session
-replacement, stale-session/owner rejection, research-before-chat gating, persisted
+replacement, stale-session/owner rejection, saved-goal chat during research failures, persisted
 checkpoints, quota pause/resume without repeating searches, no-findings and expiry.
-User-usage tests verify 4,000-input boundaries, 7,000-token rolling admission,
-actual usage without output reservations, owner isolation, atomic MongoDB appends,
+User-usage tests verify 7,000-token atomic rolling admission, in-flight reservations,
+actual usage reconciliation, owner isolation, cross-replica races,
 individual expiry, retry delays, provider distinction and output caps. Browser checks cover the
 new single-chat flow and mobile evidence. No live model/search credentials are used.
 
 Brave Answers checks cover fragmented SSE, cited AI summaries versus source excerpts,
 invalid/missing references, uncited-answer rejection, output limits, public-scope queries,
-mode-specific cache policies, MongoDB summary persistence/reuse and the 4,000-token cap.
+mode-specific cache policies, MongoDB summary persistence/reuse and bounded Groq request capacity.
 All external responses are synthetic; live Answers access must be configured separately.
 
 Career overview coverage checks category membership, research-in-progress display,
@@ -197,3 +197,11 @@ journey leaves/reopens pending extraction and reaches the saved goal without 409
 The optional `OPPORTUNITY_LIVE_TEST=1` smoke consumes actual configured public
 provider requests; it is skipped by default. Frontend unit/browser checks cover
 source/confidence/date transparency, partial status and category-only refresh.
+
+Career Discovery tests cover broad/specific directions, scope confirmation before
+search, owner/version/idempotency boundaries, source quotations, stage mismatch,
+deduplicated listing frequencies, limited/no evidence, provider errors, quota recovery,
+immutable refresh evidence and shared goal persistence without a CV. Frontend tests
+cover category review and explicit confirmation using the existing goal endpoint;
+`career-discovery.spec.ts` checks the same journey and mobile width in Chromium.
+Provider requests are mocked. The optional live Opportunity test remains opt-in.

@@ -54,10 +54,13 @@ describe('single career conversation',()=>{
   const body=JSON.parse(vi.mocked(careerApi).mock.calls.find(v=>v[0]==='/workspace/messages')![2]!.body as string);
   expect(body).toMatchObject({session_id:active.session_id,expected_version:1});expect(body).not.toHaveProperty('context');expect(body).not.toHaveProperty('text');
  });
- it('holds the composer until both extraction and interview research finish',async()=>{
+ it('keeps the composer usable while interview research waits',async()=>{
   active={...active,phase:'waiting_quota',research:null,retry_after:60};mount();
-  await screen.findByText('Waiting for the AI token budget');expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
-  expect(screen.queryByText(/Let’s look at Engineer/)).toBeNull();
+  await screen.findByText('Model provider requested a cooldown');
+  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Explain the saved skills'}});
+  expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled();
+  expect(screen.getByText(/Let’s look at Engineer/)).toBeInTheDocument();
  });
  it('edits the career goal through guided chat and refreshes the saved summary without an edit form',async()=>{
   await chat();expect(screen.queryByRole('button',{name:'Edit career goal'})).toBeNull();
@@ -229,7 +232,7 @@ it('automatically resumes initial JD extraction after a quota wait without anoth
  try{
   view=render(<CareerSessionProvider><Import/></CareerSessionProvider>);
   await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));});
-  expect(screen.getByRole('status')).toHaveTextContent('Waiting for the AI token budget');
+  expect(screen.getByRole('status')).toHaveTextContent('Model provider requested a cooldown');
   expect(screen.queryByRole('button',{name:'Retry'})).toBeNull();
   await act(async()=>{await vi.advanceTimersByTimeAsync(2999);});
   expect(api.mock.calls.filter(c=>c[0].startsWith('/workspace/operations/'))).toHaveLength(0);
@@ -250,10 +253,10 @@ it('keeps the JD receipt across chat remounts and reconnects to its pending oper
  api.mockImplementation(async(path,token,options)=>path==='/workspace/jd'?{operation_id:'d'.repeat(32),status:'waiting_quota',retry_after:600,result:null} as never:original(path,token,options));
  const view=render(<CareerSessionProvider><Journey/></CareerSessionProvider>);
  fireEvent.click(screen.getByRole('button',{name:'Open extraction'}));
- await screen.findByText('Waiting for the AI token budget');
+ await screen.findByText('Model provider requested a cooldown');
  fireEvent.click(screen.getByRole('button',{name:'Leave extraction'}));
  fireEvent.click(screen.getByRole('button',{name:'Open extraction'}));
- await screen.findByText('Waiting for the AI token budget');
+ await screen.findByText('Model provider requested a cooldown');
  const calls=api.mock.calls.filter(call=>call[0]==='/workspace/jd');
  expect(calls).toHaveLength(2);
  expect(calls[0][2]?.headers).toEqual(calls[1][2]?.headers);

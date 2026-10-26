@@ -287,3 +287,18 @@ OpportunityReport *-- CategoryResult : three_independent_categories
 CategoryResult *-- Finding
 OpportunityReport *-- Summary : validated_finding_refs_only
 Finding --> ResearchSource : exact_quotes_and_source_ids
+
+class DiscoveryEvidence {
+    +String research_id
+    +String selected_area
+    +String[] related_roles
+    +String specificity
+    +Number listings_analysed
+    +Number employers_analysed
+    +String coverage
+    +String[] source_ids
+    +Date researched_at
+}
+career_goals *-- DiscoveryEvidence : optional_market_provenance
+%% TargetSkill and NonSkillRequirement origin additionally support market_research.
+%% Listing frequencies, original terms and full claim references stay in immutable research_contexts snapshots.

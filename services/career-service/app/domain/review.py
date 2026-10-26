@@ -54,6 +54,10 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
                     raise GoalError('Guidance must be suggested and cannot claim employer evidence.', 422)
             elif item['origin'] == 'generated_guidance' and item['priority'] != 'suggested':
                 raise GoalError('Exploration guidance is not an employer condition.', 422)
+            if item['origin']=='market_research' and not extracted:
+                prior=old.get(item[key],{})
+                if prior.get('origin')!='market_research' or any(item.get(f)!=prior.get(f) for f in ('name','category','description','evidence')):
+                    raise GoalError('Research evidence cannot be invented or rewritten. Remove an irrelevant item or refine the research scope.',422)
             comparable = {k: v for k, v in item.items() if k != 'correction'}
             original = {k: v for k, v in old.get(item[key], {}).items() if k != 'correction'}
             prior = old.get(item[key], {})

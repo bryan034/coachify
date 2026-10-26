@@ -136,10 +136,10 @@ def test_edit_is_current_without_confirmation_and_new_jd_replaces_the_session(fl
     assert active['goal']['_id']==replaced['current']['goal']['_id']
 
 
-def test_failed_research_preserves_latest_goal_but_does_not_enable_chat(flow):
+def test_failed_research_preserves_latest_goal_and_keeps_saved_goal_chat_available(flow):
     client,db,ai,sources=flow;sources.block=True;ingest(flow);value=wait(flow,'research_failed')
     assert value['current']['goal']['skills'] and value['research'] is None
-    assert client.post(BASE+'/messages',headers=headers(),json={'session_id':value['session_id'],'expected_version':value['revision'],'message':'Explain'}).status_code==409
+    assert client.post(BASE+'/messages',headers=headers(),json={'session_id':value['session_id'],'expected_version':value['revision'],'message':'Explain'}).status_code==200
     sources.block=False;assert client.post(BASE+'/retry',headers=headers()).status_code==202
     assert wait(flow)['research']
 

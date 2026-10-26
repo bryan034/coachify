@@ -34,3 +34,8 @@ LangGraph runs within the existing Career container. JD extraction is transient;
 resumable research uses MongoDB checkpoints containing only structured references
 and public evidence. Brave API adapters belong to Career. No new microservice
 or cross-service database access is introduced.
+
+Career discovery reuses Career-owned `research_contexts` for private structured sessions,
+durable market jobs and immutable evidence snapshots, and existing checkpoint collections.
+Reviewed JD/discovery targets both use `GoalStore.persist_target`; no new service or
+foreign-database access is introduced.

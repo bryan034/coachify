@@ -25,7 +25,7 @@ from app.schemas.opportunity import CATEGORIES,FIELDS,CategoryResult,Opportunity
 from .store import OpportunityStore
 from .sources import pool
 from app.domain.review import MAPPING_VERSION
-from .domain import public_opportunity,validate_claims,compatibility,summary_input,dedupe_findings
+from .domain import public_opportunity,validate_claims,compatibility,summary_input,dedupe_findings,supported_claims
 
 logger=logging.getLogger('uvicorn.error.opportunity')
 
@@ -130,7 +130,7 @@ class OpportunityEngine:
         started=time.monotonic();stamp=now();queries=job['queries'].get(category,[]);history=job.get('history',{}).get(category,[])
         evidence=[ResearchSource.model_validate(v) for v in job.get('evidence',{}).get(category,[])]
         evaluated=list(job.get('evaluated',{}).get(category,[]))
-        findings=old.findings;model_calls=0;error_code=None;pending=False
+        findings=old.findings;rejected=0;model_calls=0;error_code=None;pending=False
         if not job['public']['company'] and category!='interview_intelligence':
             result=CategoryResult(status='not_applicable',missing_fields=list(FIELDS[category]),warnings=['No company is specified; employer-specific claims were not researched.'],researched_at=stamp,expires_at=stamp+timedelta(hours=self.settings.freshness_hours))
             await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}':result.model_dump(mode='json')})
@@ -167,12 +167,12 @@ class OpportunityEngine:
                     candidate=[*selected,source]
                     if len(encoding.encode(json.dumps([s.model_dump(mode='json') for s in candidate]),disallowed_special=()))<=self.settings.evidence_tokens:selected=candidate
                 if not selected:break
-                def validate(output):validate_claims(output,category,selected,job['public'])
+                def validate(output):supported_claims(output,category,selected,job['public'])
                 model_calls+=1
                 output=await self.generate(job,'opportunity_evaluate',{'opportunity':job['public'],'category':category,'allowed_fields':FIELDS[category],
                     'existing_findings':[{'field':f.field,'value':f.value[:120],'scope':f.scope} for f in findings[:8]],
                     'sources':[{'ref':i,'title':s.title,'url':s.url,'excerpt':s.evidence,'published_date':s.published_date.isoformat() if s.published_date else None,'reliability':s.reliability} for i,s in enumerate(selected)]},validate)
-                current=validate_claims(output,category,selected,job['public'])
+                current,discarded=supported_claims(output,category,selected,job['public']);rejected+=discarded
                 findings=dedupe_findings(category,[*findings,*current])
                 present={f.field for f in findings}
                 adequate=set(FIELDS[category])<=present and all(f.confidence in ('high','medium') and f.scope=='exact' and not f.conflict_group for f in findings)
@@ -192,7 +192,7 @@ class OpportunityEngine:
             logger.warning('category=%s error_code=%s reason=%s limit_scope=%s',category,error.code,error.reason,error.limit_scope)
             if error.code=='rate_limited':
                 pending=True
-                await thread(self.store.update,job['_id'],job['worker_token'],next_attempt_at=now()+timedelta(seconds=max(1,min(3600,error.retry_after or 61))))
+                await thread(self.store.update,job['_id'],job['worker_token'],next_attempt_at=now()+timedelta(seconds=max(1,min(3600,error.retry_after or 60))),limit_scope=error.limit_scope,provider=error.provider)
         except SourceRateLimit as error:
             error_code='source_rate_limited'
             waits=job.get('source_waits',{}).get(category,0)
@@ -205,6 +205,7 @@ class OpportunityEngine:
         missing=[field for field in FIELDS[category] if field not in {f.field for f in findings}]
         status='pending' if pending else 'partial' if error_code and findings else 'failed' if error_code else 'completed'
         warnings=[]
+        if rejected:warnings.append('Unsupported claims were excluded; only independently validated citations are shown.')
         if missing:warnings.append('Some requested information has no supported evidence.')
         if any(f.confidence in ('low','insufficient_evidence') for f in findings):warnings.append('Some findings have limited confidence; inspect their sources before relying on them.')
         if any(f.scope!='exact' for f in findings):warnings.append('Some reports concern related roles, locations or employment types.')
@@ -343,9 +344,9 @@ class OpportunityEngine:
             code=interview.error_code or job.get('error_code')
             waiting=phase=='waiting_quota'
             retry=max(1,int((job['next_attempt_at']-now()).total_seconds())) if waiting else None
-            message='Research is waiting for the AI allowance and will resume automatically.' if waiting and code=='rate_limited' else 'Brave is rate limited; research will resume automatically.' if waiting and code=='source_rate_limited' else 'Interview research is still pending.' if waiting else 'Interview research could not finish. Available findings remain readable.'
+            message=('Groq’s local 7,000-token window will reopen shortly; research will resume automatically.' if job.get('limit_scope')=='user' else 'The model provider requested a cooldown. Saved-goal chat remains available.') if waiting and code=='rate_limited' else 'Brave is rate limited; research will resume automatically.' if waiting and code=='source_rate_limited' else 'Interview research is still pending.' if waiting else 'Interview research could not finish. Available findings remain readable.'
             await thread(self.app.state.workspace_store.phase,job['owner'],job['session'],job['run'],phase,research_id=record.id,
-                error=None if phase=='ready' else message,error_code=None if phase=='ready' else code or 'research_unavailable',retry_after=retry)
+                error=None if phase=='ready' else message,error_code=None if phase=='ready' else code or 'research_unavailable',retry_after=retry,limit_scope=job.get('limit_scope'),provider=job.get('provider'))
         except GoalError:pass  # A replacement goal cannot be overwritten by this historical run.
 
     async def close(self):

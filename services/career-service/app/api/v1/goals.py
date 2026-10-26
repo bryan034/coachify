@@ -224,7 +224,11 @@ async def confirm(body: SaveGoal, request: Request, account=Depends(owner), key=
         draft=await run_in_threadpool(repository.claim_confirmation,body.review_id,account,body.expected_review_version,key)
         try:
             goal=repository.goal(draft,account,key,body)
-            return jsonable_encoder(await run_in_threadpool(store(request).confirm,account,key,body,goal),by_alias=True)
+            selected=await run_in_threadpool(store(request).confirm,account,key,body,goal)
+            if draft.discovery:
+                research_id=draft.discovery.research_id.split(':')[0]
+                await run_in_threadpool(store(request).db.research_contexts.update_one,{'_id':research_id,'owner':account,'review_id':draft.id},{'$set':{'status':'confirmed'}})
+            return jsonable_encoder(selected,by_alias=True)
         finally:
             await run_in_threadpool(repository.release_confirmation,body.review_id,account,key)
     if body.draft_id:

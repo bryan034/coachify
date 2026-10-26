@@ -238,6 +238,13 @@ class CareerWorkflow:
     async def _run_once(self,owner):
         row=await thread(self.workspaces.row,owner);w=row.get('workspace',{})
         if not w.get('review_id') or w.get('phase')=='ready' or w.get('expires_at',now())<=now():return
+        opportunity=getattr(self.app.state,'opportunities',None)
+        if opportunity is not None and opportunity.available:
+            job=await thread(opportunity.store.latest,owner,str(row.get('goal_id')))
+            if job and job['run']==w.get('run_id'):
+                if job.get('research_id'):await opportunity.attach(job)
+                if not job['finished']:opportunity.launch(job['_id'])
+                return  # The durable worker owns its wait/status; polling must not restart the legacy graph.
         config=self.config(owner,w);session=w['session_id'];run=w['run_id']
         # A database lease prevents duplicate graph execution by API replicas.
         leased=await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run,'$or':[{'workspace.worker_until':{'$exists':False}},{'workspace.worker_until':{'$lt':now()}}]},
@@ -288,7 +295,7 @@ class CareerWorkflow:
                     token=(checkpoint.values.get('cache') or {}).get('token')
                     if token:
                         await thread(self.db.research_contexts.update_one,{'lease.token':token},{'$set':{'lease.expires_at':now()+timedelta(seconds=retry+120)}})
-                message=(f'Your 7,000-token rolling-minute allowance has been reached. Resuming automatically in {retry} seconds.' if error.limit_scope=='user' else f'The AI provider quota was reached. Resuming automatically in {retry} seconds.') if quota else error.message if isinstance(error,GoalError) else f'The AI input exceeds 4,000 tokens ({error.input_count} estimated). Shorten the saved career context before retrying.' if isinstance(error,AIError) and error.code=='input_limit' else 'Research could not finish. Your latest career goal is saved; retry research.'
+                message=(f'Your 7,000-token rolling-minute allowance has been reached. Resuming automatically in {retry} seconds.' if error.limit_scope=='user' else f'The AI provider quota was reached. Resuming automatically in {retry} seconds.') if quota else error.message if isinstance(error,GoalError) else f'The Groq input leaves insufficient output room in the 7,000-token allowance ({error.input_count} estimated). Shorten the saved career context before retrying.' if isinstance(error,AIError) and error.code=='input_limit' else 'Research could not finish. Your latest career goal is saved; retry research.'
                 await thread(self.workspaces.phase,owner,session,run,'waiting_quota' if quota else 'research_failed',error=message,error_code=error.code if isinstance(error,AIError) else 'research_unavailable',retry_after=retry)
                 if quota:
                     await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$set':{'workspace.worker_until':now()+timedelta(seconds=retry+180)}})

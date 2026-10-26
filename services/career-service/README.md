@@ -24,13 +24,14 @@ characters; original documents and full extracted text are transient.
 Successful extraction opens the saved goal overview immediately, with separate skill/condition categories and live research status. A new JD replaces the entire goal only after successful extraction. LangGraph researches public opportunity evidence. General research questions open after interview completion; guided goal refinement remains available while research is pending or unavailable. The initial explanation is built from saved fields without another model call. It
 covers role scope, high-level skills, supported interview stages and an explicitly
 sourced round count (unknown otherwise). Unknown stages remain unknown. No confirmation button or
-conversation selector is used. Each Groq request is capped at 4,000 estimated input tokens, and each user has a rolling
-7,000-token input/output allowance. Calls may proceed while usage is below 7,000;
-output is not reserved. The app runs JD extraction and chat as background operations:
+conversation selector is used. Groq has a 7,000-token per-user rolling-minute input/output allowance. Atomic
+in-flight reservations prevent parallel calls from overshooting; unused output capacity
+is released on completion. There is no separate 4,000-input cap. Gemini is outside this ledger.
+The app runs JD extraction and chat as background operations:
 when a timed quota is reached, the unfinished model step waits and resumes automatically,
 with a countdown and no approval or resubmission. Waiting does not consume the model's
 execution timeout. Invalid JSON/schema responses trigger automatic corrections in the
-failed LangGraph node until validation succeeds, within the active workflow's lifetime.
+failed LangGraph node, with at most six repairs.
 The model receives only the latest field/type issues; the UI shows “Refining the response…”.
 A complete JSON object wrapped only in a Markdown code fence is unwrapped locally,
 then passes the same duplicate-key, schema and provenance checks without another call.
@@ -125,7 +126,7 @@ the primary model. Citation and ownership checks apply to both. No new searches 
 for ordinary chat; missing information stays unknown. Gemini failure does not silently
 fall back to another provider. Enable with a separate server-only `GEMINI_API_KEY`;
 `GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`. The
-4,000-input/request and 7,000-total/user/rolling-minute limits apply only to Groq, including corrections. Gemini neither consumes nor waits for that allowance; its provider quota, context/output limits and timeouts still apply.
+7,000-total/user/rolling-minute admission limits apply only to Groq, including corrections. Gemini neither consumes nor waits for that allowance; its provider quota, context/output limits and timeouts still apply.
 Gemini uses minimal thinking and bounded outputs. The compact catalogue is rebuilt
 from the latest saved goal; provider memory is not relied upon. Existing goal/edit
 state and recent client-supplied messages provide continuity without a new collection.
@@ -150,3 +151,14 @@ All endpoints require a verified account and completed onboarding. Private reads
 are owner-scoped and responses are no-store. See [workflow/storage and API settings](ANALYSIS_CONTRACTS.md),
 [preview safeguards](SPECIFICATION.md), [OpenAPI](../../contracts/api/career.yaml)
 and [application setup](../../docs/setup.md). Gap analysis and roadmaps remain planned.
+
+## Career discovery — conversational targets
+
+`POST /api/v1/career/discoveries`, `GET /api/v1/career/discoveries/current`, and owned
+`/discoveries/{id}` message/research routes implement a Gemini goal-setting conversation,
+explicit scope approval, Brave job-listing research and Groq requirement extraction.
+The final review uses the existing review/confirmation APIs and target persistence.
+No CV is needed. See [Career Discovery](CAREER_DISCOVERY.md) for exact routes, models,
+configuration, evidence rules, recovery and verification. Saved-goal questions remain
+available while research is waiting; configured research Gemini can handle lightweight
+context chat independently of Groq capacity.

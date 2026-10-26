@@ -42,9 +42,7 @@ class WorkspaceStore:
             location=review.content.location,seniority_level=review.content.seniority_level,job_url=review.content.job_url,employment_type=review.content.employment_type,
             review_id=review.id,expected_review_version=review.version,expected_selection_version=row.get('version',0),replace_current=True)
         goal=self.reviews.goal(review,owner,stable_id(owner,session+':'+str(review.version)+review.id,'auto-goal'),command,allow_pending_context=True)
-        payload=mongo_document(goal)
-        try:self.goals.goals.insert_one(payload)
-        except DuplicateKeyError:pass
+        payload=self.goals.persist_target(goal)
         stamp=now()
         workspace={**({} if input_key else workspace),'session_id':session,'kind':'jd' if review.target_type=='specific_job' else 'exploration',
             'review_id':review.id,'revision':review.version,'research_id':None,'coverage':[],'phase':'research_pending','error':None,'retry_after':None,

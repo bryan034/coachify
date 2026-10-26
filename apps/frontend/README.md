@@ -16,6 +16,7 @@ webfont files and is not bundled.
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
 | `/career-goal` | Saved goal overview with category cards, research progress, guided refinement and CV assessment handoff; new accounts see JD inputs/exploration |
+| `/career-goal/discovery` | Goal-setting conversation, explicit area approval, researched requirement cards and reviewed shared-goal confirmation |
 | `/career-goal?new=1` | Replace the goal using a new text, URL or document JD; preserve the previous goal until extraction succeeds |
 | `/career-goal/chat` | Saved-goal Q&A or separate career exploration; `?refine=1` opens guided goal refinement |
 | `/onboarding` | P13/P14 full-screen question-by-question setup, ending with Enter Coachify |
@@ -195,3 +196,12 @@ Whole-report and individual refresh use versioned UUID-idempotent commands.
 `?refine=1` sends explicit refinement mode, allowing guided edits before research
 finishes; ordinary questions still require interview evidence. Employment type
 is shown only when established. No-company employer sections are not applicable.
+
+Career Discovery uses Gemini for direction setting and no CV inputs. Its research
+review groups core, specialisation-specific and optional skills, with sample counts,
+coverage, qualifications, responsibilities and source links. Removing a requirement
+saves through the existing review API; explicit confirmation uses `/goals/confirm`.
+Saved-goal chat remains enabled during background research waits/failures; only a
+pending chat request's own quota recovery pauses that submission. Wait labels identify
+local Groq capacity versus provider cooldown. See the service's
+[discovery specification](../../services/career-service/CAREER_DISCOVERY.md).

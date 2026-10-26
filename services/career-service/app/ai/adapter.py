@@ -20,7 +20,7 @@ from bson import ObjectId
 
 import httpx
 from pydantic import ValidationError
-from app.ai.waiting import quota_progress
+from app.ai.waiting import quota_progress,quota_reason
 from app.ai.metrics import usage_observer
 from app.ai.recovery import recover_responses,validation_feedback,issues_for,schema_fields
 from app.ai.context_contracts import ContextPlan,CONTEXT_PROMPT
@@ -38,9 +38,10 @@ from app.ai.goal_edit_contracts import GoalEditDecision
 
 from app.ai.opportunity_contracts import QueryPlan,Evaluation,PROMPTS as OPPORTUNITY_PROMPTS
 from app.schemas.opportunity import Summary
+from app.ai.discovery_contracts import OUTPUTS as DISCOVERY_OUTPUTS, PROMPTS as DISCOVERY_PROMPTS
 
 usage_logger = logging.getLogger('uvicorn.error.ai_usage')
-MODEL_OUTPUTS = {**OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_evaluate':Evaluation,'opportunity_summary':Summary, 'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
+MODEL_OUTPUTS = {**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_evaluate':Evaluation,'opportunity_summary':Summary, 'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
 
 PROMPT_VERSION = 'career-ai-v18'
 SYSTEM_PROMPT = '''You are Coachify's career assistant. Return only JSON matching the supplied schema.
@@ -233,7 +234,7 @@ VALIDATION_FIELDS = set().union(*(schema_fields(model.model_json_schema()) for m
 
 
 class AIError(Exception):
-    def __init__(self, code: str, retryable: bool = False, *, reason=None, fields=(), limit_scope=None, retry_after=None, input_count=None, violations=()):
+    def __init__(self, code: str, retryable: bool = False, *, reason=None, fields=(), limit_scope=None, retry_after=None, input_count=None, violations=(), provider=None):
         allowed={'schema_validation','source_quote','duplicate_skill','unexpected_origin','provider_json','json_syntax','response_envelope','provenance'}
         self.reason = reason if reason in allowed else None
         safe={'role','field','company','skills','name','category','priority','required_proficiency','required_experience_months','context','evidence','origin','employment_type','location','seniority_level','job_url','summary','responsibilities','non_skill_requirements'}
@@ -243,6 +244,7 @@ class AIError(Exception):
             and all(part in safe or part.isdigit() or part=='$' for part in v['field'].split('.'))
             and isinstance(v.get('issue'),str) and re.fullmatch(r'[a-z_]{1,60}',v['issue']))[:12]
         self.fields = tuple(str(field) for field in fields if isinstance(field, str) and field in safe)[:12]
+        self.provider=provider if provider in ('groq','gemini') else None
         self.limit_scope = limit_scope if limit_scope in ('provider','user') else None
         self.input_count=input_count if type(input_count) is int and input_count>=0 else None
         self.retry_after = math.ceil(retry_after) if isinstance(retry_after, (int, float)) and math.isfinite(retry_after) and retry_after >= 0 else None
@@ -440,10 +442,11 @@ class AIAdapter:
                                 raise
                             # Keep the unfinished model call in this graph node. Waiting
                             # consumes neither an output correction nor execution time.
-                            delay = max(1, error.retry_after or 61)
+                            delay = max(1, error.retry_after or 60)
                             remaining = max(0, budget.when() - asyncio.get_running_loop().time())
                             started = self.clock()
                             budget.reschedule(None)
+                            quota_reason.set({'limit_scope':error.limit_scope,'provider':error.provider})
                             progress(delay)
                             try:
                                 await self.sleep(delay)
@@ -543,7 +546,7 @@ class AIAdapter:
         mode = self.settings.response_mode
         # This operation needs a schema. Use native constrained output only for
         # an explicitly known provider/model capability, never as an error fallback.
-        if (request.stage in ('jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'opportunity_evaluate') and mode == 'json_object'
+        if (request.stage in ('jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'opportunity_evaluate','discovery_extract') and mode == 'json_object'
                 and self.settings.provider == 'groq' and urlsplit(self.settings.base_url).hostname == 'api.groq.com'
                 and self.settings.model in ('openai/gpt-oss-20b', 'openai/gpt-oss-120b')):
             mode = 'json_schema_strict'
@@ -554,7 +557,9 @@ class AIAdapter:
             response_format = {'type': 'json_schema', 'json_schema': {'name': request.stage,
                 'strict': strict, 'schema': strict_schema(schema) if strict else schema}}
         # Native structured output already carries the schema; avoid sending it twice.
-        if request.stage in OPPORTUNITY_PROMPTS:
+        if request.stage in DISCOVERY_PROMPTS:
+            instructions=DISCOVERY_PROMPTS[request.stage]
+        elif request.stage in OPPORTUNITY_PROMPTS:
             instructions=OPPORTUNITY_PROMPTS[request.stage]
         elif request.stage in ('question_route','focused_answer','goal_edit','context_route','context_answer'):
             instructions={'question_route':QUESTION_ROUTE_PROMPT,'focused_answer':FOCUSED_ANSWER_PROMPT,'goal_edit':GOAL_EDIT_PROMPT,'context_route':CONTEXT_PROMPT,'context_answer':FOCUSED_ANSWER_PROMPT}[request.stage]
@@ -576,7 +581,7 @@ class AIAdapter:
         if mode == 'json_object':
             instructions += '\nJSON schema: ' + json.dumps(schema, separators=(',', ':'))
         schema_bytes = len(json.dumps(response_format, separators=(',', ':')).encode())
-        output_tokens = min(self.settings.max_output_tokens, {'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'opportunity_plan':768,'opportunity_evaluate':2048,'opportunity_summary':512}.get(request.stage,self.settings.max_output_tokens))
+        output_tokens = min(self.settings.max_output_tokens, {'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'discovery_turn':1024,'discovery_plan':512,'discovery_extract':2048,'discovery_summary':256,'opportunity_plan':768,'opportunity_evaluate':2048,'opportunity_summary':512}.get(request.stage,self.settings.max_output_tokens))
         safety_margin = max(1024, self.settings.context_tokens // 10)
         input_budget = self.settings.context_tokens - output_tokens - safety_margin
         if input_budget <= 0:
@@ -590,7 +595,7 @@ class AIAdapter:
                    self.settings.token_parameter: output_tokens}
         # GPT-OSS spends completion tokens on reasoning as well as the final JSON.
         # Reduce reasoning for these bounded JD tasks, without raising token caps.
-        if (request.stage in ('jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'opportunity_evaluate')
+        if (request.stage in ('jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'opportunity_evaluate','discovery_extract')
                 and self.settings.provider == 'groq' and urlsplit(self.settings.base_url).hostname == 'api.groq.com'
                 and self.settings.model in ('openai/gpt-oss-20b', 'openai/gpt-oss-120b')):
             payload['reasoning_effort'] = 'low'
@@ -730,9 +735,11 @@ class AIAdapter:
             limited=self.settings.provider.casefold()=='groq'
             if limited:
                 if count>MAX_INPUT_TOKENS:raise AIError('input_limit',input_count=count)
-                try:await run_in_threadpool(self.usage.check,owner)
-                except UserQuotaExceeded as error:raise AIError('rate_limited',True,limit_scope='user',retry_after=error.retry_after) from None
-            charge=count
+                output=min(payload.get(self.settings.token_parameter,128),7000-count)
+                payload={**payload,self.settings.token_parameter:output}
+                try:ticket=await run_in_threadpool(self.usage.reserve,owner,count,output)
+                except UserQuotaExceeded as error:raise AIError('rate_limited',True,limit_scope='user',retry_after=error.retry_after,provider='groq') from None
+            charge=count+output if limited else count
             try:
                 async with self.client.stream('POST', self.settings.base_url.rstrip('/') + '/chat/completions',
                     json=payload, headers={'Authorization': 'Bearer ' + self.settings.api_key.get_secret_value()},
@@ -742,6 +749,7 @@ class AIAdapter:
                         charge=0
                         raise AIError('provider_auth')
                     if status in (400, 404, 422):
+                        charge=count  # Explicit rejection: no returned completion to charge.
                         code = await self._rejection(response)
                         raise AIError(code, code == 'invalid_output', reason='provider_json' if code == 'invalid_output' else None)
                     if status == 429:
@@ -752,8 +760,10 @@ class AIAdapter:
                             retry_after = float(response.headers.get('retry-after', 'nan'))
                         except ValueError:
                             retry_after = None
-                        raise AIError('rate_limited', True, limit_scope='provider', retry_after=retry_after)
+                        usage_logger.warning('provider_rate_limit provider=%s retry_after=%s',self.settings.provider if self.settings.provider in ('groq','gemini') else 'other',retry_after)
+                        raise AIError('rate_limited', True, limit_scope='provider', retry_after=retry_after,provider=self.settings.provider)
                     if 500 <= status <= 599:
+                        charge=count
                         if provider_attempt == self.settings.retries:
                             raise AIError('unavailable', True)
                         delay = 0.25 * (provider_attempt + 1)
@@ -776,8 +786,8 @@ class AIAdapter:
                 charge=0  # The request did not reach model processing.
                 raise
             finally:
-                if limited and charge:
-                    await asyncio.shield(run_in_threadpool(self.usage.record,owner,charge))
+                if limited:
+                    await asyncio.shield(run_in_threadpool(self.usage.settle,owner,ticket,charge))
             await self.sleep(delay)
         raise AIError('unavailable', True)
 

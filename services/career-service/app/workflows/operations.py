@@ -8,7 +8,7 @@ import math
 import time
 from dataclasses import dataclass, field
 from uuid import uuid4
-from app.ai.waiting import quota_progress
+from app.ai.waiting import quota_progress,quota_reason
 from app.ai.recovery import recover_responses,validation_progress
 from app.repositories.goals import GoalError
 
@@ -29,6 +29,8 @@ class Pending:
     created: float = field(default_factory=time.monotonic)
     status: str = 'running'
     resume_at: float | None = None
+    limit_scope: str | None = None
+    provider: str | None = None
     validation_feedback: dict | None = None
     result: dict | None = None
     error: Exception | None = None
@@ -39,7 +41,7 @@ class Pending:
         return {'operation_id': self.id, 'status': self.status,
                 'retry_after': max(0, math.ceil(self.resume_at-time.monotonic())) if self.resume_at else None,
                 'result': self.result if self.status == 'succeeded' else None,
-                'validation_feedback': self.validation_feedback}
+                'validation_feedback': self.validation_feedback,'limit_scope':self.limit_scope,'provider':self.provider}
 
 
 class Operations:
@@ -79,6 +81,8 @@ class Operations:
 
     async def run(self, job, execute):
         def progress(seconds):
+            reason=quota_reason.get() or {}
+            job.limit_scope=reason.get('limit_scope');job.provider=reason.get('provider')
             job.status = 'waiting_quota' if seconds is not None else 'repairing' if job.validation_feedback else 'running'
             job.resume_at = time.monotonic()+seconds if seconds is not None else None
         def repairing(feedback):

@@ -1,4 +1,4 @@
-"""Per-user rolling completed usage. No maximum-output reservations."""
+"""Atomic Groq admission: in-flight allowances reconcile to actual completed usage."""
 import hashlib
 import json
 import math
@@ -10,7 +10,7 @@ from bson.codec_options import CodecOptions
 from pymongo.errors import DuplicateKeyError
 from app.repositories.goals import now
 
-MAX_INPUT_TOKENS=4000
+MAX_INPUT_TOKENS=6872
 USER_TOKENS_PER_MINUTE=7000
 
 def input_tokens(payload):
@@ -67,11 +67,55 @@ class UserTokenUsage:
         entry={'id':uuid4().hex,'at':stamp,'tokens':tokens}
         cutoff=stamp-timedelta(seconds=60)
         if self.rows is None:
-            with self.lock:self.local[key]=[v for v in self.local.get(key,[]) if v['at']>cutoff]+[entry]
+            with self.lock:self.local[key]=[v for v in self.local.get(key,[]) if v.get('until',v['at']+timedelta(seconds=60))>stamp]+[entry]
         else:
             # Pipeline updates serialize appends across replicas; no read/replace race.
             pipeline=[{'$set':{
-                'entries':{'$concatArrays':[{'$filter':{'input':{'$ifNull':['$entries',[]]},'as':'entry','cond':{'$gt':['$$entry.at',cutoff]}}},[entry]]},
-                'expires_at':stamp+timedelta(seconds=61)}}]
+                'entries':{'$concatArrays':[{'$filter':{'input':{'$ifNull':['$entries',[]]},'as':'entry','cond':{'$or':[{'$gt':['$$entry.at',cutoff]},{'$gt':['$$entry.until',stamp]}]}}},[entry]]},
+                'expires_at':stamp+timedelta(seconds=121)}}]
             try:self.rows.update_one({'_id':key},pipeline,upsert=True)
             except DuplicateKeyError:self.rows.update_one({'_id':key},pipeline)
+
+    def reserve(self,owner,prompt,output):
+        """Reserve a complete call atomically, including across service replicas.
+
+        Reservations are temporary capacity, never billed usage. Unused output is
+        released on completion. An expired worker lease conservatively counts as
+        spent for one more minute, preventing a crash from erasing paid usage.
+        """
+        key=self.key(owner)
+        for _ in range(100):
+            with self.lock:
+                stamp=self.clock()
+                row=(self.rows.find_one({'_id':key}) or {}) if self.rows is not None else {'entries':self.local.get(key,[])}
+                entries=[v for v in row.get('entries',[]) if v.get('until',v['at']+timedelta(seconds=60))>stamp]
+                used=sum(v['tokens'] for v in entries)
+                needed=prompt+output
+                if used+needed>USER_TOKENS_PER_MINUTE:
+                    for entry in sorted(entries,key=lambda v:v.get('until',v['at']+timedelta(seconds=60))):
+                        used-=entry['tokens']
+                        if used+needed<=USER_TOKENS_PER_MINUTE:
+                            delay=(entry.get('until',entry['at']+timedelta(seconds=60))-stamp).total_seconds()
+                            raise UserQuotaExceeded(max(1,min(60,math.ceil(delay))))
+                    raise UserQuotaExceeded(60)
+                ticket=uuid4().hex
+                entries.append({'id':ticket,'at':stamp,'tokens':needed,'reserved':True,'until':stamp+timedelta(seconds=120)})
+                if self.rows is None:
+                    self.local[key]=entries
+                    return ticket
+                # Compare the entire ledger so concurrent record() calls cannot be lost.
+                try:
+                    changed=self.rows.update_one({'_id':key,'entries':row.get('entries',{'$exists':False})},
+                        {'$set':{'entries':entries,'expires_at':stamp+timedelta(seconds=121)}},upsert=not bool(row))
+                except DuplicateKeyError:continue
+                if changed.matched_count or changed.upserted_id:return ticket
+        raise UserQuotaExceeded(1)
+
+    def settle(self,owner,ticket,tokens):
+        stamp=self.clock();key=self.key(owner)
+        entry={'id':ticket,'at':stamp,'tokens':max(0,tokens)}
+        if self.rows is None:
+            with self.lock:self.local[key]=[entry if v['id']==ticket else v for v in self.local.get(key,[])]
+        else:
+            self.rows.update_one({'_id':key,'entries.id':ticket},[{'$set':{
+                'entries':{'$map':{'input':'$entries','as':'entry','in':{'$cond':[{'$eq':['$$entry.id',ticket]},entry,'$$entry']}}}}}])

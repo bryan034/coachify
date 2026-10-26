@@ -95,11 +95,11 @@ test('reopening a pending JD reconnects and reaches the saved goal without a 409
  await page.goto('/career-goal');
  await page.getByRole('textbox',{name:'Job description',exact:true}).fill('Synthetic analyst position. SQL is required.');
  await page.getByRole('button',{name:'Extract career goal'}).click();
- await expect(page.getByRole('status')).toContainText('Waiting for the AI token budget');
+ await expect(page.getByRole('status')).toContainText('Model provider requested a cooldown');
  await page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true}).click();
  await expect(page.getByRole('textbox',{name:'Job description',exact:true})).toHaveValue('Synthetic analyst position. SQL is required.');
  await page.getByRole('button',{name:'Extract career goal'}).click();
- await expect(page.getByRole('status')).toContainText('Waiting for the AI token budget');
+ await expect(page.getByRole('status')).toContainText('Model provider requested a cooldown');
  expect(keys).toHaveLength(2);expect(keys[1]).toBe(keys[0]);
  await page.setViewportSize({width:390,height:844});
  await page.screenshot({path:test.info().outputPath('reconnected-extraction-mobile.png'),fullPage:true});

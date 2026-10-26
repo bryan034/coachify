@@ -25,7 +25,7 @@ node "Docker Compose — focused design" {
       artifact "Upload, extract structured skills,\nclarify personal contributions\n/api/v1/cv (planned)" as CVAPI
     }
     node "JD / career and skills analyser\nservices/career-service" as Career <<Docker container>> {
-      artifact "Specific job or career exploration\nStructured skills and three-category Opportunity Intelligence\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
+      artifact "Specific JD or conversational discovery\nShared reviewed CareerGoal persistence\nStructured skills and three-category Opportunity Intelligence\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
     }
     node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
       artifact "Generate plans from versioned analyses\nEdit plans and track task progress\n/api/v1/roadmaps (planned)" as RoadmapAPI

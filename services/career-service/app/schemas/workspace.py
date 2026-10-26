@@ -27,6 +27,8 @@ class WorkspaceView(Contract):
     edit_question:str|None=Field(default=None,max_length=600)
     error_code:str|None=Field(default=None,max_length=80)
     error:str|None=Field(default=None,max_length=1000)
+    limit_scope:Literal['provider','user']|None=None
+    provider:Literal['groq','gemini','brave']|None=None
     retry_after:int|None=Field(default=None,ge=0)
     expires_at:datetime|None
     exploration_id:DomainId|None
@@ -35,6 +37,8 @@ class WorkspaceView(Contract):
 class OperationView(Contract):
     operation_id: str = Field(pattern=r'^[0-9a-f]{32}$')
     status: Literal['running', 'repairing', 'waiting_quota', 'succeeded']
+    limit_scope:Literal['provider','user']|None=None
+    provider:Literal['groq','gemini','brave']|None=None
     retry_after: int | None = Field(default=None, ge=0)
     result: dict | None = None
     validation_feedback: dict | None = None

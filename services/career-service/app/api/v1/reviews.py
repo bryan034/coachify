@@ -15,7 +15,7 @@ def store(request):
 
 
 def view(draft):
-    return {'review_id':draft.id,'version':draft.version,'target_type':draft.target_type,
+    return {'discovery':draft.discovery,'review_id':draft.id,'version':draft.version,'target_type':draft.target_type,
             'extraction':draft.content,'baseline':draft.baseline,'generation':draft.generation,
             'metadata_origins':draft.metadata_origins,'requirements_need_review':draft.requirements_need_review,
             'is_confirmed':draft.base_goal_id == draft.id}

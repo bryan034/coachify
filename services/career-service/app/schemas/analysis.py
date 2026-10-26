@@ -105,12 +105,12 @@ class TargetSkill(Contract):
     category: Text
     priority: Priority
     priority_evidence: Evidence | None = None
-    priority_origin: Literal['employer', 'generated_guidance', 'user_declaration'] | None = None
+    priority_origin: Literal['employer', 'generated_guidance', 'user_declaration', 'market_research'] | None = None
     required_proficiency: Proficiency | None = None
     required_experience_months: Count | None = None
     context: Evidence | None = None
     evidence: Evidence | None = None
-    origin: Literal['employer', 'generated_guidance', 'user_declaration']
+    origin: Literal['employer', 'generated_guidance', 'user_declaration', 'market_research']
     source_urls: list[SourceUrl] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode='after')
@@ -126,11 +126,11 @@ class NonSkillRequirement(Contract):
     description: Evidence
     priority: Priority
     priority_evidence: Evidence | None = None
-    priority_origin: Literal['employer', 'generated_guidance', 'user_declaration'] | None = None
+    priority_origin: Literal['employer', 'generated_guidance', 'user_declaration', 'market_research'] | None = None
     evidence: Evidence
     group_id: Text | None = None
     group_operator: Literal['all', 'any'] = 'all'
-    origin: Literal['employer', 'generated_guidance', 'user_declaration'] = 'employer'
+    origin: Literal['employer', 'generated_guidance', 'user_declaration', 'market_research'] = 'employer'
     correction: Literal['extracted', 'user'] = 'extracted'
     source_urls: list[SourceUrl] = Field(default_factory=list, max_length=10)
     minimum_months: Count | None = None
@@ -259,7 +259,20 @@ class CvSnapshot(Document):
         return self
 
 
+class DiscoveryEvidence(Contract):
+    research_id: Text
+    selected_area: Text
+    related_roles: list[Text] = Field(max_length=4)
+    specificity: Literal['field','role_area','specialisation']
+    listings_analysed: int = Field(ge=0,le=30)
+    employers_analysed: int = Field(ge=0,le=30)
+    coverage: Literal['good','limited','insufficient']
+    source_ids: list[Text] = Field(max_length=30)
+    researched_at: datetime
+
+
 class CareerGoal(Document):
+    discovery: DiscoveryEvidence | None = None
     user_id: AccountId
     target_type: Literal['specific_job', 'career_exploration']
     field: Text

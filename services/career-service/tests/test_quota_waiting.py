@@ -18,10 +18,11 @@ def test_repeated_quota_waits_resume_same_call_outside_active_timeout():
         clock = [0]
         class Usage:
             checks = 0
-            def check(self, owner):
+            def reserve(self, owner, prompt, output):
                 self.checks += 1
                 if self.checks == 1: raise UserQuotaExceeded(3)
-            def record(self, owner, tokens): charged.append(tokens)
+            def settle(self, owner, ticket, tokens):
+                if tokens:charged.append(tokens)
         def respond(request):
             calls.append(request.content)
             if len(calls) == 1: return httpx.Response(429, headers={'Retry-After':'2'})

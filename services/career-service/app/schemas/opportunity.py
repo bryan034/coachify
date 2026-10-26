@@ -34,7 +34,7 @@ class CategoryResult(Model):
     researched_at:datetime|None=None
     expires_at:datetime|None=None
     searches:int=Field(default=0,ge=0,le=12)
-    model_calls:int=Field(default=0,ge=0,le=20)
+    model_calls:int=Field(default=0,ge=0)
     latency_ms:int=Field(default=0,ge=0)
     estimated_cost_usd:float|None=Field(default=None,ge=0)
     # No guessed prices or costs; provider numeric token metrics stay in existing usage logs.

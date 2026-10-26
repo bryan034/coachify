@@ -39,7 +39,7 @@ async def state(request,account):
     return jsonable_encoder({'session_id':w.get('session_id'),'revision':w.get('revision',0),'kind':w.get('kind'),
         'phase':'expired' if expired else w.get('phase','empty'),'review':view(review) if review else None,
         'current':current,'research':research,'coverage':w.get('coverage',[]),'error':w.get('error'),'error_code':w.get('error_code'),
-        'edit_question':(w.get('edit_draft') or {}).get('question'),'retry_after':w.get('retry_after'),'expires_at':w.get('expires_at'),'exploration_id':w.get('exploration_id')},by_alias=True)
+        'edit_question':(w.get('edit_draft') or {}).get('question'),'limit_scope':w.get('limit_scope'),'provider':w.get('provider'),'retry_after':w.get('retry_after'),'expires_at':w.get('expires_at'),'exploration_id':w.get('exploration_id')},by_alias=True)
 
 @router.get('',response_model=WorkspaceView)
 async def read(request:Request,account=Depends(owner)):
@@ -111,7 +111,6 @@ async def answer_message(body,request,account,key):
     if w.get('expires_at',now())<=now():raise GoalError('Temporary workflow expired. Resume your saved career goal.')
     answer=None
     if body.mode!='refine':
-        if w['phase']!='ready' or not w.get('research_id'):raise GoalError('Interview research must finish before the agent can answer. Retry research first.')
         from app.workflows.chat import focused_chat
         answer=await focused_chat(request,account,row,body)
     if answer is not None:

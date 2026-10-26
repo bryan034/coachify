@@ -1,5 +1,5 @@
 """Transient JD review contracts; candidates are not canonical analysis skills."""
-from app.schemas.analysis import EmploymentType
+from app.schemas.analysis import EmploymentType, DiscoveryEvidence
 
 from typing import Annotated, Literal
 from pydantic import Field, StringConstraints, field_validator, model_validator
@@ -18,12 +18,12 @@ class ReviewSkill(Contract):
     category: Text
     priority: Priority
     priority_evidence: Evidence | None = None
-    priority_origin: Literal['employer','generated_guidance','user_declaration'] | None = None
+    priority_origin: Literal['employer','generated_guidance','user_declaration','market_research'] | None = None
     required_proficiency: Proficiency | None = None
     required_experience_months: Count | None = None
     context: Evidence | None = None
     evidence: Evidence | None = None
-    origin: Literal['employer','generated_guidance','user_declaration']
+    origin: Literal['employer','generated_guidance','user_declaration','market_research']
 
 class JDExtraction(Contract):
     role: Text | None
@@ -40,6 +40,7 @@ class JDExtraction(Contract):
     skills: list[ReviewSkill] = Field(max_length=60)
 
 class JDExtractionResult(Contract):
+    discovery: DiscoveryEvidence | None = None
     review_id: DomainId
     version: Version
     target_type: Literal['specific_job', 'career_exploration']
@@ -77,6 +78,7 @@ class JDMessage(Contract):
 
 
 class RequirementReview(Document):
+    discovery: DiscoveryEvidence | None = None
     record_type: Literal['requirement_review'] = 'requirement_review'
     user_id: AccountId
     target_type: Literal['specific_job', 'career_exploration'] = 'specific_job'

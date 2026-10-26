@@ -41,7 +41,7 @@ function SkillItem({skill}:{skill:ReviewSkill}){
   {skill.context&&<p className="small">{skill.context}</p>}
   {(skill.required_proficiency||skill.required_experience_months!=null)&&<p className="small">{[skill.required_proficiency,skill.required_experience_months!=null?`${skill.required_experience_months} months’ experience`:null].filter(Boolean).join(' · ')}</p>}
   {skill.group_id&&<p className="small">{skill.group_operator==='any'?'Alternative requirement — one of the linked skills is needed.':'Part of a combined requirement.'}</p>}
-  <p className="goal-origin">{skill.correction==='user'||skill.origin==='user_declaration'?'Your refinement':skill.origin==='generated_guidance'?'AI planning suggestion':'From the job description'}</p>
+  <p className="goal-origin">{skill.correction==='user'||skill.origin==='user_declaration'?'Your refinement':skill.origin==='generated_guidance'?'AI planning suggestion':skill.origin==='market_research'?'From sampled job listings':'From the job description'}</p>
   {skill.evidence&&<details><summary>Supporting detail</summary><blockquote>{skill.evidence}</blockquote></details>}
  </li>;
 }

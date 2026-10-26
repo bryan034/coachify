@@ -8,7 +8,7 @@ import {careerOperation,type CareerOperation} from '@/lib/api/career-operation';
 import {careerApi,type CareerWorkspace} from '@/lib/api/career';
 
 function introduction(workspace:CareerWorkspace){
- const c=workspace.review?.extraction,r=workspace.research;if(!c||!r)return '';
+ const c=workspace.review?.extraction,r=workspace.research||{skills:[],process:undefined};if(!c)return '';
  const reach=[...workspace.coverage].reverse().find(v=>v.target_sources!=null);
  const stages=[...new Set([...(r.process?.stages.map(s=>s.name)||[]),...r.skills.map(s=>s.interview_stage).filter(Boolean)])];
  const assessments=[...new Set(r.skills.map(s=>s.assessment_type).filter(Boolean))];
@@ -56,7 +56,9 @@ export function JobReviewChat(){
  const messageReceipt=useRef<{body:string;key:string}|null>(null);
  const controller=useRef<AbortController|null>(null),key=useRef(session.jdKey||crypto.randomUUID()),revision=useRef(''),source=useRef(session.jd),latest=useRef(session);latest.current=session;
  const refining=useRef(typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('refine')==='1');
- const review=workspace?.review;const ready=(refining.current&&!!review&&workspace?.phase!=='expired')||(workspace?.phase==='ready'&&!!workspace.research);
+ const chatCooldown=!!error&&isTokenLimit(code)&&secondsLeft>0;
+ const waitLabel=(operation?.limit_scope||workspace?.limit_scope)==='user'?'Waiting for the next Groq token window':`${operation?.provider||workspace?.provider||'Model provider'} requested a cooldown`;
+ const review=workspace?.review;const ready=!!review&&workspace?.phase!=='expired';
  function receive(value:CareerWorkspace){
   if(revision.current!==value.session_id){setTurns([]);setMessage('');messageReceipt.current=null;revision.current=value.session_id||'';}
   setRetryAt(value.phase==='waiting_quota'?Date.now()+(value.retry_after||60)*1000:null);
@@ -84,7 +86,7 @@ export function JobReviewChat(){
  function followReply(){const log=transcript.current;if((turns.length||pendingMessage)&&log&&log.scrollHeight-log.scrollTop-log.clientHeight<120)log.scrollTo?.({top:log.scrollHeight,behavior:'instant'});}
  async function retry(){if(!token||busy||secondsLeft>0)return;setBusy(true);setError('');setCode('');try{receive(await careerApi<CareerWorkspace>('/workspace/retry',token,{method:'POST'}));}catch(c){reportError(c,'Retry failed.');}finally{setBusy(false);}}
  async function send(){
-  if(!workspace?.session_id||!review||!ready||!token||busy||!message.trim()||secondsLeft>0)return;
+  if(!workspace?.session_id||!review||!ready||!token||busy||!message.trim()||chatCooldown)return;
   const input=message.trim(),abort=new AbortController();controller.current=abort;setPendingMessage(input);setBusy(true);setError('');setCode('');
   const body=JSON.stringify({session_id:workspace.session_id,expected_version:review.version,message:input,mode:refining.current?'refine':'question',conversation:turns.slice(-1).flatMap(t=>[{role:'user',content:t.message},{role:'assistant',content:t.reply}])});
   if(messageReceipt.current?.body!==body)messageReceipt.current={body,key:crypto.randomUUID()};
@@ -103,9 +105,9 @@ export function JobReviewChat(){
    </aside>}
    <div ref={transcript} className="agent-transcript" role="log" aria-label="Career agent conversation" aria-live="polite">
     <div className="agent-message assistant" key="initial-answer"><span className="agent-message-label">Coachify</span>
-     {ready?<AgentReply onProgress={followReply}>{refining.current?'What would you like to refine in your career goal? We can work through your role, location, skills, qualifications or responsibilities. Tell me what feels different, and I’ll ask for any details needed before saving the update.':introduction(workspace!)}</AgentReply>:<>
+     {ready&&<AgentReply onProgress={followReply}>{refining.current?'What would you like to refine in your career goal? We can work through your role, location, skills, qualifications or responsibilities. Tell me what feels different, and I’ll ask for any details needed before saving the update.':introduction(workspace!)}</AgentReply>}{<>
       {(!workspace||['research_pending','researching','waiting_quota'].includes(workspace.phase))&&!error&&<AgentActivity
-       label={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?'Waiting for the AI token budget':operation?.status==='repairing'?'Refining the response…':workspace?.phase==='researching'||workspace?.phase==='research_pending'?'Researching interview expectations…':source.current?'Extracting your career goal…':'Opening your career goal…'}
+       label={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':workspace?.phase==='researching'||workspace?.phase==='research_pending'?'Researching interview expectations…':source.current?'Extracting your career goal…':'Opening your career goal…'}
        detail={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?(secondsLeft>0?`Resuming in ${secondsLeft} seconds.`:'Retrying research…'):workspace?.review?'Job skills are extracted. Preparing source-backed interview findings.':undefined}/>}
       {workspace?.error&&(workspace.phase==='waiting_quota'||isTokenLimit(workspace.error_code))&&<p role="alert" className="small">{workspace.error}</p>}
       {workspace&&['research_failed','expired'].includes(workspace.phase)&&<button className="btn pri" disabled={busy} onClick={()=>void retry()}>Resume research</button>}
@@ -113,11 +115,11 @@ export function JobReviewChat(){
     </div>
     {workspace?.edit_question&&!turns.length&&!pendingMessage&&<div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentReply>{workspace.edit_question}</AgentReply></div>}
     {turns.map((turn,i)=><div className="agent-exchange" key={i}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.message}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentReply animate={i===turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div></div>)}
-    {pendingMessage&&<div className="agent-exchange"><div className="agent-message user"><span className="agent-message-label">You</span><p>{pendingMessage}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentActivity label={operation?.status==='waiting_quota'?'Waiting for the AI token budget':operation?.status==='repairing'?'Refining the response…':'Preparing your answer…'} detail={operation?.status==='waiting_quota'?`Resuming automatically in ${secondsLeft} seconds.`:'Using your career goal and saved interview research.'}/></div></div>}
+    {pendingMessage&&<div className="agent-exchange"><div className="agent-message user"><span className="agent-message-label">You</span><p>{pendingMessage}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentActivity label={operation?.status==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':'Preparing your answer…'} detail={operation?.status==='waiting_quota'?`Resuming automatically in ${secondsLeft} seconds.`:'Using your career goal and saved interview research.'}/></div></div>}
     {review&&<p className="small">Want to change your career goal? Tell the agent what to update. Clear requests are saved automatically.</p>}
-    {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||secondsLeft>0} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(ready&&message.trim())void send();else void retry();}}/>}
+    {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||chatCooldown} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(ready&&message.trim())void send();else void retry();}}/>}
    </div>
-   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message Coachify" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} disabled={busy||!ready} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||!ready||!message.trim()||secondsLeft>0}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
+   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message Coachify" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} disabled={busy||!ready} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||!ready||!message.trim()||chatCooldown}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
   </div>
  </section>;
 }

@@ -38,7 +38,7 @@ class ReviewStore:
         return RequirementReview(_id=goal.id, user_id=owner, version=goal.version, skill_mapping_version=goal.skill_mapping_version,
             created_at=goal.created_at, updated_at=goal.updated_at, target_type=goal.target_type,
             source_kind={'pasted_jd':'text','url_jd':'url','document_jd':'document','career_exploration':'career_exploration'}[goal.requirements_source],
-            content=content, baseline=baseline or content, generation=goal.generation,
+            content=content, baseline=baseline or content, generation=goal.generation,discovery=goal.discovery,
             requirements_need_review=goal.requirements_need_review, base_goal_id=goal.id,
             baseline_origins=baseline_origins,
             metadata_origins={f:baseline_origins.get(f,'extracted') if getattr(content,f)==getattr(baseline or content,f) else 'user' for f in METADATA})
@@ -54,6 +54,7 @@ class ReviewStore:
         replay = self.replay_extraction(owner,key,digest)
         if replay: return replay
         stamp = now()
+        if any(v.origin=='market_research' for v in [*content.skills,*content.non_skill_requirements]):raise GoalError('Market evidence must come from career discovery.',422)
         prepared = prepare(content, extracted=True)
         draft = RequirementReview(_id=stable_id(owner,key,'jd-review'), user_id=owner, version=1,
             skill_mapping_version=MAPPING_VERSION, created_at=stamp, updated_at=stamp,
@@ -160,7 +161,7 @@ class ReviewStore:
         ready=bool(skills) and not draft.requirements_need_review and draft.generation is not None and all(s.skill_id and s.priority!='conflicting' and (s.origin!='employer' or s.evidence) for s in skills) and all(r.priority!='conflicting' for r in content.non_skill_requirements)
         base=CareerGoal.model_validate(self._row(draft.base_goal_id,owner)) if draft.base_goal_id else None
         inherited={f:getattr(base,f) for f in ('interests','preferences','exploration_draft_id','exploration_draft_version','source_cv_id','source_cv_version','source_extraction_version','source_profile_version')} if base else {}
-        return CareerGoal(**inherited,_id=stable_id(owner,key,'goal'),user_id=owner,version=1,skill_mapping_version=MAPPING_VERSION,
+        return CareerGoal(**inherited,discovery=draft.discovery,_id=stable_id(owner,key,'goal'),user_id=owner,version=1,skill_mapping_version=MAPPING_VERSION,
             created_at=stamp,updated_at=stamp,target_type=draft.target_type,**{f:getattr(content,f) for f in METADATA},
             skills=skills,non_skill_requirements=content.non_skill_requirements,summary=content.summary,responsibilities=content.responsibilities,
             requirements_source={'text':'pasted_jd','url':'url_jd','document':'document_jd','career_exploration':'career_exploration'}[draft.source_kind],
@@ -193,3 +194,22 @@ class ReviewStore:
         try:self.rows.insert_one(payload)
         except DuplicateKeyError:return self.create_guidance(owner,key,digest,goal,content,generation)
         return draft
+
+    def create_discovery(self, owner, key, content, generation, evidence):
+        """Same review model and goal() builder as JD extraction; no selected goal yet."""
+        identifier=stable_id(owner,key,'discovery-review')
+        existing=self.rows.find_one({'_id':ObjectId(identifier),'user_id':owner})
+        if existing:return self.get(identifier,owner)
+        stamp=now()
+        prepared=prepare(content,extracted=True)
+        # Trusted server aggregation supplies these URLs; generic preview prepare()
+        # deliberately strips client-supplied evidence URLs on new items.
+        for old,new in zip(content.skills,prepared.skills):new.source_urls=old.source_urls
+        for old,new in zip(content.non_skill_requirements,prepared.non_skill_requirements):new.source_urls=old.source_urls
+        review=RequirementReview(_id=identifier,user_id=owner,version=1,skill_mapping_version=MAPPING_VERSION,
+            created_at=stamp,updated_at=stamp,target_type='career_exploration',source_kind='career_exploration',
+            content=prepared,baseline=prepared,generation=generation,discovery=evidence,
+            metadata_origins={f:'user' for f in METADATA},baseline_origins={f:'user' for f in METADATA})
+        try:self.rows.insert_one({**mongo_document(review),'receipts':[]})
+        except DuplicateKeyError:return self.get(identifier,owner)
+        return review

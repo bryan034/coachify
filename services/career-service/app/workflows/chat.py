@@ -2,10 +2,11 @@
 from langgraph.graph import StateGraph,START,END
 from langsmith import tracing_context
 from app.workflows.structured import structured_node
+from app.ai.routing import chat_models
 
 async def focused_chat(request,account,row,body):
     """Route -> projected retrieval -> answer. Only ambiguous questions need routing AI."""
-    if getattr(request.app.state.ai,'context_enabled',False):
+    if getattr(chat_models(request.app.state),'context_enabled',False):
         from app.workflows.context_chat import semantic_chat
         return await semantic_chat(request,account,row,body)
     import json

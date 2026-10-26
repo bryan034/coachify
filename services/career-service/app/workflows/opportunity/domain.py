@@ -83,3 +83,13 @@ def dedupe_findings(category,findings):
         grouped[key]=old.model_copy(update={'source_ids':list(pairs),'quotes':list(pairs.values()),'confidence':confidence,
             'finding_id':'f'+fingerprint({'category':category,'field':old.field,'value':old.value,'sources':sorted(pairs)})[:16]})
     return list(grouped.values())[:20]
+
+
+def supported_claims(output,category,sources,public=None):
+    """A bad citation cannot erase other independently validated findings."""
+    valid=[];rejected=0
+    for item in output.findings:
+        try:valid.extend(validate_claims(output.model_copy(update={'findings':[item]}),category,sources,public))
+        except AIError:rejected+=1
+    if output.findings and not valid:raise AIError('invalid_output',True,reason='provenance')
+    return valid,rejected

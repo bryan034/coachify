@@ -331,3 +331,14 @@ def test_quota_pause_does_not_reset_the_invalid_response_repair_budget(opportuni
     assert result['finished'] and result['status']=='failed'
     assert set(attempts.values())=={3}  # Invalid, quota pause, final bounded correction.
     assert all(v['error_code']=='invalid_output' for v in result['categories'].values())
+
+
+def test_one_invalid_citation_does_not_discard_independently_supported_findings():
+    from app.workflows.opportunity.domain import supported_claims
+    text='Example candidates report a technical interview.'
+    source=ResearchSource(source_id='s1',platform='other',url='https://example.test/report',evidence=text)
+    good={'field':'recruitment_stages','value':'technical interview','refs':[0],'quotes':[text],'confidence':'medium','evidence_type':'candidate_reported','scope':'exact'}
+    output=Evaluation(findings=[good,{**good,'value':'fabricated stage'}])
+    findings,rejected=supported_claims(output,'interview_intelligence',[source])
+    assert rejected==1 and len(findings)==1 and findings[0].value=='technical interview'
+    assert findings[0].quotes==[text]

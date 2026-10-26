@@ -14,3 +14,5 @@ service below; its README lists individual endpoints grouped by Jira story.
 
 Page URLs such as `/profile` and `/roadmap` belong to the frontend. They are not API
 endpoints. Private `/internal/v1` routes are not exposed through the gateway.
+
+Career discovery session/message/research routes are implemented under `/api/v1/career/discoveries`; see [Career service](../../services/career-service/README.md).

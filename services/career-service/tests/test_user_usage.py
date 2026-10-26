@@ -1,4 +1,4 @@
-"""4k input cap and completed-usage 7k rolling allowance per owner."""
+"""Atomic 7k rolling Groq admission, actual usage reconciliation and provider isolation."""
 import asyncio
 import json
 import os
@@ -33,24 +33,24 @@ def test_rolling_allowance_blocks_at_7000_and_only_until_enough_usage_expires():
     stamp[0]+=timedelta(seconds=50);usage.check('alice')
 
 
-def test_allowance_has_no_maximum_output_reservation():
+def test_admission_reserves_capacity_and_reconciles_to_actual_usage():
     async def run():
         stamp,usage=clock();usage.record('alice',6999);calls=[]
         def handler(req):calls.append(req);return reply()
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter=AIAdapter(settings(),client,usage_store=usage)
             payload={'messages':[{'role':'user','content':'Hi'}],'max_completion_tokens':4096}
-            assert await adapter._complete(payload,owner='alice')=='{}'
             with pytest.raises(AIError) as error:await adapter._complete(payload,owner='alice')
-            assert error.value.code=='rate_limited' and error.value.limit_scope=='user' and error.value.retry_after==60
-            assert len(calls)==1
+            assert error.value.limit_scope=='user' and error.value.retry_after==60 and calls==[]
             assert await adapter._complete(payload,owner='bob')=='{}'
+            assert sum(v['tokens'] for v in usage.local[usage.key('bob')])==200
             stamp[0]+=timedelta(seconds=60)
             assert await adapter._complete(payload,owner='alice')=='{}'
+            assert sum(v['tokens'] for v in usage.local[usage.key('alice')])==200
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('count,allowed',[(4000,True),(4001,False)])
+@pytest.mark.parametrize('count,allowed',[(6872,True),(6873,False)])
 def test_input_token_boundary_is_checked_before_network(count,allowed,monkeypatch):
     monkeypatch.setattr('app.ai.adapter.input_tokens',lambda _:count)
     async def run():
@@ -61,7 +61,7 @@ def test_input_token_boundary_is_checked_before_network(count,allowed,monkeypatc
             if allowed:assert await adapter._complete({'messages':[]},owner='alice')=='{}'
             else:
                 with pytest.raises(AIError) as error:await adapter._complete({'messages':[]},owner='alice')
-                assert error.value.code=='input_limit' and error.value.input_count==4001
+                assert error.value.code=='input_limit' and error.value.input_count==6873
             assert len(calls)==int(allowed)
     asyncio.run(run())
 
@@ -111,7 +111,7 @@ def test_truncated_paid_response_counts_usage_and_provider_429_does_not():
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('code,scope,status,fragment',[('input_limit',None,422,'4,000'),('rate_limited','user',429,'7,000-token'),('rate_limited','provider',429,'AI provider')])
+@pytest.mark.parametrize('code,scope,status,fragment',[('input_limit',None,422,'7,000'),('rate_limited','user',429,'7,000-token'),('rate_limited','provider',429,'AI provider')])
 def test_api_explains_input_vs_user_and_provider_limits(code,scope,status,fragment):
     def profile(req):return httpx.Response(200,json={'id':'synthetic','email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
     def processor(*args):raise AIError(code,limit_scope=scope,input_count=4100,retry_after=23 if scope else None)
@@ -143,7 +143,7 @@ def test_mongodb_usage_is_shared_atomic_and_isolated_by_user():
 
 
 @pytest.mark.parametrize('failure,charged',[(httpx.ConnectError,False),(httpx.ReadTimeout,True)])
-def test_unknown_network_usage_never_reserves_max_output(failure,charged):
+def test_unknown_network_usage_conservatively_counts_possible_paid_completion(failure,charged):
     async def run():
         stamp,usage=clock()
         def handler(req):raise failure('Synthetic network failure',request=req)
@@ -152,7 +152,7 @@ def test_unknown_network_usage_never_reserves_max_output(failure,charged):
             adapter=AIAdapter(settings(),client,usage_store=usage)
             with pytest.raises(httpx.HTTPError):await adapter._complete(payload,owner='alice')
         entries=usage.local.get(usage.key('alice'),[])
-        assert sum(v['tokens'] for v in entries)==(input_tokens(payload) if charged else 0)
+        assert sum(v['tokens'] for v in entries)==(input_tokens(payload)+4096 if charged else 0)
     asyncio.run(run())
 
 
@@ -185,3 +185,37 @@ def test_gemini_provider_quota_is_still_enforced():
             with pytest.raises(AIError) as error:await adapter._complete({'messages':[]},owner='alice')
             assert error.value.limit_scope=='provider' and error.value.retry_after==3
     asyncio.run(run())
+
+
+def test_concurrent_requests_cannot_overshoot_7000_and_refund_unused_capacity():
+    stamp,usage=clock()
+    def admit(_):
+        try:return usage.reserve('alice',1000,2000)
+        except UserQuotaExceeded:return None
+    with ThreadPoolExecutor(max_workers=8) as pool:tickets=list(pool.map(admit,range(8)))
+    accepted=[v for v in tickets if v]
+    assert len(accepted)==2 and sum(v['tokens'] for v in usage.local[usage.key('alice')])==6000
+    usage.settle('alice',accepted[0],1200)
+    assert usage.reserve('alice',1000,1500)
+    assert sum(v['tokens'] for v in usage.local[usage.key('alice')])==6700
+    with pytest.raises(UserQuotaExceeded) as error:usage.reserve('alice',500,500)
+    assert error.value.retry_after<=60
+
+
+def test_reservations_are_atomic_across_mongodb_replicas_and_survive_restart():
+    uri=os.getenv('MONGODB_TEST_URI')
+    if not uri:pytest.skip('Requires disposable MongoDB')
+    client=MongoClient(uri);db=client['coachify_reservations_test_'+uuid4().hex]
+    try:
+        stamp=now();stores=[UserTokenUsage(db,clock=lambda:stamp) for _ in range(8)]
+        def reserve(index):
+            try:return stores[index].reserve('alice',1000,2000)
+            except UserQuotaExceeded:return None
+        with ThreadPoolExecutor(max_workers=8) as pool:tickets=list(pool.map(reserve,range(8)))
+        assert len([v for v in tickets if v])==2
+        restarted=UserTokenUsage(db,clock=lambda:stamp)
+        with pytest.raises(UserQuotaExceeded):restarted.reserve('alice',1000,2000)
+        restarted.settle('alice',next(v for v in tickets if v),500)
+        assert restarted.reserve('alice',1000,2000)
+        assert sum(v['tokens'] for v in db.ai_user_usage.find_one({'_id':restarted.key('alice')})['entries'])==6500
+    finally:client.drop_database(db.name);client.close()

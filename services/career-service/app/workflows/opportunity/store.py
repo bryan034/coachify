@@ -75,7 +75,10 @@ class OpportunityStore:
 
     def update(self,identifier,token,**values):
         values['updated_at']=now()
-        result=self.rows.update_one({'_id':identifier,'worker_token':token},{'$set':values})
+        retry=values.pop('next_attempt_at',None)
+        update={'$set':values}
+        if retry:update['$max']={'next_attempt_at':retry}
+        result=self.rows.update_one({'_id':identifier,'worker_token':token},update)
         if not result.matched_count:raise GoalError('A newer worker replaced this research run.')
 
     def release(self,identifier,token):

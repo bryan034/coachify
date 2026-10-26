@@ -31,7 +31,7 @@ def test_graph_repairs_repeated_schema_json_and_truncated_responses_then_display
             return response(valid)
         async def sleep(seconds):waits.append(seconds)
         async with httpx.AsyncClient(transport=httpx.MockTransport(provider)) as client:
-            ai=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture',response_mode='json_schema'),client,sleep=sleep)
+            ai=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture',response_mode='json_schema',max_output_tokens=2048),client,sleep=sleep)
             async def interpret(state):
                 value=await ai.generate(AIInput(stage='jd_extraction',source_text='Synthetic Data Analyst role.'),
                     Operation('alice','1','jd_extraction'),current_revision=lambda:'1')
@@ -103,4 +103,16 @@ def test_unfinished_repair_loop_can_be_cancelled():
         await entered.wait();task.cancel()
         with pytest.raises(asyncio.CancelledError):await task
         assert calls
+    asyncio.run(run())
+
+
+def test_repeated_invalid_responses_stop_after_six_repairs():
+    async def run():
+        calls=[]
+        async def node(state):calls.append(1);raise AIError('invalid_output',reason='schema_validation')
+        context=recover_responses.set(True)
+        try:
+            with pytest.raises(AIError,match='invalid_output'):await structured_node(node)({})
+        finally:recover_responses.reset(context)
+        assert len(calls)==7
     asyncio.run(run())
