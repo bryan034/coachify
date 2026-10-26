@@ -223,3 +223,12 @@ for Next.js Fast Refresh and Python API reload without rebuilding for source edi
 It keeps the base production-style configuration available and retains MongoDB data.
 Run the startup commands yourself with your private settings; agents must not load
 or inspect your environment files. Dependencies/image changes still need rebuilding.
+
+
+## Career LangGraph and research
+
+Rebuild the Career image once after installing the new LangGraph/checkpointer/tokenizer dependencies. Subsequent source edits use the existing Docker hot reload setup. No LangSmith account or additional database server is required.
+
+Use the existing Groq settings (`AI_ENABLED=true`, `AI_PROVIDER=groq`, `AI_MODEL` and backend-only `AI_API_KEY`). Coachify caps each model request at 4,000 estimated input tokens and checks a per-user 7,000-token rolling-minute input/output allowance before each call, without output reservations. Groq quotas remain separate. No new environment settings are needed for these limits. Chat output is capped at 1024 tokens, interview synthesis at 2048, and JD extraction defaults to 4096; a lower `AI_MAX_OUTPUT_TOKENS` remains the overall ceiling. Add `BRAVE_API_KEY`; `BRAVE_SEARCH_MODE=answers` is the default and requires an Answers-plan API key. If your existing configuration sets `search`, change it yourself to `answers` to use AI summaries; `search` remains a snippet-only option. Brave is the only interview-research API; no Reddit credentials are needed. Keep credentials server-side and enter them yourself in your local configuration.
+
+Compose passes these settings only to Career. Without Brave configured or with denied Answers access the goal saves but research/chat preparation reports unavailable. Brave Answers has separate provider billing; its answer becomes context for the Groq extraction and counts toward Groq input once sent. Groq 429 responses pause background research using the provider retry delay; direct chat offers retry. Legacy `AI_TOKENS_PER_MINUTE`, `AI_REQUESTS_PER_MINUTE` and `AI_CONCURRENCY` values are ignored and may be removed from your configuration. Old token-budget records are unused; `ai_user_usage` now tracks rolling usage by user automatically, with no manual database setup. User-limit responses include seconds until enough usage expires. See the [Career configuration contract](../services/career-service/ANALYSIS_CONTRACTS.md) for defaults and persistence rules.

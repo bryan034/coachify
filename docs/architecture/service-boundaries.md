@@ -4,7 +4,7 @@
 |---|---|---|
 | Profile | P01-P16; profile corrections following ingestion | Accounts/email verification/revocable sessions, canonical onboarding and education, experiences, personal contributions, capabilities, declared deadline/capacity/temporary availability, profile versions |
 | CV | C01-C09; SCRUM-310 | cvs, ingestion state, provisional extraction, clarification questions/answers, processing operations |
-| Career | J01-J13; G01-G07; SCRUM-282/310 | career_goals, interview_research, skill_gap_analyses, private exploration/operation state; raw JD text stays transient |
+| Career | J01-J13; G01-G07; SCRUM-282/310 | career_goals, interview_research, skill_gap_analyses, one career_state workspace, LangGraph checkpoints and per-user ai_user_usage; raw JD text stays transient |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Consumed planning-input snapshots, milestones, tasks, progress history, proposed/applied revisions |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
 | Review | A01 orchestration; S01-S06 | Manual/scheduled review state, pace analysis, schedules, approval preferences |
@@ -29,3 +29,8 @@ owner/version boundary. This supersedes the original roadmap-owned P04–P06 map
 Roadmap will consume a snapshot through an API and own scheduling/results. It must
 retain the source profile version, planning revision and explicit calendar context.
 No roadmap generation or cross-service stale-plan notification is implemented yet.
+
+LangGraph runs within the existing Career container. JD extraction is transient;
+resumable research uses MongoDB checkpoints containing only structured references
+and public evidence. Brave API adapters belong to Career. No new microservice
+or cross-service database access is introduced.

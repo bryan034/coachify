@@ -56,5 +56,10 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
                 raise GoalError('Exploration guidance is not an employer condition.', 422)
             comparable = {k: v for k, v in item.items() if k != 'correction'}
             original = {k: v for k, v in old.get(item[key], {}).items() if k != 'correction'}
+            prior = old.get(item[key], {})
+            priority_changed = bool(previous) and (not prior or any(item.get(f) != prior.get(f) for f in ('priority','priority_evidence')))
+            item['priority_origin'] = 'user_declaration' if priority_changed else prior.get('priority_origin') if prior else item['origin']
+            if item['priority_origin'] == 'generated_guidance' and item['priority'] != 'suggested':
+                raise GoalError('AI planning importance must stay advisory.', 422)
             item['correction'] = 'extracted' if extracted else old.get(item[key], {}).get('correction', 'user') if comparable == original else 'user'
     return JDExtraction.model_validate(data)

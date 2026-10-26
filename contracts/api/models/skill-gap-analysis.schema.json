@@ -39,6 +39,8 @@
               "enum": [
                 "required",
                 "preferred",
+                "unspecified",
+                "conflicting",
                 "suggested"
               ],
               "type": "string"

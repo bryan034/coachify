@@ -32,3 +32,12 @@ test('adding and editing conditions retains durations and explicit context ackno
  expect(onSave.mock.calls[0][0].non_skill_requirements[0]).toMatchObject({minimum_months:12,maximum_months:36});
  expect(onSave.mock.calls[0][1]).toBe(true);
 });
+
+test('importance can stay unspecified or conflicting and evidence survives reclassification',()=>{
+ const onSave=vi.fn();render(<RequirementEditor review={review} busy={false} onSave={onSave} onCancel={vi.fn()}/>);
+ fireEvent.change(screen.getByRole('combobox',{name:'Priority'}),{target:{value:'conflicting'}});
+ fireEvent.change(screen.getByRole('textbox',{name:'Importance evidence'}),{target:{value:'Required in heading, optional in the clause.'}});
+ fireEvent.click(screen.getByRole('button',{name:'Move SQL to conditions'}));
+ fireEvent.click(screen.getByRole('button',{name:'Save review'}));
+ expect(onSave.mock.calls[0][0].non_skill_requirements[1]).toMatchObject({requirement_id:'stable-sql-item',priority:'conflicting',priority_evidence:'Required in heading, optional in the clause.'});
+});

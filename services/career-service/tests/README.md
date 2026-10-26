@@ -37,3 +37,18 @@ use synthetic HTTP transport; these checks do not measure live Groq token saving
 `test_jd_generation_failures.py` covers the provider JSON-failure/deadline sequence,
 model-specific low reasoning, insufficient follow-up time, specific API errors and
 safe reasoning/cache/finish-reason metrics. No live Groq credentials are used.
+
+Brave-only research checks verify that acquisition contacts only the Brave API,
+public forum citations remain labelled as anecdotes, the old mixed-provider cache
+is refreshed without deleting historical evidence, and quota/restart recovery
+does not repeat completed searches. No Reddit credentials or live calls are used.
+
+`test_user_usage.py` verifies 4,000-input boundaries, full prompt/schema counting,
+7,000-token rolling admission with no output reservations, per-user isolation,
+MongoDB atomic appends/expiry, correction/retry accounting, missing usage fallback,
+truncated paid responses, and distinct shorten-versus-wait/provider messages.
+Frontend checks cover countdowns, retained drafts and retry readiness.
+
+`test_brave_summaries.py` covers attributed AI claims, forged references, original
+excerpt separation and summary-rich input budgets. Connector tests cover fragmented
+streaming and plan-access failures; workspace tests cover MongoDB persistence/reuse.

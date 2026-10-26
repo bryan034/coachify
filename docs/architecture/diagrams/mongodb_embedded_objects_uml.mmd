@@ -22,7 +22,9 @@ class TargetSkill {
     +String correction [extracted|user]
     +String name
     +String category
-    +String priority
+    +String priority [required|preferred|unspecified|conflicting|suggested]
+    +String priority_evidence?
+    +String priority_origin?
     +String required_proficiency?
     +Number required_experience_months?
     +String context?
@@ -32,7 +34,9 @@ class TargetSkill {
 }
 
 class InterviewSkill {
-    +String skill_id
+    +String evidence_origin [source_excerpt|brave_summary]
+    +String summary_id?
+    +String skill_id? [null_while_unmapped]
     +String name
     +String category
     +String interview_stage?
@@ -53,7 +57,8 @@ class ResearchSource {
     +Date published_date?
     +String role_match?
     +String reliability?
-    +String report_group
+    +String report_group? [verified_origin_only]
+    +Date retrieved_at?
 }
 
 class GapResult {
@@ -83,7 +88,9 @@ class NonSkillRequirement {
     +String requirement_id
     +String category
     +String description
-    +String priority
+    +String priority [required|preferred|unspecified|conflicting|suggested]
+    +String priority_evidence?
+    +String priority_origin?
     +String evidence
     +String origin
     +String correction [extracted|user]
@@ -109,6 +116,8 @@ class ReviewContent {
 }
 
 class interview_research {
+    +BraveAnswer[] summaries
+    +ResearchCoverage[] coverage
     +InterviewSkill[] skills
     +ResearchSource[] sources
 }
@@ -187,3 +196,46 @@ career_goals *-- Answer : draft answers
 career_goals *-- Turn : draft turns
 career_goals *-- RoleSuggestion : draft suggestions
 career_goals *-- CvContext : optional context
+
+class ResearchCoverage {
+    +String platform [brave; reddit for historical records only]
+    +String status
+    +Number round [0|1]
+}
+interview_research *-- ResearchCoverage : API availability
+
+class BraveAnswer {
+    +String summary_id
+    +String provider [brave]
+    +String text [max_2400_chars]
+    +String[] source_ids
+    +AnswerClaim[] claims
+}
+class AnswerClaim {
+    +String text [AI_synthesis_not_source_quote]
+    +String[] source_ids
+}
+interview_research *-- BraveAnswer : AI synthesis
+BraveAnswer *-- AnswerClaim : attributed spans
+InterviewSkill --> BraveAnswer : summary_id_optional
+
+class InterviewProcess {
+    +Number round_count? [explicit_only]
+    +InterviewEvidence round_count_evidence?
+    +InterviewStage[] stages
+}
+class InterviewStage {
+    +String name
+    +String assessment_type?
+    +InterviewEvidence evidence
+}
+class InterviewEvidence {
+    +String evidence_origin
+    +String summary_id?
+    +String[] source_ids
+    +String text
+}
+interview_research *-- InterviewProcess : reported process
+InterviewProcess *-- InterviewStage
+InterviewProcess *-- InterviewEvidence
+InterviewStage *-- InterviewEvidence

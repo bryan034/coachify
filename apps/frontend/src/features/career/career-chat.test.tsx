@@ -1,165 +1,209 @@
-import {fireEvent,render,screen,waitFor} from '@testing-library/react';
-import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
+import {useState} from 'react';
+import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {CareerChat} from './career-chat';
 import {CareerSessionProvider,useCareerSession} from './career-session';
-import {careerApi,importExplorationCV,type GoalDraft,type JDExtraction} from '@/lib/api/career';
-const push=vi.fn();const search=new URLSearchParams();
-vi.mock('next/navigation',()=>({useRouter:()=>({push}),useSearchParams:()=>search}));
+import {careerApi,importExplorationCV,type CareerWorkspace,type GoalDraft} from '@/lib/api/career';
+const push=vi.fn(),replace=vi.fn(),search=new URLSearchParams();
+vi.mock('next/navigation',()=>({useRouter:()=>({push,replace}),useSearchParams:()=>search}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-session'})}));
 vi.mock('@/lib/api/career',()=>({careerApi:vi.fn(),importExplorationCV:vi.fn()}));
-const base:GoalDraft={_id:'000000000000000000000001',version:1,answers:{},turns:[],interests:[],preferences:[],suggestions:[],
- next_question:'aspirations',question_text:'What would you like to achieve?',context_complete:false,
- cv:{mode:'none',filename:null,cv_id:null,version:null,extraction_version:null}};
-const extracted:JDExtraction={role:'Engineer',field:'Software',company:null,location:'Singapore',seniority_level:'Junior',job_url:null,
- summary:'Build and maintain backend services.',responsibilities:['Develop reliable APIs.'],
- non_skill_requirements:[{requirement_id:'degree',category:'qualification',description:'A relevant degree is preferred.',priority:'preferred',evidence:'A related degree is a plus.',group_id:null,group_operator:'all'}],
- skills:[{name:'Python',category:'Technical',priority:'required',origin:'employer',evidence:'Backend programming with Python.'}]};
-const savedReview=()=>({review_id:'000000000000000000000081',version:1,target_type:'specific_job',extraction:structuredClone(extracted),baseline:structuredClone(extracted),metadata_origins:{},requirements_need_review:false,is_confirmed:false,generation:{}});
-let activeReview= savedReview();
-const calls:{path:string;body:Record<string,unknown>}[]=[];
-let fail=false;let selected=false;
+const draft:GoalDraft={_id:'000000000000000000000001',version:1,answers:{},turns:[],interests:[],preferences:[],suggestions:[],next_question:'aspirations',question_text:'What would you like to achieve?',context_complete:false,cv:{mode:'none',filename:null,cv_id:null,version:null,extraction_version:null}};
+function initial():CareerWorkspace{return {session_id:'000000000000000000000071',revision:1,kind:'jd',phase:'ready',
+ review:{review_id:'000000000000000000000081',version:1,target_type:'specific_job',extraction:{role:'Engineer',field:'Software',company:null,location:'Singapore',seniority_level:'Junior',job_url:null,summary:'Build backend services.',responsibilities:['Build APIs'],non_skill_requirements:[],skills:[{item_id:'python',name:'Python',category:'Technical',priority:'required',origin:'employer',evidence:'Python required.'}]},baseline:{role:'Engineer',field:'Software',company:null,location:null,seniority_level:null,job_url:null,summary:null,responsibilities:[],skills:[],non_skill_requirements:[]},metadata_origins:{},requirements_need_review:false,is_confirmed:false,generation:{}},
+ current:{selection_version:1,goal:null,dependent_results_need_review:false},research:{_id:'000000000000000000000091',version:1,last_researched_at:'2026-01-01T00:00:00Z',research_status:'succeeded',skills:[{skill_id:null,name:'Coding',category:'Technical',interview_stage:'Technical interview',assessment_type:'Coding exercise',difficulty:'unknown',question_patterns:[],independent_report_count:0,source_ids:['s1']}],sources:[{source_id:'s1',platform:'reddit',url:'https://example.test/interview',title:'Interview report',evidence:'Reported coding exercise.',published_date:null,reported_date:null,role_match:'unknown',reliability:'anecdotal',report_group:null}]},coverage:[],error:null,retry_after:null,expires_at:null,exploration_id:null};}
+let active:CareerWorkspace,empty:CareerWorkspace,failSave=false,failChat=false;
 beforeEach(()=>{
- search.delete('source');search.delete('exploration');search.delete('review');activeReview=savedReview();calls.length=0;fail=false;selected=false;vi.mocked(careerApi).mockClear();vi.mocked(importExplorationCV).mockClear();
+ vi.resetAllMocks();Object.defineProperty(window,'matchMedia',{configurable:true,value:()=>({matches:true,addEventListener(){},removeEventListener(){}})});search.forEach((_,key)=>search.delete(key));active=initial();empty={...active,session_id:null,kind:null,phase:'empty',review:null,research:null};failSave=false;failChat=false;
  vi.mocked(careerApi).mockImplementation(async(path,_token,options)=>{
-  if(path==='/jd/extract'||path===`/goals/${activeReview.review_id}`)return activeReview as never;
-  if(options?.method==='PATCH'){const body=JSON.parse(options.body as string);activeReview={...activeReview,extraction:body.content,version:activeReview.version+1};return activeReview as never;}
-  if(path==='/jd/messages')return {reply:'Python is a programming language.',proposed_skills:null} as never;
-  if(options?.method==='POST'){
-   const body=JSON.parse(options.body as string);calls.push({path,body});
-   if(path==='/explorations')return base as never;
-   if(path.endsWith('/messages')){
-    if(fail)throw new Error('The provider is unavailable.');
-    return {...base,version:2,answers:{aspirations:{status:'partial',value:body.answer}},
-     turns:[{question:'aspirations',answer:{status:'answered',value:body.answer},reply:'What appeals to you about that direction?'}]} as never;
-   }
-   return {selection_version:1,goal:{_id:'g',role:'Analyst',field:'Data',version:1,readiness:'pending'},dependent_results_need_review:false} as never;
+  if(path==='/workspace/jd')return active as never;
+  if(path==='/workspace/review'){
+   if(failSave)throw new Error('Storage unavailable');
+   const body=JSON.parse(options!.body as string);active={...active,revision:2,review:{...active.review!,version:2,extraction:body.content}};return active as never;
   }
-  if(path.includes('/explorations/'))return {...base,context_complete:true,next_question:null,suggestions:[{role:'Analyst',field:'Data',rationale:'A possible fit.',uncertainty:'Skills remain unknown.'}]} as never;
-  return (path==='/context'?{cvs:[],cv_service_available:true,ai_available:true}:path==='/goals/current'?{selection_version:selected?3:0,goal:selected?{role:'Existing goal'}:null}:{goals:[],explorations:[]}) as never;
+  if(path==='/workspace/messages'){
+   if(failChat)throw new Error('Provider unavailable');
+   return {reply:'Practise Python for the reported coding exercise.',proposed_skills:null} as never;
+  }
+  if(path==='/workspace')return active as never;
+  if(path==='/context')return {cvs:[],cv_service_available:true,ai_available:true} as never;
+  if(path==='/goals/current')return active.current as never;
+  if(path==='/explorations')return draft as never;
+  if(path.endsWith('/messages'))return {...draft,version:2,turns:[{question:'aspirations',answer:{value:'I enjoy data'},reply:'What appeals to you about data?'}]} as never;
+  return draft as never;
  });
 });
-afterEach(()=>vi.restoreAllMocks());
-function ShowJD(){const session=useCareerSession();return <><button onClick={()=>session.chooseJD({text:'Python backend engineer requirements.',kind:'text',name:'Pasted description'})}>Select test JD</button><CareerChat/></>;}
-const mount=()=>render(<CareerSessionProvider><CareerChat/></CareerSessionProvider>);
-describe('shared career agent chat',()=>{
- it('starts with a conversational agent and sends an open-ended message after consent',async()=>{
-  mount();await screen.findByText(/Hi, I’m your career agent/);
-  expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
-  expect(screen.getByText(/No CV is required to start/)).toBeVisible();
-  fireEvent.click(screen.getByRole('checkbox',{name:/Allow Coachify/}));
-  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'I enjoy data but I am not sure what work I want.'}});
-  await waitFor(()=>expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled());
-  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
-  await screen.findByText('What appeals to you about that direction?');
-  expect(calls.at(-1)?.body).toMatchObject({answer:'I enjoy data but I am not sure what work I want.',skip:false,expected_version:1});
-  expect(calls.some(c=>c.path==='/goals/confirm')).toBe(false);
-  expect(screen.queryByText(/5 topics/)).not.toBeInTheDocument();
+function Import(){const session=useCareerSession(),[show,setShow]=useState(false);return show?<CareerChat/>:<button onClick={()=>{session.chooseJD({text:'Private synthetic Python JD',kind:'text',name:'Pasted description'});setShow(true);}}>Import test JD</button>;}
+function mount(){return render(<CareerSessionProvider><CareerChat/></CareerSessionProvider>);}
+async function chat(){mount();await screen.findByText(/Let’s look at Engineer/);}
+describe('single career conversation',()=>{
+ it('extracts a new JD into the only workspace and opens research-backed explanation',async()=>{
+  render(<CareerSessionProvider><Import/></CareerSessionProvider>);fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));
+  await screen.findByText(/Let’s look at Engineer/);
+  const call=vi.mocked(careerApi).mock.calls.find(v=>v[0]==='/workspace/jd')!;
+  expect(JSON.parse(call[2]!.body as string)).toMatchObject({text:'Private synthetic Python JD'});
+  expect(screen.getByRole('log')).toHaveTextContent('Python');expect(screen.getByRole('log')).toHaveTextContent('Technical interview');
+  expect(screen.queryByRole('button',{name:/Confirm.*goal/})).toBeNull();
  });
- it('keeps the message and the same request key on provider failure and retry',async()=>{
-  fail=true;mount();await screen.findByText(/Hi, I’m your career agent/);
-  fireEvent.click(screen.getByRole('checkbox',{name:/Allow Coachify/}));
-  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'I want to build useful software.'}});
-  await waitFor(()=>expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled());
-  fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByRole('alert');
-  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toHaveValue('I want to build useful software.');
-  const initial=vi.mocked(careerApi).mock.calls.find(c=>c[0].endsWith('/messages'))![2]?.headers;
-  fail=false;fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('What appeals to you about that direction?');
-  expect(vi.mocked(careerApi).mock.calls.filter(c=>c[0].endsWith('/messages'))[1][2]?.headers).toEqual(initial);
+ it('loads the latest workspace regardless of an old review query parameter',async()=>{
+  search.set('review','old-review');await chat();
+  expect(vi.mocked(careerApi).mock.calls.some(v=>v[0].includes('old-review'))).toBe(false);
+  expect(screen.queryByText('Previous conversations')).toBeNull();
  });
- it('extracts JD skills on the shared chat page and supports clarification messages',async()=>{
-  search.set('source','jd');render(<CareerSessionProvider><ShowJD/></CareerSessionProvider>);
-  fireEvent.click(screen.getByRole('button',{name:'Select test JD'}));
-  expect(await screen.findByRole('heading',{name:'Skills to review'})).toBeVisible();
-  expect(screen.getByText('Build and maintain backend services.')).toBeVisible();
-  expect(screen.getByText('Develop reliable APIs.')).toBeVisible();
-  expect(screen.getByText('Singapore')).toBeVisible();
-  expect(screen.getByText('Junior')).toBeVisible();
-  expect(screen.getByText(/A relevant degree is preferred/)).toBeVisible();
-  expect(screen.getByText(/Supporting context: Backend programming with Python/)).toBeVisible();
-  const composer=screen.getByRole('textbox',{name:'Message Coachify'});
-  fireEvent.change(composer,{target:{value:'What is Python?'}});
-  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
-  expect(await screen.findByText('Python is a programming language.')).toBeVisible();
-  const request=JSON.parse(vi.mocked(careerApi).mock.calls.find(c=>c[0]==='/jd/messages')![2]!.body as string);
-  expect(request).toMatchObject({review_id:activeReview.review_id,expected_version:1,message:'What is Python?'});
-  expect(request).not.toHaveProperty('context');
-  expect(request).not.toHaveProperty('text');
-  expect(request).not.toHaveProperty('source_url');
-  expect(vi.mocked(careerApi).mock.calls.some(c=>c[0]==='/goals/confirm')).toBe(false);
+ it('sends session/version and bounded turns without resending raw JD',async()=>{
+  await chat();fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'How should I prepare?'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  await screen.findByText('Practise Python for the reported coding exercise.');
+  const body=JSON.parse(vi.mocked(careerApi).mock.calls.find(v=>v[0]==='/workspace/messages')![2]!.body as string);
+  expect(body).toMatchObject({session_id:active.session_id,expected_version:1});expect(body).not.toHaveProperty('context');expect(body).not.toHaveProperty('text');
  });
- it('sends only approved skill changes as the next conversation context',async()=>{
-  const original=vi.mocked(careerApi).getMockImplementation()!;
-  const addition={name:'Communication',category:'Interpersonal',priority:'suggested',origin:'generated_guidance',evidence:null};
-  vi.mocked(careerApi).mockImplementation(async(path,token,options)=>path==='/jd/messages'
-   ?{reply:'Communication can help you explain API designs.',proposed_skills:[...extracted.skills,addition]} as never
-   :original(path,token,options));
-  search.set('source','jd');render(<CareerSessionProvider><ShowJD/></CareerSessionProvider>);
-  fireEvent.click(screen.getByRole('button',{name:'Select test JD'}));
-  await screen.findByRole('heading',{name:'Skills to review'});
-  const composer=screen.getByRole('textbox',{name:'Message Coachify'});
-  fireEvent.change(composer,{target:{value:'Suggest another skill.'}});
-  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
-  await screen.findByRole('button',{name:'Apply proposed changes'});
-  expect(screen.getByRole('region',{name:'Extracted career skills'})).not.toHaveTextContent('Communication');
-  fireEvent.click(screen.getByRole('button',{name:'Apply proposed changes'}));
-  await waitFor(()=>expect(screen.getByRole('region',{name:'Extracted career skills'})).toHaveTextContent('Communication'));
-  expect(screen.getByText(/Inferred \/ suggested/)).toBeVisible();
-  fireEvent.change(composer,{target:{value:'Why does that matter?'}});
-  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
-  await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.filter(c=>c[0]==='/jd/messages')).toHaveLength(2));
-  const request=JSON.parse(vi.mocked(careerApi).mock.calls.filter(c=>c[0]==='/jd/messages')[1][2]!.body as string);
-  expect(activeReview.extraction.skills).toEqual([...extracted.skills,addition]);
-  expect(request.expected_version).toBe(2);
-  expect(request).not.toHaveProperty('context');
-  expect(request.conversation).toEqual([{role:'user',content:'Suggest another skill.'},{role:'assistant',content:'Communication can help you explain API designs.'}]);
-  expect(request).not.toHaveProperty('text');
+ it('holds the composer until both extraction and interview research finish',async()=>{
+  active={...active,phase:'waiting_quota',research:null,retry_after:60};mount();
+  await screen.findByText('Waiting for the AI token budget');expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+  expect(screen.queryByText(/Let’s look at Engineer/)).toBeNull();
  });
- it('restores a saved review without a JD and chats against its saved version',async()=>{
-  search.set('review',activeReview.review_id);mount();
-  await screen.findByRole('heading',{name:'Skills to review'});
-  expect(vi.mocked(careerApi).mock.calls.some(c=>c[0]==='/jd/extract')).toBe(false);
-  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Explain the responsibilities.'}});
-  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
-  await screen.findByText('Python is a programming language.');
-  const body=JSON.parse(vi.mocked(careerApi).mock.calls.find(c=>c[0]==='/jd/messages')![2]!.body as string);
-  expect(body.review_id).toBe(activeReview.review_id);expect(body.expected_version).toBe(1);
-  expect(body).not.toHaveProperty('text');expect(body).not.toHaveProperty('context');
+ it('retains a failed message for retry',async()=>{
+  failChat=true;await chat();const box=screen.getByRole('textbox',{name:'Message Coachify'});fireEvent.change(box,{target:{value:'Explain Python'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  await screen.findByRole('button',{name:'Retry'});expect(screen.queryByRole('alert')).toBeNull();expect(screen.queryByText('Provider unavailable')).toBeNull();expect(box).toHaveValue('Explain Python');failChat=false;fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('Practise Python for the reported coding exercise.');
  });
- it('retains failed review edits and reuses the save key on retry',async()=>{
-  const original=vi.mocked(careerApi).getMockImplementation()!;let reject=true;
-  vi.mocked(careerApi).mockImplementation(async(path,token,options)=>{if(options?.method==='PATCH'&&reject)throw new Error('Storage temporarily unavailable.');return original(path,token,options);});
-  search.set('review',activeReview.review_id);mount();
-  fireEvent.click(await screen.findByRole('button',{name:'Edit review'}));
-  fireEvent.change(screen.getByRole('textbox',{name:'Company'}),{target:{value:'Example Company'}});
-  fireEvent.click(screen.getByRole('button',{name:'Save review'}));
-  await screen.findByText('Storage temporarily unavailable.');
-  expect(screen.getByRole('textbox',{name:'Company'})).toHaveValue('Example Company');
-  const first=vi.mocked(careerApi).mock.calls.find(c=>c[2]?.method==='PATCH')![2]!.headers;
-  reject=false;fireEvent.click(screen.getByRole('button',{name:'Save review'}));
-  await screen.findByText('Review saved.');
-  expect(vi.mocked(careerApi).mock.calls.filter(c=>c[2]?.method==='PATCH')[1][2]!.headers).toEqual(first);
+ it('automatically updates the goal from saved edits and keeps the same retry key',async()=>{
+  await chat();fireEvent.click(screen.getByRole('button',{name:'Edit career goal'}));fireEvent.change(screen.getByRole('textbox',{name:'Company'}),{target:{value:'Example Company'}});fireEvent.click(screen.getByRole('checkbox',{name:/I have reviewed/}));
+  failSave=true;fireEvent.click(screen.getByRole('button',{name:'Save review'}));await screen.findByRole('button',{name:'Retry'});expect(screen.queryByText('Storage unavailable')).toBeNull();expect(screen.getByRole('textbox',{name:'Company'})).toHaveValue('Example Company');
+  const first=vi.mocked(careerApi).mock.calls.find(v=>v[0]==='/workspace/review')![2]!.headers;
+  failSave=false;fireEvent.click(screen.getByRole('button',{name:'Save review'}));await waitFor(()=>expect(screen.queryByRole('button',{name:'Save review'})).toBeNull());
+  expect(vi.mocked(careerApi).mock.calls.filter(v=>v[0]==='/workspace/review')[1][2]!.headers).toEqual(first);
+  expect(active.review!.extraction.company).toBe('Example Company');expect(screen.queryByRole('button',{name:/Confirm.*goal/})).toBeNull();
  });
- it('does not silently switch to exploration when a temporary JD is lost',async()=>{
-  search.set('source','jd');mount();
-  expect(await screen.findByText(/Your selected job description was temporary/)).toBeVisible();
-  expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+ it('shows an explicit empty JD state instead of silently changing to exploration',async()=>{
+  active=empty;search.set('source','jd');mount();await screen.findByText(/No job description is available/);expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
  });
- it('requires explicit replacement when reviewing a suggested role',async()=>{
-  search.set('exploration',base._id);selected=true;mount();
-  fireEvent.click(await screen.findByRole('button',{name:'Review this direction'}));
-  expect(screen.getByRole('button',{name:'Confirm and save goal'})).toBeDisabled();
-  fireEvent.click(screen.getByRole('checkbox',{name:/Replace Existing goal/}));
-  fireEvent.click(screen.getByRole('button',{name:'Confirm and save goal'}));
-  await screen.findByText(/Career goal saved/);
-  expect(calls.at(-1)?.body).toMatchObject({company:null,role:'Analyst',replace_current:true,expected_selection_version:3});
+ it('starts separate exploration without a session chooser or goal confirmation',async()=>{
+  active=empty;mount();await screen.findByText(/Hi, I’m your career agent/);fireEvent.click(screen.getByRole('checkbox',{name:/Allow Coachify/}));fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'I enjoy data'}});await waitFor(()=>expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('What appeals to you about data?');expect(screen.queryByText('Previous conversations')).toBeNull();
  });
- it('keeps a CV attachment out of browser storage and the draft-creation request',async()=>{
-  vi.mocked(importExplorationCV).mockResolvedValue({kind:'document',source_name:'cv.txt',text:'Private synthetic CV',notices:[]});
-  const storage=vi.spyOn(Storage.prototype,'setItem');mount();
-  await screen.findByText(/Hi, I’m your career agent/);
-  fireEvent.click(screen.getByText('CV optional · add or choose a CV'));
-  fireEvent.change(screen.getByLabelText('Temporary CV attachment'),{target:{files:[new File(['Private synthetic CV'],'cv.txt',{type:'text/plain'})]}});
-  await screen.findByText('Temporary CV: cv.txt');
-  expect(storage).not.toHaveBeenCalled();
+ it('keeps a pending-context goal current and explains that its requirements need review',async()=>{
+  active.review!.requirements_need_review=true;await chat();
+  expect(screen.getByRole('log')).toHaveTextContent('The role context changed');
+  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Which requirements need review?'}});
+  expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled();
+  expect(screen.queryByRole('button',{name:/Confirm.*goal/})).toBeNull();
  });
+ it('keeps temporary CV content out of browser storage',async()=>{
+  active=empty;vi.mocked(importExplorationCV).mockResolvedValue({kind:'document',source_name:'cv.txt',text:'Synthetic private CV',notices:[]});const storage=vi.spyOn(Storage.prototype,'setItem');mount();await screen.findByText(/Hi, I’m your career agent/);fireEvent.click(screen.getByText('CV optional · add or choose a CV'));fireEvent.change(screen.getByLabelText('Temporary CV attachment'),{target:{files:[new File(['Synthetic private CV'],'cv.txt',{type:'text/plain'})]}});await screen.findByText('Temporary CV: cv.txt');expect(storage).not.toHaveBeenCalled();
+ });
+});
+
+
+it('waits for the quota retry time instead of polling every two seconds',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  active={...active,phase:'waiting_quota',research:null,retry_after:60};
+  await act(async()=>{view=mount();});
+  const calls=()=>vi.mocked(careerApi).mock.calls.filter(v=>v[0]==='/workspace').length;
+  const initialCalls=calls();expect(initialCalls).toBeGreaterThan(0);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(59_000);});
+  expect(calls()).toBe(initialCalls);
+  active=initial();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1_000);});
+  expect(calls()).toBe(initialCalls+1);
+  expect(screen.getByRole('log')).toHaveTextContent('Let’s look at Engineer');
+  await act(async()=>{await vi.advanceTimersByTimeAsync(60_000);});
+  expect(calls()).toBe(initialCalls+1);
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+
+
+it('counts down a per-user token wait and retains the unsent message',async()=>{
+ await chat();
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation(async(path,token,options)=>{
+  if(path==='/workspace/messages')throw Object.assign(new Error('Your 7,000-token rolling-minute allowance has been reached. Retry after 3 seconds.'),{code:'rate_limited',retryAt:Date.now()+3000});
+  return original(path,token,options);
+ });
+ const box=screen.getByRole('textbox',{name:'Message Coachify'});
+ fireEvent.change(box,{target:{value:'Explain Python'}});
+ vi.useFakeTimers();
+ try{
+  await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Send message'}));});
+  expect(box).toHaveValue('Explain Python');
+  expect(screen.getByRole('alert')).toHaveTextContent('Try again in 3 seconds.');
+  expect(screen.getByRole('button',{name:'Retry'})).toBeDisabled();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(3000);});
+  expect(screen.getByRole('alert')).toHaveTextContent('You can retry now.');
+  expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled();
+ }finally{vi.useRealTimers();}
+});
+
+
+it('labels Brave AI findings and exposes the summary with source links',async()=>{
+ active.research!.summaries=[{summary_id:'answer1',provider:'brave',text:'Candidates report coding assessments.',source_ids:['s1'],claims:[{text:'Candidates report coding assessments.',source_ids:['s1']}]}];
+ active.research!.skills[0]={...active.research!.skills[0],evidence_origin:'brave_summary',summary_id:'answer1'};
+ await chat();
+ expect(screen.getByRole('log')).toHaveTextContent('Brave AI synthesis linked to sources');
+ fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
+ expect(screen.getByText('Brave AI interview summary')).toBeInTheDocument();
+ expect(screen.getByText('Candidates report coding assessments.')).toBeInTheDocument();
+ expect(screen.getAllByText(/not a direct website quotation/).length).toBeGreaterThan(0);
+ expect(screen.getByRole('link',{name:'View source'})).toHaveAttribute('href','https://example.test/interview');
+});
+
+it('shows activity inside the pending reply and replaces it with formatted output',async()=>{
+ await chat();
+ let resolve!:(value:never)=>void;
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation((path,token,options)=>path==='/workspace/messages'?new Promise(done=>{resolve=done;}):original(path,token,options));
+ fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Explain SQL'}});
+ fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+ const status=screen.getByRole('status');
+ expect(screen.getByRole('log')).toContainElement(status);
+ expect(status).toHaveTextContent('Preparing your answer');
+ expect(screen.getByText('Explain SQL',{selector:'p'})).toBeInTheDocument();
+ await act(async()=>resolve({reply:'Learn **SQL**.\n\n- Practise joins',proposed_skills:null} as never));
+ expect(screen.queryByText('Preparing your answer…')).toBeNull();
+ expect(screen.getByText('SQL',{selector:'strong'})).toBeInTheDocument();
+ expect(screen.getByText('Practise joins',{selector:'li'})).toBeInTheDocument();
+ expect(screen.getAllByText('Explain SQL')).toHaveLength(1);
+});
+
+it('shows initial research activity in the chat and replaces it when research is ready',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  active={...active,phase:'researching',research:null};
+  await act(async()=>{view=mount();});
+  const log=screen.getByRole('log');
+  expect(log).toContainElement(screen.getByRole('status'));
+  expect(log).toHaveTextContent('Researching interview expectations with Brave');
+  active=initial();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  expect(log).toHaveTextContent('Let’s look at Engineer');
+  expect(screen.queryByText('Researching interview expectations with Brave…')).toBeNull();
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+
+it('summarises saved round counts and stage names without an extra generation call',async()=>{
+ active.research!.process={round_count:3,stages:[{name:'Recruiter screen',assessment_type:null}]};
+ await chat();
+ expect(screen.getByRole('log')).toHaveTextContent('Reported interview rounds: 3.');
+ expect(screen.getByRole('log')).toHaveTextContent('Recruiter screen');
+ expect(vi.mocked(careerApi).mock.calls.some(v=>v[0]==='/workspace/messages')).toBe(false);
+ fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
+ expect(screen.getByText('Reported rounds: 3')).toBeInTheDocument();
+});
+
+it('keeps background research diagnostics out of the UI and offers resume',async()=>{
+ active={...active,phase:'research_failed',research:null,error_code:'research_unavailable',error:'PRIVATE Brave OPTION_NOT_IN_PLAN diagnostic'};
+ mount();await screen.findByRole('button',{name:'Resume research'});
+ expect(screen.queryByText(/PRIVATE/)).toBeNull();
+ expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('shows background input-token limits but not other failure details',async()=>{
+ active={...active,phase:'research_failed',research:null,error_code:'input_limit',error:'The AI input exceeds 4,000 tokens.'};
+ mount();expect(await screen.findByRole('alert')).toHaveTextContent('4,000 tokens');
+});
+
+it('formats the initial JD overview with headings and skill lists',async()=>{
+ await chat();const log=screen.getByRole('log');
+ expect(screen.getByRole('heading',{name:'Your career goal'})).toBeInTheDocument();
+ expect(screen.getByRole('heading',{name:'Skills for this role'})).toBeInTheDocument();
+ expect(screen.getByRole('heading',{name:'Interview process'})).toBeInTheDocument();
+ expect(log.querySelector('strong')).toBeInTheDocument();
 });

@@ -14,7 +14,7 @@ skinparam databaseBackgroundColor #EFF6FA
 actor "User browser" as Browser
 component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nOutside this three-service scope" as Profile
 cloud "Configured LLM provider\nGroq initially; server-side adapter" as LLM
-cloud "Permitted public interview sources\nCompany sites, Reddit, Glassdoor\nAvailability and access restrictions apply" as Sources
+cloud "Brave Search / Answers API\nConfigured API access required" as Sources
 
 node "Docker Compose — focused design" {
   node "Next.js / React / TypeScript" as Web <<Docker container>>
@@ -25,7 +25,7 @@ node "Docker Compose — focused design" {
       artifact "Upload, extract structured skills,\nclarify personal contributions\n/api/v1/cv (planned)" as CVAPI
     }
     node "JD / career and skills analyser\nservices/career-service" as Career <<Docker container>> {
-      artifact "Specific job or career exploration\nStructured target skills, interview research, gaps\n/api/v1/career" as CareerAPI
+      artifact "Specific job or career exploration\nStructured skills and sourced interview process\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
     }
     node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
       artifact "Generate plans from versioned analyses\nEdit plans and track task progress\n/api/v1/roadmaps (planned)" as RoadmapAPI
@@ -60,7 +60,7 @@ Roadmap --> RoadmapDB : Own records only
 CV --> Uploads : Temporary original access
 CV --> LLM : Structured CV extraction
 Career --> LLM : Target skills / research synthesis / gap analysis
-Career --> Sources : Bounded permitted research retrieval
+Career --> Sources : LangGraph Brave research node
 Roadmap --> LLM : Personalised roadmap generation
 
 note bottom of Career
@@ -86,8 +86,13 @@ legend bottom
   Dashboard, review/scheduling and future services are intentionally omitted;
   extend this diagram when their scope is agreed.
   Current implementation: Profile/auth, temporary Career JD previews,
-  optional-CV exploration, persisted structured JD review, explicit goal confirmation, CV reads and data contracts.
-  Dedicated CV extraction, broader skill mapping, research, gap analysis and roadmap generation are planned.
+  optional-CV exploration, one autosaved current goal/chat, LangGraph research, CV reads and data contracts.
+  Importance review, advisory skills and versioned research orchestration/review are implemented.
+  Brave Answers keeps cited AI summaries separately from original excerpts; Answers-plan access required.
+  Dedicated CV extraction, broader mapping, gap analysis and roadmaps are planned.
+  career_state and research_contexts are operational metadata.
+  career_checkpoints / career_checkpoint_writes retain safe graph state for 24h.
+  AI input cap: 4,000 tokens/call; ai_user_usage tracks 7,000 completed tokens/user/rolling minute. No output reservations.
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend
 @enduml

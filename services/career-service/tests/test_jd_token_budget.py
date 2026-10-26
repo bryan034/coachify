@@ -22,7 +22,7 @@ GOAL = {'role':'Analyst','field':'Data','company':None,'skills':[SKILL]}
 
 
 def config():
-    return AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='synthetic')
+    return AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='synthetic',max_output_tokens=512)
 
 
 def completion(output, usage=None):
@@ -132,8 +132,7 @@ def test_edit_second_call_preserves_existing_identity_and_validates_new_items(de
                 result=await pending
                 assert result.data.proposed_skills[0]==JDExtraction.model_validate(GOAL).skills[0]
                 assert result.data.proposed_skills[1].origin=='user_declaration'
-            assert len(adapter.requests['owner'])==1  # One operation, two provider calls.
-            assert not adapter.active_users
+            assert len(calls)==2  # One operation, two provider calls.
     asyncio.run(invoke())
     assert len(calls)==2
     assert calls[1]['response_format']['json_schema']['name']=='jd_edit'
@@ -157,7 +156,7 @@ def test_edit_cooldown_and_stale_response_cannot_publish():
             operation=Operation('owner','1','jd_chat')
             with pytest.raises(AIError,match='stale_input' if stale else 'rate_limited'):
                 await adapter.generate(chat_input('Add Python'),operation,current_revision=lambda:revision[0])
-            assert operation.status=='failed' and len(calls)==2 and not adapter.active_users
+            assert operation.status=='failed' and len(calls)==2
     asyncio.run(invoke(False));asyncio.run(invoke(True))
 
 

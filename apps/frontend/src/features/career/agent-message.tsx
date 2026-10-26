@@ -1,0 +1,62 @@
+"use client";
+
+import Markdown from 'react-markdown';
+import {useEffect,useState} from 'react';
+
+/** Model text is Markdown, never executable HTML or remote images. */
+export function AgentMarkdown({children}:{children:string}){
+ return <div className="agent-markdown"><Markdown skipHtml disallowedElements={['img']} components={{
+  a:({href,children})=>href&&/^(https?:\/\/|\/(?!\/)|#)/i.test(href)?<a href={href} target="_blank" rel="noopener noreferrer">{children}</a>:<span>{children}</span>,
+ }}>{children}</Markdown></div>;
+}
+
+/** Observable work only: no simulated reasoning, timers or invented tool results. */
+export function AgentActivity({label,detail}:{label:string;detail?:string}){
+ return <div className="agent-activity" role="status" aria-live="polite">
+  <div className="agent-activity-heading"><span className="agent-activity-dot" aria-hidden="true"/><span>{label}</span></div>
+  {detail&&<p>{detail}</p>}
+ </div>;
+}
+
+export function isTokenLimit(code:unknown){return code==='rate_limited'||code==='input_limit';}
+export function errorCode(cause:unknown){return cause&&typeof cause==='object'&&'code' in cause&&typeof cause.code==='string'?cause.code:'';}
+
+/** Technical details stay in API responses; recovery controls never repeat them. */
+export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry',seconds}:{message:string;code:string;onRetry:()=>void;disabled?:boolean;label?:string;seconds?:number}){
+ const tokenLimit=isTokenLimit(code);
+ return <div role={tokenLimit?'alert':undefined} className={tokenLimit?'goal-error':'agent-recovery'}>
+  {tokenLimit&&<p>{seconds!==undefined?message.replace(/ Retry after [\d.]+ seconds\./,''):message}</p>}
+  {tokenLimit&&seconds!==undefined&&<p role="status">{seconds>0?`Try again in ${seconds} seconds.`:'You can retry now.'}</p>}
+  <p className="small">Your inputs are kept.</p><button className="btn ghost sm" disabled={disabled} onClick={onRetry}>{label}</button>
+ </div>;
+}
+
+/** Display animation after a validated response arrives; this is not provider streaming. */
+export function AgentReply({children,animate=true,onProgress}:{children:string;animate?:boolean;onProgress?:()=>void}){
+ const [shown,setShown]=useState({text:children,count:0});
+ const [reduced,setReduced]=useState(()=>typeof window!=='undefined'&&!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+ const words=children.match(/\s*\S+/g)||[];
+ useEffect(()=>{
+  const media=window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  if(!media)return;const update=()=>setReduced(media.matches);update();
+  media.addEventListener?.('change',update);return()=>media.removeEventListener?.('change',update);
+ },[]);
+ useEffect(()=>{
+  if(!animate||reduced)return;
+  setShown({text:children,count:1});
+  const timer=setInterval(()=>setShown(current=>{
+   const count=current.text===children?current.count+1:1;
+   if(count>=words.length)clearInterval(timer);
+   return {text:children,count};
+  }),20);
+  return()=>clearInterval(timer);
+ },[children,animate,reduced]);
+ const count=shown.text===children?shown.count:0;
+ const complete=!animate||reduced||count>=words.length;
+ const visible=complete?children:words.slice(0,count).join('');
+ useEffect(()=>{onProgress?.();},[visible,onProgress]);
+ return <div className="agent-reply" aria-busy={!complete}>
+  <AgentMarkdown>{visible}</AgentMarkdown>
+  {!complete&&<button type="button" className="agent-reveal" onClick={()=>setShown({text:children,count:words.length})}>Show full response</button>}
+ </div>;
+}

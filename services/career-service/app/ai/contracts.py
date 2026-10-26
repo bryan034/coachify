@@ -4,7 +4,7 @@ from pydantic import Field, model_validator
 from app.schemas.goals import ExplorationOutput
 from app.schemas.jd import ChatText, JDExtraction, JDReply
 from app.schemas.analysis import (Contract, Evidence, GapResult, InputVersions, InterviewSkill,
-    NonSkillRequirement, ResearchContext, ResearchSource, TargetSkill, Text, SkillId, CvSkill, SourceUrl)
+    NonSkillRequirement, BraveAnswer, ResearchContext, ResearchSource, TargetSkill, Text, SkillId, CvSkill, SourceUrl)
 
 
 class Message(Contract):
@@ -37,12 +37,13 @@ class GapOutput(Contract):
 
 
 class AIInput(Contract):
-    stage: Literal['extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat', 'jd_edit']
+    stage: Literal['extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer']
     source_text: str | None = Field(default=None, min_length=1, max_length=8000, repr=False)
     conversation: list[Message] = Field(default_factory=list, max_length=30, repr=False)
     # Callers build this from authenticated, approved structured snapshots.
     context: str = Field(default='', max_length=40000, repr=False)
     sources: list[ResearchSource] = Field(default_factory=list, max_length=100)
+    summaries: list[BraveAnswer] = Field(default_factory=list,max_length=2)
     source_urls: list[SourceUrl] = Field(default_factory=list, max_length=10)
     versions: InputVersions | None = None
     public_context: ResearchContext | None = None
@@ -53,17 +54,18 @@ class AIInput(Contract):
 
     @model_validator(mode='after')
     def input_for_stage(self):
+        if self.summaries and self.stage!='interview_synthesis':raise ValueError('Brave summaries belong to public interview synthesis only.')
         if self.stage in ('extraction','jd_extraction') and not self.source_text:
             raise ValueError('Extraction requires transient JD text.')
         if self.stage not in ('extraction','jd_extraction') and self.source_text is not None:
             raise ValueError('Raw JD text is only accepted by extraction stages.')
-        if self.stage in ('chat', 'jd_chat', 'jd_edit') and not self.conversation:
+        if self.stage in ('chat', 'jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer') and not self.conversation:
             raise ValueError('Chat requires a conversation.')
-        if self.stage in ('jd_chat', 'jd_edit') and not self.context:
+        if self.stage in ('jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer') and not self.context:
             raise ValueError('JD chat requires extracted career-goal context.')
         if self.stage == 'gap_analysis' and self.versions is None:
             raise ValueError('Gap analysis requires pinned input versions.')
-        if self.stage == 'research' and (self.conversation or self.context or self.cv_skills or self.target_skills or self.interview_skills or self.source_urls or self.versions or not self.public_context):
+        if self.stage in ('research','interview_synthesis') and (self.conversation or self.context or self.cv_skills or self.target_skills or self.interview_skills or self.source_urls or self.versions or not self.public_context):
             raise ValueError('Shared research accepts only public context and verified public sources.')
         return self
 

@@ -285,3 +285,26 @@ h2,h3{font-family:var(--font-heading);letter-spacing:-.02em}
 
 .jd-context{overflow-wrap:anywhere}.jd-context dl{display:flex;flex-wrap:wrap;gap:16px 32px;margin:16px 0}.jd-context dt{font-size:11px;color:var(--mute);margin-bottom:6px}.jd-context dd{margin:0;font-size:13px;font-weight:600}.jd-context h3{font-size:14px;margin:18px 0 8px}.jd-context ul{padding-left:20px;line-height:1.7}.jd-context li{margin:6px 0}
 .requirement-editor{max-width:760px}.requirement-editor fieldset{border:0;margin:20px 0;padding:0;min-width:0}.requirement-editor legend{font-size:18px;font-weight:600;margin-bottom:14px}.requirement-editor label{display:block;font-size:12px;font-weight:600;margin:12px 0}.requirement-editor input:not([type=checkbox]),.requirement-editor select,.requirement-editor textarea{display:block;width:100%;padding:10px 12px;margin:6px 0;border:1px solid var(--line);border-radius:10px;font:inherit;color:var(--text);background:white}.requirement-editor textarea{min-height:70px;resize:vertical}.requirement-editor .small{font-weight:400}.requirement-item{border:1px solid var(--line);border-radius:14px;padding:16px;margin:16px 0}.requirement-item h3{font-size:14px}.requirement-editor .row{display:flex;gap:10px;flex-wrap:wrap}.requirement-editor .review-confirm{display:flex;gap:8px;align-items:flex-start;line-height:1.6}
+
+.career-tools{margin-top:24px}.career-tools .row{flex-wrap:wrap;gap:12px}.interview-research{margin-top:24px;border-top:1px solid var(--border,#e5e7eb);padding-top:20px}.interview-research label{display:grid;gap:8px;margin:12px 0}.interview-research textarea{width:100%;box-sizing:border-box}.interview-research details{margin:12px 0}.interview-research summary{cursor:pointer}.interview-research blockquote{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0;padding:12px;background:var(--bg,#f7f9fc);border-radius:12px}.interview-research a{overflow-wrap:anywhere}.interview-research .requirement-item{min-width:0}
+
+/* In-chat activity gives way to the response without a separate progress panel. */
+.agent-activity{padding:6px 0;color:var(--mute);font-size:13px;line-height:1.6}
+.agent-activity-heading{display:flex;align-items:center;gap:10px;font-weight:500}
+.agent-activity-dot{width:9px;height:9px;flex-shrink:0;border-radius:50%;background:var(--blue);animation:agent-pulse 1.4s ease-in-out infinite}
+.agent-activity p{font-size:12px;margin:8px 0 0 19px}
+@keyframes agent-pulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+.agent-markdown{font-size:inherit;line-height:1.75;overflow-wrap:anywhere}
+.agent-markdown>:first-child{margin-top:0}.agent-markdown>:last-child{margin-bottom:0}
+.agent-markdown p{white-space:pre-wrap;margin:0 0 12px}
+.agent-markdown strong{font-weight:700;color:var(--text)}
+.agent-markdown h1,.agent-markdown h2,.agent-markdown h3,.agent-markdown h4{font-size:1.05em;font-weight:650;line-height:1.4;margin:20px 0 10px}
+.agent-markdown ul,.agent-markdown ol{padding-left:24px;margin:10px 0 16px}.agent-markdown li{margin:5px 0}.agent-markdown li>p{margin:0}
+.agent-markdown blockquote{border-left:3px solid var(--line);padding-left:14px;margin:14px 0;color:var(--mute)}
+.agent-markdown pre{overflow:auto;padding:14px;border-radius:10px;background:var(--side);white-space:pre;font-size:12px}
+.agent-markdown code{font-family:ui-monospace,monospace;font-size:.9em}.agent-markdown :not(pre)>code{padding:2px 5px;border-radius:4px;background:var(--side)}
+.agent-markdown hr{border:0;border-top:1px solid var(--line);margin:18px 0}
+@media(prefers-reduced-motion:reduce){.agent-activity-dot{animation:none}}
+.agent-recovery{padding:12px 0;margin:12px 0;color:var(--mute)}.agent-recovery .btn{margin-top:8px}
+.agent-reveal{display:block;border:0;background:none;color:var(--mute);font:inherit;font-size:11px;padding:6px 0;cursor:pointer;margin-top:6px;text-decoration:underline;text-underline-offset:3px}
+.agent-reveal:hover{color:var(--text)}

@@ -28,6 +28,8 @@ def validate_inputs(owner: str, expected: InputVersions, cv: CvSnapshot | None,
         raise ContractConflict('Research context does not match the selected goal.')
     if any(r.research_status not in ('succeeded', 'no_findings') for r in research):
         raise ContractConflict('Research is unavailable; explicitly request a partial analysis instead.')
+    if any(s.skill_id is None for r in research for s in r.skills):
+        raise ContractConflict('Research topics need skill mapping before gap analysis.')
     if any(r.skill_mapping_version != goal.skill_mapping_version for r in research) or cv.skill_mapping_version != goal.skill_mapping_version:
         raise ContractConflict('Skill mapping versions disagree.')
 

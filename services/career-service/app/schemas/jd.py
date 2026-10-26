@@ -1,7 +1,7 @@
 """Transient JD review contracts; candidates are not canonical analysis skills."""
 from typing import Annotated, Literal
 from pydantic import Field, StringConstraints, field_validator, model_validator
-from app.schemas.analysis import Contract, Text, Evidence, SourceUrl, Proficiency, Count, Generation, NonSkillRequirement, Document, AccountId, DomainId, SkillId, Version
+from app.schemas.analysis import Contract, Text, Evidence, SourceUrl, Proficiency, Count, Generation, NonSkillRequirement, Document, AccountId, DomainId, SkillId, Version, Priority
 
 ChatText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
 
@@ -14,7 +14,9 @@ class ReviewSkill(Contract):
     source_urls: list[SourceUrl] = Field(default_factory=list, max_length=10)
     name: Text
     category: Text
-    priority: Literal['required','preferred','suggested']
+    priority: Priority
+    priority_evidence: Evidence | None = None
+    priority_origin: Literal['employer','generated_guidance','user_declaration'] | None = None
     required_proficiency: Proficiency | None = None
     required_experience_months: Count | None = None
     context: Evidence | None = None

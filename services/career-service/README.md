@@ -1,84 +1,98 @@
 # Career service
 
-Interprets job descriptions, helps users explore roles, and saves reviewed career
-goals. Profile verifies accounts/onboarding; CV supplies owner-scoped saved skills.
+Interprets job descriptions, explores career directions and researches interviews.
+Each account has one live career goal and conversation. Validated changes become
+the latest goal automatically; a new extracted JD replaces the conversation.
 
-## JD input — J01/J06/J07
+## JD inputs — J01/J06/J07
 
-- `POST /api/v1/career/imports/url` — Prepare an editable public job-page preview, including available company/location metadata.
+- `POST /api/v1/career/imports/url` — Prepare an editable public job-page preview.
 - `POST /api/v1/career/imports/document` — Read a PDF/DOCX/TXT file up to 10 MiB.
 
-Previews make no AI calls or database writes. Pasted text and original uploads are
-transient; only later structured interpretation is saved. JDs are capped at 8,000
-characters; oversized content is rejected without truncation. Temporary CV
-previews retain their separate 20,000-character limit.
+Previews call no AI and write no database records. JD input is capped at 8,000
+characters; original documents and full extracted text are transient.
 
-## Role, skills and conditions — J02/J03/J04
+## Single career goal and chat — J02–J05/J09
 
-- `POST /api/v1/career/jd/extract` — Interpret a reviewed JD and save a private structured review. Returns `review_id`, version, extracted values and reset baseline.
-- `GET /api/v1/career/goals` — List confirmed goals, saved reviews and exploration drafts.
-- `GET /api/v1/career/goals/{id}` — Open a saved review or an editable view of a confirmed goal.
-- `PATCH /api/v1/career/goals/{id}/review` — Save role details, skills and conditions together, or reset metadata/all fields to the baseline.
-- `POST /api/v1/career/jd/messages` — Explain the saved review identified by `review_id` and `expected_version`, or propose skill changes for approval. No raw JD or client-authored context is accepted here.
+- `GET /api/v1/career/workspace` — Open the account's latest goal and processing state.
+- `POST /api/v1/career/workspace/jd` — Extract a new JD, save it as current and start interview research. Requires a UUID idempotency key.
+- `PATCH /api/v1/career/workspace/review` — Save/reset structured details, skills and conditions, immediately updating the current goal. Requires session ID, expected review version and UUID idempotency key.
+- `POST /api/v1/career/workspace/messages` — Ask scoped questions about the saved role, requirements and interviews. Clear questions use focused retrieval; ambiguous ones use a small router. Explicit skill edits use a separate model contract.
+- `POST /api/v1/career/workspace/retry` — Resume expired work or retry failed research.
 
-The shared chat page supports Save, Cancel, Reset, adding/removing items and moving
-items between skills and conditions. Item identities and AND/OR groups survive
-reclassification. Conditions retain qualification wording, duration ranges and
-completion requirements; they never establish the user's legal eligibility.
+LangGraph validates extraction, reuses or acquires interview evidence, then enables
+chat. The initial explanation is built from saved fields without another model call. It
+covers role scope, high-level skills, supported interview stages and an explicitly
+sourced round count (unknown otherwise). Unknown stages remain unknown. No confirmation button or
+conversation selector is used. Each AI request is capped at 4,000 estimated input tokens, and each user has a rolling
+7,000-token input/output allowance. Calls may proceed while usage is below 7,000;
+output is not reserved. Limit errors explain shortening versus timed retry. Workspace responses include
+`error_code` for background failures; the UI shows token-limit messages while keeping
+other diagnostic details in Network responses. Provider
+quotas remain separate; task output caps and timeouts still apply. Goal versions remain immutable internally; late
+results and requests for replaced sessions cannot overwrite the current goal.
 
-Supporting evidence can be a faithful summary. Stated requirements, inferred
-suggestions and user changes remain labelled. Changing role/context marks its
-requirements for review; acknowledgement is required before confirmation. Edits
-stay local until saved, and failures preserve them. No-op saves retain the version.
+Importance distinguishes required, preferred, unspecified, conflicting and advisory;
+legacy essential means required. Evidence/origin, stable identities and AND/OR
+alternatives survive edits/reset. The small [skill registry](app/data/skill-registry.json)
+maps known aliases; unknown skills remain pending for future gap analysis.
 
-MongoDB stores structured fields, bounded evidence, reset baseline and provenance;
-full JD text, originals and JD chat transcripts are not saved. Chat reload starts
-from saved context. Editing a confirmed goal creates a review revision and keeps
-its history. Only explicit confirmation changes the selected goal.
-
-The backend's small [versioned registry](app/data/skill-registry.json) maps explicit
-name/category aliases. Unfamiliar skills remain saved with `skill_id=null`; they
-block analysis readiness, not extraction or review. This is not a global skill
-catalogue. Employer facts are never generated from the user's CV or role stereotypes.
-
-## Career exploration — J08
+## Career exploration — J08/J10
 
 - `GET /api/v1/career/context` — Saved CV options and AI availability.
-- `POST /api/v1/career/explorations` — Start a private draft after AI-processing consent.
-- `GET /api/v1/career/explorations/{id}` — Resume structured progress.
+- `POST /api/v1/career/explorations` — Start or resume the one exploration after consent.
+- `GET /api/v1/career/explorations/{id}` — Read its structured progress.
 - `POST /api/v1/career/explorations/{id}/messages` — Answer, skip or refine with the agent.
-- `POST /api/v1/career/explorations/cv/document` — Read an optional temporary CV attachment.
+- `POST /api/v1/career/explorations/cv/document` — Prepare an optional temporary CV preview.
+- `POST /api/v1/career/workspace/direction` — Choose a suggested direction; generate advisory skills and research before continuing the same chat.
 
-CV use is optional and explicit. The UI recommends dedicated CV extraction and
-warns that this goal-focused model may interpret current skills less accurately.
-Vague answers stay unresolved; unknown/skip is allowed. Suggestions require
-confirmation; J10 role-skill generation is still planned.
+Exploration uses a separate LangGraph path. CV context is optional and explicitly
+chosen; the UI recommends dedicated CV extraction and explains the temporary
+attachment's limitations. Choosing a direction automatically makes it current.
 
-## Confirm a goal — J09
+## Interview evidence — J12/J13
 
-- `GET /api/v1/career/goals/current` — Selected goal and selection version.
-- `POST /api/v1/career/goals/confirm` — Select reviewed metadata/requirements using the saved review ID/version, or confirm an exploration direction.
+Brave is the sole API used to acquire public interview evidence. Research uses a
+60-second execution budget and at most one extra search round. Quota waiting
+pauses the workflow and may extend elapsed time. The UI shows partial coverage,
+failures and unknown findings; anecdotes never become employer requirements.
 
-Replacing a selection requires explicit approval. Saved goals keep reviewed skills,
-conditions, provenance and exact source-review version. Unknown mappings, empty
-skills or unfinished requirements keep readiness pending. Requirements readiness
-is not a claim of job readiness. Research, gap analysis and roadmaps remain planned.
+- `GET /api/v1/career/goals/{id}/interview-research` — Read linked research; `research_id` pins an exact version.
+- `POST /api/v1/career/goals/{id}/interview-research` — Compatibility API for explicit research/reuse on the current goal.
 
-All routes require a verified bearer session and completed onboarding. Extraction,
-review saves and confirmation require a UUID `Idempotency-Key`; edits check expected
-versions. Responses are no-store. See [API contract](../../contracts/api/career.yaml),
-[implementation rules](ANALYSIS_CONTRACTS.md), [input safeguards](SPECIFICATION.md),
-[setup](../../docs/setup.md) and [Docker hot reload](../../infrastructure/docker/README.md#hot-reload-during-development).
+Normalized role/company/location/seniority matches reuse seven-day research across
+users. Only public evidence is shared; account/CV/chat context is excluded.
+Brave `answers` is the default and requires an Answers-plan API key. It asks a targeted
+role/company/location question, keeps a bounded AI summary with linked citations, and
+extracts structured interview findings. Groq receives compact evidence entries and
+returns skill/stage fields with an evidence reference; Career restores source IDs and
+summary attribution itself and validates claims before saving. Unattributed summary
+prose cannot establish interview requirements. The UI labels summary-derived findings as
+Brave AI synthesis; source excerpts remain separate. Up to six cited sources are kept.
+`search` remains an explicit snippet-only alternative. Cache policies separate modes;
+older research stays readable. Failures distinguish missing runtime configuration, denied
+access, quota/billing, rejected parameters, network errors and invalid responses without
+showing credentials or provider response bodies. Recognised Brave error codes
+(such as `RESOURCE_NOT_ALLOWED`) and validated field names are included in failures;
+HTTP 400 alone does not establish that a request parameter is wrong. Environment changes require recreating
+the career-service container; hot reload alone does not reload its environment.
 
+Ordinary Q&A sends only relevant projected fields and matching facts, without full
+research summaries or the edit schema. Location/round-count lookups, missing facts and
+clear unrelated requests need no answering call. Ambiguous scope uses a 256-output-token
+router; grounded answers use at most 768 output tokens, subject to the existing caps.
+Independent questions omit chat history; follow-ups include only two short recent
+messages. Unrelated tasks are refused. Q&A never performs another Brave search or
+silently edits the goal. JD chat history remains temporary browser memory.
 
-AI defaults to 10 operations per user per minute. Provider quotas are separate;
-quota responses identify their origin and return a retry delay when available.
-Provider quota errors are not automatically retried. Explicit configuration
-overrides the default. Extraction, explanation and editing use separate compact
-prompts/schemas. Ordinary chat uses one call; requested skill proposals use a second
-call and still need approval. Numeric `ai_usage` events in Career service logs show
-actual input/output/total tokens per response and attempt, without logging content.
-Groq GPT-OSS JD calls use low reasoning effort to leave room for structured output.
-The default overall deadline is 45 seconds; corrections/edits are skipped when too
-little time remains. Explicit settings override defaults. See [AI settings and
-usage](ANALYSIS_CONTRACTS.md).
+## Compatibility and setup
+
+Older `/jd/extract`, `/jd/messages`, `/goals`, `/goals/current`, `/goals/{id}`,
+`/goals/{id}/review`, `/goals/confirm` and `/goals/{id}/guidance` remain available
+for existing API consumers. The application uses `/workspace` for automatic saves;
+legacy confirmation is not part of the new user flow. There is no destructive migration.
+
+All endpoints require a verified account and completed onboarding. Private reads
+are owner-scoped and responses are no-store. See [workflow/storage and API settings](ANALYSIS_CONTRACTS.md),
+[preview safeguards](SPECIFICATION.md), [OpenAPI](../../contracts/api/career.yaml)
+and [application setup](../../docs/setup.md). Gap analysis and roadmaps remain planned.

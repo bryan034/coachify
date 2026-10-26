@@ -30,6 +30,12 @@ export type SavedGoal = { _id:string; version:number; target_type:'specific_job'
  source_review_id?:string|null;source_review_version?:number|null;requirements_need_review?:boolean; exploration_draft_id:string|null;exploration_draft_version:number|null };
 export type CurrentGoal = {review_selection?:{id:string;version:number}|null;selection_version:number;goal:SavedGoal|null;dependent_results_need_review:boolean};
 export type CareerContext = {cvs:{id:string;filename:string;status:string;version:number;extraction_version:string}[];cv_service_available:boolean;ai_available:boolean};
+export class CareerApiError extends ApiError {
+ retryAt:number|null;
+ constructor(message:string,status:number,public code?:string,retryAfter?:number){
+  super(message,status);this.retryAt=typeof retryAfter==='number'&&Number.isFinite(retryAfter)&&retryAfter>0?Date.now()+retryAfter*1000:null;
+ }
+}
 export async function careerApi<T>(path:string,token:string, options:RequestInit={}):Promise<T>{
  const response=await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/career${path}`,{
   ...options,cache:'no-store',headers:{Authorization:`Bearer ${token}`,...(typeof options.body==='string'?{'Content-Type':'application/json'}:{}),...options.headers},
@@ -37,7 +43,7 @@ export async function careerApi<T>(path:string,token:string, options:RequestInit
  const body=await response.json().catch(()=>({}));
  if(!response.ok){
   if(response.status===401)window.dispatchEvent(new CustomEvent('coachify:expired',{detail:token}));
-  throw new ApiError(typeof body.detail==='string'?body.detail:'Career Goal is unavailable. Please retry.',response.status);
+  throw new CareerApiError(typeof body.detail==='string'?body.detail:'Career Goal is unavailable. Please retry.',response.status,body.code,body.retry_after);
  }
  return body as T;
 }
@@ -46,9 +52,17 @@ export async function importExplorationCV(file:File,token:string,signal:AbortSig
  return careerApi<CareerPreview>('/explorations/cv/document',token,{method:'POST',body,signal});
 }
 
-export type ReviewSkill={item_id?:string|null;skill_id?:string|null;group_id?:string|null;group_operator?:'all'|'any';correction?:'extracted'|'user';source_urls?:string[];name:string;category:string;priority:'required'|'preferred'|'suggested';required_proficiency?:string|null;required_experience_months?:number|null;context?:string|null;evidence?:string|null;origin:'employer'|'generated_guidance'|'user_declaration'};
-export type ReviewCondition={requirement_id:string;category:string;description:string;priority:string;evidence:string;group_id:string|null;group_operator:'all'|'any';origin?:'employer'|'generated_guidance'|'user_declaration';correction?:'extracted'|'user';source_urls?:string[];minimum_months?:number|null;maximum_months?:number|null;completion_status?:'completed'|'in_progress'|'unspecified'};
+export type ReviewSkill={item_id?:string|null;skill_id?:string|null;group_id?:string|null;group_operator?:'all'|'any';correction?:'extracted'|'user';source_urls?:string[];name:string;category:string;priority:'required'|'preferred'|'unspecified'|'conflicting'|'suggested';priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|null;required_proficiency?:string|null;required_experience_months?:number|null;context?:string|null;evidence?:string|null;origin:'employer'|'generated_guidance'|'user_declaration'};
+export type ReviewCondition={requirement_id:string;category:string;description:string;priority:string;priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|null;evidence:string;group_id:string|null;group_operator:'all'|'any';origin?:'employer'|'generated_guidance'|'user_declaration';correction?:'extracted'|'user';source_urls?:string[];minimum_months?:number|null;maximum_months?:number|null;completion_status?:'completed'|'in_progress'|'unspecified'};
 export type JDExtraction={role:string|null;field:string|null;company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
  summary:string|null;responsibilities:string[];non_skill_requirements:ReviewCondition[];skills:ReviewSkill[]};
 export type SavedReview={review_id:string;version:number;target_type:'specific_job'|'career_exploration';extraction:JDExtraction;baseline:JDExtraction;metadata_origins:Record<string,'extracted'|'user'>;requirements_need_review:boolean;is_confirmed:boolean;generation:unknown};
 export type JDReview=SavedReview&{turns:{message:string;reply:string}[];proposals:ReviewSkill[]|null};
+
+export type ResearchSource={source_id:string;platform:string;url:string;title:string|null;evidence:string|null;retrieved_at?:string|null;published_date:string|null;reported_date:string|null;role_match:string;reliability:string;report_group:string|null};
+export type InterviewSummary={summary_id:string;provider:string;text:string;source_ids:string[];claims:{text:string;source_ids:string[]}[]};
+export type InterviewTopic={evidence_origin?:'source_excerpt'|'brave_summary';summary_id?:string|null;skill_id:string|null;name:string;category:string;interview_stage:string|null;assessment_type:string|null;difficulty:string;question_patterns:string[];independent_report_count:number;source_ids:string[]};
+export type InterviewProcess={round_count:number|null;stages:{name:string;assessment_type:string|null}[]};
+export type ResearchView={status:string;research:{_id:string;version:number;process?:InterviewProcess;summaries?:InterviewSummary[];skills:InterviewTopic[];sources:ResearchSource[];last_researched_at:string;research_status:string}|null;context:{role:string;field:string;company:string|null;location:string|null;seniority_level:string|null};stale:boolean;reused:boolean;historical:boolean;general:boolean;note:string;history?:string[]};
+
+export type CareerWorkspace={session_id:string|null;revision:number;kind:'jd'|'exploration'|null;phase:string;review:SavedReview|null;current:CurrentGoal;research:ResearchView['research'];coverage:{platform:string;status:string;round?:number}[];error_code?:string|null;error:string|null;retry_after:number|null;expires_at:string|null;exploration_id:string|null};

@@ -1,4 +1,4 @@
-"""Authenticated temporary previews, adaptive exploration and explicit goal saving."""
+"""Authenticated previews, LangGraph research and one autosaved career workspace."""
 import asyncio
 import os
 from contextlib import asynccontextmanager
@@ -13,12 +13,20 @@ from starlette.datastructures import UploadFile
 from app.core.auth import bearer, current_account
 from app.ai.adapter import AIAdapter
 from app.ai.config import AISettings
+from app.ai.usage import UserTokenUsage
 from app.ai.adapter import AIError
 from app.clients.cvs import CvClient
 from app.repositories.goals import GoalStore, GoalError
 from app.api.v1.goals import router as goals_router
 from app.api.v1.jd import router as jd_router
 from app.api.v1.reviews import router as reviews_router
+from app.api.v1.guidance import router as guidance_router
+from app.api.v1.research import router as research_router
+from app.repositories.research import ResearchStore
+from app.clients.search_sources import SourceAPIs
+from app.repositories.workspace import WorkspaceStore
+from app.workflows.career import CareerWorkflow
+from app.api.v1.workspace import router as workspace_router
 from app.repositories.reviews import ReviewStore
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
@@ -32,7 +40,7 @@ class BodyLimit:
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
             return await self.app(scope, receive, send)
-        maximum = MAX_BODY if scope['path'].endswith('/document') else 256 * 1024 if '/career/jd/' in scope['path'] or scope['path'].endswith('/review') else 96 * 1024 if '/explorations/' in scope['path'] else 16 * 1024
+        maximum = MAX_BODY if scope['path'].endswith('/document') else 256 * 1024 if '/career/jd/' in scope['path'] or '/career/workspace/' in scope['path'] or scope['path'].endswith('/review') else 96 * 1024 if '/explorations/' in scope['path'] else 16 * 1024
         headers = dict(scope.get('headers', []))
         try: declared = int(headers.get(b'content-length', b'0'))
         except ValueError: declared = maximum + 1
@@ -50,7 +58,7 @@ class BodyLimit:
         await self.app(scope, limited_receive, send)
 
 
-def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None):
+def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None, research_client=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.slots = asyncio.Semaphore(2)
@@ -61,19 +69,29 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
             db = mongo[os.getenv('MONGODB_DATABASE','coachify_career')]
         app.state.goal_store = GoalStore(db) if db is not None else None
         app.state.review_store = review_store if review_store is not None else ReviewStore(db) if db is not None else None
+        app.state.research_store = ResearchStore(db) if db is not None else None
+        if app.state.research_store is not None:
+            await run_in_threadpool(app.state.research_store.ensure_indexes)
         if app.state.goal_store is not None:
             try: await run_in_threadpool(app.state.goal_store.ensure_indexes)
             except PyMongoError:
                 if mongo is not None: mongo.close()
                 raise RuntimeError('Career storage could not connect. Check database setup.') from None
         async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as ai_client:
-            app.state.ai = ai or AIAdapter(AISettings.from_env(), ai_client)
+            settings=AISettings.from_env() if ai is None else None
+            app.state.ai = ai or AIAdapter(settings,ai_client,usage_store=await run_in_threadpool(UserTokenUsage,db))
+            app.state.research_client = research_client or SourceAPIs.from_environment(ai_client)
+            if app.state.research_store is not None:
+                app.state.research_store.policy=getattr(app.state.research_client,'cache_policy',app.state.research_store.policy)
+            app.state.workspace_store = WorkspaceStore(app.state.goal_store,app.state.review_store) if db is not None else None
+            app.state.workflow = await run_in_threadpool(CareerWorkflow,app,db) if db is not None else None
             async with httpx.AsyncClient(base_url=os.getenv('CV_SERVICE_URL','http://cv-service:8000'),
                     timeout=5, trust_env=False, follow_redirects=False) as cv_http:
                 app.state.cv = cv_client or CvClient(cv_http)
                 try:
                     async with profile_lifespan(app): yield
                 finally:
+                    if app.state.workflow is not None: await app.state.workflow.close()
                     if mongo is not None: mongo.close()
 
     @asynccontextmanager
@@ -88,10 +106,13 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 yield
 
     app = FastAPI(title='Coachify Career API', version='0.2.0', lifespan=lifespan,
-        description='Transient JD previews, optional-CV conversational exploration and explicit structured goal persistence. JD reviews persist structured requirements; confirmation explicitly selects the reviewed goal.')
+        description='One automatically saved career workspace per account. LangGraph interprets JDs, coordinates Brave research, then enables context-grounded chat. Exploration follows a separate graph.')
     app.add_middleware(BodyLimit)
+    app.include_router(workspace_router)
     app.include_router(goals_router)
     app.include_router(jd_router)
+    app.include_router(research_router)
+    app.include_router(guidance_router)
     app.include_router(reviews_router)
 
     @app.exception_handler(ValidationError)
@@ -108,7 +129,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
 
     @app.exception_handler(AIError)
     async def ai_error(request, error):
-        status=429 if error.code in ('busy','capacity','rate_limited') else 409 if error.code=='stale_input' else 503
+        status=429 if error.code=='rate_limited' else 422 if error.code=='input_limit' else 409 if error.code=='stale_input' else 503
         messages={'not_configured':'AI is disabled. Configure the Career service model and API key.',
                   'provider_auth':'The AI provider credentials need to be checked.',
                   'provider_configuration':'Check the configured AI model and response mode.',
@@ -118,15 +139,13 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                   'incomplete_output':'The AI response ended before it was complete, possibly at its output limit. No incomplete result was saved; retry the request.',
                   'output_limit':'The AI response exceeded the allowed response size. Your inputs and saved progress are unchanged.',
                   'unavailable':'The AI provider is temporarily unavailable. Your inputs and saved progress are unchanged; retry shortly.',
-                  'busy':'An AI request is already running or the service is busy. Wait for it to finish before retrying.',
-                  'capacity':'The AI service is busy. Your inputs and saved progress are unchanged; retry shortly.',
-                  'context_limit':'This context is too long. Start without the temporary CV or use a shorter document.'}
+                  'input_limit':f'This request contains {error.input_count} estimated input tokens; the limit is 4,000 per AI request, including instructions and response schema. Shorten the description or conversation and retry. Your saved progress is unchanged.',
+                  'context_limit':'This request exceeds the configured model or token allowance. Shorten the description/chat context or check the configured model context window. Saved progress is unchanged.'}
         detail=messages.get(error.code,'The assistant could not complete this turn. Your saved progress is unchanged; retry shortly.')
         payload={'detail':detail,'code':error.code}
         if error.code == 'rate_limited':
             payload['limit_scope'] = error.limit_scope
-            payload['detail'] = ('You reached your per-minute Coachify AI operation limit.' if error.limit_scope == 'user'
-                                 else 'The AI provider request or token quota was reached.') + ' Your inputs and saved progress are unchanged.'
+            payload['detail'] = ('Your 7,000-token rolling-minute allowance has been reached.' if error.limit_scope=='user' else 'The AI provider request or token quota was reached.') + ' Your inputs and saved progress are unchanged.'
             if error.retry_after is not None:
                 payload['retry_after'] = error.retry_after
                 payload['detail'] += f' Retry after {error.retry_after} seconds.'

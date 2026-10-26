@@ -3,9 +3,9 @@
 Use the focused design references below for the next CV, JD/skills-analysis and
 roadmap work. The repository also retains the broader six-service scaffold for
 future expansion. P01–P16 are implemented in the frontend/profile slice; Career
-now supports adaptive optional-CV exploration and explicit goal saving through one
-shared chat page (including saved J02–J04 role/skill/condition reviews), alongside temporary
-URL/document previews and CV read APIs. Dedicated CV extraction, broader skill mapping, research,
+now supports adaptive optional-CV exploration and automatic goal saving through one
+shared chat page, LangGraph-coordinated Brave interview research, temporary
+URL/document previews and CV read APIs. Dedicated CV extraction, broader skill mapping,
 gap analysis and roadmap generation remain planned.
 
 ## Working design references
@@ -104,7 +104,7 @@ Career validates sessions via the Profile API and returns URL/document previews.
 Original uploads use private tmpfs and are closed/deleted after processing. Source
 text exists only in request/process/browser memory, with no persistence. Future
 structured skill review now uses explicit AI extraction/chat requests, separately
-from import previews. J02–J04 now persist structured reviews and confirmed goal requirements, with a
+from import previews. J02–J04 now persist structured reviews and automatically current goal requirements, with a
 small explicit alias registry and pending status for unknown skill identities.
-Interview research and gap analysis remain planned. Full source
+Interview research uses configured Brave APIs and versioned public evidence; gap analysis remains planned. Full source
 persistence stays intentionally excluded.

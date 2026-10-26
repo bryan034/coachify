@@ -176,8 +176,8 @@ def test_saved_cv_explicit_context_and_stale_version_guard(flow,documents):
     client,db,ai,cv=flow; cv.rows=[CvSnapshot.model_validate(documents['cv'])]
     listing=client.get(BASE+'/context',headers=headers()).json()
     assert listing['cvs'][0]['id']==documents['cv']['_id']
-    assert start(client)['cv']['mode']=='none'
     draft=start(client,cv_id=documents['cv']['_id'])
+    assert draft['cv']['mode']=='saved'
     cv.rows[0].version=2
     assert turn(client,draft).status_code==409 and not ai.inputs
 

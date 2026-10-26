@@ -12,7 +12,7 @@ from app.main import create_app
 
 
 def settings(**values):
-    return AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='synthetic',**values)
+    return AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='synthetic',max_output_tokens=512,**values)
 
 
 @pytest.mark.parametrize('stage',['jd_extraction','jd_chat','jd_edit'])
@@ -29,7 +29,7 @@ def test_low_reasoning_is_scoped_to_supported_groq_jd_calls(stage,provider,model
         stage=stage,context='{}',conversation=[{'role':'user','content':'Explain SQL'}])
     payload=adapter._payload(request)
     assert payload.get('reasoning_effort')==expected
-    assert payload['max_completion_tokens']==4096
+    assert payload['max_completion_tokens']==(1024 if stage=='jd_chat' else 4096)
 
 
 def test_non_jd_tasks_keep_existing_reasoning_settings():
@@ -61,7 +61,7 @@ def test_json_correction_requires_enough_remaining_time(timeout,expected_calls):
             else:
                 result=await pending
                 assert result.data.role=='Analyst' and op.status=='succeeded'
-            assert not adapter.active_users and len(calls)==expected_calls
+            assert len(calls)==expected_calls
             assert 'PRIVATE' not in json.dumps(calls)
     asyncio.run(invoke())
 
@@ -114,5 +114,16 @@ def test_edit_followup_is_not_started_near_deadline():
             op=Operation('owner','1','jd_chat')
             with pytest.raises(AIError,match='timeout'):
                 await adapter.generate(AIInput(stage='jd_chat',context='{}',conversation=[{'role':'user','content':'Add Python'}]),op,current_revision=lambda:'1')
-            assert len(calls)==1 and op.status=='failed' and not adapter.active_users
+            assert len(calls)==1 and op.status=='failed'
     asyncio.run(invoke())
+
+
+def test_provider_quota_error_preserves_retry_delay():
+    scope,detail='provider','AI provider'
+    def profile(req):return httpx.Response(200,json={'id':'synthetic-account','email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
+    def processor(*args):raise AIError('rate_limited',True,limit_scope=scope,retry_after=12)
+    upstream=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile))
+    with TestClient(create_app(profile_client=upstream,processor=processor)) as client:
+        response=client.post('/api/v1/career/imports/url',headers={'Authorization':'Bearer synthetic'},json={'url':'https://example.test/job'})
+        assert response.status_code==429 and response.json()['limit_scope']==scope
+        assert detail in response.json()['detail'] and response.headers['Retry-After']=='12'

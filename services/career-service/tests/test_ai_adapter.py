@@ -10,7 +10,7 @@ from app.schemas.analysis import InputVersions
 
 
 def settings(**values):
-    return AISettings(**{'enabled':True, 'model':'fixture-model', 'api_key':'fixture-only-secret', **values})
+    return AISettings(**{'enabled':True, 'model':'fixture-model', 'api_key':'fixture-only-secret', 'max_output_tokens':512, **values})
 
 
 def response(content, finish='stop'):
@@ -113,7 +113,7 @@ def test_truncated_refused_or_tool_output_cannot_publish(finish):
     asyncio.run(invoke())
 
 
-def test_cancellation_and_stale_completion_release_capacity():
+def test_cancellation_and_stale_completion_still_protect_publication():
     async def invoke():
         entered, release = asyncio.Event(), asyncio.Event()
         async def handler(_): entered.set(); await release.wait(); return response({'reply':'Hi'})
@@ -123,52 +123,38 @@ def test_cancellation_and_stale_completion_release_capacity():
             revision=['1']; op=Operation('owner','1','chat')
             pending=asyncio.create_task(adapter.generate(request,op,current_revision=lambda:revision[0]))
             await entered.wait()
-            with pytest.raises(AIError,match='busy'):
-                await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
             revision[0]='2'; release.set()
             with pytest.raises(AIError,match='stale_input'): await pending
-            assert not adapter.active_users and op.status == 'failed'
+            assert op.status == 'failed'
             entered.clear(); release.clear(); op=Operation('owner','2','chat')
             pending=asyncio.create_task(adapter.generate(request,op,current_revision=lambda:'2'))
             await entered.wait(); pending.cancel()
             with pytest.raises(asyncio.CancelledError): await pending
-            assert op.status == 'cancelled' and not adapter.active_users
+            assert op.status == 'cancelled'
     asyncio.run(invoke())
 
 
-def test_rate_and_context_limits_do_not_call_provider():
+def test_context_validation_still_rejects_oversized_requests_before_network():
     async def invoke():
         calls=[]
-        def handler(req): calls.append(req); return response({'reply':'Hi'})
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(settings(requests_per_minute=1),client)
-            request=AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}])
-            await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
-            with pytest.raises(AIError,match='rate_limited'):
-                await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
-            assert len(calls)==1
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda req:calls.append(req))) as client:
             adapter=AIAdapter(settings(context_tokens=2048),client)
             with pytest.raises(AIError,match='context_limit'):
-                await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
-            assert len(calls)==1
+                await adapter.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}]),Operation('owner','1','chat'),current_revision=lambda:'1')
+            assert calls==[]
     asyncio.run(invoke())
 
 
-def test_default_rate_limit_allows_ten_operations_per_user_per_minute():
+def test_no_local_operation_rate_limit_blocks_repeated_calls():
     async def invoke():
         calls=[]
-        def handler(req):
-            calls.append(req)
-            return response({'reply':'Hi'})
+        def handler(req):calls.append(req);return response({'reply':'Hi'})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter=AIAdapter(settings(),client)
             request=AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}])
-            for _ in range(10):
+            for _ in range(12):
                 await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
-            with pytest.raises(AIError,match='rate_limited') as caught:
-                await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
-            assert caught.value.limit_scope=='user'
-            assert len(calls)==10
+            assert len(calls)==12
     asyncio.run(invoke())
 
 
@@ -208,7 +194,7 @@ def test_oversized_context_trims_without_truncating_the_jd():
             sent.append(json.loads(req.content))
             return response({'role':'Analyst','field':'Data','company':None,'skills':[]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(settings(context_tokens=50000),client)
+            adapter=AIAdapter(settings(context_tokens=50000,provider='compatible'),client)
             await adapter.generate(
                 AIInput(stage='jd_extraction',source_text=jd,context=json.dumps({'summary':'x'*39000})),
                 Operation('owner','1','jd_extraction'),current_revision=lambda:'1')
@@ -234,7 +220,7 @@ def test_config_is_server_only_explicit_and_validated(monkeypatch):
     monkeypatch.setenv('AI_ENABLED','true'); monkeypatch.setenv('AI_API_KEY','fixture-key')
     monkeypatch.setenv('AI_MODEL','fixture-model')
     assert AISettings.from_env().model == 'fixture-model'
-    assert AISettings().requests_per_minute == 10
+    assert not {'requests_per_minute','tokens_per_minute','concurrency'} & AISettings.model_fields.keys()
     for overrides in [{'base_url':'http://insecure.test'}, {'model':''}, {'response_mode':'unsupported'}, {'retries':5}]:
         with pytest.raises(ValidationError): settings(**overrides)
     with pytest.raises(ValidationError):
@@ -282,19 +268,22 @@ def test_disabled_config_makes_no_calls_and_keeps_previews_usable():
     asyncio.run(invoke())
 
 
-def test_global_concurrency_limit_is_bounded():
+def test_concurrent_calls_for_same_owner_are_not_locally_rate_limited():
     async def invoke():
-        entered,release=asyncio.Event(),asyncio.Event()
-        async def handler(_): entered.set(); await release.wait(); return response({'reply':'Hi'})
+        entered,release=asyncio.Event(),asyncio.Event();calls=[]
+        async def handler(req):
+            calls.append(req)
+            if len(calls)==4:entered.set()
+            await release.wait();return response({'reply':'Hi'})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(settings(concurrency=1),client)
+            adapter=AIAdapter(settings(),client)
             request=AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}])
-            first=asyncio.create_task(adapter.generate(request,Operation('owner-a','1','chat'),current_revision=lambda:'1'))
-            await entered.wait()
-            with pytest.raises(AIError,match='busy'):
-                await adapter.generate(request,Operation('owner-b','1','chat'),current_revision=lambda:'1')
-            release.set(); await first
-            assert not adapter.active_users
+            tasks=[asyncio.create_task(adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')) for _ in range(4)]
+            try:
+                await asyncio.wait_for(entered.wait(),2)
+            finally:release.set()
+            results=await asyncio.gather(*tasks)
+            assert len(calls)==4 and all(v.data.reply=='Hi' for v in results)
     asyncio.run(invoke())
 
 
@@ -363,11 +352,10 @@ def test_jd_validation_correction_is_bounded_private_and_uses_one_operation():
             adapter=AIAdapter(settings(),client);op=Operation('fixture','1','jd_extraction')
             result=await adapter.generate(AIInput(stage='jd_extraction',source_text='Synthetic analyst'),op,current_revision=lambda:'1')
             assert result.data.role=='Analyst' and op.status=='succeeded'
-            assert len(calls)==2 and len(adapter.requests['fixture'])==1
+            assert len(calls)==2
             correction=calls[1]['messages'][-1]['content']
             assert 'schema_validation' in correction and 'company' in correction
             assert 'PRIVATE_FAILED_RESPONSE' not in json.dumps(calls[1])
-            assert not adapter.active_users
     asyncio.run(invoke())
 
 def test_jd_repeated_bad_output_reports_safe_fields_and_stops_after_two_calls():
@@ -380,7 +368,6 @@ def test_jd_repeated_bad_output_reports_safe_fields_and_stops_after_two_calls():
                 await adapter.generate(AIInput(stage='jd_extraction',source_text='Synthetic analyst'),op,current_revision=lambda:'1')
             assert len(calls)==2 and error.value.reason=='schema_validation' and op.status=='failed'
             assert 'secret' not in str(error.value.fields).lower() and 'SECRET_CONTENT' not in str(error.value)
-            assert not adapter.active_users
     asyncio.run(invoke())
 
 def test_jd_retry_rechecks_revision_before_another_provider_call():
@@ -406,21 +393,6 @@ def test_jd_chat_requires_structured_context_and_never_accepts_raw_jd():
     assert 'Use the supplied career_goal context' in payload['messages'][0]['content']
     assert json.loads(payload['messages'][1]['content']).get('source_text') is None
 
-
-
-def test_ten_per_user_limit_and_window_reset():
-    async def invoke():
-        now=[100.0]
-        async with httpx.AsyncClient() as client:
-            adapter=AIAdapter(settings(),client,clock=lambda:now[0])
-            assert adapter.settings.requests_per_minute==10
-            for _ in range(10): adapter._limit('one')
-            adapter._limit('two')
-            with pytest.raises(AIError) as error: adapter._limit('one')
-            assert error.value.limit_scope=='user' and error.value.retry_after==60
-            now[0]+=60
-            adapter._limit('one')
-    asyncio.run(invoke())
 
 
 @pytest.mark.parametrize('header,expected',[('37.2',38),('invalid',None),('nan',None),('-1',None)])
@@ -453,3 +425,51 @@ def test_native_schema_is_not_duplicated_and_unused_inputs_are_omitted():
 def test_ai_jd_character_boundary():
     assert len(AIInput(stage='jd_extraction',source_text='🧭'*8000).source_text)==8000
     with pytest.raises(ValidationError): AIInput(stage='jd_extraction',source_text='🧭'*8001)
+
+
+def test_role_guidance_uses_compact_contract_and_its_own_prompt():
+    output={'role':'Data Analyst','field':'Data','company':None,'skills':[
+        {'name':'SQL','category':'Technical','priority':'suggested','origin':'generated_guidance'}]}
+    result,seen,_=run(AIInput(stage='role_guidance',context=json.dumps({'role':'Data Analyst','field':'Data','interests':['visualization']})),output)
+    body=json.loads(seen[0].content)
+    assert result.data.skills[0].priority=='suggested'
+    assert 'technical and transferable skills' in body['messages'][0]['content']
+    assert 'visualization' in str(body) and 'user_id' not in str(body)
+
+
+def test_interview_synthesis_has_public_sources_only(documents):
+    request=AIInput(stage='interview_synthesis',public_context={'field':'Software','role':'Engineer'},sources=documents['research']['sources'])
+    result,seen,_=run(request,{'topics':[]})
+    body=json.loads(seen[0].content)
+    assert result.data.topics==[] and 'retrieved public source evidence' in body['messages'][0]['content']
+    with pytest.raises(ValidationError):
+        AIInput(stage='interview_synthesis',public_context={'field':'Software','role':'Engineer'},context='private context')
+
+
+def test_workspace_chat_explains_and_proposes_edits_in_one_provider_call():
+    existing={'item_id':'saved-sql','skill_id':'language.sql','name':'SQL','category':'Technical','priority':'required','origin':'employer','evidence':'SQL required'}
+    request=AIInput(stage='workspace_chat',context=json.dumps({'career_goal':{'role':'Analyst','field':'Data','company':None,'skills':[existing]},
+        'interview_research':{'status':'succeeded','skills':[{'name':'SQL interview','source_ids':['s1']}],'sources':[{'source_id':'s1','evidence':'SQL exercise'}]}}),
+        conversation=[{'role':'user','content':'Add Python'}])
+    result,seen,_=run(request,{'reply':'Python can be an additional planning skill.','edits':{'keep':['0'],'add':[
+        {'name':'Python','category':'Technical','priority':'suggested','origin':'user_declaration','evidence':'Add Python'}]}})
+    assert len(seen)==1 and result.data.proposed_skills[0].item_id=='saved-sql'
+    assert result.data.proposed_skills[1].name=='Python'
+    sent=json.loads(json.loads(seen[0].content)['messages'][1]['content'])
+    assert sent['context']['career_goal']['skills'][0]['ref']=='0'
+    assert sent['context']['interview_research']['sources'][0]['source_id']=='s1'
+
+
+@pytest.mark.parametrize('stage,cap,output',[
+    ('question_route',256,{'topic':'skills','terms':['SQL'],'followup':False}),
+    ('focused_answer',768,{'status':'answered','reply':'SQL is required.','references':['f1']}),
+])
+def test_focused_qa_uses_small_stage_specific_prompts_schemas_and_caps(stage,cap,output):
+    request=AIInput(stage=stage,context=json.dumps({'facts':[{'ref':'f1','data':{'name':'SQL','priority':'required'}}]}),conversation=[{'role':'user','content':'Which skills are required?'}])
+    _,seen,_=run(request,output,max_output_tokens=4096,model='openai/gpt-oss-120b')
+    payload=json.loads(seen[0].content)
+    assert payload['max_completion_tokens']==cap
+    assert payload['response_format']['type']=='json_schema'
+    assert 'SkillEdits' not in str(payload['response_format'])
+    assert 'Transient jd_extraction' not in payload['messages'][0]['content']
+    assert len(payload['messages'])==2

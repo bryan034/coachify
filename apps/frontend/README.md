@@ -16,7 +16,7 @@ webfont files and is not bundled.
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
 | `/career-goal` | Choose exploration or prepare a transient JD preview from text, URL or a document |
-| `/career-goal/chat` | One agent conversation page: adaptive J08 exploration/J09 goal review, or saved JD role/skill/condition reviews with clarification, editing and confirmation |
+| `/career-goal/chat` | One agent conversation page: one current goal/chat with LangGraph JD research or separate exploration; automatic saves, editing and clarification |
 | `/onboarding` | P13/P14 full-screen question-by-question setup, ending with Enter Coachify |
 | `/profile` | Occupation, education and employment summary with inline Edit profile, Save changes and Cancel |
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
@@ -31,6 +31,15 @@ webfont files and is not bundled.
 Draft names, scores, achievements, applications, contacts and events are replaced
 with empty states. Unimplemented service actions do not make API calls or imply a
 successful save. Account screens use the implemented Profile account endpoints.
+
+Career chat renders assistant Markdown (bold, headings, lists and code) using
+`react-markdown`, with raw HTML and remote images disabled. In-chat activity reflects
+observed loading, research and response states; it does not expose model reasoning.
+The initial overview includes saved interview stages and explicitly sourced round
+counts; unknown counts stay unknown. Chat sends one recent exchange for follow-up
+resolution, with backend topic routing and focused retrieval. The completed answer
+replaces the activity indicator, and failures keep the composer
+draft available for retry. Existing JSON APIs and research polling are unchanged.
 
 ## Profile and authentication
 
@@ -71,21 +80,23 @@ layouts and reduced-motion preferences are supported.
 Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
 `src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
 content stays in the account-scoped Career route provider, never browser storage.
-**Extract career goal** carries a prepared JD into the shared chat page and calls
-the configured AI. The review shows role context, responsibilities, conditions and
-skills with supporting summaries. Subsequent chat sends this structured context
-and recent turns instead of resending the original JD. Users can ask about the job,
-clarify requirements, remove items or apply proposed additions; stated requirements,
-inferred skills and user additions stay distinct. Extracted reviews now save to
-MongoDB and reopen using `?review={id}` or the Career Goal saved-review list.
-Edit review is a single-column form with Save, Cancel, Reset, skill/condition
-reclassification and shared AND/OR groups. Chat uses the saved ID/version; the
-backend loads its authoritative context. Explicit confirmation selects the goal,
-including its reviewed skills and conditions. Changing role/context requires
-requirements acknowledgement. Unknown mappings keep gap analysis pending. Selecting a document automatically reads it, with retry
-after failure. Refresh restores saved structured reviews; the original source must be re-added only for a fresh extraction. Exploration uses live agent follow-ups, keeps
-partial answers unresolved, and restores saved conversation context by draft ID.
-Confirming a suggested direction is explicit; its skill requirements remain pending.
+**Extract career goal** starts the LangGraph JD workflow. Validated role/skill/condition
+information immediately becomes the account's latest goal. Brave/Reddit interview
+research completes before the initial chat explanation and follow-up composer open.
+Unavailable sources produce a retry state; no-findings stays explicit. One current
+conversation is loaded from `/api/v1/career/workspace`; there is no session picker or
+confirmation button. A new successfully interpreted JD resets that conversation.
+Save/Cancel/Reset edits preserve stable identities and automatically publish valid
+saved changes. Research remains distinct from JD requirements and personal skills.
+The details panel exposes interview topics, stages, assessments, uncertainty and
+source evidence. Ordinary follow-up requests send only session/version, the current
+message and at most one recent exchange; the backend retrieves only the relevant
+saved fields. Independent questions omit that history from model input.
+Recent JD turns are temporary. Reload restores the latest structured goal/research,
+not the original JD or a full chat transcript. Exploration uses its own LangGraph
+path; choosing a suggested direction makes it current, then generates advisory skills
+and research for the same workspace. Temporary workflow checkpoints expire after
+24 hours of inactivity; saved goals remain available for structured resume.
 FastAPI owns validation, resource ownership and database writes. See
 [application setup](../../docs/setup.md) for environment and Docker setup.
 
@@ -149,3 +160,9 @@ uses the Dockerfile's `development` target, Next.js dev with Webpack polling,
 read-only source mounts and a separate `.next` cache. The gateway forwards the
 HMR WebSocket. React edits usually preserve state; edits requiring a full refresh
 can reset unsaved inputs. Production uses the existing build/start target.
+
+Career replies reveal word by word after the validated API response arrives. Markdown
+headings/lists format the first JD overview; older replies stay fully visible. Users
+can choose Show full response, and reduced-motion preferences disable animation.
+Only token-limit errors are shown as error messages. Other failures keep quiet retry
+controls and retained drafts; diagnostic codes/details remain in Network responses.

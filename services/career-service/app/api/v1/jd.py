@@ -30,6 +30,10 @@ def validate_extraction(output, source_url):
     validate_skills(output.skills, extraction=True)
     # Provenance comes from the input transport, not an AI-generated URL.
     output.job_url = source_url
+    for item in [*output.skills,*output.non_skill_requirements]:
+        if item.origin=='employer' and item.priority in ('required','preferred','conflicting'):
+            item.priority_evidence=item.priority_evidence or item.evidence
+            if not item.priority_evidence:item.priority='unspecified'
 
 
 @router.post('/extract', response_model=JDExtractionResult)

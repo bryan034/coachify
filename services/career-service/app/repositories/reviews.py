@@ -107,6 +107,9 @@ class ReviewStore:
         for item in [*content.skills,*content.non_skill_requirements]:
             identity=item.item_id if hasattr(item,'item_id') else item.requirement_id
             original=originals.get(identity,{})
+            comparable=lambda value:{k:v for k,v in value.items() if k not in ('correction','priority_origin')}
+            if comparable(item.model_dump(mode='json'))==comparable(original):
+                item.priority_origin=original.get('priority_origin')
             if {k:v for k,v in item.model_dump(mode='json').items() if k!='correction'} == {k:v for k,v in original.items() if k!='correction'}:
                 item.correction=original.get('correction','extracted')
         if content==draft.baseline: needs_review=False
@@ -145,16 +148,16 @@ class ReviewStore:
             if receipt not in latest.get('receipts',[]): raise GoalError('This review changed or is being confirmed. Reload before retrying.')
         return self.get(identifier,owner)
 
-    def goal(self, draft, owner, key, data):
+    def goal(self, draft, owner, key, data, *, allow_pending_context=False):
         if draft.version != data.expected_review_version: raise GoalError('The review changed. Reload before confirming.')
-        if draft.requirements_need_review: raise GoalError('Review the requirements for the edited role before confirming.',422)
+        if draft.requirements_need_review and not allow_pending_context: raise GoalError('Review the requirements for the edited role before confirming.',422)
         content=draft.content
         if any(getattr(data,f) != getattr(content,f) for f in METADATA) or data.target_type != draft.target_type:
             raise GoalError('Confirm the saved review values. Save your edits first.',422)
         if not content.role or not content.field: raise GoalError('Fill in the role and field before confirming.',422)
         stamp=now()
         skills=[TargetSkill.model_validate(s.model_dump()) for s in content.skills]
-        ready=bool(skills) and draft.generation is not None and all(s.skill_id and (s.origin!='employer' or s.evidence) for s in skills)
+        ready=bool(skills) and not draft.requirements_need_review and draft.generation is not None and all(s.skill_id and s.priority!='conflicting' and (s.origin!='employer' or s.evidence) for s in skills) and all(r.priority!='conflicting' for r in content.non_skill_requirements)
         base=CareerGoal.model_validate(self._row(draft.base_goal_id,owner)) if draft.base_goal_id else None
         inherited={f:getattr(base,f) for f in ('interests','preferences','exploration_draft_id','exploration_draft_version','source_cv_id','source_cv_version','source_extraction_version','source_profile_version')} if base else {}
         return CareerGoal(**inherited,_id=stable_id(owner,key,'goal'),user_id=owner,version=1,skill_mapping_version=MAPPING_VERSION,
@@ -162,7 +165,7 @@ class ReviewStore:
             skills=skills,non_skill_requirements=content.non_skill_requirements,summary=content.summary,responsibilities=content.responsibilities,
             requirements_source={'text':'pasted_jd','url':'url_jd','document':'document_jd','career_exploration':'career_exploration'}[draft.source_kind],
             generation_version=draft.generation.prompt_version if draft.generation else 'pending-skills',generation=draft.generation,
-            readiness='ready' if ready else 'pending',source_review_id=draft.id,source_review_version=draft.version)
+            readiness='ready' if ready else 'pending',requirements_need_review=draft.requirements_need_review,source_review_id=draft.id,source_review_version=draft.version)
 
     def claim_confirmation(self, identifier, owner, version, key):
         result=self.rows.update_one({'_id':ObjectId(identifier),'user_id':owner,'record_type':'requirement_review','version':version,
@@ -173,3 +176,20 @@ class ReviewStore:
 
     def release_confirmation(self,identifier,owner,key):
         self.rows.update_one({'_id':ObjectId(identifier),'user_id':owner,'processing.key':key},{'$unset':{'processing':''}})
+
+
+    def create_guidance(self, owner, key, digest, goal, content, generation):
+        identifier=stable_id(owner,key,'guidance-review')
+        existing=self.rows.find_one({'_id':ObjectId(identifier),'user_id':owner})
+        if existing:
+            if existing.get('source_hash')!=digest: raise GoalError('This guidance key was used for different details.')
+            return self.get(identifier,owner)
+        stamp=now();prepared=prepare(content,extracted=True)
+        draft=RequirementReview(_id=identifier,user_id=owner,version=1,skill_mapping_version=MAPPING_VERSION,
+            created_at=stamp,updated_at=stamp,target_type='career_exploration',source_kind='career_exploration',
+            base_goal_id=goal.id,content=prepared,baseline=prepared,generation=generation,
+            metadata_origins={f:'user' for f in METADATA},baseline_origins={f:'user' for f in METADATA})
+        payload=mongo_document(draft);payload.update(source_hash=digest,receipts=[])
+        try:self.rows.insert_one(payload)
+        except DuplicateKeyError:return self.create_guidance(owner,key,digest,goal,content,generation)
+        return draft

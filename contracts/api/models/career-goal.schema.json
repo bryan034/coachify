@@ -73,10 +73,43 @@
           "enum": [
             "required",
             "preferred",
+            "unspecified",
+            "conflicting",
             "suggested"
           ],
           "title": "Priority",
           "type": "string"
+        },
+        "priority_evidence": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority Evidence"
+        },
+        "priority_origin": {
+          "anyOf": [
+            {
+              "enum": [
+                "employer",
+                "generated_guidance",
+                "user_declaration"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority Origin"
         },
         "evidence": {
           "maxLength": 600,
@@ -262,10 +295,43 @@
           "enum": [
             "required",
             "preferred",
+            "unspecified",
+            "conflicting",
             "suggested"
           ],
           "title": "Priority",
           "type": "string"
+        },
+        "priority_evidence": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority Evidence"
+        },
+        "priority_origin": {
+          "anyOf": [
+            {
+              "enum": [
+                "employer",
+                "generated_guidance",
+                "user_declaration"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority Origin"
         },
         "required_proficiency": {
           "anyOf": [

@@ -130,11 +130,35 @@ J02–J04 add saved review editing, reset/cancel, atomic skill/condition reclass
 source/metadata provenance, mapping-pending states, guarded confirmation, version
 conflicts and immutable history. Career MongoDB tests use random
 `coachify_reviews_test_*` databases. Browser fixtures cover extract → chat proposal →
-review save → reload → explicit confirmation, including mobile layout. External AI
+automatic save → reload → latest goal, including mobile layout. External AI
 remains mocked; these checks do not establish live-model semantic accuracy.
 
 The Local UI and MongoDB job uploads `local-ui-integration-results` for seven days,
 including retained failure traces and error context. Its Career preview journey
-keeps AI disabled: it asserts the real extraction API returns `503/not_configured`,
+keeps AI disabled: it asserts the real `/workspace/jd` API returns `503/not_configured`,
 the UI preserves retry controls and disables chat, and no review was saved. It does
 not depend on introductory wording or use live Groq credentials.
+
+
+Career J05/J10/J12/J13 checks cover importance/reset identities, advisory generation,
+exact selection versions, owner isolation, shared public research reuse, leases,
+immutable history and failed refresh recovery. API source connectors and AI are
+synthetic fixtures; no live source API or model accuracy is claimed. An unconnected
+source API is tested as unavailable. Frontend checks cover the shared skills review,
+read-only historical evidence, retry preservation and mobile layout. Run Career
+with a disposable `MONGODB_TEST_URI` to include these database-backed tests.
+
+
+LangGraph single-workspace checks use real disposable MongoDB with synthetic models
+and Brave HTTP responses. They cover automatic current-goal saves, session
+replacement, stale-session/owner rejection, research-before-chat gating, persisted
+checkpoints, quota pause/resume without repeating searches, no-findings and expiry.
+User-usage tests verify 4,000-input boundaries, 7,000-token rolling admission,
+actual usage without output reservations, owner isolation, atomic MongoDB appends,
+individual expiry, retry delays, provider distinction and output caps. Browser checks cover the
+new single-chat flow and mobile evidence. No live model/search credentials are used.
+
+Brave Answers checks cover fragmented SSE, cited AI summaries versus source excerpts,
+invalid/missing references, uncited-answer rejection, output limits, public-scope queries,
+mode-specific cache policies, MongoDB summary persistence/reuse and the 4,000-token cap.
+All external responses are synthetic; live Answers access must be configured separately.

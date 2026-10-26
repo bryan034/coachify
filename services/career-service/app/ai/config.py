@@ -18,8 +18,6 @@ class AISettings(BaseModel):
     retries: int = Field(default=1, ge=0, le=2)
     max_output_tokens: int = Field(default=4096, ge=128, le=8192)
     context_tokens: int = Field(default=65536, ge=2048, le=262144)
-    requests_per_minute: int = Field(default=10, ge=1, le=60)
-    concurrency: int = Field(default=2, ge=1, le=8)
 
     @model_validator(mode='after')
     def valid_provider(self):

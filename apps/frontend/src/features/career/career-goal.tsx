@@ -1,10 +1,11 @@
 "use client";
+
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCareerSession } from './career-session';
 import { Icon } from '@/components/ui/icon';
 import { useProfile } from '@/features/profile/profile-provider';
-import { careerApi, importCareer, type CareerPreview, type SavedGoal } from '@/lib/api/career';
+import { importCareer, type CareerPreview } from '@/lib/api/career';
 
 const methods = [
  { id: 'text', label: 'Paste description', icon: 'doc', hint: 'Bring the opportunity into focus.', detail: 'Copy the complete description from one job listing, including responsibilities and requirements.' },
@@ -19,9 +20,6 @@ export function CareerGoal() {
  const { token } = useProfile();
  const router=useRouter();const {jd,chooseJD}=useCareerSession();
  useEffect(()=>{if(new URLSearchParams(window.location.search).get('explore')==='1')router.replace('/career-goal/chat');},[router]);
- const [saved,setSaved]=useState<{goals:SavedGoal[];reviews:{review_id:string;role:string|null;version:number}[]}>();
- const [savedError,setSavedError]=useState('');
- useEffect(()=>{if(!token)return;const abort=new AbortController();void careerApi<{goals:SavedGoal[];reviews:{review_id:string;role:string|null;version:number}[]}>('/goals',token,{signal:abort.signal}).then(setSaved).catch(()=>{if(!abort.signal.aborted)setSavedError('Saved reviews could not be loaded. Refresh to retry.');});return()=>abort.abort();},[token]);
  const [method,setMethod] = useState<Method>('text');
  const [drafts,setDrafts] = useState(()=>{const values=empty();if(jd)values.text={text:jd.text};return values;});
  const [url,setUrl] = useState(''); const [file,setFile] = useState<File>();
@@ -70,8 +68,7 @@ export function CareerGoal() {
  function clear(){if(hasWork&&!window.confirm('Clear this temporary input and preview?'))return;request.current++;controller.current?.abort();setBusy(false);setError('');setDrafts(p=>({...p,[method]:{text:''}}));if(method==='url')setUrl('');if(method==='document'){setFile(undefined);if(input.current)input.current.value='';}}
  return <section className="page on career-goal">
   <div className="ptitle"><div><p className="small">Your direction, your next step</p><h1>Career Goal</h1></div><span className="chip"><Icon name="brief"/>Find your starting point</span></div>
-  {savedError&&<p role="status" className="small">{savedError}</p>}
-  {(!!saved?.reviews?.length||!!saved?.goals?.length)&&<section className="card saved-goal-reviews" aria-label="Saved career goal reviews"><h2>Continue a saved review</h2>{saved?.reviews?.map(r=><button className="btn ghost sm" key={r.review_id} onClick={()=>router.push(`/career-goal/chat?source=jd&review=${r.review_id}`)}>{r.role||'Untitled role'} · review v{r.version}</button>)}{saved?.goals?.map(g=><button className="btn ghost sm" key={g._id} onClick={()=>router.push(`/career-goal/chat?review=${g._id}`)}>{g.role} · confirmed goal</button>)}</section>}
+  <div className="row"><button className="btn ghost" onClick={()=>router.push('/career-goal/chat')}>Continue career conversation</button></div>
   <div className="goal-explore-entry"><span>Still deciding on a role?</span><button type="button" className="btn pri" onClick={()=>{chooseJD(null);router.push('/career-goal/chat');}}>Explore careers ↗</button></div>
   <div className="card goal-intro"><div className="tag tone-book"><Icon name="brief"/></div><div><h2>A role to work towards.</h2><p className="small">Bring a job description that interests you. Start with the text, a link or a document.</p></div><span className="pill n">Input preview</span></div>
   <div className="goal-grid"><div className="card goal-editor">

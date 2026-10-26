@@ -72,112 +72,52 @@ test('late Career imports cannot restore content after the page is left',async({
  await page.getByRole('tab',{name:'Job URL'}).click();await expect(page.getByText('Old private source')).toHaveCount(0);
 });
 
-test('one agent chat adapts follow-ups, confirms a direction and restores progress',async({page})=>{
- await workspace(page);
- let draft={_id:'000000000000000000000001',version:1,answers:{} as Record<string,unknown>,turns:[] as unknown[],
-  cv:{mode:'none',filename:null,cv_id:null},interests:['Data'],preferences:['Singapore'],suggestions:[] as unknown[],
-  next_question:'aspirations' as string|null,question_text:'What would you like to achieve?' as string|null,context_complete:false};
- let current:{selection_version:number;goal:Record<string,unknown>|null;dependent_results_need_review:boolean}={selection_version:0,goal:null,dependent_results_need_review:false};
+function prepared(){
+ const extraction={role:'Analyst',field:'Data',company:null,location:'Singapore',seniority_level:null,job_url:null,summary:'Interpret data for decisions.',responsibilities:['Analyse data'],skills:[{item_id:'sql',name:'SQL',category:'Technical',priority:'required',origin:'employer',evidence:'SQL required.'}],non_skill_requirements:[]};
+ return {session_id:'000000000000000000000071',revision:1,kind:'jd',phase:'ready',review:{review_id:'000000000000000000000081',version:1,target_type:'specific_job',extraction,baseline:structuredClone(extraction),metadata_origins:{},requirements_need_review:false,is_confirmed:false,generation:{}},current:{selection_version:1,goal:null,dependent_results_need_review:false},research:{_id:'000000000000000000000091',version:1,research_status:'succeeded',last_researched_at:'2026-01-01T00:00:00Z',skills:[{name:'SQL',category:'Technical',skill_id:null,interview_stage:'Technical interview',assessment_type:'SQL exercise',source_ids:['s1'],question_patterns:[],independent_report_count:0}],sources:[{source_id:'s1',platform:'reddit',title:'Public interview report',url:'https://example.test/report',evidence:'Reported SQL exercise',reliability:'anecdotal',role_match:'related',published_date:null}]},coverage:[{platform:'brave',status:'succeeded'},{platform:'reddit',status:'succeeded'}],error:null,retry_after:null,expires_at:null,exploration_id:null};
+}
+
+test('one exploration conversation chooses a role without a confirmation step',async({page})=>{
+ await workspace(page);let chosen=false,turns=0;
+ const draft={_id:'000000000000000000000001',version:1,answers:{},turns:[] as unknown[],cv:{mode:'none',filename:null,cv_id:null},interests:['Data'],preferences:[],suggestions:[] as unknown[],next_question:'aspirations' as string|null,question_text:'What would you like to achieve?' as string|null,context_complete:false};
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/workspace'))return route.fulfill({json:chosen?prepared():{phase:'empty',review:null,exploration_id:null}});
+  if(path.endsWith('/direction')){expect(route.request().postDataJSON().index).toBe(0);chosen=true;return route.fulfill({json:prepared()});}
   if(path.endsWith('/context'))return route.fulfill({json:{cvs:[],cv_service_available:true,ai_available:true}});
-  if(path.endsWith('/goals/current'))return route.fulfill({json:current});
-  if(path.endsWith('/goals'))return route.fulfill({json:{goals:current.goal?[current.goal]:[],explorations:[draft]}});
-  if(path.endsWith('/explorations')||path.endsWith('/explorations/'+draft._id))return route.fulfill({json:draft});
-  if(path.endsWith('/messages')){
-   const body=route.request().postDataJSON();expect(body.attachment_text).toBeNull();
-   const complete=draft.version===2;
-   draft={...draft,version:draft.version+1,next_question:complete?null:'aspirations',
-    question_text:complete?null:'What kind of work would feel meaningful to you?',context_complete:complete,
-    turns:[...draft.turns,{question:'aspirations',answer:{status:'answered',value:body.answer},reply:complete?'Analytics is one possible direction.':'What kind of work would feel meaningful to you?'}]};
-   if(complete)draft.suggestions=[{role:'Data analyst',field:'Analytics',rationale:'An option to explore based on your interests.',uncertainty:'Your current proficiency remains unknown.'}];
-   return route.fulfill({json:draft});
-  }
-  if(path.endsWith('/confirm')){
-   const body=route.request().postDataJSON();expect(body.expected_draft_version).toBe(3);
-   current={selection_version:1,goal:{...body,_id:'000000000000000000000002',version:1,readiness:'pending',skills:[],interests:['Data'],preferences:[]},dependent_results_need_review:false};
-   return route.fulfill({json:current});
-  }
-  return route.fulfill({status:404,json:{detail:'Not found'}});
+  if(path.endsWith('/goals/current'))return route.fulfill({json:{selection_version:0,goal:null}});
+  if(path.endsWith('/explorations'))return route.fulfill({json:draft});
+  if(path.endsWith('/messages')){turns++;const input=route.request().postDataJSON();draft.version++;draft.context_complete=true;draft.next_question=null;draft.suggestions=[{role:'Analyst',field:'Data',rationale:'Based on your interests.',uncertainty:'Capabilities need review.'}];draft.turns.push({answer:{value:input.answer},reply:'Analytics is a direction to explore.'});return route.fulfill({json:draft});}
+  return route.fulfill({json:draft});
  });
- await page.goto('/career-goal');await page.getByRole('button',{name:'Explore careers'}).click();
- await expect(page).toHaveURL(/\/career-goal\/chat$/);
- const composer=page.getByRole('textbox',{name:'Message Coachify'});
- await composer.fill('I am not sure yet.');await expect(page.getByRole('button',{name:'Send message'})).toBeDisabled();
- await page.getByRole('checkbox',{name:/Allow Coachify/}).check();await page.getByRole('button',{name:'Send message'}).click();
- await expect(page.getByRole('log')).toContainText('What kind of work would feel meaningful');
- await expect(page).toHaveURL(/\/career-goal\/chat\?exploration=/);
- await expect(page.getByRole('checkbox',{name:/Allow Coachify/})).toBeChecked();
- await expect(page.getByRole('button',{name:'Review this direction'})).toHaveCount(0);
- await composer.fill('I want to work with data. I studied computing, built SQL projects, enjoy analysis and prefer Singapore.');
- await composer.press('Enter');
- await expect(page.getByRole('heading',{name:'Data analyst',exact:true})).toBeVisible();
- await page.screenshot({path:test.info().outputPath('exploration-desktop.png'),fullPage:true});
- await page.getByRole('button',{name:'Review this direction'}).click();
- await page.setViewportSize({width:390,height:844});
- expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await expect(page.getByRole('heading',{name:'Review your career goal'})).toBeInViewport();
- await expect(composer).toBeInViewport();
- await page.screenshot({path:test.info().outputPath('exploration-mobile.png'),fullPage:true});
- await page.getByRole('button',{name:'Confirm and save goal'}).click();
- await expect(page.getByText(/Career goal saved/)).toBeVisible();
- await page.reload();
- await expect(page.getByRole('log')).toContainText('I am not sure yet.');
- await page.getByRole('button',{name:'Conversation details'}).click();
- await expect(page.getByText('Selected goal: Data analyst',{exact:true})).toBeVisible();
+ await page.goto('/career-goal/chat');await page.getByRole('checkbox',{name:/Allow Coachify/}).check();await page.getByRole('textbox',{name:'Message Coachify'}).fill('I enjoy working with data');await page.getByRole('button',{name:'Send message'}).click();
+ await page.getByRole('button',{name:'Explore this direction'}).click();
+ await expect(page.getByRole('log')).toContainText('Let’s look at Analyst');
+ await expect(page.getByRole('button',{name:/Confirm.*goal/})).toHaveCount(0);
+ await page.reload();await expect(page.getByRole('log')).toContainText('SQL exercise');expect(turns).toBe(1);
 });
 
-test('JD review saves skills and conditions, restores after reload and confirms explicitly',async({page})=>{
- await workspace(page);const calls:string[]=[];let created=false;
- const extraction={role:'Analyst',field:'Data',company:null as string|null,location:'Singapore',seniority_level:'Junior',job_url:null,summary:'Interpret business data.',responsibilities:['Build useful reports.'],non_skill_requirements:[] as unknown[],skills:[{item_id:'sql-item',skill_id:'language.sql',name:'SQL',category:'Technical',priority:'required',origin:'employer',evidence:'SQL'}]};
- let review={review_id:'000000000000000000000081',version:1,target_type:'specific_job',extraction,baseline:structuredClone(extraction),metadata_origins:{},requirements_need_review:false,is_confirmed:false,generation:{}};
- let current:{selection_version:number;goal:Record<string,unknown>|null;dependent_results_need_review:boolean}={selection_version:0,goal:null,dependent_results_need_review:false};
+test('JD extraction researches before chat, autosaves edits and restores the latest goal',async({page})=>{
+ await workspace(page);let active=prepared(),created=false;const calls:string[]=[];
  await page.route('**/api/v1/career/**',route=>{
-  const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/goals/current'))return route.fulfill({json:current});
-  if(path.endsWith('/goals'))return route.fulfill({json:{goals:[],reviews:created?[{review_id:review.review_id,role:'Analyst',version:review.version}]:[]}});
-  if(route.request().method()==='GET')return route.fulfill({json:review});
-  calls.push(path);
-  if(path.endsWith('/jd/extract')){created=true;expect(route.request().headers()['idempotency-key']).toBeTruthy();return route.fulfill({json:review});}
-  if(path.endsWith('/review')){const body=route.request().postDataJSON();expect(body.expected_version).toBe(review.version);review={...review,version:review.version+1,extraction:body.content};return route.fulfill({json:review});}
-  if(path.endsWith('/confirm')){const body=route.request().postDataJSON();expect(body.review_id).toBe(review.review_id);expect(body.expected_review_version).toBe(review.version);current={selection_version:1,goal:{_id:'000000000000000000000082',role:'Analyst',source_review_id:review.review_id,source_review_version:review.version},dependent_results_need_review:false};return route.fulfill({json:current});}
-  expect(route.request().postDataJSON()).toMatchObject({review_id:review.review_id,expected_version:review.version});
-  expect(route.request().postDataJSON()).not.toHaveProperty('text');expect(route.request().postDataJSON()).not.toHaveProperty('context');
-  return route.fulfill({json:{reply:'Python can be an additional learning goal; it is not stated in this JD.',proposed_skills:[...review.extraction.skills,{name:'Python',category:'Technical',priority:'suggested',origin:'generated_guidance',evidence:null}]}});
+  const path=new URL(route.request().url()).pathname,method=route.request().method();if(method!=='GET')calls.push(path);
+  if(path.endsWith('/workspace/jd')){created=true;active={...active,phase:'researching'};return route.fulfill({json:active});}
+  if(path.endsWith('/workspace/review')){const body=route.request().postDataJSON();expect(body.session_id).toBe(active.session_id);active={...active,revision:2,review:{...active.review,version:2,extraction:body.content}};return route.fulfill({json:active});}
+  if(path.endsWith('/workspace/messages'))return route.fulfill({json:{reply:'Practise SQL joins for the reported assessment.',proposed_skills:null}});
+  if(path.endsWith('/workspace')){active={...active,phase:'ready'};return route.fulfill({json:created?active:{phase:'empty',review:null}});}
+  return route.fulfill({status:404,json:{detail:'Not found'}});
  });
- await page.goto('/career-goal');
- await page.getByRole('textbox',{name:'Job description',exact:true}).fill('Synthetic analyst requires SQL and research.');
- await page.getByRole('button',{name:'Extract career goal'}).click();
- await expect(page.getByRole('heading',{name:'Skills to review'})).toBeVisible();
- await expect(page).toHaveURL(new RegExp('review='+review.review_id));
- await page.getByRole('textbox',{name:'Message Coachify'}).fill('Add Python as a suggested learning goal.');
- await page.getByRole('button',{name:'Send message'}).click();
- await expect(page.getByRole('heading',{name:'Proposed skill changes'})).toBeVisible();
- await expect(page.getByRole('region',{name:'Extracted career skills'})).not.toContainText('Python');
- await page.getByRole('button',{name:'Apply proposed changes'}).click();
- await expect(page.getByRole('region',{name:'Extracted career skills'})).toContainText('Python');
- await page.getByRole('button',{name:'Edit review',exact:true}).click();
- await page.getByRole('textbox',{name:'Company',exact:true}).fill('Example Company');
- await page.getByRole('checkbox',{name:/I have reviewed the requirements/}).check();
- await page.getByRole('button',{name:'Add condition'}).click();
- await page.getByRole('textbox',{name:'Condition',exact:true}).fill('One to three years of relevant experience.');
- await page.getByRole('textbox',{name:'Condition supporting context'}).fill('Relevant work experience.');
- await page.getByRole('spinbutton',{name:'Minimum experience (months)'}).fill('12');
- await page.getByRole('spinbutton',{name:'Maximum experience (months)'}).fill('36');
- await page.setViewportSize({width:390,height:844});
+ await page.goto('/career-goal');await page.getByRole('textbox',{name:'Job description',exact:true}).fill('Data analyst. SQL required.');await page.getByRole('button',{name:'Extract career goal'}).click();
+ await expect(page.getByRole('status').filter({hasText:'Researching interviews'})).toBeVisible();await expect(page.getByRole('button',{name:'Send message'})).toBeDisabled();
+ await expect(page.getByRole('log')).toContainText('Let’s look at Analyst');await expect(page.getByRole('log')).toContainText('SQL exercise');
+ await page.getByRole('textbox',{name:'Message Coachify'}).fill('How should I prepare?');await page.getByRole('button',{name:'Send message'}).click();await expect(page.getByRole('log')).toContainText('Practise SQL joins');
+ await page.getByRole('button',{name:'Edit career goal'}).click();await page.getByRole('textbox',{name:'Company',exact:true}).fill('Example Company');await page.getByRole('checkbox',{name:/I have reviewed/}).check();await page.getByRole('button',{name:'Save review'}).click();
+ await expect(page.getByRole('log')).toContainText('Example Company');await expect(page.getByRole('button',{name:/Confirm.*goal/})).toHaveCount(0);
+ await page.reload();await expect(page.getByRole('log')).toContainText('Example Company');
+ await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Role and research details'}).click();await page.getByText('Public interview report',{exact:true}).click();await expect(page.getByRole('link',{name:'View source'})).toHaveAttribute('href','https://example.test/report');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.screenshot({path:test.info().outputPath('jd-review-editor-mobile.png'),fullPage:true});
- await page.getByRole('button',{name:'Save review',exact:true}).click();
- await expect(page.getByRole('region',{name:'Non-skill requirements'})).toContainText('One to three years');
- await page.screenshot({path:test.info().outputPath('jd-review-desktop.png'),fullPage:true});
- await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.screenshot({path:test.info().outputPath('jd-review-mobile.png'),fullPage:true});
- expect(await page.evaluate(()=>JSON.stringify([Object.entries(localStorage),Object.entries(sessionStorage)]))).not.toContain('requires SQL');
- await page.reload();await expect(page.getByRole('region',{name:'Extracted career skills'})).toContainText('Python');
- await expect(page.getByRole('region',{name:'Non-skill requirements'})).toContainText('12–36 months');
- await page.getByRole('button',{name:'Confirm and save goal'}).click();await expect(page.getByText('Career goal confirmed and saved.')).toBeVisible();
- expect(calls.filter(p=>p.endsWith('/jd/extract'))).toHaveLength(1);
- expect(calls.filter(p=>p.endsWith('/review'))).toHaveLength(2);
+ await page.screenshot({path:test.info().outputPath('single-goal-mobile.png'),fullPage:true});
+ expect(calls.filter(p=>p.endsWith('/workspace/jd'))).toHaveLength(1);expect(calls.some(p=>p.endsWith('/confirm'))).toBe(false);
 });
 
 test('switching tabs keeps JD work and five-minute inactivity requires an explicit refresh',async({page,context})=>{

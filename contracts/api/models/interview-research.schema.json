@@ -1,5 +1,82 @@
 {
   "$defs": {
+    "AnswerClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "source_ids"
+      ],
+      "title": "AnswerClaim",
+      "type": "object"
+    },
+    "BraveAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "summary_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Summary Id",
+          "type": "string"
+        },
+        "provider": {
+          "const": "brave",
+          "default": "brave",
+          "title": "Provider",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 2400,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "claims": {
+          "items": {
+            "$ref": "#/$defs/AnswerClaim"
+          },
+          "maxItems": 4,
+          "title": "Claims",
+          "type": "array"
+        }
+      },
+      "required": [
+        "summary_id",
+        "text",
+        "source_ids"
+      ],
+      "title": "BraveAnswer",
+      "type": "object"
+    },
     "Generation": {
       "additionalProperties": false,
       "properties": {
@@ -42,14 +119,136 @@
       "title": "Generation",
       "type": "object"
     },
+    "InterviewEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_origin": {
+          "default": "source_excerpt",
+          "enum": [
+            "source_excerpt",
+            "brave_summary"
+          ],
+          "title": "Evidence Origin",
+          "type": "string"
+        },
+        "summary_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary Id"
+        },
+        "source_ids": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "text": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_ids",
+        "text"
+      ],
+      "title": "InterviewEvidence",
+      "type": "object"
+    },
+    "InterviewProcess": {
+      "additionalProperties": false,
+      "properties": {
+        "round_count": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Round Count"
+        },
+        "round_count_evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterviewEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/InterviewStage"
+          },
+          "maxItems": 8,
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "title": "InterviewProcess",
+      "type": "object"
+    },
     "InterviewSkill": {
       "additionalProperties": false,
       "properties": {
-        "skill_id": {
-          "maxLength": 120,
-          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$",
-          "title": "Skill Id",
+        "evidence_origin": {
+          "default": "source_excerpt",
+          "enum": [
+            "source_excerpt",
+            "brave_summary"
+          ],
+          "title": "Evidence Origin",
           "type": "string"
+        },
+        "summary_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary Id"
+        },
+        "skill_id": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Id"
         },
         "name": {
           "maxLength": 160,
@@ -131,7 +330,6 @@
         }
       },
       "required": [
-        "skill_id",
         "name",
         "category",
         "independent_report_count",
@@ -140,9 +338,92 @@
       "title": "InterviewSkill",
       "type": "object"
     },
+    "InterviewStage": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "assessment_type": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assessment Type"
+        },
+        "evidence": {
+          "$ref": "#/$defs/InterviewEvidence"
+        }
+      },
+      "required": [
+        "name",
+        "evidence"
+      ],
+      "title": "InterviewStage",
+      "type": "object"
+    },
+    "ResearchCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "enum": [
+            "brave",
+            "reddit"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "no_findings",
+            "unavailable",
+            "not_connected"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "round": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Round",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "platform",
+        "status"
+      ],
+      "title": "ResearchCoverage",
+      "type": "object"
+    },
     "ResearchSource": {
       "additionalProperties": false,
       "properties": {
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieved At"
+        },
         "source_id": {
           "maxLength": 160,
           "minLength": 1,
@@ -238,17 +519,24 @@
           "type": "string"
         },
         "report_group": {
-          "maxLength": 160,
-          "minLength": 1,
-          "title": "Report Group",
-          "type": "string"
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report Group"
         }
       },
       "required": [
         "source_id",
         "platform",
-        "url",
-        "report_group"
+        "url"
       ],
       "title": "ResearchSource",
       "type": "object"
@@ -340,6 +628,25 @@
       "format": "date-time",
       "title": "Updated At",
       "type": "string"
+    },
+    "process": {
+      "$ref": "#/$defs/InterviewProcess"
+    },
+    "summaries": {
+      "items": {
+        "$ref": "#/$defs/BraveAnswer"
+      },
+      "maxItems": 2,
+      "title": "Summaries",
+      "type": "array"
+    },
+    "coverage": {
+      "items": {
+        "$ref": "#/$defs/ResearchCoverage"
+      },
+      "maxItems": 4,
+      "title": "Coverage",
+      "type": "array"
     },
     "skills": {
       "items": {

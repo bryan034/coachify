@@ -1,14 +1,15 @@
 """Small provider contracts, independent of persistence/API document metadata."""
 from typing import Literal
 from pydantic import Field
-from app.schemas.analysis import Contract, Text, Evidence, Proficiency, Count
+from app.schemas.analysis import Contract, Text, Evidence, Proficiency, Count, Priority
 from app.schemas.jd import ChatText, JDExtraction, ReviewSkill
 
 
 class ExtractedSkill(Contract):
     name: Text
     category: Text
-    priority: Literal['required', 'preferred', 'suggested']
+    priority: Priority
+    priority_evidence: Evidence | None = None
     origin: Literal['employer', 'generated_guidance', 'user_declaration']
     group_id: Text | None = None
     group_operator: Literal['all', 'any'] = 'all'
@@ -21,7 +22,8 @@ class ExtractedSkill(Contract):
 class ExtractedCondition(Contract):
     category: Literal['qualification', 'experience', 'eligibility', 'location', 'work_condition', 'other']
     description: Evidence
-    priority: Literal['required', 'preferred', 'suggested']
+    priority: Priority
+    priority_evidence: Evidence | None = None
     evidence: Evidence
     group_id: Text | None = None
     group_operator: Literal['all', 'any'] = 'all'
@@ -71,3 +73,8 @@ def apply_edits(edits: SkillEdits, existing: list[ReviewSkill]):
         raise ValueError('New chat skills cannot become employer facts.')
     return [*(lookup[key].model_copy(deep=True) for key in edits.keep),
             *(ReviewSkill.model_validate(skill.model_dump()) for skill in edits.add)]
+
+
+class WorkspaceAnswer(Contract):
+    reply: ChatText
+    edits: SkillEdits | None = None

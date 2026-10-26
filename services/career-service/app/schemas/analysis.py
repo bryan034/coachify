@@ -24,7 +24,7 @@ SkillId = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_-]*(\.[a-z0-9
 Count = Annotated[int, Field(strict=True, ge=0, le=1200)]
 Version = Annotated[int, Field(strict=True, ge=1)]
 Proficiency = Literal['beginner', 'intermediate', 'advanced', 'expert']
-Priority = Literal['required', 'preferred', 'suggested']
+Priority = Annotated[Literal['required', 'preferred', 'unspecified', 'conflicting', 'suggested'], BeforeValidator(lambda value: 'required' if value == 'essential' else value)]
 
 
 def object_id(value):
@@ -103,6 +103,8 @@ class TargetSkill(Contract):
     name: Text
     category: Text
     priority: Priority
+    priority_evidence: Evidence | None = None
+    priority_origin: Literal['employer', 'generated_guidance', 'user_declaration'] | None = None
     required_proficiency: Proficiency | None = None
     required_experience_months: Count | None = None
     context: Evidence | None = None
@@ -122,6 +124,8 @@ class NonSkillRequirement(Contract):
     category: Literal['qualification', 'experience', 'eligibility', 'location', 'work_condition', 'other']
     description: Evidence
     priority: Priority
+    priority_evidence: Evidence | None = None
+    priority_origin: Literal['employer', 'generated_guidance', 'user_declaration'] | None = None
     evidence: Evidence
     group_id: Text | None = None
     group_operator: Literal['all', 'any'] = 'all'
@@ -140,6 +144,7 @@ class NonSkillRequirement(Contract):
 
 
 class ResearchSource(Contract):
+    retrieved_at: datetime | None = None
     source_id: Text
     platform: Literal['employer', 'reddit', 'glassdoor', 'other']
     url: SourceUrl
@@ -150,7 +155,7 @@ class ResearchSource(Contract):
     role_match: Literal['exact', 'related', 'unknown'] = 'unknown'
     reliability: Literal['official', 'anecdotal', 'unverified'] = 'unverified'
     # Assigned by retrieval/deduplication, never by the model.
-    report_group: Text
+    report_group: Text | None = None
 
     @field_validator('reported_date', 'published_date')
     @classmethod
@@ -160,8 +165,23 @@ class ResearchSource(Contract):
         return value
 
 
+class AnswerClaim(Contract):
+    text: Evidence
+    source_ids: list[Text] = Field(min_length=1,max_length=6)
+
+
+class BraveAnswer(Contract):
+    summary_id: Text
+    provider: Literal['brave'] = 'brave'
+    text: str = Field(min_length=1,max_length=2400)
+    source_ids: list[Text] = Field(min_length=1,max_length=6)
+    claims: list[AnswerClaim] = Field(default_factory=list,max_length=4)
+
+
 class InterviewSkill(Contract):
-    skill_id: SkillId
+    evidence_origin: Literal['source_excerpt','brave_summary'] = 'source_excerpt'
+    summary_id: Text | None = None
+    skill_id: SkillId | None = None
     name: Text
     category: Text
     interview_stage: Text | None = None
@@ -270,7 +290,7 @@ class CareerGoal(Document):
     @model_validator(mode='after')
     def scenario(self):
         unique_skills(self.skills)
-        if self.readiness == 'ready' and (not self.skills or self.generation is None or self.requirements_need_review or any(s.skill_id is None for s in self.skills)):
+        if self.readiness == 'ready' and (not self.skills or self.generation is None or self.requirements_need_review or any(s.skill_id is None or s.priority == 'conflicting' for s in self.skills) or any(r.priority == 'conflicting' for r in self.non_skill_requirements)):
             raise ValueError('Ready goals need validated skills and generation provenance.')
         if (self.target_type == 'career_exploration') != (self.requirements_source == 'career_exploration'):
             raise ValueError('Target type and requirements source disagree.')
@@ -302,7 +322,34 @@ class ResearchContext(Contract):
         return hashlib.sha256(json.dumps(normalized, sort_keys=True).encode()).hexdigest()
 
 
+class ResearchCoverage(Contract):
+    # Keep historical mixed-provider records readable; new acquisition uses Brave only.
+    platform: Literal['brave','reddit']
+    status: Literal['succeeded','no_findings','unavailable','not_connected']
+    round: int = Field(default=0,ge=0,le=1)
+
+
+class InterviewEvidence(Contract):
+    evidence_origin: Literal['source_excerpt','brave_summary']='source_excerpt'
+    summary_id: Text | None=None
+    source_ids: list[Text]=Field(min_length=1,max_length=3)
+    text: Evidence
+
+class InterviewStage(Contract):
+    name: Text
+    assessment_type: Text | None=None
+    evidence: InterviewEvidence
+
+class InterviewProcess(Contract):
+    round_count: int | None=Field(default=None,ge=1,le=20,strict=True)
+    round_count_evidence: InterviewEvidence | None=None
+    stages: list[InterviewStage]=Field(default_factory=list,max_length=8)
+
+
 class InterviewResearch(Document, ResearchContext):
+    process: InterviewProcess=Field(default_factory=InterviewProcess)
+    summaries: list[BraveAnswer] = Field(default_factory=list,max_length=2)
+    coverage: list[ResearchCoverage] = Field(default_factory=list,max_length=4)
     skills: list[InterviewSkill] = Field(default_factory=list, max_length=200)
     sources: list[ResearchSource] = Field(default_factory=list, max_length=100)
     research_status: Literal['pending', 'processing', 'succeeded', 'no_findings', 'failed']
@@ -319,10 +366,36 @@ class InterviewResearch(Document, ResearchContext):
         sources = {s.source_id: s for s in self.sources}
         if len(sources) != len(self.sources) or len({canonical_url(s.url) for s in self.sources}) != len(self.sources):
             raise ValueError('Duplicate source ID or URL.')
+        summaries={v.summary_id:v for v in self.summaries}
+        if len(summaries)!=len(self.summaries):raise ValueError('Duplicate summary identity.')
+        for summary in self.summaries:
+            if len(set(summary.source_ids))!=len(summary.source_ids) or not set(summary.source_ids)<=sources.keys():raise ValueError('Summary citations must resolve to retrieved sources.')
+            if any(not set(c.source_ids)<=set(summary.source_ids) or c.text not in summary.text for c in summary.claims):raise ValueError('Summary claims need matching text and citations.')
+        process_links=[stage.evidence for stage in self.process.stages]
+        if self.process.round_count is not None:
+            if not self.process.round_count_evidence:raise ValueError('Interview round count needs evidence.')
+            process_links.append(self.process.round_count_evidence)
+        elif self.process.round_count_evidence is not None:raise ValueError('Unknown round count has no supporting count claim.')
+        for link in process_links:
+            if len(set(link.source_ids))!=len(link.source_ids) or not set(link.source_ids)<=sources.keys():raise ValueError('Interview process references must resolve.')
+            if link.evidence_origin=='brave_summary':
+                summary=summaries.get(link.summary_id)
+                if not summary or not any(set(link.source_ids)<=set(c.source_ids) and link.text in c.text for c in summary.claims):raise ValueError('Interview process needs attributed summary evidence.')
+            elif link.summary_id is not None or any(link.text not in (sources[s].evidence or '') for s in link.source_ids):raise ValueError('Interview process needs original evidence.')
+        for stage in self.process.stages:
+            if stage.name.casefold() not in stage.evidence.text.casefold() or (stage.assessment_type and stage.assessment_type.casefold() not in stage.evidence.text.casefold()):raise ValueError('Stage details must appear in supporting evidence.')
+        if self.process.round_count is not None:
+            from app.domain.interview import supported_round_count
+            if not supported_round_count(self.process.round_count,self.process.round_count_evidence.text):raise ValueError('Round count must be explicit in evidence.')
+        if self.research_status!='succeeded' and (self.process.stages or self.process.round_count is not None):raise ValueError('Only successful research may publish an interview process.')
         for skill in self.skills:
+            if skill.evidence_origin=='brave_summary':
+                summary=summaries.get(skill.summary_id)
+                if not summary or not any(set(skill.source_ids)<=set(c.source_ids) for c in summary.claims):raise ValueError('Summary finding requires attributed claim references.')
+            elif skill.summary_id is not None:raise ValueError('Direct evidence cannot be labelled as summary evidence.')
             if len(set(skill.source_ids)) != len(skill.source_ids) or not set(skill.source_ids) <= sources.keys():
                 raise ValueError('Interview evidence must resolve to distinct retrieved source IDs.')
-            reports = {sources[key].report_group for key in skill.source_ids}
+            reports = {sources[key].report_group for key in skill.source_ids if sources[key].report_group}
             if skill.independent_report_count != len(reports):
                 raise ValueError('Independent reports must count deduplicated report groups.')
         if self.research_status != 'succeeded' and self.skills:
