@@ -77,6 +77,226 @@
       "title": "BraveAnswer",
       "type": "object"
     },
+    "CategoryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "pending",
+          "enum": [
+            "pending",
+            "running",
+            "completed",
+            "partial",
+            "failed",
+            "not_applicable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "maxItems": 20,
+          "title": "Findings",
+          "type": "array"
+        },
+        "missing_fields": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Missing Fields",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "maxLength": 600,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "researched_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Researched At"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        },
+        "searches": {
+          "default": 0,
+          "maximum": 12,
+          "minimum": 0,
+          "title": "Searches",
+          "type": "integer"
+        },
+        "model_calls": {
+          "default": 0,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Model Calls",
+          "type": "integer"
+        },
+        "latency_ms": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Latency Ms",
+          "type": "integer"
+        },
+        "estimated_cost_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimated Cost Usd"
+        }
+      },
+      "title": "CategoryResult",
+      "type": "object"
+    },
+    "Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "pattern": "^f[0-9a-f]{16}$",
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "field": {
+          "maxLength": 40,
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "insufficient_evidence"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "evidence_type": {
+          "enum": [
+            "official",
+            "candidate_reported",
+            "third_party",
+            "inferred"
+          ],
+          "title": "Evidence Type",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "quotes": {
+          "items": {
+            "maxLength": 600,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Quotes",
+          "type": "array"
+        },
+        "scope": {
+          "enum": [
+            "exact",
+            "related_role",
+            "related_location",
+            "related_employment",
+            "general"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "conflict_group": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conflict Group"
+        },
+        "last_verified_at": {
+          "format": "date-time",
+          "title": "Last Verified At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "field",
+        "value",
+        "confidence",
+        "evidence_type",
+        "source_ids",
+        "quotes",
+        "scope",
+        "last_verified_at"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
     "Generation": {
       "additionalProperties": false,
       "properties": {
@@ -372,6 +592,121 @@
       "title": "InterviewStage",
       "type": "object"
     },
+    "OpportunityReport": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fingerprint",
+          "type": "string"
+        },
+        "opportunity_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Opportunity Id"
+        },
+        "employment_type": {
+          "default": "unknown",
+          "enum": [
+            "internship",
+            "full_time",
+            "part_time",
+            "contract",
+            "unknown"
+          ],
+          "title": "Employment Type",
+          "type": "string"
+        },
+        "job_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Url"
+        },
+        "categories": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CategoryResult"
+          },
+          "propertyNames": {
+            "enum": [
+              "interview_intelligence",
+              "internship_insights",
+              "company_intelligence"
+            ]
+          },
+          "title": "Categories",
+          "type": "object"
+        },
+        "summary": {
+          "$ref": "#/$defs/Summary"
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "partial",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "researched_at": {
+          "format": "date-time",
+          "title": "Researched At",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "maxLength": 600,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Warnings",
+          "type": "array"
+        },
+        "models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "maxProperties": 2,
+          "title": "Models",
+          "type": "object"
+        }
+      },
+      "required": [
+        "fingerprint",
+        "opportunity_id",
+        "categories",
+        "status",
+        "researched_at",
+        "expires_at"
+      ],
+      "title": "OpportunityReport",
+      "type": "object"
+    },
     "ResearchCoverage": {
       "additionalProperties": false,
       "properties": {
@@ -395,10 +730,43 @@
         },
         "round": {
           "default": 0,
-          "maximum": 1,
+          "maximum": 5,
           "minimum": 0,
           "title": "Round",
           "type": "integer"
+        },
+        "useful_sources": {
+          "anyOf": [
+            {
+              "maximum": 6,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Useful Sources"
+        },
+        "target_sources": {
+          "anyOf": [
+            {
+              "maximum": 6,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Sources"
+        },
+        "limit_reached": {
+          "default": false,
+          "title": "Limit Reached",
+          "type": "boolean"
         }
       },
       "required": [
@@ -461,7 +829,7 @@
         "evidence": {
           "anyOf": [
             {
-              "maxLength": 600,
+              "maxLength": 2400,
               "minLength": 1,
               "type": "string"
             },
@@ -540,6 +908,37 @@
       ],
       "title": "ResearchSource",
       "type": "object"
+    },
+    "Summary": {
+      "additionalProperties": false,
+      "properties": {
+        "overview_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Overview Refs",
+          "type": "array"
+        },
+        "key_takeaway_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 6,
+          "title": "Key Takeaway Refs",
+          "type": "array"
+        },
+        "consideration_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 6,
+          "title": "Consideration Refs",
+          "type": "array"
+        }
+      },
+      "title": "Summary",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -598,6 +997,19 @@
       "default": null,
       "title": "Seniority Level"
     },
+    "details_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Details Fingerprint"
+    },
     "_id": {
       "title": "Id",
       "type": "string"
@@ -629,6 +1041,17 @@
       "title": "Updated At",
       "type": "string"
     },
+    "intelligence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OpportunityReport"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "process": {
       "$ref": "#/$defs/InterviewProcess"
     },
@@ -644,7 +1067,7 @@
       "items": {
         "$ref": "#/$defs/ResearchCoverage"
       },
-      "maxItems": 4,
+      "maxItems": 6,
       "title": "Coverage",
       "type": "array"
     },

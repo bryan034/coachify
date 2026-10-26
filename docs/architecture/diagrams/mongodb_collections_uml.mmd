@@ -40,6 +40,7 @@ class career_goals {
     +ObjectId _id [PK]
     +String user_id [Profile_UUID]
     +String target_type
+    +String employment_type [unknown_if_unstated]
     +String field
     +String role
     +String company?
@@ -66,6 +67,7 @@ class career_goals {
 }
 
 class interview_research {
+    +OpportunityReport intelligence?
     +BraveAnswer[] summaries
     +Number version
     +String schema_version
@@ -120,3 +122,9 @@ note for career_goals "One current goal/chat per account; validated saves automa
 note for interview_research "Immutable public-context revisions; shared seven-day reuse. Private career_state links constrain user reads. Operational research_contexts holds leases/cache pointers. Brave API adapters acquire evidence. Operational LangGraph checkpoints expire after 24h inactivity; current goals persist. Unavailable acquisition preserves saved goals/research."
 
 %% Operational ai_user_usage: hashed owner keys and numeric completed token usage; rolling 60s checks, TTL cleanup; no raw inputs or output reservations.
+
+%% career_state.workspace.edit_draft holds a private structured pending edit and latest question (24h workspace expiry); chat_receipts holds bounded idempotency metadata. No raw JD/chat transcript or new collection is added.
+
+%% Opportunity Intelligence reuses these collections: no duplicate targets/opportunities collection.
+%% research_contexts also holds owner/goal/run-scoped durable jobs, command receipts, per-category progress/evidence and public cache leases.
+%% Public report fingerprints include material structured opportunity context; raw JD/CV/chat remain excluded.

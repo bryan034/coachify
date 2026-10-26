@@ -1,4 +1,6 @@
 """Small provider contracts, independent of persistence/API document metadata."""
+from app.schemas.analysis import EmploymentType
+
 from typing import Literal
 from pydantic import Field
 from app.schemas.analysis import Contract, Text, Evidence, Proficiency, Count, Priority
@@ -36,6 +38,7 @@ class ExtractedCondition(Contract):
 class ExtractedJD(Contract):
     role: Text | None
     field: Text | None
+    employment_type: EmploymentType = 'unknown'
     company: Text | None
     location: Text | None = None
     seniority_level: Text | None = None

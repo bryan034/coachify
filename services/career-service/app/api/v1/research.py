@@ -18,7 +18,7 @@ from app.domain.interview import topics_from
 
 router=APIRouter(prefix='/api/v1/career/goals',tags=['J12/J13 interview research'])
 
-def context_for(goal):return ResearchContext(**{k:getattr(goal,k) for k in ResearchContext.model_fields})
+def context_for(goal):return ResearchContext(**{k:getattr(goal,k,None) for k in ResearchContext.model_fields})
 
 def repository(request):
     if request.app.state.research_store is None:raise GoalError('Research storage is unavailable.',503)

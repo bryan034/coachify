@@ -36,3 +36,19 @@ class AISettings(BaseModel):
         except ValueError:
             # Startup configuration errors must not echo env values or secret inputs.
             raise ValueError('Invalid server AI configuration. Check the Career service settings.') from None
+
+
+class GeminiSettings(AISettings):
+    """Independent server-only context provider; no Groq credential inheritance."""
+    provider: str = 'gemini'
+    base_url: str = 'https://generativelanguage.googleapis.com/v1beta/openai'
+    model: str = 'gemini-3.5-flash-lite'
+    response_mode: Literal['json_object', 'json_schema', 'json_schema_strict'] = 'json_schema'
+    token_parameter: Literal['max_tokens', 'max_completion_tokens'] = 'max_tokens'
+    max_output_tokens: int = 1024
+
+    @classmethod
+    def from_env(cls):
+        fields={'enabled':'GEMINI_ENABLED','model':'GEMINI_MODEL','api_key':'GEMINI_API_KEY'}
+        try:return cls(**{field:os.environ[key] for field,key in fields.items() if key in os.environ})
+        except ValueError:raise ValueError('Invalid server Gemini configuration. Check GEMINI_ENABLED, GEMINI_MODEL and GEMINI_API_KEY.') from None

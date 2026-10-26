@@ -25,8 +25,9 @@ export type GoalDraft = {
  cv: {mode:'none'|'temporary'|'saved';filename:string|null;cv_id:string|null;version:number|null;extraction_version:string|null};
 };
 export type SavedGoal = { _id:string; version:number; target_type:'specific_job'|'career_exploration';role:string;field:string;
- company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
- skills:{name:string;priority:string;origin:string}[];interests:string[];preferences:string[];readiness:'pending'|'ready';
+ employment_type?:'internship'|'full_time'|'part_time'|'contract'|'unknown';company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
+ summary?:string|null;responsibilities?:string[];non_skill_requirements?:ReviewCondition[];
+ skills:ReviewSkill[];interests:string[];preferences:string[];readiness:'pending'|'ready';
  source_review_id?:string|null;source_review_version?:number|null;requirements_need_review?:boolean; exploration_draft_id:string|null;exploration_draft_version:number|null };
 export type CurrentGoal = {review_selection?:{id:string;version:number}|null;selection_version:number;goal:SavedGoal|null;dependent_results_need_review:boolean};
 export type CareerContext = {cvs:{id:string;filename:string;status:string;version:number;extraction_version:string}[];cv_service_available:boolean;ai_available:boolean};
@@ -54,7 +55,7 @@ export async function importExplorationCV(file:File,token:string,signal:AbortSig
 
 export type ReviewSkill={item_id?:string|null;skill_id?:string|null;group_id?:string|null;group_operator?:'all'|'any';correction?:'extracted'|'user';source_urls?:string[];name:string;category:string;priority:'required'|'preferred'|'unspecified'|'conflicting'|'suggested';priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|null;required_proficiency?:string|null;required_experience_months?:number|null;context?:string|null;evidence?:string|null;origin:'employer'|'generated_guidance'|'user_declaration'};
 export type ReviewCondition={requirement_id:string;category:string;description:string;priority:string;priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|null;evidence:string;group_id:string|null;group_operator:'all'|'any';origin?:'employer'|'generated_guidance'|'user_declaration';correction?:'extracted'|'user';source_urls?:string[];minimum_months?:number|null;maximum_months?:number|null;completion_status?:'completed'|'in_progress'|'unspecified'};
-export type JDExtraction={role:string|null;field:string|null;company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
+export type JDExtraction={role:string|null;field:string|null;employment_type?:'internship'|'full_time'|'part_time'|'contract'|'unknown';company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
  summary:string|null;responsibilities:string[];non_skill_requirements:ReviewCondition[];skills:ReviewSkill[]};
 export type SavedReview={review_id:string;version:number;target_type:'specific_job'|'career_exploration';extraction:JDExtraction;baseline:JDExtraction;metadata_origins:Record<string,'extracted'|'user'>;requirements_need_review:boolean;is_confirmed:boolean;generation:unknown};
 export type JDReview=SavedReview&{turns:{message:string;reply:string}[];proposals:ReviewSkill[]|null};
@@ -63,6 +64,16 @@ export type ResearchSource={source_id:string;platform:string;url:string;title:st
 export type InterviewSummary={summary_id:string;provider:string;text:string;source_ids:string[];claims:{text:string;source_ids:string[]}[]};
 export type InterviewTopic={evidence_origin?:'source_excerpt'|'brave_summary';summary_id?:string|null;skill_id:string|null;name:string;category:string;interview_stage:string|null;assessment_type:string|null;difficulty:string;question_patterns:string[];independent_report_count:number;source_ids:string[]};
 export type InterviewProcess={round_count:number|null;stages:{name:string;assessment_type:string|null}[]};
-export type ResearchView={status:string;research:{_id:string;version:number;process?:InterviewProcess;summaries?:InterviewSummary[];skills:InterviewTopic[];sources:ResearchSource[];last_researched_at:string;research_status:string}|null;context:{role:string;field:string;company:string|null;location:string|null;seniority_level:string|null};stale:boolean;reused:boolean;historical:boolean;general:boolean;note:string;history?:string[]};
+export type ResearchCoverage={platform:string;status:string;round?:number;useful_sources?:number|null;target_sources?:number|null;limit_reached?:boolean};
+export type ResearchView={status:string;research:{_id:string;version:number;intelligence?:OpportunityView['research'];process?:InterviewProcess;summaries?:InterviewSummary[];skills:InterviewTopic[];sources:ResearchSource[];last_researched_at:string;research_status:string}|null;context:{role:string;field:string;company:string|null;location:string|null;seniority_level:string|null};stale:boolean;reused:boolean;historical:boolean;general:boolean;note:string;history?:string[]};
 
-export type CareerWorkspace={session_id:string|null;revision:number;kind:'jd'|'exploration'|null;phase:string;review:SavedReview|null;current:CurrentGoal;research:ResearchView['research'];coverage:{platform:string;status:string;round?:number}[];error_code?:string|null;error:string|null;retry_after:number|null;expires_at:string|null;exploration_id:string|null};
+export type CareerWorkspace={session_id:string|null;revision:number;kind:'jd'|'exploration'|null;phase:string;review:SavedReview|null;current:CurrentGoal;research:ResearchView['research'];coverage:ResearchCoverage[];edit_question?:string|null;error_code?:string|null;error:string|null;retry_after:number|null;expires_at:string|null;exploration_id:string|null};
+
+export type AssessmentStatus={status:'no_cv'|'not_evaluated'|'evaluated'|'unavailable';cv_uploaded:boolean|null;skills_evaluated:boolean|null};
+
+export type IntelligenceCategory='interview_intelligence'|'internship_insights'|'company_intelligence';
+export type IntelligenceFinding={finding_id:string;field:string;value:string;confidence:'high'|'medium'|'low'|'insufficient_evidence';evidence_type:'official'|'candidate_reported'|'third_party'|'inferred';source_ids:string[];quotes:string[];scope:string;conflict_group:string|null;last_verified_at:string};
+export type IntelligenceResult={status:'pending'|'running'|'completed'|'partial'|'failed'|'not_applicable';findings:IntelligenceFinding[];missing_fields:string[];warnings:string[];error_code:string|null;researched_at:string|null;expires_at:string|null;searches:number;model_calls:number;latency_ms:number;estimated_cost_usd:number|null};
+export type IntelligenceSummary={overview_refs:string[];key_takeaway_refs:string[];consideration_refs:string[]};
+export type OpportunityAvailabilityIssue='research_disabled'|'reasoning_disabled'|'gemini_not_configured'|'brave_not_configured'|'brave_llm_context_required';
+export type OpportunityView={available:boolean;availability_issues?:OpportunityAvailabilityIssue[];job_id:string|null;career_target_id:string;status:'pending'|'running'|'partial'|'completed'|'failed';finished?:boolean;categories:Partial<Record<IntelligenceCategory,IntelligenceResult>>;sources?:ResearchSource[];summary?:IntelligenceSummary;research:{fingerprint:string;opportunity_id:string|null;employment_type:string;job_url:string|null;categories:Record<IntelligenceCategory,IntelligenceResult>;summary:IntelligenceSummary;status:string;researched_at:string;expires_at:string;warnings:string[]}|null;error_code:string|null;retry_after?:number|null};

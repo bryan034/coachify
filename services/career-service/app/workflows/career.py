@@ -15,6 +15,10 @@ from langgraph.checkpoint.mongodb import MongoDBSaver
 from langsmith import tracing_context
 from starlette.concurrency import run_in_threadpool as thread
 from app.ai.adapter import AIError,Operation
+from app.ai.waiting import quota_progress
+from app.ai.recovery import recover_responses,validation_progress,validation_budget
+from app.workflows.structured import structured_node
+from app.workflows import research_search
 from app.ai.contracts import AIInput
 from app.api.v1.jd import validate_extraction
 from app.api.v1.research import context_for
@@ -32,6 +36,15 @@ class Progress(TypedDict,total=False):
     revision:int
     selection:int
     round:int
+    opportunity_deferred:bool
+    smart_search:bool
+    planned_queries:list[str]
+    query_history:list[str]
+    useful_source_ids:list[str]
+    latest_source_ids:list[str]
+    assessed_source_ids:list[str]
+    stalled_rounds:int
+    search_exhausted:bool
     sources:Annotated[list[dict],operator.add]
     coverage:Annotated[list[dict],operator.add]
     summaries:Annotated[list[dict],operator.add]
@@ -47,11 +60,12 @@ class CareerWorkflow:
         self.app=app;self.db=database;self.tasks={};self.stopping=False
         saver=MongoDBSaver(database.client,db_name=database.name,checkpoint_collection_name='career_checkpoints',writes_collection_name='career_checkpoint_writes',ttl=86400)
         graph=StateGraph(Progress)
-        for name,fn in [('guidance',self.guidance),('cache',self.cache),('brave',self.brave),('assess',self.assess),('synthesize',self.synthesize),('publish',self.publish)]:graph.add_node(name,fn)
+        for name,fn in [('guidance',self.guidance),('cache',self.cache),('plan_search',self.plan_search),('brave',self.brave),('assess',self.assess),('synthesize',self.synthesize),('publish',self.publish)]:graph.add_node(name,structured_node(fn) if name in ('guidance','plan_search','assess','synthesize') else fn)
         graph.add_edge(START,'guidance');graph.add_edge('guidance','cache')
-        graph.add_conditional_edges('cache',lambda s:['publish'] if s.get('research_id') else ['brave'])
+        graph.add_conditional_edges('cache',lambda s:[END] if s.get('opportunity_deferred') else ['publish'] if s.get('research_id') else ['plan_search'] if s.get('smart_search') else ['brave'])
+        graph.add_edge('plan_search','brave')
         graph.add_edge('brave','assess')
-        graph.add_conditional_edges('assess',lambda s:['brave'] if s['round']==1 and len(self.unique(s))<2 and not any(v.get('claims') for v in s.get('summaries',[])) else ['synthesize'])
+        graph.add_conditional_edges('assess',self.after_assess)
         graph.add_edge('synthesize','publish');graph.add_edge('publish',END)
         self.graph=graph.compile(checkpointer=saver)
 
@@ -61,6 +75,10 @@ class CareerWorkflow:
     async def extract(self,body,account,key):
         # This graph deliberately keeps input and failed model output in memory only.
         async def interpret(state):
+            if recover_responses.get():
+                row=await thread(self.workspaces.row,account)
+                if row.get('incoming',{}).get('key')!=key:
+                    raise GoalError('A newer description replaced this input.')
             result=await self.app.state.ai.generate(AIInput(stage='jd_extraction',source_text=body.text,source_urls=[body.source_url] if body.source_url else []),
                 Operation(account,'transient','jd_extraction'),current_revision=lambda:'transient',validate_output=lambda o:validate_extraction(o,body.source_url))
             return {'result':result}
@@ -68,7 +86,7 @@ class CareerWorkflow:
             validate_extraction(state['result'].data,body.source_url)
             if not state['result'].data.role or not state['result'].data.field:raise GoalError('Include an identifiable job role and field in the description.',422)
             return state
-        graph=StateGraph(dict);graph.add_node('interpret_jd',interpret);graph.add_node('validate_structure',validate)
+        graph=StateGraph(dict);graph.add_node('interpret_jd',structured_node(interpret));graph.add_node('validate_structure',validate)
         graph.add_edge(START,'interpret_jd');graph.add_edge('interpret_jd','validate_structure');graph.add_edge('validate_structure',END)
         with tracing_context(enabled=False):result=await graph.compile().ainvoke({})
         return result['result']
@@ -84,6 +102,9 @@ class CareerWorkflow:
         return (await thread(self.app.state.goal_store.current,state['owner']))['goal']
 
     def unique(self,state):
+        if state.get('smart_search'):
+            useful=set(state.get('useful_source_ids',[]))
+            return [source for source in research_search.candidates(state) if source.source_id in useful][:6]
         values=[];ids=set()
         for value in state.get('sources',[]):
             if value['source_id'] not in ids:values.append(value);ids.add(value['source_id'])
@@ -108,18 +129,34 @@ class CareerWorkflow:
 
     async def cache(self,state):
         goal=await self.goal(state);repo=self.app.state.research_store
+        opportunity=getattr(self.app.state,'opportunities',None)
+        if opportunity is not None and opportunity.available:
+            await opportunity.start(state['owner'],goal,state['selection'],state['session'],state['run'],'auto:'+state['run'],{'refresh':False,'category':None})
+            return {'opportunity_deferred':True}
+        smart=research_search.enabled(self)
         cache=await thread(repo.begin,context_for(goal),False)
         if cache.get('processing'):raise GoalError('Matching public research is already running. Retry shortly.',503)
         if cache.get('record'):
             record=cache.pop('record');return {'cache':{'reused':True},'research_id':record.id,'coverage':[c.model_dump() for c in record.coverage]}
-        return {'cache':cache,'round':0}
+        return {'cache':cache,'round':0,'smart_search':smart}
+
+    async def plan_search(self,state):return await research_search.plan(self,state)
 
     async def platform(self,state,platform):
         goal=await self.goal(state);provider=self.app.state.research_client
         try:
-            if hasattr(provider,'collect_platform'):sources=await asyncio.wait_for(provider.collect_platform(context_for(goal),platform,state.get('round',0)),40)
+            if state.get('smart_search'):
+                await research_search.renew(self,state)
+                query=research_search.next_query(state,context_for(goal))
+                if query is None:raise GoalError('No additional distinct interview searches could be planned.',503)
+                sources=await asyncio.wait_for(provider.collect_query(context_for(goal),query),40)
+            elif hasattr(provider,'collect_platform'):sources=await asyncio.wait_for(provider.collect_platform(context_for(goal),platform,state.get('round',0)),40)
             elif platform=='brave':sources=await asyncio.wait_for(provider.collect(context_for(goal)),40)
             batch=normalize_batch(sources);sources=batch.sources
+            if state.get('smart_search'):
+                return {'sources':[s.model_dump(mode='json') for s in sources],
+                        'query_history':[*state.get('query_history',[]),query],
+                        'latest_source_ids':[s.source_id for s in sources], 'source_error':None}
             return {'sources':[s.model_dump(mode='json') for s in sources], 'summaries':[v.model_dump(mode='json') for v in batch.summaries], 'source_error':None, 'coverage':[{'platform':platform,'status':'succeeded' if sources else 'no_findings','round':state.get('round',0)}]}
         except (GoalError,TimeoutError,ValueError) as error:
             message=error.message if isinstance(error,GoalError) else ('Brave research timed out. Retry shortly.' if isinstance(error,TimeoutError) else 'Brave returned research data that could not be validated. Retry interview research.')
@@ -127,8 +164,16 @@ class CareerWorkflow:
 
     async def brave(self,state):return await self.platform(state,'brave')
 
+    def after_assess(self,state):
+        if state.get('smart_search'):
+            more=not state.get('search_exhausted') and state['round']<research_search.MAX_SEARCHES and len(state.get('useful_source_ids',[]))<research_search.TARGET_SOURCES
+        else:
+            more=state['round']==1 and len(self.unique(state))<2 and not any(v.get('claims') for v in state.get('summaries',[]))
+        return ['brave'] if more else ['synthesize']
+
     async def assess(self,state):
         await self.valid(state)
+        if state.get('smart_search'):return await research_search.assess(self,state)
         if not any(v['status'] in ('succeeded','no_findings') for v in state.get('coverage',[])):
             raise GoalError(state.get('source_error') or 'Interview research is unavailable. Retry shortly.',503)
         return {'round':state.get('round',0)+1}
@@ -164,7 +209,7 @@ class CareerWorkflow:
         await thread(self.workspaces.phase,state['owner'],state['session'],state['run'],'ready',coverage=state.get('coverage',[]),research_id=record.id,error=None,error_code=None,retry_after=None)
 
     def config(self,owner,workspace):
-        return {'configurable':{'thread_id':owner+':'+workspace['session_id']+':'+workspace['run_id']},'recursion_limit':20,'callbacks':[]}
+        return {'configurable':{'thread_id':owner+':'+workspace['session_id']+':'+workspace['run_id']},'recursion_limit':40,'callbacks':[]}
 
     def launch(self,owner,replace=False):
         if self.stopping:return
@@ -173,6 +218,10 @@ class CareerWorkflow:
             if not replace:return
             old.cancel()
         async def start():
+            # Research owns its durable checkpoint/lease pause handling; do not
+            # inherit a foreground operation's in-memory quota callback.
+            quota_progress.set(None)
+            validation_progress.set(None)
             if old and not old.done():await asyncio.gather(old,return_exceptions=True)
             await self.run(owner)
         task=asyncio.create_task(start());self.tasks[owner]=task
@@ -183,6 +232,10 @@ class CareerWorkflow:
         task.add_done_callback(finished)
 
     async def run(self,owner):
+        while not self.stopping:
+            if not await self._run_once(owner):break
+
+    async def _run_once(self,owner):
         row=await thread(self.workspaces.row,owner);w=row.get('workspace',{})
         if not w.get('review_id') or w.get('phase')=='ready' or w.get('expires_at',now())<=now():return
         config=self.config(owner,w);session=w['session_id'];run=w['run_id']
@@ -200,28 +253,49 @@ class CareerWorkflow:
                     await thread(self.workspaces.phase,owner,session,run,'research_pending',run_id=str(ObjectId()))
                     return
             value=None if state.values and state.next else {'owner':owner,'session':session,'run':run,'goal_id':str(row['goal_id']),'revision':w['revision'],'selection':row['version'],'sources':[],'summaries':[],'coverage':[]}
-            with tracing_context(enabled=False):
-                async with asyncio.timeout(60):await self.graph.ainvoke(value,config=config,durability='sync')
+            async def repairing(feedback):
+                if feedback is None:return
+                # Every corrective call gets a fresh model deadline. Keep both
+                # leases alive and reject superseded work before spending again.
+                latest=await thread(self.workspaces.check,owner,session,w['revision'])
+                if latest['workspace']['run_id']!=run:raise GoalError('A newer goal replaced this work.')
+                if latest['workspace'].get('expires_at',now())<=now():raise GoalError('Temporary workflow expired.')
+                await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},
+                    {'$set':{'workspace.worker_until':now()+timedelta(seconds=180)}})
+                snapshot=await self.graph.aget_state(config)
+                token=(snapshot.values.get('cache') or {}).get('token')
+                if token:await thread(self.db.research_contexts.update_one,{'lease.token':token},
+                    {'$set':{'lease.expires_at':now()+timedelta(seconds=180)}})
+            recovery=recover_responses.set(True);observer=validation_progress.set(repairing)
+            try:
+                with tracing_context(enabled=False):
+                    seconds=180 if research_search.enabled(self) or state.values.get('smart_search') else 60
+                    async with asyncio.timeout(seconds) as budget:
+                        timer=validation_budget.set(budget)
+                        try:await self.graph.ainvoke(value,config=config,durability='sync')
+                        finally:validation_budget.reset(timer)
+            finally:
+                validation_progress.reset(observer);recover_responses.reset(recovery)
         except asyncio.CancelledError:
             raise
         except (AIError,GoalError,TimeoutError,ValueError,PyMongoError) as error:
             try:
                 await thread(self.workspaces.check,owner,session,w['revision'])
                 quota=isinstance(error,AIError) and error.code=='rate_limited'
-                retry=min(3600,max(1,int(error.retry_after or 61))) if quota else None
+                retry=max(1,int(error.retry_after or 61)) if quota else None
                 if quota:
                     checkpoint=await self.graph.aget_state(config)
                     token=(checkpoint.values.get('cache') or {}).get('token')
                     if token:
                         await thread(self.db.research_contexts.update_one,{'lease.token':token},{'$set':{'lease.expires_at':now()+timedelta(seconds=retry+120)}})
-                message=(f'Your 7,000-token rolling-minute allowance has been reached. Try again in {retry} seconds.' if error.limit_scope=='user' else f'The AI provider quota was reached. Try again in {retry} seconds.') if quota else error.message if isinstance(error,GoalError) else f'The AI input exceeds 4,000 tokens ({error.input_count} estimated). Shorten the saved career context before retrying.' if isinstance(error,AIError) and error.code=='input_limit' else 'Research could not finish. Your latest career goal is saved; retry research.'
+                message=(f'Your 7,000-token rolling-minute allowance has been reached. Resuming automatically in {retry} seconds.' if error.limit_scope=='user' else f'The AI provider quota was reached. Resuming automatically in {retry} seconds.') if quota else error.message if isinstance(error,GoalError) else f'The AI input exceeds 4,000 tokens ({error.input_count} estimated). Shorten the saved career context before retrying.' if isinstance(error,AIError) and error.code=='input_limit' else 'Research could not finish. Your latest career goal is saved; retry research.'
                 await thread(self.workspaces.phase,owner,session,run,'waiting_quota' if quota else 'research_failed',error=message,error_code=error.code if isinstance(error,AIError) else 'research_unavailable',retry_after=retry)
                 if quota:
                     await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$set':{'workspace.worker_until':now()+timedelta(seconds=retry+180)}})
-                    await asyncio.sleep(min(retry,3600))
+                    await asyncio.sleep(retry)
                     # Release lease before resuming the saved failed node.
                     await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$unset':{'workspace.worker_until':''}})
-                    if not self.stopping:await self.run(owner)
+                    return not self.stopping
                 else:
                     goal=(await thread(self.app.state.goal_store.current,owner))['goal']
                     state=await self.graph.aget_state(config)

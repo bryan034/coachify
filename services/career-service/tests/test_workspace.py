@@ -42,6 +42,11 @@ class AI:
         elif request.stage=='question_route':
             from app.ai.qa_contracts import QuestionRoute
             output=QuestionRoute(topic='skills',terms=['SQL'])
+        elif request.stage=='goal_edit':
+            from app.ai.goal_edit_contracts import GoalEditDecision
+            output=GoalEditDecision(status='ready',reply='Added Python to your goal.',intent='Add Python',changes=[
+                {'collection':'skills','action':'add','reference':'new1','field':'name','value':'Python'},
+                {'collection':'skills','action':'add','reference':'new1','field':'category','value':'Technical'}])
         elif request.stage in ('jd_chat','workspace_chat'):
             context=json.loads(request.context)
             assert context['career_goal']['skills']
@@ -74,6 +79,30 @@ def wait(flow,phase='ready'):
         if value['phase']==phase:return value
         time.sleep(.03)
     pytest.fail('Workflow did not reach '+phase+': '+str(value))
+
+
+def test_async_duplicate_jd_with_new_key_reconnects_instead_of_conflicting(flow):
+    client,db,ai,_=flow;original=ai.generate;blocked=True
+    async def generate(request,operation,**kwargs):
+        if request.stage=='jd_extraction':
+            while blocked:await asyncio.sleep(.01)
+        return await original(request,operation,**kwargs)
+    ai.generate=generate
+    body={'text':'SQL is required.'}
+    first=client.post(BASE+'/jd',headers={**headers(),'Prefer':'respond-async'},json=body)
+    assert first.status_code==202
+    again=client.post(BASE+'/jd',headers={**headers(),'Prefer':'respond-async'},json=body)
+    assert again.status_code==202 and again.json()['operation_id']==first.json()['operation_id']
+    conflict=client.post(BASE+'/jd',headers={**headers(),'Prefer':'respond-async'},json={'text':'A different role. SQL is required.'})
+    assert conflict.status_code==409 and conflict.json()['code']=='operation_in_progress'
+    assert client.get(BASE+'/operations/'+first.json()['operation_id'],headers=headers(other=True)).status_code==404
+    blocked=False
+    for _ in range(100):
+        result=client.get(BASE+'/operations/'+first.json()['operation_id'],headers=headers()).json()
+        if result.get('status')=='succeeded':break
+        time.sleep(.02)
+    assert result['status']=='succeeded'
+    assert len([call for call in ai.calls if call.stage=='jd_extraction'])==1
 
 def test_jd_graph_autosaves_current_goal_and_gates_chat_on_both_inputs(flow):
     client,db,ai,sources=flow;key=str(uuid4());response=ingest(flow,key=key)
@@ -251,3 +280,104 @@ def test_background_quota_code_is_available_for_ui_classification(flow):
     ingest(flow);value=wait(flow,'waiting_quota')
     assert value['error_code']=='rate_limited' and value['retry_after']==1
     assert wait(flow)['error_code'] is None
+
+
+
+def test_async_jd_wait_resumes_the_same_graph_call_and_receipt(flow):
+    from app.ai.adapter import AIAdapter
+    from app.ai.config import AISettings
+    client,db,fixture_ai,sources=flow
+    calls=[]
+    def provider(request):
+        calls.append(request.content)
+        if len(calls)==1:return httpx.Response(429,headers={'Retry-After':'1'})
+        output={'role':'Data Analyst','field':'Data','company':None,'skills':[]}
+        return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
+    transport=httpx.AsyncClient(transport=httpx.MockTransport(provider))
+    try:
+        adapter=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),transport)
+        # Only extraction uses the real adapter; research keeps deterministic fixtures.
+        async def generate(request,operation,**kwargs):
+            return await (adapter if request.stage=='jd_extraction' else fixture_ai).generate(request,operation,**kwargs)
+        client.app.state.ai=SimpleNamespace(generate=generate,settings=fixture_ai.settings)
+        key=str(uuid4());h={**headers(key),'Prefer':'respond-async'}
+        response=client.post(BASE+'/jd',headers=h,json={'text':'Data Analyst at a software firm.'})
+        assert response.status_code==202,response.text
+        id=response.json()['operation_id'];path=BASE+'/operations/'+id
+        assert client.get(path,headers=headers(other=True)).status_code==404
+        assert client.post(BASE+'/jd',headers=h,json={'text':'Data Analyst at a software firm.'}).json()['operation_id']==id
+        for _ in range(100):
+            pending=client.get(path,headers=headers()).json()
+            if pending['status']=='waiting_quota':break
+            time.sleep(.01)
+        assert pending['status']=='waiting_quota' and pending['retry_after']<=1
+        assert db.career_goals.count_documents({})==0
+        for _ in range(150):
+            result=client.get(path,headers=headers()).json()
+            if result['status']=='succeeded':break
+            time.sleep(.02)
+        assert result['status']=='succeeded',result
+        assert result['result']['review']['extraction']['role']=='Data Analyst'
+        assert len(calls)==2 and calls[0]==calls[1]
+        assert wait(flow)['current']['goal']['role']=='Data Analyst'
+        assert 'Data Analyst at a software firm.' not in str(list(db.career_checkpoints.find({})))
+
+    finally: client.portal.call(transport.aclose)
+
+
+
+def test_async_jd_repairs_missing_fields_without_publishing_bad_data(flow):
+    from app.ai.adapter import AIAdapter
+    from app.ai.config import AISettings
+    client,db,fixture_ai,sources=flow
+    calls=[];release=asyncio.Event()
+    async def provider(request):
+        calls.append(json.loads(request.content))
+        if len(calls)==1:output={'role':'PRIVATE_FAILED_VALUE','field':'Data','skills':[]}
+        else:
+            await release.wait()
+            output={'role':'Analyst','field':'Data','company':None,'skills':[]}
+        return httpx.Response(200,json={'usage':{'prompt_tokens':10,'completion_tokens':5,'total_tokens':15},
+            'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
+    transport=httpx.AsyncClient(transport=httpx.MockTransport(provider))
+    try:
+        adapter=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),transport)
+        async def generate(request,operation,**kwargs):
+            return await (adapter if request.stage=='jd_extraction' else fixture_ai).generate(request,operation,**kwargs)
+        client.app.state.ai=SimpleNamespace(generate=generate,settings=fixture_ai.settings)
+        response=client.post(BASE+'/jd',headers={**headers(),'Prefer':'respond-async'},json={'text':'Synthetic analyst role.'})
+        path=BASE+'/operations/'+response.json()['operation_id']
+        for _ in range(100):
+            pending=client.get(path,headers=headers()).json()
+            if pending['status']=='repairing':break
+            time.sleep(.01)
+        assert pending['status']=='repairing',pending
+        assert pending['validation_feedback']['violations']==[{'field':'company','issue':'missing'}]
+        assert db.career_goals.count_documents({})==0
+        assert 'PRIVATE_FAILED_VALUE' not in json.dumps(pending)
+        client.portal.call(release.set)
+        for _ in range(100):
+            done=client.get(path,headers=headers()).json()
+            if done['status']=='succeeded':break
+            time.sleep(.02)
+        assert done['status']=='succeeded' and done['validation_feedback'] is None
+        assert done['result']['review']['extraction']['role']=='Analyst'
+        assert len(calls)==2 and 'company' in calls[1]['messages'][0]['content']
+        assert wait(flow)['phase']=='ready'
+    finally:
+        client.portal.call(release.set);client.portal.call(transport.aclose)
+
+
+def test_interview_synthesis_repairs_repeatedly_without_repeating_search(flow):
+    client,db,ai,sources=flow;generate=ai.generate;failures=[2]
+    async def recover(request,operation,**kwargs):
+        if request.stage=='interview_synthesis' and failures[0]:
+            failures[0]-=1;ai.calls.append(request)
+            raise AIError('invalid_output',True,reason='schema_validation',fields=('topics',),
+                violations=[{'field':'topics','issue':'missing'}])
+        return await generate(request,operation,**kwargs)
+    client.app.state.ai=SimpleNamespace(generate=recover,settings=ai.settings)
+    ingest(flow);done=wait(flow)
+    assert done['research'] and done['error'] is None
+    assert len([r for r in ai.calls if r.stage=='interview_synthesis'])==3
+    assert len(sources.calls)==2

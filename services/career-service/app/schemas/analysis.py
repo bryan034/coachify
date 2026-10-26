@@ -17,6 +17,7 @@ from bson import BSON, ObjectId
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 SCHEMA_VERSION = 'analysis-v1'
+EmploymentType=Literal['internship','full_time','part_time','contract','unknown']
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
 Evidence = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)]
 Note = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
@@ -149,7 +150,7 @@ class ResearchSource(Contract):
     platform: Literal['employer', 'reddit', 'glassdoor', 'other']
     url: SourceUrl
     title: Text | None = None
-    evidence: Evidence | None = None
+    evidence: Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=2400)] | None = None
     reported_date: date | None = None
     published_date: date | None = None
     role_match: Literal['exact', 'related', 'unknown'] = 'unknown'
@@ -263,6 +264,7 @@ class CareerGoal(Document):
     target_type: Literal['specific_job', 'career_exploration']
     field: Text
     role: Text
+    employment_type: EmploymentType = 'unknown'
     company: Text | None = None
     location: Text | None = None
     seniority_level: Text | None = None
@@ -316,6 +318,7 @@ class ResearchContext(Contract):
     role: Text
     location: Text | None = None
     seniority_level: Text | None = None
+    details_fingerprint: str | None = Field(default=None,pattern=r"^[0-9a-f]{64}$")
 
     def reuse_key(self):
         normalized = {k: ' '.join(v.casefold().split()) if v else None for k, v in self.model_dump().items()}
@@ -326,7 +329,10 @@ class ResearchCoverage(Contract):
     # Keep historical mixed-provider records readable; new acquisition uses Brave only.
     platform: Literal['brave','reddit']
     status: Literal['succeeded','no_findings','unavailable','not_connected']
-    round: int = Field(default=0,ge=0,le=1)
+    round: int = Field(default=0,ge=0,le=5)
+    useful_sources:int|None=Field(default=None,ge=0,le=6)
+    target_sources:int|None=Field(default=None,ge=1,le=6)
+    limit_reached:bool=False
 
 
 class InterviewEvidence(Contract):
@@ -346,10 +352,13 @@ class InterviewProcess(Contract):
     stages: list[InterviewStage]=Field(default_factory=list,max_length=8)
 
 
+from app.schemas.opportunity import OpportunityReport
+
 class InterviewResearch(Document, ResearchContext):
+    intelligence: OpportunityReport | None = None
     process: InterviewProcess=Field(default_factory=InterviewProcess)
     summaries: list[BraveAnswer] = Field(default_factory=list,max_length=2)
-    coverage: list[ResearchCoverage] = Field(default_factory=list,max_length=4)
+    coverage: list[ResearchCoverage] = Field(default_factory=list,max_length=6)
     skills: list[InterviewSkill] = Field(default_factory=list, max_length=200)
     sources: list[ResearchSource] = Field(default_factory=list, max_length=100)
     research_status: Literal['pending', 'processing', 'succeeded', 'no_findings', 'failed']
@@ -366,6 +375,11 @@ class InterviewResearch(Document, ResearchContext):
         sources = {s.source_id: s for s in self.sources}
         if len(sources) != len(self.sources) or len({canonical_url(s.url) for s in self.sources}) != len(self.sources):
             raise ValueError('Duplicate source ID or URL.')
+        if self.intelligence:
+            for category in self.intelligence.categories.values():
+                for finding in category.findings:
+                    if len(finding.source_ids)!=len(finding.quotes) or any(s not in sources or quote not in (sources[s].evidence or '') or finding.value not in quote for s,quote in zip(finding.source_ids,finding.quotes)):
+                        raise ValueError('Opportunity claim must resolve to original retrieved excerpts.')
         summaries={v.summary_id:v for v in self.summaries}
         if len(summaries)!=len(self.summaries):raise ValueError('Duplicate summary identity.')
         for summary in self.summaries:

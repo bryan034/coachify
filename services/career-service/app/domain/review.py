@@ -10,7 +10,7 @@ REGISTRY = json.loads((Path(__file__).parents[1] / 'data' / 'skill-registry.json
 MAPPING_VERSION = REGISTRY['version']
 ALIASES = {(category.casefold(), name.casefold()): skill['id'] for skill in REGISTRY['skills']
            for category in skill['categories'] for name in skill['names']}
-METADATA = ('role', 'field', 'company', 'location', 'seniority_level', 'job_url')
+METADATA = ('role', 'field', 'company', 'location', 'seniority_level', 'job_url', 'employment_type')
 
 
 def prepare(content, previous=None, *, extracted=False, map_skills=True):

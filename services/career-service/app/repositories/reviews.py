@@ -31,7 +31,7 @@ class ReviewStore:
         baseline = source_review.baseline if source_review else None
         baseline_origins = source_review.baseline_origins if source_review else {f:'user' for f in METADATA}
         content = JDExtraction(role=goal.role, field=goal.field, company=goal.company, location=goal.location,
-            seniority_level=goal.seniority_level, job_url=goal.job_url, summary=goal.summary, responsibilities=goal.responsibilities,
+            seniority_level=goal.seniority_level, employment_type=goal.employment_type, job_url=goal.job_url, summary=goal.summary, responsibilities=goal.responsibilities,
             skills=[s.model_dump(mode='json') for s in goal.skills], non_skill_requirements=goal.non_skill_requirements)
         for index,skill in enumerate(content.skills):
             if not skill.item_id: skill.item_id=str(uuid5(NAMESPACE_URL,f'coachify:{goal.id}:skill:{index}'))

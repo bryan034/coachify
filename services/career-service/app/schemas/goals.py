@@ -1,4 +1,6 @@
 """J08/J09 private drafts, bounded conversational context and explicit selection."""
+from app.schemas.analysis import EmploymentType
+
 from typing import Literal
 from pydantic import Field, model_validator
 from app.schemas.analysis import (Contract, Document, DomainId, Evidence, Generation, Text, TargetSkill,
@@ -132,6 +134,7 @@ class SaveGoal(Contract):
     target_type: Literal['specific_job', 'career_exploration']
     role: Text
     field: Text
+    employment_type: EmploymentType = 'unknown'
     company: Text | None = None
     location: Text | None = None
     seniority_level: Text | None = None
@@ -152,6 +155,12 @@ class SaveGoal(Contract):
         if self.target_type == 'career_exploration' and self.draft_id is None and self.review_id is None:
             raise ValueError('Review an exploration draft before confirming.')
         return self
+
+
+class AssessmentStatus(Contract):
+    status: Literal['no_cv', 'not_evaluated', 'evaluated', 'unavailable']
+    cv_uploaded: bool | None
+    skills_evaluated: bool | None
 
 
 class CvSummary(Contract):

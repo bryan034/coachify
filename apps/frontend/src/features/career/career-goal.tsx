@@ -16,7 +16,7 @@ type Method = typeof methods[number]['id'];
 type Draft = { text: string; preview?: CareerPreview };
 const MAX_TEXT = 8_000, MAX_FILE = 10 * 1024 * 1024;
 const empty = (): Record<Method,Draft> => ({text:{text:''},url:{text:''},document:{text:''}});
-export function CareerGoal() {
+export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
  const { token } = useProfile();
  const router=useRouter();const {jd,chooseJD}=useCareerSession();
  useEffect(()=>{if(new URLSearchParams(window.location.search).get('explore')==='1')router.replace('/career-goal/chat');},[router]);
@@ -68,8 +68,8 @@ export function CareerGoal() {
  function clear(){if(hasWork&&!window.confirm('Clear this temporary input and preview?'))return;request.current++;controller.current?.abort();setBusy(false);setError('');setDrafts(p=>({...p,[method]:{text:''}}));if(method==='url')setUrl('');if(method==='document'){setFile(undefined);if(input.current)input.current.value='';}}
  return <section className="page on career-goal">
   <div className="ptitle"><div><p className="small">Your direction, your next step</p><h1>Career Goal</h1></div><span className="chip"><Icon name="brief"/>Find your starting point</span></div>
-  <div className="row"><button className="btn ghost" onClick={()=>router.push('/career-goal/chat')}>Continue career conversation</button></div>
-  <div className="goal-explore-entry"><span>Still deciding on a role?</span><button type="button" className="btn pri" onClick={()=>{chooseJD(null);router.push('/career-goal/chat');}}>Explore careers ↗</button></div>
+  {!replacing&&<div className="row"><button className="btn ghost" onClick={()=>router.push('/career-goal/chat')}>Continue career conversation</button></div>}
+  {!replacing&&<div className="goal-explore-entry"><span>Still deciding on a role?</span><button type="button" className="btn pri" onClick={()=>{chooseJD(null);router.push('/career-goal/chat');}}>Explore careers ↗</button></div>}
   <div className="card goal-intro"><div className="tag tone-book"><Icon name="brief"/></div><div><h2>A role to work towards.</h2><p className="small">Bring a job description that interests you. Start with the text, a link or a document.</p></div><span className="pill n">Input preview</span></div>
   <div className="goal-grid"><div className="card goal-editor">
    <div className="goal-tabs" role="tablist" aria-label="Job description input method">{methods.map((item,index)=><button key={item.id} id={`goal-tab-${item.id}`} type="button" role="tab" aria-selected={method===item.id} aria-controls="goal-panel" tabIndex={method===item.id?0:-1} onKeyDown={event=>keyboard(event,index)} onClick={()=>changeMethod(item.id)}><Icon name={item.icon}/>{item.label}</button>)}</div>
@@ -92,7 +92,7 @@ export function CareerGoal() {
    </div>
   </div><aside className="goal-guide">
    <div className="card pad"><p className="k">A little guidance</p><h3>One opportunity at a time.</h3><p className="small">Use a complete description for one role. A title or link alone won’t tell the full story.</p><div className="goal-guide-step"><span>01</span><div><strong>Bring the description</strong><p className="small">Choose the input that works for you.</p></div></div><div className="goal-guide-step"><span>02</span><div><strong>Check the details</strong><p className="small">Review the text and remove unrelated content.</p></div></div><div className="goal-guide-step"><span>03</span><div><strong>Understand the role</strong><p className="small">Extract the role’s skills, then review them with your career agent.</p></div></div></div>
-   <div className="goal-temporary"><Icon name="doc"/><div><strong>Just a temporary preview</strong><p className="small">Your description stays temporary. Extract career goal sends it to the configured AI provider and saves a structured review. You choose when to confirm it as your career goal. Refreshing discards temporary inputs.</p></div></div>
+   <div className="goal-temporary"><Icon name="doc"/><div><strong>Just a temporary preview</strong><p className="small">Your description stays temporary. Extract career goal sends it to the configured AI provider and saves a structured review. A successfully extracted goal is saved automatically and replaces your current goal. Refreshing discards temporary inputs.</p></div></div>
   </aside></div>
  </section>;
 }

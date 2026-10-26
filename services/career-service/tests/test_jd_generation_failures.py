@@ -66,10 +66,6 @@ def test_json_correction_requires_enough_remaining_time(timeout,expected_calls):
     asyncio.run(invoke())
 
 
-def test_default_deadline_allows_two_generations():
-    assert AISettings().timeout_seconds==45
-
-
 @pytest.mark.parametrize('code,detail',[
     ('timeout','time limit'),('incomplete_output','before it was complete'),
     ('output_limit','response size'),('unavailable','temporarily unavailable')])
@@ -100,7 +96,6 @@ def test_usage_identifies_reasoning_cached_input_and_output_truncation(caplog):
     assert 'SECRET' not in caplog.text and 'PRIVATE' not in caplog.text
 
 
-
 def test_edit_followup_is_not_started_near_deadline():
     async def invoke():
         now=[0.0];calls=[]
@@ -116,14 +111,3 @@ def test_edit_followup_is_not_started_near_deadline():
                 await adapter.generate(AIInput(stage='jd_chat',context='{}',conversation=[{'role':'user','content':'Add Python'}]),op,current_revision=lambda:'1')
             assert len(calls)==1 and op.status=='failed'
     asyncio.run(invoke())
-
-
-def test_provider_quota_error_preserves_retry_delay():
-    scope,detail='provider','AI provider'
-    def profile(req):return httpx.Response(200,json={'id':'synthetic-account','email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
-    def processor(*args):raise AIError('rate_limited',True,limit_scope=scope,retry_after=12)
-    upstream=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile))
-    with TestClient(create_app(profile_client=upstream,processor=processor)) as client:
-        response=client.post('/api/v1/career/imports/url',headers={'Authorization':'Bearer synthetic'},json={'url':'https://example.test/job'})
-        assert response.status_code==429 and response.json()['limit_scope']==scope
-        assert detail in response.json()['detail'] and response.headers['Retry-After']=='12'

@@ -1,18 +1,13 @@
 """Transient follow-up graph: explain from structured JD + interview evidence."""
 from langgraph.graph import StateGraph,START,END
 from langsmith import tracing_context
-
-async def review_chat(generate,validate):
-    async def answer(state):return {'result':await generate()}
-    def check(state):validate(state['result'].data);return state
-    graph=StateGraph(dict);graph.add_node('explain_role_and_interviews',answer);graph.add_node('validate_proposals',check)
-    graph.add_edge(START,'explain_role_and_interviews');graph.add_edge('explain_role_and_interviews','validate_proposals');graph.add_edge('validate_proposals',END)
-    with tracing_context(enabled=False):result=await graph.compile().ainvoke({})
-    return result['result']
-
+from app.workflows.structured import structured_node
 
 async def focused_chat(request,account,row,body):
     """Route -> projected retrieval -> answer. Only ambiguous questions need routing AI."""
+    if getattr(request.app.state.ai,'context_enabled',False):
+        from app.workflows.context_chat import semantic_chat
+        return await semantic_chat(request,account,row,body)
     import json
     import re
     from app.ai.adapter import Operation,AIError
@@ -25,9 +20,14 @@ async def focused_chat(request,account,row,body):
     from starlette.concurrency import run_in_threadpool as thread
     repo=request.app.state.workspace_store
     store=QuestionStore(repo,request.app.state.research_store)
+    if row['workspace'].get('edit_draft'):
+        chosen=direct_route(body.message)
+        if chosen is not None and chosen.topic=='off_topic':return JDReply(reply=REFUSAL,proposed_skills=None)
+        return None
     title=await thread(store.metadata,account,row['workspace']['review_id'])
     revision=str(body.expected_version)
     async def generate(stage,context,history=()):
+        await thread(repo.check,account,body.session_id,body.expected_version)
         result=await request.app.state.ai.generate(AIInput(stage=stage,context=json.dumps(jsonable_encoder(context)),conversation=[*history,Message(role='user',content=body.message)]),
             Operation(account,revision,stage),current_revision=lambda:revision)
         return result.data
@@ -67,10 +67,39 @@ async def focused_chat(request,account,row,body):
         history=[m.model_copy(update={'content':m.content[:300]}) for m in body.conversation[-2:]] if chosen.followup else []
         result=await generate('focused_answer',{'goal':title,'facts':facts,'partial':state['partial']},history)
         if result.status!='answered':return {'result':JDReply(reply=REFUSAL if result.status=='off_topic' else MISSING,proposed_skills=None)}
-        if not result.references or any(ref not in state['links'] for ref in result.references):raise AIError('invalid_output',True,reason='provenance')
+        if not result.references or any(ref not in state['links'] for ref in result.references):raise AIError('invalid_output',True,reason='provenance',fields=('references',))
         return {'result':finish(result.reply,result.references,state['links'])}
     graph=StateGraph(dict)
-    for name,node in (('route_question',route),('retrieve_relevant_fields',retrieve),('answer_from_facts',answer)):graph.add_node(name,node)
+    for name,node in (('route_question',route),('retrieve_relevant_fields',retrieve),('answer_from_facts',answer)):graph.add_node(name,structured_node(node) if name!='retrieve_relevant_fields' else node)
     graph.add_edge(START,'route_question');graph.add_edge('route_question','retrieve_relevant_fields');graph.add_edge('retrieve_relevant_fields','answer_from_facts');graph.add_edge('answer_from_facts',END)
     with tracing_context(enabled=False):value=await graph.compile().ainvoke({})
     return value['result']
+
+
+async def edit_goal(request,account,row,body):
+    """A model proposes a narrow change set; validation precedes all persistence."""
+    import json
+    from app.ai.adapter import AIError,Operation
+    from app.ai.contracts import AIInput,Message
+    from app.domain.goal_edits import edit_context,apply_changes
+    from starlette.concurrency import run_in_threadpool as thread
+    repo=request.app.state.workspace_store;w=row['workspace']
+    review=await thread(repo.reviews.get,w['review_id'],account)
+    pending=w.get('edit_draft')
+    context=edit_context(review.content,pending)
+    def validate(decision):
+        if decision.status=='ready':
+            content=apply_changes(review.content,decision.changes,decision.intent)
+            if review.target_type=='career_exploration' and any(item.origin=='employer' for item in [*content.skills,*content.non_skill_requirements]):
+                raise AIError('invalid_output',True,reason='unexpected_origin',fields=('origin',))
+    async def decide(state):
+        await thread(repo.check,account,body.session_id,body.expected_version)
+        result=await request.app.state.ai.generate(AIInput(stage='goal_edit',context=json.dumps(context,separators=(',',':')),
+            conversation=[Message(role='user',content=body.message)]),
+            Operation(account,str(body.expected_version),'goal_edit'),current_revision=lambda:str(body.expected_version),validate_output=validate)
+        validate(result.data)
+        return {'decision':result.data}
+    graph=StateGraph(dict);graph.add_node('clarify_or_apply_goal_change',structured_node(decide))
+    graph.add_edge(START,'clarify_or_apply_goal_change');graph.add_edge('clarify_or_apply_goal_change',END)
+    with tracing_context(enabled=False):result=await graph.compile().ainvoke({})
+    return result['decision'],review

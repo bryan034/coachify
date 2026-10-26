@@ -7,6 +7,21 @@ Career has preview/AI/contract tests and CV has contract tests; Roadmap, Dashboa
 and Review still have empty suites. Empty suites pass; real failures do not.
 See [application setup](setup.md) and the affected service README for setup and service details.
 
+## Suite maintenance
+
+Keep tests for distinct behaviours and boundaries, including cross-service contracts.
+When consolidating overlapping tests, move unique assertions into the retained case.
+Remove obsolete UI journeys when the current journey covers their useful checks;
+do not remove valid failing tests to make CI pass.
+
+The 26 October 2026 cleanup removed nine cases: three overlapping/default-only
+Career backend checks, three superseded form-based onboarding cases, two duplicate
+chat retry/formatting cases and one obsolete manual goal editor browser journey.
+Retry preservation, Markdown formatting, provider scope, saved-goal reload and mobile
+research-source assertions remain in the current tests. That cleanup left 772 discovered
+cases: 648 backend, 95 frontend component/unit, 17 mocked browser and 12 full-stack
+browser cases. Parameterised cases are counted separately.
+
 ## Local commands
 
 Use Node.js 24 and Python 3.12. From the root:
@@ -162,3 +177,23 @@ Brave Answers checks cover fragmented SSE, cited AI summaries versus source exce
 invalid/missing references, uncited-answer rejection, output limits, public-scope queries,
 mode-specific cache policies, MongoDB summary persistence/reuse and the 4,000-token cap.
 All external responses are synthetic; live Answers access must be configured separately.
+
+Career overview coverage checks category membership, research-in-progress display,
+CV assessment absence versus service failure, guided refinement, safe goal replacement
+and reload restoration. `career-overview.spec.ts` exercises the desktop/mobile flow
+through CV-page navigation using synthetic providers. Backend assessment-status tests
+verify authentication/no-store, owner filtering, empty/pending/failed/succeeded CVs
+and unavailable upstream snapshots without database or model writes.
+
+Opportunity Intelligence tests use a real disposable MongoDB with synthetic Gemini,
+Groq and Brave boundaries. They cover independent parallel categories, partial
+failure, no company/no results, conflicting employee/intern salary context, forged
+refs/quotes, bounded schema repair, category cache/expiry, refresh/idempotency,
+owner access, quota recovery and restart without repeating acquired searches.
+Foreground extraction regressions cover reconnecting an identical JD under a new
+key during a 600-second simulated quota wait, replay/ownership checks, safe
+different-input conflicts and chat navigation retaining its request key. A Chromium
+journey leaves/reopens pending extraction and reaches the saved goal without 409s.
+The optional `OPPORTUNITY_LIVE_TEST=1` smoke consumes actual configured public
+provider requests; it is skipped by default. Frontend unit/browser checks cover
+source/confidence/date transparency, partial status and category-only refresh.

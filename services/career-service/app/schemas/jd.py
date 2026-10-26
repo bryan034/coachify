@@ -1,4 +1,6 @@
 """Transient JD review contracts; candidates are not canonical analysis skills."""
+from app.schemas.analysis import EmploymentType
+
 from typing import Annotated, Literal
 from pydantic import Field, StringConstraints, field_validator, model_validator
 from app.schemas.analysis import Contract, Text, Evidence, SourceUrl, Proficiency, Count, Generation, NonSkillRequirement, Document, AccountId, DomainId, SkillId, Version, Priority
@@ -26,6 +28,7 @@ class ReviewSkill(Contract):
 class JDExtraction(Contract):
     role: Text | None
     field: Text | None
+    employment_type: EmploymentType = 'unknown'
     company: Text | None
     location: Text | None = None
     seniority_level: Text | None = None
@@ -81,8 +84,8 @@ class RequirementReview(Document):
     content: JDExtraction
     baseline: JDExtraction
     generation: Generation | None
-    metadata_origins: dict[str, Literal['extracted', 'user']] = Field(default_factory=dict, max_length=6)
-    baseline_origins: dict[str, Literal['extracted', 'user']] = Field(default_factory=dict, max_length=6)
+    metadata_origins: dict[str, Literal['extracted', 'user']] = Field(default_factory=dict, max_length=7)
+    baseline_origins: dict[str, Literal['extracted', 'user']] = Field(default_factory=dict, max_length=7)
     requirements_need_review: bool = False
     base_goal_id: DomainId | None = None
 

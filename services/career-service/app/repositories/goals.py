@@ -146,7 +146,7 @@ class GoalStore:
         goal = prepared_goal if prepared_goal is not None else CareerGoal(_id=stable_id(owner, key, 'goal'), user_id=owner, version=1,
             skill_mapping_version='skills-v1', created_at=stamp, updated_at=stamp,
             target_type=data.target_type, field=data.field, role=data.role, company=data.company,
-            location=data.location, seniority_level=data.seniority_level, job_url=data.job_url,
+            location=data.location, seniority_level=data.seniority_level, job_url=data.job_url,employment_type=data.employment_type,
             interests=draft.interests if draft else [], preferences=draft.preferences if draft else [],
             skills=[], requirements_source='career_exploration' if data.target_type == 'career_exploration' else 'url_jd' if data.job_url else 'pasted_jd',
             generation_version='pending-skills', generation=draft.generation if draft else None, readiness='pending',
@@ -155,7 +155,7 @@ class GoalStore:
             source_extraction_version=draft.cv.extraction_version if draft else None, source_profile_version=draft.cv.profile_version if draft else None)
         # Metadata-equivalent confirmation is a no-op, not a new selection/version.
         previous = self.current(owner)['goal']
-        fields = ('target_type','field','role','company','location','seniority_level','job_url','interests','preferences','source_cv_id','source_cv_version','source_extraction_version','source_profile_version','exploration_draft_id','exploration_draft_version','skills','non_skill_requirements','summary','responsibilities','readiness','requirements_need_review','skill_mapping_version')
+        fields = ('target_type','field','role','employment_type','company','location','seniority_level','job_url','interests','preferences','source_cv_id','source_cv_version','source_extraction_version','source_profile_version','exploration_draft_id','exploration_draft_version','skills','non_skill_requirements','summary','responsibilities','readiness','requirements_need_review','skill_mapping_version')
         if previous and all(getattr(previous, f) == getattr(goal, f) for f in fields):
             receipt={'key':key,'hash':digest}
             changed=self.state.update_one({'_id':owner,'version':state['version'],'receipts.key':{'$ne':key}},

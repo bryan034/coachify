@@ -1,6 +1,7 @@
 """J08/J09 authenticated orchestration; raw CV buffers never enter repositories."""
 import hashlib
 import json
+import asyncio
 from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
@@ -11,7 +12,7 @@ from app.ai.contracts import AIInput, Message
 from app.core.auth import bearer, current_account
 from app.repositories.goals import GoalError, fingerprint, now
 from app.schemas.analysis import object_id
-from app.schemas.goals import Answer, CvContext, GoalDraft, QUESTIONS, SaveGoal, SendAnswer, StartExploration, Turn
+from app.schemas.goals import Answer, AssessmentStatus, CvContext, GoalDraft, QUESTIONS, SaveGoal, SendAnswer, StartExploration, Turn
 
 router=APIRouter(prefix='/api/v1/career', tags=['J08 exploration / J09 goal confirmation'])
 
@@ -61,6 +62,31 @@ async def context(request: Request, account=Depends(owner)):
         except GoalError: available=False
     return {'cvs':items, 'cv_service_available':available,
             'ai_available':request.app.state.ai.settings.enabled}
+
+
+@router.get('/context/assessment', response_model=AssessmentStatus)
+async def assessment_status(request: Request, account=Depends(owner)):
+    """Read readiness through CV's owner API; a successful empty CV is not assessed."""
+    cv_client=request.app.state.cv
+    uploaded=None
+    try:
+        if cv_client is None:raise GoalError('CV service unavailable.',503)
+        token=request.headers.get('authorization','')
+        rows=[cv for cv in (await cv_client.list(token))[:50] if cv.user_id==account]
+        uploaded=bool(rows)
+        if not rows:return AssessmentStatus(status='no_cv',cv_uploaded=False,skills_evaluated=False)
+        ready=[cv for cv in rows if cv.extraction_status=='succeeded']
+        # Inspect at most four snapshots concurrently, without returning their private evidence.
+        failed=False
+        for offset in range(0,len(ready),4):
+            snapshots=await asyncio.gather(*(cv_client.get(cv.id,token,account) for cv in ready[offset:offset+4]),return_exceptions=True)
+            if any(not isinstance(cv,BaseException) and cv.user_id==account and cv.extraction_status=='succeeded' and cv.skills for cv in snapshots):
+                return AssessmentStatus(status='evaluated',cv_uploaded=True,skills_evaluated=True)
+            failed=failed or any(isinstance(cv,BaseException) for cv in snapshots)
+        if failed:raise GoalError('CV service unavailable.',503)
+        return AssessmentStatus(status='not_evaluated',cv_uploaded=True,skills_evaluated=False)
+    except GoalError:
+        return AssessmentStatus(status='unavailable',cv_uploaded=uploaded,skills_evaluated=None)
 
 
 @router.post('/explorations')

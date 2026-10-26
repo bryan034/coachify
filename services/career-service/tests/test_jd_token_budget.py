@@ -195,3 +195,25 @@ def test_invalid_usage_does_not_log_content_or_break_generation(usage,caplog):
     with caplog.at_level(logging.INFO,logger='uvicorn.error.ai_usage'):
         record_usage(raw,'jd_extraction',1,1)
     assert not caplog.records
+
+
+@pytest.mark.parametrize('fence',['```json','```'])
+def test_json_fence_is_removed_locally_without_regenerating_extraction(fence):
+    async def run():
+        calls=[]
+        def handler(request):
+            calls.append(request)
+            content=fence+'\n'+json.dumps({'role':'Analyst','field':'Data','company':None,'skills':[]})+'\n```'
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':content}}]})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter=AIAdapter(config(),client)
+            result=await adapter.generate(AIInput(stage='jd_extraction',source_text='Synthetic analyst job'),Operation('owner','1','jd_extraction'),current_revision=lambda:'1')
+        assert result.data.role=='Analyst' and len(calls)==1
+    asyncio.run(run())
+
+
+def test_json_fence_does_not_accept_duplicate_keys_or_trailing_prose():
+    adapter=AIAdapter(config(),None)
+    for content in ['```json\n{"role":"A","role":"B"}\n```','```json\n{}\n```\nUntrusted extra prose']:
+        raw=json.dumps({'choices':[{'finish_reason':'stop','message':{'content':content}}]}).encode()
+        with pytest.raises(AIError,match='invalid_output'):adapter._content(raw)

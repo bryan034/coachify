@@ -24,7 +24,9 @@ export function errorCode(cause:unknown){return cause&&typeof cause==='object'&&
 /** Technical details stay in API responses; recovery controls never repeat them. */
 export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry',seconds}:{message:string;code:string;onRetry:()=>void;disabled?:boolean;label?:string;seconds?:number}){
  const tokenLimit=isTokenLimit(code);
- return <div role={tokenLimit?'alert':undefined} className={tokenLimit?'goal-error':'agent-recovery'}>
+ const conflict=code==='operation_in_progress'||code==='operation_key_reused';
+ return <div role={tokenLimit||conflict?'alert':undefined} className={tokenLimit?'goal-error':'agent-recovery'}>
+  {conflict&&<p>{code==='operation_in_progress'?'Another request is still being processed. Wait for it to finish before submitting different input.':'This request changed after it started. Return to Career Goal and submit the updated description again.'}</p>}
   {tokenLimit&&<p>{seconds!==undefined?message.replace(/ Retry after [\d.]+ seconds\./,''):message}</p>}
   {tokenLimit&&seconds!==undefined&&<p role="status">{seconds>0?`Try again in ${seconds} seconds.`:'You can retry now.'}</p>}
   <p className="small">Your inputs are kept.</p><button className="btn ghost sm" disabled={disabled} onClick={onRetry}>{label}</button>

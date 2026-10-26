@@ -1,8 +1,14 @@
 """Compact model output; trusted evidence links are restored by the backend."""
+import json
+import re
+import tiktoken
 from typing import Literal
 from pydantic import Field
 from app.schemas.analysis import Contract,Text,Evidence,InterviewProcess,InterviewEvidence,InterviewStage
 from app.schemas.research import SourcedTopics,Topic
+
+
+RESEARCH_EVIDENCE_TOKENS = 1000
 
 
 def evidence_items(request):
@@ -18,7 +24,24 @@ def evidence_items(request):
             if ids:
                 items.append({'ref':f'e{len(items)+1}','origin':'brave_summary','text':claim.text,
                     'source_ids':ids,'summary_id':summary.summary_id})
-    return items
+    # Preserve complete excerpts and attribution; do not truncate a claim mid-sentence.
+    unique=[];seen=set()
+    for item in items:
+        key=(item['origin'],re.sub(r'\s+',' ',item['text']).strip().casefold())
+        if key in seen:continue
+        seen.add(key);unique.append(item)
+    encoding=tiktoken.get_encoding('o200k_harmony')
+    def cost(values):
+        sent=[{k:v[k] for k in ('ref','origin','text')} for v in values]
+        return len(encoding.encode(json.dumps(sent,ensure_ascii=False,separators=(',',':')),disallowed_special=()))
+    if cost(unique)<=RESEARCH_EVIDENCE_TOKENS:return unique
+    # Under pressure, prioritise process evidence over generic snippets.
+    ranked=sorted(enumerate(unique),key=lambda pair:len(re.findall(
+        r'interview|rounds?|stages?|assessments?|screening',pair[1]['text'],re.I)),reverse=True)
+    chosen=[]
+    for index,item in ranked:
+        if cost([value for _,value in chosen]+[item])<=RESEARCH_EVIDENCE_TOKENS:chosen.append((index,item))
+    return [item for _,item in sorted(chosen)]
 
 
 def interview_input(request):

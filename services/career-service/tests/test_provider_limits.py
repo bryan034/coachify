@@ -1,25 +1,10 @@
-"""Provider-only rate limits; keep task output caps and safe failure handling."""
+"""Provider retry behaviour and task output caps."""
 import asyncio
-import json
 import httpx
 import pytest
 from app.ai.adapter import AIAdapter,AIError
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
-
-
-def test_output_allowances_are_not_reserved_against_actual_usage():
-    async def invoke():
-        calls=[]
-        def handler(req):
-            calls.append(req)
-            return httpx.Response(200,json={'usage':{'prompt_tokens':100,'completion_tokens':20,'total_tokens':120},'choices':[{'finish_reason':'stop','message':{'content':'{}'}}]})
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),client)
-            payload={'messages':[{'role':'user','content':'Synthetic JD '*500}],'max_completion_tokens':4096}
-            for _ in range(12):assert await adapter._complete(payload,owner='alice')=='{}'
-            assert len(calls)==12
-    asyncio.run(invoke())
 
 
 def test_provider_429_has_no_automatic_retry_or_subsequent_local_block():

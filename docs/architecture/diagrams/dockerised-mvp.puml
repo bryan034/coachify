@@ -13,8 +13,8 @@ skinparam databaseBackgroundColor #EFF6FA
 
 actor "User browser" as Browser
 component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nOutside this three-service scope" as Profile
-cloud "Configured LLM provider\nGroq initially; server-side adapter" as LLM
-cloud "Brave Search / Answers API\nConfigured API access required" as Sources
+cloud "Server-side model router\nGroq: extraction / reasoning / edits\nGemini: chat context + configurable Flash research coordination" as LLM
+cloud "Brave LLM Context / Search / Answers API\nConfigured API access required" as Sources
 
 node "Docker Compose — focused design" {
   node "Next.js / React / TypeScript" as Web <<Docker container>>
@@ -25,7 +25,7 @@ node "Docker Compose — focused design" {
       artifact "Upload, extract structured skills,\nclarify personal contributions\n/api/v1/cv (planned)" as CVAPI
     }
     node "JD / career and skills analyser\nservices/career-service" as Career <<Docker container>> {
-      artifact "Specific job or career exploration\nStructured skills and sourced interview process\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
+      artifact "Specific job or career exploration\nStructured skills and three-category Opportunity Intelligence\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
     }
     node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
       artifact "Generate plans from versioned analyses\nEdit plans and track task progress\n/api/v1/roadmaps (planned)" as RoadmapAPI
@@ -60,7 +60,7 @@ Roadmap --> RoadmapDB : Own records only
 CV --> Uploads : Temporary original access
 CV --> LLM : Structured CV extraction
 Career --> LLM : Target skills / research synthesis / gap analysis
-Career --> Sources : LangGraph Brave research node
+Career --> Sources : LangGraph parallel LLM Context research branches
 Roadmap --> LLM : Personalised roadmap generation
 
 note bottom of Career
@@ -92,7 +92,11 @@ legend bottom
   Dedicated CV extraction, broader mapping, gap analysis and roadmaps are planned.
   career_state and research_contexts are operational metadata.
   career_checkpoints / career_checkpoint_writes retain safe graph state for 24h.
-  AI input cap: 4,000 tokens/call; ai_user_usage tracks 7,000 completed tokens/user/rolling minute. No output reservations.
+  Groq input cap: 4,000 tokens/call; ai_user_usage tracks 7,000 completed Groq tokens/user/rolling minute. No output reservations.
+  Gemini bypasses these local limits; provider quotas and context/output/time limits remain independent.
+  Opportunity Intelligence embeds typed categories/findings/summary in interview_research.
+  Durable category jobs/receipts reuse research_contexts; no duplicate domain collections.
+  Gemini plans/selects validated summaries; configured Groq evaluates cited evidence.
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend
 @enduml

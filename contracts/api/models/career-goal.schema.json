@@ -478,6 +478,18 @@
       "title": "Role",
       "type": "string"
     },
+    "employment_type": {
+      "default": "unknown",
+      "enum": [
+        "internship",
+        "full_time",
+        "part_time",
+        "contract",
+        "unknown"
+      ],
+      "title": "Employment Type",
+      "type": "string"
+    },
     "company": {
       "anyOf": [
         {

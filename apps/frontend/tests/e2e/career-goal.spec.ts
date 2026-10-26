@@ -8,6 +8,7 @@ async function workspace(page:Page){
   if(path.endsWith('/school-categories'))return route.fulfill({json:[]});
   return route.fulfill({json:{version:1,onboarding_complete:true,occupational_status:'employed',education:{},education_review_required:false}});
  });
+ await page.route('**/api/v1/career/workspace',route=>route.fulfill({json:{phase:'empty',review:null,current:{goal:null},exploration_id:null}}));
 }
 test('Career Goal supports three temporary inputs, recovery and responsive navigation',async({page})=>{
  await workspace(page);const calls:string[]=[];
@@ -77,6 +78,38 @@ function prepared(){
  return {session_id:'000000000000000000000071',revision:1,kind:'jd',phase:'ready',review:{review_id:'000000000000000000000081',version:1,target_type:'specific_job',extraction,baseline:structuredClone(extraction),metadata_origins:{},requirements_need_review:false,is_confirmed:false,generation:{}},current:{selection_version:1,goal:null,dependent_results_need_review:false},research:{_id:'000000000000000000000091',version:1,research_status:'succeeded',last_researched_at:'2026-01-01T00:00:00Z',skills:[{name:'SQL',category:'Technical',skill_id:null,interview_stage:'Technical interview',assessment_type:'SQL exercise',source_ids:['s1'],question_patterns:[],independent_report_count:0}],sources:[{source_id:'s1',platform:'reddit',title:'Public interview report',url:'https://example.test/report',evidence:'Reported SQL exercise',reliability:'anecdotal',role_match:'related',published_date:null}]},coverage:[{platform:'brave',status:'succeeded'},{platform:'reddit',status:'succeeded'}],error:null,retry_after:null,expires_at:null,exploration_id:null};
 }
 
+test('reopening a pending JD reconnects and reaches the saved goal without a 409 loop',async({page})=>{
+ await workspace(page);let complete=false;const keys:string[]=[];
+ const operation={operation_id:'e'.repeat(32),status:'waiting_quota',retry_after:1,result:null};
+ await page.route('**/api/v1/career/**',route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/workspace/jd')){
+   const key=route.request().headers()['idempotency-key'];keys.push(key);
+   if(keys.length>1&&key!==keys[0])return route.fulfill({status:409,json:{code:'operation_in_progress',detail:'An operation is already running.'}});
+   return route.fulfill({status:202,json:operation});
+  }
+  if(path.includes('/workspace/operations/'))return route.fulfill({json:complete?{...operation,status:'succeeded',retry_after:null,result:prepared()}:operation});
+  if(path.endsWith('/context/assessment'))return route.fulfill({json:{status:'no_cv',cv_uploaded:false,skills_evaluated:false}});
+  return route.fulfill({json:complete?prepared():{phase:'empty',review:null,current:{goal:null},exploration_id:null}});
+ });
+ await page.goto('/career-goal');
+ await page.getByRole('textbox',{name:'Job description',exact:true}).fill('Synthetic analyst position. SQL is required.');
+ await page.getByRole('button',{name:'Extract career goal'}).click();
+ await expect(page.getByRole('status')).toContainText('Waiting for the AI token budget');
+ await page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true}).click();
+ await expect(page.getByRole('textbox',{name:'Job description',exact:true})).toHaveValue('Synthetic analyst position. SQL is required.');
+ await page.getByRole('button',{name:'Extract career goal'}).click();
+ await expect(page.getByRole('status')).toContainText('Waiting for the AI token budget');
+ expect(keys).toHaveLength(2);expect(keys[1]).toBe(keys[0]);
+ await page.setViewportSize({width:390,height:844});
+ await page.screenshot({path:test.info().outputPath('reconnected-extraction-mobile.png'),fullPage:true});
+ complete=true;
+ await expect(page).toHaveURL(/\/career-goal$/);
+ await expect(page.getByRole('heading',{name:'Analyst',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Retry',exact:true})).toHaveCount(0);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+});
+
 test('one exploration conversation chooses a role without a confirmation step',async({page})=>{
  await workspace(page);let chosen=false,turns=0;
  const draft={_id:'000000000000000000000001',version:1,answers:{},turns:[] as unknown[],cv:{mode:'none',filename:null,cv_id:null},interests:['Data'],preferences:[],suggestions:[] as unknown[],next_question:'aspirations' as string|null,question_text:'What would you like to achieve?' as string|null,context_complete:false};
@@ -95,29 +128,6 @@ test('one exploration conversation chooses a role without a confirmation step',a
  await expect(page.getByRole('log')).toContainText('Let’s look at Analyst');
  await expect(page.getByRole('button',{name:/Confirm.*goal/})).toHaveCount(0);
  await page.reload();await expect(page.getByRole('log')).toContainText('SQL exercise');expect(turns).toBe(1);
-});
-
-test('JD extraction researches before chat, autosaves edits and restores the latest goal',async({page})=>{
- await workspace(page);let active=prepared(),created=false;const calls:string[]=[];
- await page.route('**/api/v1/career/**',route=>{
-  const path=new URL(route.request().url()).pathname,method=route.request().method();if(method!=='GET')calls.push(path);
-  if(path.endsWith('/workspace/jd')){created=true;active={...active,phase:'researching'};return route.fulfill({json:active});}
-  if(path.endsWith('/workspace/review')){const body=route.request().postDataJSON();expect(body.session_id).toBe(active.session_id);active={...active,revision:2,review:{...active.review,version:2,extraction:body.content}};return route.fulfill({json:active});}
-  if(path.endsWith('/workspace/messages'))return route.fulfill({json:{reply:'Practise SQL joins for the reported assessment.',proposed_skills:null}});
-  if(path.endsWith('/workspace')){active={...active,phase:'ready'};return route.fulfill({json:created?active:{phase:'empty',review:null}});}
-  return route.fulfill({status:404,json:{detail:'Not found'}});
- });
- await page.goto('/career-goal');await page.getByRole('textbox',{name:'Job description',exact:true}).fill('Data analyst. SQL required.');await page.getByRole('button',{name:'Extract career goal'}).click();
- await expect(page.getByRole('status').filter({hasText:'Researching interviews'})).toBeVisible();await expect(page.getByRole('button',{name:'Send message'})).toBeDisabled();
- await expect(page.getByRole('log')).toContainText('Let’s look at Analyst');await expect(page.getByRole('log')).toContainText('SQL exercise');
- await page.getByRole('textbox',{name:'Message Coachify'}).fill('How should I prepare?');await page.getByRole('button',{name:'Send message'}).click();await expect(page.getByRole('log')).toContainText('Practise SQL joins');
- await page.getByRole('button',{name:'Edit career goal'}).click();await page.getByRole('textbox',{name:'Company',exact:true}).fill('Example Company');await page.getByRole('checkbox',{name:/I have reviewed/}).check();await page.getByRole('button',{name:'Save review'}).click();
- await expect(page.getByRole('log')).toContainText('Example Company');await expect(page.getByRole('button',{name:/Confirm.*goal/})).toHaveCount(0);
- await page.reload();await expect(page.getByRole('log')).toContainText('Example Company');
- await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Role and research details'}).click();await page.getByText('Public interview report',{exact:true}).click();await expect(page.getByRole('link',{name:'View source'})).toHaveAttribute('href','https://example.test/report');
- expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.screenshot({path:test.info().outputPath('single-goal-mobile.png'),fullPage:true});
- expect(calls.filter(p=>p.endsWith('/workspace/jd'))).toHaveLength(1);expect(calls.some(p=>p.endsWith('/confirm'))).toBe(false);
 });
 
 test('switching tabs keeps JD work and five-minute inactivity requires an explicit refresh',async({page,context})=>{

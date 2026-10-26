@@ -140,3 +140,22 @@ def test_round_count_is_not_derived_from_skill_or_question_counts():
     with pytest.raises(ValueError):InterviewFindings(topics=[],process={'round_count':3,'count_evidence_ref':'e1'}).to_domain(request)
     output=InterviewFindings(topics=[]).to_domain(request)
     assert output.process.round_count is None and output.process.stages==[]
+
+
+def test_research_evidence_is_deduplicated_and_budgeted_with_stable_verified_refs():
+    from app.ai.interview_contracts import evidence_items,interview_input,RESEARCH_EVIDENCE_TOKENS,InterviewFindings
+    import tiktoken
+    sources=[ResearchSource(source_id=f's{i}',platform='other',url=f'https://example.test/{i}',
+        evidence=(f'Technical interview round {i}: SQL assessment. '+('Public role guidance. '*35))[:600]) for i in range(6)]
+    claim='The technical interview includes a SQL assessment.'
+    summaries=[BraveAnswer(summary_id=f'a{i}',text=claim,source_ids=['s0'],claims=[AnswerClaim(text=claim,source_ids=['s0'])]) for i in range(2)]
+    request=AIInput(stage='interview_synthesis',public_context={'role':'Analyst','field':'Data'},sources=sources,summaries=summaries)
+    items=evidence_items(request);sent=interview_input(request)['evidence']
+    assert len(tiktoken.get_encoding('o200k_harmony').encode(json.dumps(sent,ensure_ascii=False,separators=(',',':'))))<=RESEARCH_EVIDENCE_TOKENS
+    assert sum(v['text']==claim for v in sent)<=1
+    assert all(v['text'] in [s.evidence for s in sources]+[claim] for v in sent)
+    item=items[0]
+    result=InterviewFindings(topics=[{'name':'SQL','category':'Technical','evidence_ref':item['ref']}]).to_domain(request)
+    assert result.topics[0].source_ids==item['source_ids'] and result.topics[0].quotes[0]==item['text']
+    adapter=AIAdapter(AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='fixture'),None)
+    assert input_tokens(adapter._payload(request))<=4000

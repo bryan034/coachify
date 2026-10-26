@@ -13,7 +13,7 @@ def direct_route(message):
     text=message.strip().casefold().rstrip('?.!')
     # Reject task execution, including attempts that wrap unrelated work in job terminology.
     task=re.match(r'^(?:(?:please|can you|could you|help me)\s+)?(?:write|generate|build|create|solve)\b.{0,80}\b(?:code|script|program|app|application|essay|email|query|homework|assignment|poem|cover letter)\b',text)
-    if task or re.fullmatch(r'(?:what is|how is|tell me) the weather(?: today)?',text) or re.search(r'\b(ignore (?:all |previous |your )?instructions|system prompt|recipe|shopping list|write (?:me |a |an |the |some )?(?:code|script|essay|email|poem|assignment)|solve (?:my |this )?(?:homework|assignment))\b',text):
+    if task or re.fullmatch(r'(?:weather(?: today)?|(?:what is|how is|tell me) the weather(?: today)?)',text) or re.search(r'\b(ignore (?:all |previous |your )?instructions|system prompt|recipe|shopping list|write (?:me |a |an |the |some )?(?:code|script|essay|email|poem|assignment)|solve (?:my |this )?(?:homework|assignment))\b',text):
         return QuestionRoute(topic='off_topic')
     if re.fullmatch(r'(?:how many|what (?:is|are) the number of) (?:interview )?(?:rounds|stages)(?: (?:are there|will there be|for this (?:job|role)))?',text):
         return QuestionRoute(topic='interview_process',terms=['round_count'])
@@ -24,6 +24,8 @@ def direct_route(message):
     if re.fullmatch(r'(?:what|which) (?:are the )?(?:interview stages|interview rounds|interview process)(?: (?:are there|can i expect))?',text):
         return QuestionRoute(topic='interview_process')
     if re.fullmatch(r'what should i practi[cs]e',text):return QuestionRoute(topic='preparation')
+    if re.match(r"^(?:(?:please|can you|could you|help me|i want to|i would like to|i'd like to)\s+)?(?:change|update|edit|revise|adjust|replace|set|rename|clear|mark|make)\b",text):
+        return QuestionRoute(topic='edit')
     if re.fullmatch(r'(?:add|remove|include|drop) [\w +#./-]{1,100}(?: (?:to|from) (?:my |the )?(?:skills|goal))?',text):
         return QuestionRoute(topic='edit')
     return None

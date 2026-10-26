@@ -12,7 +12,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from app.core.auth import bearer, current_account
 from app.ai.adapter import AIAdapter
-from app.ai.config import AISettings
+from app.ai.config import AISettings,GeminiSettings
+from app.ai.routing import ModelRouter,opportunity_models
 from app.ai.usage import UserTokenUsage
 from app.ai.adapter import AIError
 from app.clients.cvs import CvClient
@@ -26,6 +27,10 @@ from app.repositories.research import ResearchStore
 from app.clients.search_sources import SourceAPIs
 from app.repositories.workspace import WorkspaceStore
 from app.workflows.career import CareerWorkflow
+from app.workflows.opportunity.engine import OpportunityEngine
+from app.ai.opportunity_config import OpportunitySettings
+from app.api.v1.opportunity import router as opportunity_router
+from app.workflows.operations import Operations,OperationConflict
 from app.api.v1.workspace import router as workspace_router
 from app.repositories.reviews import ReviewStore
 from pymongo import MongoClient
@@ -58,10 +63,11 @@ class BodyLimit:
         await self.app(scope, limited_receive, send)
 
 
-def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None, research_client=None):
+def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None, research_client=None, context_ai=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.slots = asyncio.Semaphore(2)
+        app.state.operations = Operations()
         mongo = None
         db = database
         if db is None and os.getenv('MONGODB_URI'):
@@ -79,18 +85,30 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 raise RuntimeError('Career storage could not connect. Check database setup.') from None
         async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as ai_client:
             settings=AISettings.from_env() if ai is None else None
-            app.state.ai = ai or AIAdapter(settings,ai_client,usage_store=await run_in_threadpool(UserTokenUsage,db))
+            usage=await run_in_threadpool(UserTokenUsage,db)
+            primary=ai or AIAdapter(settings,ai_client,usage_store=usage)
+            context=context_ai
+            gemini=None
+            if ai is None:
+                gemini=GeminiSettings.from_env()
+                if gemini.enabled:context=AIAdapter(gemini,ai_client)
+            app.state.ai=ModelRouter(primary,context) if context is not None else primary
             app.state.research_client = research_client or SourceAPIs.from_environment(ai_client)
             if app.state.research_store is not None:
                 app.state.research_store.policy=getattr(app.state.research_client,'cache_policy',app.state.research_store.policy)
             app.state.workspace_store = WorkspaceStore(app.state.goal_store,app.state.review_store) if db is not None else None
             app.state.workflow = await run_in_threadpool(CareerWorkflow,app,db) if db is not None else None
+            opportunity_settings=OpportunitySettings.from_env()
+            opportunity_ai=opportunity_models(primary,context,gemini,opportunity_settings,ai_client)
+            app.state.opportunities=OpportunityEngine(app,db,opportunity_settings,opportunity_ai) if db is not None else None
             async with httpx.AsyncClient(base_url=os.getenv('CV_SERVICE_URL','http://cv-service:8000'),
                     timeout=5, trust_env=False, follow_redirects=False) as cv_http:
                 app.state.cv = cv_client or CvClient(cv_http)
                 try:
                     async with profile_lifespan(app): yield
                 finally:
+                    if app.state.opportunities is not None:await app.state.opportunities.close()
+                    await app.state.operations.close()
                     if app.state.workflow is not None: await app.state.workflow.close()
                     if mongo is not None: mongo.close()
 
@@ -108,6 +126,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     app = FastAPI(title='Coachify Career API', version='0.2.0', lifespan=lifespan,
         description='One automatically saved career workspace per account. LangGraph interprets JDs, coordinates Brave research, then enables context-grounded chat. Exploration follows a separate graph.')
     app.add_middleware(BodyLimit)
+    app.include_router(opportunity_router)
     app.include_router(workspace_router)
     app.include_router(goals_router)
     app.include_router(jd_router)
@@ -121,7 +140,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
 
     @app.exception_handler(GoalError)
     async def goal_error(request, error):
-        return JSONResponse({'detail':error.message},error.status)
+        return JSONResponse({'detail':error.message,**({'code':error.code} if isinstance(error,OperationConflict) else {})},error.status)
 
     @app.exception_handler(PyMongoError)
     async def storage_error(request, error):
@@ -165,6 +184,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
             action='retry extraction' if request.url.path.endswith('/jd/extract') else 'retry your message'
             payload['detail']=descriptions[error.reason]+' Your previous inputs and saved progress are unchanged; '+action+'.'
             payload['diagnostic']={'reason':error.reason,'fields':list(error.fields)}
+            if error.violations:payload['diagnostic']['violations']=list(error.violations)
         headers = {'Retry-After': str(error.retry_after)} if error.retry_after is not None else None
         return JSONResponse(payload,status,headers=headers)
 

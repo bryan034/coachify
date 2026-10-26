@@ -119,7 +119,9 @@ def test_api_explains_input_vs_user_and_provider_limits(code,scope,status,fragme
     with TestClient(create_app(profile_client=upstream,processor=processor)) as client:
         response=client.post('/api/v1/career/imports/url',headers={'Authorization':'Bearer synthetic'},json={'url':'https://example.test/job'})
         assert response.status_code==status and fragment in response.json()['detail']
-        if scope:assert response.json()['retry_after']==23 and response.headers['Retry-After']=='23'
+        if scope:
+            assert response.json()['limit_scope']==scope
+            assert response.json()['retry_after']==23 and response.headers['Retry-After']=='23'
         else:assert 'Retry-After' not in response.headers
 
 
@@ -151,4 +153,35 @@ def test_unknown_network_usage_never_reserves_max_output(failure,charged):
             with pytest.raises(httpx.HTTPError):await adapter._complete(payload,owner='alice')
         entries=usage.local.get(usage.key('alice'),[])
         assert sum(v['tokens'] for v in entries)==(input_tokens(payload) if charged else 0)
+    asyncio.run(run())
+
+
+def test_gemini_large_input_bypasses_groq_cap_and_exhausted_ledger():
+    from app.ai.config import GeminiSettings
+    from app.ai.contracts import AIInput
+    async def run():
+        stamp,usage=clock();usage.record('alice',7000);calls=[]
+        def handler(request):calls.append(request);return reply()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture'),client,usage_store=usage)
+            request=AIInput(stage='context_answer',context=json.dumps({'facts':['x '*5000]}),conversation=[{'role':'user','content':'Explain these facts.'}])
+            payload=adapter._payload(request)
+            assert input_tokens(payload)>4000
+            assert await adapter._complete(payload,owner='alice')=='{}'
+            assert len(calls)==1
+            assert sum(v['tokens'] for v in usage.local[usage.key('alice')])==7000
+            primary=AIAdapter(settings(),client,usage_store=usage)
+            with pytest.raises(AIError) as error:
+                await primary._complete({'messages':[{'role':'user','content':'Hi'}]},owner='alice')
+            assert error.value.limit_scope=='user' and len(calls)==1
+    asyncio.run(run())
+
+
+def test_gemini_provider_quota_is_still_enforced():
+    from app.ai.config import GeminiSettings
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(429,headers={'Retry-After':'3'}))) as client:
+            adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture'),client)
+            with pytest.raises(AIError) as error:await adapter._complete({'messages':[]},owner='alice')
+            assert error.value.limit_scope=='provider' and error.value.retry_after==3
     asyncio.run(run())

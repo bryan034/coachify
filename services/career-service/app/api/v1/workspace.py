@@ -1,18 +1,18 @@
 """One live career goal/chat per account. Drafts publish automatically."""
-import json
+from uuid import uuid4
+from typing import Literal
 from bson import ObjectId
 from pydantic import Field
-from fastapi import APIRouter,Depends,Request
+from fastapi import APIRouter,Depends,Request,Response,Header
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
 from app.api.v1.goals import owner,request_key
 from app.api.v1.reviews import view
-from app.ai.adapter import Operation
-from app.ai.contracts import AIInput,Message
+from app.ai.contracts import Message
 from app.repositories.goals import GoalError,fingerprint,stable_id,now
 from app.schemas.analysis import Contract
 from app.schemas.jd import JDSource,SaveReview,ChatText
-from app.schemas.workspace import WorkspaceView
+from app.schemas.workspace import WorkspaceView,OperationView,WorkspaceChatReply
 
 router=APIRouter(prefix='/api/v1/career/workspace',tags=['Single career workspace / LangGraph'])
 
@@ -39,7 +39,7 @@ async def state(request,account):
     return jsonable_encoder({'session_id':w.get('session_id'),'revision':w.get('revision',0),'kind':w.get('kind'),
         'phase':'expired' if expired else w.get('phase','empty'),'review':view(review) if review else None,
         'current':current,'research':research,'coverage':w.get('coverage',[]),'error':w.get('error'),'error_code':w.get('error_code'),
-        'retry_after':w.get('retry_after'),'expires_at':w.get('expires_at'),'exploration_id':w.get('exploration_id')},by_alias=True)
+        'edit_question':(w.get('edit_draft') or {}).get('question'),'retry_after':w.get('retry_after'),'expires_at':w.get('expires_at'),'exploration_id':w.get('exploration_id')},by_alias=True)
 
 @router.get('',response_model=WorkspaceView)
 async def read(request:Request,account=Depends(owner)):
@@ -47,8 +47,14 @@ async def read(request:Request,account=Depends(owner)):
     if value['phase'] in ('research_pending','researching','waiting_quota'):request.app.state.workflow.launch(account)
     return value
 
-@router.post('/jd',status_code=202,response_model=WorkspaceView)
-async def ingest(body:JDSource,request:Request,account=Depends(owner),key=Depends(request_key)):
+@router.post('/jd',status_code=202,response_model=WorkspaceView|OperationView)
+async def ingest(body:JDSource,request:Request,account=Depends(owner),key=Depends(request_key),prefer:str|None=Header(default=None,alias='Prefer')):
+    if prefer == 'respond-async':
+        return request.app.state.operations.submit(account,key,fingerprint(body.model_dump(mode='json')),'jd',
+            lambda: ingest_jd(body,request,account,key))
+    return await ingest_jd(body,request,account,key)
+
+async def ingest_jd(body,request,account,key):
     repo=store(request);digest=fingerprint(body.model_dump(mode='json'))
     if not await thread(repo.claim_input,account,key,digest):return await state(request,account)
     try:
@@ -81,43 +87,66 @@ class Chat(Contract):
     session_id:str=Field(pattern=r'^[0-9a-f]{24}$')
     expected_version:int=Field(strict=True,ge=1)
     message:ChatText=Field(max_length=600)
+    mode:Literal['question','refine']='question'
     conversation:list[Message]=Field(default_factory=list,max_length=12)
 
-@router.post('/messages')
-async def message(body:Chat,request:Request,account=Depends(owner)):
-    repo=store(request);row=await thread(repo.check,account,body.session_id,body.expected_version);w=row['workspace']
+@router.post('/messages',response_model=WorkspaceChatReply|OperationView,responses={202:{'model':OperationView}})
+async def message(body:Chat,request:Request,response:Response,account=Depends(owner),prefer:str|None=Header(default=None,alias='Prefer'),idempotency_key:str|None=Header(default=None,alias='Idempotency-Key')):
+    if prefer == 'respond-async':
+        key=request_key(idempotency_key or '')
+        response.status_code=202
+        return request.app.state.operations.submit(account,key,fingerprint(body.model_dump(mode='json')),'chat',
+            lambda: answer_message(body,request,account,key))
+    return await answer_message(body,request,account,request_key(idempotency_key) if idempotency_key else str(uuid4()))
+
+@router.get('/operations/{operation_id}',response_model=OperationView)
+async def operation(operation_id:str,request:Request,account=Depends(owner)):
+    return request.app.state.operations.read(account,operation_id)
+
+async def answer_message(body,request,account,key):
+    repo=store(request);digest=fingerprint(body.model_dump(mode='json'))
+    if await thread(repo.chat_replay,account,key,digest,body.session_id):
+        return {'reply':'Your requested career goal changes have already been saved.','proposed_skills':None,'edit_status':'saved','workspace':await state(request,account)}
+    row=await thread(repo.check,account,body.session_id,body.expected_version);w=row['workspace']
     if w.get('expires_at',now())<=now():raise GoalError('Temporary workflow expired. Resume your saved career goal.')
-    if w['phase']!='ready' or not w.get('research_id'):raise GoalError('Interview research must finish before the agent can answer. Retry research first.')
-    from app.workflows.chat import focused_chat
-    answer=await focused_chat(request,account,row,body)
+    answer=None
+    if body.mode!='refine':
+        if w['phase']!='ready' or not w.get('research_id'):raise GoalError('Interview research must finish before the agent can answer. Retry research first.')
+        from app.workflows.chat import focused_chat
+        answer=await focused_chat(request,account,row,body)
     if answer is not None:
         await thread(repo.check,account,body.session_id,body.expected_version)
         await thread(repo.touch,account,body.session_id)
         return answer.model_dump(mode='json')
-    # Explicit skill edits retain the separate, fully validated edit contract.
-    review=await thread(repo.reviews.get,w['review_id'],account)
-    context={'career_goal':review.content.model_dump(mode='json')}
-    from app.api.v1.jd import validate_skills
-    from app.workflows.chat import review_chat
-    def validate(output):
-        if output.proposed_skills is None:return
-        normalized=[]
-        facts=('name','category','priority','required_proficiency','required_experience_months')
-        for skill in output.proposed_skills:
-            if skill.origin=='employer':
-                matches=[s for s in review.content.skills if s.origin=='employer' and all(getattr(s,f)==getattr(skill,f) for f in facts)]
-                if len(matches)!=1:raise GoalError('The assistant proposed an unsupported employer requirement. Retry.',503)
-                normalized.append(matches[0].model_copy(deep=True))
-            else:normalized.append(skill)
-        output.proposed_skills=normalized
-        validate_skills(output.proposed_skills,body.message,review.content.skills)
-    result=await review_chat(lambda:request.app.state.ai.generate(AIInput(stage='workspace_chat',context=json.dumps(context),conversation=[Message(role='user',content=body.message)]),
-        Operation(account,str(review.version),'workspace_chat'),current_revision=lambda:str(review.version),validate_output=validate),validate)
-    validate(result.data)
+    from app.workflows.chat import edit_goal
+    from app.domain.goal_edits import apply_changes
+    from app.domain.questions import REFUSAL
+    decision,review=await edit_goal(request,account,row,body)
     await thread(repo.check,account,body.session_id,body.expected_version)
-    # A chat answer itself is temporary; applying an edit publishes a new goal version.
+    if decision.status=='off_topic':
+        return {'reply':REFUSAL,'proposed_skills':None}
+    if decision.status=='clarify':
+        draft={'intent':decision.intent,'changes':[c.model_dump(mode='json') for c in decision.changes],
+            'question':decision.reply[:600],'version':body.expected_version}
+        await thread(repo.edit_draft,account,body.session_id,body.expected_version,draft)
+        await thread(repo.touch,account,body.session_id)
+        return {'reply':decision.reply,'proposed_skills':None,'edit_status':'clarifying'}
+    if decision.status=='cancel':
+        await thread(repo.edit_draft,account,body.session_id,body.expected_version,None)
+        return {'reply':decision.reply,'proposed_skills':None,'edit_status':'cancelled'}
+    content=apply_changes(review.content,decision.changes,decision.intent)
+    updated=await thread(repo.reviews.save,review.id,account,key,SaveReview(expected_version=body.expected_version,
+        content=content,acknowledge_context=decision.acknowledge_context))
+    if updated.version!=review.version:
+        await thread(repo.activate,account,body.session_id,updated,chat_receipt={'key':key,'hash':digest})
+        request.app.state.workflow.launch(account,replace=True)
+    else:
+        await thread(repo.edit_draft,account,body.session_id,body.expected_version,None)
+        # The requested values already match the goal; do not create another version.
+        await thread(repo.rows.update_one,{'_id':account,'workspace.session_id':body.session_id},
+            {'$push':{'chat_receipts':{'$each':[{'key':key,'hash':digest}],'$slice':-100}}})
     await thread(repo.touch,account,body.session_id)
-    return result.data.model_dump(mode='json')
+    return {'reply':decision.reply,'proposed_skills':None,'edit_status':'saved','workspace':await state(request,account)}
 
 @router.post('/retry',status_code=202,response_model=WorkspaceView)
 async def retry(request:Request,account=Depends(owner)):

@@ -52,3 +52,9 @@ Frontend checks cover countdowns, retained drafts and retry readiness.
 `test_brave_summaries.py` covers attributed AI claims, forged references, original
 excerpt separation and summary-rich input budgets. Connector tests cover fragmented
 streaming and plan-access failures; workspace tests cover MongoDB persistence/reuse.
+
+Research regressions cover Groq-only token admission/accounting, Gemini inputs above
+4,000 tokens and independent provider 429s, late interview passages, full assessment
+excerpts, deadline-aware early stopping, no-progress limits, partial cache reuse and
+preserving assessed evidence after later retrieval timeouts. Workflow/cache checks
+require disposable MongoDB; all provider responses use synthetic fixtures.

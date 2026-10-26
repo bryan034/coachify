@@ -15,8 +15,9 @@ webfont files and is not bundled.
 |---|---|
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
-| `/career-goal` | Choose exploration or prepare a transient JD preview from text, URL or a document |
-| `/career-goal/chat` | One agent conversation page: one current goal/chat with LangGraph JD research or separate exploration; automatic saves, editing and clarification |
+| `/career-goal` | Saved goal overview with category cards, research progress, guided refinement and CV assessment handoff; new accounts see JD inputs/exploration |
+| `/career-goal?new=1` | Replace the goal using a new text, URL or document JD; preserve the previous goal until extraction succeeds |
+| `/career-goal/chat` | Saved-goal Q&A or separate career exploration; `?refine=1` opens guided goal refinement |
 | `/onboarding` | P13/P14 full-screen question-by-question setup, ending with Enter Coachify |
 | `/profile` | Occupation, education and employment summary with inline Edit profile, Save changes and Cancel |
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
@@ -81,13 +82,15 @@ Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
 `src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
 content stays in the account-scoped Career route provider, never browser storage.
 **Extract career goal** starts the LangGraph JD workflow. Validated role/skill/condition
-information immediately becomes the account's latest goal. Brave/Reddit interview
-research completes before the initial chat explanation and follow-up composer open.
+information immediately becomes the account's latest goal. The browser returns to the saved goal overview as soon as extraction succeeds. Skills and non-skill requirements are grouped into category cards, with responsibilities and interview preparation kept separate. Research status updates on this page without hiding the extracted goal. **Refine goal** opens guided chat; **Set a new goal** opens fresh JD inputs while preserving the current goal until successful replacement. Brave interview
+research completes before the chat explanation and follow-up composer open.
 Unavailable sources produce a retry state; no-findings stays explicit. One current
 conversation is loaded from `/api/v1/career/workspace`; there is no session picker or
 confirmation button. A new successfully interpreted JD resets that conversation.
-Save/Cancel/Reset edits preserve stable identities and automatically publish valid
-saved changes. Research remains distinct from JD requirements and personal skills.
+Manual changes happen through guided chat. The agent asks for missing details, then
+automatically validates and saves the requested fields; users can cancel a pending edit
+in chat. The manual form and Apply button are removed. Message keys make retries
+idempotent, and the workspace can restore the latest pending question after reload. Research remains distinct from JD requirements and personal skills.
 The details panel exposes interview topics, stages, assessments, uncertainty and
 source evidence. Ordinary follow-up requests send only session/version, the current
 message and at most one recent exchange; the backend retrieves only the relevant
@@ -164,5 +167,31 @@ can reset unsaved inputs. Production uses the existing build/start target.
 Career replies reveal word by word after the validated API response arrives. Markdown
 headings/lists format the first JD overview; older replies stay fully visible. Users
 can choose Show full response, and reduced-motion preferences disable animation.
-Only token-limit errors are shown as error messages. Other failures keep quiet retry
-controls and retained drafts; diagnostic codes/details remain in Network responses.
+Token-limit errors and safe request-conflict explanations are shown. Other failures keep quiet retry
+controls and retained drafts; provider diagnostic codes/details remain in Network responses.
+The transient JD request key stays in the career session across chat navigation.
+Reopening the same pending JD reconnects to its running extraction; different-input
+conflicts show a safe explanation instead of only an unexplained Retry button.
+
+Interview research uses provider-neutral progress and summary labels. Original source
+links and AI-summary attribution remain visible in research details.
+
+The initial career-goal explanation reports useful interview source coverage. If the
+research budget cannot find three distinct useful URLs, it labels the findings as limited.
+
+The overview checks `GET /api/v1/career/context/assessment` for the signed-in
+account. Missing CVs or successfully extracted CVs without skills show **Assess my
+skills**, linking to `/cv`; pending/failed extraction also needs assessment. An API
+failure stays unknown and offers retry, rather than implying the database is empty.
+An evaluated CV shows **View my CV**. This is a capability-input check, not a gap
+analysis or readiness score. Dedicated CV upload/assessment on `/cv` remains planned.
+
+Opportunity Intelligence adds three expandable sections beneath the saved goal
+cards: interviews, internship experience and company context. Category findings
+show original citations, confidence/evidence type, dates, context limitations and
+missing fields; summaries select only validated finding refs. Category status
+polls independently, retaining successful findings during other failures/refresh.
+Whole-report and individual refresh use versioned UUID-idempotent commands.
+`?refine=1` sends explicit refinement mode, allowing guided edits before research
+finishes; ordinary questions still require interview evidence. Employment type
+is shown only when established. No-company employer sections are not applicable.
