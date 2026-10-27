@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Icon } from '@/components/ui/icon';
 import { useProfile } from '@/features/profile/profile-provider';
 import { importCareer, type CareerPreview } from '@/lib/api/career';
+import { TargetWorkspace } from './target-workspace';
 
 const methods = [
  { id: 'text', label: 'Paste description', icon: 'doc', hint: 'Bring the opportunity into focus.', detail: 'Copy the complete description from one job listing, including responsibilities and requirements.' },
@@ -14,19 +15,23 @@ type Draft = { text: string; preview?: CareerPreview };
 const MAX_TEXT = 20_000, MAX_FILE = 10 * 1024 * 1024;
 const empty = (): Record<Method,Draft> => ({text:{text:''},url:{text:''},document:{text:''}});
 export function CareerGoal() {
- const { token } = useProfile();
+ const { token,account } = useProfile();
+ return <CareerWorkspace key={`${account?.id??'signed-out'}:${token??''}`} token={token}/>;
+}
+function CareerWorkspace({token}:{token?:string}) {
  const [method,setMethod] = useState<Method>('text');
  const [drafts,setDrafts] = useState(empty);
  const [url,setUrl] = useState(''); const [file,setFile] = useState<File>();
  const [error,setError] = useState(''); const [busy,setBusy] = useState(false);
+ const [targetDirty,setTargetDirty] = useState(false);
  const controller = useRef<AbortController | null>(null); const request = useRef(0); const input = useRef<HTMLInputElement>(null);
  const active = methods.find(m=>m.id===method)!; const draft=drafts[method];
  const count=Array.from(draft.text).length; const tooLong=count>MAX_TEXT;
  const hasWork=Boolean(url||file||Object.values(drafts).some(d=>d.text));
- const work = useRef(hasWork); work.current=hasWork;
+ const work = useRef(hasWork||targetDirty); work.current=hasWork||targetDirty;
  useEffect(()=>()=>{request.current++;controller.current?.abort();},[]);
  useEffect(()=>{
-  const warning='Your Career Goal preview is temporary. Leave this page and discard it?';
+  const warning='Leave this page and discard temporary Career Goal previews or unsaved target fields? Saved targets will remain available.';
   function unload(event:BeforeUnloadEvent){if(work.current){event.preventDefault();event.returnValue='';}}
   function link(event:MouseEvent){
    const anchor=(event.target as Element | null)?.closest?.('a[href]');
@@ -83,8 +88,9 @@ export function CareerGoal() {
     <div className="row between goal-actions"><button type="button" className="btn ghost sm" disabled={!draft.text&&!(method==='url'?url:method==='document'?file:false)} onClick={clear}>Clear input</button><span className="small">Nothing is saved yet</span></div>
    </div>
   </div><aside className="goal-guide">
-   <div className="card pad"><p className="k">A little guidance</p><h3>One opportunity at a time.</h3><p className="small">Use a complete description for one role. A title or link alone won’t tell the full story.</p><div className="goal-guide-step"><span>01</span><div><strong>Bring the description</strong><p className="small">Choose the input that works for you.</p></div></div><div className="goal-guide-step"><span>02</span><div><strong>Check the details</strong><p className="small">Review the text and remove unrelated content.</p></div></div><div className="goal-guide-step"><span>03</span><div><strong>Understand the role</strong><p className="small">Role and skill analysis will follow in a later update.</p></div></div></div>
-   <div className="goal-temporary"><Icon name="doc"/><div><strong>Just a temporary preview</strong><p className="small">Your description stays in this page’s memory. Refreshing or leaving the page discards it. Nothing is saved to your account or sent to an AI model.</p></div></div>
+   <div className="card pad"><p className="k">A little guidance</p><h3>One opportunity at a time.</h3><p className="small">Use a complete description for one role. A title or link alone won’t tell the full story.</p><div className="goal-guide-step"><span>01</span><div><strong>Bring the description</strong><p className="small">Choose the input that works for you.</p></div></div><div className="goal-guide-step"><span>02</span><div><strong>Check the details</strong><p className="small">Review the text and remove unrelated content.</p></div></div><div className="goal-guide-step"><span>03</span><div><strong>Review the target</strong><p className="small">Save the skills and supporting excerpts below, confirm them, then select this target for CV clarification.</p></div></div></div>
+   <div className="goal-temporary"><Icon name="doc"/><div><strong>Just a temporary preview</strong><p className="small">The full description stays in this page’s memory until you save a target draft. Saving sends it briefly to validate the excerpts; only structured requirements and bounded excerpts are retained. No AI model is called.</p></div></div>
   </aside></div>
+  {token&&<TargetWorkspace token={token} sourceText={draft.text} sourceUrl={draft.preview?.source_url} onDraftChange={setTargetDirty}/>}
  </section>;
 }

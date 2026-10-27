@@ -75,12 +75,12 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e '.[test]'
-      - name: Run pytest (allow empty suites)
+      - name: Run pytest (only unimplemented services may have empty suites)
         shell: bash
         run: |
           status=0
           python -m pytest || status=$?
-          if [ "$status" -eq 5 ]; then
+          if [ "$status" -eq 5 ] && [[ '${{ matrix.service }}' =~ ^(roadmap|dashboard|review)$ ]]; then
             echo "No pytest tests collected; passing this service."
             exit 0
           fi
@@ -109,6 +109,52 @@ jobs:
         env:
           MONGODB_TEST_URI: mongodb://localhost:27017
 
+  cv-integration:
+    name: CV MongoDB integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports: [27017:27017]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[test]'
+        working-directory: services/cv-service
+      - run: python -m pytest
+        working-directory: services/cv-service
+        env:
+          MONGODB_TEST_URI: mongodb://localhost:27017
+
+  career-integration:
+    name: Career MongoDB integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports: [27017:27017]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[test]'
+        working-directory: services/career-service
+      - run: python -m pytest
+        working-directory: services/career-service
+        env:
+          MONGODB_TEST_URI: mongodb://localhost:27017
+
   local-ui-integration:
     name: Local UI and MongoDB integration
     runs-on: ubuntu-latest
@@ -126,6 +172,8 @@ jobs:
       GATEWAY_PORT: '8081'
       MONGO_ROOT_PASSWORD: ci-only-root-password
       PROFILE_DB_PASSWORD: ci-only-profile-password
+      CV_DB_PASSWORD: ci-only-cv-password
+      CAREER_DB_PASSWORD: ci-only-career-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -135,7 +183,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
         working-directory: apps/frontend
-      - run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml up --build -d
+      - run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml up --build -d
       - name: Wait for the gateway and API
         run: curl --fail --silent --show-error --retry 20 --retry-delay 2 --retry-all-errors http://localhost:8081/api/v1/profile/auth-config
       - run: npx playwright test --config playwright.integration.config.ts
@@ -145,15 +193,15 @@ jobs:
           MAILPIT_BASE_URL: http://localhost:8026
       - name: Service logs on failure
         if: ${{ failure() }}
-        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml logs --tail=100
+        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml logs --tail=100
       - name: Remove disposable test services
         if: ${{ always() }}
-        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml down -v
+        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml down -v
 
   test-gate:
     name: Test gate
     if: ${{ always() }}
-    needs: [frontend-unit, frontend-e2e, backend, profile-integration, local-ui-integration]
+    needs: [frontend-unit, frontend-e2e, backend, profile-integration, cv-integration, career-integration, local-ui-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -164,9 +212,13 @@ jobs:
           BACKEND_RESULT: ${{ needs.backend.result }}
           LOCAL_UI_RESULT: ${{ needs.local-ui-integration.result }}
           INTEGRATION_RESULT: ${{ needs.profile-integration.result }}
+          CV_INTEGRATION_RESULT: ${{ needs.cv-integration.result }}
+          CAREER_INTEGRATION_RESULT: ${{ needs.career-integration.result }}
         run: |
           test "$UNIT_RESULT" = success
           test "$E2E_RESULT" = success
           test "$BACKEND_RESULT" = success
           test "$INTEGRATION_RESULT" = success
+          test "$CV_INTEGRATION_RESULT" = success
+          test "$CAREER_INTEGRATION_RESULT" = success
           test "$LOCAL_UI_RESULT" = success

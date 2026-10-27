@@ -1,7 +1,9 @@
 # API contracts
 
-`profile.yaml` describes the implemented Profile API and is generated from the
-FastAPI application. Other service contracts remain empty shells.
+`profile.yaml`, `career.yaml` and `cv.yaml` describe the implemented APIs and are
+generated from their FastAPI applications. Roadmap, Dashboard and Review remain
+scaffolds. The target-bound CV input is a producer contract; it does not imply a
+working assessment or roadmap consumer.
 
 Individual endpoint explanations live in each service README; the
 [API overview](../../docs/api/README.md) maps prefixes to services. Keep schemas

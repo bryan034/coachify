@@ -15,13 +15,13 @@ webfont files and is not bundled.
 |---|---|
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
-| `/career-goal` | J01/J06/J07 temporary pasted text, URL and PDF/DOCX/TXT previews; no save or AI analysis |
+| `/career-goal` | Temporary pasted text, URL and PDF/DOCX/TXT previews; reviewed target drafts, confirmation and explicit selection; no AI target analysis |
 | `/onboarding` | P13/P14 full-screen question-by-question setup, ending with Enter Coachify |
 | `/profile` | Occupation, education and employment summary with inline Edit profile, Save changes and Cancel |
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
 | `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
 | `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
-| `/cv` | Resume/skills/tracker layout; upload and assessment unavailable |
+| `/cv` | Saved PDF/DOCX upload, processing/recovery, explicit CV selection, evidence review/corrections, manual capabilities, selected-target clarification preparation and saved answer/skip; gap analysis remains planned |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
 | `/calendar` | Current week/month views; events and task actions unavailable |
 | `/career`, `/reviews` | Matching placeholders for existing reserved routes |
@@ -70,6 +70,16 @@ layouts and reduced-motion preferences are supported.
 Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
 `src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
 content stays in page memory and is discarded on reload/leave.
+CV API access uses `src/lib/api/cv.ts` through `/api/v1/cv` and Profile-owned manual
+capabilities. The server policy supplies supported formats/limits. Uploads stay
+private; ready CV selection is explicit and independent of the viewed/uploaded
+source. Corrections, removals, declarations and clarification answers are saved
+with expected versions and mutation identities. Same-source re-upload preserves
+corrections; changed documents use a new CV identity. Failed/conflicting writes keep
+local drafts, while logout/account changes discard them. Unconfigured extraction
+and unavailable confirmed Career context are shown explicitly, without synthetic
+results. See [CV feature behavior](src/features/cv-ingestion/README.md).
+
 FastAPI owns validation, resource ownership and database writes. See
 [application setup](../../docs/setup.md) for environment and Docker setup.
 

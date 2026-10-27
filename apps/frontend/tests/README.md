@@ -64,3 +64,48 @@ last-job profile display/editing, and the 75% desktop onboarding width. Full-sta
 journeys verify both unemployed branches against MongoDB and captured-email setup.
 
 Graduation checks cover question order, resuming a missing year, invalid/future years, profile display/editing and a real MongoDB save/reload journey. Company-data checks require at least 5,000 unique named employers with positive counts, employee-ranked search and Singapore coverage.
+
+
+C-series tests cover authenticated response validation, exact upload limits,
+interrupted-upload idempotency, identical filenames, explicit selection, private
+state clearing on account changes, effective provenance, unknown values, retained
+correction drafts, stale-version reconciliation, skip behavior and explicit manual
+capability matches. Browser fixtures cover upload → selection → correction →
+manual declaration → reload/removal, failed replacements and mobile overflow.
+The workspace baseline now expects CV API reads while still checking other
+unimplemented services remain disconnected. These fixtures use synthetic data and
+mocked API responses; real service/database coverage lives under `tests/integration`.
+
+
+Confirmed-target checks cover structured draft review, explicit confirmation and
+selection, reloaded targets, source excerpt validation, request identity and stale
+responses. CV tests distinguish absent context from dependency failure and an empty
+prepared question set, preserve drafts, and keep target-irrelevant pending prompts
+hidden while retaining answers/skips. `integration/clarification-flow.spec.ts` uses
+real Career/CV/Profile/Mongo/gateway services plus the labelled synthetic CV model
+fixture. It exercises project/work explanations, unknown skill answers, skips,
+voluntary return, reload, target switching and owner isolation.
+
+Profile compatibility checks exercise delayed editor initialization and shared
+session recovery. The C-series browser fixture keeps an unsaved correction,
+clarification answer, manual capability and selected file through hide/show,
+temporary validation failure/retry and simulated back/forward-cache restoration.
+It verifies masking, keyboard focus, expiry/account-change cleanup and more than
+five minutes without an inactivity lock. These fixtures simulate lifecycle events;
+they do not establish browser-specific native cache eligibility.
+
+The full-stack compatibility journey covers Student, National Service, Employed
+and both Unemployed branches. It creates verified synthetic accounts, uploads a CV,
+adds a manual capability, then edits Profile and reloads to check saved selection
+and declarations. Backend checks use the existing Profile completion and version
+contracts with real disposable MongoDB; model responses remain synthetic.
+
+Interpretation-completion checks distinguish raw answer saves, validated claims,
+partial/unanswerable resolution and recoverable provider failure. They cover
+explicit new personal skills, partial dates, qualification conditions, manual-link
+repair and replacement reconciliation. The shared
+`integration/completion-workflow.ts` journey is used by
+`integration/c-series-completion.spec.ts` and the local workflow recording. It
+asserts the target-bound input contract through the real services without creating
+an assessment or claiming live model accuracy. The synthetic fixture accepts only
+its labelled test model and fixed fixture answers.

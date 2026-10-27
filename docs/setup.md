@@ -1,7 +1,7 @@
 # Run Coachify locally
 
 Use Docker Desktop, Node.js 24 and Python 3.12. The active local stack contains
-NGINX, the Next.js frontend, the Profile API, the Career preview API and MongoDB. Other backend services
+NGINX, the Next.js frontend, the Profile API, the Career API, the CV API and MongoDB. Other backend services
 are placeholders. See the [API overview](api/README.md) and individual service
 READMEs for feature details.
 
@@ -22,7 +22,7 @@ Gmail SMTP. Fill in these values before starting:
 | `SMTP_USERNAME`, `SMTP_FROM` | Your Gmail sender address (use the same address for both). |
 | `SMTP_PASSWORD` | That sender's Google App Password, without spaces. |
 | `OTP_HASH_SECRET` | Generate once with `openssl rand -hex 32`. |
-| `MONGO_ROOT_PASSWORD`, `PROFILE_DB_PASSWORD` | Generate each separately with `openssl rand -hex 24`. Preserve existing values when reusing your database. |
+| `MONGO_ROOT_PASSWORD`, `PROFILE_DB_PASSWORD`, `CV_DB_PASSWORD`, `CAREER_DB_PASSWORD` | Generate each separately with `openssl rand -hex 24`. Preserve existing values when reusing your database. Existing volumes need the [CV/Career user provisioning steps](../infrastructure/mongodb/README.md). |
 
 Keep the supplied `APP_ENV=development`, `AUTH_MODE=email`, SMTP host, port and
 security values. No Google OAuth variables or Mailpit variables are needed.
@@ -111,25 +111,73 @@ sign-in. Deploy behind HTTPS; the local Compose file is a development deployment
 not a complete public production hosting configuration. School lookups still need
 no API key or download.
 
-## Career Goal previews
+## Career Goal previews and reviewed targets
 
-The normal Compose command also builds and starts `career-service`. No new
-credentials, MongoDB users or Groq key are required. Open `/career-goal` after
-sign-in and initial profile setup. Paste a description, import a public URL, or
-upload a PDF/DOCX/TXT document. All previews are temporary; refreshing or leaving
-the page discards them. No descriptions or original files are saved in MongoDB.
-Only future approved structured information will be persisted after its schema
-is agreed. The [Career service README](../services/career-service/README.md)
-explains endpoints and current limitations.
+The normal Compose command starts Career with its private `coachify_career`
+database and `CAREER_DB_PASSWORD`. Existing volumes need the idempotent
+[Career user provisioning step](../infrastructure/mongodb/README.md#local-development).
+No Career AI key is needed for reviewed targets.
 
-Career verifies sessions through Profile over the internal Docker network. Its
-private temporary upload directory is a bounded tmpfs, not a persistent volume.
-If running Career independently, install `.[test]` from `services/career-service` in a
-separate Python environment, set `PROFILE_SERVICE_URL=http://localhost:8080` with
-the Profile stack already running, then run `uvicorn app.main:app --port 8001
---no-access-log` from the Career service directory (one command line). Explicitly
-load any service-specific environment file when running outside Compose. Use a
-verified Coachify session for API tests. There are no save/analysis endpoints yet.
+Open `/career-goal` after sign-in and initial setup. Paste a description, import a
+public URL, or upload a PDF/DOCX/TXT document. Previews are temporary and disappear
+on reload or navigation. Review the role, field, optional company and skills in
+structured fields. Specific-job skills and optional qualification/date conditions
+need bounded excerpts from the reviewed JD; exploration entries are labelled
+personal guidance. Conditions specify which CV source kinds and phrases they
+apply to. Save the draft, review and
+confirm it, then explicitly select it or switch from the previous target.
+Confirmation alone never changes selection. Saved targets survive reload; full JD
+text and original files do not persist. To change a saved target, create another
+snapshot and explicitly select it. A target needs at least one usable skill or
+condition before confirmation.
+AI JD interpretation, exploration chat and gap analysis remain separate work.
+
+Career authenticates through Profile's API. Private temporary uploads use bounded
+tmpfs. For direct service runs, install `.[test]` in a separate Python environment,
+set `PROFILE_SERVICE_URL`, `MONGODB_URI` and `MONGODB_DATABASE=coachify_career`,
+and run `uvicorn app.main:app --port 8001 --no-access-log` from its service directory.
+Use the [Career environment example](../services/career-service/.env.example) and
+[service README](../services/career-service/README.md) for the contract and limits.
+
+## Saved CV upload and review
+
+Open `/cv` after signing in and completing initial setup. CV records are stored
+in `coachify_ingestion`; manual capability declarations stay with the existing
+Profile account. Uploading a file never changes the selected CV. Choose a ready
+CV explicitly before using its versioned capability input.
+
+The Compose file uses a 10 MiB file limit and an 11 MiB gateway request limit
+to allow multipart overhead. PDF/DOCX parsing is bounded; OCR is not included.
+Originals use the private `cv_uploads` volume for the documented retry window.
+Only structured extraction and bounded evidence are saved in MongoDB.
+
+Set `CV_LLM_MODEL` and `CV_LLM_API_KEY` in the ignored Docker environment file
+to enable real structured extraction and clarification-answer interpretation.
+`CV_LLM_BASE_URL` defaults to
+`https://api.groq.com/openai/v1`. Choose a model supporting JSON object output;
+the server validates the schema and cited evidence before publication. Keys
+stay on the server. Missing configuration is an actionable processing error,
+never a synthetic successful extraction. No provider calls are needed for
+automated tests. See [Groq compatibility](https://console.groq.com/docs/openai)
+and [structured output modes](https://console.groq.com/docs/structured-outputs).
+
+CV obtains the selected confirmed target through Career using the same owner
+session. Compose supplies `CAREER_SERVICE_URL=http://career-service:8000`; set it
+explicitly for direct service runs. On the CV review, prepare relevant questions,
+then save an explanation or skip. The raw answer is saved before interpretation.
+Supported changes appear against the relevant source, including personal/team
+attribution, assistance, explicit skill details and optional partial dates. A failed
+interpretation leaves the answer available for retry; a saved answer alone does
+not mean the uncertainty is resolved. Reload restores answers and skips. Switching
+targets updates relevance without deleting those source facts or repeating resolved
+questions. No target defers preparation; an unavailable service shows a retry.
+Reprocessing or explicitly comparing a replacement can require a source-by-source
+review before applying a candidate. Manual capability links report changed or
+removed sources and can be explicitly relinked or detached without losing the
+declaration. The target-bound analysis input checks current revisions and requires
+the future consumer to revalidate them. Assessment admission, gap analysis,
+saved-result staleness and roadmap generation remain unimplemented. See the
+[CV specification](../services/cv-service/SPEC.md).
 
 ## Stop without deleting data
 

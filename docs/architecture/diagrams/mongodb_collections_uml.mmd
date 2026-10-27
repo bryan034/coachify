@@ -2,30 +2,49 @@ classDiagram
 direction TB
 
 class users {
-    +ObjectId _id [PK]
+    +String id [canonical UUID]
+    +String owner [existing auth namespace]
     +String name
     +String email
     +String auth_provider
     +Date created_at
     +Date updated_at
+    +CapabilityDeclaration[] capability_declarations
+    +Integer declarations_version
 }
+note for users "Logical users maps to existing physical accounts. Preserve credentials, verification and P-series records. No user migration."
 
 class cvs {
-    +ObjectId _id [PK]
-    +ObjectId user_id [FK]
+    +String _id [opaque UUID]
+    +String user_id [account UUID]
     +String file_name
-    +String file_url
+    +String private_original_reference?
     +String file_type
     +CvSkill[] skills
     +String extraction_status
-    +String extraction_version
+    +Integer extraction_version
+    +Integer version
+    +Integer effective_version
+    +CvItem[] items
+    +Object corrections
+    +Clarification[] clarifications
+    +Object reconciliation_candidate?
     +Date created_at
     +Date updated_at
 }
+note for cvs "CV owns evidence and correction overlays. Original storage is private and temporary. Public API exposes no file path."
 
-class career_targets {
-    +ObjectId _id [PK]
-    +ObjectId user_id [FK]
+class cv_selections {
+    <<operational>>
+    +String _id [account UUID]
+    +String selected_cv_id?
+    +Integer version
+}
+note for cv_selections "One selection per owner. Explicit selection only; upload never changes it. Operational metadata does not add a sixth logical domain authority."
+
+class career_goals {
+    +String _id [opaque UUID]
+    +String user_id [account UUID]
     +String target_type
     +String field
     +String role
@@ -36,11 +55,24 @@ class career_targets {
     +String[] interests
     +String[] preferences
     +TargetSkill[] skills
+    +TargetCondition[] conditions
     +String requirements_source
     +String generation_version
+    +String status [draft or confirmed]
+    +Integer version
+    +Date confirmed_at?
     +Date created_at
     +Date updated_at
 }
+
+class career_target_selections {
+    <<operational>>
+    +String _id [account UUID]
+    +String career_target_id?
+    +Integer career_target_version?
+    +Integer version
+}
+note for career_goals "Immutable reviewed snapshots. Current SCRUM-310 collection name; no migration from the earlier proposed career_targets. Full JD text stays transient."
 
 class interview_research {
     +ObjectId _id [PK]
@@ -59,23 +91,28 @@ class interview_research {
 
 class skill_gap_analyses {
     +ObjectId _id [PK]
-    +ObjectId user_id [FK]
-    +ObjectId cv_id [FK]
-    +ObjectId career_target_id [FK]
+    +String user_id [account UUID]
+    +String cv_id [opaque CV ID]
+    +String career_goal_id [validated reference]
     +ObjectId[] research_ids
     +GapResult[] job_skill_gaps
     +GapResult[] interview_prep_gaps
     +String analysis_status
     +String analysis_version
+    +Object source_version_vector
     +String summary
     +Date created_at
     +Date updated_at
 }
 
 users "1" --> "0..*" cvs : owns
-users "1" --> "0..*" career_targets : creates
+users "1" --> "0..1" cv_selections : owns selection metadata
+cv_selections --> cvs : validates selected reference
+users "1" --> "0..*" career_goals : creates
+users "1" --> "0..1" career_target_selections : explicitly selects
+career_target_selections --> career_goals : confirmed version reference
 users "1" --> "0..*" skill_gap_analyses : receives
 
 cvs "1" --> "0..*" skill_gap_analyses : used in
-career_targets "1" --> "0..*" skill_gap_analyses : evaluated in
+career_goals "1" --> "0..*" skill_gap_analyses : evaluated in
 interview_research "0..*" --> "0..*" skill_gap_analyses : referenced by

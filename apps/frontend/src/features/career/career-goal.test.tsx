@@ -4,6 +4,7 @@ import { CareerGoal } from './career-goal';
 import { importCareer } from '@/lib/api/career';
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-session'})}));
 vi.mock('@/lib/api/career',()=>({importCareer:vi.fn()}));
+vi.mock('@/lib/api/career-targets',()=>({targetApi:{list:vi.fn().mockResolvedValue({targets:[],selected_target:null,next_cursor:null,selection:{career_target_id:null,career_target_version:null,version:0}})}}));
 afterEach(()=>vi.restoreAllMocks());
 const preview={kind:'url' as const,text:'Analyst\n• SQL or Python',source_name:'Synthetic Jobs',source_url:'https://example.test/job',notices:['Check for missing content.']};
 

@@ -1,15 +1,19 @@
-# CV ingestion service
+# CV service
 
-Turns a CV into a profile that reflects what the user actually contributed.
+Saves owner-scoped CV extractions and effective evidence for review and Career inputs. Uses the existing Profile session and account declarations; it never imports CV claims into another profile authority.
 
 ## API by Jira story
 
-**No API endpoints are implemented yet.** The `/api/v1/cv` prefix is reserved.
-
-| Jira stories | Planned purpose |
+| Stories | Available endpoints under `/api/v1/cv` |
 |---|---|
-| C01–C02 | Upload a CV and review the extracted information. |
-| C03–C05 | Clarify project roles, work responsibilities and ambiguous claims. |
-| C06–C08 | Correct details, add missing capabilities or skip a clarification. |
+| C01–C02 | `GET /policy`, `POST /uploads`, `GET /operations/{id}`, `POST /operations/{id}/retry`, `GET /{id}` save uploads, recover processing, and review bounded structured evidence. |
+| C03–C05 / C08 | `GET /{id}/clarifications`, `POST /{id}/clarifications/prepare`, `PUT /{id}/clarifications/{question_id}` use confirmed skill/condition context and source-bound answer/skip state. `POST /{id}/clarifications/{question_id}/interpretation/retry` recovers saved interpretations. |
+| C06 / C01 reconciliation | `PATCH /{id}/items/{item_id}` corrects/removes claims and optional partial dates. `GET`/`POST /{id}/reconciliation` reviews/resolves a retained candidate; `POST /{id}/reconciliation/compare` explicitly compares a replacement with an earlier CV. |
+| C07 | Account declarations remain in [Profile](../profile-service/README.md). `GET /declaration-links` assesses source relationships without changing the saved declarations. |
+| C09 | `PUT /selection` explicitly selects a ready source. `GET /{id}/capability-input` retains source-only compatibility; `GET /{id}/analysis-input` returns a target-bound versioned snapshot without starting an assessment. |
 
-See the [application API overview](../../docs/api/README.md) and [service boundaries](../../docs/architecture/service-boundaries.md).
+The saved-CV list uses the exact path `GET /api/v1/cv` with no trailing slash.
+
+See [SPEC.md](SPEC.md) for semantics, [OpenAPI](../../contracts/api/cv.yaml) for fields, and [setup](../../docs/setup.md) for Compose. `GET /health` is process health. All CV routes require an authenticated owner with completed onboarding and return `Cache-Control: no-store`.
+
+The running service uses MongoDB and private originals. Configure `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY` for extraction and clarification interpretation. Missing configuration preserves the upload/answer and offers retry; runtime never substitutes synthetic output. `CAREER_SERVICE_URL` supplies confirmed skill and qualification/date context. Assessment admission, stale-result tracking and gap/roadmap generation remain outside this service. Tests use synthetic responses and do not establish live-model accuracy.

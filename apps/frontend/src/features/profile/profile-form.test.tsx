@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { ProfileForm } from './profile-form';
-import { ProfileProvider } from './profile-provider';
+import { ProfileProvider, useProfile } from './profile-provider';
 import { educationQuestions } from './types';
 vi.mock('next/navigation', () => ({useRouter:()=>({replace:vi.fn()})}));
 vi.mock('@/lib/auth/google-sign-in', () => ({ GoogleSignIn: ({ onCredential }: { onCredential: (t: string) => void }) => <button onClick={() => onCredential('test-only')}>Test sign in</button> }));
@@ -156,4 +156,42 @@ test('saved school stays compact until Change school is chosen and a blank optio
   fireEvent.click(screen.getByRole('button', {name:'Save background'}));
   await screen.findByText('Profile saved.');
   expect(saved.education).toMatchObject({institution:{name:'Synthetic school'},course:null});
+});
+
+test('a delayed profile populates the editor before the first edit can be overwritten', async () => {
+  saved = { ...initial, version: 1, occupational_status: 'student', school_category: 'university' };
+  const fetchImmediately = vi.mocked(fetch).getMockImplementation()!;
+  let releaseProfile!: () => void;
+  const profileResponse = new Promise<void>(resolve => { releaseProfile = resolve; });
+  vi.mocked(fetch).mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/profile') && !init?.method) await profileResponse;
+    return fetchImmediately(url, init);
+  });
+  const editorStates: { populated: boolean; locked: boolean }[] = [];
+  function ReadinessCheck() {
+    const { profile, loading } = useProfile();
+    // Inspect the committed controls before passive effects populate the editor.
+    React.useLayoutEffect(() => {
+      if (!profile || loading) return;
+      const status = screen.getByRole('combobox', { name: 'Occupational status' }) as HTMLSelectElement;
+      const save = screen.getByRole('button', { name: 'Save background' }) as HTMLButtonElement;
+      editorStates.push({ populated: status.value === profile.occupational_status, locked: status.matches(':disabled') && save.disabled });
+    }, [profile, loading]);
+    return null;
+  }
+  render(<ProfileProvider><ProfileForm /><ReadinessCheck /></ProfileProvider>);
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/profile'))).toBe(true));
+  expect(screen.getByRole('combobox', { name: 'Occupational status' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save background' })).toBeDisabled();
+  await act(async () => { releaseProfile(); });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
+  expect(editorStates.length).toBeGreaterThan(0);
+  expect(editorStates.every(state => state.populated || state.locked)).toBe(true);
+  expect(screen.getByRole('combobox', { name: 'Occupational status' })).toHaveValue('student');
+  fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'employed' } });
+  await act(async () => {});
+  expect(screen.getByRole('combobox', { name: 'Occupational status' })).toHaveValue('employed');
+  fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
+  await screen.findByText('Profile saved.');
+  expect(saved.occupational_status).toBe('employed');
 });

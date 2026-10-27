@@ -1,7 +1,9 @@
 # Backend services
 
-Coachify has six FastAPI service directories. The Profile service is runnable;
-the other five currently contain placeholders.
+Coachify has six FastAPI service directories. Profile, CV and Career are runnable.
+CV supports saved evidence and interpreted clarification; Career supports reviewed,
+confirmed target snapshots. Roadmap, Dashboard and Review remain scaffolds.
+Assessment admission, gap calculation and roadmap generation remain planned.
 
 Each service README explains its purpose and lists available endpoints by Jira
 story. Planned functionality is labelled explicitly. Detailed service rules live

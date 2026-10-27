@@ -1,0 +1,10 @@
+export type TargetType = 'specific_job' | 'career_exploration';
+export type TargetSkillInput = { name: string; category?: string; priority?: string; required_proficiency?: string | null; required_experience_months?: number | null; context?: string | null; evidence?: string | null; source_urls?: string[] };
+export type TargetSkill = TargetSkillInput & { skill_id: string; category: string; priority: string; required_proficiency: string | null; required_experience_months: number | null; context: string | null; evidence: string | null; origin: 'user_reviewed_jd' | 'user_guidance'; source_urls: string[] };
+export type CvItemKind = 'education' | 'experience' | 'project' | 'skill';
+export type TargetConditionInput = { kind: 'qualification' | 'date'; label: string; description: string; item_kinds: CvItemKind[]; match_terms: string[]; evidence?: string | null };
+export type TargetCondition = TargetConditionInput & { id: string; origin: 'user_reviewed_jd' | 'user_guidance'; evidence: string | null };
+export type CareerTarget = { id: string; user_id: string; target_type: TargetType; role: string; field: string; company: string | null; location: string | null; seniority_level: string | null; job_url: string | null; interests: string[]; preferences: string[]; skills: TargetSkill[]; conditions?: TargetCondition[]; requirements_source: 'user_reviewed_jd' | 'user_guidance'; generation_version: string; status: 'draft' | 'confirmed'; version: number; created_at: string; updated_at: string; confirmed_at: string | null };
+export type TargetSelection = { career_target_id: string | null; career_target_version: number | null; version: number };
+export type TargetList = { targets: CareerTarget[]; selection: TargetSelection; selected_target: CareerTarget | null; next_cursor: string | null };
+export type CreateTargetInput = { mutation_id: string; target_type: TargetType; role: string; field: string; company?: string | null; location?: string | null; seniority_level?: string | null; job_url?: string | null; interests?: string[]; preferences?: string[]; skills: TargetSkillInput[]; conditions?: TargetConditionInput[]; reviewed_source_text?: string };

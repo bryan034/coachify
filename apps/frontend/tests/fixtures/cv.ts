@@ -1,0 +1,11 @@
+import type { ConfirmedTargetContext, CvDetail, CvPolicy, Declarations, Questions } from '../../src/features/cv-ingestion/types';
+export const confirmedTarget:ConfirmedTargetContext={id:'target-python',version:1,type:'specific_job',confirmed:true,skill_ids:['python'],selection_version:1,role:'Data analyst',field:'Analytics'};
+export function clarificationState(detail:CvDetail,context:ConfirmedTargetContext|null=null,prepared=false):Questions{return {questions:prepared?detail.clarifications:[],deferred:context===null,reason:context?null:'Confirm and select a career target before preparing relevant questions.',cv_version:detail.version,context,prepared};}
+export const policy:CvPolicy={formats:['pdf','docx'],max_file_bytes:10*1024*1024,max_answer_chars:4000,max_item_chars:4000,extraction_configured:true};
+export function savedCv(id='cv-synthetic-one'):CvDetail{return {
+ id,file_name:'resume.pdf',file_type:'pdf',status:'ready',operation_id:`operation-${id}`,version:1,extraction_version:1,effective_version:1,created_at:'2026-10-25T00:00:00Z',updated_at:'2026-10-25T00:00:00Z',error:null,source_available:true,
+ extraction:{provider:'synthetic-test',model:'fixture',prompt_version:'1',schema_version:'1'},
+ items:[{id:`project-${id}`,kind:'project',title:'Team dashboard',description:'Built a Python dashboard with a team.',provenance:'explicit',evidence:[{id:`evidence-${id}`,excerpt:'Built a Python dashboard with a team.',location:'Page 1'}],skill_ids:['python'],proficiency:null,experience_months:null,removed:false},{id:`skill-${id}`,kind:'skill',title:'Python',description:'Python in team dashboard.',provenance:'inferred',evidence:[{id:`evidence-${id}`,excerpt:'Built a Python dashboard with a team.',location:'Page 1'}],skill_ids:['python'],proficiency:null,experience_months:null,removed:false}],
+ skills:[{skill_id:'python',name:'Python',category:'technical',proficiency:null,experience_months:null,context:'Team dashboard',evidence:[{id:`evidence-${id}`,excerpt:'Built a Python dashboard with a team.',location:'Page 1'}],evidence_type:'inferred',explicit:false,item_ids:[`skill-${id}`]}],clarifications:[],
+};}
+export const emptyDeclarations:Declarations={version:0,declarations:[],limits:{name:120,description:2000}};

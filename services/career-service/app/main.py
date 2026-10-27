@@ -1,7 +1,9 @@
-"""Authenticated temporary previews. No database, LLM, source logging or saved operations."""
+"""Temporary source previews and owner-scoped reviewed career targets."""
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from anyio import CapacityLimiter
+from pymongo import MongoClient
 from pathlib import PurePosixPath
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -10,6 +12,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from app.core.auth import bearer, current_account
+from app.api.v1.targets import router as targets_router
 from app.domain.preview import run_preview
 from app.schemas.preview import MAX_BODY, MAX_FILE, Preview, UrlInput, ImportErrorView
 
@@ -20,12 +23,14 @@ class BodyLimit:
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
             return await self.app(scope, receive, send)
-        maximum = MAX_BODY if scope['path'].endswith('/document') else 16 * 1024
+        target_request = scope['path'] == '/api/v1/career/targets' or scope['path'].startswith('/api/v1/career/targets/')
+        maximum = 256 * 1024 if target_request else MAX_BODY if scope['path'].endswith('/document') else 16 * 1024
+        limit_message = 'Career target requests must be at most 256 KiB.' if target_request else 'The request exceeds the upload limit. Choose a file up to 10 MiB.'
         headers = dict(scope.get('headers', []))
         try: declared = int(headers.get(b'content-length', b'0'))
         except ValueError: declared = maximum + 1
         if declared < 0 or declared > maximum:
-            return await JSONResponse({'detail':'The request exceeds the upload limit. Choose a file up to 10 MiB.'},413,
+            return await JSONResponse({'detail':limit_message},413,
                 headers={'Cache-Control':'no-store'})(scope, receive, send)
         size = 0
         async def limited_receive():
@@ -33,27 +38,39 @@ class BodyLimit:
             message = await receive()
             size += len(message.get('body', b''))
             if size > maximum:
-                raise HTTPException(413, 'The request exceeds the upload limit. Choose a file up to 10 MiB.')
+                raise HTTPException(413, limit_message)
             return message
         await self.app(scope, limited_receive, send)
 
 
-def create_app(profile_client=None, processor=run_preview):
+def create_app(profile_client=None, processor=run_preview, target_repository=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.slots = asyncio.Semaphore(2)
-        if profile_client is not None:
-            app.state.profile_client = profile_client
-            yield
-        else:
-            async with httpx.AsyncClient(base_url=os.getenv('PROFILE_SERVICE_URL', 'http://profile-service:8000'),
-                                         timeout=5, follow_redirects=False, trust_env=False) as client:
-                app.state.profile_client = client
+        app.state.target_limiter = CapacityLimiter(8)
+        app.state.target_repository = target_repository
+        app.state.target_database = None
+        mongo = None
+        if target_repository is None and os.getenv('MONGODB_URI'):
+            mongo = MongoClient(os.environ['MONGODB_URI'], serverSelectionTimeoutMS=3000,
+                                connectTimeoutMS=3000, socketTimeoutMS=5000)
+            app.state.target_database = mongo[os.getenv('MONGODB_DATABASE', 'coachify_career')]
+        try:
+            if profile_client is not None:
+                app.state.profile_client = profile_client
                 yield
+            else:
+                async with httpx.AsyncClient(base_url=os.getenv('PROFILE_SERVICE_URL', 'http://profile-service:8000'),
+                                             timeout=5, follow_redirects=False, trust_env=False) as client:
+                    app.state.profile_client = client
+                    yield
+        finally:
+            if mongo is not None: mongo.close()
 
-    app = FastAPI(title='Coachify Career preview API', version='0.1.0', lifespan=lifespan,
-        description='Temporary authenticated URL/document previews; no persistence or AI interpretation.')
+    app = FastAPI(title='Coachify Career API', version='0.1.0', lifespan=lifespan,
+        description='Temporary source previews and immutable user-reviewed targets with explicit confirmation and selection. No AI interpretation.')
     app.add_middleware(BodyLimit)
+    app.include_router(targets_router)
 
     @app.middleware('http')
     async def no_storage(request, call_next):
@@ -64,6 +81,8 @@ def create_app(profile_client=None, processor=run_preview):
 
     @app.exception_handler(RequestValidationError)
     async def invalid(request, exc):
+        if request.url.path == '/api/v1/career/targets' or request.url.path.startswith('/api/v1/career/targets/'):
+            return JSONResponse({'detail': 'Review the target fields and limits. Job skills and conditions need exact source excerpts. Conditions need specific subject phrases supported by their excerpt; duplicate skills or conditions are not allowed.'}, 422)
         return JSONResponse({'detail':'Enter one valid URL of at most 2,048 characters.'},422)
 
     async def authenticated(request: Request, credentials=Depends(bearer)):

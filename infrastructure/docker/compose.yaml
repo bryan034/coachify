@@ -4,7 +4,7 @@ services:
     image: nginx:1.28-alpine
     ports: ["127.0.0.1:${GATEWAY_PORT:-8080}:80"]
     volumes: ["../gateway/nginx.conf:/etc/nginx/nginx.conf:ro"]
-    depends_on: [frontend, profile-service, career-service]
+    depends_on: [frontend, profile-service, career-service, cv-service]
     networks: [web, backend]
   frontend:
     build:
@@ -28,17 +28,51 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       MONGODB_URI: mongodb://coachify_profile:${PROFILE_DB_PASSWORD:?Set PROFILE_DB_PASSWORD}@mongodb:27017/coachify_profile
       MONGODB_DATABASE: coachify_profile
+      CV_SERVICE_URL: http://cv-service:8000
     depends_on:
       mongodb:
         condition: service_healthy
     networks: [backend, database]
+  cv-service:
+    build: ../../services/cv-service
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      PROFILE_SERVICE_URL: http://profile-service:8000
+      CAREER_SERVICE_URL: http://career-service:8000
+      MONGODB_URI: mongodb://coachify_cv:${CV_DB_PASSWORD:?Set CV_DB_PASSWORD}@mongodb:27017/coachify_ingestion
+      MONGODB_DATABASE: coachify_ingestion
+      CV_STORAGE_PATH: /app/uploads
+      CV_MAX_FILE_BYTES: '10485760'
+      CV_LLM_BASE_URL: ${CV_LLM_BASE_URL:-https://api.groq.com/openai/v1}
+      CV_LLM_MODEL: ${CV_LLM_MODEL:-}
+      CV_LLM_API_KEY: ${CV_LLM_API_KEY:-}
+    depends_on:
+      profile-service:
+        condition: service_started
+      mongodb:
+        condition: service_healthy
+    networks: [backend, database]
+    read_only: true
+    volumes: [cv_uploads:/app/uploads]
+    tmpfs:
+      - /tmp:size=64m,mode=0700,uid=10001,gid=10001
+    mem_limit: 768m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
   career-service:
     build: ../../services/career-service
     environment:
       PROFILE_SERVICE_URL: http://profile-service:8000
+      MONGODB_URI: mongodb://coachify_career:${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}@mongodb:27017/coachify_career
+      MONGODB_DATABASE: coachify_career
       TMPDIR: /tmp
-    depends_on: [profile-service]
-    networks: [backend]
+    depends_on:
+      profile-service:
+        condition: service_started
+      mongodb:
+        condition: service_healthy
+    networks: [backend, database]
     read_only: true
     tmpfs:
       - /tmp:size=32m,mode=0700,uid=10001,gid=10001
@@ -59,9 +93,13 @@ services:
       MONGO_INITDB_ROOT_USERNAME: coachify_admin
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       PROFILE_DB_PASSWORD: ${PROFILE_DB_PASSWORD:?Set PROFILE_DB_PASSWORD}
+      CV_DB_PASSWORD: ${CV_DB_PASSWORD:?Set CV_DB_PASSWORD}
+      CAREER_DB_PASSWORD: ${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}
     volumes:
       - profile_data:/data/db
       - ../mongodb/init-profile.js:/docker-entrypoint-initdb.d/init-profile.js:ro
+      - ../mongodb/init-cv.js:/docker-entrypoint-initdb.d/init-cv.js:ro
+      - ../mongodb/init-career.js:/docker-entrypoint-initdb.d/init-career.js:ro
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 5s
@@ -75,3 +113,4 @@ networks:
     internal: true
 volumes:
   profile_data: {}
+  cv_uploads: {}

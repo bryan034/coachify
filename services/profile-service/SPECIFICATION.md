@@ -1,8 +1,80 @@
 # Profile service rules
 
-P01–P16 are implemented. Jira acceptance criteria remain the product source of
+P01–P16 and C07 account declaration endpoints are implemented. Jira acceptance criteria remain the product source of
 truth. The [README](README.md) lists available endpoints, and the
 [OpenAPI contract](../../contracts/api/profile.yaml) defines request/response fields.
+
+## Manual capabilities — C07
+
+- The logical `users` authority is the existing `accounts` record. Its server-owned
+  UUID `id` is canonical `user_id`; `owner` remains the existing authentication
+  namespace. No account migration or duplicate profile/skill authority is needed.
+- `capability_declarations` and `declarations_version` are embedded in that account.
+  They are independent of P-series profile versions, onboarding and CV selection.
+  Writes only `$set` these fields and their recovery marker, preserving credentials,
+  identity, verification, sessions and existing profile/planning information.
+- Entry requires a name (1–120 characters after trimming), description (1–2,000),
+  nonnegative integer `expected_version`, `mutation_id` (1–128 ASCII letters,
+  digits, hyphens or underscores) and mode `new`, `distinct` or `attach`. Names
+  reject control characters; descriptions permit line breaks and tabs. At most
+  100 declarations and ten descriptions per declaration are stored. No CV,
+  independent proof, onboarding completion or particular target is required.
+- `new` detects trimmed, case-insensitive account declaration names and returns
+  409 `matching_capability` with the existing matches. `distinct` explicitly
+  retains a separate declaration identity. `attach` requires exactly one
+  `attach_to_id` or `cv_match` and preserves the original description while adding
+  a separately identified contribution. Reattaching identical text is a no-op.
+- `cv_match` contains `cv_id`, `item_id` and `cv_version`. The Profile service
+  forwards the current bearer to CV's owner-scoped API, verifies the ready CV,
+  exact version, nonremoved item and matching canonical skill in its effective
+  skill/source records, and records that bounded reference
+  only on attachment. A changed or unavailable match returns 409 `match_changed`;
+  unavailable service returns 503. No CV query happens for ordinary no-CV entry.
+  The frontend presents matching CV evidence for explicit attach/distinct choice.
+  Cross-service validation is not a transaction: an attachment refers to the
+  verified source version, and later CV changes do not rewrite the declaration.
+- Project, work and education evidence may support a matching skill even when the
+  source title is different. A team-only, observed or denied source cannot be used
+  merely because another item supports the same skill. Legacy CV responses without
+  effective skills allow only an explicit standalone canonical skill match.
+- `attached_source_fingerprint` stores CV's bounded item fingerprint, or null if
+  an older response does not supply one. Missing fingerprints never establish a
+  current verified relationship. CV owns current relationship assessment through
+  its API; Profile does not query CV during ordinary declaration reads.
+- `POST /api/v1/profile/capabilities/attachment` accepts `declaration_id`,
+  `expected_version`, `mutation_id` and nullable `cv_match`. It validates the
+  account's existing declaration name against a proposed source, or explicitly
+  detaches without a CV dependency. The manual statement, contributions, identity
+  and provenance survive either action. Up to 100 prior/new attachment changes
+  with timestamps and fingerprints are retained; the limit rejects additional
+  changes without truncating history. An identical source/fingerprint is a no-op
+  even when the overall CV version changed. Older null fingerprints remain
+  unverified until an explicit successful refresh records a fingerprint.
+- Attachment changes reuse the existing receipt and account compare-and-set
+  boundary. A committed retry returns current state without revalidating a CV
+  that may since have changed. Different content under the same mutation key is
+  rejected; stale or foreign declarations cannot trigger a source attachment.
+- Each declaration and contribution has a stable UUID and timestamps. Provenance
+  remains `user_declared`, including when attached to CV evidence. Proficiency,
+  experience months and independence stay null. Shared `skill_id` normalization
+  v1 is `skill:` followed by NFKC text, collapsed whitespace and case folding;
+  punctuation remains significant. It identifies a skill name, not target fit,
+  mastery, synonym equivalence or independent evidence. Different source IDs with
+  the same skill identity do not increase confidence by counting repetitions.
+- An account compare-and-set enforces the declaration revision and last mutation
+  marker. Durable `capability_mutations` reserves owner/key/fingerprint and stores
+  immutable input-derived snapshots. The last committed receipt is sealed before
+  another mutation publishes, allowing replay after a crash between account write
+  and receipt acknowledgement on standalone MongoDB without transactions.
+  Historical snapshots are operational history; current reads use the account.
+- Retrying the same key/body returns the latest declarations without reverting
+  subsequent edits. Different bodies sharing a key return 409. No-ops reserve and
+  acknowledge their keys without incrementing the effective declaration version.
+  Failed or stale writes preserve saved state and the UI draft.
+- CV composes these declarations through the authenticated API with the explicitly
+  selected CV snapshot and retains a version vector. CV-specific extraction,
+  corrections, removals and clarification answers remain CV-owned. J/G generation,
+  analyses, target-fit judgments and downstream notifications are separate work.
 
 ## Background and education — P01–P03, P07/P08
 

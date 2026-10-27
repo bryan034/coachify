@@ -1,6 +1,6 @@
 # Docker deployment structure
 
-The active slice includes Profile, Career preview imports and a development-only Mailpit inbox in `infrastructure/docker/compose.yaml`, with `infrastructure/gateway/nginx.conf` and `infrastructure/mongodb/init-profile.js`. See the [application setup guide](../../docs/setup.md). Career uses a read-only container and private, bounded temporary tmpfs; it does not connect to MongoDB or an AI provider. The remaining notes below describe the original scaffold templates.
+The active slice includes Profile, CV saved upload/review, Career previews and reviewed targets, and an optional development Mailpit inbox in `infrastructure/docker/compose.yaml`. See the [application setup guide](../../docs/setup.md). CV and Career use separate database credentials. CV retains private originals temporarily; Career previews use bounded tmpfs and only structured reviewed targets persist. Career makes no AI calls. Remaining services still use inactive scaffold templates.
 
 
 `compose.yaml.example` is an intentionally inactive deployment blueprint. It uses a `scaffold` profile for application services, and references comment-only Dockerfile examples. It cannot build or start a working Coachify application. Do not interpret Compose schema validity as application readiness.
@@ -30,4 +30,7 @@ The active slice includes Profile, Career preview imports and a development-only
 6. Configure health checks and readiness dependencies.
 7. Review the deployment blueprint and then produce an active Compose file.
 
-No image pulls, builds, container starts, network creation, or volume creation are performed by this scaffold.
+`compose.test.yaml` is an explicit override for disposable integration tests. It
+adds a synthetic model HTTP boundary and permits HTTP only in the development
+CV container. It refuses documents without the synthetic fixture marker. Never
+apply this override to a personal-data or production stack. See [tests](../../docs/testing.md).

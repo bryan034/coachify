@@ -1,9 +1,2941 @@
-# Contract shell only: no endpoint or request/response schema is implemented.
 openapi: 3.1.0
 info:
-  title: Coachify CV ingestion API
-  version: 0.0.0
-  description: Structure-only contract shell. Public prefix /api/v1/cv.
-servers:
-  - url: /api/v1
-paths: {}
+  title: Coachify CV API
+  description: C01–C09 saved CV upload, review, source corrections, clarification
+    and explicit versioned selection.
+  version: 0.1.0
+paths:
+  /api/v1/cv/policy:
+    get:
+      summary: Policy
+      operationId: policy_api_v1_cv_policy_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - HTTPBearer: []
+  /api/v1/cv:
+    get:
+      summary: Listing
+      operationId: listing_api_v1_cv_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - HTTPBearer: []
+  /api/v1/cv/declaration-links:
+    get:
+      summary: Declaration Links
+      operationId: declaration_links_api_v1_cv_declaration_links_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeclarationLinks'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - HTTPBearer: []
+  /api/v1/cv/uploads:
+    post:
+      summary: Upload
+      operationId: upload_api_v1_cv_uploads_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              properties:
+                file:
+                  type: string
+                  format: binary
+                mutation_id:
+                  type: string
+                  format: uuid
+                cv_id:
+                  type: string
+                  format: uuid
+                expected_version:
+                  type: integer
+                  minimum: 0.0
+              additionalProperties: false
+              type: object
+              required:
+              - file
+              - mutation_id
+        required: true
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvDetail'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - HTTPBearer: []
+  /api/v1/cv/operations/{operation_id}:
+    get:
+      summary: Operation
+      operationId: operation_api_v1_cv_operations__operation_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Operation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvDetail'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/operations/{operation_id}/retry:
+    post:
+      summary: Retry
+      operationId: retry_api_v1_cv_operations__operation_id__retry_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Operation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Mutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvDetail'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/selection:
+    put:
+      summary: Select
+      operationId: select_api_v1_cv_selection_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelectionMutation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Selection'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - HTTPBearer: []
+  /api/v1/cv/{cv_id}:
+    get:
+      summary: Read
+      operationId: read_api_v1_cv__cv_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvDetail'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/{cv_id}/items/{item_id}:
+    patch:
+      summary: Edit
+      operationId: edit_api_v1_cv__cv_id__items__item_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Item Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvDetail'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/{cv_id}/clarifications:
+    get:
+      summary: Clarifications
+      operationId: clarifications_api_v1_cv__cv_id__clarifications_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionEnvelope'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/{cv_id}/clarifications/prepare:
+    post:
+      summary: Prepare Questions
+      operationId: prepare_questions_api_v1_cv__cv_id__clarifications_prepare_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrepareMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionEnvelope'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/{cv_id}/clarifications/{question_id}:
+    put:
+      summary: Save Answer
+      operationId: save_answer_api_v1_cv__cv_id__clarifications__question_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      - name: question_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Question Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvDetail'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/{cv_id}/clarifications/{question_id}/interpretation/retry:
+    post:
+      summary: Reinterpret Answer
+      operationId: reinterpret_answer_api_v1_cv__cv_id__clarifications__question_id__interpretation_retry_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      - name: question_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Question Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Mutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvDetail'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/{cv_id}/reconciliation:
+    get:
+      summary: Read Reconciliation
+      operationId: read_reconciliation_api_v1_cv__cv_id__reconciliation_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/ReconciliationView'
+                - type: 'null'
+                title: Response Read Reconciliation Api V1 Cv  Cv Id  Reconciliation
+                  Get
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+    post:
+      summary: Resolve Reconciliation
+      operationId: resolve_reconciliation_api_v1_cv__cv_id__reconciliation_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconcileMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvDetail'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/{cv_id}/reconciliation/compare:
+    post:
+      summary: Compare Replacement
+      operationId: compare_replacement_api_v1_cv__cv_id__reconciliation_compare_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompareSourceMutation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvDetail'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/{cv_id}/capability-input:
+    get:
+      summary: Capability Input
+      operationId: capability_input_api_v1_cv__cv_id__capability_input_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      - name: expected_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Expected Version
+      - name: expected_selection_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Expected Selection Version
+      - name: expected_declarations_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Expected Declarations Version
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceSnapshot'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+  /api/v1/cv/{cv_id}/analysis-input:
+    get:
+      summary: Analysis Input
+      description: Target-bound producer snapshot. This endpoint does not start an
+        analysis.
+      operationId: analysis_input_api_v1_cv__cv_id__analysis_input_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cv Id
+      - name: expected_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Expected Version
+      - name: expected_selection_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Expected Selection Version
+      - name: expected_declarations_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Expected Declarations Version
+      - name: expected_target_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+          title: Expected Target Id
+      - name: expected_target_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Expected Target Version
+      - name: expected_target_selection_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Expected Target Selection Version
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisInput'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request Entity Too Large
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported Media Type
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service Unavailable
+components:
+  schemas:
+    AnalysisInput:
+      properties:
+        schema_version:
+          type: string
+          const: '2'
+          title: Schema Version
+          default: '2'
+        capabilities:
+          $ref: '#/components/schemas/SourceSnapshot'
+        target:
+          $ref: '#/components/schemas/ConfirmedContext'
+        requires_consumer_revalidation:
+          type: boolean
+          const: true
+          title: Requires Consumer Revalidation
+          default: true
+      type: object
+      required:
+      - capabilities
+      - target
+      title: AnalysisInput
+    AnswerMutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+        action:
+          type: string
+          enum:
+          - answer
+          - skip
+          title: Action
+        answer:
+          anyOf:
+          - type: string
+            maxLength: 4000
+            minLength: 1
+          - type: 'null'
+          title: Answer
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      - action
+      title: AnswerMutation
+    ApiError:
+      properties:
+        detail:
+          type: string
+          title: Detail
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+      type: object
+      required:
+      - detail
+      title: ApiError
+    Clarification:
+      properties:
+        id:
+          type: string
+          title: Id
+        item_id:
+          type: string
+          title: Item Id
+        kind:
+          type: string
+          enum:
+          - project
+          - work
+          - other
+          title: Kind
+        question:
+          type: string
+          title: Question
+        uncertainty_key:
+          type: string
+          title: Uncertainty Key
+        status:
+          type: string
+          enum:
+          - unanswered
+          - answered
+          - skipped
+          title: Status
+        answer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Answer
+        career_target_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Career Target Id
+        career_target_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Career Target Version
+        career_target_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Career Target Type
+        extraction_version:
+          type: integer
+          title: Extraction Version
+        reconciliation_required:
+          type: boolean
+          title: Reconciliation Required
+          default: false
+        uncertainty:
+          type: string
+          title: Uncertainty
+        answer_revision:
+          type: integer
+          title: Answer Revision
+          default: 0
+        answer_sequence:
+          type: integer
+          title: Answer Sequence
+          default: 0
+        interpretation_status:
+          type: string
+          enum:
+          - not_requested
+          - pending
+          - ready
+          - failed
+          title: Interpretation Status
+          default: not_requested
+        interpretation_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Interpretation Error
+        resolution:
+          type: string
+          enum:
+          - unresolved
+          - resolved
+          - partial
+          - unanswerable
+          title: Resolution
+          default: unresolved
+        interpretation:
+          anyOf:
+          - $ref: '#/components/schemas/SavedInterpretation'
+          - type: 'null'
+        followup_of:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Followup Of
+        reconciled_from:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Reconciled From
+      type: object
+      required:
+      - id
+      - item_id
+      - kind
+      - question
+      - uncertainty_key
+      - status
+      - answer
+      - career_target_id
+      - career_target_version
+      - extraction_version
+      - uncertainty
+      title: Clarification
+    CompareSourceMutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+        source_cv_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Source Cv Id
+        source_version:
+          type: integer
+          minimum: 0.0
+          title: Source Version
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      - source_cv_id
+      - source_version
+      title: CompareSourceMutation
+    ConfirmedContext:
+      properties:
+        id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Id
+        version:
+          type: integer
+          minimum: 1.0
+          title: Version
+        type:
+          type: string
+          enum:
+          - specific_job
+          - career_exploration
+          title: Type
+        confirmed:
+          type: boolean
+          const: true
+          title: Confirmed
+        skill_ids:
+          items:
+            type: string
+            maxLength: 4000
+            minLength: 7
+          type: array
+          maxItems: 40
+          title: Skill Ids
+        selection_version:
+          type: integer
+          minimum: 1.0
+          title: Selection Version
+          default: 1
+        role:
+          type: string
+          maxLength: 200
+          title: Role
+          default: ''
+        field:
+          type: string
+          maxLength: 200
+          title: Field
+          default: ''
+        conditions:
+          items:
+            $ref: '#/components/schemas/TargetCondition'
+          type: array
+          maxItems: 20
+          title: Conditions
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - version
+      - type
+      - confirmed
+      - skill_ids
+      title: ConfirmedContext
+    CvDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        file_name:
+          type: string
+          title: File Name
+        file_type:
+          type: string
+          enum:
+          - pdf
+          - docx
+          title: File Type
+        status:
+          type: string
+          enum:
+          - queued
+          - processing
+          - ready
+          - failed
+          title: Status
+        operation_id:
+          type: string
+          title: Operation Id
+        version:
+          type: integer
+          title: Version
+        extraction_version:
+          type: integer
+          title: Extraction Version
+        effective_version:
+          type: integer
+          title: Effective Version
+        profile_version:
+          type: integer
+          title: Profile Version
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ErrorInfo'
+          - type: 'null'
+        source_available:
+          type: boolean
+          title: Source Available
+        items:
+          items:
+            $ref: '#/components/schemas/CvItem'
+          type: array
+          title: Items
+        skills:
+          items:
+            $ref: '#/components/schemas/CvSkill'
+          type: array
+          title: Skills
+        original_items:
+          items:
+            $ref: '#/components/schemas/CvItem'
+          type: array
+          title: Original Items
+        clarifications:
+          items:
+            $ref: '#/components/schemas/Clarification'
+          type: array
+          title: Clarifications
+        extraction:
+          anyOf:
+          - $ref: '#/components/schemas/ExtractionMetadata'
+          - type: 'null'
+        notices:
+          items:
+            type: string
+          type: array
+          title: Notices
+        reconciliation:
+          items:
+            additionalProperties:
+              type: string
+            type: object
+          type: array
+          title: Reconciliation
+        reconciliation_candidate_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reconciliation Candidate Id
+        review_required:
+          type: boolean
+          title: Review Required
+      type: object
+      required:
+      - id
+      - file_name
+      - file_type
+      - status
+      - operation_id
+      - version
+      - extraction_version
+      - effective_version
+      - profile_version
+      - created_at
+      - updated_at
+      - error
+      - source_available
+      - items
+      - skills
+      - original_items
+      - clarifications
+      - extraction
+      - notices
+      - reconciliation
+      - review_required
+      title: CvDetail
+    CvItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        source_fingerprint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Fingerprint
+        kind:
+          type: string
+          enum:
+          - education
+          - experience
+          - project
+          - skill
+          title: Kind
+        title:
+          type: string
+          title: Title
+        description:
+          type: string
+          title: Description
+        provenance:
+          type: string
+          enum:
+          - explicit
+          - inferred
+          - user_corrected
+          - user_clarified
+          title: Provenance
+        evidence:
+          items:
+            $ref: '#/components/schemas/Evidence'
+          type: array
+          title: Evidence
+        skill_ids:
+          items:
+            type: string
+          type: array
+          title: Skill Ids
+        skill_names:
+          items:
+            type: string
+          type: array
+          title: Skill Names
+          default: []
+        category:
+          type: string
+          title: Category
+          default: unspecified
+        proficiency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Proficiency
+        experience_months:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Experience Months
+        start_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End Date
+        ongoing:
+          type: boolean
+          title: Ongoing
+          default: false
+        context:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Context
+        removed:
+          type: boolean
+          title: Removed
+        supporting_item_ids:
+          items:
+            type: string
+          type: array
+          title: Supporting Item Ids
+          default: []
+        support_uncertain:
+          type: boolean
+          title: Support Uncertain
+          default: false
+        uncertainties:
+          items:
+            type: string
+          type: array
+          title: Uncertainties
+          default: []
+        skill_claims:
+          items:
+            $ref: '#/components/schemas/SkillClaim'
+          type: array
+          title: Skill Claims
+          default: []
+      type: object
+      required:
+      - id
+      - kind
+      - title
+      - description
+      - provenance
+      - evidence
+      - skill_ids
+      - proficiency
+      - experience_months
+      - removed
+      title: CvItem
+    CvList:
+      properties:
+        cvs:
+          items:
+            $ref: '#/components/schemas/CvSummary'
+          type: array
+          title: Cvs
+        selection:
+          $ref: '#/components/schemas/Selection'
+      type: object
+      required:
+      - cvs
+      - selection
+      title: CvList
+    CvSkill:
+      properties:
+        skill_id:
+          type: string
+          title: Skill Id
+        name:
+          type: string
+          title: Name
+        category:
+          type: string
+          title: Category
+        proficiency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Proficiency
+        experience_months:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Experience Months
+        context:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Context
+        evidence:
+          items:
+            $ref: '#/components/schemas/Evidence'
+          type: array
+          title: Evidence
+        evidence_type:
+          type: string
+          title: Evidence Type
+        explicit:
+          type: boolean
+          title: Explicit
+        item_ids:
+          items:
+            type: string
+          type: array
+          title: Item Ids
+        sources:
+          items:
+            $ref: '#/components/schemas/SkillSource'
+          type: array
+          title: Sources
+        conflicting_fields:
+          items:
+            type: string
+          type: array
+          title: Conflicting Fields
+          default: []
+      type: object
+      required:
+      - skill_id
+      - name
+      - category
+      - proficiency
+      - experience_months
+      - context
+      - evidence
+      - evidence_type
+      - explicit
+      - item_ids
+      - sources
+      title: CvSkill
+    CvSummary:
+      properties:
+        id:
+          type: string
+          title: Id
+        file_name:
+          type: string
+          title: File Name
+        file_type:
+          type: string
+          enum:
+          - pdf
+          - docx
+          title: File Type
+        status:
+          type: string
+          enum:
+          - queued
+          - processing
+          - ready
+          - failed
+          title: Status
+        operation_id:
+          type: string
+          title: Operation Id
+        version:
+          type: integer
+          title: Version
+        extraction_version:
+          type: integer
+          title: Extraction Version
+        effective_version:
+          type: integer
+          title: Effective Version
+        profile_version:
+          type: integer
+          title: Profile Version
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ErrorInfo'
+          - type: 'null'
+        source_available:
+          type: boolean
+          title: Source Available
+      type: object
+      required:
+      - id
+      - file_name
+      - file_type
+      - status
+      - operation_id
+      - version
+      - extraction_version
+      - effective_version
+      - profile_version
+      - created_at
+      - updated_at
+      - error
+      - source_available
+      title: CvSummary
+    DeclarationLink:
+      properties:
+        declaration_id:
+          type: string
+          title: Declaration Id
+        status:
+          type: string
+          enum:
+          - standalone
+          - current
+          - changed
+          - removed
+          - unavailable
+          - unverified
+          title: Status
+        selected:
+          type: boolean
+          title: Selected
+        current_cv_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Current Cv Version
+      type: object
+      required:
+      - declaration_id
+      - status
+      - selected
+      - current_cv_version
+      title: DeclarationLink
+    DeclarationLinks:
+      properties:
+        declarations_version:
+          type: integer
+          title: Declarations Version
+        links:
+          items:
+            $ref: '#/components/schemas/DeclarationLink'
+          type: array
+          title: Links
+      type: object
+      required:
+      - declarations_version
+      - links
+      title: DeclarationLinks
+    ErrorInfo:
+      properties:
+        code:
+          type: string
+          title: Code
+        message:
+          type: string
+          title: Message
+        retryable:
+          type: boolean
+          title: Retryable
+      type: object
+      required:
+      - code
+      - message
+      - retryable
+      title: ErrorInfo
+    Evidence:
+      properties:
+        id:
+          type: string
+          title: Id
+        excerpt:
+          type: string
+          title: Excerpt
+        location:
+          type: string
+          title: Location
+      type: object
+      required:
+      - id
+      - excerpt
+      - location
+      title: Evidence
+    ExtractionMetadata:
+      properties:
+        provider:
+          type: string
+          title: Provider
+        model:
+          type: string
+          title: Model
+        prompt_version:
+          type: string
+          title: Prompt Version
+        schema_version:
+          type: string
+          title: Schema Version
+      type: object
+      required:
+      - provider
+      - model
+      - prompt_version
+      - schema_version
+      title: ExtractionMetadata
+    InterpretationMetadata:
+      properties:
+        provider:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Provider
+        model:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Model
+        prompt_version:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Prompt Version
+        schema_version:
+          type: string
+          maxLength: 30
+          minLength: 1
+          title: Schema Version
+      additionalProperties: false
+      type: object
+      required:
+      - provider
+      - model
+      - prompt_version
+      - schema_version
+      title: InterpretationMetadata
+    InterpretedClaim:
+      properties:
+        skill_id:
+          type: string
+          maxLength: 4000
+          minLength: 7
+          title: Skill Id
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+        attribution:
+          type: string
+          enum:
+          - personal
+          - team
+          - observed
+          - denied
+          - unknown
+          title: Attribution
+        assistance:
+          type: string
+          enum:
+          - independent
+          - assisted
+          - supervised
+          - unknown
+          title: Assistance
+          default: unknown
+        proficiency:
+          anyOf:
+          - type: string
+            maxLength: 120
+            minLength: 1
+          - type: 'null'
+          title: Proficiency
+        experience_months:
+          anyOf:
+          - type: number
+            maximum: 1200.0
+            minimum: 0.0
+          - type: 'null'
+          title: Experience Months
+        evidence_excerpt:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Evidence Excerpt
+        changed_fields:
+          items:
+            type: string
+            enum:
+            - attribution
+            - assistance
+            - proficiency
+            - experience_months
+          type: array
+          maxItems: 4
+          minItems: 1
+          title: Changed Fields
+      additionalProperties: false
+      type: object
+      required:
+      - skill_id
+      - name
+      - attribution
+      - changed_fields
+      title: InterpretedClaim
+    InterpretedDates:
+      properties:
+        start_date:
+          anyOf:
+          - type: string
+            pattern: ^\d{4}(?:-\d{2}(?:-\d{2})?)?$
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+            pattern: ^\d{4}(?:-\d{2}(?:-\d{2})?)?$
+          - type: 'null'
+          title: End Date
+        ongoing:
+          type: boolean
+          title: Ongoing
+          default: false
+        changed_fields:
+          items:
+            type: string
+            enum:
+            - start_date
+            - end_date
+            - ongoing
+          type: array
+          maxItems: 3
+          minItems: 1
+          title: Changed Fields
+        evidence_excerpt:
+          type: string
+          maxLength: 500
+          minLength: 1
+          title: Evidence Excerpt
+      additionalProperties: false
+      type: object
+      required:
+      - changed_fields
+      - evidence_excerpt
+      title: InterpretedDates
+    ItemMutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+        action:
+          type: string
+          enum:
+          - update
+          - remove
+          title: Action
+        title:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Title
+        description:
+          anyOf:
+          - type: string
+            maxLength: 4000
+            minLength: 1
+          - type: 'null'
+          title: Description
+        proficiency:
+          anyOf:
+          - type: string
+            maxLength: 120
+            minLength: 1
+          - type: 'null'
+          title: Proficiency
+        experience_months:
+          anyOf:
+          - type: number
+            maximum: 1200.0
+            minimum: 0.0
+          - type: 'null'
+          title: Experience Months
+        start_date:
+          anyOf:
+          - type: string
+            pattern: ^\d{4}(?:-\d{2}(?:-\d{2})?)?$
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+            pattern: ^\d{4}(?:-\d{2}(?:-\d{2})?)?$
+          - type: 'null'
+          title: End Date
+        ongoing:
+          type: boolean
+          title: Ongoing
+          default: false
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      - action
+      title: ItemMutation
+    Mutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      title: Mutation
+    Policy:
+      properties:
+        max_file_bytes:
+          type: integer
+          title: Max File Bytes
+        formats:
+          items:
+            type: string
+            enum:
+            - pdf
+            - docx
+          type: array
+          title: Formats
+        max_answer_chars:
+          type: integer
+          title: Max Answer Chars
+        max_item_chars:
+          type: integer
+          title: Max Item Chars
+        extraction_configured:
+          type: boolean
+          title: Extraction Configured
+        original_retention_hours:
+          type: integer
+          title: Original Retention Hours
+        ocr_supported:
+          type: boolean
+          title: Ocr Supported
+        max_text_chars:
+          type: integer
+          title: Max Text Chars
+        max_title_chars:
+          type: integer
+          title: Max Title Chars
+        max_description_chars:
+          type: integer
+          title: Max Description Chars
+      type: object
+      required:
+      - max_file_bytes
+      - formats
+      - max_answer_chars
+      - max_item_chars
+      - extraction_configured
+      - original_retention_hours
+      - ocr_supported
+      - max_text_chars
+      - max_title_chars
+      - max_description_chars
+      title: Policy
+    PrepareMutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+        career_target_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Career Target Id
+        career_target_version:
+          type: integer
+          minimum: 1.0
+          title: Career Target Version
+        career_target_selection_version:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Career Target Selection Version
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      - career_target_id
+      - career_target_version
+      title: PrepareMutation
+    QuestionEnvelope:
+      properties:
+        questions:
+          items:
+            $ref: '#/components/schemas/Clarification'
+          type: array
+          title: Questions
+        deferred:
+          type: boolean
+          title: Deferred
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        cv_version:
+          type: integer
+          title: Cv Version
+        context:
+          anyOf:
+          - $ref: '#/components/schemas/ConfirmedContext'
+          - type: 'null'
+        prepared:
+          type: boolean
+          title: Prepared
+      type: object
+      required:
+      - questions
+      - deferred
+      - reason
+      - cv_version
+      - context
+      - prepared
+      title: QuestionEnvelope
+    ReconcileMutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+        candidate_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Candidate Id
+        action:
+          type: string
+          enum:
+          - keep_previous
+          - accept_candidate
+          title: Action
+        choices:
+          items:
+            $ref: '#/components/schemas/ResolutionChoice'
+          type: array
+          maxItems: 160
+          title: Choices
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      - candidate_id
+      - action
+      title: ReconcileMutation
+    ReconciliationView:
+      properties:
+        cv_id:
+          type: string
+          title: Cv Id
+        cv_version:
+          type: integer
+          title: Cv Version
+        candidate_id:
+          type: string
+          title: Candidate Id
+        source_cv_id:
+          type: string
+          title: Source Cv Id
+        previous_items:
+          items:
+            $ref: '#/components/schemas/CvItem'
+          type: array
+          title: Previous Items
+        candidate_items:
+          items:
+            $ref: '#/components/schemas/CvItem'
+          type: array
+          title: Candidate Items
+        affected_item_ids:
+          items:
+            type: string
+          type: array
+          title: Affected Item Ids
+        previous_answers:
+          items:
+            $ref: '#/components/schemas/Clarification'
+          type: array
+          title: Previous Answers
+        extraction:
+          $ref: '#/components/schemas/ExtractionMetadata'
+        notices:
+          items:
+            type: string
+          type: array
+          title: Notices
+      type: object
+      required:
+      - cv_id
+      - cv_version
+      - candidate_id
+      - source_cv_id
+      - previous_items
+      - candidate_items
+      - affected_item_ids
+      - previous_answers
+      - extraction
+      - notices
+      title: ReconciliationView
+    ResolutionChoice:
+      properties:
+        item_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Item Id
+        target_item_id:
+          anyOf:
+          - type: string
+            maxLength: 100
+            minLength: 1
+          - type: 'null'
+          title: Target Item Id
+      additionalProperties: false
+      type: object
+      required:
+      - item_id
+      title: ResolutionChoice
+    SavedInterpretation:
+      properties:
+        item_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Item Id
+        answer_revision:
+          type: integer
+          minimum: 1.0
+          title: Answer Revision
+        resolution:
+          type: string
+          enum:
+          - resolved
+          - partial
+          - unanswerable
+          title: Resolution
+        claims:
+          items:
+            $ref: '#/components/schemas/InterpretedClaim'
+          type: array
+          maxItems: 20
+          title: Claims
+        dates:
+          anyOf:
+          - $ref: '#/components/schemas/InterpretedDates'
+          - type: 'null'
+        statement_excerpt:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Statement Excerpt
+        resolved_uncertainties:
+          items:
+            type: string
+            enum:
+            - personal_contribution
+            - responsibility
+            - proficiency
+            - duration
+            - claim
+            - qualification
+            - date
+          type: array
+          maxItems: 7
+          title: Resolved Uncertainties
+        remaining_uncertainties:
+          items:
+            type: string
+            enum:
+            - personal_contribution
+            - responsibility
+            - proficiency
+            - duration
+            - claim
+            - qualification
+            - date
+          type: array
+          maxItems: 7
+          title: Remaining Uncertainties
+        summary:
+          type: string
+          maxLength: 2000
+          title: Summary
+        metadata:
+          $ref: '#/components/schemas/InterpretationMetadata'
+        applied_sequence:
+          type: integer
+          minimum: 1.0
+          title: Applied Sequence
+        extraction_version:
+          type: integer
+          minimum: 1.0
+          title: Extraction Version
+      additionalProperties: false
+      type: object
+      required:
+      - item_id
+      - answer_revision
+      - resolution
+      - summary
+      - metadata
+      - applied_sequence
+      - extraction_version
+      title: SavedInterpretation
+    Selection:
+      properties:
+        cv_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cv Id
+        version:
+          type: integer
+          title: Version
+      type: object
+      required:
+      - cv_id
+      - version
+      title: Selection
+    SelectionMutation:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+        cv_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Cv Id
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      - cv_id
+      title: SelectionMutation
+    SkillClaim:
+      properties:
+        skill_id:
+          type: string
+          title: Skill Id
+        name:
+          type: string
+          title: Name
+        attribution:
+          type: string
+          enum:
+          - personal
+          - team
+          - observed
+          - denied
+          - unknown
+          title: Attribution
+        assistance:
+          type: string
+          enum:
+          - independent
+          - assisted
+          - supervised
+          - unknown
+          title: Assistance
+        proficiency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Proficiency
+        experience_months:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Experience Months
+        evidence:
+          items:
+            $ref: '#/components/schemas/Evidence'
+          type: array
+          title: Evidence
+        evidence_type:
+          type: string
+          title: Evidence Type
+        support_uncertain:
+          type: boolean
+          title: Support Uncertain
+      type: object
+      required:
+      - skill_id
+      - name
+      - attribution
+      - assistance
+      - proficiency
+      - experience_months
+      - evidence
+      - evidence_type
+      - support_uncertain
+      title: SkillClaim
+    SkillSource:
+      properties:
+        item_id:
+          type: string
+          title: Item Id
+        evidence_type:
+          type: string
+          title: Evidence Type
+        explicit:
+          type: boolean
+          title: Explicit
+        support_uncertain:
+          type: boolean
+          title: Support Uncertain
+        attribution:
+          type: string
+          enum:
+          - personal
+          - team
+          - observed
+          - denied
+          - unknown
+          title: Attribution
+          default: unknown
+        assistance:
+          type: string
+          enum:
+          - independent
+          - assisted
+          - supervised
+          - unknown
+          title: Assistance
+          default: unknown
+        proficiency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Proficiency
+        experience_months:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Experience Months
+        evidence:
+          items:
+            $ref: '#/components/schemas/Evidence'
+          type: array
+          title: Evidence
+          default: []
+      type: object
+      required:
+      - item_id
+      - evidence_type
+      - explicit
+      - support_uncertain
+      title: SkillSource
+    SourceSnapshot:
+      properties:
+        cv_id:
+          type: string
+          title: Cv Id
+        selection_version:
+          type: integer
+          title: Selection Version
+        extraction_version:
+          type: integer
+          title: Extraction Version
+        effective_version:
+          type: integer
+          title: Effective Version
+        declarations_version:
+          type: integer
+          title: Declarations Version
+        profile_version:
+          type: integer
+          title: Profile Version
+        items:
+          items:
+            $ref: '#/components/schemas/CvItem'
+          type: array
+          title: Items
+        skills:
+          items:
+            $ref: '#/components/schemas/CvSkill'
+          type: array
+          title: Skills
+        declarations:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Declarations
+        schema_version:
+          type: string
+          const: '1'
+          title: Schema Version
+        normalization_version:
+          type: string
+          const: '1'
+          title: Normalization Version
+        cv_version:
+          type: integer
+          title: Cv Version
+        upload_profile_version:
+          type: integer
+          title: Upload Profile Version
+        declaration_links:
+          items:
+            $ref: '#/components/schemas/DeclarationLink'
+          type: array
+          title: Declaration Links
+      type: object
+      required:
+      - cv_id
+      - selection_version
+      - extraction_version
+      - effective_version
+      - declarations_version
+      - profile_version
+      - items
+      - skills
+      - declarations
+      - schema_version
+      - normalization_version
+      - cv_version
+      - upload_profile_version
+      - declaration_links
+      title: SourceSnapshot
+    TargetCondition:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        kind:
+          type: string
+          enum:
+          - qualification
+          - date
+          title: Kind
+        label:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Label
+        description:
+          type: string
+          maxLength: 500
+          minLength: 1
+          title: Description
+        item_kinds:
+          items:
+            type: string
+            enum:
+            - education
+            - experience
+            - project
+            - skill
+          type: array
+          maxItems: 4
+          minItems: 1
+          title: Item Kinds
+        match_terms:
+          items:
+            type: string
+            maxLength: 120
+            minLength: 1
+          type: array
+          maxItems: 5
+          minItems: 1
+          title: Match Terms
+        evidence:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Evidence
+        origin:
+          type: string
+          enum:
+          - user_reviewed_jd
+          - user_guidance
+          title: Origin
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - kind
+      - label
+      - description
+      - item_kinds
+      - match_terms
+      - origin
+      title: TargetCondition
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer

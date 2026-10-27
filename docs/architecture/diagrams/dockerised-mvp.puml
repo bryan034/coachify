@@ -12,7 +12,7 @@ skinparam componentBackgroundColor white
 skinparam databaseBackgroundColor #EFF6FA
 
 actor "User browser" as Browser
-component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nOutside this three-service scope" as Profile
+component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nAccount-level manual declarations" as Profile
 cloud "Configured LLM provider\nGroq initially; server-side adapter" as LLM
 cloud "Permitted public interview sources\nCompany sites, Reddit, Glassdoor\nAvailability and access restrictions apply" as Sources
 
@@ -22,10 +22,10 @@ node "Docker Compose — focused design" {
 
   package "Private backend network" {
     node "CV analyser\nservices/cv-service" as CV <<Docker container>> {
-      artifact "Upload, extract structured skills,\nclarify personal contributions\n/api/v1/cv (planned)" as CVAPI
+      artifact "Saved upload/review, corrections,\nclarifications, explicit CV selection\n/api/v1/cv" as CVAPI
     }
     node "JD / career and skills analyser\nservices/career-service" as Career <<Docker container>> {
-      artifact "Specific job or career exploration\nStructured target skills, interview research, gaps\n/api/v1/career" as CareerAPI
+      artifact "Specific job or career exploration\nReviewed target confirmation and selection\nAI target generation, research and gaps planned\n/api/v1/career" as CareerAPI
     }
     node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
       artifact "Generate plans from versioned analyses\nEdit plans and track task progress\n/api/v1/roadmaps (planned)" as RoadmapAPI
@@ -33,8 +33,8 @@ node "Docker Compose — focused design" {
   }
 
   node "MongoDB — local development" as Mongo <<Docker container>> {
-    database "CV-owned database\ncvs" as CVDB
-    database "Career-owned database\ncareer_targets\ninterview_research\nskill_gap_analyses" as CareerDB
+    database "CV-owned database\ncvs\ncv_selections (operational)" as CVDB
+    database "Career-owned database\ncareer_goals + career_target_selections (operational)\ninterview_research\nskill_gap_analyses" as CareerDB
     database "Roadmap-owned database\nPlans, milestones and task history\nSchema to be expanded" as RoadmapDB
   }
   artifact "Service-private temporary CV storage\nOriginal-file cleanup per policy" as Uploads <<Private storage>>
@@ -43,14 +43,16 @@ node "Docker Compose — focused design" {
 Browser --> Web : Use application
 Web --> Gateway : /api/v1 requests
 Gateway --> Profile : Existing account / profile routes
-Gateway --> CV : CV routes (planned)
+Gateway --> CV : CV routes
 Gateway --> Career : Career routes
 Gateway --> Roadmap : Roadmap routes (planned)
 
 ' API dependencies point from caller to the service it calls.
-CV --> Profile : Validate account / import clarified contributions
+CV --> Profile : Validate account / read versioned manual declarations
+CV --> Career : Read selected confirmed context and exact versions
+Profile --> CV : Validate explicitly attached source item/version
 Career --> Profile : Validate session / read selected context
-Career --> CV : Read effective CV skills and extraction version
+Career ..> CV : Future selected CV input with source version vector
 Roadmap --> Profile : Read deadline and availability
 Roadmap --> Career : Read selected versioned gap analysis
 
@@ -58,13 +60,13 @@ CV --> CVDB : Own records only
 Career --> CareerDB : Own records only
 Roadmap --> RoadmapDB : Own records only
 CV --> Uploads : Temporary original access
-CV --> LLM : Structured CV extraction
-Career --> LLM : Target skills / research synthesis / gap analysis
-Career --> Sources : Bounded permitted research retrieval
+CV --> LLM : Structured extraction and bounded clarification interpretation
+Career ..> LLM : Future target skills / research synthesis / gap analysis
+Career ..> Sources : Future bounded permitted research retrieval
 Roadmap --> LLM : Personalised roadmap generation
 
 note bottom of Career
-  One career_targets model: specific_job or career_exploration.
+  One career_goals model: specific_job or career_exploration.
   company may be null. Interview research is reusable public context;
   private CV/chat data must not enter that shared research.
   Persist structured output and bounded evidence, not full raw JD text.
@@ -85,8 +87,10 @@ legend bottom
   Existing Profile/auth is shown only as an external dependency.
   Dashboard, review/scheduling and future services are intentionally omitted;
   extend this diagram when their scope is agreed.
-  Current implementation: Profile/auth and temporary Career JD previews.
-  Structured extraction, research, gap analysis and roadmap generation are planned.
+  Current implementation: Profile/auth/manual declarations, saved CV flow,
+  configured extraction/interpretation, source reconciliation, temporary Career previews,
+  reviewed targets/conditions and a target-bound input contract. AI target generation, research,
+  gap analysis and roadmap remain planned.
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend
 @enduml

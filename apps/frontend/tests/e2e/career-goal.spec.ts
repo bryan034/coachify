@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import {emptyTargets} from '../fixtures/career-targets';
 async function workspace(page:Page){
  await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
@@ -8,11 +9,14 @@ async function workspace(page:Page){
   if(path.endsWith('/school-categories'))return route.fulfill({json:[]});
   return route.fulfill({json:{version:1,onboarding_complete:true,occupational_status:'employed',education:{},education_review_required:false}});
  });
+ await page.route('**/api/v1/career/targets',route=>route.fulfill({json:emptyTargets}));
 }
 test('Career Goal supports three temporary inputs, recovery and responsive navigation',async({page})=>{
  await workspace(page);const calls:string[]=[];
  await page.route('**/api/v1/career/**',route=>{
-  const path=new URL(route.request().url()).pathname;calls.push(path);
+  const path=new URL(route.request().url()).pathname;
+  if(path==='/api/v1/career/targets')return route.fulfill({json:emptyTargets});
+  calls.push(path);
   expect(route.request().headers().authorization).toBe('Bearer synthetic-session');
   if(path.endsWith('/url')){
    const {url}=route.request().postDataJSON();

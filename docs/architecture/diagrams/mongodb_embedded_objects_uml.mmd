@@ -8,10 +8,91 @@ class CvSkill {
     +String proficiency?
     +Number experience_months?
     +String context?
-    +String evidence
+    +Evidence[] evidence
     +String evidence_type?
     +Boolean explicit
+    +String[] item_ids
 }
+
+class CapabilityDeclaration {
+    +String id
+    +String skill_id
+    +String name
+    +String description
+    +String provenance [user_declared]
+    +String proficiency [null]
+    +Number experience_months [null]
+    +Boolean independence [null]
+    +Contribution[] contributions
+    +CvReference attached_to?
+    +String attached_source_fingerprint?
+    +Object[] attachment_history
+    +Date created_at
+    +Date updated_at
+}
+
+class Contribution {
+    +String id
+    +String description
+    +Date created_at
+}
+
+class CvReference {
+    +String cv_id
+    +String item_id
+    +Integer cv_version
+}
+
+class Evidence {
+    +String id
+    +String excerpt
+    +String location
+}
+
+class CvItem {
+    +String id
+    +String kind
+    +String title
+    +String description
+    +String provenance
+    +Evidence[] evidence
+    +String[] skill_ids
+    +String proficiency?
+    +Number experience_months?
+    +String start_date? [year/month/day precision]
+    +String end_date? [year/month/day precision]
+    +Boolean ongoing
+    +SkillClaim[] skill_claims
+    +Boolean removed
+}
+
+class SkillClaim {
+    +String skill_id
+    +String attribution [personal/team/observed/denied/unknown]
+    +String assistance [independent/assisted/supervised/unknown]
+    +String proficiency?
+    +Number experience_months?
+    +Evidence[] evidence
+    +Boolean support_uncertain
+}
+
+class Clarification {
+    +String id
+    +String item_id
+    +String uncertainty_key
+    +String answer?
+    +Integer answer_revision
+    +String interpretation_status
+    +String resolution
+    +Object interpretation?
+    +Object reconciled_from?
+}
+
+class users {
+    +CapabilityDeclaration[] capability_declarations
+    +Integer declarations_version
+}
+note for users "Logical users is the existing accounts authority. Manual declarations remain available without any CV."
 
 class TargetSkill {
     +String skill_id
@@ -24,6 +105,17 @@ class TargetSkill {
     +String evidence?
     +String origin
     +String[] source_urls
+}
+
+class TargetCondition {
+    +String id
+    +String kind [qualification/date]
+    +String label
+    +String description
+    +String[] item_kinds
+    +String[] match_terms
+    +String evidence?
+    +String origin [user_reviewed_jd/user_guidance]
 }
 
 class InterviewSkill {
@@ -64,10 +156,12 @@ class GapResult {
 
 class cvs {
     +CvSkill[] skills
+    +CvItem[] items
 }
 
-class career_targets {
+class career_goals {
     +TargetSkill[] skills
+    +TargetCondition[] conditions
 }
 
 class interview_research {
@@ -81,7 +175,15 @@ class skill_gap_analyses {
 }
 
 cvs *-- CvSkill : embeds
-career_targets *-- TargetSkill : embeds
+cvs *-- CvItem : embeds
+cvs *-- Clarification : source-bound answers and interpretation
+CvItem *-- SkillClaim : scoped effective attribution
+CvItem *-- Evidence : bounded source excerpts
+users *-- CapabilityDeclaration : embeds
+CapabilityDeclaration *-- Contribution : preserves descriptions
+CapabilityDeclaration *-- CvReference : optional validated attachment
+career_goals *-- TargetSkill : embeds
+career_goals *-- TargetCondition : optional confirmed relevance
 interview_research *-- InterviewSkill : embeds
 interview_research *-- ResearchSource : embeds
 skill_gap_analyses *-- GapResult : embeds

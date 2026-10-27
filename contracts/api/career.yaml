@@ -1,10 +1,472 @@
 openapi: 3.1.0
 info:
-  title: Coachify Career preview API
-  description: Temporary authenticated URL/document previews; no persistence or AI
-    interpretation.
+  title: Coachify Career API
+  description: Temporary source previews and immutable user-reviewed targets with
+    explicit confirmation and selection. No AI interpretation.
   version: 0.1.0
 paths:
+  /api/v1/career/targets:
+    get:
+      tags:
+      - J09 reviewed target context
+      summary: List Targets
+      operationId: list_targets_api_v1_career_targets_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 512
+          - type: 'null'
+          title: Cursor
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Targets'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Service Unavailable
+    post:
+      tags:
+      - J09 reviewed target context
+      summary: Create Target
+      operationId: create_target_api_v1_career_targets_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Target'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Service Unavailable
+  /api/v1/career/targets/selection:
+    put:
+      tags:
+      - J09 reviewed target context
+      summary: Select Target
+      operationId: select_target_api_v1_career_targets_selection_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelectTarget'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Selection'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+      security:
+      - HTTPBearer: []
+  /api/v1/career/targets/selected-context:
+    get:
+      tags:
+      - J09 reviewed target context
+      summary: Current Context
+      operationId: current_context_api_v1_career_targets_selected_context_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/ConfirmedContext'
+                - type: 'null'
+                title: Response Current Context Api V1 Career Targets Selected Context
+                  Get
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+      security:
+      - HTTPBearer: []
+  /api/v1/career/targets/{identifier}:
+    get:
+      tags:
+      - J09 reviewed target context
+      summary: Read Target
+      operationId: read_target_api_v1_career_targets__identifier__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: identifier
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Identifier
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Target'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Service Unavailable
+  /api/v1/career/targets/{identifier}/confirm:
+    post:
+      tags:
+      - J09 reviewed target context
+      summary: Confirm Target
+      operationId: confirm_target_api_v1_career_targets__identifier__confirm_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: identifier
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmTarget'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Target'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Service Unavailable
+  /api/v1/career/targets/{identifier}/confirmed-context:
+    get:
+      tags:
+      - J09 reviewed target context
+      summary: Confirmed Context
+      operationId: confirmed_context_api_v1_career_targets__identifier__confirmed_context_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: identifier
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Identifier
+      - name: expected_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Expected Version
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmedContext'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportErrorView'
+          description: Service Unavailable
   /api/v1/career/imports/url:
     post:
       tags:
@@ -37,13 +499,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ImportErrorView'
         '403':
-          description: Initial setup is incomplete
+          description: Forbidden
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportErrorView'
         '413':
-          description: Content Too Large
+          description: Request Entity Too Large
           content:
             application/json:
               schema:
@@ -55,7 +517,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ImportErrorView'
         '422':
-          description: Unprocessable Content
+          description: Unprocessable Entity
           content:
             application/json:
               schema:
@@ -113,13 +575,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ImportErrorView'
         '403':
-          description: Initial setup is incomplete
+          description: Forbidden
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportErrorView'
         '413':
-          description: Content Too Large
+          description: Request Entity Too Large
           content:
             application/json:
               schema:
@@ -131,7 +593,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ImportErrorView'
         '422':
-          description: Unprocessable Content
+          description: Unprocessable Entity
           content:
             application/json:
               schema:
@@ -152,6 +614,135 @@ paths:
       - HTTPBearer: []
 components:
   schemas:
+    ConditionInput:
+      properties:
+        kind:
+          type: string
+          enum:
+          - qualification
+          - date
+          title: Kind
+        label:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Label
+        description:
+          type: string
+          maxLength: 500
+          minLength: 1
+          title: Description
+        item_kinds:
+          items:
+            type: string
+            enum:
+            - education
+            - experience
+            - project
+            - skill
+          type: array
+          maxItems: 4
+          minItems: 1
+          title: Item Kinds
+        match_terms:
+          items:
+            type: string
+            maxLength: 120
+            minLength: 2
+          type: array
+          maxItems: 5
+          minItems: 1
+          title: Match Terms
+        evidence:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Evidence
+      additionalProperties: false
+      type: object
+      required:
+      - kind
+      - label
+      - description
+      - item_kinds
+      - match_terms
+      title: ConditionInput
+    ConfirmTarget:
+      properties:
+        mutation_id:
+          type: string
+          title: Mutation Id
+        expected_version:
+          type: integer
+          minimum: 1.0
+          title: Expected Version
+      additionalProperties: false
+      type: object
+      required:
+      - mutation_id
+      - expected_version
+      title: ConfirmTarget
+    ConfirmedContext:
+      properties:
+        id:
+          type: string
+          title: Id
+        version:
+          type: integer
+          minimum: 1.0
+          title: Version
+        type:
+          type: string
+          enum:
+          - specific_job
+          - career_exploration
+          title: Type
+        confirmed:
+          type: boolean
+          const: true
+          title: Confirmed
+        skill_ids:
+          items:
+            type: string
+            maxLength: 4000
+            minLength: 7
+          type: array
+          maxItems: 40
+          title: Skill Ids
+        conditions:
+          items:
+            $ref: '#/components/schemas/TargetCondition'
+          type: array
+          maxItems: 20
+          title: Conditions
+        selection_version:
+          type: integer
+          minimum: 1.0
+          title: Selection Version
+        role:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Role
+        field:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Field
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - version
+      - type
+      - confirmed
+      - skill_ids
+      - selection_version
+      - role
+      - field
+      title: ConfirmedContext
     ImportErrorView:
       properties:
         detail:
@@ -193,6 +784,504 @@ components:
       - text
       - source_name
       title: Preview
+    SelectTarget:
+      properties:
+        mutation_id:
+          type: string
+          title: Mutation Id
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        career_target_id:
+          type: string
+          title: Career Target Id
+        career_target_version:
+          type: integer
+          minimum: 1.0
+          title: Career Target Version
+      additionalProperties: false
+      type: object
+      required:
+      - mutation_id
+      - expected_version
+      - career_target_id
+      - career_target_version
+      title: SelectTarget
+    Selection:
+      properties:
+        career_target_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Career Target Id
+        career_target_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Career Target Version
+        version:
+          type: integer
+          minimum: 0.0
+          title: Version
+      additionalProperties: false
+      type: object
+      required:
+      - career_target_id
+      - career_target_version
+      - version
+      title: Selection
+    SkillInput:
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+        category:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Category
+          default: unspecified
+        priority:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Priority
+          default: unspecified
+        required_proficiency:
+          anyOf:
+          - type: string
+            maxLength: 120
+            minLength: 1
+          - type: 'null'
+          title: Required Proficiency
+        required_experience_months:
+          anyOf:
+          - type: integer
+            maximum: 1200.0
+            minimum: 0.0
+          - type: 'null'
+          title: Required Experience Months
+        context:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Context
+        evidence:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Evidence
+        source_urls:
+          items:
+            type: string
+            maxLength: 2048
+            minLength: 1
+          type: array
+          maxItems: 5
+          title: Source Urls
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      title: SkillInput
+    Target:
+      properties:
+        id:
+          type: string
+          title: Id
+        user_id:
+          type: string
+          title: User Id
+        target_type:
+          type: string
+          enum:
+          - specific_job
+          - career_exploration
+          title: Target Type
+        role:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Role
+        field:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Field
+        company:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Company
+        location:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Location
+        seniority_level:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Seniority Level
+        job_url:
+          anyOf:
+          - type: string
+            maxLength: 2048
+            minLength: 1
+          - type: 'null'
+          title: Job Url
+        interests:
+          items:
+            type: string
+            maxLength: 200
+            minLength: 1
+          type: array
+          title: Interests
+        preferences:
+          items:
+            type: string
+            maxLength: 200
+            minLength: 1
+          type: array
+          title: Preferences
+        skills:
+          items:
+            $ref: '#/components/schemas/TargetSkill'
+          type: array
+          title: Skills
+        conditions:
+          items:
+            $ref: '#/components/schemas/TargetCondition'
+          type: array
+          maxItems: 20
+          title: Conditions
+        requirements_source:
+          type: string
+          enum:
+          - user_reviewed_jd
+          - user_guidance
+          title: Requirements Source
+        generation_version:
+          type: string
+          const: manual-v1
+          title: Generation Version
+        status:
+          type: string
+          enum:
+          - draft
+          - confirmed
+          title: Status
+        version:
+          type: integer
+          minimum: 1.0
+          title: Version
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        confirmed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmed At
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - user_id
+      - target_type
+      - role
+      - field
+      - company
+      - location
+      - seniority_level
+      - job_url
+      - interests
+      - preferences
+      - skills
+      - requirements_source
+      - generation_version
+      - status
+      - version
+      - created_at
+      - updated_at
+      - confirmed_at
+      title: Target
+    TargetCondition:
+      properties:
+        kind:
+          type: string
+          enum:
+          - qualification
+          - date
+          title: Kind
+        label:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Label
+        description:
+          type: string
+          maxLength: 500
+          minLength: 1
+          title: Description
+        item_kinds:
+          items:
+            type: string
+            enum:
+            - education
+            - experience
+            - project
+            - skill
+          type: array
+          maxItems: 4
+          minItems: 1
+          title: Item Kinds
+        match_terms:
+          items:
+            type: string
+            maxLength: 120
+            minLength: 2
+          type: array
+          maxItems: 5
+          minItems: 1
+          title: Match Terms
+        evidence:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Evidence
+        id:
+          type: string
+          title: Id
+        origin:
+          type: string
+          enum:
+          - user_reviewed_jd
+          - user_guidance
+          title: Origin
+      additionalProperties: false
+      type: object
+      required:
+      - kind
+      - label
+      - description
+      - item_kinds
+      - match_terms
+      - id
+      - origin
+      title: TargetCondition
+    TargetCreate:
+      properties:
+        mutation_id:
+          type: string
+          title: Mutation Id
+        target_type:
+          type: string
+          enum:
+          - specific_job
+          - career_exploration
+          title: Target Type
+        role:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Role
+        field:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Field
+        company:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Company
+        location:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Location
+        seniority_level:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Seniority Level
+        job_url:
+          anyOf:
+          - type: string
+            maxLength: 2048
+            minLength: 1
+          - type: 'null'
+          title: Job Url
+        interests:
+          items:
+            type: string
+            maxLength: 200
+            minLength: 1
+          type: array
+          maxItems: 20
+          title: Interests
+        preferences:
+          items:
+            type: string
+            maxLength: 200
+            minLength: 1
+          type: array
+          maxItems: 20
+          title: Preferences
+        skills:
+          items:
+            $ref: '#/components/schemas/SkillInput'
+          type: array
+          maxItems: 40
+          title: Skills
+        conditions:
+          items:
+            $ref: '#/components/schemas/ConditionInput'
+          type: array
+          maxItems: 20
+          title: Conditions
+        reviewed_source_text:
+          anyOf:
+          - type: string
+            maxLength: 20000
+            minLength: 1
+          - type: 'null'
+          title: Reviewed Source Text
+      additionalProperties: false
+      type: object
+      required:
+      - mutation_id
+      - target_type
+      - role
+      - field
+      - skills
+      title: TargetCreate
+    TargetSkill:
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+        category:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Category
+          default: unspecified
+        priority:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Priority
+          default: unspecified
+        required_proficiency:
+          anyOf:
+          - type: string
+            maxLength: 120
+            minLength: 1
+          - type: 'null'
+          title: Required Proficiency
+        required_experience_months:
+          anyOf:
+          - type: integer
+            maximum: 1200.0
+            minimum: 0.0
+          - type: 'null'
+          title: Required Experience Months
+        context:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Context
+        evidence:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Evidence
+        source_urls:
+          items:
+            type: string
+            maxLength: 2048
+            minLength: 1
+          type: array
+          maxItems: 5
+          title: Source Urls
+        skill_id:
+          type: string
+          maxLength: 4000
+          minLength: 7
+          title: Skill Id
+        origin:
+          type: string
+          enum:
+          - user_reviewed_jd
+          - user_guidance
+          title: Origin
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - skill_id
+      - origin
+      title: TargetSkill
+    Targets:
+      properties:
+        targets:
+          items:
+            $ref: '#/components/schemas/Target'
+          type: array
+          maxItems: 20
+          title: Targets
+        selection:
+          $ref: '#/components/schemas/Selection'
+        next_cursor:
+          anyOf:
+          - type: string
+            maxLength: 512
+          - type: 'null'
+          title: Next Cursor
+        selected_target:
+          anyOf:
+          - $ref: '#/components/schemas/Target'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - targets
+      - selection
+      - next_cursor
+      - selected_target
+      title: Targets
     UrlInput:
       properties:
         url:

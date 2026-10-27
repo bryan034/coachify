@@ -2,7 +2,7 @@
 
 Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
-**Status:** P01–P16 education, planning preferences, email/password access, email verification and initial onboarding are implemented with profile persistence and local/international school snapshots. Career Goal input/previews for J01/J06/J07 are available without persistence or AI interpretation. The first workspace UI is integrated; unimplemented features use empty states and disabled actions. The current local setup uses email/password and OTP; no Google OAuth credentials are needed. See [setup instructions](docs/setup.md).
+**Status:** P01–P16 background, planning, account access and onboarding are implemented. CV supports saved PDF/DOCX extraction, claim-scoped clarification interpretation, partial-date corrections, explicit source reconciliation, manual-capability links and saved-CV selection. Extraction and interpretation need a configured provider. Career saves reviewed target skills and qualification/date conditions with explicit confirmation/selection. CV supplies a target-bound input contract; actual assessment admission, stale-result tracking, AI target generation, exploration chat and gap/roadmap generation remain planned. Tests use synthetic model responses. The local setup uses email/password and OTP. See [setup instructions](docs/setup.md).
 
 ## Stack
 
@@ -13,7 +13,7 @@ Career-readiness planner for users in Singapore, including students, National Se
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
 - Account access: email/password accounts with OTP email verification, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
-- AI provider planned: Groq; no AI integration is active in the current preview slice. Application hosting is not selected.
+- AI: server-side Groq-compatible CV extraction adapter; optional provider configuration is required. Automated checks use synthetic fixtures, not live inference. Application hosting is not selected.
 
 ## Repository layout
 
@@ -28,7 +28,7 @@ services/review-service/    Pace reviews and scheduling
 infrastructure/gateway/     NGINX configuration template
 infrastructure/mongodb/     Local database and Atlas guidance
 infrastructure/docker/      Compose deployment template
-contracts/api/              Profile OpenAPI contract and future service shells
+contracts/api/              Profile, CV and Career OpenAPI contracts
 docs/                       Current design and development guidance
 outputs/                    Earlier architecture deliverables
 work/                       Ignored working files, not application source
@@ -48,4 +48,4 @@ The current documentation under `docs/` reflects the Next.js and MongoDB decisio
 
 ## Implementation scope
 
-Use the active `infrastructure/docker/compose.yaml` for the implemented profile slice. Files ending in `.example` remain inactive planning templates. Career supports temporary URL/document previews without database writes or AI calls; other services retain source placeholders. The profile API contract is implemented; remaining contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.
+Use the active `infrastructure/docker/compose.yaml` for Profile, CV and Career. Files ending in `.example` remain inactive planning templates. Career keeps URL/document previews transient and saves reviewed structured targets in its own database; it makes no AI calls. Roadmap, dashboard and review services retain source placeholders. CV handoff includes versioned sources and declarations; it does not generate gap analysis or silently regenerate existing results. Keep real environment files, credentials, CV uploads and database data out of source control.
