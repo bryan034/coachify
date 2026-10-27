@@ -25,7 +25,7 @@ class MemoryReviews:
     """API boundary fixture; test_requirement_reviews covers actual MongoDB."""
     def __init__(self):
         stamp=now();context=JDExtraction.model_validate(CONTEXT)
-        self.rows={REVIEW_ID:RequirementReview(_id=REVIEW_ID,user_id=OWNER,version=1,skill_mapping_version='skills-v1',created_at=stamp,updated_at=stamp,content=context,baseline=context,generation=None)}
+        self.rows={REVIEW_ID:RequirementReview(_id=REVIEW_ID,user_id=OWNER,version=1,skill_mapping_version='skills-v1',created_at=stamp,updated_at=stamp,content=context,generation=None)}
         self.digests={}
     def replay_extraction(self,owner,key,digest):
         identifier=stable_id(owner,key,'jd-review')
@@ -36,7 +36,7 @@ class MemoryReviews:
         replay=self.replay_extraction(owner,key,digest)
         if replay:return replay
         stamp=now();content=prepare(content,extracted=True);identifier=stable_id(owner,key,'jd-review')
-        result=RequirementReview(_id=identifier,user_id=owner,version=1,skill_mapping_version='skills-v1',created_at=stamp,updated_at=stamp,content=content,baseline=content,generation=generation,source_kind=kind)
+        result=RequirementReview(_id=identifier,user_id=owner,version=1,skill_mapping_version='skills-v1',created_at=stamp,updated_at=stamp,content=content,generation=generation,source_kind=kind)
         self.rows[identifier]=result;self.digests[identifier]=digest;return result
     def get(self,identifier,owner):return self.rows[identifier]
     def version(self,identifier,owner):return self.rows[identifier].version
@@ -47,6 +47,9 @@ class Provider:
     async def generate(self,data,operation,**kwargs):
         self.inputs.append(data)
         if self.error:raise AIError('unavailable',True)
+        if data.stage=='jd_scope':
+            from app.ai.jd_scope import JobIdentity
+            return SimpleNamespace(data=JobIdentity(is_job_description=True,evidence=[data.source_text[:200]]))
         output=self.output or {'role':'Analyst','field':'Data','company':None,'skills':[SKILL]}
         model=JDExtraction if data.stage=='jd_extraction' else JDReply
         return SimpleNamespace(data=model.model_validate(output),generation=Generation(provider='fixture',model='fixture',prompt_version='test',generated_at=datetime.now(timezone.utc)))
@@ -62,7 +65,7 @@ def test_extract_is_authenticated_transient_and_grounded(flow):
     assert client.post('/api/v1/career/jd/extract',json={'text':SOURCE}).status_code==401
     assert not provider.inputs
     result=client.post('/api/v1/career/jd/extract',headers={**AUTH,'Idempotency-Key':str(uuid4())},json={'text':SOURCE})
-    assert result.status_code==200 and result.json()['extraction']['skills'][0]['evidence']=='SQL required'
+    assert result.status_code==200 and result.json()['current']['goal']['skills'][0]['evidence']=='SQL required'
     assert 'text' not in result.json() and result.headers['cache-control']=='no-store'
     assert provider.inputs[-1].source_text==SOURCE
     assert client.app.state.goal_store is None
@@ -84,8 +87,8 @@ def test_semantic_extraction_accepts_supporting_summaries_and_optional_evidence(
          'context':'Inferred from the reporting responsibilities; verify the expected depth.','evidence':None}]}
     result=client.post('/api/v1/career/jd/extract',headers=AUTH,json={'text':'Work with colleagues to query SQL data and interpret reports. Collaboration is a plus.'})
     assert result.status_code==200
-    assert result.json()['extraction']['skills'][0]['evidence']=='Ability to query relational data with SQL.'
-    assert result.json()['extraction']['skills'][2]['origin']=='generated_guidance'
+    assert result.json()['current']['goal']['skills'][0]['evidence']=='Ability to query relational data with SQL.'
+    assert result.json()['current']['goal']['skills'][2]['origin']=='generated_guidance'
 
 
 def test_extraction_retains_job_fields_conditions_and_real_url(flow):
@@ -96,7 +99,7 @@ def test_extraction_retains_job_fields_conditions_and_real_url(flow):
     url='https://careers.example.test/analyst'
     result=client.post('/api/v1/career/jd/extract',headers=AUTH,json={'text':SOURCE,'source_url':url})
     assert result.status_code==200
-    extracted=result.json()['extraction']
+    extracted=result.json()['current']['goal']
     assert extracted['job_url']==url and extracted['location']=='Singapore' and extracted['seniority_level']=='Entry level'
     assert extracted['summary']==CONTEXT['summary'] and extracted['responsibilities']==CONTEXT['responsibilities']
     assert extracted['non_skill_requirements'][0]['category']=='qualification'
@@ -107,7 +110,7 @@ def test_extraction_retains_job_fields_conditions_and_real_url(flow):
 def test_no_explicit_skills_is_valid_and_failures_are_recoverable(flow):
     client,provider=flow
     provider.output={'role':None,'field':None,'company':None,'skills':[]}
-    assert client.post('/api/v1/career/jd/extract',headers=AUTH,json={'text':'Role details to follow.'}).json()['extraction']['skills']==[]
+    assert client.post('/api/v1/career/jd/extract',headers=AUTH,json={'text':'Role details to follow.'}).json()['current']['goal']['skills']==[]
     provider.error=True
     assert client.post('/api/v1/career/jd/extract',headers={**AUTH,'Idempotency-Key':str(uuid4())},json={'text':SOURCE}).status_code==503
     provider.error=False
@@ -160,7 +163,7 @@ def test_line_wrap_punctuation_and_paraphrase_do_not_block_extraction(flow,evide
     text='Analyst. SQL\n is\u00a0required for this position.'
     result=client.post('/api/v1/career/jd/extract',headers={**AUTH,'Idempotency-Key':str(uuid4())},json={'text':text})
     assert result.status_code==200
-    assert result.json()['extraction']['skills'][0]['evidence']==evidence
+    assert result.json()['current']['goal']['skills'][0]['evidence']==evidence
 
 
 def test_chat_uses_context_without_a_source_and_rejects_raw_source_fields(flow):
@@ -189,15 +192,15 @@ def test_semantic_extraction_needs_no_quote_correction_with_real_adapter():
     calls=[]
     def upstream(req):
         calls.append(json.loads(req.content))
-        output={**CONTEXT,'skills':[{**SKILL,'evidence':'Querying relational databases is essential.'}]}
+        output={'is_job_description':True,'evidence':[SOURCE]} if calls[-1]['response_format'].get('json_schema',{}).get('name')=='jd_scope' or 'jd_scope' in calls[-1]['messages'][0]['content'] or 'JobIdentity' in calls[-1]['messages'][0]['content'] else {**CONTEXT,'skills':[{**SKILL,'evidence':'Querying relational databases is essential.'}]}
         return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
     def profile(req):return httpx.Response(200,json={'id':OWNER,'email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
     ai=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),httpx.AsyncClient(transport=httpx.MockTransport(upstream)))
     with TestClient(create_app(profile_client=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile)),ai=ai,review_store=MemoryReviews())) as client:
         result=client.post('/api/v1/career/jd/extract',headers={**AUTH,'Idempotency-Key':str(uuid4())},json={'text':SOURCE})
-    assert result.status_code==200 and len(calls)==1
-    assert result.json()['extraction']['job_url'] is None
-    assert 'verbatim wording is NOT required' in calls[0]['messages'][0]['content']
+    assert result.status_code==200 and len(calls)==2
+    assert result.json()['current']['goal']['job_url'] is None
+    assert 'verbatim wording is NOT required' in calls[-1]['messages'][0]['content']
 
 
 def test_detailed_chat_answers_survive_the_next_turn_with_bounded_history(flow):

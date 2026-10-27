@@ -106,14 +106,14 @@ class GoalStore:
     def current(self, owner):
         state = self.state.find_one({'_id': owner}) or {'version': 0, 'goal_id': None}
         goal = self.goals.find_one({'_id': state.get('goal_id'), 'user_id': owner}) if state.get('goal_id') else None
-        return {'selection_version': state['version'], 'goal': CareerGoal.model_validate(goal) if goal else None,
+        return {'selection_version': state['version'], 'goal': CareerGoal.model_validate({k:v for k,v in goal.items() if k in CareerGoal.model_fields or k=='_id'}) if goal else None,
                 'dependent_results_need_review': state.get('dependent_results_need_review', False),
                 'review_selection':state.get('selected_review') or ({'id':str(goal['source_review_id']),'version':goal['source_review_version']} if goal and goal.get('source_review_id') else None)}
 
     def list(self, owner):
         goals = list(self.goals.find({'user_id': owner, 'record_type': {'$nin': ['exploration_draft', 'requirement_review']}}).sort('created_at', -1).limit(50))
         drafts = list(self.goals.find({'user_id': owner, 'record_type': 'exploration_draft'}).sort('updated_at', -1).limit(10))
-        return {'goals': [CareerGoal.model_validate(g) for g in goals],
+        return {'goals': [CareerGoal.model_validate({k:v for k,v in g.items() if k in CareerGoal.model_fields or k=='_id'}) for g in goals],
                 'explorations': [self.draft(str(d['_id']), owner) for d in drafts]}
 
     def replay_confirmation(self, owner, key, data):
@@ -125,6 +125,27 @@ class GoalStore:
                 raise GoalError('This request key was already used with different goal details.')
             return self.current(owner)
         return None
+
+    def persist_target(self, goal):
+        """Shared final persistence for JD, discovery and reviewed goal revisions."""
+        payload=mongo_document(CareerGoal.model_validate(goal))
+        draft=self.goals.find_one({'_id':payload['_id'],'user_id':goal.user_id,'record_type':'requirement_review'})
+        if draft:
+            # Promote the same record: source content is replaced by the canonical goal.
+            payload.update({k:draft[k] for k in ('source_hash','receipts') if k in draft})
+            result=self.goals.replace_one({'_id':payload['_id'],'user_id':goal.user_id,'record_type':'requirement_review','version':goal.version},payload)
+            if not result.matched_count:raise GoalError('The goal changed while saving.')
+            return payload
+        try:self.goals.insert_one(payload)
+        except DuplicateKeyError:
+            existing=self.goals.find_one({'_id':payload['_id'],'user_id':goal.user_id})
+            if not existing:raise GoalError('This target could not be recovered.')
+            previous=CareerGoal.model_validate({k:v for k,v in existing.items() if k in CareerGoal.model_fields or k=='_id'})
+            fields=set(CareerGoal.model_fields)-{'created_at','updated_at'}
+            if any(getattr(previous,f)!=getattr(goal,f) for f in fields):
+                raise GoalError('This request key was used for another target.')
+            payload=mongo_document(previous)
+        return payload
 
     def confirm(self, owner, key, data, prepared_goal=None):
         digest = fingerprint(data.model_dump(mode='json'))
@@ -146,7 +167,7 @@ class GoalStore:
         goal = prepared_goal if prepared_goal is not None else CareerGoal(_id=stable_id(owner, key, 'goal'), user_id=owner, version=1,
             skill_mapping_version='skills-v1', created_at=stamp, updated_at=stamp,
             target_type=data.target_type, field=data.field, role=data.role, company=data.company,
-            location=data.location, seniority_level=data.seniority_level, job_url=data.job_url,
+            location=data.location, seniority_level=data.seniority_level, job_url=data.job_url,employment_type=data.employment_type,
             interests=draft.interests if draft else [], preferences=draft.preferences if draft else [],
             skills=[], requirements_source='career_exploration' if data.target_type == 'career_exploration' else 'url_jd' if data.job_url else 'pasted_jd',
             generation_version='pending-skills', generation=draft.generation if draft else None, readiness='pending',
@@ -155,7 +176,7 @@ class GoalStore:
             source_extraction_version=draft.cv.extraction_version if draft else None, source_profile_version=draft.cv.profile_version if draft else None)
         # Metadata-equivalent confirmation is a no-op, not a new selection/version.
         previous = self.current(owner)['goal']
-        fields = ('target_type','field','role','company','location','seniority_level','job_url','interests','preferences','source_cv_id','source_cv_version','source_extraction_version','source_profile_version','exploration_draft_id','exploration_draft_version','skills','non_skill_requirements','summary','responsibilities','readiness','requirements_need_review','skill_mapping_version')
+        fields = ('discovery','target_type','field','role','employment_type','company','location','seniority_level','job_url','interests','preferences','source_cv_id','source_cv_version','source_extraction_version','source_profile_version','exploration_draft_id','exploration_draft_version','skills','non_skill_requirements','summary','responsibilities','readiness','requirements_need_review','skill_mapping_version')
         if previous and all(getattr(previous, f) == getattr(goal, f) for f in fields):
             receipt={'key':key,'hash':digest}
             changed=self.state.update_one({'_id':owner,'version':state['version'],'receipts.key':{'$ne':key}},
@@ -165,20 +186,14 @@ class GoalStore:
             return self.current(owner)
         if state.get('goal_id') and not data.replace_current:
             raise GoalError('Confirm explicitly that you want to replace your selected goal.')
-        payload = mongo_document(goal)
-        try:
-            self.goals.insert_one(payload)
-        except DuplicateKeyError:
-            existing = self.goals.find_one({'_id': payload['_id'], 'user_id': owner})
-            if not existing:
-                raise GoalError('This goal request could not be recovered.')
-            previous_attempt=CareerGoal.model_validate(existing)
-            if any(getattr(previous_attempt,f)!=getattr(goal,f) for f in fields):
-                raise GoalError('This request key was previously used for different goal details.')
-            payload=mongo_document(previous_attempt)
+        payload = self.persist_target(goal)
         receipt = {'key': key, 'hash': digest}
+        discovery_workspace={}
+        if goal.discovery:
+            discovery_workspace={'workspace':{'session_id':goal.source_review_id,'kind':'exploration','review_id':goal.source_review_id,'revision':goal.source_review_version,
+                'run_id':str(ObjectId()),'phase':'ready','research_id':None,'coverage':[],'error':None,'error_code':None,'retry_after':None,'expires_at':now()+timedelta(hours=24)}}
         changed = self.state.update_one({'_id': owner, 'version': state['version']},
-            {'$set': {'goal_id': payload['_id'], 'dependent_results_need_review': bool(previous),
+            {'$set': {**discovery_workspace,'goal_id': payload['_id'], 'dependent_results_need_review': bool(previous),
                        'selected_review':{'id':goal.source_review_id,'version':goal.source_review_version} if goal.source_review_id else None},
              '$inc': {'version': 1}, '$push': {'receipts': {'$each': [receipt], '$slice': -100}}}).modified_count
         if not changed:

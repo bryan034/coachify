@@ -10,7 +10,7 @@ REGISTRY = json.loads((Path(__file__).parents[1] / 'data' / 'skill-registry.json
 MAPPING_VERSION = REGISTRY['version']
 ALIASES = {(category.casefold(), name.casefold()): skill['id'] for skill in REGISTRY['skills']
            for category in skill['categories'] for name in skill['names']}
-METADATA = ('role', 'field', 'company', 'location', 'seniority_level', 'job_url')
+METADATA = ('role', 'field', 'company', 'location', 'seniority_level', 'job_url', 'employment_type')
 
 
 def prepare(content, previous=None, *, extracted=False, map_skills=True):
@@ -54,7 +54,16 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
                     raise GoalError('Guidance must be suggested and cannot claim employer evidence.', 422)
             elif item['origin'] == 'generated_guidance' and item['priority'] != 'suggested':
                 raise GoalError('Exploration guidance is not an employer condition.', 422)
+            if item['origin']=='market_research' and not extracted:
+                prior=old.get(item[key],{})
+                if prior.get('origin')!='market_research' or any(item.get(f)!=prior.get(f) for f in ('name','category','description','evidence')):
+                    raise GoalError('Research evidence cannot be invented or rewritten. Remove an irrelevant item or refine the research scope.',422)
             comparable = {k: v for k, v in item.items() if k != 'correction'}
             original = {k: v for k, v in old.get(item[key], {}).items() if k != 'correction'}
+            prior = old.get(item[key], {})
+            priority_changed = bool(previous) and (not prior or any(item.get(f) != prior.get(f) for f in ('priority','priority_evidence')))
+            item['priority_origin'] = 'user_declaration' if priority_changed else prior.get('priority_origin') if prior else item['origin']
+            if item['priority_origin'] == 'generated_guidance' and item['priority'] != 'suggested':
+                raise GoalError('AI planning importance must stay advisory.', 422)
             item['correction'] = 'extracted' if extracted else old.get(item[key], {}).get('correction', 'user') if comparable == original else 'user'
     return JDExtraction.model_validate(data)

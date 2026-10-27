@@ -2,10 +2,929 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Coachify Career API",
-    "description": "Transient JD previews, optional-CV conversational exploration and explicit structured goal persistence. JD reviews persist structured requirements; confirmation explicitly selects the reviewed goal.",
+    "description": "One version-checked current career goal per account, compact progress reads, five-category research and lazy owner-scoped evidence.",
     "version": "0.2.0"
   },
   "paths": {
+    "/api/v1/career/discoveries/current": {
+      "get": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Current",
+        "operationId": "current_api_v1_career_discoveries_current_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/career/discoveries": {
+      "post": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Start",
+        "operationId": "start_api_v1_career_discoveries_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartDiscovery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/discoveries/{session_id}": {
+      "get": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Get",
+        "operationId": "get_api_v1_career_discoveries__session_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/discoveries/{session_id}/messages": {
+      "post": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Message",
+        "operationId": "message_api_v1_career_discoveries__session_id__messages_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/discoveries/{session_id}/research": {
+      "post": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Research",
+        "operationId": "research_api_v1_career_discoveries__session_id__research_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchDiscovery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/opportunity-research/progress": {
+      "get": {
+        "tags": [
+          "J12/J13 Opportunity Intelligence"
+        ],
+        "summary": "Progress",
+        "operationId": "progress_api_v1_career_goals__goal_id__opportunity_research_progress_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchProgress"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/opportunity-research/findings/{finding_id}/evidence": {
+      "get": {
+        "tags": [
+          "J12/J13 Opportunity Intelligence"
+        ],
+        "summary": "Evidence",
+        "operationId": "evidence_api_v1_career_goals__goal_id__opportunity_research_findings__finding_id__evidence_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Finding Id"
+            }
+          },
+          {
+            "name": "research_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Research Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/opportunity-research": {
+      "get": {
+        "tags": [
+          "J12/J13 Opportunity Intelligence"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_career_goals__goal_id__opportunity_research_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "research_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Research Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpportunityView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "J12/J13 Opportunity Intelligence"
+        ],
+        "summary": "Start",
+        "operationId": "start_api_v1_career_goals__goal_id__opportunity_research_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpportunityView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/workspace/progress": {
+      "get": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Progress",
+        "operationId": "progress_api_v1_career_workspace_progress_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceProgress"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/career/workspace": {
+      "get": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_career_workspace_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/career/workspace/jd": {
+      "post": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Ingest",
+        "operationId": "ingest_api_v1_career_workspace_jd_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Prefer",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prefer"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JDSource"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/WorkspaceView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OperationView"
+                    }
+                  ],
+                  "title": "Response Ingest Api V1 Career Workspace Jd Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/workspace/review": {
+      "patch": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Edit",
+        "operationId": "edit_api_v1_career_workspace_review_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/workspace/messages": {
+      "post": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Message",
+        "operationId": "message_api_v1_career_workspace_messages_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Prefer",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prefer"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Chat"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/WorkspaceChatReply"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OperationView"
+                    }
+                  ],
+                  "title": "Response Message Api V1 Career Workspace Messages Post"
+                }
+              }
+            }
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/workspace/operations/{operation_id}": {
+      "get": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Operation",
+        "operationId": "operation_api_v1_career_workspace_operations__operation_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Operation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/workspace/retry": {
+      "post": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Retry",
+        "operationId": "retry_api_v1_career_workspace_retry_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/career/workspace/direction": {
+      "post": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Direction",
+        "operationId": "direction_api_v1_career_workspace_direction_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Direction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/career/context": {
       "get": {
         "tags": [
@@ -19,6 +938,33 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/career/context/assessment": {
+      "get": {
+        "tags": [
+          "J08 exploration / J09 goal confirmation"
+        ],
+        "summary": "Assessment Status",
+        "description": "Read readiness through CV's owner API; a successful empty CV is not assessed.",
+        "operationId": "assessment_status_api_v1_career_context_assessment_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentStatus"
+                }
               }
             }
           }
@@ -398,6 +1344,193 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/interview-research": {
+      "get": {
+        "tags": [
+          "J12/J13 interview research"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_career_goals__goal_id__interview_research_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "research_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Research Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "J12/J13 interview research"
+        ],
+        "summary": "Acquire",
+        "operationId": "acquire_api_v1_career_goals__goal_id__interview_research_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/guidance": {
+      "post": {
+        "tags": [
+          "J10 exploration skills"
+        ],
+        "summary": "Guidance",
+        "operationId": "guidance_api_v1_career_goals__goal_id__guidance_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateSkills"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/career/goals/{goal_id}": {
@@ -784,6 +1917,985 @@
   },
   "components": {
     "schemas": {
+      "AssessmentStatus": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "no_cv",
+              "not_evaluated",
+              "evaluated",
+              "unavailable"
+            ],
+            "title": "Status"
+          },
+          "cv_uploaded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cv Uploaded"
+          },
+          "skills_evaluated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills Evaluated"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "cv_uploaded",
+          "skills_evaluated"
+        ],
+        "title": "AssessmentStatus"
+      },
+      "CareerGoal": {
+        "properties": {
+          "_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "analysis-v1",
+            "title": "Schema Version",
+            "default": "analysis-v1"
+          },
+          "skill_mapping_version": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Skill Mapping Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoveryEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "user_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+            "title": "User Id"
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "specific_job",
+              "career_exploration"
+            ],
+            "title": "Target Type"
+          },
+          "field": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Field"
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Role"
+          },
+          "employment_type": {
+            "type": "string",
+            "enum": [
+              "internship",
+              "full_time",
+              "part_time",
+              "contract",
+              "unknown"
+            ],
+            "title": "Employment Type",
+            "default": "unknown"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "seniority_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seniority Level"
+          },
+          "job_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Url"
+          },
+          "interests": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Interests"
+          },
+          "preferences": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Preferences"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/TargetSkill"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Skills"
+          },
+          "non_skill_requirements": {
+            "items": {
+              "$ref": "#/components/schemas/NonSkillRequirement"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Non Skill Requirements"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "responsibilities": {
+            "items": {
+              "type": "string",
+              "maxLength": 600,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Responsibilities"
+          },
+          "requirements_source": {
+            "type": "string",
+            "enum": [
+              "pasted_jd",
+              "url_jd",
+              "document_jd",
+              "career_exploration"
+            ],
+            "title": "Requirements Source"
+          },
+          "generation_version": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Generation Version"
+          },
+          "generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Generation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "readiness": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "pending"
+            ],
+            "title": "Readiness",
+            "default": "ready"
+          },
+          "exploration_draft_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exploration Draft Id"
+          },
+          "exploration_draft_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exploration Draft Version"
+          },
+          "source_review_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Review Id"
+          },
+          "source_review_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Review Version"
+          },
+          "requirements_need_review": {
+            "type": "boolean",
+            "title": "Requirements Need Review",
+            "default": false
+          },
+          "source_cv_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Cv Id"
+          },
+          "source_cv_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Cv Version"
+          },
+          "source_extraction_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Extraction Version"
+          },
+          "source_profile_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Profile Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "_id",
+          "version",
+          "skill_mapping_version",
+          "created_at",
+          "updated_at",
+          "user_id",
+          "target_type",
+          "field",
+          "role",
+          "requirements_source",
+          "generation_version"
+        ],
+        "title": "CareerGoal"
+      },
+      "CategoryProgress": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "partial",
+              "failed",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "CategoryProgress"
+      },
+      "Chat": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Session Id"
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "question",
+              "refine"
+            ],
+            "title": "Mode",
+            "default": "question"
+          },
+          "conversation": {
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Conversation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "expected_version",
+          "message"
+        ],
+        "title": "Chat"
+      },
+      "CurrentCareerGoal": {
+        "properties": {
+          "selection_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Selection Version"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CareerGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dependent_results_need_review": {
+            "type": "boolean",
+            "title": "Dependent Results Need Review",
+            "default": false
+          },
+          "review_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "selection_version",
+          "goal"
+        ],
+        "title": "CurrentCareerGoal"
+      },
+      "Decision": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "ASK_CLARIFICATION",
+              "SUGGEST_ROLES",
+              "CONFIRM_AREA",
+              "START_RESEARCH"
+            ],
+            "title": "Action"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Scope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Recommendations"
+          },
+          "reply": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Reply"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action",
+          "scope",
+          "question",
+          "reply"
+        ],
+        "title": "Decision"
+      },
+      "Direction": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "index": {
+            "type": "integer",
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Index"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "index"
+        ],
+        "title": "Direction"
+      },
+      "DiscoveryEvidence": {
+        "properties": {
+          "research_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Research Id"
+          },
+          "selected_area": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Selected Area"
+          },
+          "related_roles": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Related Roles"
+          },
+          "specificity": {
+            "type": "string",
+            "enum": [
+              "field",
+              "role_area",
+              "specialisation"
+            ],
+            "title": "Specificity"
+          },
+          "listings_analysed": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Listings Analysed"
+          },
+          "employers_analysed": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Employers Analysed"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "good",
+              "limited",
+              "insufficient"
+            ],
+            "title": "Coverage"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Source Ids"
+          },
+          "researched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Researched At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "research_id",
+          "selected_area",
+          "related_roles",
+          "specificity",
+          "listings_analysed",
+          "employers_analysed",
+          "coverage",
+          "source_ids",
+          "researched_at"
+        ],
+        "title": "DiscoveryEvidence"
+      },
+      "DiscoveryMessage": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "message"
+        ],
+        "title": "DiscoveryMessage"
+      },
+      "DiscoverySession": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "conversation",
+              "researching",
+              "waiting",
+              "failed",
+              "review",
+              "confirmed"
+            ],
+            "title": "Status"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Decision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Scope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "related_roles": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Related Roles"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchSource"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Sources"
+          },
+          "stats": {
+            "items": {
+              "$ref": "#/components/schemas/SkillFrequency"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Stats"
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 600,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Warnings"
+          },
+          "listings_analysed": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Listings Analysed"
+          },
+          "employers_analysed": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Employers Analysed"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "good",
+                  "limited",
+                  "insufficient"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "provider"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "gemini",
+                  "brave"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JDExtractionResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "status",
+          "stage",
+          "decision",
+          "scope",
+          "related_roles",
+          "sources",
+          "stats",
+          "warnings",
+          "listings_analysed",
+          "employers_analysed",
+          "coverage",
+          "error_code",
+          "limit_scope",
+          "provider",
+          "retry_after",
+          "review"
+        ],
+        "title": "DiscoverySession"
+      },
+      "DiscoveryView": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoverySession"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "available",
+          "session"
+        ],
+        "title": "DiscoveryView"
+      },
+      "EvidenceView": {
+        "properties": {
+          "finding_id": {
+            "type": "string",
+            "title": "Finding Id"
+          },
+          "quotes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Quotes"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "finding_id",
+          "quotes",
+          "sources"
+        ],
+        "title": "EvidenceView"
+      },
+      "GenerateSkills": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "expected_selection_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Selection Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "expected_selection_version"
+        ],
+        "title": "GenerateSkills"
+      },
       "Generation": {
         "properties": {
           "provider": {
@@ -825,6 +2937,204 @@
           "generated_at"
         ],
         "title": "Generation"
+      },
+      "GoalContent": {
+        "properties": {
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "employment_type": {
+            "type": "string",
+            "enum": [
+              "internship",
+              "full_time",
+              "part_time",
+              "contract",
+              "unknown"
+            ],
+            "title": "Employment Type",
+            "default": "unknown"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "seniority_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seniority Level"
+          },
+          "job_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Url"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "responsibilities": {
+            "items": {
+              "type": "string",
+              "maxLength": 600,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Responsibilities"
+          },
+          "non_skill_requirements": {
+            "items": {
+              "$ref": "#/components/schemas/NonSkillRequirement"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Non Skill Requirements"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewSkill"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Skills"
+          },
+          "_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "specific_job",
+              "career_exploration"
+            ],
+            "title": "Target Type"
+          },
+          "generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Generation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoveryEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirements_need_review": {
+            "type": "boolean",
+            "title": "Requirements Need Review",
+            "default": false
+          },
+          "metadata_origins": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "user"
+              ]
+            },
+            "type": "object",
+            "title": "Metadata Origins"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "field",
+          "company",
+          "skills",
+          "_id",
+          "version",
+          "target_type",
+          "generation"
+        ],
+        "title": "GoalContent"
       },
       "HTTPValidationError": {
         "properties": {
@@ -879,6 +3189,18 @@
               }
             ],
             "title": "Field"
+          },
+          "employment_type": {
+            "type": "string",
+            "enum": [
+              "internship",
+              "full_time",
+              "part_time",
+              "contract",
+              "unknown"
+            ],
+            "title": "Employment Type",
+            "default": "unknown"
           },
           "company": {
             "anyOf": [
@@ -982,72 +3304,14 @@
       },
       "JDExtractionResult": {
         "properties": {
-          "review_id": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{24}$",
-            "title": "Review Id"
-          },
-          "version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Version"
-          },
-          "target_type": {
-            "type": "string",
-            "enum": [
-              "specific_job",
-              "career_exploration"
-            ],
-            "title": "Target Type"
-          },
-          "extraction": {
-            "$ref": "#/components/schemas/JDExtraction"
-          },
-          "baseline": {
-            "$ref": "#/components/schemas/JDExtraction"
-          },
-          "metadata_origins": {
-            "additionalProperties": {
-              "type": "string",
-              "enum": [
-                "extracted",
-                "user"
-              ]
-            },
-            "type": "object",
-            "title": "Metadata Origins"
-          },
-          "requirements_need_review": {
-            "type": "boolean",
-            "title": "Requirements Need Review"
-          },
-          "is_confirmed": {
-            "type": "boolean",
-            "title": "Is Confirmed"
-          },
-          "generation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Generation"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "current": {
+            "$ref": "#/components/schemas/ProposedCurrentGoal"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "review_id",
-          "version",
-          "target_type",
-          "extraction",
-          "baseline",
-          "metadata_origins",
-          "requirements_need_review",
-          "is_confirmed",
-          "generation"
+          "current"
         ],
         "title": "JDExtractionResult"
       },
@@ -1085,6 +3349,53 @@
           "message"
         ],
         "title": "JDMessage"
+      },
+      "JDPreview": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "url",
+              "document"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "notices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text",
+          "source_name"
+        ],
+        "title": "JDPreview"
       },
       "JDReply": {
         "properties": {
@@ -1155,6 +3466,31 @@
         ],
         "title": "JDSource"
       },
+      "Message": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "Message"
+      },
       "NonSkillRequirement": {
         "properties": {
           "requirement_id": {
@@ -1186,9 +3522,41 @@
             "enum": [
               "required",
               "preferred",
+              "unspecified",
+              "conflicting",
               "suggested"
             ],
             "title": "Priority"
+          },
+          "priority_evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Evidence"
+          },
+          "priority_origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "employer",
+                  "generated_guidance",
+                  "user_declaration",
+                  "market_research"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Origin"
           },
           "evidence": {
             "type": "string",
@@ -1223,7 +3591,8 @@
             "enum": [
               "employer",
               "generated_guidance",
-              "user_declaration"
+              "user_declaration",
+              "market_research"
             ],
             "title": "Origin",
             "default": "employer"
@@ -1293,6 +3662,272 @@
         ],
         "title": "NonSkillRequirement"
       },
+      "OperationView": {
+        "properties": {
+          "activities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Activities"
+          },
+          "operation_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Operation Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "repairing",
+              "waiting_quota",
+              "succeeded"
+            ],
+            "title": "Status"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "provider",
+                  "user"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "gemini",
+                  "brave"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "validation_feedback": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Feedback"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operation_id",
+          "status"
+        ],
+        "title": "OperationView"
+      },
+      "OpportunityView": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "availability_issues": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "research_disabled",
+                "reasoning_disabled",
+                "gemini_not_configured",
+                "brave_not_configured",
+                "brave_llm_context_required"
+              ]
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Availability Issues"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "career_target_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Career Target Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "partial",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "finished": {
+            "type": "boolean",
+            "title": "Finished",
+            "default": false
+          },
+          "historical": {
+            "type": "boolean",
+            "title": "Historical",
+            "default": false
+          },
+          "research_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Id"
+          },
+          "research_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Version"
+          },
+          "categories": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PublicCategoryResult"
+            },
+            "propertyNames": {
+              "enum": [
+                "interview_intelligence",
+                "internship_insights",
+                "career_progression",
+                "conversion_outcomes",
+                "company_intelligence"
+              ]
+            },
+            "type": "object",
+            "maxProperties": 5,
+            "title": "Categories"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/PublicSource"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Sources"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Summary"
+          },
+          "metrics": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Metrics"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 3600.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "available",
+          "job_id",
+          "career_target_id",
+          "status"
+        ],
+        "title": "OpportunityView"
+      },
       "Preview": {
         "properties": {
           "kind": {
@@ -1340,6 +3975,711 @@
         ],
         "title": "Preview"
       },
+      "ProposedCurrentGoal": {
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/GoalContent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "title": "ProposedCurrentGoal"
+      },
+      "PublicCategoryResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "partial",
+              "failed",
+              "not_applicable"
+            ],
+            "title": "Status",
+            "default": "pending"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/PublicFinding"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Findings"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Missing Fields"
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 600,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Warnings"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "researched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Researched At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "searches": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 0.0,
+            "title": "Searches",
+            "default": 0
+          },
+          "model_calls": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Model Calls",
+            "default": 0
+          },
+          "latency_ms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Latency Ms",
+            "default": 0
+          },
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PublicCategoryResult"
+      },
+      "PublicFinding": {
+        "properties": {
+          "finding_id": {
+            "type": "string",
+            "pattern": "^f[0-9a-f]{16}$",
+            "title": "Finding Id"
+          },
+          "field": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Field"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "insufficient_evidence"
+            ],
+            "title": "Confidence"
+          },
+          "evidence_type": {
+            "type": "string",
+            "enum": [
+              "official",
+              "candidate_reported",
+              "third_party",
+              "inferred"
+            ],
+            "title": "Evidence Type"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Source Ids"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "related_role",
+              "related_location",
+              "related_employment",
+              "general"
+            ],
+            "title": "Scope"
+          },
+          "conflict_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflict Group"
+          },
+          "last_verified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Verified At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "finding_id",
+          "field",
+          "value",
+          "confidence",
+          "evidence_type",
+          "source_ids",
+          "scope",
+          "last_verified_at"
+        ],
+        "title": "PublicFinding"
+      },
+      "PublicSource": {
+        "properties": {
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "employer",
+              "reddit",
+              "glassdoor",
+              "other"
+            ],
+            "title": "Platform"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "reported_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Date"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "role_match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "related",
+              "unknown"
+            ],
+            "title": "Role Match",
+            "default": "unknown"
+          },
+          "reliability": {
+            "type": "string",
+            "enum": [
+              "official",
+              "anecdotal",
+              "unverified"
+            ],
+            "title": "Reliability",
+            "default": "unverified"
+          },
+          "report_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Group"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "platform",
+          "url"
+        ],
+        "title": "PublicSource"
+      },
+      "ResearchCommand": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "expected_selection_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Selection Version"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "interview_intelligence",
+                  "internship_insights",
+                  "career_progression",
+                  "conversion_outcomes",
+                  "company_intelligence"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "expected_selection_version"
+        ],
+        "title": "ResearchCommand"
+      },
+      "ResearchCoverage": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": [
+              "brave",
+              "reddit"
+            ],
+            "title": "Platform"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "no_findings",
+              "unavailable",
+              "not_connected"
+            ],
+            "title": "Status"
+          },
+          "round": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Round",
+            "default": 0
+          },
+          "useful_sources": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Useful Sources"
+          },
+          "target_sources": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Sources"
+          },
+          "limit_reached": {
+            "type": "boolean",
+            "title": "Limit Reached",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "platform",
+          "status"
+        ],
+        "title": "ResearchCoverage"
+      },
+      "ResearchDiscovery": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "const": true,
+            "title": "Confirmed"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "scope",
+          "confirmed"
+        ],
+        "title": "ResearchDiscovery"
+      },
+      "ResearchProgress": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "finished": {
+            "type": "boolean",
+            "title": "Finished"
+          },
+          "categories": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "propertyNames": {
+              "enum": [
+                "interview_intelligence",
+                "internship_insights",
+                "career_progression",
+                "conversion_outcomes",
+                "company_intelligence"
+              ]
+            },
+            "type": "object",
+            "title": "Categories"
+          },
+          "result_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Version"
+          },
+          "research_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Id"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "finished",
+          "categories",
+          "result_version"
+        ],
+        "title": "ResearchProgress"
+      },
+      "ResearchRequest": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "expected_selection_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Selection Version"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "expected_selection_version"
+        ],
+        "title": "ResearchRequest"
+      },
+      "ResearchSource": {
+        "properties": {
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "employer",
+              "reddit",
+              "glassdoor",
+              "other"
+            ],
+            "title": "Platform"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2400,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "reported_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Date"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "role_match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "related",
+              "unknown"
+            ],
+            "title": "Role Match",
+            "default": "unknown"
+          },
+          "reliability": {
+            "type": "string",
+            "enum": [
+              "official",
+              "anecdotal",
+              "unverified"
+            ],
+            "title": "Reliability",
+            "default": "unverified"
+          },
+          "report_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Group"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "platform",
+          "url"
+        ],
+        "title": "ResearchSource"
+      },
       "ReviewMessage": {
         "properties": {
           "role": {
@@ -1364,6 +4704,27 @@
           "content"
         ],
         "title": "ReviewMessage"
+      },
+      "ReviewReference": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "ReviewReference"
       },
       "ReviewSkill": {
         "properties": {
@@ -1449,9 +4810,41 @@
             "enum": [
               "required",
               "preferred",
+              "unspecified",
+              "conflicting",
               "suggested"
             ],
             "title": "Priority"
+          },
+          "priority_evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Evidence"
+          },
+          "priority_origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "employer",
+                  "generated_guidance",
+                  "user_declaration",
+                  "market_research"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Origin"
           },
           "required_proficiency": {
             "anyOf": [
@@ -1514,7 +4907,8 @@
             "enum": [
               "employer",
               "generated_guidance",
-              "user_declaration"
+              "user_declaration",
+              "market_research"
             ],
             "title": "Origin"
           }
@@ -1578,6 +4972,18 @@
             "maxLength": 160,
             "minLength": 1,
             "title": "Field"
+          },
+          "employment_type": {
+            "type": "string",
+            "enum": [
+              "internship",
+              "full_time",
+              "part_time",
+              "contract",
+              "unknown"
+            ],
+            "title": "Employment Type",
+            "default": "unknown"
           },
           "company": {
             "anyOf": [
@@ -1676,29 +5082,7 @@
             "title": "Expected Version"
           },
           "content": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/JDExtraction"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "reset": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "metadata",
-                  "all"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reset"
+            "$ref": "#/components/schemas/JDExtraction"
           },
           "acknowledge_context": {
             "type": "boolean",
@@ -1709,9 +5093,67 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "expected_version"
+          "expected_version",
+          "content"
         ],
         "title": "SaveReview"
+      },
+      "Scope": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Field"
+          },
+          "area": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Area"
+          },
+          "specificity": {
+            "type": "string",
+            "enum": [
+              "field",
+              "role_area",
+              "specialisation"
+            ],
+            "title": "Specificity",
+            "default": "field"
+          },
+          "career_stage": {
+            "type": "string",
+            "enum": [
+              "internship",
+              "entry_level",
+              "experienced",
+              "unspecified"
+            ],
+            "title": "Career Stage",
+            "default": "unspecified"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "area"
+        ],
+        "title": "Scope"
       },
       "SendAnswer": {
         "properties": {
@@ -1759,6 +5201,95 @@
         ],
         "title": "SendAnswer"
       },
+      "SkillFrequency": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Id"
+          },
+          "requirement_type": {
+            "type": "string",
+            "enum": [
+              "core",
+              "specialisation",
+              "optional"
+            ],
+            "title": "Requirement Type"
+          },
+          "mention_count": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Mention Count"
+          },
+          "sample_size": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Sample Size"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Source Ids"
+          },
+          "original_terms": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Original Terms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "skill_id",
+          "requirement_type",
+          "mention_count",
+          "sample_size",
+          "source_ids",
+          "original_terms"
+        ],
+        "title": "SkillFrequency"
+      },
+      "StartDiscovery": {
+        "properties": {
+          "consent": {
+            "type": "boolean",
+            "const": true,
+            "title": "Consent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "consent"
+        ],
+        "title": "StartDiscovery"
+      },
       "StartExploration": {
         "properties": {
           "consent": {
@@ -1797,6 +5328,271 @@
           "consent"
         ],
         "title": "StartExploration"
+      },
+      "Suggestion": {
+        "properties": {
+          "area": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Area"
+          },
+          "explanation": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Explanation"
+          },
+          "typical_work": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Typical Work"
+          },
+          "difference": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Difference"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "area",
+          "explanation",
+          "typical_work",
+          "difference"
+        ],
+        "title": "Suggestion"
+      },
+      "Summary": {
+        "properties": {
+          "overview_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Overview Refs"
+          },
+          "key_takeaway_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Key Takeaway Refs"
+          },
+          "consideration_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Consideration Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Summary"
+      },
+      "TargetSkill": {
+        "properties": {
+          "skill_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "group_operator": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Group Operator",
+            "default": "all"
+          },
+          "correction": {
+            "type": "string",
+            "enum": [
+              "extracted",
+              "user"
+            ],
+            "title": "Correction",
+            "default": "extracted"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Category"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "required",
+              "preferred",
+              "unspecified",
+              "conflicting",
+              "suggested"
+            ],
+            "title": "Priority"
+          },
+          "priority_evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Evidence"
+          },
+          "priority_origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "employer",
+                  "generated_guidance",
+                  "user_declaration",
+                  "market_research"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Origin"
+          },
+          "required_proficiency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "beginner",
+                  "intermediate",
+                  "advanced",
+                  "expert"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Proficiency"
+          },
+          "required_experience_months": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1200.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Experience Months"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "employer",
+              "generated_guidance",
+              "user_declaration",
+              "market_research"
+            ],
+            "title": "Origin"
+          },
+          "source_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Source Urls"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "category",
+          "priority",
+          "origin"
+        ],
+        "title": "TargetSkill"
       },
       "UrlInput": {
         "properties": {
@@ -1854,27 +5650,171 @@
         ],
         "title": "ValidationError"
       },
-      "JDPreview": {
+      "WorkspaceChatReply": {
         "properties": {
-          "kind": {
+          "reply": {
             "type": "string",
-            "enum": [
-              "url",
-              "document"
-            ],
-            "title": "Kind"
-          },
-          "text": {
-            "type": "string",
-            "maxLength": 8000,
+            "maxLength": 4000,
             "minLength": 1,
-            "title": "Text"
+            "title": "Reply"
           },
-          "source_name": {
+          "proposed_skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReviewSkill"
+                },
+                "type": "array",
+                "maxItems": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Skills"
+          },
+          "edit_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "clarifying",
+                  "saved",
+                  "cancelled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Status"
+          },
+          "workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reply",
+          "proposed_skills"
+        ],
+        "title": "WorkspaceChatReply"
+      },
+      "WorkspaceEdit": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "content": {
+            "$ref": "#/components/schemas/JDExtraction"
+          },
+          "acknowledge_context": {
+            "type": "boolean",
+            "title": "Acknowledge Context",
+            "default": false
+          },
+          "session_id": {
             "type": "string",
-            "title": "Source Name"
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Session Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "content",
+          "session_id"
+        ],
+        "title": "WorkspaceEdit"
+      },
+      "WorkspaceProgress": {
+        "properties": {
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
           },
-          "source_url": {
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "selection_version": {
+            "type": "integer",
+            "title": "Selection Version"
+          },
+          "activities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Activities"
+          },
+          "categories": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CategoryProgress"
+            },
+            "type": "object",
+            "title": "Categories"
+          },
+          "research_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Id"
+          },
+          "result_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Version"
+          },
+          "error": {
             "anyOf": [
               {
                 "type": "string"
@@ -1883,23 +5823,297 @@
                 "type": "null"
               }
             ],
-            "title": "Source Url"
+            "title": "Error"
           },
-          "notices": {
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "provider",
+                  "user"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "gemini",
+                  "brave"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "edit_question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Question"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "phase",
+          "revision",
+          "goal_id",
+          "selection_version",
+          "activities",
+          "categories",
+          "research_id",
+          "result_version",
+          "error",
+          "error_code",
+          "retry_after",
+          "limit_scope",
+          "provider"
+        ],
+        "title": "WorkspaceProgress"
+      },
+      "WorkspaceView": {
+        "properties": {
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "jd",
+                  "exploration"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "empty",
+              "exploring",
+              "research_pending",
+              "researching",
+              "waiting_quota",
+              "research_failed",
+              "ready",
+              "expired"
+            ],
+            "title": "Phase"
+          },
+          "current": {
+            "$ref": "#/components/schemas/CurrentCareerGoal"
+          },
+          "research_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Id"
+          },
+          "research_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Version"
+          },
+          "activities": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Notices"
+            "maxItems": 12,
+            "title": "Activities"
+          },
+          "coverage": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchCoverage"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Coverage"
+          },
+          "edit_question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Question"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "provider",
+                  "user"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "gemini",
+                  "brave"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "exploration_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exploration Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
+          "session_id",
+          "revision",
           "kind",
-          "text",
-          "source_name"
+          "phase",
+          "current",
+          "expires_at",
+          "exploration_id"
         ],
-        "title": "JDPreview"
+        "title": "WorkspaceView"
       }
     },
     "securitySchemes": {

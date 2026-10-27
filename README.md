@@ -2,7 +2,7 @@
 
 Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
-**Status:** P01–P16 education, planning preferences, email/password access, email verification and initial onboarding are implemented with profile persistence and local/international school snapshots. Career Goal includes one chat page with J08 adaptive optional-CV exploration and J09 goal confirmation/persistence. J01/J06/J07 previews remain transient; selecting a JD starts structured AI extraction and saved review on that same page. J02–J04 now save editable role/skill/condition reviews in MongoDB, restore them after reload and explicitly confirm structured goals. A small versioned registry maps known skills; unfamiliar skills keep analysis pending. The first workspace UI is integrated; unimplemented features use empty states and disabled actions. The current local setup uses email/password and OTP; no Google OAuth credentials are needed. See [setup instructions](docs/setup.md).
+**Status:** Profile, onboarding, email/password and OTP are implemented. Career Goal now has one automatically saved goal/chat per account. A validated job identity starts public research alongside full JD extraction. The chat shows observed progress and waits for JD extraction plus completed research before typing one combined summary; saved goal cards update as extraction finishes. Five-category Opportunity Intelligence adds cited interviews, internship experience, career progression/conversion salary, historical conversion rates and company/team culture through Gemini/Brave; guided chat supports refinements, and a CV assessment link uses owner-scoped saved-data checks. New JDs replace the live conversation. Conversational Career Discovery researches a user-approved area and saves its reviewed target through the same goal persistence path. The current goal is returned once and edited in place with version checks; lightweight progress polling and lazy evidence reads avoid repeated source payloads. Structured goals and research persist in MongoDB, with temporary 24-hour workflow checkpoints. Dedicated CV extraction, gap analysis and roadmaps remain planned. See [setup](docs/setup.md) and [Career service](services/career-service/README.md).
 
 ## Stack
 
@@ -13,7 +13,7 @@ Career-readiness planner for users in Singapore, including students, National Se
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
 - Account access: email/password accounts with OTP email verification, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
-- AI provider: Groq powers explicit exploration turns; preview endpoints do not call AI. Application hosting is not selected.
+- AI provider: Gemini 3.5 Flash Lite powers all reasoning, extraction and chat; preview endpoints do not call AI. Application hosting is not selected.
 
 ## Repository layout
 
@@ -48,6 +48,6 @@ The current documentation under `docs/` reflects the Next.js and MongoDB decisio
 
 ## Implementation scope
 
-Use the active `infrastructure/docker/compose.yaml` for the implemented profile slice. Files ending in `.example` remain inactive planning templates. Career supports optional-CV exploration and confirmed goals with scoped MongoDB persistence. CV exposes owner-scoped reads; dedicated upload/extraction remains planned. Temporary URL/document previews have no database writes or AI calls; explicit JD extraction and approved review saves persist structured data only. Other services retain source placeholders. Profile and preview API contracts are implemented; remaining endpoint contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.
+Use the active `infrastructure/docker/compose.yaml` for the implemented profile slice. Files ending in `.example` remain inactive planning templates. Career supports optional-CV exploration, importance review, advisory skill generation and confirmed goals with scoped MongoDB persistence. Brave API adapters and versioned interview research are implemented; live calls require your configured credentials/access. CV exposes owner-scoped reads; dedicated upload/extraction remains planned. Temporary URL/document previews have no database writes or AI calls; explicit JD extraction and approved review saves persist structured data only. Other services retain source placeholders. Profile and preview API contracts are implemented; remaining endpoint contracts are shells. Keep real environment files, credentials, CV uploads and database data out of source control.
 
 For Docker source-code hot reload, see the [development setup](infrastructure/docker/README.md#hot-reload-during-development).

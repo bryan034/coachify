@@ -1,16 +1,18 @@
 """J08/J09 authenticated orchestration; raw CV buffers never enter repositories."""
 import hashlib
 import json
+import asyncio
 from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool
 from app.ai.adapter import AIError, Operation
+from app.workflows.exploration import exploration_turn
 from app.ai.contracts import AIInput, Message
 from app.core.auth import bearer, current_account
 from app.repositories.goals import GoalError, fingerprint, now
 from app.schemas.analysis import object_id
-from app.schemas.goals import Answer, CvContext, GoalDraft, QUESTIONS, SaveGoal, SendAnswer, StartExploration, Turn
+from app.schemas.goals import Answer, AssessmentStatus, CvContext, GoalDraft, QUESTIONS, SaveGoal, SendAnswer, StartExploration, Turn
 
 router=APIRouter(prefix='/api/v1/career', tags=['J08 exploration / J09 goal confirmation'])
 
@@ -62,8 +64,42 @@ async def context(request: Request, account=Depends(owner)):
             'ai_available':request.app.state.ai.settings.enabled}
 
 
+@router.get('/context/assessment', response_model=AssessmentStatus)
+async def assessment_status(request: Request, account=Depends(owner)):
+    """Read readiness through CV's owner API; a successful empty CV is not assessed."""
+    cv_client=request.app.state.cv
+    uploaded=None
+    try:
+        if cv_client is None:raise GoalError('CV service unavailable.',503)
+        token=request.headers.get('authorization','')
+        rows=[cv for cv in (await cv_client.list(token))[:50] if cv.user_id==account]
+        uploaded=bool(rows)
+        if not rows:return AssessmentStatus(status='no_cv',cv_uploaded=False,skills_evaluated=False)
+        ready=[cv for cv in rows if cv.extraction_status=='succeeded']
+        # Inspect at most four snapshots concurrently, without returning their private evidence.
+        failed=False
+        for offset in range(0,len(ready),4):
+            snapshots=await asyncio.gather(*(cv_client.get(cv.id,token,account) for cv in ready[offset:offset+4]),return_exceptions=True)
+            if any(not isinstance(cv,BaseException) and cv.user_id==account and cv.extraction_status=='succeeded' and cv.skills for cv in snapshots):
+                return AssessmentStatus(status='evaluated',cv_uploaded=True,skills_evaluated=True)
+            failed=failed or any(isinstance(cv,BaseException) for cv in snapshots)
+        if failed:raise GoalError('CV service unavailable.',503)
+        return AssessmentStatus(status='not_evaluated',cv_uploaded=True,skills_evaluated=False)
+    except GoalError:
+        return AssessmentStatus(status='unavailable',cv_uploaded=uploaded,skills_evaluated=None)
+
+
 @router.post('/explorations')
 async def start(body: StartExploration, request: Request, account=Depends(owner), key=Depends(request_key)):
+    workspace=getattr(request.app.state,'workspace_store',None)
+    if workspace:
+        active=(await run_in_threadpool(workspace.row,account)).get('workspace',{})
+        if active.get('exploration_id') and active.get('kind')=='exploration' and not active.get('review_id'):
+            existing=await run_in_threadpool(store(request).draft,active['exploration_id'],account)
+            if body.cv_id!=existing.cv.cv_id or body.temporary_filename!=(existing.cv.filename if existing.cv.mode=='temporary' else None):
+                raise GoalError('The current conversation already has its CV context. Continue it instead of creating another session.')
+            return draft_view(existing)
+        if active.get('review_id'):raise GoalError('Continue your existing career conversation, or import a new JD to replace it.')
     cv_context=CvContext()
     if body.cv_id:
         cv=await selected_cv(request,body.cv_id,account)
@@ -71,6 +107,11 @@ async def start(body: StartExploration, request: Request, account=Depends(owner)
     elif body.temporary_filename:
         cv_context=CvContext(mode='temporary',filename=body.temporary_filename)
     draft=await run_in_threadpool(store(request).start,account,key,body.model_dump(mode='json'),cv_context)
+    if workspace:
+        from datetime import timedelta
+        await run_in_threadpool(workspace.rows.update_one,{'_id':account},{'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]},
+            '$set':{'workspace':{'session_id':draft.id,'kind':'exploration','exploration_id':draft.id,'revision':draft.version,'phase':'exploring',
+                'run_id':draft.id,'expires_at':now()+timedelta(hours=24)}}},upsert=True)
     return draft_view(draft)
 
 
@@ -82,6 +123,10 @@ async def get_draft(draft_id: str, request: Request, account=Depends(owner)):
 @router.post('/explorations/{draft_id}/messages')
 async def answer(draft_id: str, body: SendAnswer, request: Request, account=Depends(owner), key=Depends(request_key)):
     identifier(draft_id)
+    workspace=getattr(request.app.state,'workspace_store',None)
+    if workspace:
+        active=(await run_in_threadpool(workspace.row,account)).get('workspace',{})
+        if active and (active.get('exploration_id')!=draft_id or active.get('review_id')):raise GoalError('This conversation has been replaced. Open your current career goal.')
     repository=store(request)
     digest=fingerprint(body.model_dump(mode='json'))
     replay=await run_in_threadpool(repository.replay_turn,draft_id,account,key,digest)
@@ -121,7 +166,7 @@ async def answer(draft_id: str, body: SendAnswer, request: Request, account=Depe
         messages.append(Message(role='user',content=body.answer or 'I am unsure; skip this question.'))
         ai_request=AIInput(stage='exploration',context=json.dumps(payload,ensure_ascii=False),conversation=messages)
         op=Operation(account,str(body.expected_version),'exploration')
-        result=await request.app.state.ai.generate(ai_request,op,current_revision=lambda:str(body.expected_version))
+        result=await exploration_turn(lambda:request.app.state.ai.generate(ai_request,op,current_revision=lambda:str(body.expected_version)))
         # Check mutable external CV inputs again before committing.
         if draft.cv.mode=='saved':
             latest=await selected_cv(request,draft.cv.cv_id,account)
@@ -150,6 +195,7 @@ async def answer(draft_id: str, body: SendAnswer, request: Request, account=Depe
         draft.version+=1; draft.updated_at=now()
         draft=GoalDraft.model_validate(draft)
         await run_in_threadpool(repository.finish_turn,draft,account,body.expected_version,key,digest)
+        if workspace: await run_in_threadpool(workspace.touch,account,draft.id)
         return draft_view(draft)
     finally:
         await run_in_threadpool(repository.release_turn,draft_id,account,key)
@@ -178,7 +224,11 @@ async def confirm(body: SaveGoal, request: Request, account=Depends(owner), key=
         draft=await run_in_threadpool(repository.claim_confirmation,body.review_id,account,body.expected_review_version,key)
         try:
             goal=repository.goal(draft,account,key,body)
-            return jsonable_encoder(await run_in_threadpool(store(request).confirm,account,key,body,goal),by_alias=True)
+            selected=await run_in_threadpool(store(request).confirm,account,key,body,goal)
+            if draft.discovery:
+                research_id=draft.discovery.research_id.split(':')[0]
+                await run_in_threadpool(store(request).db.research_contexts.update_one,{'_id':research_id,'owner':account,'review_id':draft.id},{'$set':{'status':'confirmed'}})
+            return jsonable_encoder(selected,by_alias=True)
         finally:
             await run_in_threadpool(repository.release_confirmation,body.review_id,account,key)
     if body.draft_id:

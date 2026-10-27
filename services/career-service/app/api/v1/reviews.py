@@ -15,10 +15,9 @@ def store(request):
 
 
 def view(draft):
-    return {'review_id':draft.id,'version':draft.version,'target_type':draft.target_type,
-            'extraction':draft.content,'baseline':draft.baseline,'generation':draft.generation,
-            'metadata_origins':draft.metadata_origins,'requirements_need_review':draft.requirements_need_review,
-            'is_confirmed':draft.base_goal_id == draft.id}
+    return {'current':{'goal':{'_id':draft.id,'version':draft.version,'target_type':draft.target_type,
+        **draft.content.model_dump(mode='json'),'generation':draft.generation,'discovery':draft.discovery,
+        'requirements_need_review':draft.requirements_need_review,'metadata_origins':draft.metadata_origins}}}
 
 
 @router.get('/{goal_id}',response_model=JDExtractionResult)

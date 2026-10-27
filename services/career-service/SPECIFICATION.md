@@ -1,3 +1,5 @@
+> The current single-workspace LangGraph flow is described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). It supersedes earlier explicit goal confirmation/session selection; preview input safeguards below remain unchanged.
+
 # Career Goal previews and exploration
 
 ## Current scope
@@ -78,11 +80,14 @@ lifecycle. TMPDIR can be changed for direct service runs; keep it private.
 ## Structured review boundary — J02–J04
 
 Explicit JD extraction now saves a structured review with metadata, skills,
-non-skill conditions, provenance and a bounded reset baseline. The shared chat
+non-skill conditions and provenance in one effective goal content object. The shared chat
 loads that owner-checked review by ID/version; it does not accept raw JD text or
 client-authored context. Supporting summaries and labelled inferences remain
 permitted. Saved review editing, reclassification and confirmation follow
 [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). Preview parsing still makes no AI
 calls or database writes. Sources remain transient, and reload restores only
-structured information. Research, gap analysis, roadmap generation and J10
-exploration skill generation remain future work.
+structured information. J05 importance review and J10 advisory exploration skills use this same review
+boundary. J12/J13 research orchestration, versioned storage and review UI are
+implemented with an injectable source API boundary; source connectors are deferred.
+Unconnected acquisition returns unavailable and preserves previous research.
+Gap analysis and roadmap generation remain future work.

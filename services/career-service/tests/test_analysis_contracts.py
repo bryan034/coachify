@@ -154,3 +154,22 @@ def test_nested_source_dates_and_generation_roundtrip_as_bson_dates(documents):
     assert isinstance(stored['generation']['generated_at'],datetime)
     restored=BSON(BSON.encode(stored)).decode(codec_options=CodecOptions(tz_aware=True))
     assert InterviewResearch.model_validate(restored)==record
+
+
+def test_unmapped_research_remains_readable_but_cannot_establish_gaps(documents):
+    from app.domain.analysis import validate_inputs,ContractConflict
+    from app.schemas.analysis import InputVersions
+    cv=CvSnapshot.model_validate(documents['cv']);goal=CareerGoal.model_validate(documents['goal'])
+    data=documents['research'];data['skills'][0]['skill_id']=None
+    research=InterviewResearch.model_validate(data)
+    with pytest.raises(ContractConflict,match='need skill mapping'):
+        validate_inputs(goal.user_id,InputVersions.model_validate(documents['analysis']['inputs']),cv,goal,[research],1)
+
+
+def test_legacy_importance_normalizes_and_conflicts_block_readiness(documents):
+    data=documents['goal'];data['skills'][0]['priority']='essential'
+    assert CareerGoal.model_validate(data).skills[0].priority=='required'
+    data['skills'][0]['priority']='conflicting'
+    with pytest.raises(ValidationError):CareerGoal.model_validate(data)
+    data['readiness']='pending'
+    assert CareerGoal.model_validate(data).skills[0].priority=='conflicting'

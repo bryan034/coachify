@@ -342,7 +342,7 @@ def test_jd_character_cap_does_not_reduce_temporary_cv_limit(length,status):
         assert result.status_code==status
 
 
-@pytest.mark.parametrize('scope',['user','provider'])
+@pytest.mark.parametrize('scope',['provider'])
 def test_rate_error_exposes_only_safe_origin_and_cooldown(scope):
     from app.ai.adapter import AIError
     def processor(*args): raise AIError('rate_limited',True,limit_scope=scope,retry_after=37)

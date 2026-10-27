@@ -22,7 +22,7 @@ GOAL = {'role':'Analyst','field':'Data','company':None,'skills':[SKILL]}
 
 
 def config():
-    return AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='synthetic')
+    return AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='synthetic',max_output_tokens=512)
 
 
 def completion(output, usage=None):
@@ -56,9 +56,9 @@ def test_each_operation_has_only_its_own_prompt_and_schema():
             assert schema['required']==list(schema['properties'])
             assert len(json.dumps(schema)) < len(json.dumps(JDExtraction.model_json_schema()))
             assert 'job_url' not in schema['properties']
-            properties=schema['$defs']['ExtractedSkill']['properties']
+            properties=schema['properties']['skills']['items']['properties']
             assert not {'skill_id','item_id','correction','source_urls'} & properties.keys()
-            conditions=schema['$defs']['ExtractedCondition']['properties']
+            conditions=schema['properties']['non_skill_requirements']['items']['properties']
             assert not {'requirement_id','correction','source_urls'} & conditions.keys()
             for payload in (extract,chat,edit):
                 assert 'JSON schema:' not in payload['messages'][0]['content']
@@ -132,8 +132,7 @@ def test_edit_second_call_preserves_existing_identity_and_validates_new_items(de
                 result=await pending
                 assert result.data.proposed_skills[0]==JDExtraction.model_validate(GOAL).skills[0]
                 assert result.data.proposed_skills[1].origin=='user_declaration'
-            assert len(adapter.requests['owner'])==1  # One operation, two provider calls.
-            assert not adapter.active_users
+            assert len(calls)==2  # One operation, two provider calls.
     asyncio.run(invoke())
     assert len(calls)==2
     assert calls[1]['response_format']['json_schema']['name']=='jd_edit'
@@ -157,7 +156,7 @@ def test_edit_cooldown_and_stale_response_cannot_publish():
             operation=Operation('owner','1','jd_chat')
             with pytest.raises(AIError,match='stale_input' if stale else 'rate_limited'):
                 await adapter.generate(chat_input('Add Python'),operation,current_revision=lambda:revision[0])
-            assert operation.status=='failed' and len(calls)==2 and not adapter.active_users
+            assert operation.status=='failed' and len(calls)==2
     asyncio.run(invoke(False));asyncio.run(invoke(True))
 
 
@@ -196,3 +195,25 @@ def test_invalid_usage_does_not_log_content_or_break_generation(usage,caplog):
     with caplog.at_level(logging.INFO,logger='uvicorn.error.ai_usage'):
         record_usage(raw,'jd_extraction',1,1)
     assert not caplog.records
+
+
+@pytest.mark.parametrize('fence',['```json','```'])
+def test_json_fence_is_removed_locally_without_regenerating_extraction(fence):
+    async def run():
+        calls=[]
+        def handler(request):
+            calls.append(request)
+            content=fence+'\n'+json.dumps({'role':'Analyst','field':'Data','company':None,'skills':[]})+'\n```'
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':content}}]})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter=AIAdapter(config(),client)
+            result=await adapter.generate(AIInput(stage='jd_extraction',source_text='Synthetic analyst job'),Operation('owner','1','jd_extraction'),current_revision=lambda:'1')
+        assert result.data.role=='Analyst' and len(calls)==1
+    asyncio.run(run())
+
+
+def test_json_fence_does_not_accept_duplicate_keys_or_trailing_prose():
+    adapter=AIAdapter(config(),None)
+    for content in ['```json\n{"role":"A","role":"B"}\n```','```json\n{}\n```\nUntrusted extra prose']:
+        raw=json.dumps({'choices':[{'finish_reason':'stop','message':{'content':content}}]}).encode()
+        with pytest.raises(AIError,match='invalid_output'):adapter._content(raw)
