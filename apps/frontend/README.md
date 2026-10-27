@@ -229,3 +229,7 @@ Career clients read goal content from `current.goal`. Progress polling uses `/wo
 and opportunity `/progress` endpoints; changed versions trigger content loading. Source excerpts
 and verified quotes load only when a finding's evidence disclosure opens. Goal edits retain the
 current goal ID and use its version. There is no original-content restore action.
+
+Saved goal details in chat remain readable when research fails or the workflow expires,
+including when AI is disabled. The combined response and composer still require completed
+research; the details panel does not present unfinished findings as complete.

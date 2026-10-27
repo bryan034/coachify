@@ -73,6 +73,7 @@ export function JobReviewChat(){
  const chatCooldown=!!error&&isTokenLimit(code)&&secondsLeft>0;
  const waitLabel=(operation?.limit_scope||workspace?.limit_scope)==='user'?'Waiting for the AI service to resume':'Waiting for the research service to resume';
  const goal=workspace?.current.goal;const ready=!!workspace&&responseReady(workspace,research);
+ const detailsReady=!!goal&&(ready||workspace?.phase==='research_failed'||workspace?.phase==='expired');
  useEffect(()=>{
   if(!token||!goal||!workspace?.research_id)return;const abort=new AbortController();
   void careerApi<OpportunityView>(`/goals/${goal._id}/opportunity-research?research_id=${workspace.research_id}`,token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted)setResearch(v);}).catch(c=>{if(!abort.signal.aborted)reportError(c,'Could not load research.');});
@@ -113,11 +114,11 @@ export function JobReviewChat(){
  }
  return <section className="page on career-agent-page">
   <header className="agent-page-header"><div><p className="small">Your direction, one conversation</p><h1>Career Goal</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>{if(!dirty.current||window.confirm('Leave and discard unsent edits? Your saved goal stays current.'))router.push('/career-goal');}}>← Career Goal</button></header>
-  <div className="agent-workspace"><div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true">C</span><div><strong>Coachify agent</strong><p className="small">{goal?.role||'Understanding your career goal'}</p></div></div><button className="btn ghost sm" disabled={!ready} onClick={()=>setDetails(v=>!v)}>{details?'Hide details':'Role and research details'}</button></div>
+  <div className="agent-workspace"><div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true">C</span><div><strong>Coachify agent</strong><p className="small">{goal?.role||'Understanding your career goal'}</p></div></div><button className="btn ghost sm" disabled={!detailsReady} onClick={()=>setDetails(v=>!v)}>{details?'Hide details':'Role and research details'}</button></div>
    {workspace?.phase==='empty'&&<p role="status">No job description is available. Import a JD from Career Goal or explore a direction.</p>}
-   {details&&ready&&goal&&<aside className="agent-details"><h2>{goal.role}</h2><p>{goal.company||'General career direction'} · v{goal.version} · Saved automatically</p>
+   {details&&detailsReady&&goal&&<aside className="agent-details"><h2>{goal.role}</h2><p>{goal.company||'General career direction'} · v{goal.version} · Saved automatically</p>
     <h3>Main job skills</h3><ul>{goal.skills.map((s,i)=><li key={s.item_id||i}>{s.name} · {s.priority}</li>)}</ul>
-    <AgentMarkdown>{researchSummary(research,workspace?.coverage)}</AgentMarkdown>
+    {ready?<AgentMarkdown>{researchSummary(research,workspace?.coverage)}</AgentMarkdown>:<p className="small">Research is incomplete. Your saved goal details remain available.</p>}
    </aside>}
 
    <div ref={transcript} className="agent-transcript" {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">

@@ -406,3 +406,15 @@ it('does not publish a failed historical research record even if an older worksp
  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
 });
+
+
+it.each(['research_failed','expired'])('keeps saved goal details readable after research stops: %s',async phase=>{
+ active={...active,phase,research_id:null,error_code:'not_configured',error:'PRIVATE provider diagnostic'};
+ mount();const details=await screen.findByRole('button',{name:'Role and research details'});
+ await waitFor(()=>expect(details).toBeEnabled());fireEvent.click(details);
+ expect(screen.getByRole('heading',{name:/^Engineer$/})).toBeVisible();
+ expect(screen.getByText('Research is incomplete. Your saved goal details remain available.')).toBeVisible();
+ expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+ expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
+ expect(screen.queryByText('PRIVATE provider diagnostic')).toBeNull();
+});
