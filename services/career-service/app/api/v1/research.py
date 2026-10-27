@@ -29,7 +29,7 @@ def goal_for(request,account,goal_id):
         'record_type':{'$nin':['exploration_draft','requirement_review']}})
     if not row:raise GoalError('Confirmed career goal was not found.',404)
     from app.schemas.analysis import CareerGoal
-    return CareerGoal.model_validate(row)
+    return CareerGoal.model_validate({k:v for k,v in row.items() if k in CareerGoal.model_fields or k=='_id'})
 
 def presentation(record,context,*,status=None,reused=False,historical=False):
     return {'status':status or (record.research_status if record else 'missing'),'research':record,

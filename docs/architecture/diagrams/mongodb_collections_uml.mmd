@@ -55,7 +55,6 @@ class career_goals {
     +String summary?
     +String[] responsibilities
     +ReviewContent content? [review]
-    +ReviewContent baseline? [review]
     +Map metadata_origins? [review]
     +Boolean requirements_need_review
     +ObjectId source_review_id?
@@ -69,7 +68,6 @@ class career_goals {
 
 class interview_research {
     +OpportunityReport intelligence?
-    +BraveAnswer[] summaries
     +Number version
     +String schema_version
     +String skill_mapping_version
@@ -79,8 +77,6 @@ class interview_research {
     +String role
     +String location?
     +String seniority_level?
-    +InterviewProcess process
-    +InterviewSkill[] skills
     +ResearchSource[] sources
     +String research_status
     +Date last_researched_at?
@@ -118,11 +114,10 @@ career_goals "1" --> "0..*" skill_gap_analyses : evaluated in
 interview_research "0..*" --> "0..*" skill_gap_analyses : referenced by
 
 note for users "Logical authority: existing Profile accounts; no collection rename or auth migration."
-note for career_goals "One current goal/chat per account; validated saves automatically move the current pointer. Goal revisions are immutable; versioned exploration drafts and requirement_review records share this collection. Review content/baseline are structured values only; immutable goals reference the exact source review version. Draft role/field may be unknown; confirmed role/field are required. Drafts retain adaptive topic context, current focus/question, total_turns and latest 30 turns. Structured progress and bounded evidence only; no raw JD/CV text."
+note for career_goals "One current goal/chat per account; validated saves automatically move the current pointer. Current goals use owner/version CAS edits. Versioned exploration drafts and temporary structured intake records share this collection. Intake promotes the same document into the current goal; no duplicate original-content copy is saved. Draft role/field may be unknown; confirmed role/field are required. Drafts retain adaptive topic context, current focus/question, total_turns and latest 30 turns. Structured progress and bounded evidence only; no raw JD/CV text."
 
 note for interview_research "Immutable public-context revisions; shared seven-day reuse. Private career_state links constrain user reads. Operational research_contexts holds leases/cache pointers. Brave API adapters acquire evidence. Operational LangGraph checkpoints expire after 24h inactivity; current goals persist. Unavailable acquisition preserves saved goals/research."
 
-%% Operational ai_user_usage: hashed owner keys and numeric completed token usage; rolling 60s checks, TTL cleanup; no raw inputs; numeric in-flight reservations only.
 
 %% career_state.workspace.edit_draft holds a private structured pending edit and latest question (24h workspace expiry); chat_receipts holds bounded idempotency metadata. No raw JD/chat transcript or new collection is added.
 
@@ -132,4 +127,8 @@ note for interview_research "Immutable public-context revisions; shared seven-da
 
 %% Career Discovery: private sessions/jobs and immutable public-evidence snapshots in research_contexts.
 %% Both JD and discovery publish via ReviewStore.goal / GoalStore.persist_target.
-%% Numeric ai_user_usage reservations reconcile to actual Groq usage; completed window 60s.
+%% Generic legacy quota tests retain ledger coverage; production model stages use one Gemini client.
+
+%% JD job identity and speculative retrieval are transient until full extraction validates.
+%% Matching public-only seeds reuse research_contexts job history/evidence; activities are fixed stage IDs.
+%% Raw JD and scope evidence quotes are never checkpointed; domain collections and shared target persistence are unchanged.

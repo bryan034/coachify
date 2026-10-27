@@ -3,19 +3,21 @@ import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {CareerChat} from './career-chat';
 import {CareerSessionProvider,useCareerSession} from './career-session';
-import {careerApi,importExplorationCV,type CareerWorkspace,type GoalDraft} from '@/lib/api/career';
+import {careerApi,refreshWorkspace,importExplorationCV,type CareerWorkspace,type GoalDraft,type OpportunityView} from '@/lib/api/career';
 const push=vi.fn(),replace=vi.fn(),search=new URLSearchParams();
 vi.mock('next/navigation',()=>({useRouter:()=>({push,replace}),useSearchParams:()=>search}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-session'})}));
-vi.mock('@/lib/api/career',()=>({careerApi:vi.fn(),importExplorationCV:vi.fn()}));
+vi.mock('@/lib/api/career',()=>({careerApi:vi.fn(),importExplorationCV:vi.fn(),refreshWorkspace:vi.fn(async()=>active)}));
 const draft:GoalDraft={_id:'000000000000000000000001',version:1,answers:{},turns:[],interests:[],preferences:[],suggestions:[],next_question:'aspirations',question_text:'What would you like to achieve?',context_complete:false,cv:{mode:'none',filename:null,cv_id:null,version:null,extraction_version:null}};
-function initial():CareerWorkspace{return {session_id:'000000000000000000000071',revision:1,kind:'jd',phase:'ready',
- review:{review_id:'000000000000000000000081',version:1,target_type:'specific_job',extraction:{role:'Engineer',field:'Software',company:null,location:'Singapore',seniority_level:'Junior',job_url:null,summary:'Build backend services.',responsibilities:['Build APIs'],non_skill_requirements:[],skills:[{item_id:'python',name:'Python',category:'Technical',priority:'required',origin:'employer',evidence:'Python required.'}]},baseline:{role:'Engineer',field:'Software',company:null,location:null,seniority_level:null,job_url:null,summary:null,responsibilities:[],skills:[],non_skill_requirements:[]},metadata_origins:{},requirements_need_review:false,is_confirmed:false,generation:{}},
- current:{selection_version:1,goal:null,dependent_results_need_review:false},research:{_id:'000000000000000000000091',version:1,last_researched_at:'2026-01-01T00:00:00Z',research_status:'succeeded',skills:[{skill_id:null,name:'Coding',category:'Technical',interview_stage:'Technical interview',assessment_type:'Coding exercise',difficulty:'unknown',question_patterns:[],independent_report_count:0,source_ids:['s1']}],sources:[{source_id:'s1',platform:'reddit',url:'https://example.test/interview',title:'Interview report',evidence:'Reported coding exercise.',published_date:null,reported_date:null,role_match:'unknown',reliability:'anecdotal',report_group:null}]},coverage:[],error:null,retry_after:null,expires_at:null,exploration_id:null};}
+const goal={_id:'000000000000000000000081',version:1,target_type:'specific_job' as const,role:'Engineer',field:'Software',company:null,location:'Singapore',seniority_level:'Junior',job_url:null,summary:'Build backend services.',responsibilities:['Build APIs'],non_skill_requirements:[],skills:[{item_id:'python',name:'Python',category:'Technical',priority:'required' as const,origin:'employer' as const,evidence:'Python required.'}],interests:[],preferences:[],readiness:'pending' as const,exploration_draft_id:null,exploration_draft_version:null};
+function initial():CareerWorkspace{return {session_id:'000000000000000000000071',revision:1,kind:'jd',phase:'ready',current:{selection_version:1,goal:{...goal},dependent_results_need_review:false},research_id:'000000000000000000000091',research_version:1,coverage:[],error:null,retry_after:null,expires_at:null,exploration_id:null};}
+function report():OpportunityView{return {available:true,job_id:'job',career_target_id:goal._id,research_id:'000000000000000000000091',status:'completed',finished:true,error_code:null,categories:{interview_intelligence:{status:'completed',findings:[{finding_id:'f0000000000000001',field:'recruitment_stages',value:'Technical interview and Coding exercise',confidence:'medium',evidence_type:'candidate_reported',source_ids:['s1'],scope:'exact',conflict_group:null,last_verified_at:'2026-01-01T00:00:00Z'}],missing_fields:[],warnings:[],error_code:null,researched_at:null,expires_at:null,searches:1,model_calls:1,latency_ms:1,estimated_cost_usd:null}},sources:[{source_id:'s1',platform:'other',url:'https://example.test/interview',title:'Interview report',published_date:null,reported_date:null,role_match:'unknown',reliability:'anecdotal',report_group:null}]};}
+let research:OpportunityView;
 let active:CareerWorkspace,empty:CareerWorkspace,failChat=false;
 beforeEach(()=>{
- vi.resetAllMocks();Object.defineProperty(window,'matchMedia',{configurable:true,value:()=>({matches:true,addEventListener(){},removeEventListener(){}})});search.forEach((_,key)=>search.delete(key));active=initial();empty={...active,session_id:null,kind:null,phase:'empty',review:null,research:null};failChat=false;
+ vi.resetAllMocks();Object.defineProperty(window,'matchMedia',{configurable:true,value:()=>({matches:true,addEventListener(){},removeEventListener(){}})});search.forEach((_,key)=>search.delete(key));active=initial();research=report();empty={...active,session_id:null,kind:null,phase:'empty',current:{...active.current,goal:null},research_id:null};failChat=false;
  vi.mocked(careerApi).mockImplementation(async(path,_token,options)=>{
+  if(path.includes('/opportunity-research'))return research as never;
   if(path==='/workspace/jd')return active as never;
   if(path==='/workspace/messages'){
    if(failChat)throw new Error('Provider unavailable');
@@ -40,7 +42,8 @@ describe('single career conversation',()=>{
   expect(JSON.parse(call[2]!.body as string)).toMatchObject({text:'Private synthetic Python JD'});
   expect(screen.getByRole('log')).toHaveTextContent('Python');expect(screen.getByRole('log')).toHaveTextContent('Technical interview');
   expect(screen.queryByRole('button',{name:/Confirm.*goal/})).toBeNull();
-  for(const name of ['Your career goal','Skills for this role','Interview process'])expect(screen.getByRole('heading',{name})).toBeInTheDocument();
+  expect(replace).not.toHaveBeenCalledWith('/career-goal');
+  for(const name of ['Your career goal','Skills for this role','Interview findings'])expect(screen.getByRole('heading',{name})).toBeInTheDocument();
   expect(screen.getByRole('log').querySelector('strong')).toBeInTheDocument();
  });
  it('loads the latest workspace regardless of an old review query parameter',async()=>{
@@ -54,13 +57,13 @@ describe('single career conversation',()=>{
   const body=JSON.parse(vi.mocked(careerApi).mock.calls.find(v=>v[0]==='/workspace/messages')![2]!.body as string);
   expect(body).toMatchObject({session_id:active.session_id,expected_version:1});expect(body).not.toHaveProperty('context');expect(body).not.toHaveProperty('text');
  });
- it('keeps the composer usable while interview research waits',async()=>{
-  active={...active,phase:'waiting_quota',research:null,retry_after:60};mount();
-  await screen.findByText('Model provider requested a cooldown');
-  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
-  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Explain the saved skills'}});
-  expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled();
-  expect(screen.getByText(/Let’s look at Engineer/)).toBeInTheDocument();
+ it('holds the initial response and composer while interview research waits',async()=>{
+  active={...active,phase:'waiting_quota',research_id:null,retry_after:60};mount();
+  await screen.findByText('Waiting for the research service to resume');
+  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+  expect(screen.queryByText(/Let’s look at Engineer/)).toBeNull();
+  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
  });
  it('edits the career goal through guided chat and refreshes the saved summary without an edit form',async()=>{
   await chat();expect(screen.queryByRole('button',{name:'Edit career goal'})).toBeNull();
@@ -68,7 +71,7 @@ describe('single career conversation',()=>{
   api.mockImplementation(async(path,token,options)=>{
    if(path==='/workspace/messages'){
     if(!followup)return {reply:'Which detail would you like to change: role, location or a skill?',edit_status:'clarifying'} as never;
-    active={...active,revision:2,review:{...active.review!,version:2,extraction:{...active.review!.extraction,location:'London'}}};
+    active={...active,revision:2,current:{...active.current,goal:{...active.current.goal!,version:2,location:'London'}}};
     return {reply:'Updated your goal location to London.',edit_status:'saved',workspace:active} as never;
    }
    return original(path,token,options);
@@ -99,7 +102,7 @@ describe('single career conversation',()=>{
   active=empty;mount();await screen.findByText(/Hi, I’m your career agent/);fireEvent.click(screen.getByRole('checkbox',{name:/Allow Coachify/}));fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'I enjoy data'}});await waitFor(()=>expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('What appeals to you about data?');expect(screen.queryByText('Previous conversations')).toBeNull();
  });
  it('keeps a pending-context goal current and explains that its requirements need review',async()=>{
-  active.review!.requirements_need_review=true;await chat();
+  active.current.goal!.requirements_need_review=true;await chat();
   expect(screen.getByRole('log')).toHaveTextContent('The role context changed');
   fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Which requirements need review?'}});
   expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled();
@@ -114,9 +117,9 @@ describe('single career conversation',()=>{
 it('waits for the quota retry time instead of polling every two seconds',async()=>{
  vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
  try{
-  active={...active,phase:'waiting_quota',research:null,retry_after:60};
+  active={...active,phase:'waiting_quota',research_id:null,retry_after:60};
   await act(async()=>{view=mount();});
-  const calls=()=>vi.mocked(careerApi).mock.calls.filter(v=>v[0]==='/workspace').length;
+  const calls=()=>vi.mocked(careerApi).mock.calls.filter(v=>v[0]==='/workspace').length+vi.mocked(refreshWorkspace).mock.calls.length;
   const initialCalls=calls();expect(initialCalls).toBeGreaterThan(0);
   await act(async()=>{await vi.advanceTimersByTimeAsync(59_000);});
   expect(calls()).toBe(initialCalls);
@@ -134,7 +137,7 @@ it('counts down a per-user token wait and retains the unsent message',async()=>{
  await chat();
  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
  api.mockImplementation(async(path,token,options)=>{
-  if(path==='/workspace/messages')throw Object.assign(new Error('Your 7,000-token rolling-minute allowance has been reached. Retry after 3 seconds.'),{code:'rate_limited',retryAt:Date.now()+3000});
+  if(path==='/workspace/messages')throw Object.assign(new Error('The AI provider quota was reached. Retry after 3 seconds.'),{code:'rate_limited',retryAt:Date.now()+3000});
   return original(path,token,options);
  });
  const box=screen.getByRole('textbox',{name:'Message Coachify'});
@@ -152,17 +155,13 @@ it('counts down a per-user token wait and retains the unsent message',async()=>{
 });
 
 
-it('labels AI findings without provider branding and exposes source links',async()=>{
- active.research!.summaries=[{summary_id:'answer1',provider:'brave',text:'Candidates report coding assessments.',source_ids:['s1'],claims:[{text:'Candidates report coding assessments.',source_ids:['s1']}]}];
- active.research!.skills[0]={...active.research!.skills[0],evidence_origin:'brave_summary',summary_id:'answer1'};
+it('presents category summaries with source links without duplicate interview structures',async()=>{
  await chat();
- expect(screen.getByRole('log')).toHaveTextContent('AI synthesis linked to sources');
+ expect(screen.getByRole('log')).toHaveTextContent('Technical interview');
  expect(screen.getByRole('log')).not.toHaveTextContent('Brave');
  fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
- expect(screen.getByText('AI interview summary')).toBeInTheDocument();
- expect(screen.getByText('Candidates report coding assessments.')).toBeInTheDocument();
- expect(screen.getAllByText(/not a direct website quotation/).length).toBeGreaterThan(0);
- expect(screen.getByRole('link',{name:'View source'})).toHaveAttribute('href','https://example.test/interview');
+ expect(screen.getAllByRole('link').some(link=>link.getAttribute('href')==='https://example.test/interview')).toBe(true);
+ expect(active).not.toHaveProperty('research');
 });
 
 it('shows activity inside the pending reply and replaces it with formatted output',async()=>{
@@ -186,12 +185,16 @@ it('shows activity inside the pending reply and replaces it with formatted outpu
 it('shows initial research activity in the chat and replaces it when research is ready',async()=>{
  vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
  try{
-  active={...active,phase:'researching',research:null};
+  active={...active,phase:'researching',research_id:null};
   await act(async()=>{view=mount();});
   const log=screen.getByRole('log');
   expect(log).toContainElement(screen.getByRole('status'));
   expect(log).toHaveTextContent('Researching interview expectations');
   expect(log).not.toHaveTextContent('Brave');
+  expect(log).not.toHaveTextContent('Let’s look at Engineer');
+  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
+  expect(screen.getByRole('button',{name:'Role and research details'})).toBeDisabled();
   active=initial();
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
   expect(log).toHaveTextContent('Let’s look at Engineer');
@@ -199,25 +202,22 @@ it('shows initial research activity in the chat and replaces it when research is
  }finally{view?.unmount();vi.useRealTimers();}
 });
 
-it('summarises saved round counts and stage names without an extra generation call',async()=>{
- active.research!.process={round_count:3,stages:[{name:'Recruiter screen',assessment_type:null}]};
+it('summarises category findings without an extra answering call',async()=>{
+ research.categories.interview_intelligence!.findings[0].value='Recruiter screen and 3 reported interview rounds';
  await chat();
- expect(screen.getByRole('log')).toHaveTextContent('Reported interview rounds: 3.');
- expect(screen.getByRole('log')).toHaveTextContent('Recruiter screen');
+ expect(screen.getByRole('log')).toHaveTextContent('3 reported interview rounds');
  expect(vi.mocked(careerApi).mock.calls.some(v=>v[0]==='/workspace/messages')).toBe(false);
- fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
- expect(screen.getByText('Reported rounds: 3')).toBeInTheDocument();
 });
 
 it('keeps background research diagnostics out of the UI and offers resume',async()=>{
- active={...active,phase:'research_failed',research:null,error_code:'research_unavailable',error:'PRIVATE Brave OPTION_NOT_IN_PLAN diagnostic'};
+ active={...active,phase:'research_failed',research_id:null,error_code:'research_unavailable',error:'PRIVATE Brave OPTION_NOT_IN_PLAN diagnostic'};
  mount();await screen.findByRole('button',{name:'Resume research'});
  expect(screen.queryByText(/PRIVATE/)).toBeNull();
  expect(screen.queryByRole('alert')).toBeNull();
 });
 
 it('shows background input-token limits but not other failure details',async()=>{
- active={...active,phase:'research_failed',research:null,error_code:'input_limit',error:'The AI input exceeds 4,000 tokens.'};
+ active={...active,phase:'research_failed',research_id:null,error_code:'input_limit',error:'The AI input exceeds 4,000 tokens.'};
  mount();expect(await screen.findByRole('alert')).toHaveTextContent('4,000 tokens');
 });
 
@@ -225,6 +225,7 @@ it('automatically resumes initial JD extraction after a quota wait without anoth
  vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
  api.mockImplementation(async(path,token,options)=>{
+  if(path.includes('/opportunity-research'))return research as never;
   if(path==='/workspace/jd')return {operation_id:'a'.repeat(32),status:'waiting_quota',retry_after:3,result:null} as never;
   if(path.startsWith('/workspace/operations/'))return {operation_id:'a'.repeat(32),status:'succeeded',retry_after:null,result:active} as never;
   return original(path,token,options);
@@ -232,7 +233,7 @@ it('automatically resumes initial JD extraction after a quota wait without anoth
  try{
   view=render(<CareerSessionProvider><Import/></CareerSessionProvider>);
   await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));});
-  expect(screen.getByRole('status')).toHaveTextContent('Model provider requested a cooldown');
+  expect(screen.getByRole('status')).toHaveTextContent('Waiting for the research service to resume');
   expect(screen.queryByRole('button',{name:'Retry'})).toBeNull();
   await act(async()=>{await vi.advanceTimersByTimeAsync(2999);});
   expect(api.mock.calls.filter(c=>c[0].startsWith('/workspace/operations/'))).toHaveLength(0);
@@ -253,10 +254,10 @@ it('keeps the JD receipt across chat remounts and reconnects to its pending oper
  api.mockImplementation(async(path,token,options)=>path==='/workspace/jd'?{operation_id:'d'.repeat(32),status:'waiting_quota',retry_after:600,result:null} as never:original(path,token,options));
  const view=render(<CareerSessionProvider><Journey/></CareerSessionProvider>);
  fireEvent.click(screen.getByRole('button',{name:'Open extraction'}));
- await screen.findByText('Model provider requested a cooldown');
+ await screen.findByText('Waiting for the research service to resume');
  fireEvent.click(screen.getByRole('button',{name:'Leave extraction'}));
  fireEvent.click(screen.getByRole('button',{name:'Open extraction'}));
- await screen.findByText('Model provider requested a cooldown');
+ await screen.findByText('Waiting for the research service to resume');
  const calls=api.mock.calls.filter(call=>call[0]==='/workspace/jd');
  expect(calls).toHaveLength(2);
  expect(calls[0][2]?.headers).toEqual(calls[1][2]?.headers);
@@ -267,6 +268,7 @@ it('keeps the JD receipt across chat remounts and reconnects to its pending oper
 it('explains extraction conflicts without displaying provider diagnostics',async()=>{
  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
  api.mockImplementation(async(path,token,options)=>{
+  if(path.includes('/opportunity-research'))return research as never;
   if(path==='/workspace/jd')throw Object.assign(new Error('PRIVATE diagnostic'),{code:'operation_in_progress'});
   return original(path,token,options);
  });
@@ -338,4 +340,69 @@ it.each([0,1,3])('shows assessed source coverage honestly for %i useful sources'
  expect(log).toHaveTextContent(`${count} distinct sources`);
  expect(log.textContent?.includes('Findings remain limited.')).toBe(count<3);
  expect(log).not.toHaveTextContent('Brave');
+});
+
+
+it('shows observed research steps during JD extraction without exposing provider names',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation(async(path,token,options)=>{
+  if(path.includes('/opportunity-research'))return research as never;
+  if(path==='/workspace/jd')return {operation_id:'b'.repeat(32),status:'running',activities:['identifying_job','extracting_requirements','searching_interviews'],retry_after:null,result:null} as never;
+  if(path.startsWith('/workspace/operations/'))return {operation_id:'b'.repeat(32),status:'succeeded',retry_after:null,result:active} as never;
+  return original(path,token,options);
+ });
+ try{
+  view=render(<CareerSessionProvider><Import/></CareerSessionProvider>);
+  await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));});
+  expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Searching for relevant interview experiences');
+  expect(screen.getByRole('log')).not.toHaveTextContent(/Brave|API/);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
+  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+  expect(replace).not.toHaveBeenCalledWith('/career-goal');
+  expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Saving your career goal');
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+
+it('publishes no initial JD text until the completed research snapshot arrives, then uses one assistant message',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  active={...active,phase:'researching',research_id:null};
+  await act(async()=>{view=mount();});
+  expect(screen.getByRole('log')).not.toHaveTextContent('Build backend services');
+  expect(screen.queryByRole('heading',{name:'Your career goal'})).toBeNull();
+  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
+  active=initial();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  const goal=screen.getByRole('heading',{name:'Your career goal'}).closest('.agent-message');
+  const research=screen.getByRole('heading',{name:'Interview findings'}).closest('.agent-message');
+  expect(goal).toBe(research);
+  expect(goal).toHaveTextContent('Build backend services');
+  expect(goal).toHaveTextContent('Technical interview');
+  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+
+it('also holds research text when the JD review is not ready yet',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  search.set('source','jd');active={...active,phase:'researching',current:{...active.current,goal:null}};
+  await act(async()=>{view=mount();});
+  expect(screen.queryByRole('heading',{name:'Your career goal'})).toBeNull();
+  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
+  expect(screen.getByRole('log')).not.toHaveTextContent('Technical interview');
+  active=initial();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Let’s look at Engineer');
+  expect(screen.getByRole('log')).toHaveTextContent('Technical interview');
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+
+it('does not publish a failed historical research record even if an older workspace marked it ready',async()=>{
+ research={...research,status:'failed'};active={...active,phase:'ready'};mount();
+ await screen.findByRole('button',{name:'Resume research'});
+ expect(screen.queryByRole('heading',{name:'Your career goal'})).toBeNull();
+ expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
+ expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
 });

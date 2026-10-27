@@ -47,8 +47,8 @@ def test_multiple_guided_questions_keep_current_goal_until_a_complete_edit_and_r
     key=str(uuid4());response=send(flow,initial,'London',key)
     assert response.status_code==200,response.text
     saved=response.json();assert saved['edit_status']=='saved'
-    assert saved['workspace']['review']['extraction']['location']=='London'
-    assert saved['workspace']['review']['extraction']['skills']==initial['review']['extraction']['skills']
+    assert saved['workspace']['current']['goal']['location']=='London'
+    assert saved['workspace']['current']['goal']['skills']==initial['current']['goal']['skills']
     assert saved['workspace']['edit_question'] is None
     assert json.loads(seen[-1].context)['pending_edit']['intent']=='Change the goal location'
     assert all(len(r.conversation)==1 for r in seen)
@@ -56,7 +56,7 @@ def test_multiple_guided_questions_keep_current_goal_until_a_complete_edit_and_r
     replay=send(flow,initial,'London',key)
     assert replay.status_code==200 and replay.json()['edit_status']=='saved' and len(seen)==3
     assert send(flow,initial,'Singapore',key).status_code==409
-    assert ready['review']['requirements_need_review']  # Earlier requirements were not silently re-certified.
+    assert ready['current']['goal']['requirements_need_review']  # Earlier requirements were not silently re-certified.
 
 
 def test_skill_change_is_automatically_applied_with_user_provenance(flow):
@@ -64,8 +64,8 @@ def test_skill_change_is_automatically_applied_with_user_provenance(flow):
     response=send(flow,initial,'Add Python')
     assert response.status_code==200,response.text
     result=response.json();assert result['edit_status']=='saved' and result['proposed_skills'] is None
-    skills=result['workspace']['review']['extraction']['skills']
-    assert skills[0]==initial['review']['extraction']['skills'][0]
+    skills=result['workspace']['current']['goal']['skills']
+    assert skills[0]==initial['current']['goal']['skills'][0]
     assert skills[-1]['name']=='Python' and skills[-1]['origin']=='user_declaration' and skills[-1]['evidence']=='Add Python'
     assert wait(flow)['current']['goal']['skills'][-1]['name']=='Python'
 
@@ -99,8 +99,8 @@ def test_bad_change_reference_is_repaired_inside_the_graph_before_any_save(flow)
         if result.json()['status']=='succeeded':break
         time.sleep(.02)
     assert result.json()['status']=='succeeded' and result.json()['result']['edit_status']=='saved'
-    ready=wait(flow);assert ready['revision']==2 and ready['review']['extraction']['company']=='Example'
-    assert ready['review']['extraction']['skills']==initial['review']['extraction']['skills'] and len(seen)==2
+    ready=wait(flow);assert ready['revision']==2 and ready['current']['goal']['company']=='Example'
+    assert ready['current']['goal']['skills']==initial['current']['goal']['skills'] and len(seen)==2
 
 
 def test_stale_edit_is_rejected_before_using_the_model(flow):
@@ -116,7 +116,7 @@ def test_explicit_refinement_can_update_saved_goal_while_research_is_unavailable
     flow[3].block=True
     assert ingest(flow).status_code==202
     current=wait(flow,phase='research_failed')
-    response=flow[0].post(BASE+'/messages',headers=headers(),json={'session_id':current['session_id'],'expected_version':current['review']['version'],'message':'Add Python to my goal','mode':'refine'})
+    response=flow[0].post(BASE+'/messages',headers=headers(),json={'session_id':current['session_id'],'expected_version':current['current']['goal']['version'],'message':'Add Python to my goal','mode':'refine'})
     assert response.status_code==200,response.text
     assert response.json()['edit_status']=='saved'
-    assert any(s['name']=='Python' for s in response.json()['workspace']['review']['extraction']['skills'])
+    assert any(s['name']=='Python' for s in response.json()['workspace']['current']['goal']['skills'])

@@ -4,7 +4,7 @@
 |---|---|---|
 | Profile | P01-P16; profile corrections following ingestion | Accounts/email verification/revocable sessions, canonical onboarding and education, experiences, personal contributions, capabilities, declared deadline/capacity/temporary availability, profile versions |
 | CV | C01-C09; SCRUM-310 | cvs, ingestion state, provisional extraction, clarification questions/answers, processing operations |
-| Career | J01-J13; G01-G07; SCRUM-282/310 | career_goals, interview_research, skill_gap_analyses, one career_state workspace, LangGraph checkpoints and per-user ai_user_usage; raw JD text stays transient |
+| Career | J01-J13; G01-G07; SCRUM-282/310 | career_goals, interview_research, skill_gap_analyses, one career_state workspace, LangGraph checkpoints and public research metadata; raw JD text stays transient |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Consumed planning-input snapshots, milestones, tasks, progress history, proposed/applied revisions |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
 | Review | A01 orchestration; S01-S06 | Manual/scheduled review state, pace analysis, schedules, approval preferences |
@@ -39,3 +39,8 @@ Career discovery reuses Career-owned `research_contexts` for private structured 
 durable market jobs and immutable evidence snapshots, and existing checkpoint collections.
 Reviewed JD/discovery targets both use `GoalStore.persist_target`; no new service or
 foreign-database access is introduced.
+
+Current career goals use owner/version-checked in-place edits. JD intake promotes its
+structured record into that goal instead of retaining a duplicate content object.
+Research reports stay immutable and owner-linked; category findings are canonical,
+with compact progress endpoints and evidence excerpts loaded on demand.

@@ -16,6 +16,7 @@ from app.ai.adapter import AIError,Operation
 from app.ai.discovery_config import DiscoverySettings
 from app.ai.contracts import AIInput,Message
 from app.ai.recovery import validation_feedback
+from app.workflows.model_waits import resume_obsolete_model_waits
 from app.ai.waiting import quota_progress
 from app.clients.search_sources import SourceRateLimit
 from app.domain.review import ALIASES
@@ -161,17 +162,19 @@ class DiscoveryEngine:
         # Only approved structured direction survives; raw human messages are transient.
         async def understand(state):
             result=await self.ai.generate(AIInput(stage='discovery_turn',context=json.dumps({'previous':row['decision']}),conversation=[Message(role='user',content=body.message)]),Operation(owner,str(row['version']),'discovery_turn'),current_revision=lambda:str(row['version']))
-            return {'decision':Decision.model_validate(result.data.model_dump()).model_dump(mode='json')}
+            return {'decision':Decision.model_validate(result.data.model_dump()).model_dump(mode='json'),'digest':digest}
         def confirm_area(state):
             decision=state['decision']
             if decision['action']=='START_RESEARCH':decision['action']='CONFIRM_AREA'
-            return {'decision':decision}
+            return {'decision':decision,'digest':digest}
         graph=StateGraph(dict);graph.add_node('understand_intent',understand);graph.add_node('confirm_career_area',confirm_area)
         graph.add_edge(START,'understand_intent');graph.add_conditional_edges('understand_intent',lambda s:'confirm_career_area' if s['decision']['scope'] else END);graph.add_edge('confirm_career_area',END)
         compiled=graph.compile(checkpointer=self.saver)
         config={'configurable':{'thread_id':'discovery-conversation:'+identifier+':'+key}}
         with tracing_context(enabled=False):
             snapshot=await compiled.aget_state(config)
+            if snapshot.values and snapshot.values.get('digest')!=digest:
+                raise GoalError('This message key was used for another message.')
             value=await compiled.ainvoke(None if snapshot.next else {},config) if not snapshot.values or snapshot.next else snapshot.values
         changed=await thread(self.rows.update_one,{'_id':identifier,'owner':owner,'version':body.expected_version,'status':row['status']},{'$set':{'decision':value['decision'],'status':'conversation','updated_at':now()},'$inc':{'version':1},'$push':{'receipts':{'$each':[{'key':key,'hash':digest}],'$slice':-100}}})
         if not changed.matched_count:raise GoalError('A newer discovery message arrived; reload it.')
@@ -311,6 +314,8 @@ class DiscoveryEngine:
     async def recover(self):
         while not self.stopping:
             try:
+                if self.ai.settings.enabled and getattr(self.ai.settings,'provider',None)=='gemini':
+                    await thread(resume_obsolete_model_waits,self.rows,'career_discovery')
                 rows=await thread(lambda:list(self.rows.find({'kind':'career_discovery','status':{'$in':['researching','waiting']},'next_attempt_at':{'$lte':now()},'lease_until':{'$lte':now()}},{'_id':1}).limit(10)))
                 for row in rows:self.launch(row['_id'])
             except Exception:log.warning('discovery_recovery_unavailable')

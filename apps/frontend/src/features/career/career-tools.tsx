@@ -20,7 +20,7 @@ function GoalTools({current,token}:{current:CurrentGoal;token:string}){
   const abort=new AbortController();controller.current?.abort();controller.current=abort;setBusy(true);setError('');
   try{const result=await careerApi<SavedReview>(`/goals/${goal._id}/guidance`,token,{method:'POST',signal:abort.signal,
    headers:{'Idempotency-Key':key.current},body:JSON.stringify({expected_version:goal.version,expected_selection_version:current.selection_version})});
-   if(!abort.signal.aborted)router.push(`/career-goal/chat?source=jd&review=${result.review_id}`);
+   if(!abort.signal.aborted)router.push(`/career-goal/chat?source=jd&review=${result.current.goal._id}`);
   }catch(cause){if(!abort.signal.aborted)setError(cause instanceof Error?cause.message:'Could not generate guidance.');}
   finally{if(!abort.signal.aborted)setBusy(false);}
  }

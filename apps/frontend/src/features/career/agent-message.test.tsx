@@ -1,6 +1,6 @@
 import {act,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {AgentMarkdown,AgentReply,AgentRecovery} from './agent-message';
+import {AgentProgress,AgentMarkdown,AgentReply,AgentRecovery} from './agent-message';
 
 describe('assistant Markdown',()=>{
  it('renders emphasis, headings, lists and code instead of literal markers',()=>{
@@ -17,7 +17,7 @@ describe('assistant Markdown',()=>{
   expect(container.querySelector('script,img')).toBeNull();
   expect(screen.queryByRole('link',{name:'bad'})).toBeNull();
   expect(screen.queryByRole('link',{name:'bad protocol'})).toBeNull();
-  expect(screen.getByRole('link',{name:'Source'})).toHaveAttribute('rel','noopener noreferrer');
+  expect(screen.getByRole('link',{name:'example.test'})).toHaveAttribute('rel','noopener noreferrer');
  });
 });
 
@@ -68,4 +68,25 @@ it('keeps token errors and the countdown visible',()=>{
  render(<AgentRecovery message="Your token limit was reached." code="rate_limited" seconds={5} onRetry={()=>{}}/>);
  expect(screen.getByRole('alert')).toHaveTextContent('Your token limit was reached.');
  expect(screen.getByRole('status')).toHaveTextContent('Try again in 5 seconds.');
+});
+
+it('explains disabled AI without displaying private configuration diagnostics',()=>{
+ render(<AgentRecovery message="PRIVATE server configuration diagnostic" code="not_configured" onRetry={()=>{}}/>);
+ expect(screen.getByRole('alert')).toHaveTextContent('AI is disabled.');
+ expect(screen.queryByText(/PRIVATE/)).toBeNull();
+ expect(screen.getByRole('button',{name:'Retry'})).toBeEnabled();
+});
+
+
+it('shows only fixed public progress labels and deduplicates observed steps',()=>{
+ render(<AgentProgress steps={['searching_interviews','PRIVATE Brave tool output','searching_interviews']}/>);
+ expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Searching for relevant interview experiences');
+ expect(screen.getAllByRole('listitem')).toHaveLength(1);
+ expect(screen.queryByText(/PRIVATE|Brave/)).toBeNull();
+});
+
+it('explains career-only scope without exposing provider diagnostics',()=>{
+ render(<AgentRecovery message="PRIVATE model response" code="career_scope" onRetry={()=>{}}/>);
+ expect(screen.getByRole('alert')).toHaveTextContent('Please provide a job description');
+ expect(screen.queryByText(/PRIVATE/)).toBeNull();
 });

@@ -9,7 +9,15 @@ STOP={'what','which','how','are','the','a','an','is','in','for','to','of','and',
 
 def words(text):return set(TOKENS.findall(text.casefold()))-STOP
 
+def blocked_task(message):
+    text=message.casefold()
+    # Narrow execution/override patterns; ordinary goal edits such as "ignore
+    # Java as a requirement" and technical skill explanations remain allowed.
+    return bool(re.search(r'\b(?:ignore|override|disregard)\b.{0,40}\b(?:previous|system|all)\s+(?:instructions|rules|prompts)\b|\b(?:reveal|print|show)\b.{0,35}\b(?:system prompt|api keys?|secrets?)\b',text) or
+        re.search(r'\b(?:write|generate|build|create|solve|translate|summari[sz]e)\b.{0,70}\b(?:recipe|homework|poem|political speech|medical report|legal contract|entire document|python script|sql query|application code)\b',text))
+
 def direct_route(message):
+    if blocked_task(message):return QuestionRoute(topic='off_topic')
     text=message.strip().casefold().rstrip('?.!')
     # Reject task execution, including attempts that wrap unrelated work in job terminology.
     task=re.match(r'^(?:(?:please|can you|could you|help me)\s+)?(?:write|generate|build|create|solve)\b.{0,80}\b(?:code|script|program|app|application|essay|email|query|homework|assignment|poem|cover letter)\b',text)
@@ -43,6 +51,11 @@ def select_items(items,terms,limit=12):
         selected=[v for v in items if v in selected or (v.get('group_id') and v['group_id'] in groups)]
     else:selected=items
     return selected[:limit],len(selected)>limit
+
+
+def opportunity_findings(research):
+    if 'opportunity_findings' in research:return research['opportunity_findings']
+    return [{**finding,'category':category} for category,result in (research.get('intelligence') or {}).get('categories',{}).items() for finding in result.get('findings',[])]
 
 
 def facts_for(route,goal,research,include_evidence=False):
@@ -84,4 +97,14 @@ def facts_for(route,goal,research,include_evidence=False):
                     stage=v.get('interview_stage')
                     if stage and stage not in seen:
                         seen.add(stage);add('interview_stage',{'name':stage,'assessment_type':v.get('assessment_type')},v.get('source_ids',[]))
+    if topic in ('opportunity','overview'):
+        items=opportunity_findings(research)
+        if route.terms:
+            wanted=set().union(*(words(term) for term in route.terms))
+            items=[item for item in items if wanted & words(str(item.get('field',''))+' '+str(item.get('value','')))]
+        truncated|=len(items)>12
+        for item in items[:12]:
+            data={key:item[key] for key in ('field','value','category','confidence','scope','evidence_type') if key in item}
+            if include_evidence:data['supporting_evidence']=item.get('quotes',[])[:3]
+            add('opportunity_finding',data,item.get('source_ids',[]))
     return facts,links,truncated

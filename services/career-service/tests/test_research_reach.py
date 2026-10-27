@@ -1,3 +1,4 @@
+from tests.api_views import saved_research
 """Gemini query planning and useful-source coverage; synthetic public API fixtures."""
 import json
 from types import SimpleNamespace
@@ -73,7 +74,7 @@ def test_search_planning_payloads_are_public_bounded_and_country_matches_address
         def search(req):
             calls.append(req)
             assert req.url.path.endswith('/llm/context')
-            assert req.url.params['country']=='ALL' and req.url.params['maximum_number_of_urls']=='5'
+            assert req.url.params['country']=='ALL' and req.url.params['maximum_number_of_urls']=='6'
             assert req.url.params['q']=='DBS technology internship Singapore interview process'
             return httpx.Response(200,json={'grounding':{'generic':[]},'sources':{}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(search)) as client:
@@ -89,7 +90,7 @@ def test_research_expands_past_irrelevant_and_duplicate_results_until_three_usef
     assert ingest(flow).status_code==202
     current=wait(flow)
     assert len(search.calls)==2 and len(set(search.calls))==2
-    assert {s['source_id'] for s in current['research']['sources']}=={'a','b','c'}
+    assert {s['source_id'] for s in saved_research(flow,current)['sources']}=={'a','b','c'}
     assert current['coverage'][-1]['useful_sources']==3 and not current['coverage'][-1]['limit_reached']
     assert len([v for v in gemini.calls if v.stage=='research_assess'])==2
     # Adequate public research is reused without new searches for the same context.
@@ -101,7 +102,7 @@ def test_repeated_single_source_does_not_fake_three_sources_or_repeat_assessment
     search,gemini=configure(flow,[[source('a')]])
     ingest(flow);current=wait(flow)
     assert len(search.calls)==3 and len(set(search.calls))==3
-    assert len(current['research']['sources'])==1
+    assert len(saved_research(flow,current)['sources'])==1
     assert current['coverage'][-1]['useful_sources']==1 and current['coverage'][-1]['limit_reached']
     assert len([v for v in gemini.calls if v.stage=='research_assess'])==1
     assert all('Analyst' in q for q in search.calls)
@@ -110,8 +111,8 @@ def test_repeated_single_source_does_not_fake_three_sources_or_repeat_assessment
 def test_no_useful_evidence_finishes_as_no_findings_without_synthesis(flow):
     search,gemini=configure(flow,[[source('noise',False)]])
     ingest(flow);current=wait(flow)
-    assert len(search.calls)==2 and current['research']['research_status']=='no_findings'
-    assert current['research']['sources']==[] and current['coverage'][-1]['useful_sources']==0
+    assert len(search.calls)==2 and saved_research(flow,current)['research_status']=='no_findings'
+    assert saved_research(flow,current)['sources']==[] and current['coverage'][-1]['useful_sources']==0
     assert not any(v.stage=='interview_synthesis' for v in flow[2].calls)
 
 
@@ -128,7 +129,7 @@ def test_partial_evidence_is_reused_instead_of_repeating_exhausted_searches(flow
     ingest(flow);first=wait(flow)
     assert len(search.calls)==3 and first['coverage'][-1]['limit_reached']
     ingest(flow,'Another source JD. SQL is required.');second=wait(flow)
-    assert len(search.calls)==3 and second['research']['_id']==first['research']['_id']
+    assert len(search.calls)==3 and second['research_id']==first['research_id']
 
 
 def test_later_search_timeout_keeps_assessed_evidence_and_opens_chat(flow):
@@ -139,5 +140,5 @@ def test_later_search_timeout_keeps_assessed_evidence_and_opens_chat(flow):
         return await original(context,query)
     search.collect_query=collect
     ingest(flow);current=wait(flow)
-    assert [s['source_id'] for s in current['research']['sources']]==['a']
+    assert [s['source_id'] for s in saved_research(flow,current)['sources']]==['a']
     assert current['coverage'][-1]['status']=='unavailable'

@@ -26,7 +26,7 @@ test('exposes sourced topics, uncertainty and historical evidence without starti
 });
 
 test('generation uses exact goal versions and opens the shared saved review',async()=>{
- vi.mocked(careerApi).mockResolvedValue({review_id:'000000000000000000000082'});
+ vi.mocked(careerApi).mockResolvedValue({current:{goal:{_id:'000000000000000000000082'}}});
  render(<CareerTools current={current}/>);
  fireEvent.click(screen.getByRole('button',{name:'Generate role skills'}));
  await waitFor(()=>expect(push).toHaveBeenCalledWith('/career-goal/chat?source=jd&review=000000000000000000000082'));

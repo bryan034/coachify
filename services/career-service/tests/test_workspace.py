@@ -1,3 +1,4 @@
+from tests.api_views import saved_research,goal_content
 """One live goal, automatic snapshots, real LangGraph/MongoDB and fake APIs."""
 import asyncio
 import json
@@ -28,7 +29,10 @@ class AI:
     async def generate(self,request,operation,**kwargs):
         self.calls.append(request)
         if self.fail:raise AIError('invalid_output',True)
-        if request.stage=='jd_extraction':
+        if request.stage=='jd_scope':
+            from app.ai.jd_scope import JobIdentity
+            output=JobIdentity(is_job_description=True,evidence=[request.source_text[:200]])
+        elif request.stage=='jd_extraction':
             role='Second Analyst' if 'Second' in request.source_text else 'Data Analyst'
             output=JDExtraction(role=role,field='Data',company=None,summary='Interpret data for decisions.',skills=[{'name':'SQL','category':'Technical','priority':'required','origin':'employer','evidence':'SQL is required.'}])
         elif request.stage=='interview_synthesis':
@@ -108,7 +112,7 @@ def test_jd_graph_autosaves_current_goal_and_gates_chat_on_both_inputs(flow):
     client,db,ai,sources=flow;key=str(uuid4());response=ingest(flow,key=key)
     assert response.status_code==202,response.text
     initial=response.json();assert initial['current']['goal']['skills'][0]['name']=='SQL'
-    current=wait(flow);assert current['research']['skills'][0]['assessment_type']=='SQL exercise'
+    current=wait(flow);assert saved_research(flow,current)['skills'][0]['assessment_type']=='SQL exercise'
     assert {v[1] for v in sources.calls}=={'brave'}
     answer=client.post(BASE+'/messages',headers=headers(),json={'session_id':current['session_id'],'expected_version':current['revision'],'message':'What should I practise?'})
     assert answer.status_code==200,answer.text
@@ -123,7 +127,7 @@ def test_jd_graph_autosaves_current_goal_and_gates_chat_on_both_inputs(flow):
 
 
 def test_edit_is_current_without_confirmation_and_new_jd_replaces_the_session(flow):
-    client,db,ai,sources=flow;ingest(flow);first=wait(flow);content=first['review']['extraction'];content['summary']='Updated role interpretation.'
+    client,db,ai,sources=flow;ingest(flow);first=wait(flow);content=goal_content(first['current']['goal']);content['summary']='Updated role interpretation.'
     saved=client.patch(BASE+'/review',headers=headers(),json={'session_id':first['session_id'],'expected_version':first['revision'],'content':content})
     assert saved.status_code==200,saved.text
     second=wait(flow);assert second['current']['goal']['summary']=='Updated role interpretation.'
@@ -138,21 +142,21 @@ def test_edit_is_current_without_confirmation_and_new_jd_replaces_the_session(fl
 
 def test_failed_research_preserves_latest_goal_and_keeps_saved_goal_chat_available(flow):
     client,db,ai,sources=flow;sources.block=True;ingest(flow);value=wait(flow,'research_failed')
-    assert value['current']['goal']['skills'] and value['research'] is None
+    assert value['current']['goal']['skills'] and value['research_id'] is None
     assert client.post(BASE+'/messages',headers=headers(),json={'session_id':value['session_id'],'expected_version':value['revision'],'message':'Explain'}).status_code==200
     sources.block=False;assert client.post(BASE+'/retry',headers=headers()).status_code==202
-    assert wait(flow)['research']
+    assert wait(flow)['research_id']
 
 
 def test_quota_pause_resumes_failed_node_without_repeating_search(flow):
     client,db,ai,sources=flow;ai.quota=True;ingest(flow);pending=wait(flow,'waiting_quota')
     assert pending['retry_after']==1
-    ready=wait(flow);assert ready['research'] and len(sources.calls)==2
+    ready=wait(flow);assert saved_research(flow,ready) and len(sources.calls)==2
 
 
 def test_empty_research_is_explicit_and_checkpoint_expiry_keeps_saved_goal(flow):
     client,db,ai,sources=flow;sources.empty=True;ingest(flow);value=wait(flow)
-    assert value['research']['research_status']=='no_findings'
+    assert saved_research(flow,value)['research_status']=='no_findings'
     assert len(sources.calls)==2 # Brave only, at most one extra query round
     assert not any(r.stage=='interview_synthesis' for r in ai.calls)
     db.career_state.update_one({'_id':OWNER},{'$set':{'workspace.expires_at':now()-timedelta(seconds=1)}})
@@ -169,7 +173,7 @@ def test_invalid_replacement_retains_prior_career_goal(flow):
 
 def test_stale_review_edit_and_lost_success_retry_cannot_replace_new_goal(flow):
     client,db,ai,sources=flow;ingest(flow);first=wait(flow);key=headers()
-    body={'session_id':first['session_id'],'expected_version':first['revision'],'content':first['review']['extraction']}
+    body={'session_id':first['session_id'],'expected_version':first['revision'],'content':goal_content(first['current']['goal'])}
     body['content']['summary']='Saved exactly once.'
     saved=client.patch(BASE+'/review',headers=key,json=body);assert saved.status_code==200
     assert client.patch(BASE+'/review',headers=key,json=body).json()['revision']==saved.json()['revision']
@@ -189,7 +193,7 @@ def test_process_restart_resumes_checkpoint_without_repeating_api_searches(flow)
 
 def test_edit_during_quota_pause_releases_old_research_lease(flow):
     client,db,ai,sources=flow;ai.quota=True;ingest(flow);value=wait(flow,'waiting_quota')
-    content=value['review']['extraction'];content['summary']='Latest role summary.'
+    content=goal_content(value['current']['goal']);content['summary']='Latest role summary.'
     changed=client.patch(BASE+'/review',headers=headers(),json={'session_id':value['session_id'],'expected_version':value['revision'],'content':content})
     assert changed.status_code==200,changed.text
     latest=wait(flow)
@@ -199,16 +203,16 @@ def test_edit_during_quota_pause_releases_old_research_lease(flow):
 
 def test_pending_context_is_still_the_latest_goal_and_invalid_scope_never_half_saves(flow):
     client,db,ai,sources=flow;ingest(flow);value=wait(flow)
-    content=value['review']['extraction'];content['role']='Business Analyst'
+    content=goal_content(value['current']['goal']);content['role']='Business Analyst'
     response=client.patch(BASE+'/review',headers=headers(),json={'session_id':value['session_id'],'expected_version':value['revision'],'content':content})
     assert response.status_code==200,response.text
     latest=response.json();assert latest['current']['goal']['role']=='Business Analyst'
     assert latest['current']['goal']['requirements_need_review'] and latest['current']['goal']['readiness']=='pending'
-    content=latest['review']['extraction'];content['role']=None
+    content=goal_content(latest['current']['goal']);content['role']=None
     invalid=client.patch(BASE+'/review',headers=headers(),json={'session_id':value['session_id'],'expected_version':latest['revision'],'content':content})
     assert invalid.status_code==422
     current=client.get(BASE,headers=headers()).json()
-    assert current['review']['version']==current['revision']==latest['revision']
+    assert current['current']['goal']['version']==current['revision']==latest['revision']
 
 
 def test_brave_summary_survives_graph_storage_and_cross_user_cache_reuse(flow):
@@ -229,27 +233,27 @@ def test_brave_summary_survives_graph_storage_and_cross_user_cache_reuse(flow):
             'source_ids':['s1'],'quotes':[text],'evidence_origin':'brave_summary','summary_id':'answer1'}]),generation=Generation(provider='fixture',model='fixture',prompt_version='test',generated_at=now()))
     ai.generate=generate
     ingest(flow);value=wait(flow)
-    assert value['research']['summaries'][0]['text']==text and value['research']['skills'][0]['evidence_origin']=='brave_summary'
-    assert value['research']['skills'][0]['interview_stage']=='technical screen'
-    assert value['research']['sources'][0]['evidence']!=text
+    assert saved_research(flow,value)['summaries'][0]['text']==text and saved_research(flow,value)['skills'][0]['evidence_origin']=='brave_summary'
+    assert saved_research(flow,value)['skills'][0]['interview_stage']=='technical screen'
+    assert saved_research(flow,value)['sources'][0]['evidence']!=text
     assert len(sources.calls)==1  # A supported answer does not need another broad search.
     assert client.post(BASE+'/jd',headers=headers(other=True),json={'text':'SQL is required.'}).status_code==202
     for _ in range(100):
         other=client.get(BASE,headers=headers(other=True)).json()
         if other['phase']=='ready':break
         time.sleep(.03)
-    assert other['phase']=='ready' and other['research']['_id']==value['research']['_id']
+    assert other['phase']=='ready' and other['research_id']==value['research_id']
     assert len(sources.calls)==1
 
 
-def test_answers_plan_failure_preserves_goal_and_explains_the_required_access(flow):
-    from app.clients.search_sources import AnswersAccessError
+def test_context_access_failure_preserves_goal_and_explains_the_required_access(flow):
+    from app.repositories.goals import GoalError
     client,db,ai,sources=flow
-    async def collect(*args,**kwargs):raise AnswersAccessError()
+    async def collect(*args,**kwargs):raise GoalError('Brave LLM Context API credentials or access need checking.',503)
     sources.collect_platform=collect
     ingest(flow);value=wait(flow,'research_failed')
     assert value['current']['goal']['skills']
-    assert 'Answers plan' in value['error'] and value['research'] is None
+    assert 'LLM Context API credentials' in value['error'] and value['research_id'] is None
 
 
 @pytest.mark.parametrize('failure,expected',[
@@ -317,7 +321,7 @@ def test_async_jd_wait_resumes_the_same_graph_call_and_receipt(flow):
             if result['status']=='succeeded':break
             time.sleep(.02)
         assert result['status']=='succeeded',result
-        assert result['result']['review']['extraction']['role']=='Data Analyst'
+        assert result['result']['current']['goal']['role']=='Data Analyst'
         assert len(calls)==2 and calls[0]==calls[1]
         assert wait(flow)['current']['goal']['role']=='Data Analyst'
         assert 'Data Analyst at a software firm.' not in str(list(db.career_checkpoints.find({})))
@@ -361,7 +365,7 @@ def test_async_jd_repairs_missing_fields_without_publishing_bad_data(flow):
             if done['status']=='succeeded':break
             time.sleep(.02)
         assert done['status']=='succeeded' and done['validation_feedback'] is None
-        assert done['result']['review']['extraction']['role']=='Analyst'
+        assert done['result']['current']['goal']['role']=='Analyst'
         assert len(calls)==2 and 'company' in calls[1]['messages'][0]['content']
         assert wait(flow)['phase']=='ready'
     finally:
@@ -378,6 +382,6 @@ def test_interview_synthesis_repairs_repeatedly_without_repeating_search(flow):
         return await generate(request,operation,**kwargs)
     client.app.state.ai=SimpleNamespace(generate=recover,settings=ai.settings)
     ingest(flow);done=wait(flow)
-    assert done['research'] and done['error'] is None
+    assert saved_research(flow,done) and done['error'] is None
     assert len([r for r in ai.calls if r.stage=='interview_synthesis'])==3
     assert len(sources.calls)==2

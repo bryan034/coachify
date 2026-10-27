@@ -31,11 +31,11 @@ it('uses conversation first, requires explicit scope confirmation, and excludes 
  expect(JSON.parse(call[2]!.body as string)).toMatchObject({confirmed:true,scope});
 });
 it('reviews categorized evidence, removes a skill, then uses the existing goal confirmation API',async()=>{
- const review={review_id:'000000000000000000000002',version:1,target_type:'career_exploration',extraction,baseline:extraction,requirements_need_review:false,metadata_origins:{},is_confirmed:false,generation:{}};
+ const review={current:{goal:{...extraction,_id:'000000000000000000000081',version:1,target_type:'career_exploration'}}};
  const session={...base,status:'review',review,related_roles:['Software Engineer'],listings_analysed:10,employers_analysed:5,coverage:'good',stats:[{name:'SQL',requirement_type:'core',mention_count:8,sample_size:10,source_ids:[]},{name:'Python',requirement_type:'optional',mention_count:3,sample_size:10,source_ids:[]}]};
  vi.mocked(careerApi).mockImplementation(async (path,_token,options)=>{
   if(path==='/discoveries/current')return {available:true,session} as never;
-  if(path.endsWith('/review'))return {...review,version:2,extraction:JSON.parse(options!.body as string).content} as never;
+  if(path.endsWith('/review'))return {current:{goal:{...review.current.goal,version:2,...JSON.parse(options!.body as string).content}}} as never;
   if(path==='/goals/current')return {selection_version:0,goal:null} as never;
   if(path==='/goals/confirm')return {selection_version:1,goal:{_id:'goal'}} as never;
   throw new Error(path);
@@ -50,12 +50,12 @@ it('reviews categorized evidence, removes a skill, then uses the existing goal c
  const saved=vi.mocked(careerApi).mock.calls.find(([path])=>path.endsWith('/review'))!;
  expect(JSON.parse(saved[2]!.body as string).content.skills.map((s:{name:string})=>s.name)).toEqual(['SQL']);
  const confirm=vi.mocked(careerApi).mock.calls.find(([path])=>path==='/goals/confirm')!;
- expect(JSON.parse(confirm[2]!.body as string)).toMatchObject({target_type:'career_exploration',review_id:review.review_id,expected_review_version:2,company:null,job_url:null});
+ expect(JSON.parse(confirm[2]!.body as string)).toMatchObject({target_type:'career_exploration',review_id:review.current.goal._id,expected_review_version:2,company:null,job_url:null});
 });
 it('restores provider wait with its cause while keeping saved evidence visible',async()=>{
- vi.mocked(careerApi).mockResolvedValue({available:true,session:{...base,status:'waiting',retry_after:407,limit_scope:'provider',provider:'groq'}} as never);
+ vi.mocked(careerApi).mockResolvedValue({available:true,session:{...base,status:'waiting',retry_after:407,limit_scope:'provider',provider:'gemini'}} as never);
  render(<CareerDiscovery/>);
- await screen.findByText('groq is rate limiting requests');
+ await screen.findByText('gemini is rate limiting requests');
  expect(screen.getByRole('status')).toHaveTextContent('Resuming in 407 seconds');
  expect(screen.queryByRole('button',{name:'Confirm and save goal'})).toBeNull();
 });

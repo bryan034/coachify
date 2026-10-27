@@ -1,3 +1,4 @@
+from tests.api_views import saved_research
 """Scoped Q&A uses projected saved facts, not whole documents/history/edit schemas."""
 import json
 from types import SimpleNamespace
@@ -28,7 +29,7 @@ def test_clear_skill_question_sends_only_relevant_fields_without_history(flow):
     assert [f['kind'] for f in context['facts']]==['jd_skill']
     assert 'sources' not in context and 'summaries' not in context and 'responsibilities' not in str(context)
     assert len(calls[0].conversation)==1 and 'OLD_HISTORY' not in calls[0].model_dump_json()
-    payload=AIAdapter(AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='fixture'),None)._payload(calls[0])
+    payload=AIAdapter(AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='fixture'),None)._payload(calls[0])
     assert input_tokens(payload)<1000
     assert 'SkillEdits' not in str(payload['response_format'])
 
@@ -42,7 +43,7 @@ def test_missing_round_count_is_not_guessed_from_stage_list_and_uses_no_model(fl
 
 def test_saved_location_is_answered_without_a_model(flow):
     ingest(flow);current=wait(flow);_,db,ai,_=flow
-    db.career_goals.update_one({'_id':ObjectId(current['review']['review_id'])},{'$set':{'content.location':'Singapore'}})
+    db.career_goals.update_one({'_id':ObjectId(current['current']['goal']['_id'])},{'$set':{'location':'Singapore'}})
     before=len(ai.calls);response=ask(flow,current,'Where is this role based?')
     assert response.status_code==200 and '**Singapore**' in response.json()['reply']
     assert len(ai.calls)==before
@@ -91,7 +92,7 @@ def test_question_store_uses_fixed_projections_and_owner_scope(flow):
     goal,research=store.fetch(OWNER,row,'skills')
     assert set(goal)=={'skills'} and 'process' not in research and 'summaries' not in research
     assert all('evidence' not in source for source in research.get('sources',[]))
-    with pytest.raises(GoalError):store.metadata('another-owner',current['review']['review_id'])
+    with pytest.raises(GoalError):store.metadata('another-owner',current['current']['goal']['_id'])
     row['workspace']['research_id']='000000000000000000000099'
     with pytest.raises(GoalError):store.fetch(OWNER,row,'skills')
     with pytest.raises(ValueError):store.fetch(OWNER,row,'$where')
@@ -117,8 +118,8 @@ def test_process_only_research_is_persisted_and_round_count_answers_without_mode
         return result
     ai.generate=generate
     ingest(flow);current=wait(flow)
-    assert current['research']['skills']==[] and current['research']['research_status']=='succeeded'
-    assert db.interview_research.find_one({'_id':ObjectId(current['research']['_id'])})['process']['round_count']==3
+    assert saved_research(flow,current)['skills']==[] and saved_research(flow,current)['research_status']=='succeeded'
+    assert db.interview_research.find_one({'_id':ObjectId(current['research_id'])})['process']['round_count']==3
     before=len(ai.calls);response=ask(flow,current,'How many interview rounds are there?')
     assert response.status_code==200 and '**3 rounds**' in response.json()['reply']
     assert 'https://example.test/interviews' in response.json()['reply'] and len(ai.calls)==before
@@ -132,7 +133,7 @@ def test_explicit_skill_edits_use_edit_contract_without_interview_payload(flow):
     assert request.stage=='goal_edit' and 'interview_research' not in json.loads(request.context)
     assert len(request.conversation)==1
     assert response.json()['edit_status']=='saved'
-    assert any(s['name']=='Python' for s in response.json()['workspace']['review']['extraction']['skills'])
+    assert any(s['name']=='Python' for s in response.json()['workspace']['current']['goal']['skills'])
 
 
 def test_named_skill_retrieval_preserves_its_or_alternatives():

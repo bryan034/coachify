@@ -12,10 +12,10 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from app.core.auth import bearer, current_account
 from app.ai.adapter import AIAdapter
-from app.ai.config import AISettings,GeminiSettings
+from app.ai.config import GeminiSettings
 from app.ai.routing import ModelRouter,opportunity_models
-from app.ai.usage import UserTokenUsage
 from app.ai.adapter import AIError
+from app.ai.jd_scope import CareerScopeError
 from app.clients.cvs import CvClient
 from app.repositories.goals import GoalStore, GoalError
 from app.api.v1.goals import router as goals_router
@@ -86,14 +86,10 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 if mongo is not None: mongo.close()
                 raise RuntimeError('Career storage could not connect. Check database setup.') from None
         async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as ai_client:
-            settings=AISettings.from_env() if ai is None else None
-            usage=await run_in_threadpool(UserTokenUsage,db)
-            primary=ai or AIAdapter(settings,ai_client,usage_store=usage)
-            context=context_ai
-            gemini=None
-            if ai is None:
-                gemini=GeminiSettings.from_env()
-                if gemini.enabled:context=AIAdapter(gemini,ai_client)
+            # One Gemini client serves every reasoning/extraction/chat stage.
+            gemini=GeminiSettings.reasoning_from_env() if ai is None else None
+            primary=ai or AIAdapter(gemini,ai_client)
+            context=primary if ai is None else context_ai
             app.state.ai=ModelRouter(primary,context) if context is not None else primary
             app.state.research_client = research_client or SourceAPIs.from_environment(ai_client)
             if app.state.research_store is not None:
@@ -104,7 +100,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
             opportunity_ai=opportunity_models(primary,context,gemini,opportunity_settings,ai_client)
             app.state.opportunities=OpportunityEngine(app,db,opportunity_settings,opportunity_ai) if db is not None else None
             app.state.discovery=DiscoveryEngine(app,db,opportunity_ai,app.state.opportunities.source) if db is not None else None
-            # Gemini coordination remains usable while Groq reasoning is quota-limited.
+            # Chat and research share Gemini; provider retry delays remain resumable.
             app.state.chat_ai=opportunity_ai if getattr(opportunity_ai,'context_enabled',False) else app.state.ai
             async with httpx.AsyncClient(base_url=os.getenv('CV_SERVICE_URL','http://cv-service:8000'),
                     timeout=5, trust_env=False, follow_redirects=False) as cv_http:
@@ -130,7 +126,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 yield
 
     app = FastAPI(title='Coachify Career API', version='0.2.0', lifespan=lifespan,
-        description='One automatically saved career workspace per account. LangGraph interprets JDs, coordinates Brave research, then enables context-grounded chat. Exploration follows a separate graph.')
+        description='One automatically saved career workspace per account. Validated job identity enables concurrent JD extraction and public research, with observed progress and scoped chat. Exploration follows a separate graph.')
     app.add_middleware(BodyLimit)
     app.include_router(discovery_router)
     app.include_router(opportunity_router)
@@ -147,7 +143,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
 
     @app.exception_handler(GoalError)
     async def goal_error(request, error):
-        return JSONResponse({'detail':error.message,**({'code':error.code} if isinstance(error,OperationConflict) else {})},error.status)
+        return JSONResponse({'detail':error.message,**({'code':error.code} if isinstance(error,(OperationConflict,CareerScopeError)) else {})},error.status)
 
     @app.exception_handler(PyMongoError)
     async def storage_error(request, error):
@@ -156,22 +152,26 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     @app.exception_handler(AIError)
     async def ai_error(request, error):
         status=429 if error.code=='rate_limited' else 422 if error.code=='input_limit' else 409 if error.code=='stale_input' else 503
-        messages={'not_configured':'AI is disabled. Configure the Career service model and API key.',
-                  'provider_auth':'The AI provider credentials need to be checked.',
-                  'provider_configuration':'Check the configured AI model and response mode.',
-                  'model_unavailable':'The configured AI model is not available to this provider account. Choose an accessible AI_MODEL and recreate the Career service.',
+        messages={'not_configured':'AI is disabled. Configure AI_ENABLED and GEMINI_API_KEY on the Career service.',
+                  'provider_auth':'Check GEMINI_API_KEY and its API/application restrictions on the Google project.',
+                  'provider_configuration':'The AI provider rejected the request configuration. Check provider_error for the safe status and rejected field names.',
+                  'provider_schema':'Gemini rejected the structured-output schema. Check provider_error.fields; your saved goal is unchanged.',
+                  'provider_parameter':'Gemini rejected a model request parameter. Check provider_error.fields; your saved goal is unchanged.',
+                  'provider_access':'Google project access, API enablement, billing or regional availability needs checking. Your saved goal is unchanged.',
+                  'model_unavailable':'The configured AI model is not available to this provider account. Check GEMINI_REASONING_MODEL access for GEMINI_API_KEY and recreate the Career service.',
                   'invalid_output':'The AI returned an invalid structured response. Your saved progress is unchanged; retry your message.',
                   'timeout':'The AI did not finish within the time limit. Your inputs and saved progress are unchanged; retry the request.',
                   'incomplete_output':'The AI response ended before it was complete, possibly at its output limit. No incomplete result was saved; retry the request.',
                   'output_limit':'The AI response exceeded the allowed response size. Your inputs and saved progress are unchanged.',
                   'unavailable':'The AI provider is temporarily unavailable. Your inputs and saved progress are unchanged; retry shortly.',
-                  'input_limit':f'This request contains {error.input_count} estimated input tokens; the Groq allowance is 7,000 tokens per minute including input and output; this input leaves insufficient output space. Shorten the description or conversation and retry. Your saved progress is unchanged.',
+                  'input_limit':f'This request contains {error.input_count} estimated input tokens; this request leaves insufficient output space within the configured model context. Shorten the description or conversation and retry. Your saved progress is unchanged.',
                   'context_limit':'This request exceeds the configured model or token allowance. Shorten the description/chat context or check the configured model context window. Saved progress is unchanged.'}
         detail=messages.get(error.code,'The assistant could not complete this turn. Your saved progress is unchanged; retry shortly.')
         payload={'detail':detail,'code':error.code}
+        if error.provider_error:payload['provider_error']=error.provider_error
         if error.code == 'rate_limited':
             payload['limit_scope'] = error.limit_scope
-            payload['detail'] = ('Your 7,000-token rolling-minute allowance has been reached.' if error.limit_scope=='user' else 'The AI provider request or token quota was reached.') + ' Your inputs and saved progress are unchanged.'
+            payload['detail'] = 'The AI provider request or token quota was reached.' + ' Your inputs and saved progress are unchanged.'
             if error.retry_after is not None:
                 payload['retry_after'] = error.retry_after
                 payload['detail'] += f' Retry after {error.retry_after} seconds.'

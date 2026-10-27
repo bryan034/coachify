@@ -5,7 +5,6 @@ import pytest
 from app.ai.adapter import AIAdapter, AIError, Operation
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
-from app.ai.usage import UserQuotaExceeded
 from app.ai.waiting import quota_progress
 from app.workflows.operations import Operations
 from app.workflows.operations import OperationConflict
@@ -14,15 +13,8 @@ from app.repositories.goals import GoalError
 
 def test_repeated_quota_waits_resume_same_call_outside_active_timeout():
     async def run():
-        calls, waits, states, charged = [], [], [], []
+        calls, waits, states = [], [], []
         clock = [0]
-        class Usage:
-            checks = 0
-            def reserve(self, owner, prompt, output):
-                self.checks += 1
-                if self.checks == 1: raise UserQuotaExceeded(3)
-            def settle(self, owner, ticket, tokens):
-                if tokens:charged.append(tokens)
         def respond(request):
             calls.append(request.content)
             if len(calls) == 1: return httpx.Response(429, headers={'Retry-After':'2'})
@@ -33,16 +25,15 @@ def test_repeated_quota_waits_resume_same_call_outside_active_timeout():
             clock[0] += seconds
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             ai = AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture',timeout_seconds=1),client,
-                           sleep=sleep,clock=lambda:clock[0],usage_store=Usage())
+                           sleep=sleep,clock=lambda:clock[0])
             context = quota_progress.set(states.append)
             try:
                 operation=Operation('alice','1','chat')
                 result=await ai.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}]),operation,current_revision=lambda:'1')
             finally: quota_progress.reset(context)
         assert result.data.reply == 'Hello' and operation.status == 'succeeded'
-        assert waits == [3,2] and states == [3,None,2,None]
+        assert waits == [2] and states == [2,None]
         assert len(calls) == 2 and calls[0] == calls[1]
-        assert charged == [15]
     asyncio.run(run())
 
 

@@ -15,8 +15,20 @@ def evidence_items(request):
     items=[]
     for source in request.sources:
         if source.evidence:
-            items.append({'ref':f'e{len(items)+1}','origin':'source_excerpt','text':source.evidence,
-                'source_ids':[source.source_id],'summary_id':None})
+            # Saved retrieval can contain 2,400 characters; citation quotes still
+            # use the existing 600-character contract. Split on text boundaries
+            # before token selection, retaining exact substrings and provenance.
+            remaining=source.evidence
+            while remaining:
+                end=min(600,len(remaining))
+                if end<len(remaining):
+                    boundary=remaining.rfind('. ',0,end)
+                    if boundary<200:boundary=remaining.rfind(' ',0,end)
+                    if boundary>0:end=boundary+1
+                text=remaining[:end].strip()
+                remaining=remaining[end:].lstrip()
+                if text:items.append({'ref':f'e{len(items)+1}','origin':'source_excerpt','text':text,
+                    'source_ids':[source.source_id],'summary_id':None})
     known={s.source_id for s in request.sources}
     for summary in request.summaries:
         for claim in summary.claims:

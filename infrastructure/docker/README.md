@@ -32,6 +32,16 @@ The active slice includes Profile, Career exploration/goal persistence, CV read 
 
 No image pulls, builds, container starts, network creation, or volume creation are performed by this scaffold.
 
+## Active environment example
+
+The public `.env.example` includes only consumed inputs for email/Gmail OTP delivery,
+service-scoped database passwords, `AI_ENABLED`, `GEMINI_API_KEY`,
+`GEMINI_REASONING_MODEL` and `BRAVE_API_KEY`. Every model stage uses that Gemini
+model setting; the default is `gemini-3.5-flash-lite`. Unused provider/model/response settings,
+Gemini-chat switches and Brave search-mode options are omitted because production
+ignores them. Optional tuning uses the defaults documented in the service specifications.
+Keep existing database passwords and private credentials when applying template changes.
+
 ## Hot reload during development
 
 From the repository root, run this yourself with your existing private configuration:

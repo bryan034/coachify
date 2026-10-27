@@ -7,6 +7,8 @@ from app.repositories.goals import fingerprint, GoalError
 from starlette.concurrency import run_in_threadpool
 from app.ai.adapter import Operation, AIError
 from app.ai.contracts import AIInput, Message
+from app.ai.jd_scope import identify_job
+from app.domain.questions import direct_route,REFUSAL
 from app.schemas.jd import JDSource, JDMessage, JDExtractionResult, JDReply
 router=APIRouter(prefix='/api/v1/career/jd',tags=['J02–J04 extraction and chat'])
 
@@ -42,6 +44,7 @@ async def extract(body: JDSource, request: Request, account=Depends(owner), key=
     digest=fingerprint(body.model_dump(mode='json'))
     existing=await run_in_threadpool(repository.replay_extraction,account,key,digest)
     if existing: return view(existing)
+    await identify_job(request.app.state.ai,body.text,account)
     result = await request.app.state.ai.generate(AIInput(stage='jd_extraction', source_text=body.text,
         source_urls=[body.source_url] if body.source_url else []),
         Operation(account, 'transient', 'jd_extraction'), current_revision=lambda: 'transient',
@@ -57,6 +60,8 @@ async def message(body: JDMessage, request: Request, account=Depends(owner)):
     draft=await run_in_threadpool(repository.get,identifier(body.review_id),account)
     if draft.version != body.expected_version:
         raise GoalError('This review changed. Reload the saved context before chatting.')
+    route=direct_route(body.message)
+    if route is not None and route.topic=='off_topic':return JDReply(reply=REFUSAL,proposed_skills=None)
     context=draft.content
     validate_skills(context.skills, existing=context.skills)
     history = [Message.model_validate(m.model_dump()) for m in body.conversation]

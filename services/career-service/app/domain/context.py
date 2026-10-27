@@ -2,12 +2,12 @@
 import json
 import tiktoken
 from app.ai.qa_contracts import QuestionRoute
-from app.domain.questions import facts_for
+from app.domain.questions import facts_for,opportunity_findings
 
 INDEX_TOKENS=1800
 FACT_TOKENS=1600
 PREFIXES={'s':('skills','skills'),'c':('requirements','non_skill_requirements'),
-          'i':('interview_skills','skills'),'p':('interview_process','stages')}
+          'i':('interview_skills','skills'),'p':('interview_process','stages'),'r':('opportunity','opportunity_findings')}
 
 
 def token_count(value):
@@ -22,10 +22,11 @@ def context_index(goal,research,pending=None):
                         'interview_skills':len(research.get('skills',[])), 'interview_process':bool(research.get('process') or any(s.get('interview_stage') for s in research.get('skills',[])))}}
     if pending:result['pending_edit']={k:str(pending.get(k) or '')[:300] for k in ('intent','question')}
     arrays={'s':goal.get('skills',[]),'c':goal.get('non_skill_requirements',[]),
-            'i':research.get('skills',[]),'p':(research.get('process') or {}).get('stages',[])}
+            'i':research.get('skills',[]),'p':(research.get('process') or {}).get('stages',[]),'r':opportunity_findings(research)}
     for prefix,items in arrays.items():
         for index,item in enumerate(items):
-            value={'ref':f'{prefix}{index}','label':str(item.get('name') or item.get('description') or '')[:120]}
+            value={'ref':f'{prefix}{index}','label':str(item.get('name') or item.get('description') or item.get('value') or '')[:120]}
+            if item.get('field'):value['field']=str(item['field'])[:40]
             if item.get('category'):value['category']=str(item['category'])[:40]
             result['items'].append(value)
     while token_count(result)>INDEX_TOKENS and result['items']:
@@ -40,7 +41,7 @@ def selected_documents(plan,goal,research):
     for prefix,(_,field) in PREFIXES.items():
         container=goal if prefix in ('s','c') else research
         if prefix=='p':container=dict(research.get('process') or {});research['process']=container
-        original=container.get(field,[])
+        original=opportunity_findings(research) if prefix=='r' else container.get(field,[])
         wanted={int(ref[1:]) for ref in plan.item_refs if ref.startswith(prefix)}
         groups={item['group_id'] for i,item in enumerate(original) if i in wanted and item.get('group_id')}
         container[field]=[item for i,item in enumerate(original) if i in wanted or (item.get('group_id') and item['group_id'] in groups)]

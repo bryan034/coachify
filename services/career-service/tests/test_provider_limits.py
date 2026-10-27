@@ -52,4 +52,4 @@ def test_task_output_caps_respect_the_configured_ceiling(stage,expected):
     else:request=AIInput(stage=stage,conversation=[{'role':'user','content':'Explain SQL'}],context='{}')
     for configured in (4096,512):
         adapter=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture',max_output_tokens=configured),None)
-        assert adapter._payload(request)['max_completion_tokens']==min(configured,expected)
+        assert adapter._payload(request)['max_tokens']==min(configured,expected)

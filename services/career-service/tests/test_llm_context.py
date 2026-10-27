@@ -18,9 +18,13 @@ def test_llm_context_request_uses_its_own_parameters_and_extracts_content_not_me
             calls.append(request)
             assert request.method=='GET' and request.url.path=='/res/v1/llm/context'
             params=request.url.params
-            assert params['country']=='ALL' and params['count']=='20'
-            assert params['maximum_number_of_urls']=='5' and params['maximum_number_of_tokens']=='2048'
-            assert params['maximum_number_of_tokens_per_url']=='512' and params['context_threshold_mode']=='balanced'
+            assert params['country']=='ALL' and params['count']=='30'
+            assert params['maximum_number_of_urls']=='6' and params['maximum_number_of_tokens']=='8192'
+            assert params['maximum_number_of_tokens_per_url']=='2048' and params['context_threshold_mode']=='balanced'
+            assert params['maximum_number_of_snippets']=='30' and params['maximum_number_of_snippets_per_url']=='6'
+            assert params['operators']=='true' and params['operators_fallback']=='false'
+            assert params['search_lang']=='en' and params['spellcheck']=='false'
+            assert params['enable_source_metadata']=='true' and params['enable_local']=='false'
             assert 'extra_snippets' not in params and 'text_decorations' not in params
             assert request.headers['X-Subscription-Token']=='fixture'
             return httpx.Response(200,json={'grounding':{'generic':[
@@ -130,3 +134,39 @@ def test_slow_round_stops_searching_with_time_left_for_synthesis(monkeypatch):
         assert result['search_exhausted'] and result['useful_source_ids']==['a']
         assert result['coverage'][0]['limit_reached']
     asyncio.run(run())
+
+
+def test_richer_context_preserves_later_snippets_and_six_sources():
+    async def run():
+        detail='Example Analyst interns report an SQL case study and a final manager interview.'
+        snippets=['Unrelated navigation '+str(i) for i in range(5)]+['Background. '*90+detail]
+        payload={'grounding':{'generic':[
+            {'url':f'https://example.test/{i}','snippets':snippets+[f'Candidate report {i}.']} for i in range(8)]}}
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(200,json=payload))) as client:
+            sources=await SourceAPIs(client,brave_key='fixture').brave('Example Analyst internship interview')
+        assert len(sources)==6
+        assert all(detail in s.evidence and 600<len(s.evidence)<=2400 for s in sources)
+    asyncio.run(run())
+
+
+def test_opportunity_fits_richer_evidence_instead_of_dropping_oversized_sources():
+    import json
+    import tiktoken
+    from app.workflows.opportunity.engine import select_evidence
+    sources=[ResearchSource(source_id=f's{i}',platform='other',url=f'https://example.test/{i}',
+        evidence=f'Report {i}: technical interview with SQL assessment. '+('Detailed candidate account. '*100)[:2300]) for i in range(3)]
+    selected=select_evidence(sources,1000)
+    assert len(selected)==3
+    assert all(s.evidence in original.evidence and 'SQL assessment' in s.evidence for s,original in zip(selected,sources))
+    assert len(tiktoken.get_encoding('o200k_harmony').encode(json.dumps([s.model_dump(mode='json') for s in selected]),disallowed_special=()))<=1000
+    assert select_evidence(sources,1)==[]
+
+
+def test_rich_retrieval_keeps_citation_quotes_within_the_existing_contract():
+    from app.ai.contracts import AIInput
+    from app.ai.interview_contracts import evidence_items
+    detail='The technical interview includes an SQL assessment. '
+    source=ResearchSource(source_id='rich',platform='other',url='https://example.test/report',evidence=detail*40)
+    items=evidence_items(AIInput(stage='interview_synthesis',public_context=ResearchContext(role='Analyst',field='Data'),sources=[source]))
+    assert items and all(0<len(v['text'])<=600 and v['text'] in source.evidence for v in items)
+    assert all(v['source_ids']==['rich'] for v in items)

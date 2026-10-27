@@ -23,7 +23,7 @@ def enabled(workflow):
 
 def candidates(state):
     result=[];ids=set();seen=set()
-    for value in state.get('sources',[])[:MAX_SEARCHES*5]:
+    for value in state.get('sources',[])[:MAX_SEARCHES*6]:
         if value['source_id'] in ids:continue
         ids.add(value['source_id'])
         for source in normalize_sources([value]):

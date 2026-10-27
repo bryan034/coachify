@@ -39,17 +39,20 @@ class JDExtraction(Contract):
     non_skill_requirements: list[NonSkillRequirement] = Field(default_factory=list, max_length=30)
     skills: list[ReviewSkill] = Field(max_length=60)
 
+class GoalContent(JDExtraction):
+    id:DomainId=Field(alias='_id')
+    version:Version
+    target_type:Literal['specific_job','career_exploration']
+    generation:Generation|None
+    discovery:DiscoveryEvidence|None=None
+    requirements_need_review:bool=False
+    metadata_origins:dict[str,Literal['extracted','user']]=Field(default_factory=dict)
+
+class ProposedCurrentGoal(Contract):
+    goal:GoalContent
+
 class JDExtractionResult(Contract):
-    discovery: DiscoveryEvidence | None = None
-    review_id: DomainId
-    version: Version
-    target_type: Literal['specific_job', 'career_exploration']
-    extraction: JDExtraction
-    baseline: JDExtraction
-    metadata_origins: dict[str, Literal['extracted', 'user']]
-    requirements_need_review: bool
-    is_confirmed: bool
-    generation: Generation | None
+    current: ProposedCurrentGoal
 
 class JDReply(Contract):
     reply: ChatText
@@ -84,22 +87,13 @@ class RequirementReview(Document):
     target_type: Literal['specific_job', 'career_exploration'] = 'specific_job'
     source_kind: Literal['text', 'url', 'document', 'career_exploration'] = 'text'
     content: JDExtraction
-    baseline: JDExtraction
     generation: Generation | None
     metadata_origins: dict[str, Literal['extracted', 'user']] = Field(default_factory=dict, max_length=7)
-    baseline_origins: dict[str, Literal['extracted', 'user']] = Field(default_factory=dict, max_length=7)
     requirements_need_review: bool = False
     base_goal_id: DomainId | None = None
 
 
 class SaveReview(Contract):
     expected_version: Version
-    content: JDExtraction | None = None
-    reset: Literal['metadata', 'all'] | None = None
+    content: JDExtraction
     acknowledge_context: bool = False
-
-    @model_validator(mode='after')
-    def one_action(self):
-        if (self.content is None) == (self.reset is None):
-            raise ValueError('Supply edited content or a reset action.')
-        return self

@@ -16,12 +16,15 @@ test('Career previews validate real sessions, read a document and discard source
  await page.getByRole('button',{name:'Import job page'}).click();await expect(page.getByRole('tabpanel').getByRole('alert')).toContainText('Private, local and internal');
  await page.getByRole('tab',{name:'Paste description'}).click();await page.getByRole('textbox',{name:'Job description',exact:true}).fill(source);
  const stored=await page.evaluate(()=>JSON.stringify([Object.entries(localStorage),Object.entries(sessionStorage)]));expect(stored).not.toContain('Synthetic analyst');
+ const failure=page.waitForResponse(response=>response.url().includes('/api/v1/career/workspace/operations/')&&response.status()===503);
  const extraction=page.waitForResponse(response=>response.url().endsWith('/api/v1/career/workspace/jd')&&response.request().method()==='POST');
  await page.getByRole('button',{name:'Extract career goal'}).click();
  await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
  const response=await extraction;
  expect(response.status()).toBe(202);
  expect(await response.json()).toMatchObject({operation_id:expect.any(String),status:'running'});
+ const failedOperation=await failure;
+ expect(await failedOperation.json()).toMatchObject({code:'not_configured'});
  await expect(page.getByRole('log').getByRole('alert')).toContainText('AI is disabled');
  await expect(page.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeEnabled();

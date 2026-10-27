@@ -1,3 +1,4 @@
+from app.schemas.jd import JDExtraction
 """Synthetic end-to-end discovery: real Mongo/graphs, no CV/provider/network calls."""
 import asyncio
 import json
@@ -34,7 +35,7 @@ class AI:
         elif request.stage=='discovery_plan':result=Plan(related_roles=['Software Engineer','Backend Engineer'],queries=['graduate software jobs','graduate backend jobs'])
         elif request.stage=='discovery_extract':
             count=self.calls.count('discovery_extract')
-            if count==self.quota_at:raise AIError('rate_limited',limit_scope='user',retry_after=1,provider='groq')
+            if count==self.quota_at:raise AIError('rate_limited',limit_scope='user',retry_after=1,provider='gemini')
             result=Listings(listings=[] if self.empty else [Listing(ref=i,company=s['title'].split(' · ')[0],job_title='Software Engineer',location='Singapore',career_stage='entry_level',relevant=True,requirements=[Requirement(kind='skill',name='SQL',quote='SQL is required.'),Requirement(kind='skill',name='Python',quote='Python preferred.',preferred=True),Requirement(kind='responsibility',name='Build APIs',quote='Build APIs.')]) for i,s in enumerate(data['sources'])])
         elif request.stage=='discovery_summary':result=MarketSummary(responsibility_refs=[0] if data['responsibilities'] else [])
         else:raise AssertionError(request.stage)
@@ -97,24 +98,24 @@ def test_conversation_is_goal_setting_and_never_launches_search_without_confirma
 def test_research_reviews_then_confirms_through_shared_persistence_without_cv(flow,monkeypatch):
     row=start(flow);research(flow,row);row=wait(flow,row)
     assert row['listings_analysed']==10 and row['employers_analysed']==10
-    assert row['coverage']=='good' and len(row['review']['extraction']['skills'])==2
+    assert row['coverage']=='good' and len(row['review']['current']['goal']['skills'])==2
     assert row['stats'][0]['requirement_type']=='core' and row['stats'][0]['mention_count']==10
     assert row['stats'][1]['requirement_type']=='optional'
     assert all('Singapore' in q and 'entry level' in q for q in flow[3].calls)
     assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal'] is None
-    review=row['review'];content=review['extraction'];content['skills']=content['skills'][:1]
-    response=flow[0].patch('/api/v1/career/goals/'+review['review_id']+'/review',headers=headers(),json={'expected_version':review['version'],'content':content})
+    review=row['review'];content={k:v for k,v in review['current']['goal'].items() if k in JDExtraction.model_fields};content['skills']=content['skills'][:1]
+    response=flow[0].patch('/api/v1/career/goals/'+review['current']['goal']['_id']+'/review',headers=headers(),json={'expected_version':review['current']['goal']['version'],'content':content})
     assert response.status_code==200,response.text
     review=response.json();seen=[];original=GoalStore.persist_target
     def save(store,goal):seen.append(goal);return original(store,goal)
     monkeypatch.setattr(GoalStore,'persist_target',save)
-    key=str(uuid4());body={'target_type':'career_exploration','role':content['role'],'field':content['field'],'location':content['location'],'seniority_level':content['seniority_level'],'review_id':review['review_id'],'expected_review_version':review['version'],'expected_selection_version':0}
+    key=str(uuid4());body={'target_type':'career_exploration','role':content['role'],'field':content['field'],'location':content['location'],'seniority_level':content['seniority_level'],'review_id':review['current']['goal']['_id'],'expected_review_version':review['current']['goal']['version'],'expected_selection_version':0}
     response=flow[0].post('/api/v1/career/goals/confirm',headers=headers(key=key),json=body)
     assert response.status_code==200,response.text
     goal=CareerGoal.model_validate(response.json()['goal']);assert len(seen)==1
     assert goal.company is None and goal.job_url is None and goal.discovery.listings_analysed==10
     assert goal.skills[0].source_urls and goal.skills[0].origin=='market_research'
-    assert flow[0].get('/api/v1/career/workspace',headers=headers()).json()['review']['review_id']==review['review_id']
+    assert flow[0].get('/api/v1/career/workspace',headers=headers()).json()['current']['goal']['_id']==review['current']['goal']['_id']
     assert flow[0].post('/api/v1/career/goals/confirm',headers=headers(key=key),json=body).json()['selection_version']==1
     assert len(seen)==1
     assert flow[1].research_contexts.find_one({'_id':goal.discovery.research_id})['aggregate']['listings']
@@ -130,14 +131,14 @@ def test_quota_resume_reuses_searches_and_successful_extractions(flow):
 
 def test_empty_sources_and_empty_supported_listings_are_honest(flow):
     flow[3].empty=True;row=start(flow);research(flow,row);row=wait(flow,row)
-    assert row['coverage']=='insufficient' and row['listings_analysed']==0 and row['review']['extraction']['skills']==[]
+    assert row['coverage']=='insufficient' and row['listings_analysed']==0 and row['review']['current']['goal']['skills']==[]
     assert 'discovery_extract' not in flow[2].calls and row['warnings']
 
 
 def test_refresh_preserves_evidence_snapshot_and_requires_new_confirmation(flow):
     row=start(flow);research(flow,row);row=wait(flow,row);review=row['review'];calls=len(flow[3].calls)
     research(flow,row,refresh=True);latest=wait(flow,row)
-    assert len(flow[3].calls)>calls and latest['review']['review_id']!=review['review_id']
+    assert len(flow[3].calls)>calls and latest['review']['current']['goal']['_id']!=review['current']['goal']['_id']
     assert flow[1].research_contexts.count_documents({'kind':'career_discovery_evidence'})==2
     assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal'] is None
 
@@ -160,3 +161,28 @@ def test_duplicate_reposts_do_not_inflate_sample_or_frequency():
     item={'company':'Employer','job_title':'Software Engineer','location':'Singapore','source_id':'s','source_url':'https://example.test/one','requirements':[{'kind':'skill','name':'SQL','category':'technical','quote':'SQL required.','preferred':False}]}
     result=aggregate(SCOPE,[item,{**item,'source_id':'repost','source_url':'https://example.test/two'}])
     assert len(result['listings'])==1 and result['stats'][0]['mention_count']==1 and result['stats'][0]['sample_size']==1
+
+
+def test_interrupted_conversation_commit_reuses_checkpoint_only_for_the_same_payload(flow):
+    client,db,ai,_=flow
+    row=client.post(BASE,headers=headers(),json={'consent':True}).json()['session']
+    service=client.app.state.discovery;original=service.rows
+    class InterruptedWrite:
+        failed=False
+        def __getattr__(self,name):return getattr(original,name)
+        def update_one(self,query,update,**kwargs):
+            if query.get('owner')==OWNER and query.get('version')==row['version'] and not self.failed:
+                self.failed=True
+                from app.repositories.goals import GoalError
+                raise GoalError('Synthetic commit interruption.',503)
+            return original.update_one(query,update,**kwargs)
+    service.rows=InterruptedWrite()
+    key=str(uuid4());path=f"{BASE}/{row['id']}/messages"
+    body={'expected_version':row['version'],'message':'Software Engineering'}
+    assert client.post(path,headers=headers(key=key),json=body).status_code==503
+    assert ai.calls==['discovery_turn']
+    assert client.post(path,headers=headers(key=key),json={**body,'message':'Backend Engineering'}).status_code==409
+    restored=client.post(path,headers=headers(key=key),json=body)
+    assert restored.status_code==200,restored.text
+    assert restored.json()['session']['decision']['scope']['area']=='Software Engineering'
+    assert ai.calls==['discovery_turn']

@@ -1,35 +1,36 @@
+import {careerFixture} from './career-fixture';
 import {test,expect} from '@playwright/test';
 
 test('saved goal categories, guided refinement, replacement and CV handoff on desktop and mobile',async({page})=>{
  await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/auth-config'))return route.fulfill({json:{mode:'email',google_enabled:false}});
-  if(path.endsWith('/auth/session'))return route.fulfill({json:{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'}});
-  return route.fulfill({json:{version:1,onboarding_complete:true,occupational_status:'employed',education:{}}});
+  if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
+  if(path.endsWith('/auth/session'))return route.fulfill({json:careerFixture(route.request().url(),{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'})});
+  return route.fulfill({json:careerFixture(route.request().url(),{version:1,onboarding_complete:true,occupational_status:'employed',education:{}})});
  });
  let currentRole='Backend Software Engineer',researching=true,edits=0,extractions=0;
  const state=()=>{
   const extraction={role:currentRole,field:'Software Engineering',company:'Example Technologies',location:'Singapore',seniority_level:'Entry level',job_url:null,summary:'Build and maintain backend services, APIs and reliable data systems.',responsibilities:['Build APIs and services','Collaborate with product teams'],skills:[{item_id:'python',name:'Python',category:'Technical',priority:'required',origin:'employer',evidence:'Python is required.'},{item_id:'team',name:'Teamwork',category:'Transferable',priority:'preferred',origin:'employer'}],non_skill_requirements:[{requirement_id:'degree',category:'Qualifications',description:'Degree in a related discipline',priority:'preferred',group_id:null,group_operator:'all',origin:'employer'}]};
-  return {session_id:'000000000000000000000001',revision:edits+1,kind:'jd',phase:researching?'researching':'ready',review:{review_id:'000000000000000000000002',version:edits+1,target_type:'specific_job',extraction,baseline:extraction,requirements_need_review:false},research:researching?null:{_id:'000000000000000000000003',version:1,last_researched_at:'2026-10-26T00:00:00Z',research_status:'succeeded',process:{round_count:null,stages:[{name:'Technical interview',assessment_type:'Coding exercise'}]},skills:[{name:'SQL joins',interview_stage:'Technical interview',assessment_type:'SQL exercise',source_ids:['s1'],question_patterns:[]}],sources:[{source_id:'s1',platform:'brave',title:'Public interview report',url:'https://example.test/report',evidence:'Candidates report an SQL assessment.',reliability:'anecdotal',role_match:'related'}]},current:{selection_version:edits+1,goal:null},coverage:[{platform:'brave',status:'succeeded',useful_sources:1,target_sources:3,limit_reached:true}],error:null,retry_after:null};
+  return {session_id:'000000000000000000000001',revision:edits+1,kind:'jd',phase:researching?'researching':'ready',review:{review_id:'000000000000000000000002',version:edits+1,target_type:'specific_job',extraction,requirements_need_review:false},research:researching?null:{_id:'000000000000000000000003',version:1,last_researched_at:'2026-10-26T00:00:00Z',research_status:'succeeded',process:{round_count:null,stages:[{name:'Technical interview',assessment_type:'Coding exercise'}]},skills:[{name:'SQL joins',interview_stage:'Technical interview',assessment_type:'SQL exercise',source_ids:['s1'],question_patterns:[]}],sources:[{source_id:'s1',platform:'brave',title:'Public interview report',url:'https://example.test/report',evidence:'Candidates report an SQL assessment.',reliability:'anecdotal',role_match:'related'}]},current:{selection_version:edits+1,goal:null},coverage:[{platform:'brave',status:'succeeded',useful_sources:1,target_sources:3,limit_reached:true}],error:null,retry_after:null};
  };
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/context/assessment'))return route.fulfill({json:{status:'no_cv',cv_uploaded:false,skills_evaluated:false}});
-  if(path.endsWith('/workspace/jd')){extractions++;currentRole='Data Engineer';return route.fulfill({json:state()});}
-  if(path.endsWith('/workspace/messages')){edits++;return route.fulfill({json:{reply:edits===1?'Which part would you like to change: your role, skills or location?':'Your goal has been updated.',edit_status:'clarifying'}});}
-  return route.fulfill({json:state()});
+  if(path.endsWith('/context/assessment'))return route.fulfill({json:careerFixture(route.request().url(),{status:'no_cv',cv_uploaded:false,skills_evaluated:false})});
+  if(path.endsWith('/workspace/jd')){extractions++;currentRole='Data Engineer';return route.fulfill({json:careerFixture(route.request().url(),state())});}
+  if(path.endsWith('/workspace/messages')){edits++;return route.fulfill({json:careerFixture(route.request().url(),{reply:edits===1?'Which part would you like to change: your role, skills or location?':'Your goal has been updated.',edit_status:'clarifying'})});}
+  return route.fulfill({json:careerFixture(route.request().url(),state())});
  });
  await page.goto('/career-goal');
  await expect(page.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Technical skills'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Transferable skills'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Qualifications',exact:true})).toBeVisible();
- await expect(page.getByRole('status')).toContainText('Researching interview expectations');
+ await expect(page.getByRole('status').filter({hasText:'Researching opportunity information'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
  await expect(page.getByRole('link',{name:/Assess my skills/})).toHaveAttribute('href','/cv');
  researching=false;
- await expect(page.getByRole('heading',{name:'Interview process',exact:true})).toBeVisible();
+ await expect(page.locator('details.intelligence-section').filter({has:page.getByText('Interview Intelligence',{exact:true})})).toContainText('Technical interview');
  await page.screenshot({path:test.info().outputPath('goal-overview-desktop.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -45,7 +46,9 @@ test('saved goal categories, guided refinement, replacement and CV handoff on de
  expect(extractions).toBe(0);
  await page.getByRole('textbox',{name:'Job description',exact:true}).fill('A Data Engineer builds data pipelines. Python is required.');
  await page.getByRole('button',{name:'Extract career goal'}).click();
- await expect(page).toHaveURL(/\/career-goal$/);
+ await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
+ await expect(page.getByRole('log')).toContainText('Let’s look at Data Engineer');
+ await page.getByRole('button',{name:'← Career Goal',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
  expect(extractions).toBe(1);
  await page.reload();await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
@@ -58,9 +61,9 @@ test('Opportunity Intelligence preserves partial categories, citations and targe
  await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/auth-config'))return route.fulfill({json:{mode:'email',google_enabled:false}});
-  if(path.endsWith('/auth/session'))return route.fulfill({json:{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'}});
-  return route.fulfill({json:{version:1,onboarding_complete:true,occupational_status:'employed',education:{}}});
+  if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
+  if(path.endsWith('/auth/session'))return route.fulfill({json:careerFixture(route.request().url(),{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'})});
+  return route.fulfill({json:careerFixture(route.request().url(),{version:1,onboarding_complete:true,occupational_status:'employed',education:{}})});
  });
  const goal={_id:'0'.repeat(24),version:1,target_type:'specific_job',role:'Software Engineering Intern',field:'Software',company:'Example',location:'Singapore',employment_type:'internship',seniority_level:null,job_url:null,skills:[],non_skill_requirements:[],responsibilities:[],summary:'Build software with the engineering team.'};
  const base={status:'completed',findings:[],missing_fields:[],warnings:[],error_code:null,researched_at:'2026-10-26T00:00:00Z',expires_at:null,searches:1,model_calls:1,latency_ms:100,estimated_cost_usd:null};
@@ -69,12 +72,12 @@ test('Opportunity Intelligence preserves partial categories, citations and targe
  let refreshed='';
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path.endsWith('/context/assessment'))return route.fulfill({json:{status:'evaluated',cv_uploaded:true,skills_evaluated:true}});
+  if(path.endsWith('/context/assessment'))return route.fulfill({json:careerFixture(route.request().url(),{status:'evaluated',cv_uploaded:true,skills_evaluated:true})});
   if(path.endsWith('/opportunity-research')){
    if(route.request().method()==='POST')refreshed=route.request().postDataJSON().category;
-   return route.fulfill({json:{available:true,status:'partial',finished:true,job_id:'job',career_target_id:goal._id,research:null,sources:[source],summary:{overview_refs:[],key_takeaway_refs:[claim.finding_id],consideration_refs:[]},categories:{interview_intelligence:{...base,status:'failed',error_code:'source_unavailable'},internship_insights:{...base,findings:[claim],missing_fields:['benefits','mentorship'],warnings:['Conflicting reports are preserved separately; figures are not averaged.']},company_intelligence:{...base,missing_fields:['tech_stack']}}}});
+   return route.fulfill({json:careerFixture(route.request().url(),{available:true,status:'partial',finished:true,job_id:'job',career_target_id:goal._id,research:null,sources:[source],summary:{overview_refs:[],key_takeaway_refs:[claim.finding_id],consideration_refs:[]},categories:{interview_intelligence:{...base,status:'failed',error_code:'source_unavailable'},internship_insights:{...base,findings:[claim],missing_fields:['benefits','mentorship'],warnings:['Conflicting reports are preserved separately; figures are not averaged.']},career_progression:{...base,findings:[{...claim,finding_id:'f0000000000000002',field:'conversion_salary',value:'SGD 5000 monthly base salary, 2025'}]},conversion_outcomes:{...base,missing_fields:['conversion_rate','historical_cohort']},company_intelligence:{...base,missing_fields:['team_culture']}}})});
   }
-  return route.fulfill({json:{phase:'ready',review:{review_id:'1'.repeat(24),version:1,target_type:'specific_job',extraction:goal,requirements_need_review:false},current:{selection_version:1,goal},research:null,coverage:[],error:null,retry_after:null}});
+  return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',review:{review_id:'1'.repeat(24),version:1,target_type:'specific_job',extraction:goal,requirements_need_review:false},current:{selection_version:1,goal},research:null,coverage:[],error:null,retry_after:null})});
  });
  await page.goto('/career-goal');await expect(page.getByRole('heading',{name:'Opportunity Intelligence'})).toBeVisible();
  await expect(page.getByText('This category could not finish. Other results are preserved; refresh this section to retry.')).toBeVisible();
@@ -86,6 +89,14 @@ test('Opportunity Intelligence preserves partial categories, citations and targe
  await expect(internships).toContainText('Published: Unknown');
  await internships.getByRole('button',{name:'Refresh this section'}).click();
  await expect.poll(()=>refreshed).toBe('internship_insights');
+ await page.getByText('Career Progression',{exact:true}).click();
+ await expect(page.locator('details.intelligence-section').filter({has:page.getByText('Career Progression',{exact:true})})).toContainText('SGD 5000 monthly base salary, 2025');
+ await page.getByText('Historical Conversion Rates',{exact:true}).click();
+ const conversions=page.locator('details.intelligence-section').filter({has:page.getByText('Historical Conversion Rates',{exact:true})});
+ await expect(conversions).toContainText('Information pertaining to this category was not found');
+ await conversions.getByRole('button',{name:'Refresh this section'}).click();
+ await expect.poll(()=>refreshed).toBe('conversion_outcomes');
+ await expect(page.getByText('Company and Team Culture',{exact:true})).toBeVisible();
  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:test.info().outputPath('opportunity-intelligence-mobile.png'),fullPage:true});
 });

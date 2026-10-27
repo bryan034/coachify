@@ -17,7 +17,9 @@ Two LangGraph flows run inside Career:
 
 1. `understand_intent` → conditional `confirm_career_area`: a private checkpoint
    stores the structured decision; the newest raw message is transient. Replaying
-   the same message key recovers the decision without another generation.
+   the same message key recovers the decision without another generation. The checkpoint
+   also stores a payload digest, so a write interruption cannot let changed input reuse
+   the earlier decision.
 2. `plan_research` → `search_job_listings` → `extract_requirements` →
    `aggregate_requirements` → `generate_career_target`: a leased background job
    checkpoints progress and saves completed searches/extractions independently.
@@ -26,7 +28,7 @@ Two LangGraph flows run inside Career:
 Gemini plans related titles and searches. Brave LLM Context retrieves bounded
 excerpts, with at most four initial queries and two targeted follow-ups, two requests
 at once. Searches always retain approved area, location, stage and current year.
-Groq extracts batches of at most three sources. Each requirement must quote retrieved
+Gemini extracts batches of at most three sources. Each requirement must quote retrieved
 text, with the requirement itself present in that quote. Company/title/location are
 checked against the excerpt/title; mismatched career stages and senior roles are
 excluded from internship/entry-level samples. Unsupported claims are rejected.
@@ -63,7 +65,6 @@ No new collection or destructive migration. Existing collections gain additive d
 - Existing Career checkpoint collections: structured conversation decisions and
   research-node progress, with the existing 24-hour checkpoint TTL. Session/job data
   reconstructs research after restart or checkpoint expiry.
-- `ai_user_usage`: numeric Groq reservations/completed usage, never prompts or keys.
 
 Fresh equivalent scopes reuse evidence within the same owner's sessions (case and
 whitespace normalised), preserving the original freshness timestamp. Explicit refresh
@@ -96,9 +97,9 @@ feature does not implement them.
 
 ## Configuration
 
-Reuse server-only `AI_*` Groq settings, `GEMINI_API_KEY`, `BRAVE_API_KEY`, and Career
-MongoDB. Discovery uses the existing research router and `OPPORTUNITY_GEMINI_MODEL`
-(default `gemini-3.5-flash`) rather than routing conversation through Groq.
+Use `AI_ENABLED=true`, server-only `GEMINI_API_KEY`, `BRAVE_API_KEY`, and Career
+MongoDB. All discovery/research/chat/extraction stages use `gemini-3.5-flash-lite` through
+the same adapter; legacy provider/model/chat switches no longer alter routing.
 No new API key, dependency or service is needed. Existing research context creation
 is governed by `OPPORTUNITY_ENABLED`. Optional tuning values are passed by Compose:
 
@@ -111,33 +112,20 @@ is governed by `OPPORTUNITY_ENABLED`. Optional tuning values are passed by Compo
 | `DISCOVERY_FRESHNESS_HOURS` | 168 |
 
 Model IDs/endpoints follow the provider documentation:
-[Gemini 3.5 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash),
-[Groq supported models](https://console.groq.com/docs/models), and
+[Gemini 3.5 Flash Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),
 [Brave LLM Context](https://api-dashboard.search.brave.com/documentation/services/llm-context).
 Configured account access still needs live verification; synthetic tests do not prove billing/plan access.
 
-## Groq waits and research reliability
+## Provider waits and research reliability
 
-Groq alone has a local **7,000 input + output tokens per user per rolling 60 seconds**
-allowance. Atomic reservations cover input plus bounded output before sending, across
-parallel branches and replicas; completion reconciles to actual provider usage,
-releasing unused capacity. This replaces the earlier check that admitted a request
-at 6,999 used tokens and allowed concurrent calls to overshoot. There is no separate
-4,000-token input limit: input must leave at least 128 output tokens within 7,000.
-Provider accounting can differ slightly from the local tokenizer estimate.
+There is no local token-per-minute admission limit. Gemini and Brave may still return HTTP 429 with a retry
+delay. Background work checkpoints completed searches/evaluations and resumes the
+unfinished step after that provider delay. A 407/600-second provider cooldown is not
+shortened or presented as a local token reset.
 
-Completed usage ages out after 60 seconds. Crashed/in-flight reservations conservatively
-expire after 120 seconds; unknown read failures reserve the possible paid completion.
-Connection/auth/429 rejections release reservations. Numeric usage only is persisted.
-Gemini never checks or consumes the Groq ledger. Provider quotas still apply:
-[Groq documents `Retry-After` on HTTP 429](https://console.groq.com/docs/rate-limits).
-A 407/600-second provider cooldown cannot safely be converted into a local 60-second
-reset. The UI distinguishes provider cooldown from the Groq local window.
-
-Saved-goal questions no longer require interview research to finish. When Gemini is
-configured for research, it can answer ordinary saved-context questions even with its
-legacy chat switch off; explicit enabled chat configuration keeps its chosen model.
-Groq remains responsible for reasoning/edits. Missing interview evidence is reported
+Saved-goal questions remain available while research runs or waits. The same Gemini
+model handles coordination, reasoning and validated edits regardless of the retired
+Gemini-chat switch. Missing interview evidence is reported
 as missing. Workspace polling does not restart the legacy graph after the durable
 Opportunity worker has taken ownership. One invalid opportunity claim no longer
 throws away other independently valid citations; wholly invalid batches still fail

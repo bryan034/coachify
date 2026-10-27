@@ -18,16 +18,45 @@ from app.ai.contracts import AIInput
 from app.ai.recovery import recover_responses,validation_feedback
 from app.ai.waiting import quota_progress
 from app.ai.metrics import usage_observer
+from app.ai.opportunity_contracts import FIELD_GUIDANCE
+from app.workflows.model_waits import resume_obsolete_model_waits
 from app.clients.search_sources import SourceRateLimit
 from app.repositories.goals import GoalError,now,fingerprint
 from app.schemas.analysis import ResearchContext,ResearchSource,InterviewResearch,Generation
 from app.schemas.opportunity import CATEGORIES,FIELDS,CategoryResult,OpportunityReport,Summary
 from .store import OpportunityStore
 from .sources import pool
+from .queries import ACTIVITIES,planned_queries
 from app.domain.review import MAPPING_VERSION
-from .domain import public_opportunity,validate_claims,compatibility,summary_input,dedupe_findings,supported_claims
+from .domain import whitespace,public_opportunity,validate_claims,summary_input,dedupe_findings,supported_claims
 
 logger=logging.getLogger('uvicorn.error.opportunity')
+
+def select_evidence(sources,budget):
+    """Fit exact source passages fairly within the existing evidence token budget."""
+    encoding=tiktoken.get_encoding('o200k_harmony')
+    def size(values):
+        serialized=json.dumps([s.model_dump(mode='json') for s in values])
+        # AIInput.context is bounded to 40,000 characters. Reserve room for
+        # public identity, field guidance and already validated findings too.
+        if len(serialized)>24000:return budget+1
+        return len(encoding.encode(serialized,disallowed_special=()))
+    selected=[]
+    for index,source in enumerate(sources):
+        # Reserve a fair share for later sources instead of dropping them whole.
+        allowance=size(selected)+max(0,(budget-size(selected))//(len(sources)-index))
+        low,high=0,len(source.evidence)
+        best=None
+        while low<=high:
+            length=(low+high)//2
+            if not length:low=1;continue
+            candidate=source.model_copy(update={'evidence':source.evidence[:length]})
+            if size([*selected,candidate])<=allowance:
+                best=candidate;low=length+1
+            else:high=length-1
+        if best is not None:selected.append(best)
+    return selected
+
 
 def availability_issues(settings,ai,source):
     """Capability codes only: never expose settings values or provider credentials."""
@@ -67,6 +96,19 @@ class OpportunityEngine:
     async def load(self,state):
         job=await self.job(state)
         if not job:raise GoalError('Research run is no longer available.',404)
+        missing=set(CATEGORIES)-set(job['categories'])
+        if missing:
+            updates={f'categories.{k}':CategoryResult().model_dump(mode='json') for k in missing}
+            for category,result in job['categories'].items():
+                kept=[f for f in result.get('findings',[]) if f['field'] in FIELDS[category]]
+                if len(kept)!=len(result.get('findings',[])):
+                    # Re-evaluate existing paid evidence under the new field contract.
+                    updates.update({f'categories.{category}':{**result,'findings':kept,'status':'pending','error_code':None},
+                                    f'evaluated.{category}':[],f'evaluation_complete.{category}':False})
+            await thread(self.store.update,job['_id'],job['worker_token'],**{
+                **updates,'requested':list(dict.fromkeys([*job.get('requested',[]),*missing])),
+                'queries_planned':False,'prefetched':True})
+            job=await self.job(state)
         return {'results':{k:v for k,v in job['categories'].items() if v['status'] not in ('pending','running')}}
 
     async def generate(self,job,stage,data,validate=None):
@@ -83,13 +125,23 @@ class OpportunityEngine:
                     attempts+=1
                     result=await self.ai.generate(AIInput(stage=stage,context=json.dumps(data,separators=(',',':'),ensure_ascii=False)),
                         Operation(job['owner'],job['goal_id'],stage),current_revision=lambda:job['goal_id'],validate_output=validate)
-                    if validate:validate(result.data)
+                    validated=validate(result.data) if validate else None
+                    if stage=='opportunity_evaluate':
+                        accepted={(f.field,f.value,tuple(f.quotes)) for f in validated[0]} if validated else set()
+                        summaries=[{'ref':i,'summary':item.summary,'quotes':item.quotes} for i,item in enumerate(result.data.findings) if item.summary and whitespace(item.summary)!=whitespace(item.value) and (item.field,item.summary,tuple(item.quotes)) in accepted]
+                        if summaries:
+                            expected={item['ref'] for item in summaries}
+                            def support_check(output):
+                                if set(output.supported_refs)!=expected:
+                                    raise AIError('invalid_output',True,reason='provenance',fields=('summary',),
+                                        violations=[{'field':f'findings.{i}.summary','issue':'summary_not_supported'} for i in sorted(expected-set(output.supported_refs))])
+                            await self.generate(job,'opportunity_support',{'claims':summaries},support_check)
                     return result.data
                 except AIError as error:
                     logger.warning('node=%s attempt=%s error_code=%s reason=%s limit_scope=%s',stage,attempt+1,error.code,error.reason,error.limit_scope)
                     if error.code not in ('invalid_output','incomplete_output'):raise
                     invalids+=1
-                    correction={'reason':error.reason or 'schema_validation','fields':list(error.fields)}
+                    correction={'reason':error.reason or 'schema_validation','fields':list(error.fields),'issues':list(error.violations)}
                     await thread(self.store.update,job['_id'],job['worker_token'],**{
                         'model_recovery.'+step:{'invalid_responses':invalids,'feedback':correction}})
                     if invalids>self.settings.schema_repairs:raise
@@ -105,21 +157,15 @@ class OpportunityEngine:
 
     async def plan(self,state):
         job=await self.job(state)
-        if job['queries']:return {}
-        plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year})
-        queries={};seen=set()
-        for category in CATEGORIES:
-            values=[]
-            if job['public']['company'] or category=='interview_intelligence':
-                for value in getattr(plan,category):
-                    query=' '.join(value.split())[:180];key=query.casefold()
-                    if 3<=len(query) and key not in seen:values.append(query);seen.add(key)
-            if not values and (job['public']['company'] or category=='interview_intelligence'):
-                focus={'interview_intelligence':'interview process assessment questions','internship_insights':'internship compensation experience mentorship','company_intelligence':'products technology stack recent developments'}[category]
-                base=' '.join(str(job['public'].get(k) or '') for k in ('company','role','location'))
-                values=[(base+' '+str(now().year)+' '+focus)[:180]]
-            queries[category]=values[:self.settings.max_searches]
-        await thread(self.store.update,job['_id'],job['worker_token'],queries=queries)
+        await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':'checking_sources'}})
+        if all(v['status'] in ('completed','not_applicable') for v in job['categories'].values()):return {}
+        if job['queries'] and (not job.get('prefetched') or job.get('queries_planned')):return {}
+        plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year,'previous_queries':job.get('history',{})})
+        queries=planned_queries(plan,self.settings.max_searches)
+        if job.get('prefetched'):
+            # Successful paid prefetch stays first, so evaluation resumes its exact query.
+            queries={category:list(dict.fromkeys([*job.get('queries',{}).get(category,[]),*queries[category]]))[:self.settings.max_searches] for category in CATEGORIES}
+        await thread(self.store.update,job['_id'],job['worker_token'],queries=queries,queries_planned=True)
         return {}
 
     def fanout(self,state):return [Send('research_category',{'job_id':state['job_id'],'category':category}) for category in CATEGORIES]
@@ -131,10 +177,6 @@ class OpportunityEngine:
         evidence=[ResearchSource.model_validate(v) for v in job.get('evidence',{}).get(category,[])]
         evaluated=list(job.get('evaluated',{}).get(category,[]))
         findings=old.findings;rejected=0;model_calls=0;error_code=None;pending=False
-        if not job['public']['company'] and category!='interview_intelligence':
-            result=CategoryResult(status='not_applicable',missing_fields=list(FIELDS[category]),warnings=['No company is specified; employer-specific claims were not researched.'],researched_at=stamp,expires_at=stamp+timedelta(hours=self.settings.freshness_hours))
-            await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}':result.model_dump(mode='json')})
-            return {'results':{category:result.model_dump(mode='json')}}
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}.status':'running'})
         try:
             rounds=0 if job.get('evaluation_complete',{}).get(category) else min(self.settings.max_searches,1+self.settings.max_followups)
@@ -143,6 +185,8 @@ class OpportunityEngine:
                 if index>=len(history):
                     query=queries[index] if index<len(queries) else None
                     if not query:break
+                    stage=ACTIVITIES[category]
+                    await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':stage}})
                     sources=None
                     for attempt in range(self.settings.retries+1):
                         try:
@@ -156,20 +200,18 @@ class OpportunityEngine:
                             if not retryable or attempt==self.settings.retries:raise
                             await asyncio.sleep(.5*2**attempt)
                     history.append(query)
-                    evidence=pool([s.model_dump(mode='json') for s in [*(sources or []),*evidence]])[:self.settings.max_searches*5]
+                    evidence=pool([s.model_dump(mode='json') for s in [*(sources or []),*evidence]])[:self.settings.max_searches*6]
                     await thread(self.store.update,job['_id'],job['worker_token'],**{f'evidence.{category}':[s.model_dump(mode='json') for s in evidence],f'history.{category}':history})
                 # Quota pauses resume the unfinished evaluation, not earlier successful ones.
                 if history[index] in evaluated:continue
                 if not evidence:continue
-                # Complete bounded excerpts; schema/prompt must also fit Groq's unchanged 4k cap.
-                selected=[];encoding=tiktoken.get_encoding('o200k_harmony')
-                for source in evidence[:self.settings.max_searches*5]:
-                    candidate=[*selected,source]
-                    if len(encoding.encode(json.dumps([s.model_dump(mode='json') for s in candidate]),disallowed_special=()))<=self.settings.evidence_tokens:selected=candidate
+                # Keep useful passages even when a richer source exceeds the model
+                # evidence allowance without discarding all useful source text.
+                selected=select_evidence(evidence[:self.settings.max_searches*6],self.settings.evidence_tokens)
                 if not selected:break
-                def validate(output):supported_claims(output,category,selected,job['public'])
+                def validate(output):return supported_claims(output,category,selected,job['public'])
                 model_calls+=1
-                output=await self.generate(job,'opportunity_evaluate',{'opportunity':job['public'],'category':category,'allowed_fields':FIELDS[category],
+                output=await self.generate(job,'opportunity_evaluate',{'opportunity':job['public'],'category':category,'allowed_fields':FIELDS[category],'field_guidance':FIELD_GUIDANCE[category],
                     'existing_findings':[{'field':f.field,'value':f.value[:120],'scope':f.scope} for f in findings[:8]],
                     'sources':[{'ref':i,'title':s.title,'url':s.url,'excerpt':s.evidence,'published_date':s.published_date.isoformat() if s.published_date else None,'reliability':s.reliability} for i,s in enumerate(selected)]},validate)
                 current,discarded=supported_claims(output,category,selected,job['public']);rejected+=discarded
@@ -206,7 +248,7 @@ class OpportunityEngine:
         status='pending' if pending else 'partial' if error_code and findings else 'failed' if error_code else 'completed'
         warnings=[]
         if rejected:warnings.append('Unsupported claims were excluded; only independently validated citations are shown.')
-        if missing:warnings.append('Some requested information has no supported evidence.')
+        if not findings and not error_code:warnings.append('Information pertaining to this category was not found in the retrieved sources.')
         if any(f.confidence in ('low','insufficient_evidence') for f in findings):warnings.append('Some findings have limited confidence; inspect their sources before relying on them.')
         if any(f.scope!='exact' for f in findings):warnings.append('Some reports concern related roles, locations or employment types.')
         if any(f.conflict_group for f in findings):warnings.append('Conflicting reports are preserved separately; figures are not averaged.')
@@ -222,7 +264,7 @@ class OpportunityEngine:
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
         sources={s.source_id:s for s in pool([*job.get('sources',[]),*[s for values in job.get('evidence',{}).values() for s in values]])}
         for key,result in categories.items():
-            valid=[f for f in result.findings if all(s in sources and q in (sources[s].evidence or '') for s,q in zip(f.source_ids,f.quotes))]
+            valid=[f for f in result.findings if all(s in sources and whitespace(q) in whitespace(sources[s].evidence or '') for s,q in zip(f.source_ids,f.quotes))]
             if len(valid)!=len(result.findings):
                 result.findings=valid;result.warnings=(result.warnings+['Some claims exceeded the bounded evidence budget.'])[:10]
                 result.missing_fields=[f for f in FIELDS[key] if f not in {v.field for v in valid}]
@@ -232,13 +274,14 @@ class OpportunityEngine:
     async def summarize(self,state):
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in state['results'].items()};facts=summary_input(categories)
         if not facts or any(v.status=='pending' for v in categories.values()):return {'summary':{}}
+        await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':'preparing_summary'}})
         ids={v['id'] for v in facts}
         def validate(output):
             if any(ref not in ids for refs in output.model_dump().values() for ref in refs):raise AIError('invalid_output',True,reason='provenance')
-        try:summary=await self.generate(job,'opportunity_summary',{'validated_findings':facts},validate)
-        except AIError:
-            await thread(self.store.update,job['_id'],job['worker_token'],summary_error=True)
-            return {'summary':{}}
+        # A failed/paused summary is unfinished research. Let the durable worker
+        # resume it; do not publish a successful-looking response without it.
+        summary=await self.generate(job,'opportunity_summary',{'validated_findings':facts},validate)
+        await thread(self.store.update,job['_id'],job['worker_token'],summary_error=False)
         return {'summary':summary.model_dump()}
 
     async def persist(self,state):
@@ -253,13 +296,15 @@ class OpportunityEngine:
         report=OpportunityReport(models=models,fingerprint=context.details_fingerprint,opportunity_id=context.details_fingerprint if context.company else None,
             employment_type=job['public']['employment_type'],job_url=job['public']['job_url'],categories=categories,summary=Summary.model_validate(state.get('summary',{})),status=status,
             researched_at=stamp,expires_at=min(v.expires_at or stamp for v in categories.values()),warnings=['Summary uses only validated cited extracts.']+(['Overall summary unavailable; validated category findings remain available.'] if job.get('summary_error') else []))
-        skills,process=compatibility(categories,sources)
         record=InterviewResearch(_id=str(ObjectId()),version=cache['version'],skill_mapping_version=MAPPING_VERSION,created_at=stamp,updated_at=stamp,
-            **context.model_dump(),intelligence=report,sources=sources,skills=skills,process=process,
-            research_status='failed' if failed else 'succeeded' if skills or process.stages else 'no_findings',last_researched_at=stamp,
-            generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-v1',generated_at=stamp))
+            **context.model_dump(),intelligence=report,sources=sources,
+            research_status='failed' if failed else 'succeeded' if any(v.findings for v in categories.values()) else 'no_findings',last_researched_at=stamp,
+            generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-five-intents-v2',generated_at=stamp))
         record=await thread(self.store.research.finish,context,cache['token'],record)
-        await thread(self.store.update,identifier,token,research_id=record.id,status='pending' if pending else status,finished=not pending,summary=report.summary.model_dump())
+        if not pending:await thread(self.store.rows.update_one,{'_id':identifier,'worker_token':token},{'$addToSet':{'activities':'research_complete'}})
+        failure=next((v.error_code for v in categories.values() if v.error_code),None)
+        await thread(self.store.update,identifier,token,research_id=record.id,status='pending' if pending else status,finished=not pending,summary=report.summary.model_dump(),error_code=failure,
+            limit_scope=job.get('limit_scope') if pending else None,provider=job.get('provider') if pending else None)
         await self.attach({**job,'research_id':record.id,'status':status,'finished':not pending})
         return {'research_id':record.id}
 
@@ -274,14 +319,16 @@ class OpportunityEngine:
     async def recover(self):
         while not self.stopping:
             try:
+                if self.available and getattr(self.ai.settings,'provider',None)=='gemini':
+                    await thread(resume_obsolete_model_waits,self.store.rows,'opportunity_job')
                 if self.available:
                     for row in await thread(self.store.due):self.launch(row['_id'])
             except Exception:logger.warning('Opportunity recovery temporarily unavailable.')
             await asyncio.sleep(3)
 
-    async def start(self,owner,goal,selection,session,run,key,command):
+    async def start(self,owner,goal,selection,session,run,key,command,seed=None):
         if not self.available:raise GoalError('Opportunity Intelligence is unavailable on this server. Reload to see its availability details.',503)
-        job=await thread(self.store.start,owner,goal,selection,session,run,key,command)
+        job=await thread(self.store.start,owner,goal,selection,session,run,key,command,seed)
         if job['finished']:await self.attach(job)
         else:self.launch(job['_id'])
         return job
@@ -292,7 +339,7 @@ class OpportunityEngine:
         context=ResearchContext.model_validate(job['context']);cache=None
         try:
             cached=await thread(self.store.cached,context)
-            if cached and cached.intelligence.researched_at>=job['created_at'] and all(v.status not in ('pending','running') and v.expires_at and v.expires_at>now() for v in cached.intelligence.categories.values()):
+            if cached and cached.intelligence.status=='completed' and not any(w.startswith('Overall summary unavailable;') for w in cached.intelligence.warnings) and cached.intelligence.researched_at>=job['created_at'] and all(v.status in ('completed','not_applicable') and not v.error_code and v.expires_at and v.expires_at>now() for v in cached.intelligence.categories.values()):
                 await thread(self.store.update,identifier,token,research_id=cached.id,categories={k:v.model_dump(mode='json') for k,v in cached.intelligence.categories.items()},summary=cached.intelligence.summary.model_dump(),status=cached.intelligence.status,finished=True)
                 await self.attach({**job,'research_id':cached.id});return
             cache=await thread(self.store.research.begin,context,True)
@@ -310,20 +357,22 @@ class OpportunityEngine:
             code=error.code if isinstance(error,AIError) else 'research_timeout' if isinstance(error,TimeoutError) else 'research_validation_failed' if isinstance(error,ValueError) else 'research_state_changed'
             logger.warning('research_error code=%s exception_type=%s reason=%s',code,type(error).__name__,error.reason if isinstance(error,AIError) else None)
             quota=isinstance(error,AIError) and error.code=='rate_limited'
+            retry_transient=(isinstance(error,TimeoutError) or isinstance(error,AIError) and error.code in ('timeout','unavailable')) and job.get('automatic_retries',0)<1
+            pending=quota or retry_transient
             latest=await thread(self.store.rows.find_one,{'_id':identifier});updates={}
             for category,value in latest.get('categories',{}).items():
                 if value['status'] in ('pending','running'):
-                    updates[f'categories.{category}.status']='pending' if quota else 'partial' if value.get('findings') else 'failed'
+                    updates[f'categories.{category}.status']='pending' if pending else 'partial' if value.get('findings') else 'failed'
                     updates[f'categories.{category}.error_code']=code
             partial=any(v['status']=='completed' or v.get('findings') for v in latest.get('categories',{}).values())
-            await thread(self.store.update,identifier,token,status='pending' if quota else 'partial' if partial else 'failed',finished=not quota,error_code=code,
-                next_attempt_at=now()+timedelta(seconds=max(1,min(3600,error.retry_after or 61)) if quota else 5),**updates)
-            interview=latest.get('categories',{}).get('interview_intelligence',{})
-            phase='ready' if interview.get('status') in ('completed','partial') else 'waiting_quota' if quota else 'research_failed'
+            await thread(self.store.update,identifier,token,status='pending' if pending else 'partial' if partial else 'failed',finished=not pending,error_code=code,
+                automatic_retries=job.get('automatic_retries',0)+(1 if retry_transient else 0),
+                next_attempt_at=now()+timedelta(seconds=max(1,min(3600,error.retry_after or 61)) if quota else 1),**updates)
+            phase='waiting_quota' if quota else 'research_pending' if retry_transient else 'research_failed'
             try:
                 await thread(self.app.state.workspace_store.phase,job['owner'],job['session'],job['run'],phase,
-                    error=None if phase=='ready' else 'Research is waiting for the AI allowance and will resume automatically.' if quota else 'Research could not finish. Your goal and available findings remain saved.',
-                    error_code=None if phase=='ready' else code,retry_after=max(1,min(3600,error.retry_after or 61)) if quota else None)
+                    error='Research is waiting for the AI allowance and will resume automatically.' if quota else 'Research is retrying automatically.' if retry_transient else 'Research could not finish. Your goal and available findings remain saved.',
+                    error_code=code,retry_after=max(1,min(3600,error.retry_after or 61)) if quota else None)
             except GoalError:pass  # A replaced workspace must not receive this run's error.
         finally:
             if cache and cache.get('token'):await thread(self.store.research.fail,context,cache['token'],'partial')
@@ -339,14 +388,17 @@ class OpportunityEngine:
         if str(row.get('goal_id'))!=job['goal_id'] or w.get('run_id')!=job['run']:return
         try:
             await thread(self.store.research.attach,job['owner'],job['goal_id'],job['selection'],job['_id'],job['digest'],record)
-            interview=record.intelligence.categories['interview_intelligence']
-            phase='ready' if interview.status in ('completed','partial') else 'waiting_quota' if interview.status=='pending' else 'research_failed'
-            code=interview.error_code or job.get('error_code')
+            categories=record.intelligence.categories.values()
+            pending=not job['finished'] or any(v.status in ('pending','running') for v in categories)
+            failed=any(v.status in ('failed','partial') or v.error_code for v in categories)
+            code=next((v.error_code for v in categories if v.error_code),None) or job.get('error_code')
+            cooling=pending and code in ('rate_limited','source_rate_limited') and job['next_attempt_at']>now()
+            phase=('waiting_quota' if cooling else 'researching') if pending else 'research_failed' if failed else 'ready'
             waiting=phase=='waiting_quota'
             retry=max(1,int((job['next_attempt_at']-now()).total_seconds())) if waiting else None
-            message=('Groq’s local 7,000-token window will reopen shortly; research will resume automatically.' if job.get('limit_scope')=='user' else 'The model provider requested a cooldown. Saved-goal chat remains available.') if waiting and code=='rate_limited' else 'Brave is rate limited; research will resume automatically.' if waiting and code=='source_rate_limited' else 'Interview research is still pending.' if waiting else 'Interview research could not finish. Available findings remain readable.'
+            message=('The previous AI service wait will resume automatically.' if job.get('limit_scope')=='user' else 'The model provider requested a cooldown. Research will resume automatically.') if waiting and code=='rate_limited' else 'Brave is rate limited; research will resume automatically.' if waiting and code=='source_rate_limited' else 'Interview research is still pending.' if waiting else 'Some research categories could not finish. Available findings remain readable.'
             await thread(self.app.state.workspace_store.phase,job['owner'],job['session'],job['run'],phase,research_id=record.id,
-                error=None if phase=='ready' else message,error_code=None if phase=='ready' else code or 'research_unavailable',retry_after=retry,limit_scope=job.get('limit_scope'),provider=job.get('provider'))
+                error=None if phase in ('ready','researching') else message,error_code=None if phase in ('ready','researching') else code or 'research_unavailable',retry_after=retry,limit_scope=job.get('limit_scope'),provider=job.get('provider'))
         except GoalError:pass  # A replacement goal cannot be overwritten by this historical run.
 
     async def close(self):

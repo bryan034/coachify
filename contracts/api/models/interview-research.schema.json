@@ -595,8 +595,11 @@
       "additionalProperties": false,
       "properties": {
         "schema_version": {
-          "const": 1,
-          "default": 1,
+          "default": 2,
+          "enum": [
+            1,
+            2
+          ],
           "title": "Schema Version",
           "type": "integer"
         },
@@ -648,6 +651,8 @@
             "enum": [
               "interview_intelligence",
               "internship_insights",
+              "career_progression",
+              "conversion_outcomes",
               "company_intelligence"
             ]
           },

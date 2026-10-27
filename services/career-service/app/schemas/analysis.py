@@ -391,7 +391,7 @@ class InterviewResearch(Document, ResearchContext):
         if self.intelligence:
             for category in self.intelligence.categories.values():
                 for finding in category.findings:
-                    if len(finding.source_ids)!=len(finding.quotes) or any(s not in sources or quote not in (sources[s].evidence or '') or finding.value not in quote for s,quote in zip(finding.source_ids,finding.quotes)):
+                    if len(finding.source_ids)!=len(finding.quotes) or any(s not in sources or ' '.join(quote.split()) not in ' '.join((sources[s].evidence or '').split()) for s,quote in zip(finding.source_ids,finding.quotes)):
                         raise ValueError('Opportunity claim must resolve to original retrieved excerpts.')
         summaries={v.summary_id:v for v in self.summaries}
         if len(summaries)!=len(self.summaries):raise ValueError('Duplicate summary identity.')

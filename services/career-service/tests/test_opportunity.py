@@ -1,4 +1,5 @@
-"""Three-category durable research, strict citations and isolated provider fixtures."""
+from tests.api_views import saved_research
+"""Five-category durable research, strict citations and isolated provider fixtures."""
 import asyncio
 import json
 import os
@@ -41,7 +42,9 @@ class Gemini:
     def __init__(self):self.calls=[]
     async def generate(self,request,operation,**kwargs):
         self.calls.append(request);data=json.loads(request.context)
-        if request.stage=='opportunity_plan':output=QueryPlan(**{k:[f'Example Analyst Singapore {k}'] for k in CATEGORIES})
+        if request.stage=='opportunity_plan':
+            public=data.get('opportunity',data);base=' '.join(str(public.get(k) or '') for k in ('company','role','location'))
+            output=QueryPlan(**{k:[f'{base} {k}',f'{base} additional {k}'] for k in CATEGORIES})
         elif request.stage=='opportunity_summary':output=Summary(overview_refs=[data['validated_findings'][0]['id']])
         else:raise AssertionError(request.stage)
         if kwargs.get('validate_output'):kwargs['validate_output'](output)
@@ -56,7 +59,7 @@ class Search:
             await asyncio.sleep(.03)
             if self.fail and self.fail in query:raise GoalError('Brave access unavailable.',503)
             if self.empty:return []
-            text='Example candidates report a technical interview.' if 'interview_' in query else 'Example interns report SGD 1500 per month.' if 'internship_' in query else 'Example builds analytics software.'
+            text='Example candidates report a technical interview.' if 'interview_' in query else 'Example interns report SGD 1500 per month.' if 'internship_' in query else 'Example interns converted to full-time in 2025 at a conversion rate of 50%.' if 'conversion_outcomes' in query else 'Example graduate analysts receive SGD 5000 monthly.' if 'career_progression' in query else 'Example teams report a collaborative company culture.'
             return [ResearchSource(source_id=query.split()[-1],platform='other',url='https://example.test/'+query.split()[-1],title='Example public report',evidence=text,reliability='anecdotal')]
         finally:self.active-=1
 
@@ -78,7 +81,10 @@ def research(flow,finished=True):
         if goal:
             path=f"/api/v1/career/goals/{goal['_id']}/opportunity-research";response=client.get(path,headers=headers())
             value=response.json()
-            if value.get('job_id') and (not finished or value.get('finished')):return w,value,path
+            if value.get('job_id') and (not finished or value.get('finished')):
+                w=client.get(BASE,headers=headers()).json()
+                if finished and w['phase'] in ('research_pending','researching'):time.sleep(.01);continue
+                return w,value,path
         time.sleep(.04)
     pytest.fail('Research did not finish: '+str(value))
 
@@ -89,20 +95,20 @@ def test_parallel_categories_persist_cited_summary_and_legacy_chat_compatibility
     assert result['available'] and result['availability_issues']==[]
     assert set(result['categories'])==set(CATEGORIES)
     assert all(v['findings'] for v in result['categories'].values())
-    assert flow[4].maximum>=2 and len(flow[4].calls)==3
-    assert workspace['phase']=='ready' and workspace['research']['process']['stages']
-    assert result['research']['employment_type']=='internship'
+    assert flow[4].maximum>=2 and len(flow[4].calls)==5
+    assert workspace['phase']=='ready' and workspace['research_id']
+    assert 'process' not in saved_research(flow,workspace) and 'skills' not in saved_research(flow,workspace)
     assert workspace['current']['goal']['employment_type']=='internship'
-    assert result['research']['summary']['overview_refs']
+    assert result['summary']['overview_refs']
     assert flow[1].interview_research.count_documents({'intelligence':{'$ne':None}})==1
     assert flow[0].get(path,headers=headers(other=True)).status_code==404
     body={'expected_version':workspace['current']['goal']['version'],'expected_selection_version':workspace['current']['selection_version'],'refresh':True,'category':'company_intelligence'}
     key=str(uuid4());assert flow[0].post(path,headers=headers(key),json=body).status_code==202
     _,refreshed,_=research(flow)
-    assert len(flow[4].calls)==4
+    assert len(flow[4].calls)==6
     assert refreshed['categories']['internship_insights']['findings']==result['categories']['internship_insights']['findings']
     assert flow[0].post(path,headers=headers(key),json=body).status_code==202
-    assert len(flow[4].calls)==4
+    assert len(flow[4].calls)==6
     assert flow[0].post(path,headers=headers(key),json={**body,'category':'internship_insights'}).status_code==409
 
 
@@ -115,12 +121,12 @@ def test_category_failure_preserves_other_results_and_reports_partial(opportunit
     assert result['categories']['interview_intelligence']['findings']
 
 
-def test_general_target_does_not_research_or_invent_employer_categories(opportunity_flow):
+def test_general_target_researches_all_five_with_explicit_general_context(opportunity_flow):
     flow=opportunity_flow;flow[2].company=None;ingest(flow)
-    _,result,_=research(flow)
-    assert len(flow[4].calls)==1 and result['research']['opportunity_id'] is None
-    assert result['categories']['company_intelligence']['status']=='not_applicable'
-    assert result['categories']['internship_insights']['status']=='not_applicable'
+    workspace,result,_=research(flow)
+    assert len(flow[4].calls)==5 and saved_research(flow,workspace)['intelligence']['opportunity_id'] is None
+    assert all(category['status']=='completed' for category in result['categories'].values())
+    assert all(finding['scope']=='general' and finding['confidence']=='low' for category in result['categories'].values() for finding in category['findings'])
 
 
 def test_empty_evidence_is_completed_with_missing_fields_not_provider_failure(opportunity_flow):
@@ -141,31 +147,28 @@ def test_invalid_claim_repairs_are_bounded_and_no_unvalidated_facts_persist(oppo
     _,result,_=research(flow)
     assert result['status']=='failed'
     assert all(not c['findings'] for c in result['categories'].values())
-    assert len([v for v in flow[2].calls if v.stage=='opportunity_evaluate'])==6
+    assert len([v for v in flow[2].calls if v.stage=='opportunity_evaluate'])==10
 
 
 def test_quota_resume_does_not_repeat_paid_retrieval(opportunity_flow):
     flow=opportunity_flow;flow[2].quota=True;ingest(flow)
     _,result,_=research(flow)
-    assert result['status']=='completed' and len(flow[4].calls)==3
+    assert result['status']=='completed' and len(flow[4].calls)==5
 
 
-def test_provider_payloads_route_small_reasoning_schema_with_groq_guard():
+def test_reasoning_and_planning_use_gemini_native_json_schema():
     context={'category':'internship_insights','sources':[{'ref':0,'excerpt':'Example interns report SGD 1500 per month.'}],'allowed_fields':['compensation']}
-    async def run():
-        async with httpx.AsyncClient() as client:
-            groq=AIAdapter(AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='fixture'),client)
-            payload=groq._payload(AIInput(stage='opportunity_evaluate',context=json.dumps(context)))
-            from app.ai.usage import input_tokens
-            assert input_tokens(payload)<4000 and payload['reasoning_effort']=='low'
-            gemini=AIAdapter(GeminiSettings(enabled=True,model='gemini-3.5-flash',api_key='fixture'),client)
-            assert gemini._payload(AIInput(stage='opportunity_plan',context='{}'))['model']=='gemini-3.5-flash'
-    asyncio.run(run())
+    adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture',max_output_tokens=4096),None)
+    for stage in ('opportunity_evaluate','opportunity_plan'):
+        payload=adapter._payload(AIInput(stage=stage,context=json.dumps(context)))
+        assert payload['model']=='gemini-3.5-flash-lite' and payload['response_format']['type']=='json_schema'
+        assert 'max_tokens' in payload and 'max_completion_tokens' not in payload
+        assert payload['response_format']['json_schema']['name']==stage
 
 
 def test_forged_quotes_refs_and_unbacked_value_are_rejected():
     source=ResearchSource(source_id='a',platform='other',url='https://example.test/report',evidence='Interns receive SGD 1500 per month.')
-    base={'field':'compensation','value':'SGD 1500','refs':[0],'quotes':[source.evidence],'confidence':'low','evidence_type':'candidate_reported','scope':'exact'}
+    base={'field':'compensation','value':'SGD 1500 per month','refs':[0],'quotes':[source.evidence],'confidence':'low','evidence_type':'candidate_reported','scope':'exact'}
     assert validate_claims(Evaluation(findings=[base]),'internship_insights',[source])
     for change in ({'refs':[1]},{'value':'SGD 9000'},{'quotes':['SGD 9000']}):
         with pytest.raises(AIError):validate_claims(Evaluation(findings=[{**base,**change}]),'internship_insights',[source])
@@ -174,10 +177,10 @@ def test_forged_quotes_refs_and_unbacked_value_are_rejected():
 def test_expired_category_refresh_does_not_repeat_fresh_categories(opportunity_flow):
     from bson import ObjectId
     flow=opportunity_flow;ingest(flow);workspace,first,_=research(flow)
-    identifier=workspace['research']['_id']
+    identifier=workspace['research_id']
     flow[1].interview_research.update_one({'_id':ObjectId(identifier)},{'$set':{'intelligence.categories.company_intelligence.expires_at':now()-timedelta(seconds=1)}})
     ingest(flow,'SQL is required. Equivalent new source.');_,second,_=research(flow)
-    assert len(flow[4].calls)==4
+    assert len(flow[4].calls)==6
     assert second['categories']['internship_insights']['findings']==first['categories']['internship_insights']['findings']
 
 
@@ -186,9 +189,9 @@ def test_durable_restart_reuses_completed_searches(opportunity_flow):
     flow=opportunity_flow;client=flow[0];flow[2].wait=True;ingest(flow)
     for _ in range(100):
         job=flow[1].research_contexts.find_one({'kind':'opportunity_job'}) or {}
-        if len(job.get('history',{}))==3:break
+        if len(job.get('history',{}))==5:break
         time.sleep(.02)
-    assert len(job.get('history',{}))==3
+    assert len(job.get('history',{}))==5
     previous=client.app.state.opportunities
     client.portal.call(previous.close)
     flow[2].wait=False
@@ -198,16 +201,16 @@ def test_durable_restart_reuses_completed_searches(opportunity_flow):
         value.launch(job['_id'])
     client.portal.call(restart)
     _,result,_=research(flow)
-    assert result['status']=='completed' and len(flow[4].calls)==3
+    assert result['status']=='completed' and len(flow[4].calls)==5
 
 
 def test_employee_pay_is_qualified_for_an_internship_and_conflicts_stay_separate():
     evidence='Example full-time employees report SGD 5000 monthly; another report says SGD 6000 monthly.'
     source=ResearchSource(source_id='a',platform='other',url='https://example.test/report',evidence=evidence)
-    output=Evaluation(findings=[{'field':'compensation','value':value,'refs':[0],'quotes':[evidence],'confidence':'high','evidence_type':'candidate_reported','scope':'exact','conflict_group':'salary'} for value in ('SGD 5000','SGD 6000')])
+    output=Evaluation(findings=[{'field':'compensation','value':value,'refs':[0],'quotes':[evidence],'confidence':'high','evidence_type':'candidate_reported','scope':'exact','conflict_group':'salary'} for value in ('SGD 5000 monthly','SGD 6000 monthly')])
     result=validate_claims(output,'internship_insights',[source],{'company':'Example','employment_type':'internship'})
     assert len(result)==2 and all(f.scope=='related_employment' and f.confidence=='low' for f in result)
-    assert [f.value for f in result]==['SGD 5000','SGD 6000']
+    assert [f.value for f in result]==['SGD 5000 monthly','SGD 6000 monthly']
 
 
 @pytest.mark.skipif(os.getenv('OPPORTUNITY_LIVE_TEST')!='1',reason='Opt-in only: consumes configured live provider requests')
@@ -215,7 +218,7 @@ def test_optional_live_provider_contract_smoke():
     from app.ai.opportunity_config import OpportunitySettings
     from app.clients.search_sources import SourceAPIs
     async def run():
-        settings=OpportunitySettings.from_env();primary=AISettings.from_env();gemini=GeminiSettings.from_env()
+        settings=OpportunitySettings.from_env();primary=GeminiSettings.reasoning_from_env();gemini=primary
         assert settings.enabled and primary.enabled and gemini.api_key.get_secret_value().strip(),'Configure the research providers before opting into live checks.'
         async with httpx.AsyncClient(trust_env=False) as client:
             router=opportunity_models(AIAdapter(primary,client),None,gemini,settings,client)
@@ -251,9 +254,9 @@ def test_duplicate_claims_merge_real_citations_without_averaging():
     text='Interns receive SGD 1500 monthly.'
     a=ResearchSource(source_id='a',platform='other',url='https://example.test/a',evidence=text)
     b=a.model_copy(update={'source_id':'b','url':'https://example.test/b'})
-    claims=Evaluation(findings=[{'field':'compensation','value':'SGD 1500','refs':[i],'quotes':[text],'confidence':'low','evidence_type':'candidate_reported','scope':'exact'} for i in (0,1)])
+    claims=Evaluation(findings=[{'field':'compensation','value':'SGD 1500 monthly','refs':[i],'quotes':[text],'confidence':'low','evidence_type':'candidate_reported','scope':'exact'} for i in (0,1)])
     result=dedupe_findings('internship_insights',validate_claims(claims,'internship_insights',[a,b]))
-    assert len(result)==1 and set(result[0].source_ids)=={'a','b'} and result[0].value=='SGD 1500'
+    assert len(result)==1 and set(result[0].source_ids)=={'a','b'} and result[0].value=='SGD 1500 monthly'
 
 
 @pytest.mark.parametrize('quota_followup',[False,True])
@@ -276,10 +279,10 @@ def test_follow_up_evidence_reaches_reasoner_without_discarding_previous_finding
         return SimpleNamespace(data=output)
     search.collect_opportunity_query=collect;primary.generate=generate
     ingest(flow);_,result,_=research(flow)
-    assert len(search.calls)==6
+    assert len(search.calls)==10
     evaluations=[json.loads(call.context) for call in primary.calls if call.stage=='opportunity_evaluate']
-    assert len(evaluations)==(9 if quota_followup else 6)
-    assert len([data for data in evaluations if 'followup' not in data['sources'][0]['excerpt']])==3
+    assert len(evaluations)==(15 if quota_followup else 10)
+    assert len([data for data in evaluations if 'followup' not in data['sources'][0]['excerpt']])==5
     for category in result['categories'].values():
         assert len(category['findings'])==2
         assert any('followup' in f['value'] for f in category['findings'])

@@ -11,6 +11,7 @@ from uuid import uuid4
 from app.ai.waiting import quota_progress,quota_reason
 from app.ai.recovery import recover_responses,validation_progress
 from app.repositories.goals import GoalError
+from app.workflows.activity import activity_observer,LABELS
 
 
 class OperationConflict(GoalError):
@@ -35,13 +36,14 @@ class Pending:
     result: dict | None = None
     error: Exception | None = None
     task: asyncio.Task | None = None
+    activities: list[str] = field(default_factory=list)
     aliases: set[str] = field(default_factory=set)
 
     def view(self):
         return {'operation_id': self.id, 'status': self.status,
                 'retry_after': max(0, math.ceil(self.resume_at-time.monotonic())) if self.resume_at else None,
                 'result': self.result if self.status == 'succeeded' else None,
-                'validation_feedback': self.validation_feedback,'limit_scope':self.limit_scope,'provider':self.provider}
+                'activities':self.activities,'validation_feedback': self.validation_feedback,'limit_scope':self.limit_scope,'provider':self.provider}
 
 
 class Operations:
@@ -88,6 +90,9 @@ class Operations:
         def repairing(feedback):
             job.validation_feedback = feedback
             if job.status != 'waiting_quota': job.status = 'repairing' if feedback else 'running'
+        def observed(stage):
+            if stage in LABELS and stage not in job.activities:job.activities=(job.activities+[stage])[-12:]
+        activity_context=activity_observer.set(observed)
         context = quota_progress.set(progress)
         recovery = recover_responses.set(True)
         observer = validation_progress.set(repairing)
@@ -103,6 +108,7 @@ class Operations:
             job.status, job.error = 'failed', error
         finally:
             job.resume_at = None
+            activity_observer.reset(activity_context)
             quota_progress.reset(context)
             recover_responses.reset(recovery)
             validation_progress.reset(observer)

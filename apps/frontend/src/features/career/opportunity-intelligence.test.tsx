@@ -6,7 +6,7 @@ vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synt
 vi.mock('@/lib/api/career',()=>({careerApi:vi.fn()}));
 const result: IntelligenceResult={status:'completed',findings:[{finding_id:'f0000000000000001',field:'compensation',value:'SGD 1500 per month',confidence:'low',evidence_type:'candidate_reported',source_ids:['s1'],quotes:['Interns report SGD 1500 per month'],scope:'exact',conflict_group:'salary',last_verified_at:'2026-10-26T00:00:00Z'}],missing_fields:['benefits'],warnings:['Conflicting reports are preserved separately.'],error_code:null,researched_at:'2026-10-26T00:00:00Z',expires_at:null,searches:1,model_calls:1,latency_ms:100,estimated_cost_usd:null};
 let value:OpportunityView;
-beforeEach(()=>{vi.resetAllMocks();value={available:true,status:'partial',finished:true,job_id:'job',career_target_id:'goal',categories:{interview_intelligence:{...result,findings:[],missing_fields:[],status:'failed'},internship_insights:result,company_intelligence:{...result,status:'completed',findings:[],missing_fields:['tech_stack']}},research:null,sources:[{source_id:'s1',url:'https://example.test/intern',title:'Intern report',platform:'other',evidence:'Interns report SGD 1500 per month',published_date:null,reported_date:null,role_match:'related',reliability:'anecdotal',report_group:null}],error_code:null};vi.mocked(careerApi).mockResolvedValue(value);});
+beforeEach(()=>{vi.resetAllMocks();value={available:true,status:'partial',finished:true,job_id:'job',career_target_id:'goal',categories:{interview_intelligence:{...result,findings:[],missing_fields:[],status:'failed'},internship_insights:result,company_intelligence:{...result,status:'completed',findings:[],missing_fields:['tech_stack']}},research_id:'research',sources:[{source_id:'s1',url:'https://example.test/intern',title:'Intern report',platform:'other',evidence:'Interns report SGD 1500 per month',published_date:null,reported_date:null,role_match:'related',reliability:'anecdotal',report_group:null}],error_code:null};vi.mocked(careerApi).mockResolvedValue(value);});
 it('keeps successful categories visible when interviews fail, with claims, dates and citations',async()=>{
  render(<OpportunityIntelligence goalId="goal" version={1} selectionVersion={2}/>);
  await screen.findByText('This category could not finish. Other results are preserved; refresh this section to retry.');
@@ -19,7 +19,7 @@ it('keeps successful categories visible when interviews fail, with claims, dates
 });
 it('refreshes only the requested category with owner version and idempotency key',async()=>{
  render(<OpportunityIntelligence goalId="goal" version={4} selectionVersion={5}/>);
- await screen.findByText('Internship Insights');const details=screen.getByText('Company Intelligence').closest('details')!;fireEvent.click(within(details).getByText('Company Intelligence'));
+ await screen.findByText('Internship Insights');const details=screen.getByText('Company and Team Culture').closest('details')!;fireEvent.click(within(details).getByText('Company and Team Culture'));
  fireEvent.click(within(details).getByRole('button',{name:'Refresh this section'}));
  await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.some(call=>call[2]?.method==='POST')).toBe(true));
  const call=vi.mocked(careerApi).mock.calls.find(call=>call[2]?.method==='POST')!;
@@ -32,6 +32,34 @@ it('shows provider configuration and general-target states honestly',async()=>{
  expect(await screen.findByText('The Brave connection needs LLM Context mode for opportunity research.')).toBeVisible();
  expect(screen.queryByText('Gemini is not connected to the Career service.')).not.toBeInTheDocument();
  expect(screen.getByRole('button',{name:'Refresh research'})).toBeDisabled();
- const details=screen.getByText('Company Intelligence').closest('details')!;fireEvent.click(within(details).getByText('Company Intelligence'));
+ const details=screen.getByText('Company and Team Culture').closest('details')!;fireEvent.click(within(details).getByText('Company and Team Culture'));
  expect(within(details).getByText('No company is specified for employer-specific research.')).toBeVisible();
+});
+
+it('shows all five research sections and refreshes conversion evidence independently',async()=>{
+ render(<OpportunityIntelligence goalId="goal" version={4} selectionVersion={5}/>);
+ await screen.findByText('Career Progression');
+ for(const label of ['Interview Intelligence','Internship Insights','Career Progression','Historical Conversion Rates','Company and Team Culture'])expect(screen.getByText(label)).toBeInTheDocument();
+ const section=screen.getByText('Historical Conversion Rates').closest('details')!;
+ fireEvent.click(within(section).getByText('Historical Conversion Rates'));
+ fireEvent.click(within(section).getByRole('button',{name:'Refresh this section'}));
+ await waitFor(()=>expect(careerApi).toHaveBeenCalledWith('/goals/goal/opportunity-research','synthetic-token',expect.objectContaining({method:'POST'})));
+ const call=vi.mocked(careerApi).mock.calls.find(call=>call[2]?.method==='POST')!;
+ expect(JSON.parse(call[2]!.body as string).category).toBe('conversion_outcomes');
+});
+
+it('loads version-pinned evidence only when its disclosure is opened',async()=>{
+ const publicValue={...value,sources:value.sources?.map(({evidence,...source})=>source),categories:{internship_insights:{...result,findings:result.findings.map(({quotes,...finding})=>finding)}}};
+ vi.mocked(careerApi).mockImplementation(async path=>{
+  if(path.endsWith('/progress'))return {finished:true,result_version:'v1'} as never;
+  if(path.includes('/evidence?'))return {quotes:['Interns report SGD 1500 per month'],sources:value.sources} as never;
+  return publicValue as never;
+ });
+ render(<OpportunityIntelligence goalId="goal" version={1} selectionVersion={2}/>);
+ await screen.findByText('SGD 1500 per month');
+ expect(vi.mocked(careerApi).mock.calls.some(call=>call[0].includes('/evidence?'))).toBe(false);
+ const section=screen.getByText('Internship Insights').closest('details')!;fireEvent.click(within(section).getByText('Internship Insights'));
+ const summary=within(section).getByText('Evidence and sources');fireEvent.click(summary);
+ await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.some(call=>call[0]==='/goals/goal/opportunity-research/findings/f0000000000000001/evidence?research_id=research')).toBe(true));
+ expect((await screen.findAllByText('Interns report SGD 1500 per month')).length).toBeGreaterThan(0);
 });

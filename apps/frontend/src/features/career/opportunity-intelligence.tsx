@@ -5,8 +5,10 @@ import {careerApi,type OpportunityView,type OpportunityAvailabilityIssue,type In
 
 const categories:[IntelligenceCategory,string,string][]=[
  ['interview_intelligence','Interview Intelligence','Recruitment stages, assessments, reported questions and preparation.'],
- ['internship_insights','Internship Insights','Compensation, projects, culture, mentorship and conversion.'],
- ['company_intelligence','Company Intelligence','Products, technology, recent developments and career growth.']];
+ ['internship_insights','Internship Insights','Intern experiences, projects, responsibilities, mentorship and workload.'],
+ ['career_progression','Career Progression','Roles after internship, progression and reported full-time conversion salary.'],
+ ['conversion_outcomes','Historical Conversion Rates','Yearly return offers, cohort evidence and full-time conversion percentages.'],
+ ['company_intelligence','Company and Team Culture','Company-wide and team-specific culture, management and working hours.']];
 const words=(value:string)=>value.replaceAll('_',' ');
 const availabilityMessages:Record<OpportunityAvailabilityIssue,string>={
  research_disabled:'Opportunity research is turned off on the server.',
@@ -15,9 +17,24 @@ const availabilityMessages:Record<OpportunityAvailabilityIssue,string>={
  brave_not_configured:'Brave is not connected to the Career service.',
  brave_llm_context_required:'The Brave connection needs LLM Context mode for opportunity research.'
 };
-function Finding({finding,sources}:{finding:IntelligenceFinding;sources:ResearchSource[]}){
+function Finding({finding,sources,goalId,researchId}:{finding:IntelligenceFinding;sources:ResearchSource[];goalId:string;researchId?:string|null}){
+ const {token}=useProfile();const [evidence,setEvidence]=useState<{quotes:string[];sources:ResearchSource[]}>(),[error,setError]=useState(''),[loading,setLoading]=useState(false);
+ const request=useRef<AbortController|null>(null);
+ useEffect(()=>()=>request.current?.abort(),[]);
+ async function load(){
+  if(!token||!researchId||evidence||loading)return;
+  const abort=new AbortController();request.current=abort;setLoading(true);setError('');
+  try{const result=await careerApi<{quotes:string[];sources:ResearchSource[]}>(`/goals/${goalId}/opportunity-research/findings/${finding.finding_id}/evidence?research_id=${researchId}`,token,{signal:abort.signal});if(!abort.signal.aborted)setEvidence(result);}
+  catch{if(!abort.signal.aborted)setError('Evidence could not be loaded.');}finally{if(!abort.signal.aborted)setLoading(false);}
+ }
  return <article className="intelligence-finding"><p>{finding.value}</p><div className="intelligence-labels"><span>{words(finding.confidence)} confidence</span><span>{words(finding.evidence_type)}</span>{finding.scope!=='exact'&&<span>{words(finding.scope)} context</span>}{finding.conflict_group&&<span className="intelligence-conflict">Conflicting reports</span>}</div>
-  <details><summary>Evidence and sources</summary>{finding.source_ids.map((id,i)=>{const source=sources.find(s=>s.source_id===id);return <div className="intelligence-citation" key={id}>{source?<><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title||source.platform} ↗</a><p className="small">Published: {source.published_date?new Date(source.published_date).toLocaleDateString():'Unknown'} · Retrieved: {source.retrieved_at?new Date(source.retrieved_at).toLocaleDateString():'Unknown'}</p></>:<p className="small">Source details are still loading.</p>}<blockquote>{finding.quotes[i]}</blockquote></div>;})}<p className="small">Verified {new Date(finding.last_verified_at).toLocaleDateString()}. Reports may differ from your opportunity.</p></details>
+  <details onToggle={event=>{if(event.currentTarget.open)void load();}}><summary>Evidence and sources</summary>
+   {loading&&<p role="status">Loading evidence…</p>}{error&&<p role="alert">{error} <button onClick={()=>void load()}>Retry evidence</button></p>}
+   {finding.source_ids.map((id,i)=>{const source=(evidence?.sources||sources).find(s=>s.source_id===id);return <div className="intelligence-citation" key={id}>
+    {source&&<><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title||source.platform} ↗</a><p className="small">Published: {source.published_date?new Date(source.published_date).toLocaleDateString():'Unknown'} · Retrieved: {source.retrieved_at?new Date(source.retrieved_at).toLocaleDateString():'Unknown'}</p></>}
+    {evidence?.quotes[i]&&<blockquote>{evidence.quotes[i]}</blockquote>}{source?.evidence&&<details><summary>Full retrieved excerpt</summary><blockquote>{source.evidence}</blockquote></details>}
+   </div>;})}<p className="small">Verified {new Date(finding.last_verified_at).toLocaleDateString()}. Reports may differ from your opportunity.</p>
+  </details>
  </article>;
 }
 export function OpportunityIntelligence({goalId,version,selectionVersion}:{goalId:string;version:number;selectionVersion:number}){
@@ -26,9 +43,16 @@ export function OpportunityIntelligence({goalId,version,selectionVersion}:{goalI
  const path=`/goals/${goalId}/opportunity-research`;
  useEffect(()=>{
   if(!token)return;const abort=new AbortController();let timer:ReturnType<typeof setTimeout>;
-  async function load(){try{const value=await careerApi<OpportunityView>(path,token!,{signal:abort.signal});if(abort.signal.aborted)return;setData(value);setError('');
-   if(value.job_id&&!value.finished&&['pending','running','partial'].includes(value.status))timer=setTimeout(()=>void load(),2000);
+  let loaded=false,stamp:string|null|undefined;
+  async function load(){try{
+   const progress=await careerApi<{result_version:string|null;finished:boolean}>(path+'/progress',token!,{signal:abort.signal});
+   if(!loaded||progress.result_version!==stamp){
+    const value=await careerApi<OpportunityView>(path,token!,{signal:abort.signal});if(abort.signal.aborted)return;
+    loaded=true;stamp=progress.result_version;setData(value);setError('');
+   }
+   if(!progress.finished)timer=setTimeout(()=>void load(),2000);
   }catch{if(!abort.signal.aborted)setError('Opportunity research could not be loaded. Your goal and available findings are preserved.');}}
+
   void load();return()=>{abort.abort();clearTimeout(timer);};
  },[token,path,attempt]);
  useEffect(()=>()=>controller.current?.abort(),[]);
@@ -40,8 +64,8 @@ export function OpportunityIntelligence({goalId,version,selectionVersion}:{goalI
   catch{if(!abort.signal.aborted)setError('Research could not start. Check that the opportunity is current and the research providers are available, then retry.');}
   finally{if(!abort.signal.aborted)setBusy(null);}
  }
- const results=data?.categories||data?.research?.categories||{},sources=data?.sources||[];
- const all=Object.values(results).flatMap(v=>v?.findings||[]),summary=data?.summary||data?.research?.summary;
+ const results=data?.categories||{},sources=data?.sources||[];
+ const all=Object.values(results).flatMap(v=>v?.findings||[]),summary=data?.summary;
  const refs=(ids:string[]|undefined)=>[...new Set(ids||[])].map(id=>all.find(f=>f.finding_id===id)).filter((v):v is IntelligenceFinding=>!!v);
  const takeaways=refs(summary?.key_takeaway_refs),considerations=refs(summary?.consideration_refs),overview=refs(summary?.overview_refs);
  const running=!!data?.job_id&&!data.finished&&['pending','running'].includes(data.status);
@@ -60,9 +84,9 @@ export function OpportunityIntelligence({goalId,version,selectionVersion}:{goalI
     {result&&['pending','running'].includes(result.status)&&<p role="status" className="notice">{['rate_limited','source_rate_limited'].includes(result.error_code||'')?`Waiting for the AI allowance${data?.retry_after?`; resuming in about ${data.retry_after} seconds`:''}.`:'Researching this category…'} Available findings stay visible.</p>}
     {result?.status==='failed'&&<p className="notice">This category could not finish. Other results are preserved; refresh this section to retry.</p>}
     {result?.warnings.map((warning,i)=><p className="small intelligence-warning" key={i}>{warning}</p>)}
-    {fields.map(field=><div className="intelligence-field" key={field}><h4>{words(field)}</h4>{result!.findings.filter(f=>f.field===field).map(f=><Finding key={f.finding_id} finding={f} sources={sources}/>)}</div>)}
-    {!result?.findings.length&&<p className="small">{result?.status==='not_applicable'?'No company is specified for employer-specific research.':result?.status==='completed'?'No relevant evidence was found within the research budget.':'No supported findings are available yet.'}</p>}
-    {!!result?.missing_fields.length&&<details className="intelligence-missing"><summary>Information not established · {result.missing_fields.length}</summary><ul>{result.missing_fields.map(field=><li key={field}>{words(field)}</li>)}</ul></details>}
+    {fields.map(field=><div className="intelligence-field" key={field}><h4>{words(field)}</h4>{result!.findings.filter(f=>f.field===field).map(f=><Finding key={f.finding_id} finding={f} sources={sources} goalId={goalId} researchId={data?.research_id}/>)}</div>)}
+    {!result?.findings.length&&!result?.warnings.some(w=>w==='Information pertaining to this category was not found in the retrieved sources.')&&<p className="small">{result?.status==='not_applicable'?'No company is specified for employer-specific research.':result?.status==='completed'?'Information pertaining to this category was not found in the retrieved sources.':'No supported findings are available yet.'}</p>}
+
     </div>
    </details>;
   })}</div>

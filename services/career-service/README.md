@@ -4,6 +4,13 @@ Interprets job descriptions, explores career directions and researches opportuni
 Each account has one saved goal overview with category cards and one live conversation. Manual changes open guided refinement chat; there is no edit form or Apply button. Validated changes become
 the latest goal automatically; a new extracted JD replaces the conversation.
 
+Brave research exclusively calls `/res/v1/llm/context`, including discovery,
+interview research and Opportunity Intelligence. Legacy search/answers mode settings
+are ignored. Fuller extraction uses 30 candidates, six URLs, 8,192 context tokens,
+2,048 per URL and six snippets per URL; saved evidence is capped at 2,400 characters
+per source. Gemini 3.5 Flash Lite runs every reasoning/extraction/chat stage. See
+[retrieval and evidence parameters](ANALYSIS_CONTRACTS.md).
+
 ## JD inputs — J01/J06/J07
 
 - `POST /api/v1/career/imports/url` — Prepare an editable public job-page preview.
@@ -16,17 +23,16 @@ characters; original documents and full extracted text are transient.
 
 - `GET /api/v1/career/workspace` — Open the account's latest goal and processing state.
 - `POST /api/v1/career/workspace/jd` — Extract a new JD, save it as current and start interview research. Requires a UUID idempotency key.
-- `PATCH /api/v1/career/workspace/review` — Compatibility API for saving/resetting structured details, skills and conditions. The app uses chat for edits. Requires session ID, expected review version and UUID idempotency key.
+- `PATCH /api/v1/career/workspace/review` — Compatibility API for saving structured details, skills and conditions. The app uses chat for edits. Requires session ID, expected review version and UUID idempotency key.
 - `POST /api/v1/career/workspace/messages` — Ask scoped questions about the saved role, requirements and interviews. Clear questions use focused retrieval; ambiguous ones use a small router. Ask for changes to any supported goal field here. The agent asks guided questions until the change is specific, then validates and saves it automatically.
 - `GET /api/v1/career/workspace/operations/{operation_id}` — Read an account-owned extraction/chat job and its automatic quota countdown.
 - `POST /api/v1/career/workspace/retry` — Resume expired work or retry failed research.
 
-Successful extraction opens the saved goal overview immediately, with separate skill/condition categories and live research status. A new JD replaces the entire goal only after successful extraction. LangGraph researches public opportunity evidence. General research questions open after interview completion; guided goal refinement remains available while research is pending or unavailable. The initial explanation is built from saved fields without another model call. It
+Successful extraction fills the saved goal overview immediately while keeping the user in the chat. Public retrieval overlaps full JD extraction after the identity check. The chat shows progress until extraction and all applicable research categories plus summary finish successfully, then types one combined response word by word. A new JD replaces the entire goal only after successful extraction. LangGraph researches public opportunity evidence. The chat composer opens after the combined response is ready; the underlying saved-goal APIs remain available while research is pending or unavailable; interview claims require saved evidence. The initial explanation is built from saved fields without another model call. It
 covers role scope, high-level skills, supported interview stages and an explicitly
 sourced round count (unknown otherwise). Unknown stages remain unknown. No confirmation button or
-conversation selector is used. Groq has a 7,000-token per-user rolling-minute input/output allowance. Atomic
-in-flight reservations prevent parallel calls from overshooting; unused output capacity
-is released on completion. There is no separate 4,000-input cap. Gemini is outside this ledger.
+conversation selector is used. Every stage uses the server-only `GEMINI_API_KEY`
+and `GEMINI_REASONING_MODEL` (default `gemini-3.5-flash-lite`) for every stage. Provider quotas, context/output limits and timeouts still apply.
 The app runs JD extraction and chat as background operations:
 when a timed quota is reached, the unfinished model step waits and resumes automatically,
 with a countdown and no approval or resubmission. Waiting does not consume the model's
@@ -35,6 +41,10 @@ failed LangGraph node, with at most six repairs.
 The model receives only the latest field/type issues; the UI shows “Refining the response…”.
 A complete JSON object wrapped only in a Markdown code fence is unwrapped locally,
 then passes the same duplicate-key, schema and provenance checks without another call.
+Gemini receives an inlined, fixed-shape decoding schema without length/count/range
+bounds; the complete original bounds are enforced by backend validation. This avoids
+the reproduced nested-schema `400 INVALID_ARGUMENT` rejection without changing saved
+goal/research models or retrying without structured output.
 Interview synthesis has its own task prompt without unrelated JD/CV instructions.
 Corrective calls count toward token usage and quota waits. Only valid output is saved/shown. Input/context-size and configuration failures still stop. API clients
 opt in using `Prefer: respond-async` and a UUID `Idempotency-Key`, then poll the returned
@@ -44,9 +54,9 @@ issued a new request key; accepted keys replay the same result. A different acti
 input returns `409` with `operation_in_progress`; changing an accepted key's payload
 returns `operation_key_reused`. These safe conflicts are explained in the UI.
 Workspace responses include
-`error_code` for background failures; the UI shows token-limit messages while keeping
-other diagnostic details in Network responses. Provider
-quotas remain separate; task output caps and timeouts still apply. Goal versions remain immutable internally; late
+`error_code` for background failures; the UI shows token-limit messages and a fixed
+`not_configured` explanation while keeping private diagnostics in Network responses. Provider
+quotas remain separate; task output caps and timeouts still apply. Current-goal edits use owner/version checks; late
 results and requests for replaced sessions cannot overwrite the current goal.
 
 Importance distinguishes required, preferred, unspecified, conflicting and advisory;
@@ -59,6 +69,21 @@ The latest question survives reload. Users can cancel a pending edit in chat. Co
 changes update the same conversation, preserve untouched requirements and refresh
 interview research as needed. Chat saves use idempotency keys and expected versions.
 User corrections remain distinct from employer-provided evidence.
+
+## Concurrent JD intake and career-only scope
+
+Gemini first checks job-description scope and evidence-backed public identity, then
+full JD extraction overlaps initial public retrieval. The same target persistence
+saves validated goals; matching early searches seed the durable research job without
+being repeated. Changed identity discards early results, and provider waits are preserved.
+
+Operation/workspace `activities` expose fixed observed steps. Chat shows typed summaries
+and stays open; the Career Goal button opens already populated cards. The initial response
+and composer wait for both results. Follow-up questions can use cited company/internship
+findings as well as the JD.
+Both JD extraction APIs reject unrelated documents with HTTP 422 `career_scope`.
+Question/refine paths refuse unrelated tasks and instruction overrides. See the
+[concurrency, progress and scope contract](ANALYSIS_CONTRACTS.md#concurrent-jd-intake-progress-and-career-only-guardrails).
 
 ## CV assessment handoff — J09 / CV dependency
 
@@ -84,24 +109,24 @@ attachment's limitations. Choosing a direction automatically makes it current.
 - `GET /api/v1/career/goals/{id}/opportunity-research` — Owner-scoped category status/results; optional `research_id` pins an immutable linked version.
 - `POST /api/v1/career/goals/{id}/opportunity-research` — Start/reuse/refresh with expected goal/selection versions and UUID idempotency; optional category refresh.
 
-The configured path starts after goal validation. Gemini plans queries, three LangGraph
+The configured path starts after goal validation. Gemini plans role-tailored queries, five LangGraph
 branches retrieve Brave LLM Context and use the primary reasoner for cited evidence,
 then Gemini selects validated summary findings. Each category saves progress independently;
 failed categories retain other results. The overview has expandable Interview Intelligence,
-Internship Insights and Company Intelligence with sources/confidence/context, dates,
-missing information and targeted refresh. No-company targets skip employer categories.
+Internship Insights, Career Progression, Historical Conversion Rates and Company and Team Culture with sources/confidence/context, dates,
+missing information and targeted refresh. No-company targets research all five categories as explicitly general role context.
 
 Durable jobs and category cache use existing `research_contexts`; typed immutable reports
 extend `interview_research`. Worker leases, checkpoint/restart recovery and receipt/version
-checks prevent duplicate paid retrieval and stale publication. Groq-only local token limits
-remain unchanged. See [feature specification, graph, API models, limits and setup](OPPORTUNITY_INTELLIGENCE.md).
+checks prevent duplicate paid retrieval and stale publication. Gemini evaluates all categories
+against the existing JSON fields and exact citations. See [feature specification, graph, API models, limits and setup](OPPORTUNITY_INTELLIGENCE.md).
 
 Legacy interview endpoints remain readable/compatible:
 
 - `GET /api/v1/career/goals/{id}/interview-research` — Linked exact interview/public research version.
 - `POST /api/v1/career/goals/{id}/interview-research` — Explicit legacy research/reuse.
 
-Legacy Search/Answers settings remain supported on that path. New Opportunity Intelligence
+Legacy Search/Answers mode values are ignored. Opportunity Intelligence
 uses the existing `GEMINI_API_KEY` and `BRAVE_API_KEY` when `OPPORTUNITY_ENABLED=true`
 (default), independently of the Gemini chat switch and legacy Brave mode. It always
 calls LLM Context; no silent provider substitution occurs. Availability responses
@@ -114,24 +139,16 @@ shared research, and no personal capability gaps or roadmap are generated.
 
 ## Saved-goal questions — J13
 
-With `GEMINI_ENABLED=true`, Gemini `gemini-3.5-flash-lite` interprets every saved-goal
-chat turn using a compact catalogue (up to 1,800 estimated tokens) and the last six
-messages (400 characters each). It selects application-owned item references by
-meaning, resolves follow-ups and asks guided questions for ambiguity. Python retrieves
-allowlisted sections and selected records, preserving AND/OR alternatives. Answers
-receive up to 1,600 fact tokens, not the full JD, catalogue or chat history.
-Gemini answers straightforward questions; the primary GPT model handles comparisons,
-trade-offs and validated goal edits. JD extraction and interview synthesis remain on
-the primary model. Citation and ownership checks apply to both. No new searches run
-for ordinary chat; missing information stays unknown. Gemini failure does not silently
-fall back to another provider. Enable with a separate server-only `GEMINI_API_KEY`;
-`GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`. The
-7,000-total/user/rolling-minute admission limits apply only to Groq, including corrections. Gemini neither consumes nor waits for that allowance; its provider quota, context/output limits and timeouts still apply.
-Gemini uses minimal thinking and bounded outputs. The compact catalogue is rebuilt
-from the latest saved goal; provider memory is not relied upon. Existing goal/edit
-state and recent client-supplied messages provide continuity without a new collection.
+Gemini 3.5 Flash Lite interprets every saved-goal chat turn using a compact catalogue
+(up to 1,800 estimated tokens) and six recent messages (400 characters each).
+Python retrieves allowlisted owner-linked records, preserving AND/OR alternatives;
+answers receive up to 1,600 fact tokens. The same Gemini model handles comparisons,
+goal edits, JD extraction and interview synthesis. Citation and ownership checks
+remain mandatory. Ordinary chat performs no new searches; unknown details stay unknown.
+`AI_ENABLED` is the master switch; unused provider/model/chat settings are ignored.
+No provider fallback exists. All stages default to the explicit Flash Lite model ID
+as described in [setup](../../docs/setup.md#gemini-reasoning-configuration).
 
-When Gemini is disabled, the existing Groq-only path remains available.
 Ordinary Q&A sends only relevant projected fields and matching facts, without full
 research summaries or the edit schema. Location/round-count lookups, missing facts and
 clear unrelated requests need no answering call. Ambiguous scope uses a 256-output-token
@@ -139,6 +156,11 @@ router; grounded answers use at most 768 output tokens, subject to the existing 
 Independent questions omit chat history; follow-ups include only two short recent
 messages. Unrelated tasks are refused. Q&A never performs another Brave search or
 silently edits the goal. JD chat history remains temporary browser memory.
+
+Provider rejections include safe `provider_error` metadata: HTTP status, known
+Google code and rejected field names. This distinguishes invalid keys, unavailable
+models, project access, schema and parameter failures without revealing provider prose.
+See [configuration and rejection diagnostics](ANALYSIS_CONTRACTS.md#safe-gemini-rejection-diagnostics).
 
 ## Compatibility and setup
 
@@ -156,9 +178,22 @@ and [application setup](../../docs/setup.md). Gap analysis and roadmaps remain p
 
 `POST /api/v1/career/discoveries`, `GET /api/v1/career/discoveries/current`, and owned
 `/discoveries/{id}` message/research routes implement a Gemini goal-setting conversation,
-explicit scope approval, Brave job-listing research and Groq requirement extraction.
+explicit scope approval, Brave job-listing research and Gemini requirement extraction.
 The final review uses the existing review/confirmation APIs and target persistence.
 No CV is needed. See [Career Discovery](CAREER_DISCOVERY.md) for exact routes, models,
-configuration, evidence rules, recovery and verification. Saved-goal questions remain
-available while research is waiting; configured research Gemini can handle lightweight
-context chat independently of Groq capacity.
+configuration, evidence rules, recovery and verification. Saved-goal question APIs remain
+available while research is waiting; the chat UI waits for combined completion before
+opening its composer.
+
+
+### Compact goal/research responses
+
+The saved content appears once in `current.goal`; edits update the same goal ID/version.
+There is no original-content restore action; startup clears its retired stored copies. Poll `/workspace/progress` and
+`/goals/{id}/opportunity-research/progress` for lightweight state; load full goal/findings
+only when their versions change. Finding evidence is fetched on expansion through
+`/goals/{id}/opportunity-research/findings/{finding_id}/evidence?research_id={id}`.
+Standard responses omit source excerpts, quotes and duplicate interview structures.
+Exact quotes allow whitespace-only normalization; checked presentation summaries stay
+separate from evidence. Missing information is a successful “not found” result, not a
+category failure. See [the contract](ANALYSIS_CONTRACTS.md#canonical-goal-and-compact-reads--28-october-2026).

@@ -1,5 +1,6 @@
 "use client";
 
+import {ChatScrollControl,useChatScroll} from './use-chat-scroll';
 import {useEffect,useRef,useState} from 'react';
 import {useRouter,useSearchParams} from 'next/navigation';
 import Link from 'next/link';
@@ -13,7 +14,7 @@ export function CareerChat(){
  const params=useSearchParams(),session=useCareerSession(),{token}=useProfile();
  const [workspace,setWorkspace]=useState<CareerWorkspace>(),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[code,setCode]=useState(''),[loadAttempt,setLoadAttempt]=useState(0);
  useEffect(()=>{if(!token)return;const abort=new AbortController();void careerApi<CareerWorkspace>('/workspace',token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted){setWorkspace(v);setLoaded(true);}}).catch(c=>{if(!abort.signal.aborted){setError(c.message);setCode(errorCode(c));setLoaded(true);}});return()=>abort.abort();},[token,loadAttempt]);
- if(session.jd||params.get('source')==='jd'||workspace?.review)return <JobReviewChat/>;
+ if(session.jd||params.get('source')==='jd'||workspace?.current.goal)return <JobReviewChat/>;
  if(!loaded)return <p role="status">Opening your career conversation…</p>;
  if(error)return <AgentRecovery message={error} code={code} onRetry={()=>{setError('');setCode('');setLoaded(false);setLoadAttempt(v=>v+1);}}/>;
  return <ExplorationChat initialDraftId={workspace?.exploration_id||null}/>;
@@ -27,7 +28,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
  const [cvText,setCVText]=useState('');const [cvName,setCVName]=useState('');const [busy,setBusy]=useState(false);const [loading,setLoading]=useState(false);
  const [error,setError]=useState(''),[code,setCode]=useState('');const [notice,setNotice]=useState('');const [retry,setRetry]=useState(0);
  const [showDetails,setShowDetails]=useState(false);const controller=useRef<AbortController|null>(null);const seq=useRef(0);
- const mutation=useRef<{signature:string;key:string}|null>(null);const transcript=useRef<HTMLDivElement|null>(null);
+ const mutation=useRef<{signature:string;key:string}|null>(null);const {transcript,followReply,showJump,jumpToLatest,scrollProps}=useChatScroll();
  const latestSession=useRef(session);latestSession.current=session;
  const draftId=useRef<string|null>(null);const dirty=useRef(false);dirty.current=!!(message||cvText );
  useEffect(()=>()=>{seq.current++;controller.current?.abort();},[]);
@@ -54,7 +55,6 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
    finally{if(n===seq.current)setLoading(false);}}
   void load();return()=>{seq.current++;abort.abort();};
  },[token,requested,retry]);
- useEffect(()=>{const log=transcript.current;if(log)log.scrollTo?.({top:log.scrollHeight});},[draft?.version,busy]);
  function actionKey(signature:string){if(mutation.current?.signature!==signature)mutation.current={signature,key:crypto.randomUUID()};return mutation.current.key;}
  async function post<T,>(path:string,body:unknown,signal:AbortSignal){return careerApi<T>(path,token!,{method:'POST',body:JSON.stringify(body),signal,
   headers:{'Idempotency-Key':actionKey(path+JSON.stringify(body))}});}
@@ -112,11 +112,11 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
    {draft?.cv.mode==='saved'&&<p className="small">CV version {draft.cv.version} · extraction {draft.cv.extraction_version}</p>}
 
   </details>}
-  <div className="agent-transcript" ref={transcript} role="log" aria-label="Career agent conversation" aria-live="polite">
+  <div className="agent-transcript" ref={transcript} {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">
    <div className="agent-message assistant"><span className="agent-message-label">Coachify</span><p>{initial}</p></div>
    {!draft&&<p className="agent-cv-reminder small">No CV is required to start. {warning} <Link href="/cv">CV upload</Link></p>}
    {loading&&<p role="status">Opening your conversation…</p>}
-   {draft?.turns.map((turn,index)=><div className="agent-exchange" key={`${draft._id}-${index}`}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.answer.value||'I’m not sure; skip this for now.'}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentReply animate={index===draft.turns.length-1} onProgress={()=>{const log=transcript.current;if(log&&log.scrollHeight-log.scrollTop-log.clientHeight<120)log.scrollTo?.({top:log.scrollHeight,behavior:'instant'});}}>{turn.reply}</AgentReply></div></div>)}
+   {draft?.turns.map((turn,index)=><div className="agent-exchange" key={`${draft._id}-${index}`}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.answer.value||'I’m not sure; skip this for now.'}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentReply animate={index===draft.turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div></div>)}
    {draft&&(draft.total_turns||0)>draft.turns.length&&<p className="small">Earlier messages are summarised in the saved conversation details.</p>}
    {pending&&<div className="agent-message user"><span className="agent-message-label">You</span><p>{pending}</p></div>}
    {busy&&<div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentActivity label={activity}/></div>}
@@ -125,7 +125,8 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
    {error&&<AgentRecovery message={error} code={code} disabled={busy} label="Reload conversation" onRetry={()=>{if(!dirty.current||window.confirm('Reload saved progress and discard unsent edits?')){draftId.current=null;setRetry(v=>v+1);}}}/>}
 
   </div>
-  <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}>
+  <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
+   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}>
    <label className="agent-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>Allow Coachify to send this conversation and chosen CV context to the configured AI provider.</label>
    <div className="agent-compose-row"><textarea aria-label="Message Coachify" placeholder="Tell me what you’re hoping to achieve…" value={message} maxLength={600} rows={2} disabled={busy||loading} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||loading||!message.trim()||(!consent||needsAttachment||!current)}>↑</button></div>
    {<div className="agent-compose-meta"><span className="small">Enter to send · Shift+Enter for a new line</span>{draft?.next_question&&<button type="button" className="btn ghost sm" disabled={busy||!consent||needsAttachment} onClick={()=>void send(true)}>Skip this question</button>}</div>}

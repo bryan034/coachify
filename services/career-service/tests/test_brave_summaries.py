@@ -52,9 +52,9 @@ def test_summary_rich_synthesis_stays_below_4000_input_tokens_and_keeps_claims()
     text=('Public reports describe technical interviews, SQL assessments and coding exercises. '*40)[:2400]
     sources=[ResearchSource(source_id=f's{i}',platform='other',url=f'https://example.test/{i}',evidence=(f'Interview {i} SQL coding assessment. '*30)[:600]) for i in range(6)]
     summaries=[BraveAnswer(summary_id=f'a{i}',text=text,source_ids=[s.source_id for s in sources],claims=[AnswerClaim(text=text[j:j+500],source_ids=['s0']) for j in (0,500,1000,1500)]) for i in range(2)]
-    adapter=AIAdapter(AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='fixture'),None)
+    adapter=AIAdapter(AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='fixture'),None)
     payload=adapter._payload(AIInput(stage='interview_synthesis',public_context={'role':'Analyst','field':'Data'},sources=sources,summaries=summaries))
-    assert input_tokens(payload)<=4000 and payload['max_completion_tokens']==2048
+    assert input_tokens(payload)<=4000 and payload['max_tokens']==2048
     sent=json.loads(payload['messages'][1]['content'])
     assert any(v['origin']=='brave_summary' and v['text']==summaries[0].claims[0].text for v in sent['evidence'])
     assert 'summaries' not in sent and 'sources' not in sent
@@ -75,14 +75,15 @@ def test_answers_findings_round_trip_through_provider_contract_and_backend_attri
                 {'ref':'e1','origin':'source_excerpt','text':source.evidence},
                 {'ref':'e2','origin':'brave_summary','text':TEXT}]
             assert 'source_ids' not in payload['messages'][1]['content']
-            schema=payload['response_format']['json_schema']['schema']
-            finding=schema['$defs']['Finding']['properties']
+            schema=(json.loads(payload['messages'][0]['content'].rsplit('\nJSON schema: ',1)[1])
+                    if mode=='json_object' else payload['response_format']['json_schema']['schema'])
+            finding=(schema['$defs']['Finding'] if mode=='json_object' else schema['properties']['topics']['items'])['properties']
             assert 'evidence_ref' in finding and 'quotes' not in finding and 'summary_id' not in finding
             output={'topics':[{'name':'SQL','category':'Technical','interview_stage':'technical interview',
                 'assessment_type':'SQL assessment','difficulty':'unknown','question_patterns':[],'evidence_ref':'e2'}]}
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='fixture',response_mode=mode),client)
+            adapter=AIAdapter(AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='fixture',response_mode=mode),client)
             result=await adapter.generate(request,Operation('owner','r1',request.stage),current_revision=lambda:'r1')
         topic=result.data.topics[0]
         assert topic.source_ids==['s1'] and topic.summary_id=='answer1'
@@ -157,5 +158,5 @@ def test_research_evidence_is_deduplicated_and_budgeted_with_stable_verified_ref
     item=items[0]
     result=InterviewFindings(topics=[{'name':'SQL','category':'Technical','evidence_ref':item['ref']}]).to_domain(request)
     assert result.topics[0].source_ids==item['source_ids'] and result.topics[0].quotes[0]==item['text']
-    adapter=AIAdapter(AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='fixture'),None)
+    adapter=AIAdapter(AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='fixture'),None)
     assert input_tokens(adapter._payload(request))<=4000

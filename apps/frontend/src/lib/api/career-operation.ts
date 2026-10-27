@@ -1,6 +1,6 @@
 import {careerApi} from './career';
 
-export type CareerOperation={operation_id:string;status:'running'|'repairing'|'waiting_quota'|'succeeded';limit_scope?:'user'|'provider'|null;provider?:string|null;retry_after:number|null;result:unknown;validation_feedback?:{reason:string;fields:string[];violations:{field:string;issue:string}[]}|null};
+export type CareerOperation={activities?:string[];operation_id:string;status:'running'|'repairing'|'waiting_quota'|'succeeded';limit_scope?:'user'|'provider'|null;provider?:string|null;retry_after:number|null;result:unknown;validation_feedback?:{reason:string;fields:string[];violations:{field:string;issue:string}[]}|null};
 
 function pause(milliseconds:number,signal?:AbortSignal|null){
  return new Promise<void>((resolve,reject)=>{

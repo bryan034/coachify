@@ -11,7 +11,23 @@ class WorkspaceStore:
     def __init__(self,goals,reviews):self.goals,self.reviews,self.rows=goals,reviews,goals.state
 
     def row(self,owner):
-        return self.rows.find_one({'_id':owner}) or {}
+        row=self.rows.find_one({'_id':owner}) or {};workspace=row.get('workspace',{})
+        # Recover a goal CAS committed immediately before a worker/API restart.
+        goal=self.goals.goals.find_one({'_id':row['goal_id'],'user_id':owner},{'version':1}) if row.get('goal_id') and workspace else None
+        if goal and workspace.get('review_id')!=str(goal['_id']):
+            version=max(goal['version'],workspace.get('revision',1))
+            self.goals.goals.update_one({'_id':goal['_id'],'user_id':owner,'version':goal['version']},{'$max':{'version':version}})
+            self.rows.update_one({'_id':owner,'version':row['version'],'goal_id':goal['_id'],'workspace.review_id':workspace.get('review_id')},
+                {'$set':{'workspace.review_id':str(goal['_id']),'workspace.revision':version,'selected_review':{'id':str(goal['_id']),'version':version}}})
+            row=self.rows.find_one({'_id':owner}) or {};workspace=row.get('workspace',{});goal['version']=version
+        if goal and workspace.get('review_id')==str(goal['_id']) and goal['version']>workspace.get('revision',0):
+            changes={'workspace.revision':goal['version'],'workspace.run_id':str(ObjectId()),'workspace.research_id':None,
+                'workspace.phase':'research_pending','workspace.error':None,'workspace.error_code':None,'workspace.retry_after':None,'workspace.limit_scope':None,'workspace.provider':None,
+                'selected_review':{'id':str(goal['_id']),'version':goal['version']},'dependent_results_need_review':True}
+            self.rows.update_one({'_id':owner,'version':row['version'],'goal_id':goal['_id'],'workspace.revision':workspace.get('revision',0)},
+                {'$set':changes,'$inc':{'version':1},'$unset':{'workspace.edit_draft':'','workspace.worker_until':''}})
+            row=self.rows.find_one({'_id':owner}) or {}
+        return row
 
     def ensure(self,owner):
         try:self.rows.update_one({'_id':owner},{'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]}},upsert=True)
@@ -41,15 +57,21 @@ class WorkspaceStore:
         command=SaveGoal(target_type=review.target_type,role=review.content.role,field=review.content.field,company=review.content.company,
             location=review.content.location,seniority_level=review.content.seniority_level,job_url=review.content.job_url,employment_type=review.content.employment_type,
             review_id=review.id,expected_review_version=review.version,expected_selection_version=row.get('version',0),replace_current=True)
-        goal=self.reviews.goal(review,owner,stable_id(owner,session+':'+str(review.version)+review.id,'auto-goal'),command,allow_pending_context=True)
-        payload=self.goals.persist_target(goal)
+        # Canonical goals already contain the validated edits; intake alone builds a goal.
+        from app.schemas.analysis import CareerGoal
+        if review.base_goal_id==review.id:
+            goal=CareerGoal.model_validate({k:v for k,v in self.reviews._row(review.id,owner).items() if k in CareerGoal.model_fields or k=='_id'})
+            if goal.version!=review.version:raise GoalError('Newer career-goal changes arrived. Reload.')
+        else:
+            goal=self.reviews.goal(review,owner,stable_id(owner,session+':'+str(review.version)+review.id,'auto-goal'),command,allow_pending_context=True)
+            self.goals.persist_target(goal)
         stamp=now()
         workspace={**({} if input_key else workspace),'session_id':session,'kind':'jd' if review.target_type=='specific_job' else 'exploration',
-            'review_id':review.id,'revision':review.version,'research_id':None,'coverage':[],'phase':'research_pending','error':None,'retry_after':None,
+            'review_id':goal.id,'revision':goal.version,'research_id':None,'coverage':[],'phase':'research_pending','error':None,'retry_after':None,
             'expires_at':stamp+timedelta(hours=24),'updated_at':stamp,'run_id':workspace.get('run_id') if keep_run else str(ObjectId())}
         workspace.pop('edit_draft',None)
         if not keep_run:workspace.pop('worker_until',None)
-        update={'$set':{'goal_id':ObjectId(goal.id),'workspace':workspace,'selected_review':{'id':review.id,'version':review.version},'dependent_results_need_review':True},'$inc':{'version':1}}
+        update={'$set':{'goal_id':ObjectId(goal.id),'workspace':workspace,'selected_review':{'id':goal.id,'version':goal.version},'dependent_results_need_review':True},'$inc':{'version':1}}
         if input_key:
             update['$unset']={'incoming':''}
             update['$push']={'workspace_inputs':{'$each':[{'key':input_key,'hash':digest}],'$slice':-100}}
@@ -88,6 +110,12 @@ class WorkspaceStore:
         for receipt in row.get('chat_receipts',[]):
             if receipt['key']==key:
                 if receipt['hash']!=digest:raise GoalError('This message key was used with different content.')
+                if row.get('workspace',{}).get('session_id')!=session:raise GoalError('This conversation was replaced.')
+                return True
+        goal=self.goals.goals.find_one({'_id':row.get('goal_id'),'user_id':owner},{'receipts':1}) if row.get('goal_id') else None
+        for receipt in (goal or {}).get('receipts',[]):
+            if receipt['key']==key and 'chat_hash' in receipt:
+                if receipt['chat_hash']!=digest:raise GoalError('This message key was used with different content.')
                 if row.get('workspace',{}).get('session_id')!=session:raise GoalError('This conversation was replaced.')
                 return True
         return False

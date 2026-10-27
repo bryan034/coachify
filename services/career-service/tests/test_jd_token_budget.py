@@ -22,7 +22,7 @@ GOAL = {'role':'Analyst','field':'Data','company':None,'skills':[SKILL]}
 
 
 def config():
-    return AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='synthetic',max_output_tokens=512)
+    return AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='synthetic',max_output_tokens=512)
 
 
 def completion(output, usage=None):
@@ -56,9 +56,9 @@ def test_each_operation_has_only_its_own_prompt_and_schema():
             assert schema['required']==list(schema['properties'])
             assert len(json.dumps(schema)) < len(json.dumps(JDExtraction.model_json_schema()))
             assert 'job_url' not in schema['properties']
-            properties=schema['$defs']['ExtractedSkill']['properties']
+            properties=schema['properties']['skills']['items']['properties']
             assert not {'skill_id','item_id','correction','source_urls'} & properties.keys()
-            conditions=schema['$defs']['ExtractedCondition']['properties']
+            conditions=schema['properties']['non_skill_requirements']['items']['properties']
             assert not {'requirement_id','correction','source_urls'} & conditions.keys()
             for payload in (extract,chat,edit):
                 assert 'JSON schema:' not in payload['messages'][0]['content']

@@ -105,12 +105,12 @@ career matrix job now runs these tests. Do not collect Profile and Career togeth
 in one Python process because both use an `app` package. Frontend tests cover
 three methods, Unicode, failure recovery, method-switch races and temporary state.
 The full-stack Career browser test uses the usual disposable Compose stack and
-Mailpit variables; no Groq key or live website is used. Career imports are rate
+Mailpit variables; no live Gemini key or live website is used. Career imports are rate
 limited at the gateway; use synthetic sources and discard only test-stack data.
 
 ## AI and analysis contracts
 
-The Career suite tests the Groq-compatible adapter through fake HTTP responses;
+The Career suite tests the OpenAI-compatible adapter through fake HTTP responses;
 no live key, external provider calls or billing are needed. Career and CV each
 validate the exported MongoDB schemas. Their `MONGODB_TEST_URI` tests create/drop
 random `coachify_analysis_test_*` / `coachify_cv_test_*` databases, checking real
@@ -121,7 +121,7 @@ against MongoDB; ordinary backend jobs skip only their database-dependent tests.
 J08/J09 add fake-provider + real MongoDB flow tests, CV API ownership checks,
 component/browser adaptive chat and JD handoff checks, and a full-stack confirmed-goal reload
 check. The disposable Compose test stack also needs `CAREER_DB_PASSWORD` and
-`CV_DB_PASSWORD`; CI supplies synthetic values. Real Groq credentials are never
+`CV_DB_PASSWORD`; CI supplies synthetic values. Real provider credentials are never
 used by automated tests. Goal-flow tests create/drop `coachify_goals_test_*` DBs.
 
 JD review tests use synthetic AI outputs for semantic supporting summaries,
@@ -150,9 +150,10 @@ remains mocked; these checks do not establish live-model semantic accuracy.
 
 The Local UI and MongoDB job uploads `local-ui-integration-results` for seven days,
 including retained failure traces and error context. Its Career preview journey
-keeps AI disabled: it asserts the real `/workspace/jd` API returns `503/not_configured`,
-the UI preserves retry controls and disables chat, and no review was saved. It does
-not depend on introductory wording or use live Groq credentials.
+keeps AI disabled: it asserts `/workspace/jd` returns a running 202 operation, then
+the owner-scoped operation poll returns `503/not_configured`. The UI shows a fixed
+disabled-AI alert, preserves retry controls and disables chat; no review is saved. It does
+not depend on introductory wording or use live provider credentials.
 
 
 Career J05/J10/J12/J13 checks cover importance/reset identities, advisory generation,
@@ -168,14 +169,13 @@ LangGraph single-workspace checks use real disposable MongoDB with synthetic mod
 and Brave HTTP responses. They cover automatic current-goal saves, session
 replacement, stale-session/owner rejection, saved-goal chat during research failures, persisted
 checkpoints, quota pause/resume without repeating searches, no-findings and expiry.
-User-usage tests verify 7,000-token atomic rolling admission, in-flight reservations,
-actual usage reconciliation, owner isolation, cross-replica races,
-individual expiry, retry delays, provider distinction and output caps. Browser checks cover the
+Token-limit tests verify large and concurrent Gemini requests without a local
+minute quota, provider retry delays and bounded output. Browser checks cover the
 new single-chat flow and mobile evidence. No live model/search credentials are used.
 
 Brave Answers checks cover fragmented SSE, cited AI summaries versus source excerpts,
 invalid/missing references, uncited-answer rejection, output limits, public-scope queries,
-mode-specific cache policies, MongoDB summary persistence/reuse and bounded Groq request capacity.
+versioned context cache policies, MongoDB summary persistence/reuse and bounded model requests.
 All external responses are synthetic; live Answers access must be configured separately.
 
 Career overview coverage checks category membership, research-in-progress display,
@@ -186,7 +186,7 @@ verify authentication/no-store, owner filtering, empty/pending/failed/succeeded 
 and unavailable upstream snapshots without database or model writes.
 
 Opportunity Intelligence tests use a real disposable MongoDB with synthetic Gemini,
-Groq and Brave boundaries. They cover independent parallel categories, partial
+Gemini and Brave boundaries. They cover independent parallel categories, partial
 failure, no company/no results, conflicting employee/intern salary context, forged
 refs/quotes, bounded schema repair, category cache/expiry, refresh/idempotency,
 owner access, quota recovery and restart without repeating acquired searches.
@@ -201,7 +201,52 @@ source/confidence/date transparency, partial status and category-only refresh.
 Career Discovery tests cover broad/specific directions, scope confirmation before
 search, owner/version/idempotency boundaries, source quotations, stage mismatch,
 deduplicated listing frequencies, limited/no evidence, provider errors, quota recovery,
-immutable refresh evidence and shared goal persistence without a CV. Frontend tests
+immutable refresh evidence, interrupted conversation-commit recovery with payload-bound
+checkpoint replay, and shared goal persistence without a CV. Frontend tests
 cover category review and explicit confirmation using the existing goal endpoint;
 `career-discovery.spec.ts` checks the same journey and mobile width in Chromium.
 Provider requests are mocked. The optional live Opportunity test remains opt-in.
+
+
+Gemini reasoning migration regressions use synthetic settings and HTTP responses:
+all production stages share Gemini 3.5 Flash Lite and ignore unused provider/model/key
+switches. Brave grounding snippets
+pass through the real JSON-schema adapter into every existing research field in all
+five categories; model round-trips, exact citations, invalid aliases and forged
+quotes are checked. These tests preserve existing domain schemas and do not establish
+live-provider access or extraction accuracy. The opt-in live smoke uses the same
+Gemini reasoning configuration as production.
+
+Schema compatibility regressions also check all stage projections and reject oversized
+skills, condition arrays, names, evidence and experience ranges despite provider HTTP
+success. Gemini's decoding projection leaves the domain models unchanged.
+
+
+Concurrent JD regressions hold full extraction open to prove public retrieval starts
+first, then verify matching searches are not repeated, changed scopes discard seeds,
+empty initial results still get a follow-up, and provider cooldowns survive adoption.
+Combined-response regressions also hold the research summary open, verify no manual
+resume is needed on success, and resume summary quota/transient failures without
+repeating paid retrieval. A failed category cannot mark the workspace ready. Failed
+cached categories and older missing summaries can recover while reusing valid work.
+Frontend/component and browser checks hold back both initial summaries until both
+results are ready, then verify that one assistant message contains the JD and research.
+They verify owner-isolated progress, no raw-JD persistence, non-job document refusal,
+unchanged goals on failure and refusal of unrelated tasks in question/refine modes.
+Chat tests cover remaining on the chat route, fixed activity labels without provider
+prose, typed summaries and continued questions; browser journeys open saved cards by
+an explicit button after checking the chat summary. API artifacts include the additive
+operation/workspace activity arrays; domain schema artifacts are unchanged.
+
+
+Gemini rejection regressions cover native invalid-key/model/project/schema/parameter
+errors, malformed bodies, safe API/log diagnostics, no schema-free fallback, and a
+single explicit model override across every role. The Docker-template check reads
+only the public `.env.example`, verifies that every declared key is consumed by the
+active Compose file, and requires example secrets to remain blank. Private environment
+files and live provider credentials are not used.
+
+`services/career-service/tests/test_compact_workspace.py` covers canonical goal promotion,
+in-place edits/version conflicts, activation recovery, compact progress/results, lazy
+owner/version-scoped evidence, whitespace-only quotes, salary/cohort safeguards, grounded
+presentation checks, precise repair metadata and successful no-information results.

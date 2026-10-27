@@ -1,3 +1,4 @@
+from tests.api_views import goal_view
 """J05/J10/J12/J13: real MongoDB, synthetic AI/retrieval, no live credentials."""
 import copy
 import os
@@ -70,21 +71,21 @@ def research(flow,**changes):
 
 def test_guidance_is_advisory_idempotent_editable_and_explicitly_selected(flow):
     client,db,ai,sources,goal=flow;key=str(uuid4());first=generate(flow,key);assert first.status_code==200,first.text
-    review=first.json();assert review['target_type']=='career_exploration'
-    assert review['extraction']['role']==goal.role and review['extraction']['skills'][0]['priority']=='suggested'
-    assert review['extraction']['skills'][0]['skill_id']=='language.sql'
-    assert generate(flow,key).json()==review and len(ai.calls)==1
+    review=goal_view(first);assert review['target_type']=='career_exploration'
+    assert review['content']['role']==goal.role and review['content']['skills'][0]['priority']=='suggested'
+    assert review['content']['skills'][0]['skill_id']=='language.sql'
+    assert goal_view(generate(flow,key))==review and len(ai.calls)==1
     assert db.career_state.find_one({'_id':OWNER})['goal_id']==ObjectId(goal.id)
-    assert client.get(BASE+review['review_id'],headers=headers(other=True)).status_code==404
-    content=review['extraction'];content['skills'][0]['context']='Edited planning rationale'
-    changed=client.patch(BASE+review['review_id']+'/review',headers=headers(),json={'expected_version':1,'content':content})
+    assert client.get(BASE+review['goal_id'],headers=headers(other=True)).status_code==404
+    content=review['content'];content['skills'][0]['context']='Edited planning rationale'
+    changed=client.patch(BASE+review['goal_id']+'/review',headers=headers(),json={'expected_version':1,'content':content})
     assert changed.status_code==200,changed.text
-    reviewed=changed.json();data={k:reviewed['extraction'][k] for k in ('role','field','company','location','seniority_level','job_url')}
+    reviewed=goal_view(changed);data={k:reviewed['content'][k] for k in ('role','field','company','location','seniority_level','job_url')}
     selected=client.post(BASE+'confirm',headers=headers(),json={**data,'expected_selection_version':1,'replace_current':True,
-        'target_type':'career_exploration','review_id':reviewed['review_id'],'expected_review_version':reviewed['version']})
+        'target_type':'career_exploration','review_id':reviewed['goal_id'],'expected_review_version':reviewed['version']})
     assert selected.status_code==200,selected.text
-    assert selected.json()['goal']['skills'][0]['origin']=='generated_guidance'
-    assert selected.json()['dependent_results_need_review'] is True
+    assert goal_view(selected)['goal']['skills'][0]['origin']=='generated_guidance'
+    assert goal_view(selected)['dependent_results_need_review'] is True
     assert db.career_goals.find_one({'_id':ObjectId(goal.id)})['skills']==[]
 
 @pytest.mark.parametrize('defect',['empty','provider','stale'])
@@ -99,27 +100,28 @@ def test_guidance_failure_never_replaces_prior_goal(flow,defect):
     assert 'guidance_processing' not in db.career_state.find_one({'_id':OWNER})
 
 
-def test_priority_corrections_conflicts_reset_and_noop_keep_item_identity(flow):
+def test_priority_corrections_conflicts_and_noop_keep_item_identity(flow):
     client,db,ai,_,goal=flow
-    review=generate(flow).json();content=copy.deepcopy(review['extraction']);item=content['skills'][0]
+    review=goal_view(generate(flow));content=copy.deepcopy(review['content']);item=content['skills'][0]
     item.update(priority='conflicting',priority_evidence='I am unsure which planning priority to use.',origin='user_declaration')
     body={'expected_version':1,'content':content};key=headers()
-    path=BASE+review['review_id']+'/review';first=client.patch(path,headers=key,json=body)
+    path=BASE+review['goal_id']+'/review';first=client.patch(path,headers=key,json=body)
     assert first.status_code==200,first.text
-    assert first.json()['extraction']['skills'][0]['item_id']==review['extraction']['skills'][0]['item_id']
-    assert first.json()['extraction']['skills'][0]['priority_origin']=='user_declaration'
-    assert client.patch(path,headers=key,json=body).json()==first.json()
-    same=client.patch(path,headers=headers(),json={'expected_version':2,'content':first.json()['extraction']})
-    assert same.json()['version']==2
+    assert goal_view(first)['content']['skills'][0]['item_id']==review['content']['skills'][0]['item_id']
+    assert goal_view(first)['content']['skills'][0]['priority_origin']=='user_declaration'
+    assert goal_view(client.patch(path,headers=key,json=body))==goal_view(first)
+    same=client.patch(path,headers=headers(),json={'expected_version':2,'content':goal_view(first)['content']})
+    assert goal_view(same)['version']==2
     reset=client.patch(path,headers=headers(),json={'expected_version':2,'reset':'all'})
-    assert reset.status_code==200,reset.text
-    assert reset.json()['extraction']['skills'][0]['priority']=='suggested'
-    assert reset.json()['extraction']['skills'][0]['priority_origin']=='generated_guidance'
+    assert reset.status_code==422
+    saved=goal_view(client.get(BASE+review['goal_id'],headers=headers()))
+    assert saved['content']['skills'][0]['priority']=='conflicting'
+    assert saved['content']['skills'][0]['priority_origin']=='user_declaration'
 
 
 def test_public_research_reuses_across_users_with_private_links_and_no_private_inputs(flow):
     client,db,ai,sources,goal=flow;first=research(flow);assert first.status_code==200,first.text
-    result=first.json();record=result['research'];rid=record['_id']
+    result=goal_view(first);record=result['research'];rid=record['_id']
     assert result['general'] and record['skills'][0]['independent_report_count']==0
     shared=db.interview_research.find_one({'_id':ObjectId(rid)})
     assert 'PRIVATE' not in str(shared) and OWNER not in str(shared) and 'user_id' not in shared
@@ -128,21 +130,21 @@ def test_public_research_reuses_across_users_with_private_links_and_no_private_i
     other=seed(db,OTHER)
     assert client.get(BASE+other.id+'/interview-research?research_id='+rid,headers=headers(other=True)).status_code==404
     second=client.post(BASE+other.id+'/interview-research',headers=headers(other=True),json={'expected_version':1,'expected_selection_version':1})
-    assert second.status_code==200 and second.json()['reused'] is True
-    assert second.json()['research']['_id']==rid and len(sources.contexts)==1
+    assert second.status_code==200 and goal_view(second)['reused'] is True
+    assert goal_view(second)['research']['_id']==rid and len(sources.contexts)==1
     assert db.interview_research.count_documents({})==1
     reopened=client.get(BASE+other.id+'/interview-research?research_id='+rid,headers=headers(other=True))
-    assert reopened.status_code==200 and reopened.json()['reused'] is True
+    assert reopened.status_code==200 and goal_view(reopened)['reused'] is True
 
 
 def test_refresh_pins_history_and_failure_preserves_previous_result(flow):
     client,db,ai,sources,goal=flow
-    first=research(flow).json()['research'];second=research(flow,refresh=True).json()['research']
+    first=goal_view(research(flow))['research'];second=goal_view(research(flow,refresh=True))['research']
     assert second['version']>first['version'] and second['_id']!=first['_id']
-    old=client.get(BASE+goal.id+'/interview-research?research_id='+first['_id'],headers=headers()).json()
+    old=goal_view(client.get(BASE+goal.id+'/interview-research?research_id='+first['_id'],headers=headers()))
     assert old['research']==first and old['historical']
     ai.fail=True;assert research(flow,refresh=True).status_code==503
-    restored=client.get(BASE+goal.id+'/interview-research',headers=headers()).json()
+    restored=goal_view(client.get(BASE+goal.id+'/interview-research',headers=headers()))
     assert restored['status']=='failed' and restored['research']==second
 
 
@@ -156,13 +158,13 @@ def test_research_failure_empty_and_late_results_are_distinct(flow,case):
     response=research(flow)
     if case=='empty':
         assert response.status_code==200,response.text
-        assert response.json()['status']=='no_findings' and response.json()['research']['skills']==[]
+        assert goal_view(response)['status']=='no_findings' and goal_view(response)['research']['skills']==[]
     elif case=='changed_goal':
         assert response.status_code==409
         assert not db.career_state.find_one({'_id':OWNER}).get('research_links')
     else:
         assert response.status_code==503
-        view=client.get(BASE+goal.id+'/interview-research',headers=headers()).json()
+        view=goal_view(client.get(BASE+goal.id+'/interview-research',headers=headers()))
         assert view['status']==('unavailable' if case=='blocked' else 'failed') and view['research'] is None
 
 
@@ -171,23 +173,23 @@ def test_processing_lease_avoids_duplicate_acquisition_and_recovers_on_expiry(fl
     repo=client.app.state.research_store
     from app.api.v1.research import context_for
     context=context_for(goal);lease=repo.begin(context,False)
-    pending=research(flow);assert pending.status_code==200 and pending.json()['status']=='processing'
+    pending=research(flow);assert pending.status_code==200 and goal_view(pending)['status']=='processing'
     assert not ai.calls and not sources.contexts
     db.research_contexts.update_one({'_id':context.reuse_key()},{'$set':{'lease.expires_at':now()-timedelta(seconds=1)}})
-    assert client.get(BASE+goal.id+'/interview-research',headers=headers()).json()['status']=='failed'
+    assert goal_view(client.get(BASE+goal.id+'/interview-research',headers=headers()))['status']=='failed'
     assert research(flow).status_code==200
 
 
 def test_context_mismatch_and_staleness_do_not_reuse_exact_results(flow):
     client,db,ai,sources,goal=flow
-    first=research(flow).json()['research']
+    first=goal_view(research(flow))['research']
     other=seed(db,OTHER,location='Singapore')
     different=client.post(BASE+other.id+'/interview-research',headers=headers(other=True),json={'expected_version':1,'expected_selection_version':1})
-    assert different.status_code==200 and different.json()['research']['_id']!=first['_id']
+    assert different.status_code==200 and goal_view(different)['research']['_id']!=first['_id']
     assert len(sources.contexts)==2
     db.interview_research.update_one({'_id':ObjectId(first['_id'])},{'$set':{'last_researched_at':now()-timedelta(days=8)}})
-    assert client.get(BASE+goal.id+'/interview-research',headers=headers()).json()['stale'] is True
-    assert research(flow).json()['research']['_id']!=first['_id']
+    assert goal_view(client.get(BASE+goal.id+'/interview-research',headers=headers()))['stale'] is True
+    assert goal_view(research(flow))['research']['_id']!=first['_id']
 
 
 def test_users_cannot_submit_research_source_urls(flow):
@@ -200,36 +202,36 @@ def test_users_cannot_submit_research_source_urls(flow):
 def test_unconnected_api_preserves_history_without_calling_model(flow):
     from app.clients.research import UnavailableResearchProvider
     client,db,ai,sources,goal=flow
-    original=research(flow).json()['research'];calls=len(ai.calls)
+    original=goal_view(research(flow))['research'];calls=len(ai.calls)
     client.app.state.research_client=UnavailableResearchProvider()
     response=research(flow,refresh=True)
     assert response.status_code==503 and 'not connected' in response.text
-    saved=client.get(BASE+goal.id+'/interview-research',headers=headers()).json()
+    saved=goal_view(client.get(BASE+goal.id+'/interview-research',headers=headers()))
     assert saved['status']=='unavailable' and saved['research']==original
     assert len(ai.calls)==calls
 
 
-def test_saving_baseline_from_editor_restores_importance_provenance(flow):
+def test_explicit_importance_changes_preserve_user_provenance(flow):
     client,db,ai,sources,goal=flow
-    review=generate(flow).json();content=copy.deepcopy(review['extraction'])
+    review=goal_view(generate(flow));content=copy.deepcopy(review['content'])
     content['skills'][0].update(origin='user_declaration',priority='preferred',priority_evidence='My chosen planning priority.')
-    path=BASE+review['review_id']+'/review'
+    path=BASE+review['goal_id']+'/review'
     edited=client.patch(path,headers=headers(),json={'expected_version':1,'content':content})
     assert edited.status_code==200,edited.text
-    reset=client.patch(path,headers=headers(),json={'expected_version':2,'content':review['baseline']})
-    assert reset.status_code==200,reset.text
-    assert reset.json()['extraction']==review['baseline']
+    changed=goal_view(edited)
+    assert changed['content']['skills'][0]['priority_origin']=='user_declaration'
+    assert changed['content']['skills'][0]['item_id']==review['content']['skills'][0]['item_id']
 
 
 def test_brave_policy_rebuilds_old_mixed_provider_cache_and_preserves_history(flow):
     client,db,ai,sources,goal=flow
     first=research(flow);assert first.status_code==200,first.text
-    old_id=first.json()['research']['_id']
+    old_id=goal_view(first)['research']['_id']
     db.research_contexts.update_many({}, {'$set':{'policy':'public-interview-v1'}})
     second=research(flow);assert second.status_code==200,second.text
-    assert not second.json()['reused']
-    assert second.json()['research']['_id']!=old_id
+    assert not goal_view(second)['reused']
+    assert goal_view(second)['research']['_id']!=old_id
     assert len(sources.contexts)==2
     historical=client.get(BASE+goal.id+'/interview-research?research_id='+old_id,headers=headers())
-    assert historical.status_code==200 and historical.json()['research']['_id']==old_id
-    assert research(flow).json()['reused'] is True
+    assert historical.status_code==200 and goal_view(historical)['research']['_id']==old_id
+    assert goal_view(research(flow))['reused'] is True

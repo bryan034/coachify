@@ -80,7 +80,7 @@ lifecycle. TMPDIR can be changed for direct service runs; keep it private.
 ## Structured review boundary — J02–J04
 
 Explicit JD extraction now saves a structured review with metadata, skills,
-non-skill conditions, provenance and a bounded reset baseline. The shared chat
+non-skill conditions and provenance in one effective goal content object. The shared chat
 loads that owner-checked review by ID/version; it does not accept raw JD text or
 client-authored context. Supporting summaries and labelled inferences remain
 permitted. Saved review editing, reclassification and confirmation follow

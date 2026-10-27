@@ -41,7 +41,7 @@ def test_portable_config_and_chat_output(mode):
     assert str(seen[0].url) == 'https://compatible.example.test/v1/chat/completions'
     body = json.loads(seen[0].content)
     assert body['model'] == 'fixture-model' and 'tools' not in body
-    assert 'max_completion_tokens' in body
+    assert 'max_tokens' in body
     if mode == 'json_schema_strict':
         schema = body['response_format']['json_schema']['schema']
         assert schema['required'] == list(schema['properties'])
@@ -217,8 +217,8 @@ def test_timeout_and_no_secret_repr():
 
 
 def test_config_is_server_only_explicit_and_validated(monkeypatch):
-    monkeypatch.setenv('AI_ENABLED','true'); monkeypatch.setenv('AI_API_KEY','fixture-key')
-    monkeypatch.setenv('AI_MODEL','fixture-model')
+    monkeypatch.setenv('AI_ENABLED','true'); monkeypatch.setenv('GEMINI_API_KEY','fixture-key')
+    monkeypatch.setenv('GEMINI_REASONING_MODEL','fixture-model')
     assert AISettings.from_env().model == 'fixture-model'
     assert not {'requests_per_minute','tokens_per_minute','concurrency'} & AISettings.model_fields.keys()
     for overrides in [{'base_url':'http://insecure.test'}, {'model':''}, {'response_mode':'unsupported'}, {'retries':5}]:
@@ -331,15 +331,16 @@ def test_malformed_or_oversized_error_bodies_stay_private(body):
                 await adapter.generate(AIInput(stage='chat',conversation=[{'role':'user','content':'Synthetic question'}]),Operation('fixture','1','chat'),current_revision=lambda:'1')
     asyncio.run(invoke())
 
-@pytest.mark.parametrize('model',['openai/gpt-oss-20b','openai/gpt-oss-120b'])
-def test_jd_extraction_uses_native_strict_schema_on_known_groq_models(model):
-    result,seen,_=run(AIInput(stage='jd_extraction',source_text='SQL required'),{'role':'Analyst','field':'Data','company':None,'skills':[]},model=model)
+@pytest.mark.parametrize('mode',['json_schema','json_schema_strict'])
+def test_gemini_extraction_uses_requested_schema_without_model_specific_overrides(mode):
+    result,seen,_=run(AIInput(stage='jd_extraction',source_text='SQL required'),
+        {'role':'Analyst','field':'Data','company':None,'skills':[]},model='gemini-3.5-flash-lite',response_mode=mode)
     format=json.loads(seen[0].content)['response_format']
-    assert format['type']=='json_schema' and format['json_schema']['strict'] is True
-    skill=format['json_schema']['schema']['$defs']['ExtractedSkill']
-    assert skill['required']==list(skill['properties']) and skill['additionalProperties'] is False
-    _,other,_=run(AIInput(stage='jd_extraction',source_text='SQL required'),{'role':'Analyst','field':'Data','company':None,'skills':[]},model=model,provider='compatible',base_url='https://other.example.test/v1')
-    assert json.loads(other[0].content)['response_format']['type']=='json_object'
+    assert format['type']=='json_schema'
+    assert format['json_schema']['strict']==(mode=='json_schema_strict')
+    skill=format['json_schema']['schema']['properties']['skills']['items']
+    assert skill['additionalProperties'] is False
+    assert skill['required']==list(skill['properties'])
 
 def test_jd_validation_correction_is_bounded_private_and_uses_one_operation():
     async def invoke():
@@ -414,7 +415,7 @@ def test_provider_cooldown_is_returned_without_retry(header,expected):
 def test_native_schema_is_not_duplicated_and_unused_inputs_are_omitted():
     async def invoke():
         async with httpx.AsyncClient() as client:
-            adapter=AIAdapter(settings(model='openai/gpt-oss-120b'),client)
+            adapter=AIAdapter(settings(model='gemini-3.5-flash-lite'),client)
             payload=adapter._payload(AIInput(stage='jd_extraction',source_text='SQL required'))
             assert 'JSON schema:' not in payload['messages'][0]['content']
             assert payload['response_format']['type']=='json_schema'
@@ -466,9 +467,9 @@ def test_workspace_chat_explains_and_proposes_edits_in_one_provider_call():
 ])
 def test_focused_qa_uses_small_stage_specific_prompts_schemas_and_caps(stage,cap,output):
     request=AIInput(stage=stage,context=json.dumps({'facts':[{'ref':'f1','data':{'name':'SQL','priority':'required'}}]}),conversation=[{'role':'user','content':'Which skills are required?'}])
-    _,seen,_=run(request,output,max_output_tokens=4096,model='openai/gpt-oss-120b')
+    _,seen,_=run(request,output,max_output_tokens=4096,model='gemini-3.5-flash-lite')
     payload=json.loads(seen[0].content)
-    assert payload['max_completion_tokens']==cap
+    assert payload['max_tokens']==cap
     assert payload['response_format']['type']=='json_schema'
     assert 'SkillEdits' not in str(payload['response_format'])
     assert 'Transient jd_extraction' not in payload['messages'][0]['content']

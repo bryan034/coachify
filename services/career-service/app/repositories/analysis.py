@@ -55,6 +55,8 @@ class AnalysisRepository:
         payload = mongo_document(record)
         if name == 'interview_research':
             payload['context_key'] = record.context_key
+            if record.intelligence:
+                for key in ('process','skills','summaries','coverage'):payload.pop(key,None)
         try:
             self.database[name].insert_one(payload)
         except DuplicateKeyError:
@@ -71,7 +73,7 @@ class AnalysisRepository:
         from bson import ObjectId
         from app.schemas.analysis import object_id
         data = self.database[collection].find_one({'_id': ObjectId(object_id(identifier)), 'user_id': owner})
-        return COLLECTIONS[collection].model_validate(data) if data else None
+        return COLLECTIONS[collection].model_validate({k:v for k,v in data.items() if k in COLLECTIONS[collection].model_fields or k=='_id'}) if data else None
 
     def get_research(self, identifier):
         from bson import ObjectId

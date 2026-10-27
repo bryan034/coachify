@@ -19,6 +19,9 @@ from app.ai.waiting import quota_progress
 from app.ai.recovery import recover_responses,validation_progress,validation_budget
 from app.workflows.structured import structured_node
 from app.workflows import research_search
+from app.ai.jd_scope import identify_job
+from app.workflows.activity import activity,activity_observer
+from app.workflows.jd_prefetch import prefetch,matches
 from app.ai.contracts import AIInput
 from app.api.v1.jd import validate_extraction
 from app.api.v1.research import context_for
@@ -57,7 +60,7 @@ class Progress(TypedDict,total=False):
 
 class CareerWorkflow:
     def __init__(self,app,database):
-        self.app=app;self.db=database;self.tasks={};self.stopping=False
+        self.app=app;self.db=database;self.tasks={};self.early={};self.seeds={};self.stopping=False
         saver=MongoDBSaver(database.client,db_name=database.name,checkpoint_collection_name='career_checkpoints',writes_collection_name='career_checkpoint_writes',ttl=86400)
         graph=StateGraph(Progress)
         for name,fn in [('guidance',self.guidance),('cache',self.cache),('plan_search',self.plan_search),('brave',self.brave),('assess',self.assess),('synthesize',self.synthesize),('publish',self.publish)]:graph.add_node(name,structured_node(fn) if name in ('guidance','plan_search','assess','synthesize') else fn)
@@ -72,8 +75,21 @@ class CareerWorkflow:
     @property
     def workspaces(self):return self.app.state.workspace_store
 
-    async def extract(self,body,account,key):
-        # This graph deliberately keeps input and failed model output in memory only.
+    async def extract(self,body,account,key,*,early=True):
+        # Scope/identity is transient and cannot save a goal by itself.
+        identity=await identify_job(self.app.state.ai,body.text,account)
+        engine=getattr(self.app.state,'opportunities',None)
+        if early and engine is not None and engine.available and identity.role:
+            entry={'identity':identity,'activities':[]};observer=activity_observer.get()
+            def observed(stage):
+                if stage not in entry['activities']:entry['activities'].append(stage)
+                if observer:observer(stage)
+            token=activity_observer.set(observed)
+            try:entry['task']=asyncio.create_task(prefetch(engine,identity,account,key))
+            finally:activity_observer.reset(token)
+            self.early[(account,key)]=entry
+        activity('extracting_requirements')
+        # Full source text and failed model output stay in worker memory only.
         async def interpret(state):
             if recover_responses.get():
                 row=await thread(self.workspaces.row,account)
@@ -88,8 +104,28 @@ class CareerWorkflow:
             return state
         graph=StateGraph(dict);graph.add_node('interpret_jd',structured_node(interpret));graph.add_node('validate_structure',validate)
         graph.add_edge(START,'interpret_jd');graph.add_edge('interpret_jd','validate_structure');graph.add_edge('validate_structure',END)
-        with tracing_context(enabled=False):result=await graph.compile().ainvoke({})
-        return result['result']
+        try:
+            with tracing_context(enabled=False):result=await graph.compile().ainvoke({})
+            return result['result']
+        except BaseException:
+            await self.cancel_prefetch(account,key)
+            raise
+
+    async def cancel_prefetch(self,owner,key):
+        entry=self.early.pop((owner,key),None)
+        if entry:
+            entry['task'].cancel()
+            await asyncio.gather(entry['task'],return_exceptions=True)
+
+    def adopt_prefetch(self,owner,key,row):
+        entry=self.early.pop((owner,key),None)
+        if entry:
+            workspace=row['workspace']
+            self.seeds[(owner,workspace['session_id'],workspace['run_id'])]=entry
+
+    def early_activities(self,owner,session,run):
+        entry=self.seeds.get((owner,session,run))
+        return list(entry['activities']) if entry else []
 
     async def valid(self,state):
         row=await thread(self.workspaces.check,state['owner'],state['session'],state['revision'])
@@ -131,7 +167,17 @@ class CareerWorkflow:
         goal=await self.goal(state);repo=self.app.state.research_store
         opportunity=getattr(self.app.state,'opportunities',None)
         if opportunity is not None and opportunity.available:
-            await opportunity.start(state['owner'],goal,state['selection'],state['session'],state['run'],'auto:'+state['run'],{'refresh':False,'category':None})
+            identity_key=(state['owner'],state['session'],state['run'])
+            entry=self.seeds.get(identity_key);seed=None
+            try:
+                if entry:
+                    if matches(entry['identity'],goal):seed=await entry['task']
+                    else:
+                        entry['task'].cancel()
+                        await asyncio.gather(entry['task'],return_exceptions=True)
+                await self.valid(state)
+                await opportunity.start(state['owner'],goal,state['selection'],state['session'],state['run'],'auto:'+state['run'],{'refresh':False,'category':None},seed=seed)
+            finally:self.seeds.pop(identity_key,None)
             return {'opportunity_deferred':True}
         smart=research_search.enabled(self)
         cache=await thread(repo.begin,context_for(goal),False)
@@ -295,7 +341,7 @@ class CareerWorkflow:
                     token=(checkpoint.values.get('cache') or {}).get('token')
                     if token:
                         await thread(self.db.research_contexts.update_one,{'lease.token':token},{'$set':{'lease.expires_at':now()+timedelta(seconds=retry+120)}})
-                message=(f'Your 7,000-token rolling-minute allowance has been reached. Resuming automatically in {retry} seconds.' if error.limit_scope=='user' else f'The AI provider quota was reached. Resuming automatically in {retry} seconds.') if quota else error.message if isinstance(error,GoalError) else f'The Groq input leaves insufficient output room in the 7,000-token allowance ({error.input_count} estimated). Shorten the saved career context before retrying.' if isinstance(error,AIError) and error.code=='input_limit' else 'Research could not finish. Your latest career goal is saved; retry research.'
+                message=f'The AI provider quota was reached. Resuming automatically in {retry} seconds.' if quota else error.message if isinstance(error,GoalError) else f'The input leaves insufficient output room in the configured model context ({error.input_count} estimated). Shorten the saved career context before retrying.' if isinstance(error,AIError) and error.code=='input_limit' else 'Research could not finish. Your latest career goal is saved; retry research.'
                 await thread(self.workspaces.phase,owner,session,run,'waiting_quota' if quota else 'research_failed',error=message,error_code=error.code if isinstance(error,AIError) else 'research_unavailable',retry_after=retry)
                 if quota:
                     await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$set':{'workspace.worker_until':now()+timedelta(seconds=retry+180)}})
@@ -328,6 +374,6 @@ class CareerWorkflow:
 
     async def close(self):
         self.stopping=True
-        tasks=list(self.tasks.values())
+        tasks=[*self.tasks.values(),*[v['task'] for v in self.early.values()],*[v['task'] for v in self.seeds.values()]]
         for task in tasks:task.cancel()
         await asyncio.gather(*tasks,return_exceptions=True)

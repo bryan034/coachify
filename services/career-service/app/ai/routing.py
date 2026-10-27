@@ -1,4 +1,5 @@
-"""Route context work to Gemini, reasoning/extraction/edits to the primary provider."""
+"""Stage router; production uses one Gemini 3.5 Flash Lite adapter for both roles."""
+
 
 
 class ModelRouter:
@@ -16,12 +17,13 @@ class ModelRouter:
 
 
 def opportunity_models(primary,context,gemini,settings,client):
-    """Public research has its own opt-in; Gemini chat may remain disabled."""
-    from app.ai.adapter import AIAdapter
-    if gemini is not None and settings.enabled and gemini.api_key.get_secret_value().strip():
-        context=AIAdapter(gemini.model_copy(update={'enabled':True,'model':settings.gemini_model,'max_output_tokens':2048}),client)
-    elif isinstance(context,AIAdapter):
-        context=AIAdapter(context.settings.model_copy(update={'model':settings.gemini_model,'max_output_tokens':2048}),client)
+    """Use the same Gemini model for planning, evaluation and summaries.
+
+    Injected test/custom adapters retain the existing router interface. Production
+    supplies Gemini settings and never falls back to a legacy provider or key.
+    """
+    if gemini is not None:
+        return ModelRouter(primary,primary)
     return ModelRouter(primary,context) if context is not None else primary
 
 

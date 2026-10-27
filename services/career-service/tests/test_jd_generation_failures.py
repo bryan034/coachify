@@ -12,30 +12,18 @@ from app.main import create_app
 
 
 def settings(**values):
-    return AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='synthetic',max_output_tokens=512,**values)
+    return AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='synthetic',max_output_tokens=512,**values)
 
 
-@pytest.mark.parametrize('stage',['jd_extraction','jd_chat','jd_edit'])
-@pytest.mark.parametrize('provider,model,base_url,expected',[
-    ('groq','openai/gpt-oss-120b','https://api.groq.com/openai/v1','low'),
-    ('groq','openai/gpt-oss-20b','https://api.groq.com/openai/v1','low'),
-    ('groq','other-model','https://api.groq.com/openai/v1',None),
-    ('compatible','openai/gpt-oss-120b','https://compatible.example.test/v1',None),
-    ('groq','openai/gpt-oss-120b','https://compatible.example.test/v1',None),
-])
-def test_low_reasoning_is_scoped_to_supported_groq_jd_calls(stage,provider,model,base_url,expected):
-    adapter=AIAdapter(AISettings(provider=provider,model=model,base_url=base_url),None)
+@pytest.mark.parametrize('stage',['jd_extraction','jd_chat','jd_edit','chat'])
+def test_gemini_tasks_use_minimal_reasoning_and_bounded_output(stage):
+    adapter=AIAdapter(AISettings(),None)
     request=AIInput(stage=stage,source_text='SQL required') if stage=='jd_extraction' else AIInput(
         stage=stage,context='{}',conversation=[{'role':'user','content':'Explain SQL'}])
     payload=adapter._payload(request)
-    assert payload.get('reasoning_effort')==expected
-    assert payload['max_completion_tokens']==(1024 if stage=='jd_chat' else 4096)
-
-
-def test_non_jd_tasks_keep_existing_reasoning_settings():
-    adapter=AIAdapter(settings(),None)
-    payload=adapter._payload(AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}]))
-    assert 'reasoning_effort' not in payload
+    assert payload['reasoning_effort']=='minimal'
+    assert payload['model']=='gemini-3.5-flash-lite'
+    assert payload['max_tokens']==(1024 if stage=='jd_chat' else 4096)
 
 
 @pytest.mark.parametrize('timeout,expected_calls',[(20,1),(45,2)])

@@ -5,15 +5,19 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 
+REASONING_MODEL='gemini-3.5-flash-lite'
+
+
 class AISettings(BaseModel):
+    """Gemini adapter configuration; credentials remain server-only."""
     model_config = ConfigDict(extra='forbid', frozen=True)
     enabled: bool = False
-    provider: str = Field(default='groq', min_length=1, max_length=80)
-    base_url: str = 'https://api.groq.com/openai/v1'
-    model: str = Field(default='', max_length=160)
+    provider: str = Field(default='gemini', min_length=1, max_length=80)
+    base_url: str = 'https://generativelanguage.googleapis.com/v1beta/openai'
+    model: str = Field(default=REASONING_MODEL, min_length=1, max_length=160)
     api_key: SecretStr = SecretStr('')
-    response_mode: Literal['json_object', 'json_schema', 'json_schema_strict'] = 'json_object'
-    token_parameter: Literal['max_tokens', 'max_completion_tokens'] = 'max_completion_tokens'
+    response_mode: Literal['json_object', 'json_schema', 'json_schema_strict'] = 'json_schema'
+    token_parameter: Literal['max_tokens', 'max_completion_tokens'] = 'max_tokens'
     timeout_seconds: float = Field(default=45, ge=1, le=60)
     retries: int = Field(default=1, ge=0, le=2)
     max_output_tokens: int = Field(default=4096, ge=128, le=8192)
@@ -23,32 +27,23 @@ class AISettings(BaseModel):
     def valid_provider(self):
         p = urlsplit(self.base_url)
         if p.scheme != 'https' or not p.hostname or p.username or p.password or p.query or p.fragment:
-            raise ValueError('AI_BASE_URL must be an HTTPS API base URL without credentials/query.')
+            raise ValueError('The model API base URL must use HTTPS without credentials/query.')
         if self.enabled and (not self.model.strip() or not self.api_key.get_secret_value().strip()):
-            raise ValueError('Enabled AI requires AI_MODEL and AI_API_KEY.')
+            raise ValueError('Enabled AI requires GEMINI_REASONING_MODEL and GEMINI_API_KEY.')
         return self
 
     @classmethod
     def from_env(cls):
-        names = {key: os.environ['AI_' + key.upper()] for key in cls.model_fields if 'AI_' + key.upper() in os.environ}
-        try:
-            return cls(**names)
-        except ValueError:
-            # Startup configuration errors must not echo env values or secret inputs.
-            raise ValueError('Invalid server AI configuration. Check the Career service settings.') from None
+        """Load the single Gemini configuration used by every model stage."""
+        key=os.getenv('GEMINI_API_KEY','').strip()
+        values={'api_key':key,'enabled':os.getenv('AI_ENABLED','true' if key else 'false'),
+                'model':os.getenv('GEMINI_REASONING_MODEL',REASONING_MODEL).strip()}
+        for field in ('timeout_seconds','retries','max_output_tokens','context_tokens'):
+            if 'AI_'+field.upper() in os.environ:values[field]=os.environ['AI_'+field.upper()]
+        try:return cls(**values)
+        except ValueError:raise ValueError('Invalid server Gemini configuration. Check AI_ENABLED, GEMINI_API_KEY, GEMINI_REASONING_MODEL and AI task limits.') from None
 
 
 class GeminiSettings(AISettings):
-    """Independent server-only context provider; no Groq credential inheritance."""
-    provider: str = 'gemini'
-    base_url: str = 'https://generativelanguage.googleapis.com/v1beta/openai'
-    model: str = 'gemini-3.5-flash-lite'
-    response_mode: Literal['json_object', 'json_schema', 'json_schema_strict'] = 'json_schema'
-    token_parameter: Literal['max_tokens', 'max_completion_tokens'] = 'max_tokens'
-    max_output_tokens: int = 1024
-
-    @classmethod
-    def from_env(cls):
-        fields={'enabled':'GEMINI_ENABLED','model':'GEMINI_MODEL','api_key':'GEMINI_API_KEY'}
-        try:return cls(**{field:os.environ[key] for field,key in fields.items() if key in os.environ})
-        except ValueError:raise ValueError('Invalid server Gemini configuration. Check GEMINI_ENABLED, GEMINI_MODEL and GEMINI_API_KEY.') from None
+    """Named Gemini settings for production composition."""
+    reasoning_from_env = classmethod(AISettings.from_env.__func__)

@@ -83,8 +83,8 @@ Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
 `src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
 content stays in the account-scoped Career route provider, never browser storage.
 **Extract career goal** starts the LangGraph JD workflow. Validated role/skill/condition
-information immediately becomes the account's latest goal. The browser returns to the saved goal overview as soon as extraction succeeds. Skills and non-skill requirements are grouped into category cards, with responsibilities and interview preparation kept separate. Research status updates on this page without hiding the extracted goal. **Refine goal** opens guided chat; **Set a new goal** opens fresh JD inputs while preserving the current goal until successful replacement. Brave interview
-research completes before the chat explanation and follow-up composer open.
+information immediately becomes the account's latest goal. The browser stays in chat while the saved goal overview is populated. Skills and non-skill requirements are grouped into category cards, with responsibilities and interview preparation kept separate. Research status updates on this page without hiding the extracted goal. **Refine goal** opens guided chat; **Set a new goal** opens fresh JD inputs while preserving the current goal until successful replacement. Brave interview
+the validated JD summary, cited research and follow-up composer open together only after both extraction and research succeed. Progress is visible meanwhile.
 Unavailable sources produce a retry state; no-findings stays explicit. One current
 conversation is loaded from `/api/v1/career/workspace`; there is no session picker or
 confirmation button. A new successfully interpreted JD resets that conversation.
@@ -168,7 +168,7 @@ can reset unsaved inputs. Production uses the existing build/start target.
 Career replies reveal word by word after the validated API response arrives. Markdown
 headings/lists format the first JD overview; older replies stay fully visible. Users
 can choose Show full response, and reduced-motion preferences disable animation.
-Token-limit errors and safe request-conflict explanations are shown. Other failures keep quiet retry
+Token-limit errors, safe request-conflict explanations and a fixed disabled-AI explanation are shown. Other failures keep quiet retry
 controls and retained drafts; provider diagnostic codes/details remain in Network responses.
 The transient JD request key stays in the career session across chat navigation.
 Reopening the same pending JD reconnects to its running extraction; different-input
@@ -187,8 +187,8 @@ failure stays unknown and offers retry, rather than implying the database is emp
 An evaluated CV shows **View my CV**. This is a capability-input check, not a gap
 analysis or readiness score. Dedicated CV upload/assessment on `/cv` remains planned.
 
-Opportunity Intelligence adds three expandable sections beneath the saved goal
-cards: interviews, internship experience and company context. Category findings
+Opportunity Intelligence adds five expandable sections beneath the saved goal
+cards: interviews, internship experience, career progression/conversion salary, historical conversion rates and company/team culture. Category findings
 show original citations, confidence/evidence type, dates, context limitations and
 missing fields; summaries select only validated finding refs. Category status
 polls independently, retaining successful findings during other failures/refresh.
@@ -201,7 +201,31 @@ Career Discovery uses Gemini for direction setting and no CV inputs. Its researc
 review groups core, specialisation-specific and optional skills, with sample counts,
 coverage, qualifications, responsibilities and source links. Removing a requirement
 saves through the existing review API; explicit confirmation uses `/goals/confirm`.
-Saved-goal chat remains enabled during background research waits/failures; only a
+The initial chat response and composer wait for extraction and complete research;
+saved-goal backend APIs remain available during research waits/failures. A
 pending chat request's own quota recovery pauses that submission. Wait labels identify
-local Groq capacity versus provider cooldown. See the service's
+legacy wait state versus current provider cooldown. See the service's
 [discovery specification](../../services/career-service/CAREER_DISCOVERY.md).
+
+
+JD extraction now stays in `/career-goal/chat?source=jd`: observed intake/research steps
+are shown in chat, with no provider/tool names or simulated model reasoning. The saved
+JD summary and final sourced research summary use word-by-word validated Markdown
+(reduced-motion support and Show full response). The Career Goal button explicitly
+opens populated cards; ordinary questions and refinement become available after the
+combined initial response is ready.
+Polling continues while any research category is pending, even after interview completion.
+Unrelated document intake shows a fixed career-only scope explanation. Client scope
+labels are backed by server validation; private technical diagnostics remain hidden.
+
+Chat follows word-by-word replies while the reader is at the bottom. Scrolling up
+pauses following across message and progress updates; **Jump to latest** resumes it.
+Saved research findings, interview topics and evidenced process details include
+inline domain citations linking to their original URLs. Missing provenance receives
+no invented citation. External Markdown source links also display their domain;
+internal navigation links retain their labels.
+
+Career clients read goal content from `current.goal`. Progress polling uses `/workspace/progress`
+and opportunity `/progress` endpoints; changed versions trigger content loading. Source excerpts
+and verified quotes load only when a finding's evidence disclosure opens. Goal edits retain the
+current goal ID and use its version. There is no original-content restore action.

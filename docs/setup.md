@@ -114,7 +114,7 @@ no API key or download.
 ## Career Goal previews
 
 The normal Compose command also builds and starts `career-service`. No new
-credentials, MongoDB users or Groq key are required. Open `/career-goal` after
+credentials, MongoDB users or Gemini key are required. Open `/career-goal` after
 sign-in and initial profile setup. Paste a description, import a public URL, or
 upload a PDF/DOCX/TXT document. All previews are temporary; refreshing or leaving
 the page discards them. No descriptions or original files are saved in MongoDB.
@@ -141,34 +141,45 @@ The MongoDB container includes an `rseq` compatibility setting for this machine'
 Docker Desktop kernel. Review the deployment environment before production.
 See [testing](testing.md) for automated checks and disposable test stacks.
 
-## Optional Groq configuration
+## Gemini reasoning configuration
 
-SCRUM-282 adds the backend adapter; existing JD previews still make no AI calls.
-To prepare the adapter, create a key in the
-[Groq console](https://console.groq.com/keys), choose an available model from
-[Groq's models page](https://console.groq.com/docs/models), and set these in your
-ignored `infrastructure/docker/.env`:
+All Career model stages default to `gemini-3.5-flash-lite` through Google's OpenAI-compatible
+endpoint: JD extraction, skills, discovery, research, summaries, chat and goal edits.
+Set these server-only values in your private configuration yourself:
 
 ```dotenv
 AI_ENABLED=true
-AI_PROVIDER=groq
-AI_BASE_URL=https://api.groq.com/openai/v1
-AI_MODEL=YOUR_SUPPORTED_MODEL_ID
-AI_API_KEY=YOUR_PRIVATE_GROQ_KEY
-AI_RESPONSE_MODE=json_object
+GEMINI_REASONING_MODEL=gemini-3.5-flash-lite
+GEMINI_API_KEY=YOUR_PRIVATE_GEMINI_KEY
+BRAVE_API_KEY=YOUR_PRIVATE_BRAVE_KEY
 ```
 
-Model access depends on your account. Verify the exact ID in Groq's authenticated
-`GET /openai/v1/models` list; a model appearing in public documentation does not
-guarantee access. This account was verified with `AI_MODEL=openai/gpt-oss-120b`
-and `AI_RESPONSE_MODE=json_object`. If you receive `model_unavailable`, choose an
-accessible model and recreate Career; restarting alone does not reload Compose env.
-Never print your API key or full `.env` while debugging. JD extraction on the
-supported Groq GPT-OSS models uses a native strict schema even when the general
-mode is `json_object`; no environment change is required. An `invalid_output`
-response now has a safe `diagnostic.reason`, such as `schema_validation` or
-`source_quote`, without JD/model contents. It automatically attempts one bounded
-correction before showing the error.
+The old `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`,
+`AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL` and
+`OPPORTUNITY_GEMINI_MODEL` values are no longer used by production reasoning.
+JSON Schema and backend citation,
+provenance and ownership validation preserve the current data models.
+The default is [Gemini 3.5 Flash Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),
+using the explicit `gemini-3.5-flash-lite` model ID for all stages. An existing
+`GEMINI_REASONING_MODEL` value overrides the default: change it to the Lite ID
+and recreate the Career container when switching from another model.
+If Google reports model access/NOT_FOUND, set `GEMINI_REASONING_MODEL` to an accessible
+Gemini model ID. The same setting applies to every reasoning and coordination stage;
+legacy `GEMINI_MODEL` and `AI_MODEL` do not override it.
+
+A `provider_configuration` response previously hid Google's numeric error/status/details.
+The adapter now returns safe `provider_error` metadata (provider, HTTP status, known
+machine code and rejected field names) without provider prose or submitted content.
+`API_KEY_INVALID` maps to `provider_auth`, `NOT_FOUND` to `model_unavailable`,
+project preconditions to `provider_access`, and known rejected schema/parameter names
+to `provider_schema` / `provider_parameter`. An unknown rejection remains
+`provider_configuration`; inspect its safe metadata rather than assuming a token limit.
+No schema-free fallback or provider change is attempted.
+
+The public [Docker example](../infrastructure/docker/.env.example) contains only
+active inputs for the email/Gmail stack, database passwords and Gemini/LLM Context.
+Preserve existing database passwords and private keys; do not overwrite a working
+private configuration with blank template values. Optional tuning retains code defaults.
 
 Keep `AI_ENABLED=false` if you only need current previews. No credentials are
 needed for automated AI tests. Only Career receives the key; never prefix it
@@ -205,7 +216,7 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
 ```
 
-For exploration turns set `AI_ENABLED=true` and your own `AI_MODEL`/`AI_API_KEY`.
+For exploration turns set `AI_ENABLED=true` and your server-only `GEMINI_API_KEY`.
 Without AI configuration transient JD import previews still work;
 exploration and JD extraction/clarification require a configured provider. Open
 Career Goal → Explore careers, or select **Extract career goal** after preparing a JD
@@ -229,44 +240,32 @@ or inspect your environment files. Dependencies/image changes still need rebuild
 
 Rebuild the Career image once after installing the new LangGraph/checkpointer/tokenizer dependencies. Subsequent source edits use the existing Docker hot reload setup. No LangSmith account or additional database server is required.
 
-Use the existing Groq settings (`AI_ENABLED=true`, `AI_PROVIDER=groq`, `AI_MODEL` and backend-only `AI_API_KEY`). Coachify atomically reserves each Groq call within a per-user 7,000-token rolling-minute input/output allowance, then releases unused output capacity against actual usage. There is no separate 4,000-input cap. Groq quotas remain separate. No new environment settings are needed for these limits. Chat output is capped at 1024 tokens, interview synthesis at 2048, and JD extraction defaults to 4096; a lower `AI_MAX_OUTPUT_TOKENS` remains the overall ceiling. Add `BRAVE_API_KEY`; `BRAVE_SEARCH_MODE=llm_context` is the default and requires LLM Context API access. Change any existing explicit `search` or `answers` value yourself to `llm_context` and recreate the career-service container. Answers remains opt-in for an Answers-plan API key. Research sends deduplicated, bounded snippets to the model, rather than full pages. Brave is the only interview-research API; no Reddit credentials are needed. Keep credentials server-side and enter them yourself in your local configuration.
+Use `AI_ENABLED=true`, `GEMINI_API_KEY` and `BRAVE_API_KEY`. Chat output stays
+bounded at 1,024 tokens, interview synthesis at 2,048 and JD extraction at 4,096;
+`AI_MAX_OUTPUT_TOKENS` remains the overall ceiling. `AI_TIMEOUT_SECONDS`,
+`AI_RETRIES` and `AI_CONTEXT_TOKENS` retain their task limits. Production never
+imposes no local token-per-minute admission limit.
+Google/Brave HTTP 429 responses still pause unfinished work using the provider's
+retry delay. Saved goals and completed research steps survive a wait.
 
-Compose passes these settings only to Career. Without Brave configured or with denied Answers access the goal saves but research/chat preparation reports unavailable. Brave Answers has separate provider billing; its answer becomes context for the Groq extraction and counts toward Groq input once sent. Groq 429 responses pause background research using the provider retry delay; direct chat offers retry. Legacy `AI_TOKENS_PER_MINUTE`, `AI_REQUESTS_PER_MINUTE` and `AI_CONCURRENCY` values are ignored and may be removed from your configuration. Old token-budget records are unused; `ai_user_usage` now tracks rolling usage by user automatically, with no manual database setup. User-limit responses include seconds until enough usage expires. See the [Career configuration contract](../services/career-service/ANALYSIS_CONTRACTS.md) for defaults and persistence rules.
-
-
-### Optional Gemini chat context
-
-In the infrastructure configuration, set `GEMINI_ENABLED=true`,
-`GEMINI_MODEL=gemini-3.5-flash-lite` and your server-only `GEMINI_API_KEY` from Google
-AI Studio. Keep the existing `AI_*` settings for Groq extraction/reasoning and the
-Brave Search settings. Recreate the Career service container after changing these
-values. No frontend key, Google sign-in credential or new dependency is needed.
-See the [Career service](../services/career-service/README.md) for model routing and
-Groq-only usage limits. Gemini has no local Groq token cap and never spends the Groq allowance; its provider quota and context/output limits still apply. Without Gemini enabled, the existing single-provider chat works.
-
-With Gemini enabled and `BRAVE_SEARCH_MODE=llm_context`, interview research also uses
-Gemini to plan/refine up to six Brave searches and assess a three-source target.
-Keep your existing keys with appropriate LLM Context access; Google grounding is not used. Only actual interview evidence with a matching supporting quote counts toward the three-source target. Searches stop early after two rounds without new useful evidence or when another round would leave insufficient synthesis time. Valid limited-coverage research is cached too; later retrieval failures preserve already assessed evidence.
+Every Brave retrieval uses `/llm/context` with the fuller-content parameters in the
+[Career contract](../services/career-service/ANALYSIS_CONTRACTS.md).
+All model stages, including public query planning and usefulness assessment, use
+Gemini 3.5 Flash Lite. Research keeps the six-query/three-useful-source bound and exact
+citation checks; no Google grounding or additional credential is introduced.
+Rebuild/recreate Career after applying these code/configuration changes.
 
 ### Opportunity Intelligence
 
-The saved goal can automatically research interviews, internship experience and
-company context using Gemini coordination, the configured Groq reasoner and Brave
-LLM Context. Keep the existing enabled server `AI_*` settings with
-`AI_MODEL=openai/gpt-oss-120b` (or a supported configured replacement),
-`GEMINI_API_KEY` and compatible `BRAVE_API_KEY` access. `OPPORTUNITY_ENABLED=true`
-is the default: the existing keys are sufficient for research configuration.
-`GEMINI_ENABLED` controls optional chat only; it need not be enabled for research.
-The dedicated research client always uses LLM Context regardless of the legacy
-`BRAVE_SEARCH_MODE` value. Provider subscription/model access is checked on calls.
-`OPPORTUNITY_GEMINI_MODEL=gemini-3.5-flash` controls research separately from
-`GEMINI_MODEL` chat context. Model credentials remain independent/backend-only.
-Recreate Career after applying configuration; no environment files were read or
-edited during implementation. No new SDK or API credential is required.
+The saved goal researches interviews, internship experience and company context
+using Gemini 3.5 Flash Lite for both coordination and reasoning, plus Brave LLM Context.
+`OPPORTUNITY_ENABLED=true` enables this research when the Gemini/Brave credentials
+and Career storage are available. All model stages share the configured Gemini client. Existing JSON fields and immutable saved models are retained.
+Explicit guidance maps evidence into each allowed field; missing evidence stays missing.
 
 Compose passes `OPPORTUNITY_ENABLED` (true), max searches (2), follow-ups (1),
 concurrency (3), HTTP timeout (30s), transient retries (1), schema repairs (1),
-evidence tokens (1000), freshness (168h), incomplete freshness (1h) and worker
+evidence tokens (8192), freshness (168h), incomplete freshness (1h) and worker
 deadline (300s). See the [complete settings/API/graph contract](../services/career-service/OPPORTUNITY_INTELLIGENCE.md).
 MongoDB indexes/job recovery are automatic. Existing goals/research need no destructive
 migration. Paid provider access and live response quality require your own setup;
@@ -278,7 +277,7 @@ restarting an existing image alone does not install edited code.
 
 ### Conversational career discovery
 
-The existing Career/Gemini/Groq/Brave keys also support the new discovery route.
+The existing Gemini/Brave keys also support the new discovery route.
 Optional `DISCOVERY_*` sample/freshness limits and rebuild instructions are described
 in [Career Discovery](../services/career-service/CAREER_DISCOVERY.md). Rebuild both
 Career and frontend after source changes; production containers do not mount source.

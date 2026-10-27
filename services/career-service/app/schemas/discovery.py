@@ -1,5 +1,6 @@
 """Career direction and evidence contracts; targets reuse JDExtraction/RequirementReview."""
 from typing import Literal
+from app.schemas.providers import ResearchProvider
 from pydantic import Field
 from app.schemas.analysis import Contract, Text, Evidence, Version
 
@@ -91,7 +92,7 @@ class DiscoverySession(Contract):
     coverage: Literal['good','limited','insufficient'] | None
     error_code: str | None
     limit_scope: Literal['user','provider'] | None
-    provider: Literal['groq','gemini','brave'] | None
+    provider: ResearchProvider
     retry_after: int | None = Field(ge=0)
     review: JDExtractionResult | None
 

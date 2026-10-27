@@ -1,4 +1,5 @@
-"""Synthetic two-provider routing and semantic retrieval; no live APIs."""
+from tests.api_views import saved_research
+"""Synthetic Gemini routing and semantic retrieval; no live APIs."""
 import asyncio
 import json
 from types import SimpleNamespace
@@ -10,7 +11,7 @@ from app.ai.contracts import AIInput
 from app.ai.context_contracts import ContextPlan
 from app.ai.qa_contracts import FocusedAnswer
 from app.ai.routing import ModelRouter
-from app.ai.usage import UserTokenUsage,input_tokens
+from app.ai.usage import input_tokens
 from app.domain.context import context_index,selected_facts,merge_projection,token_count,INDEX_TOKENS
 from tests.test_workspace import flow,ingest,wait,BASE,headers
 from tests.test_focused_questions import ask
@@ -20,36 +21,31 @@ def plan(**changes):return ContextPlan(**{'topic':'skills','item_refs':['s0'],'r
 
 
 def test_independent_gemini_configuration_and_safe_errors(monkeypatch):
-    monkeypatch.setenv('GEMINI_ENABLED','true');monkeypatch.setenv('GEMINI_API_KEY','gemini-fixture');monkeypatch.setenv('AI_API_KEY','groq-fixture')
-    monkeypatch.delenv('GEMINI_MODEL',raising=False)
+    monkeypatch.setenv('AI_ENABLED','true');monkeypatch.setenv('GEMINI_API_KEY','gemini-fixture');monkeypatch.setenv('AI_API_KEY','unused-fixture')
+    monkeypatch.delenv('GEMINI_REASONING_MODEL',raising=False)
     config=GeminiSettings.from_env()
     assert config.model=='gemini-3.5-flash-lite' and config.api_key.get_secret_value()=='gemini-fixture'
     assert 'gemini-fixture' not in repr(config)
-    monkeypatch.setenv('GEMINI_ENABLED','PRIVATE_INVALID')
+    monkeypatch.setenv('AI_ENABLED','PRIVATE_INVALID')
     with pytest.raises(ValueError) as error:GeminiSettings.from_env()
     assert 'PRIVATE' not in str(error.value)
 
 
-def test_provider_routing_credentials_payloads_and_groq_only_usage():
+def test_all_reasoning_and_context_routes_share_gemini_without_local_quota():
     async def run():
-        calls=[];usage=UserTokenUsage()
+        calls=[]
         def handler(request):
             body=json.loads(request.content);calls.append(body)
-            if body['model']=='gemini-3.5-flash-lite':
-                assert request.url.host=='generativelanguage.googleapis.com' and request.headers['authorization']=='Bearer gemini-fixture'
-                assert body['reasoning_effort']=='minimal' and 'max_tokens' in body and 'max_completion_tokens' not in body
-                output=plan().model_dump() if body['response_format']['json_schema']['name']=='context_route' else FocusedAnswer(reply='SQL is required.',references=['f1']).model_dump()
-            else:
-                assert request.url.host=='api.groq.com' and request.headers['authorization']=='Bearer groq-fixture'
-                output=FocusedAnswer(reply='SQL supports the interview.',references=['f1']).model_dump()
+            assert request.url.host=='generativelanguage.googleapis.com' and request.headers['authorization']=='Bearer gemini-fixture'
+            assert body['model']=='gemini-3.5-flash-lite'
+            assert body['reasoning_effort']=='minimal' and 'max_tokens' in body and 'max_completion_tokens' not in body
+            output=plan().model_dump() if body['response_format']['json_schema']['name']=='context_route' else FocusedAnswer(reply='SQL is required.',references=['f1']).model_dump()
             return httpx.Response(200,json={'usage':{'prompt_tokens':100,'completion_tokens':50,'total_tokens':150},'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            primary=AIAdapter(AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='groq-fixture'),client,usage_store=usage)
-            context=AIAdapter(GeminiSettings(enabled=True,api_key='gemini-fixture'),client,usage_store=usage)
+            adapter=AIAdapter(GeminiSettings(enabled=True,api_key='gemini-fixture'),client)
             for stage in ('context_route','context_answer','focused_answer'):
-                await ModelRouter(primary,context).generate(AIInput(stage=stage,context='{"facts":[]}',conversation=[{'role':'user','content':'Explain SQL'}]),Operation('alice','1',stage),current_revision=lambda:'1')
-        assert [v['model'] for v in calls]==['gemini-3.5-flash-lite','gemini-3.5-flash-lite','openai/gpt-oss-120b']
-        assert sum(v['tokens'] for v in usage.local[usage.key('alice')])==150 and all(input_tokens(v)<4000 for v in calls)
+                await ModelRouter(adapter,adapter).generate(AIInput(stage=stage,context='{"facts":[]}',conversation=[{'role':'user','content':'Explain SQL'}]),Operation('alice','1',stage),current_revision=lambda:'1')
+        assert len(calls)==3
     asyncio.run(run())
 
 
@@ -94,7 +90,7 @@ def test_simple_semantic_question_uses_gemini_and_only_selected_facts(flow):
     assert [f['data']['name'] for f in payload['facts']]==['SQL'] and 'index' not in payload
 
 
-def test_followup_comparison_uses_groq_with_multiple_topics_without_keyword_matching(flow):
+def test_followup_comparison_uses_gemini_with_multiple_topics_without_keyword_matching(flow):
     ingest(flow);current=wait(flow);before=len(flow[2].calls)
     context=enable_context(flow,plan(related_topics=['interview_skills','interview_process'],item_refs=['s0','i0'],followup=True,include_evidence=True,needs_reasoning=True,resolved_question='How does SQL support the technical interview?'))
     response=ask(flow,current,'How would that help with the technical screen?',conversation=[{'role':'assistant','content':'Relational data queries. '+('x'*800)}]*12)
@@ -103,7 +99,7 @@ def test_followup_comparison_uses_groq_with_multiple_topics_without_keyword_matc
     assert {'jd_skill','interview_finding','interview_stage'}<={v['kind'] for v in json.loads(calls[0].context)['facts']}
     assert len(calls[0].conversation)==1 and calls[0].conversation[0].content=='How does SQL support the technical interview?'
     assert len(context.calls)==1 and len(context.calls[0].conversation)==7 and all(len(m.content)<=400 for m in context.calls[0].conversation[:-1])
-    assert current['research']['sources'][0]['url'] in response.json()['reply']
+    assert saved_research(flow,current)['sources'][0]['url'] in response.json()['reply']
 
 
 def test_context_clarification_avoids_an_extra_answer_call(flow):
@@ -128,15 +124,15 @@ def test_semantic_edit_intent_still_uses_the_validated_primary_edit_workflow(flo
     assert response.json()['edit_status']=='saved' and [v.stage for v in flow[2].calls[before:]]==['goal_edit']
 
 
-def test_startup_wires_enabled_gemini_with_an_independent_ledger(monkeypatch):
+def test_startup_wires_one_gemini_adapter_for_all_stages(monkeypatch):
     from app.main import create_app
     from fastapi.testclient import TestClient
     monkeypatch.delenv('MONGODB_URI',raising=False)
-    monkeypatch.setattr(AISettings,'from_env',classmethod(lambda cls:AISettings(enabled=True,model='openai/gpt-oss-120b',api_key='groq-fixture')))
-    monkeypatch.setattr(GeminiSettings,'from_env',classmethod(lambda cls:GeminiSettings(enabled=True,api_key='gemini-fixture')))
+    monkeypatch.setattr(AISettings,'from_env',classmethod(lambda cls:pytest.fail('Production must not load unused provider settings')))
+    monkeypatch.setattr(GeminiSettings,'reasoning_from_env',classmethod(lambda cls:GeminiSettings(enabled=True,api_key='gemini-fixture')))
     upstream=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(lambda _:httpx.Response(200,json={})))
     with TestClient(create_app(profile_client=upstream)) as client:
         router=client.app.state.ai
-        assert router.context_enabled and router.primary.settings.model=='openai/gpt-oss-120b'
+        assert router.context_enabled and router.primary.settings.model=='gemini-3.5-flash-lite'
         assert router.context.settings.model=='gemini-3.5-flash-lite'
-        assert router.primary.usage is not router.context.usage
+        assert router.primary is router.context

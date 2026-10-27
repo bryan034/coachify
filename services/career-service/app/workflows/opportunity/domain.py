@@ -35,18 +35,69 @@ def public_opportunity(goal):
     return context,ResearchContext(**{k:context[k] for k in ('company','role','field','location','seniority_level')},details_fingerprint=digest)
 
 
+def whitespace(value):
+    """Only whitespace is normalized: case, punctuation and numbers stay exact."""
+    return ' '.join(value.split())
+
+
+def citation_error(index,field,issue):
+    return AIError('invalid_output',True,reason='provenance',fields=(field,),
+        violations=({'field':f'findings.{index}.{field}','issue':issue},))
+
+
+def numeric_support(value,quotes,index,field):
+    """Summaries cannot invent numbers, dates, currencies or salary periods."""
+    evidence=whitespace(' '.join(quotes))
+    tokens=lambda text:re.findall(r'(?<![\w])\d+(?:[,.]\d+)*(?:%|[KkMm])?',text)
+    if any(number not in tokens(evidence) for number in tokens(value)):
+        raise citation_error(index,'value','unsupported_number')
+    units=r'\b(?:SGD|USD|GBP|EUR|HKD|AUD|CAD|INR|CNY|JPY|monthly|annually|yearly|hourly|month|year|week|hour|base|bonus|percent)\b|[$£€¥%]'
+    if any(unit.casefold() not in {v.casefold() for v in re.findall(units,evidence,re.I)} for unit in re.findall(units,value,re.I)):
+        raise citation_error(index,'value','unsupported_numeric_unit')
+    if field in ('compensation','conversion_salary'):
+        if not re.search(r'\d',evidence) or not re.search(r'\b(?:SGD|USD|GBP|EUR|HKD|AUD|CAD|INR|CNY|JPY)\b|[$£€¥]',evidence):
+            raise citation_error(index,'quotes','salary_currency_required')
+        if not re.search(r'\b(?:month|monthly|mo|year|yearly|annual|annually|annum|hour|hourly|week|weekly)\b',evidence,re.I):
+            raise citation_error(index,'quotes','salary_period_required')
+        if not re.search(r'\d',value) or not re.search(r'\b(?:SGD|USD|GBP|EUR|HKD|AUD|CAD|INR|CNY|JPY)\b|[$£€¥]',value):
+            raise citation_error(index,'value','salary_amount_currency_required')
+        if not re.search(r'\b(?:month|monthly|mo|year|yearly|annual|annually|annum|hour|hourly|week|weekly)\b',value,re.I):
+            raise citation_error(index,'value','salary_period_required')
+    if field in ('compensation','conversion_salary') and re.search(r'\d',value):
+        if any(year not in value for year in re.findall(r'\b(?:19|20)\d{2}\b',evidence)):
+            raise citation_error(index,'value','salary_year_required')
+    if field=='conversion_rate':
+        for pattern,issue in [(r'\d+(?:\.\d+)?\s*(?:%|percent\b)','conversion_percentage_required'),
+                (r'\b(?:19|20)\d{2}\b','cohort_year_required'),(r'\bintern(?:s|ship)?\b','intern_cohort_required'),
+                (r'conversion|convert|return offer|full[ -]time|permanent','conversion_metric_required')]:
+            if not re.search(pattern,evidence,re.I) or not re.search(pattern,value,re.I):
+                raise citation_error(index,'value',issue)
+    if field in ('historical_cohort','offer_acceptance') and re.search(r'\d',value):
+        if not re.search(r'\b(?:19|20)\d{2}\b',value):
+            raise citation_error(index,'value','cohort_year_required')
+
+
 def validate_claims(output,category,sources,public=None):
     found=[];stamp=now()
-    for item in output.findings:
-        if item.field not in FIELDS[category] or len(item.refs)!=len(item.quotes) or len(set(item.refs))!=len(item.refs):raise AIError('invalid_output',True,reason='provenance')
-        if any(i<0 or i>=len(sources) or quote not in (sources[i].evidence or '') or item.value not in quote for i,quote in zip(item.refs,item.quotes)):
-            raise AIError('invalid_output',True,reason='provenance')
-        values=item.model_dump(exclude={'refs'})
+    for index,item in enumerate(output.findings):
+        if item.field not in FIELDS[category]:raise citation_error(index,'field','field_not_allowed')
+        if len(item.refs)!=len(item.quotes):raise citation_error(index,'refs','quote_reference_count_mismatch')
+        if len(set(item.refs))!=len(item.refs):raise citation_error(index,'refs','duplicate_source_reference')
+        for ref,quote in zip(item.refs,item.quotes):
+            if ref<0 or ref>=len(sources):raise citation_error(index,'refs','source_index_out_of_range')
+            if whitespace(quote) not in whitespace(sources[ref].evidence or ''):
+                raise citation_error(index,'quotes','quote_not_in_source')
+        if any(whitespace(item.value) not in whitespace(q) for q in item.quotes):
+            raise citation_error(index,'value','extract_not_in_quote')
+        numeric_support(item.summary or item.value,item.quotes,index,item.field)
+        values=item.model_dump(exclude={'refs','summary'})
+        values['value']=item.summary or item.value
         if public:
             cited=' '.join((sources[i].title or '')+' '+(sources[i].evidence or '') for i in item.refs).casefold()
             company=[w for w in re.findall(r'[a-z0-9]+',(public.get('company') or '').casefold()) if len(w)>2 and w not in {'ltd','limited','inc','pte','corp','corporation','company'}]
             if item.scope=='exact' and company and not any(w in cited for w in company):values.update(scope='general',confidence='low')
             if public.get('employment_type')=='internship' and re.search(r'full[ -]time|permanent employee',cited) and not re.search(r'\bintern(?:s|ship)?\b',cited):values.update(scope='related_employment',confidence='low')
+        if public and not public.get('company'):values.update(scope='general',confidence='low')
         ids=[sources[i].source_id for i in item.refs]
         if values['evidence_type']=='official' and any(sources[i].reliability!='official' and sources[i].platform!='employer' for i in item.refs):values['evidence_type']='third_party'
         if values['confidence']=='high' and any(sources[i].reliability!='official' for i in item.refs):values['confidence']='medium'
@@ -68,8 +119,12 @@ def compatibility(categories,sources=()):
 
 
 def summary_input(categories):
+    # Interleave categories so the bounded summary cannot lose later categories
+    # when interview/internship evidence fills the first sixty slots.
     return [{'id':f.finding_id,'category':category,'field':f.field,'value':f.value,'confidence':f.confidence,'scope':f.scope,'conflict_group':f.conflict_group}
-            for category,result in categories.items() for f in result.findings][:60]
+            for index in range(max((len(result.findings) for result in categories.values()),default=0))
+            for category,result in categories.items() if index<len(result.findings)
+            for f in [result.findings[index]]][:60]
 
 
 def dedupe_findings(category,findings):
@@ -87,9 +142,12 @@ def dedupe_findings(category,findings):
 
 def supported_claims(output,category,sources,public=None):
     """A bad citation cannot erase other independently validated findings."""
-    valid=[];rejected=0
-    for item in output.findings:
+    valid=[];rejected=0;issues=[]
+    for index,item in enumerate(output.findings):
         try:valid.extend(validate_claims(output.model_copy(update={'findings':[item]}),category,sources,public))
-        except AIError:rejected+=1
-    if output.findings and not valid:raise AIError('invalid_output',True,reason='provenance')
+        except AIError as error:
+            rejected+=1
+            issues.extend({**v,'field':v['field'].replace('findings.0.',f'findings.{index}.',1)} for v in error.violations)
+    if output.findings and not valid:
+        raise AIError('invalid_output',True,reason='provenance',fields=('findings',),violations=issues)
     return valid,rejected

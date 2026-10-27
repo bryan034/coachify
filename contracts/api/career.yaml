@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Coachify Career API",
-    "description": "One automatically saved career workspace per account. LangGraph interprets JDs, coordinates Brave research, then enables context-grounded chat. Exploration follows a separate graph.",
+    "description": "One version-checked current career goal per account, compact progress reads, five-category research and lazy owner-scoped evidence.",
     "version": "0.2.0"
   },
   "paths": {
@@ -268,6 +268,118 @@
         }
       }
     },
+    "/api/v1/career/goals/{goal_id}/opportunity-research/progress": {
+      "get": {
+        "tags": [
+          "J12/J13 Opportunity Intelligence"
+        ],
+        "summary": "Progress",
+        "operationId": "progress_api_v1_career_goals__goal_id__opportunity_research_progress_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchProgress"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/opportunity-research/findings/{finding_id}/evidence": {
+      "get": {
+        "tags": [
+          "J12/J13 Opportunity Intelligence"
+        ],
+        "summary": "Evidence",
+        "operationId": "evidence_api_v1_career_goals__goal_id__opportunity_research_findings__finding_id__evidence_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Finding Id"
+            }
+          },
+          {
+            "name": "research_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Research Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/career/goals/{goal_id}/opportunity-research": {
       "get": {
         "tags": [
@@ -393,6 +505,32 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/career/workspace/progress": {
+      "get": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Progress",
+        "operationId": "progress_api_v1_career_workspace_progress_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceProgress"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/career/workspace": {
@@ -1779,34 +1917,6 @@
   },
   "components": {
     "schemas": {
-      "AnswerClaim": {
-        "properties": {
-          "text": {
-            "type": "string",
-            "maxLength": 600,
-            "minLength": 1,
-            "title": "Text"
-          },
-          "source_ids": {
-            "items": {
-              "type": "string",
-              "maxLength": 160,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 6,
-            "minItems": 1,
-            "title": "Source Ids"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "text",
-          "source_ids"
-        ],
-        "title": "AnswerClaim"
-      },
       "AssessmentStatus": {
         "properties": {
           "status": {
@@ -1850,55 +1960,6 @@
           "skills_evaluated"
         ],
         "title": "AssessmentStatus"
-      },
-      "BraveAnswer": {
-        "properties": {
-          "summary_id": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Summary Id"
-          },
-          "provider": {
-            "type": "string",
-            "const": "brave",
-            "title": "Provider",
-            "default": "brave"
-          },
-          "text": {
-            "type": "string",
-            "maxLength": 2400,
-            "minLength": 1,
-            "title": "Text"
-          },
-          "source_ids": {
-            "items": {
-              "type": "string",
-              "maxLength": 160,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 6,
-            "minItems": 1,
-            "title": "Source Ids"
-          },
-          "claims": {
-            "items": {
-              "$ref": "#/components/schemas/AnswerClaim"
-            },
-            "type": "array",
-            "maxItems": 4,
-            "title": "Claims"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "summary_id",
-          "text",
-          "source_ids"
-        ],
-        "title": "BraveAnswer"
       },
       "CareerGoal": {
         "properties": {
@@ -2245,7 +2306,7 @@
         ],
         "title": "CareerGoal"
       },
-      "CategoryResult": {
+      "CategoryProgress": {
         "properties": {
           "status": {
             "type": "string",
@@ -2257,34 +2318,7 @@
               "failed",
               "not_applicable"
             ],
-            "title": "Status",
-            "default": "pending"
-          },
-          "findings": {
-            "items": {
-              "$ref": "#/components/schemas/Finding"
-            },
-            "type": "array",
-            "maxItems": 20,
-            "title": "Findings"
-          },
-          "missing_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 20,
-            "title": "Missing Fields"
-          },
-          "warnings": {
-            "items": {
-              "type": "string",
-              "maxLength": 600,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 10,
-            "title": "Warnings"
+            "title": "Status"
           },
           "error_code": {
             "anyOf": [
@@ -2296,66 +2330,14 @@
               }
             ],
             "title": "Error Code"
-          },
-          "researched_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Researched At"
-          },
-          "expires_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expires At"
-          },
-          "searches": {
-            "type": "integer",
-            "maximum": 12.0,
-            "minimum": 0.0,
-            "title": "Searches",
-            "default": 0
-          },
-          "model_calls": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Model Calls",
-            "default": 0
-          },
-          "latency_ms": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Latency Ms",
-            "default": 0
-          },
-          "estimated_cost_usd": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Estimated Cost Usd"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "CategoryResult"
+        "required": [
+          "status"
+        ],
+        "title": "CategoryProgress"
       },
       "Chat": {
         "properties": {
@@ -2781,7 +2763,6 @@
               {
                 "type": "string",
                 "enum": [
-                  "groq",
                   "gemini",
                   "brave"
                 ]
@@ -2864,107 +2845,35 @@
         ],
         "title": "DiscoveryView"
       },
-      "Finding": {
+      "EvidenceView": {
         "properties": {
           "finding_id": {
             "type": "string",
-            "pattern": "^f[0-9a-f]{16}$",
             "title": "Finding Id"
           },
-          "field": {
-            "type": "string",
-            "maxLength": 40,
-            "title": "Field"
-          },
-          "value": {
-            "type": "string",
-            "maxLength": 600,
-            "minLength": 1,
-            "title": "Value"
-          },
-          "confidence": {
-            "type": "string",
-            "enum": [
-              "high",
-              "medium",
-              "low",
-              "insufficient_evidence"
-            ],
-            "title": "Confidence"
-          },
-          "evidence_type": {
-            "type": "string",
-            "enum": [
-              "official",
-              "candidate_reported",
-              "third_party",
-              "inferred"
-            ],
-            "title": "Evidence Type"
-          },
-          "source_ids": {
+          "quotes": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "maxItems": 3,
-            "minItems": 1,
-            "title": "Source Ids"
-          },
-          "quotes": {
-            "items": {
-              "type": "string",
-              "maxLength": 600,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 3,
-            "minItems": 1,
             "title": "Quotes"
           },
-          "scope": {
-            "type": "string",
-            "enum": [
-              "exact",
-              "related_role",
-              "related_location",
-              "related_employment",
-              "general"
-            ],
-            "title": "Scope"
-          },
-          "conflict_group": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 80
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Conflict Group"
-          },
-          "last_verified_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Last Verified At"
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchSource"
+            },
+            "type": "array",
+            "title": "Sources"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "finding_id",
-          "field",
-          "value",
-          "confidence",
-          "evidence_type",
-          "source_ids",
           "quotes",
-          "scope",
-          "last_verified_at"
+          "sources"
         ],
-        "title": "Finding"
+        "title": "EvidenceView"
       },
       "GenerateSkills": {
         "properties": {
@@ -3029,44 +2938,9 @@
         ],
         "title": "Generation"
       },
-      "HTTPValidationError": {
+      "GoalContent": {
         "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
-      },
-      "ImportErrorView": {
-        "properties": {
-          "detail": {
-            "type": "string",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "required": [
-          "detail"
-        ],
-        "title": "ImportErrorView"
-      },
-      "InterviewEvidence": {
-        "properties": {
-          "evidence_origin": {
-            "type": "string",
-            "enum": [
-              "source_excerpt",
-              "brave_summary"
-            ],
-            "title": "Evidence Origin",
-            "default": "source_excerpt"
-          },
-          "summary_id": {
+          "role": {
             "anyOf": [
               {
                 "type": "string",
@@ -3077,74 +2951,33 @@
                 "type": "null"
               }
             ],
-            "title": "Summary Id"
+            "title": "Role"
           },
-          "source_ids": {
-            "items": {
-              "type": "string",
-              "maxLength": 160,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 3,
-            "minItems": 1,
-            "title": "Source Ids"
-          },
-          "text": {
-            "type": "string",
-            "maxLength": 600,
-            "minLength": 1,
-            "title": "Text"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "source_ids",
-          "text"
-        ],
-        "title": "InterviewEvidence"
-      },
-      "InterviewProcess": {
-        "properties": {
-          "round_count": {
+          "field": {
             "anyOf": [
               {
-                "type": "integer",
-                "maximum": 20.0,
-                "minimum": 1.0
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Round Count"
+            "title": "Field"
           },
-          "round_count_evidence": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/InterviewEvidence"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "employment_type": {
+            "type": "string",
+            "enum": [
+              "internship",
+              "full_time",
+              "part_time",
+              "contract",
+              "unknown"
+            ],
+            "title": "Employment Type",
+            "default": "unknown"
           },
-          "stages": {
-            "items": {
-              "$ref": "#/components/schemas/InterviewStage"
-            },
-            "type": "array",
-            "maxItems": 8,
-            "title": "Stages"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "InterviewProcess"
-      },
-      "InterviewResearch": {
-        "properties": {
           "company": {
             "anyOf": [
               {
@@ -3157,18 +2990,6 @@
               }
             ],
             "title": "Company"
-          },
-          "field": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Field"
-          },
-          "role": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Role"
           },
           "location": {
             "anyOf": [
@@ -3196,17 +3017,55 @@
             ],
             "title": "Seniority Level"
           },
-          "details_fingerprint": {
+          "job_url": {
             "anyOf": [
               {
-                "type": "string",
-                "pattern": "^[0-9a-f]{64}$"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Details Fingerprint"
+            "title": "Job Url"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "responsibilities": {
+            "items": {
+              "type": "string",
+              "maxLength": 600,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Responsibilities"
+          },
+          "non_skill_requirements": {
+            "items": {
+              "$ref": "#/components/schemas/NonSkillRequirement"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Non Skill Requirements"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewSkill"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Skills"
           },
           "_id": {
             "type": "string",
@@ -3218,95 +3077,13 @@
             "minimum": 1.0,
             "title": "Version"
           },
-          "schema_version": {
-            "type": "string",
-            "const": "analysis-v1",
-            "title": "Schema Version",
-            "default": "analysis-v1"
-          },
-          "skill_mapping_version": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Skill Mapping Version"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          },
-          "intelligence": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OpportunityReport"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "process": {
-            "$ref": "#/components/schemas/InterviewProcess"
-          },
-          "summaries": {
-            "items": {
-              "$ref": "#/components/schemas/BraveAnswer"
-            },
-            "type": "array",
-            "maxItems": 2,
-            "title": "Summaries"
-          },
-          "coverage": {
-            "items": {
-              "$ref": "#/components/schemas/ResearchCoverage"
-            },
-            "type": "array",
-            "maxItems": 6,
-            "title": "Coverage"
-          },
-          "skills": {
-            "items": {
-              "$ref": "#/components/schemas/InterviewSkill"
-            },
-            "type": "array",
-            "maxItems": 200,
-            "title": "Skills"
-          },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/ResearchSource"
-            },
-            "type": "array",
-            "maxItems": 100,
-            "title": "Sources"
-          },
-          "research_status": {
+          "target_type": {
             "type": "string",
             "enum": [
-              "pending",
-              "processing",
-              "succeeded",
-              "no_findings",
-              "failed"
+              "specific_job",
+              "career_exploration"
             ],
-            "title": "Research Status"
-          },
-          "last_researched_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Researched At"
+            "title": "Target Type"
           },
           "generation": {
             "anyOf": [
@@ -3317,178 +3094,73 @@
                 "type": "null"
               }
             ]
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoveryEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirements_need_review": {
+            "type": "boolean",
+            "title": "Requirements Need Review",
+            "default": false
+          },
+          "metadata_origins": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "user"
+              ]
+            },
+            "type": "object",
+            "title": "Metadata Origins"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "field",
           "role",
+          "field",
+          "company",
+          "skills",
           "_id",
           "version",
-          "skill_mapping_version",
-          "created_at",
-          "updated_at",
-          "research_status"
+          "target_type",
+          "generation"
         ],
-        "title": "InterviewResearch"
+        "title": "GoalContent"
       },
-      "InterviewSkill": {
+      "HTTPValidationError": {
         "properties": {
-          "evidence_origin": {
-            "type": "string",
-            "enum": [
-              "source_excerpt",
-              "brave_summary"
-            ],
-            "title": "Evidence Origin",
-            "default": "source_excerpt"
-          },
-          "summary_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Summary Id"
-          },
-          "skill_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 120,
-                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Skill Id"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "category": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Category"
-          },
-          "interview_stage": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Interview Stage"
-          },
-          "assessment_type": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assessment Type"
-          },
-          "difficulty": {
-            "type": "string",
-            "enum": [
-              "introductory",
-              "intermediate",
-              "advanced",
-              "unknown"
-            ],
-            "title": "Difficulty",
-            "default": "unknown"
-          },
-          "question_patterns": {
+          "detail": {
             "items": {
-              "type": "string",
-              "maxLength": 600,
-              "minLength": 1
+              "$ref": "#/components/schemas/ValidationError"
             },
             "type": "array",
-            "maxItems": 20,
-            "title": "Question Patterns"
-          },
-          "independent_report_count": {
-            "type": "integer",
-            "maximum": 1200.0,
-            "minimum": 0.0,
-            "title": "Independent Report Count"
-          },
-          "source_ids": {
-            "items": {
-              "type": "string",
-              "maxLength": 160,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 50,
-            "minItems": 1,
-            "title": "Source Ids"
+            "title": "Detail"
           }
         },
-        "additionalProperties": false,
         "type": "object",
-        "required": [
-          "name",
-          "category",
-          "independent_report_count",
-          "source_ids"
-        ],
-        "title": "InterviewSkill"
+        "title": "HTTPValidationError"
       },
-      "InterviewStage": {
+      "ImportErrorView": {
         "properties": {
-          "name": {
+          "detail": {
             "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "assessment_type": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assessment Type"
-          },
-          "evidence": {
-            "$ref": "#/components/schemas/InterviewEvidence"
+            "title": "Detail"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
-          "name",
-          "evidence"
+          "detail"
         ],
-        "title": "InterviewStage"
+        "title": "ImportErrorView"
       },
       "JDExtraction": {
         "properties": {
@@ -3632,82 +3304,14 @@
       },
       "JDExtractionResult": {
         "properties": {
-          "discovery": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DiscoveryEvidence"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "review_id": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{24}$",
-            "title": "Review Id"
-          },
-          "version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Version"
-          },
-          "target_type": {
-            "type": "string",
-            "enum": [
-              "specific_job",
-              "career_exploration"
-            ],
-            "title": "Target Type"
-          },
-          "extraction": {
-            "$ref": "#/components/schemas/JDExtraction"
-          },
-          "baseline": {
-            "$ref": "#/components/schemas/JDExtraction"
-          },
-          "metadata_origins": {
-            "additionalProperties": {
-              "type": "string",
-              "enum": [
-                "extracted",
-                "user"
-              ]
-            },
-            "type": "object",
-            "title": "Metadata Origins"
-          },
-          "requirements_need_review": {
-            "type": "boolean",
-            "title": "Requirements Need Review"
-          },
-          "is_confirmed": {
-            "type": "boolean",
-            "title": "Is Confirmed"
-          },
-          "generation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Generation"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "current": {
+            "$ref": "#/components/schemas/ProposedCurrentGoal"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "review_id",
-          "version",
-          "target_type",
-          "extraction",
-          "baseline",
-          "metadata_origins",
-          "requirements_need_review",
-          "is_confirmed",
-          "generation"
+          "current"
         ],
         "title": "JDExtractionResult"
       },
@@ -4060,6 +3664,14 @@
       },
       "OperationView": {
         "properties": {
+          "activities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Activities"
+          },
           "operation_id": {
             "type": "string",
             "pattern": "^[0-9a-f]{32}$",
@@ -4095,7 +3707,6 @@
               {
                 "type": "string",
                 "enum": [
-                  "groq",
                   "gemini",
                   "brave"
                 ]
@@ -4150,120 +3761,6 @@
           "status"
         ],
         "title": "OperationView"
-      },
-      "OpportunityReport": {
-        "properties": {
-          "schema_version": {
-            "type": "integer",
-            "const": 1,
-            "title": "Schema Version",
-            "default": 1
-          },
-          "fingerprint": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Fingerprint"
-          },
-          "opportunity_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Opportunity Id"
-          },
-          "employment_type": {
-            "type": "string",
-            "enum": [
-              "internship",
-              "full_time",
-              "part_time",
-              "contract",
-              "unknown"
-            ],
-            "title": "Employment Type",
-            "default": "unknown"
-          },
-          "job_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Url"
-          },
-          "categories": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/CategoryResult"
-            },
-            "propertyNames": {
-              "enum": [
-                "interview_intelligence",
-                "internship_insights",
-                "company_intelligence"
-              ]
-            },
-            "type": "object",
-            "title": "Categories"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/Summary"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "completed",
-              "partial",
-              "failed"
-            ],
-            "title": "Status"
-          },
-          "researched_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Researched At"
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Expires At"
-          },
-          "warnings": {
-            "items": {
-              "type": "string",
-              "maxLength": 600,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 10,
-            "title": "Warnings"
-          },
-          "models": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "maxProperties": 2,
-            "title": "Models"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "fingerprint",
-          "opportunity_id",
-          "categories",
-          "status",
-          "researched_at",
-          "expires_at"
-        ],
-        "title": "OpportunityReport"
       },
       "OpportunityView": {
         "properties": {
@@ -4323,34 +3820,49 @@
             "title": "Historical",
             "default": false
           },
-          "research": {
+          "research_id": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/OpportunityReport"
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Research Id"
+          },
+          "research_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Version"
           },
           "categories": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/CategoryResult"
+              "$ref": "#/components/schemas/PublicCategoryResult"
             },
             "propertyNames": {
               "enum": [
                 "interview_intelligence",
                 "internship_insights",
+                "career_progression",
+                "conversion_outcomes",
                 "company_intelligence"
               ]
             },
             "type": "object",
-            "maxProperties": 3,
+            "maxProperties": 5,
             "title": "Categories"
           },
           "sources": {
             "items": {
-              "$ref": "#/components/schemas/ResearchSource"
+              "$ref": "#/components/schemas/PublicSource"
             },
             "type": "array",
             "maxItems": 30,
@@ -4412,8 +3924,7 @@
           "available",
           "job_id",
           "career_target_id",
-          "status",
-          "research"
+          "status"
         ],
         "title": "OpportunityView"
       },
@@ -4464,6 +3975,335 @@
         ],
         "title": "Preview"
       },
+      "ProposedCurrentGoal": {
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/GoalContent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "title": "ProposedCurrentGoal"
+      },
+      "PublicCategoryResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "partial",
+              "failed",
+              "not_applicable"
+            ],
+            "title": "Status",
+            "default": "pending"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/PublicFinding"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Findings"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Missing Fields"
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 600,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Warnings"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "researched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Researched At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "searches": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 0.0,
+            "title": "Searches",
+            "default": 0
+          },
+          "model_calls": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Model Calls",
+            "default": 0
+          },
+          "latency_ms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Latency Ms",
+            "default": 0
+          },
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PublicCategoryResult"
+      },
+      "PublicFinding": {
+        "properties": {
+          "finding_id": {
+            "type": "string",
+            "pattern": "^f[0-9a-f]{16}$",
+            "title": "Finding Id"
+          },
+          "field": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Field"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "insufficient_evidence"
+            ],
+            "title": "Confidence"
+          },
+          "evidence_type": {
+            "type": "string",
+            "enum": [
+              "official",
+              "candidate_reported",
+              "third_party",
+              "inferred"
+            ],
+            "title": "Evidence Type"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Source Ids"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "related_role",
+              "related_location",
+              "related_employment",
+              "general"
+            ],
+            "title": "Scope"
+          },
+          "conflict_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflict Group"
+          },
+          "last_verified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Verified At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "finding_id",
+          "field",
+          "value",
+          "confidence",
+          "evidence_type",
+          "source_ids",
+          "scope",
+          "last_verified_at"
+        ],
+        "title": "PublicFinding"
+      },
+      "PublicSource": {
+        "properties": {
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "employer",
+              "reddit",
+              "glassdoor",
+              "other"
+            ],
+            "title": "Platform"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "reported_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Date"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "role_match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "related",
+              "unknown"
+            ],
+            "title": "Role Match",
+            "default": "unknown"
+          },
+          "reliability": {
+            "type": "string",
+            "enum": [
+              "official",
+              "anecdotal",
+              "unverified"
+            ],
+            "title": "Reliability",
+            "default": "unverified"
+          },
+          "report_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Group"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "platform",
+          "url"
+        ],
+        "title": "PublicSource"
+      },
       "ResearchCommand": {
         "properties": {
           "expected_version": {
@@ -4488,6 +4328,8 @@
                 "enum": [
                   "interview_intelligence",
                   "internship_insights",
+                  "career_progression",
+                  "conversion_outcomes",
                   "company_intelligence"
                 ]
               },
@@ -4602,6 +4444,88 @@
           "confirmed"
         ],
         "title": "ResearchDiscovery"
+      },
+      "ResearchProgress": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "finished": {
+            "type": "boolean",
+            "title": "Finished"
+          },
+          "categories": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "propertyNames": {
+              "enum": [
+                "interview_intelligence",
+                "internship_insights",
+                "career_progression",
+                "conversion_outcomes",
+                "company_intelligence"
+              ]
+            },
+            "type": "object",
+            "title": "Categories"
+          },
+          "result_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Version"
+          },
+          "research_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Id"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "finished",
+          "categories",
+          "result_version"
+        ],
+        "title": "ResearchProgress"
       },
       "ResearchRequest": {
         "properties": {
@@ -5158,29 +5082,7 @@
             "title": "Expected Version"
           },
           "content": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/JDExtraction"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "reset": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "metadata",
-                  "all"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reset"
+            "$ref": "#/components/schemas/JDExtraction"
           },
           "acknowledge_context": {
             "type": "boolean",
@@ -5191,7 +5093,8 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "expected_version"
+          "expected_version",
+          "content"
         ],
         "title": "SaveReview"
       },
@@ -5813,29 +5716,7 @@
             "title": "Expected Version"
           },
           "content": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/JDExtraction"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "reset": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "metadata",
-                  "all"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reset"
+            "$ref": "#/components/schemas/JDExtraction"
           },
           "acknowledge_context": {
             "type": "boolean",
@@ -5852,9 +5733,181 @@
         "type": "object",
         "required": [
           "expected_version",
+          "content",
           "session_id"
         ],
         "title": "WorkspaceEdit"
+      },
+      "WorkspaceProgress": {
+        "properties": {
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "selection_version": {
+            "type": "integer",
+            "title": "Selection Version"
+          },
+          "activities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Activities"
+          },
+          "categories": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CategoryProgress"
+            },
+            "type": "object",
+            "title": "Categories"
+          },
+          "research_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Id"
+          },
+          "result_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Version"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "provider",
+                  "user"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "gemini",
+                  "brave"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "edit_question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Question"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "phase",
+          "revision",
+          "goal_id",
+          "selection_version",
+          "activities",
+          "categories",
+          "research_id",
+          "result_version",
+          "error",
+          "error_code",
+          "retry_after",
+          "limit_scope",
+          "provider"
+        ],
+        "title": "WorkspaceProgress"
       },
       "WorkspaceView": {
         "properties": {
@@ -5904,28 +5957,39 @@
             ],
             "title": "Phase"
           },
-          "review": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/JDExtractionResult"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "current": {
             "$ref": "#/components/schemas/CurrentCareerGoal"
           },
-          "research": {
+          "research_id": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/InterviewResearch"
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Research Id"
+          },
+          "research_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Version"
+          },
+          "activities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Activities"
           },
           "coverage": {
             "items": {
@@ -5991,7 +6055,6 @@
               {
                 "type": "string",
                 "enum": [
-                  "groq",
                   "gemini",
                   "brave"
                 ]
@@ -6046,9 +6109,7 @@
           "revision",
           "kind",
           "phase",
-          "review",
           "current",
-          "research",
           "expires_at",
           "exploration_id"
         ],

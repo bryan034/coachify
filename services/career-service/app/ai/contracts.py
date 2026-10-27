@@ -37,7 +37,7 @@ class GapOutput(Contract):
 
 
 class AIInput(Contract):
-    stage: Literal['extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'research_plan', 'research_assess', 'opportunity_plan','opportunity_evaluate','opportunity_summary','discovery_turn','discovery_plan','discovery_extract','discovery_summary']
+    stage: Literal['jd_scope', 'extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'research_plan', 'research_assess', 'opportunity_plan','opportunity_evaluate','opportunity_support','opportunity_summary','discovery_turn','discovery_plan','discovery_extract','discovery_summary']
     source_text: str | None = Field(default=None, min_length=1, max_length=8000, repr=False)
     conversation: list[Message] = Field(default_factory=list, max_length=30, repr=False)
     # Callers build this from authenticated, approved structured snapshots.
@@ -60,9 +60,9 @@ class AIInput(Contract):
             raise ValueError('Search planning fields belong to public research only.')
         if any(len(query)>180 for query in self.search_queries):raise ValueError('Search query exceeds its limit.')
         if self.summaries and self.stage!='interview_synthesis':raise ValueError('Brave summaries belong to public interview synthesis only.')
-        if self.stage in ('extraction','jd_extraction') and not self.source_text:
+        if self.stage in ('extraction','jd_extraction','jd_scope') and not self.source_text:
             raise ValueError('Extraction requires transient JD text.')
-        if self.stage not in ('extraction','jd_extraction') and self.source_text is not None:
+        if self.stage not in ('extraction','jd_extraction','jd_scope') and self.source_text is not None:
             raise ValueError('Raw JD text is only accepted by extraction stages.')
         if self.stage in ('chat', 'jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer') and not self.conversation:
             raise ValueError('Chat requires a conversation.')

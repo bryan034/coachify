@@ -2,7 +2,7 @@
 
 Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
-**Status:** Profile, onboarding, email/password and OTP are implemented. Career Goal now has one automatically saved goal/chat per account. LangGraph interprets and validates a JD, then opens a saved overview with skill/condition category cards. Three-category Opportunity Intelligence adds cited interviews, internship insights and company context through Gemini/Groq/Brave; guided chat supports refinements, and a CV assessment link uses owner-scoped saved-data checks. New JDs replace the live conversation. Conversational Career Discovery researches a user-approved area and saves its reviewed target through the same goal persistence path. Structured goals and research persist in MongoDB, with temporary 24-hour workflow checkpoints. Dedicated CV extraction, gap analysis and roadmaps remain planned. See [setup](docs/setup.md) and [Career service](services/career-service/README.md).
+**Status:** Profile, onboarding, email/password and OTP are implemented. Career Goal now has one automatically saved goal/chat per account. A validated job identity starts public research alongside full JD extraction. The chat shows observed progress and waits for JD extraction plus completed research before typing one combined summary; saved goal cards update as extraction finishes. Five-category Opportunity Intelligence adds cited interviews, internship experience, career progression/conversion salary, historical conversion rates and company/team culture through Gemini/Brave; guided chat supports refinements, and a CV assessment link uses owner-scoped saved-data checks. New JDs replace the live conversation. Conversational Career Discovery researches a user-approved area and saves its reviewed target through the same goal persistence path. The current goal is returned once and edited in place with version checks; lightweight progress polling and lazy evidence reads avoid repeated source payloads. Structured goals and research persist in MongoDB, with temporary 24-hour workflow checkpoints. Dedicated CV extraction, gap analysis and roadmaps remain planned. See [setup](docs/setup.md) and [Career service](services/career-service/README.md).
 
 ## Stack
 
@@ -13,7 +13,7 @@ Career-readiness planner for users in Singapore, including students, National Se
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
 - Account access: email/password accounts with OTP email verification, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
-- AI provider: Groq powers explicit exploration turns; preview endpoints do not call AI. Application hosting is not selected.
+- AI provider: Gemini 3.5 Flash Lite powers all reasoning, extraction and chat; preview endpoints do not call AI. Application hosting is not selected.
 
 ## Repository layout
 
