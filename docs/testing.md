@@ -61,6 +61,15 @@ if any test job fails, is cancelled, or is skipped. Browser reports and failure
 traces are uploaded for seven days; use synthetic data because artifacts may contain
 page content. Linting is not configured yet.
 
+MongoDB-backed jobs (`profile-integration`, `analysis-integration` and
+`local-ui-integration`) explicitly use `ubuntu-22.04`, whose hosted image uses
+the Linux 6.8 Azure kernel. MongoDB 8.0 refuses to start on affected kernels 6.19
+and newer, before test steps run; `ubuntu-latest` can introduce that incompatibility
+as hosted images change. Other jobs retain `ubuntu-latest`. This is a temporary
+compatibility pin: review it before Ubuntu 22.04 runner retirement, and move to a
+newer runner only after verifying its kernel with the MongoDB image. See the
+[runner image inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md).
+
 ## GitHub enforcement (repository administrator)
 
 After this workflow has run on a PR:
