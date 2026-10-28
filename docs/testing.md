@@ -259,3 +259,39 @@ files and live provider credentials are not used.
 in-place edits/version conflicts, activation recovery, compact progress/results, lazy
 owner/version-scoped evidence, whitespace-only quotes, salary/cohort safeguards, grounded
 presentation checks, precise repair metadata and successful no-information results.
+
+Research-validation regressions cover differently worded corroborating sources, shared
+generation/storage text bounds and label enums, and preservation of storage failure
+paths/reasons. Exact quote and exact-number
+checks remain active; synthetic provider fixtures make no live Gemini/Brave calls.
+
+Duplicate-finding regressions cover different summaries sharing one extract ID, stable
+identity while merging corroborating citations, and quality-stage cleanup of persisted
+duplicates before final report validation.
+
+Opportunity-source limit checks verify that Brave receives a three-URL limit, the
+adapter retains no more than three results even if the provider returns extras, and
+weak coverage can replace initial sources through bounded follow-ups while the
+final report retains at most three useful sources per category.
+
+Direct-structuring regressions accept faithful paraphrasing without a second model
+pass, preserve the model's exact final wording in storage/chat, and still reject
+forged quotes/source references and unsupported numeric tokens. Numbers outside the
+selected quote may be supported by the full cited excerpt; uncited numbers cannot.
+Semantic faithfulness is instructed during structuring, not independently graded.
+
+`test_research_coverage.py` exercises replacement of three irrelevant results, relevant
+sources without facts, provider versus validation outcomes, retained citation integrity
+and richer excerpts. UI regressions check the distinct category explanations.
+
+Coverage refresh checks also preserve existing findings on provider failure and
+normalize prefetched source IDs before evaluation without repeating early searches.
+
+Structuring replaces the former model evaluation/support/overview-selection stages.
+Quota/retry/ownership coverage remains; overviews are built locally from finding IDs.
+Chat fixtures verify retained findings are displayed through the Gemini overview response, with temporary progress removed on completion.
+
+Goal-chat presentation checks in `services/career-service/tests/test_goal_chat_presentation.py`
+use synthetic adapters without MongoDB: summary citation validation, stale-goal rejection,
+public-only follow-up queries, ambiguous/off-topic/edit search exclusion and summary-operation
+reuse. Frontend chat tests mock the summary endpoint and verify completion and follow-ups.

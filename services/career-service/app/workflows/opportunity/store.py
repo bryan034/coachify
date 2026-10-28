@@ -6,12 +6,13 @@ from pymongo.errors import DuplicateKeyError
 from app.repositories.goals import GoalError,fingerprint,now
 from app.repositories.research import ResearchStore
 from app.schemas.opportunity import CATEGORIES,CategoryResult
+from app.clients.search_sources import OPPORTUNITY_SOURCE_LIMIT
 from .domain import public_opportunity
 
 class OpportunityStore:
     def __init__(self,db,settings):
         db=db.with_options(codec_options=CodecOptions(tz_aware=True));self.db=db;self.rows=db.research_contexts;self.settings=settings
-        self.research=ResearchStore(db);self.research.policy='opportunity-intelligence-five-intents-v4'
+        self.research=ResearchStore(db);self.research.policy='opportunity-intelligence-structured-findings-v6'
         self.rows.create_index([('kind',1),('finished',1),('next_attempt_at',1)])
         self.rows.create_index([('owner',1),('goal_id',1),('created_at',-1)])
         self.rows.create_index([('owner',1),('goal_id',1),('run',1)],unique=True,partialFilterExpression={'kind':'opportunity_job','finished':False})
@@ -50,13 +51,14 @@ class OpportunityStore:
         for category in requested:
             result=CategoryResult.model_validate(categories[category])
             if command.get('refresh') or command.get('category') or result.status in ('failed','partial','pending','running') or not result.expires_at or result.expires_at<=now():
-                categories[category]={**categories[category],'status':'pending','error_code':None}
+                categories[category]={**categories[category],'status':'pending','error_code':None,'outcome':None}
         pending=[k for k,v in categories.items() if v['status']=='pending']
         summary_pending=bool(cached and any(w.startswith('Overall summary unavailable;') for w in cached.intelligence.warnings))
+        retained={category:[s for s in sources if s['source_id'] in set(value.get('source_ids',[]))|{sid for finding in value['findings'] for sid in finding['source_ids']}][:OPPORTUNITY_SOURCE_LIMIT] for category,value in categories.items()}
         row={'_id':identifier,'kind':'opportunity_job','owner':owner,'goal_id':goal.id,'selection':selection,'session':session,'run':run,
              'digest':digest,'public':public,'context':context.model_dump(mode='json'),'status':'pending' if pending or summary_pending else cached.intelligence.status,
              'finished':not (pending or summary_pending),'prefetched':bool(seed),'queries_planned':bool((seed or {}).get('queries_planned')),'categories':categories,'sources':sources,'queries':(seed or {}).get('queries',{}),'evidence':(seed or {}).get('evidence',{}),'history':(seed or {}).get('history',{}),
-             'requested':pending,'research_id':cached.id if cached else None,'created_at':now(),'updated_at':now(),'next_attempt_at':now(), 'summary':cached.intelligence.summary.model_dump() if cached else {}}
+             'retained_sources':retained,'requested':pending,'research_id':cached.id if cached else None,'created_at':now(),'updated_at':now(),'next_attempt_at':now(), 'summary':cached.intelligence.summary.model_dump() if cached else {}}
         waits=(seed or {}).get('waits',{})
         if waits and pending:
             active_waits={category:until for category,until in waits.items() if category in pending and until>now()}

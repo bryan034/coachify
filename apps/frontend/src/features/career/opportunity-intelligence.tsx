@@ -17,6 +17,15 @@ const availabilityMessages:Record<OpportunityAvailabilityIssue,string>={
  brave_not_configured:'Brave is not connected to the Career service.',
  brave_llm_context_required:'The Brave connection needs LLM Context mode for opportunity research.'
 };
+function outcomeMessage(result:{outcome?:string|null;error_code:string|null}){
+ switch(result.outcome){
+  case 'no_relevant_sources':return 'The searches did not find sources relevant to this category.';
+  case 'information_not_found':return 'Relevant sources were found, but they did not provide supported information for this category.';
+  case 'validation_failed':return 'Proposed findings could not be verified. Available findings are preserved; refresh this section to retry.';
+  case 'provider_failed':return result.error_code?.includes('timeout')?'The research provider timed out. Available findings are preserved; refresh this section to retry.':'A research provider could not complete the request. Available findings are preserved; refresh this section to retry.';
+  default:return null;
+ }
+}
 function Finding({finding,sources,goalId,researchId}:{finding:IntelligenceFinding;sources:ResearchSource[];goalId:string;researchId?:string|null}){
  const {token}=useProfile();const [evidence,setEvidence]=useState<{quotes:string[];sources:ResearchSource[]}>(),[error,setError]=useState(''),[loading,setLoading]=useState(false);
  const request=useRef<AbortController|null>(null);
@@ -78,14 +87,15 @@ export function OpportunityIntelligence({goalId,version,selectionVersion}:{goalI
   {!!overview.length&&<div className="intelligence-overview"><h3>Opportunity overview</h3>{overview.map(f=><p key={f.finding_id}>{f.value}</p>)}</div>}
   {(!!takeaways.length||!!considerations.length)&&<div className="intelligence-takeaways">{!!takeaways.length&&<div><h3>Key takeaways</h3><ul>{takeaways.map(f=><li key={f.finding_id}>{f.value}</li>)}</ul></div>}{!!considerations.length&&<div><h3>Considerations</h3><ul>{considerations.map(f=><li key={f.finding_id}>{f.value}</li>)}</ul></div>}</div>}
   <div className="intelligence-sections">{categories.map(([key,title,description])=>{
-   const result=results[key],fields=[...new Set(result?.findings.map(f=>f.field)||[])];
+   const result=results[key],notice=result?outcomeMessage(result):null,fields=[...new Set(result?.findings.map(f=>f.field)||[])];
    return <details key={key} className="card intelligence-section" open={key==='interview_intelligence'}><summary><span><strong>{title}</strong><span className="small">{description}</span></span><span className={`intelligence-status status-${result?.status||'pending'}`}>{words(result?.status||'Not researched')}</span></summary>
     <div className="intelligence-section-body"><div className="row between"><p className="small">{result?.researched_at?`Researched ${new Date(result.researched_at).toLocaleString()}`:'No completed research yet.'}</p><button className="btn ghost sm" disabled={!data?.available||!!busy||running||result?.status==='not_applicable'} onClick={()=>void research(key)}>{busy===key?'Starting…':'Refresh this section'}</button></div>
     {result&&['pending','running'].includes(result.status)&&<p role="status" className="notice">{['rate_limited','source_rate_limited'].includes(result.error_code||'')?`Waiting for the AI allowance${data?.retry_after?`; resuming in about ${data.retry_after} seconds`:''}.`:'Researching this category…'} Available findings stay visible.</p>}
-    {result?.status==='failed'&&<p className="notice">This category could not finish. Other results are preserved; refresh this section to retry.</p>}
-    {result?.warnings.map((warning,i)=><p className="small intelligence-warning" key={i}>{warning}</p>)}
+    {notice&&<p className="notice">{notice}</p>}
+    {result?.status==='failed'&&!notice&&<p className="notice">This category could not finish. Other results are preserved; refresh this section to retry.</p>}
+    {result?.warnings.filter(w=>!notice||w!=='Information pertaining to this category was not found in the retrieved sources.').map((warning,i)=><p className="small intelligence-warning" key={i}>{warning}</p>)}
     {fields.map(field=><div className="intelligence-field" key={field}><h4>{words(field)}</h4>{result!.findings.filter(f=>f.field===field).map(f=><Finding key={f.finding_id} finding={f} sources={sources} goalId={goalId} researchId={data?.research_id}/>)}</div>)}
-    {!result?.findings.length&&!result?.warnings.some(w=>w==='Information pertaining to this category was not found in the retrieved sources.')&&<p className="small">{result?.status==='not_applicable'?'No company is specified for employer-specific research.':result?.status==='completed'?'Information pertaining to this category was not found in the retrieved sources.':'No supported findings are available yet.'}</p>}
+    {!notice&&!result?.findings.length&&!result?.warnings.some(w=>w==='Information pertaining to this category was not found in the retrieved sources.')&&<p className="small">{result?.status==='not_applicable'?'No company is specified for employer-specific research.':result?.status==='completed'?'Information pertaining to this category was not found in the retrieved sources.':'No supported findings are available yet.'}</p>}
 
     </div>
    </details>;

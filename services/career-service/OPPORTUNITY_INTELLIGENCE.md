@@ -23,26 +23,32 @@ flowchart TD
   C --> F[Quality / citation check]
   D --> F
   E --> F
-  F --> G[Gemini: select and order validated findings]
+  F --> G[Python: assemble overview references]
   G --> H[Typed validation / immutable MongoDB persistence]
   H --> I[Owner / current-goal checked publication]
 ```
 
 Each branch retrieves Brave LLM Context, saves the successful bounded retrieval,
-evaluates it through the configured primary model, and can make a bounded targeted
+structures findings through the configured Gemini model, and can make a bounded targeted
 follow-up. Branches return separate category values at fan-in. No-company targets still research all five areas using general role queries; findings
 are marked general context with low confidence, never employer-specific claims.
 Employment type is extracted into saved JD metadata only when established; otherwise
 it remains `unknown`. Related employment/location/role reports remain qualified.
 
 All stages use the existing HTTPS OpenAI-compatible adapter with the server-only
-`GEMINI_API_KEY` and requested `gemini-3.5-flash-lite` identifier. Planning, evaluation,
+`GEMINI_API_KEY` and requested `gemini-3.5-flash-lite` identifier. Planning, structuring,
 summaries, discovery and chat share the same enabled Gemini client. `AI_ENABLED`
 is the master switch; `OPPORTUNITY_ENABLED` (true by default) enables public research.
 Every stage uses the same configured Gemini model. The explicit Flash Lite model ID is used; see [setup](../../docs/setup.md#gemini-reasoning-configuration).
 The Brave client always uses LLM Context with the existing key.
 Every research workflow uses this endpoint; legacy modes are ignored.
-Requests consider 30 results, with six URLs, 8,192 total context tokens, 2,048 per URL,
+Opportunity requests consider 30 results and return at most three URLs per query.
+Weak coverage can trigger a focused follow-up within the existing two-search default.
+Candidate evidence remains checkpointed; final categories retain at most three useful
+sources selected by validated field coverage, role match, confidence and source type.
+Relevant sources with absent facts are distinguished from irrelevant search results.
+Other research workflows retain their existing six-URL request limit.
+Requests use 8,192 total context tokens, 2,048 per URL,
 30 snippets total and six per URL. They use English, balanced context, operators on
 without fallback, spellcheck off, local results off and source metadata on.
 No SDK or other dependency was added. No environment files are read or edited.
@@ -61,19 +67,19 @@ source IDs, aligned exact quotes, context scope, optional conflict group and a
 verification timestamp. All refs resolve to actual normalized source records. Source
 metadata retains URL/title/platform, available publication dates and retrieval time.
 `FIELD_GUIDANCE` maps each existing category's JSON field names to explicit meanings.
-It is supplied with `allowed_fields` for every evaluation: salary/stipend →
-`compensation`, conversion reports → `return_offer`, actual questions →
-`interview_questions`, and so on. The evaluator returns an exact evidence extract and an optional presentation summary;
+It is supplied with `allowed_fields` for every structuring request: salary/stipend →
+`compensation`, conversion reports → `conversion_rate`, actual questions →
+`interview_questions`, and so on. The structuring model returns final readable finding values and exact supporting quotes;
 Python validates exact quotes/refs, scope and allowed field names before constructing
 `Finding` / `CategoryResult` / `OpportunityReport` models. Missing evidence
 stays in `missing_fields`; source metadata alone never fills a finding.
 
 Unknown metadata stays unknown. Source content is bounded at retrieval, then pooled
-up to 2,400 characters per URL across categories; no full webpages are stored.
+up to 8,000 characters per URL across categories; no full webpages are stored.
 
-Gemini's summary selects/ranks validated finding IDs. The frontend resolves these
-to their original values for overview, takeaways and considerations. Presentation summaries are checked against verified quotes in a separate bounded
-`opportunity_support` model step. Overview selection adds no further prose or facts. GPT may identify contradictions; multiple salary
+Python assembles overview references from retained finding IDs. The frontend resolves
+these to their saved values for overview, takeaways, considerations and the completed
+research chat. No later model call judges or rewrites that wording. Conflicting salary
 reports remain separate and are never averaged. High confidence/official labels
 are constrained by authoritative source metadata; related full-time reports do not
 become exact internship evidence. These are source-backed reports, not guarantees
@@ -263,8 +269,8 @@ remain readable using their original three-category/field contract. A new cache 
 prevents old three-category results from satisfying new research. Unfinished legacy
 jobs acquire the missing categories without deleting paid evidence.
 
-Conversion percentages must be explicitly sourced for an identified historical intern
-cohort/year; anecdotes never establish a percentage. Offers, acceptance and joining
+Conversion percentages must be explicitly sourced; retain historical intern cohort/year
+context when supplied. Anecdotes never establish a percentage. Offers, acceptance and joining
 remain distinct. Salary evidence retains currency, pay period, year and base/bonus
 context; related graduate pay is not labelled an actual conversion offer. No unsupported
 figures or rates are computed. Missing evidence stays missing in every category.
@@ -286,22 +292,67 @@ supported findings and no provider/validation error completes successfully and s
 A failed acquisition or exhausted invalid-response repair still reports a failure; an
 empty result must not hide a provider error. The UI no longer displays a required-field checklist.
 
-Supporting quotes must match the retrieved excerpt after whitespace-only normalization.
-Case, punctuation, numbers and wording cannot be changed. The extracted value must be
-supported by those quotes. An optional concise presentation summary is accepted only after
-an independent support check confirms its meaning. The stored finding value is that
-checked summary, with original quotes/source IDs retained separately. Numeric checks
-reject new amounts, percentages, currencies, pay periods and cohort years. Salary findings
-retain amount/currency/period and any quoted year; conversion rates retain the historical
-intern cohort year and conversion metric. Offers, acceptances and starts remain distinct
-in the support-check prompt. No salary averaging or inferred conversion percentage is allowed.
+Supporting quotes still match their source excerpts after whitespace-only normalization.
+Finding values may paraphrase those excerpts. Every accepted
+source ID is copied from the exact cited source record, never generated by the model.
+Opportunity excerpts retain up to 8,000 characters per source, then fit fairly within
+the existing evidence-token/input-character budgets. The structuring request includes each candidate excerpt once, with a stable source ID.
+Gemini structures Brave excerpts directly into the final user-facing `value` for each
+finding. There is no second semantic-grading call or optional rewritten-summary field.
+The structuring prompt requires faithful meaning, relevance to the requested category,
+clear related-role context and no facts beyond the supplied evidence. Python validates
+schema, source references, exact quotes and numeric tokens before saving. Semantic
+faithfulness is the structuring model's responsibility; Python does not independently
+prove the meaning of a paraphrase.
+
+Every numeric token in the displayed value must appear exactly in the cited excerpts,
+not necessarily in the narrower selected quotes. Numbers from uncited sources do not
+count. Numeric formatting is not rewritten or calculated. The former literal-unit
+checks and mandatory salary/cohort year/period requirements are removed: absent details
+stay absent, while stated details must retain their meaning. Structured findings do not establish
+truth beyond the retrieved evidence.
 
 Wholly invalid batches receive bounded repair feedback containing claim paths and fixed
 issue codes, for example `findings.0.quotes: quote_not_in_source`,
-`findings.0.refs: source_index_out_of_range`, or `findings.0.value: salary_period_required`.
-Feedback contains no source text or private data. Independently valid claims survive a bad
-citation elsewhere in the batch. The support checker uses the same provider and bounded
-repair/quota handling as research evaluation; its calls add to model usage.
+`findings.0.refs: source_index_out_of_range`, or `findings.0.value: unsupported_number`.
+Generation and storage share the same allowed confidence/evidence/scope labels and
+600-character value and quote bounds. Values use the full
+storage allowance instead of the former 320-character generation limit. The prompt
+states these limits; Gemini decoding includes the allowed labels. Storage validation
+errors retain their claim path and issue code instead of becoming an empty provenance
+error. Feedback contains no source text or private data. Independently valid claims survive a bad
+citation elsewhere in the batch. The structuring call uses bounded schema/citation repairs and existing quota handling.
+Overview/takeaway references are assembled locally from saved findings without another
+model call. Chat renders all retained finding values verbatim with their source links.
 
 See [canonical goal and compact reads](ANALYSIS_CONTRACTS.md#canonical-goal-and-compact-reads--28-october-2026)
 for result/progress separation and lazy, owner-scoped evidence retrieval.
+
+Repeated finding IDs are merged before comparing presentation wording, preserving the
+first ID and its quote/source alignment as corroborating citations grow. The quality
+step also normalizes durable category results before summary selection, so previously
+checkpointed duplicates cannot prevent final report publication. Conflicting figures
+remain separate; final report identity/reference validation remains enforced.
+
+
+## Coverage outcomes and follow-ups
+
+Category `status` still reports execution success/failure. Additive `outcome` explains
+`findings_found`, `no_relevant_sources`, `information_not_found`, `validation_failed`
+or `provider_failed`; old reports default to null. `source_ids` identifies the at most
+three retained sources, including relevant sources with no accepted facts. The model
+returns bounded `relevant_refs` separately from findings; references must match the
+supplied source indexes. Validated findings independently establish useful citations.
+
+Planning favours official programme pages for programme facts, firsthand accounts for
+interview/intern experience and explicit cohort publications for conversion rates. A
+model follow-up targets the most important missing topic; an empty first evaluation
+can use the next planned query. There is no extra search after the configured budget,
+and no full-page scraper or unbounded search loop. Candidate evidence and evaluation
+cursors survive quota waits/restarts without repeating successful paid retrieval.
+The new cache policy prevents old short-excerpt reports from satisfying new research;
+immutable historical reports and owner/version checks remain intact.
+
+The active reasoning stages are `opportunity_plan` and `opportunity_structure`. Completed
+chat text comes from the stored finding values; there is no later model rewrite or
+judging stage. Historical reports remain readable under their original wording.

@@ -70,7 +70,8 @@ note bottom of Career
   Validate job identity; overlap full JD extraction with public-only retrieval.
   Matching early evidence seeds the existing research job after goal saving.
   Cards update on extraction; chat retains observed activity until both results succeed.
-  One typed chat response joins JD details and completed, summarized research.
+  Gemini writes one cited overview from JD details and completed research.
+  Temporary observed activity disappears on completion; scoped follow-up chat can search Brave.
   Persist structured output and bounded evidence, not full raw JD text.
   JD originals/previews use service-private temporary parsing storage.
 end note

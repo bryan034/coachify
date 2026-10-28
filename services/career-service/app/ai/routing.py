@@ -9,7 +9,7 @@ class ModelRouter:
         self.context_enabled=context is not None and getattr(getattr(context,'settings',None),'enabled',True)
 
     async def generate(self,request,operation,**kwargs):
-        adapter=self.context if request.stage in ('context_route','context_answer','research_plan','research_assess','opportunity_plan','opportunity_summary','discovery_turn','discovery_plan','discovery_summary') else self.primary
+        adapter=self.context if request.stage in ('context_route','context_answer','research_plan','research_assess','opportunity_plan','discovery_turn','discovery_plan','discovery_summary') else self.primary
         if adapter is None:
             from app.ai.adapter import AIError
             raise AIError('not_configured')

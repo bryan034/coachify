@@ -1,6 +1,8 @@
 """Deterministic boundaries for public context, citations and compatibility findings."""
 import re
 import ipaddress
+from pydantic import ValidationError
+from app.ai.recovery import issues_for
 from urllib.parse import urlsplit,urlunsplit
 from datetime import timedelta
 from app.schemas.analysis import ResearchContext,InterviewSkill,InterviewProcess,InterviewStage,InterviewEvidence
@@ -45,36 +47,12 @@ def citation_error(index,field,issue):
         violations=({'field':f'findings.{index}.{field}','issue':issue},))
 
 
-def numeric_support(value,quotes,index,field):
-    """Summaries cannot invent numbers, dates, currencies or salary periods."""
-    evidence=whitespace(' '.join(quotes))
-    tokens=lambda text:re.findall(r'(?<![\w])\d+(?:[,.]\d+)*(?:%|[KkMm])?',text)
-    if any(number not in tokens(evidence) for number in tokens(value)):
+def numeric_support(value,evidence,index):
+    """Numbers must be present verbatim in the cited source excerpts."""
+    numbers=lambda text:re.findall(r'(?<![\d.,])[-+]?(?:\d+(?:[,.]\d+)*|[.,]\d+)(?:[eE][-+]?\d+)?(?:[KkMm](?!\w))?',text)
+    available=set(numbers(evidence))
+    if any(number not in available for number in numbers(value)):
         raise citation_error(index,'value','unsupported_number')
-    units=r'\b(?:SGD|USD|GBP|EUR|HKD|AUD|CAD|INR|CNY|JPY|monthly|annually|yearly|hourly|month|year|week|hour|base|bonus|percent)\b|[$£€¥%]'
-    if any(unit.casefold() not in {v.casefold() for v in re.findall(units,evidence,re.I)} for unit in re.findall(units,value,re.I)):
-        raise citation_error(index,'value','unsupported_numeric_unit')
-    if field in ('compensation','conversion_salary'):
-        if not re.search(r'\d',evidence) or not re.search(r'\b(?:SGD|USD|GBP|EUR|HKD|AUD|CAD|INR|CNY|JPY)\b|[$£€¥]',evidence):
-            raise citation_error(index,'quotes','salary_currency_required')
-        if not re.search(r'\b(?:month|monthly|mo|year|yearly|annual|annually|annum|hour|hourly|week|weekly)\b',evidence,re.I):
-            raise citation_error(index,'quotes','salary_period_required')
-        if not re.search(r'\d',value) or not re.search(r'\b(?:SGD|USD|GBP|EUR|HKD|AUD|CAD|INR|CNY|JPY)\b|[$£€¥]',value):
-            raise citation_error(index,'value','salary_amount_currency_required')
-        if not re.search(r'\b(?:month|monthly|mo|year|yearly|annual|annually|annum|hour|hourly|week|weekly)\b',value,re.I):
-            raise citation_error(index,'value','salary_period_required')
-    if field in ('compensation','conversion_salary') and re.search(r'\d',value):
-        if any(year not in value for year in re.findall(r'\b(?:19|20)\d{2}\b',evidence)):
-            raise citation_error(index,'value','salary_year_required')
-    if field=='conversion_rate':
-        for pattern,issue in [(r'\d+(?:\.\d+)?\s*(?:%|percent\b)','conversion_percentage_required'),
-                (r'\b(?:19|20)\d{2}\b','cohort_year_required'),(r'\bintern(?:s|ship)?\b','intern_cohort_required'),
-                (r'conversion|convert|return offer|full[ -]time|permanent','conversion_metric_required')]:
-            if not re.search(pattern,evidence,re.I) or not re.search(pattern,value,re.I):
-                raise citation_error(index,'value',issue)
-    if field in ('historical_cohort','offer_acceptance') and re.search(r'\d',value):
-        if not re.search(r'\b(?:19|20)\d{2}\b',value):
-            raise citation_error(index,'value','cohort_year_required')
 
 
 def validate_claims(output,category,sources,public=None):
@@ -87,11 +65,9 @@ def validate_claims(output,category,sources,public=None):
             if ref<0 or ref>=len(sources):raise citation_error(index,'refs','source_index_out_of_range')
             if whitespace(quote) not in whitespace(sources[ref].evidence or ''):
                 raise citation_error(index,'quotes','quote_not_in_source')
-        if any(whitespace(item.value) not in whitespace(q) for q in item.quotes):
-            raise citation_error(index,'value','extract_not_in_quote')
-        numeric_support(item.summary or item.value,item.quotes,index,item.field)
-        values=item.model_dump(exclude={'refs','summary'})
-        values['value']=item.summary or item.value
+        evidence='\n'.join(sources[ref].evidence or '' for ref in item.refs)
+        numeric_support(item.value,evidence,index)
+        values=item.model_dump(exclude={'refs'})
         if public:
             cited=' '.join((sources[i].title or '')+' '+(sources[i].evidence or '') for i in item.refs).casefold()
             company=[w for w in re.findall(r'[a-z0-9]+',(public.get('company') or '').casefold()) if len(w)>2 and w not in {'ltd','limited','inc','pte','corp','corporation','company'}]
@@ -102,7 +78,11 @@ def validate_claims(output,category,sources,public=None):
         if values['evidence_type']=='official' and any(sources[i].reliability!='official' and sources[i].platform!='employer' for i in item.refs):values['evidence_type']='third_party'
         if values['confidence']=='high' and any(sources[i].reliability!='official' for i in item.refs):values['confidence']='medium'
         try:record=Finding(**values,source_ids=ids,finding_id='f'+fingerprint({'category':category,'field':item.field,'value':item.value,'sources':sorted(ids)})[:16],last_verified_at=stamp)
-        except ValueError:raise AIError('invalid_output',True,reason='schema_validation') from None
+        except ValidationError as error:
+            issues=issues_for(error,Finding)
+            raise AIError('invalid_output',True,reason='schema_validation',
+                fields=tuple(dict.fromkeys(v['field'].split('.')[0] for v in issues)),
+                violations=[{'field':f'findings.{index}.'+v['field'],'issue':v['issue']} for v in issues]) from None
         if record.finding_id not in {v.finding_id for v in found}:found.append(record)
     return found
 
@@ -128,26 +108,37 @@ def summary_input(categories):
 
 
 def dedupe_findings(category,findings):
-    grouped={};ranks={'insufficient_evidence':0,'low':1,'medium':2,'high':3}
+    """Merge repeated identities before comparing presentation wording.
+
+    Keep the first identity stable when citations grow, so later occurrences of
+    the same extract cannot reappear under an ID discarded during an earlier merge.
+    """
+    ranks={'insufficient_evidence':0,'low':1,'medium':2,'high':3}
+    def combine(old,finding):
+        pairs=dict(zip(old.source_ids,old.quotes))
+        for source,quote in zip(finding.source_ids,finding.quotes):pairs.setdefault(source,quote)
+        pairs=dict(list(pairs.items())[:3])
+        return old.model_copy(update={'source_ids':list(pairs),'quotes':list(pairs.values()),
+            'confidence':min((old.confidence,finding.confidence),key=ranks.get)})
+    identities={}
     for finding in findings:
+        previous=identities.get(finding.finding_id)
+        identities[finding.finding_id]=combine(previous,finding) if previous else finding
+    grouped={}
+    for finding in identities.values():
         key=(finding.field,' '.join(finding.value.casefold().split()),finding.scope,finding.conflict_group,finding.evidence_type)
-        if key not in grouped:grouped[key]=finding;continue
-        old=grouped[key];pairs=dict(zip(old.source_ids,old.quotes))
-        pairs.update(zip(finding.source_ids,finding.quotes));pairs=dict(list(pairs.items())[:3])
-        confidence=min((old.confidence,finding.confidence),key=ranks.get)
-        grouped[key]=old.model_copy(update={'source_ids':list(pairs),'quotes':list(pairs.values()),'confidence':confidence,
-            'finding_id':'f'+fingerprint({'category':category,'field':old.field,'value':old.value,'sources':sorted(pairs)})[:16]})
+        grouped[key]=combine(grouped[key],finding) if key in grouped else finding
     return list(grouped.values())[:20]
 
 
 def supported_claims(output,category,sources,public=None):
     """A bad citation cannot erase other independently validated findings."""
-    valid=[];rejected=0;issues=[]
+    valid=[];rejected=0;issues=[];reasons=[]
     for index,item in enumerate(output.findings):
         try:valid.extend(validate_claims(output.model_copy(update={'findings':[item]}),category,sources,public))
         except AIError as error:
-            rejected+=1
+            rejected+=1;reasons.append(error.reason)
             issues.extend({**v,'field':v['field'].replace('findings.0.',f'findings.{index}.',1)} for v in error.violations)
     if output.findings and not valid:
-        raise AIError('invalid_output',True,reason='provenance',fields=('findings',),violations=issues)
+        raise AIError('invalid_output',True,reason=reasons[0] if len(set(reasons))==1 else 'provenance',fields=('findings',),violations=issues)
     return valid,rejected

@@ -1,5 +1,6 @@
 """Gemini interprets and selects saved context; reasoning is delegated selectively."""
 import json
+import re
 from langgraph.graph import StateGraph,START,END
 from langsmith import tracing_context
 from starlette.concurrency import run_in_threadpool as thread
@@ -13,6 +14,7 @@ from app.repositories.questions import QuestionStore,GOAL_FIELDS
 from app.schemas.jd import JDReply
 from app.workflows.structured import structured_node
 from app.ai.routing import chat_models
+from app.workflows.activity import activity
 
 
 async def semantic_chat(request,account,row,body):
@@ -28,6 +30,7 @@ async def semantic_chat(request,account,row,body):
         return result.data
 
     async def plan_context(state):
+        activity('understanding_question')
         goal,research=await thread(store.fetch,account,row,'overview')
         index=context_index(goal,research,row['workspace'].get('edit_draft'))
         allowed={item['ref'] for item in index['items']}
@@ -41,7 +44,14 @@ async def semantic_chat(request,account,row,body):
 
     async def retrieve(state):
         plan=state['plan']
-        if plan.topic in ('edit','off_topic') or plan.clarification or plan.missing:return state
+        if plan.topic in ('edit','off_topic') or plan.clarification:return state
+        if plan.research_focus:
+            from app.workflows.goal_question import research_question
+            async def check():
+                await thread(repo.check,account,body.session_id,body.expected_version)
+            facts,links=await research_question(request,state['title'],plan.research_focus,check)
+            return {**state,'facts':facts,'links':links,'partial':False}
+        if plan.missing:return state
         # Fixed projections and owner/linked-research checks remain backend-owned.
         from app.domain.context import PREFIXES
         topics=list(dict.fromkeys([plan.topic,*plan.related_topics,*[PREFIXES[ref[0]][0] for ref in plan.item_refs]]))
@@ -58,15 +68,20 @@ async def semantic_chat(request,account,row,body):
         if plan.topic=='off_topic':return {'result':JDReply(reply=REFUSAL,proposed_skills=None)}
         if plan.topic=='edit':return {'result':None}  # Existing validated GPT edit workflow.
         if plan.clarification:return {'result':JDReply(reply=plan.clarification,proposed_skills=None)}
-        if plan.missing or not state.get('facts'):return {'result':JDReply(reply=MISSING,proposed_skills=None)}
+        missing='I could not verify that detail in the public sources retrieved for this goal. What would you like to clarify or research next?' if plan.research_focus else MISSING
+        if not state.get('facts'):
+            return {'result':JDReply(reply=missing,proposed_skills=None)}
+        activity('answering_question')
         stage='focused_answer' if plan.needs_reasoning else 'context_answer'
         def validate(output):
             if output.status=='answered' and (not output.references or any(ref not in state['links'] for ref in output.references)):
                 raise AIError('invalid_output',True,reason='provenance',fields=('references',))
+            if re.search(r'https?://|\]\(',output.reply):
+                raise AIError('invalid_output',True,reason='provenance',fields=('reply',))
         result=await generate(stage,{'goal':state['title'],'facts':state['facts'],'partial':state['partial']},
                               question=plan.resolved_question,validate=validate)
         validate(result)
-        if result.status!='answered':return {'result':JDReply(reply=REFUSAL if result.status=='off_topic' else MISSING,proposed_skills=None)}
+        if result.status!='answered':return {'result':JDReply(reply=REFUSAL if result.status=='off_topic' else missing,proposed_skills=None)}
         # Citation URLs are restored from saved sources, never supplied by either model.
         sources={v['source_id']:v for ref in result.references for v in state['links'].get(ref,[])}
         reply=result.reply

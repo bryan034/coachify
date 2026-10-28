@@ -12,6 +12,9 @@ from app.repositories.goals import GoalError,now
 from app.schemas.analysis import ResearchSource
 
 
+OPPORTUNITY_SOURCE_LIMIT=3
+OPPORTUNITY_EXCERPT_LIMIT=8000
+
 def excerpt(text):return re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]*>',' ',text or ''))).strip()[:600]
 
 INTERVIEW_TERMS=re.compile(r'\b(?:interview|rounds?|stages?|assessments?|coding|technical|behavio[u]?ral|case study|screening)\b',re.I)
@@ -206,14 +209,14 @@ class SourceAPIs:
 
     async def collect_opportunity_query(self,context,query):
         if self.brave_mode!='llm_context':raise GoalError('Opportunity Intelligence requires Brave LLM Context mode.',503)
-        return await self.brave(query,country=search_country(context.location),focus=query)
+        return await self.brave(query,country=search_country(context.location),focus=query,max_sources=OPPORTUNITY_SOURCE_LIMIT,evidence_chars=OPPORTUNITY_EXCERPT_LIMIT)
 
-    async def brave(self,query,*,country='ALL',focus=None):
+    async def brave(self,query,*,country='ALL',focus=None,max_sources=6,evidence_chars=2400):
         if not self.brave_key:raise GoalError('The running career service has no Brave API key. After configuring BRAVE_API_KEY, recreate the career-service container and retry.',503)
         headers={'X-Subscription-Token':self.brave_key,'Accept':'application/json'}
         country=country if country in SEARCH_COUNTRIES else 'ALL'
         raw=await body(self.client,'GET','https://api.search.brave.com/res/v1/llm/context',headers=headers,timeout=30,
-            params={'q':query,'country':country,'count':30,'maximum_number_of_urls':6,
+            params={'q':query,'country':country,'count':30,'maximum_number_of_urls':max_sources,
                 'maximum_number_of_tokens':8192,'maximum_number_of_tokens_per_url':2048,
                 'maximum_number_of_snippets':30,'maximum_number_of_snippets_per_url':6,
                 'context_threshold_mode':'balanced','enable_local':'false',
@@ -223,7 +226,7 @@ class SourceAPIs:
         except (ValueError,UnicodeError,TypeError):raise GoalError('Brave returned invalid LLM context data.',503) from None
         sources=[]
         for value in results:
-            evidence=search_evidence(value,focus,budget=2400)
+            evidence=search_evidence(value,focus,budget=evidence_chars)
             if not evidence or error_excerpt(evidence):continue
             try:source=self.source('brave',value['url'],value.get('title') if isinstance(value.get('title'),str) else None,evidence)
             except (ValidationError,ValueError):continue
@@ -231,7 +234,7 @@ class SourceAPIs:
             from app.clients.research import normalize_sources
             try:sources.extend(normalize_sources([source]))
             except GoalError:continue
-            if len(sources)>=6:break
+            if len(sources)>=max_sources:break
         return sources
 
     @staticmethod

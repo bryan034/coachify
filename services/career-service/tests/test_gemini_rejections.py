@@ -92,7 +92,7 @@ def test_explicit_model_override_is_shared_by_all_roles_and_legacy_settings_stay
     adapter=AIAdapter(settings,None)
     router=opportunity_models(adapter,None,settings,OpportunitySettings(),None)
     assert router.primary is router.context is adapter
-    for stage in ('jd_scope','jd_extraction','opportunity_evaluate','opportunity_plan','discovery_extract'):
+    for stage in ('jd_scope','jd_extraction','opportunity_structure','opportunity_plan','discovery_extract'):
         request=AIInput(stage=stage,source_text='Analyst. SQL required.') if stage in ('jd_scope','jd_extraction') else AIInput(stage=stage,context='{}')
         assert adapter._payload(request)['model']=='gemini-3.6-flash'
 

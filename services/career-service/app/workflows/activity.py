@@ -3,6 +3,9 @@ from contextvars import ContextVar
 
 activity_observer=ContextVar('career_activity',default=None)
 LABELS={
+ 'understanding_question':'Understanding your question about this goal…',
+ 'searching_question':'Searching public sources for your question…',
+ 'answering_question':'Structuring an answer from the available evidence…',
  'identifying_job':'Identifying the job title, employer, location and position…',
  'extracting_requirements':'Extracting skills, responsibilities and other requirements…',
  'searching_interviews':'Searching for relevant interview experiences…',
