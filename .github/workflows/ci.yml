@@ -88,7 +88,8 @@ jobs:
 
   profile-integration:
     name: Profile MongoDB integration
-    runs-on: ubuntu-latest
+    # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     services:
       mongodb:
@@ -111,7 +112,8 @@ jobs:
 
   analysis-integration:
     name: Analysis MongoDB contracts (${{ matrix.service }})
-    runs-on: ubuntu-latest
+    # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -139,7 +141,8 @@ jobs:
 
   local-ui-integration:
     name: Local UI and MongoDB integration
-    runs-on: ubuntu-latest
+    # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
       AI_ENABLED: 'false'
