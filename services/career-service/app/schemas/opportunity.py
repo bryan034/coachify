@@ -6,6 +6,9 @@ from pydantic import BaseModel,ConfigDict,Field,StringConstraints,model_validato
 class Model(BaseModel):
     model_config=ConfigDict(extra='forbid')
 Text=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]
+Confidence=Literal['high','medium','low','insufficient_evidence']
+EvidenceType=Literal['official','candidate_reported','third_party','inferred']
+Scope=Literal['exact','related_role','related_location','related_employment','general']
 Category=Literal['interview_intelligence','internship_insights','career_progression','conversion_outcomes','company_intelligence']
 CATEGORIES=('interview_intelligence','internship_insights','career_progression','conversion_outcomes','company_intelligence')
 LEGACY_FIELDS={
@@ -25,17 +28,19 @@ class Finding(Model):
     finding_id:str=Field(pattern=r'^f[0-9a-f]{16}$')
     field:str=Field(max_length=40)
     value:Text
-    confidence:Literal['high','medium','low','insufficient_evidence']
-    evidence_type:Literal['official','candidate_reported','third_party','inferred']
+    confidence:Confidence
+    evidence_type:EvidenceType
     source_ids:list[str]=Field(min_length=1,max_length=3)
     quotes:list[Text]=Field(min_length=1,max_length=3)
-    scope:Literal['exact','related_role','related_location','related_employment','general']
+    scope:Scope
     conflict_group:str|None=Field(default=None,max_length=80)
     last_verified_at:datetime
 
 class CategoryResult(Model):
     status:Literal['pending','running','completed','partial','failed','not_applicable']='pending'
+    outcome:Literal['findings_found','no_relevant_sources','information_not_found','validation_failed','provider_failed']|None=None
     findings:list[Finding]=Field(default_factory=list,max_length=20)
+    source_ids:list[str]=Field(default_factory=list,max_length=3)
     missing_fields:list[str]=Field(default_factory=list,max_length=20)
     warnings:list[Text]=Field(default_factory=list,max_length=10)
     error_code:str|None=None

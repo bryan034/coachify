@@ -213,7 +213,12 @@ are shown in chat, with no provider/tool names or simulated model reasoning. The
 JD summary and final sourced research summary use word-by-word validated Markdown
 (reduced-motion support and Show full response). The Career Goal button explicitly
 opens populated cards; ordinary questions and refinement become available after the
-combined initial response is ready.
+combined initial response is ready. The frontend requests `/workspace/summary` after
+extraction and research finish, then renders Gemini's structured Markdown and validated
+citations. Progress is removed once this answer is ready. Summary retries preserve their
+operation key. Follow-up questions stay in the same conversation and can initiate public
+Brave research through Gemini's backend context route; their observed steps disappear
+when the cited reply arrives. Public answers do not silently edit the saved goal.
 Polling continues while any research category is pending, even after interview completion.
 Unrelated document intake shows a fixed career-only scope explanation. Client scope
 labels are backed by server validation; private technical diagnostics remain hidden.
@@ -233,3 +238,11 @@ current goal ID and use its version. There is no original-content restore action
 Saved goal details in chat remain readable when research fails or the workflow expires,
 including when AI is disabled. The combined response and composer still require completed
 research; the details panel does not present unfinished findings as complete.
+
+Opportunity category notices distinguish irrelevant sources, absent facts, validation
+failures and provider failures/timeouts using the backend outcome. Legacy saved
+reports without an outcome retain their existing status messages.
+
+Completed research chat displays every retained Gemini-structured finding verbatim
+with citations. Overview ordering uses stored finding IDs and makes no additional
+model request; frontend rendering does not paraphrase the saved wording.

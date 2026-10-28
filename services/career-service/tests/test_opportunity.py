@@ -16,7 +16,7 @@ from app.ai.adapter import AIAdapter,AIError,Operation
 from app.ai.config import AISettings,GeminiSettings
 from app.ai.contracts import AIInput
 from app.ai.routing import ModelRouter,opportunity_models
-from app.ai.opportunity_contracts import QueryPlan,Evaluation
+from app.ai.opportunity_contracts import QueryPlan,StructuredFindings
 from app.schemas.opportunity import CATEGORIES,Summary,OpportunityReport,CategoryResult
 from app.schemas.analysis import ResearchSource,ResearchContext
 from app.repositories.goals import GoalError,now
@@ -26,12 +26,12 @@ from tests.test_workspace import AI,OWNER,OTHER,headers,BASE,ingest
 class Primary(AI):
     def __init__(self):super().__init__();self.company='Example';self.quota=False;self.invalid=False;self.wait=False
     async def generate(self,request,operation,**kwargs):
-        if request.stage=='opportunity_evaluate':
+        if request.stage=='opportunity_structure':
             self.calls.append(request);data=json.loads(request.context)
             while self.wait:await asyncio.sleep(.02)
             if self.quota:self.quota=False;raise AIError('rate_limited',limit_scope='provider',retry_after=1)
             text=data['sources'][0]['excerpt']
-            output=Evaluation(findings=[{'field':data['allowed_fields'][0],'value':'invented' if self.invalid else text,'refs':[0],'quotes':[text],'confidence':'medium','evidence_type':'candidate_reported','scope':'exact','conflict_group':None}])
+            output=StructuredFindings(findings=[{'field':data['allowed_fields'][0],'value':'invented' if self.invalid else text,'refs':[0],'quotes':['fabricated excerpt' if self.invalid else text],'confidence':'medium','evidence_type':'candidate_reported','scope':'exact','conflict_group':None}])
             if kwargs.get('validate_output'):kwargs['validate_output'](output)
             return SimpleNamespace(data=output)
         result=await super().generate(request,operation,**kwargs)
@@ -45,7 +45,6 @@ class Gemini:
         if request.stage=='opportunity_plan':
             public=data.get('opportunity',data);base=' '.join(str(public.get(k) or '') for k in ('company','role','location'))
             output=QueryPlan(**{k:[f'{base} {k}',f'{base} additional {k}'] for k in CATEGORIES})
-        elif request.stage=='opportunity_summary':output=Summary(overview_refs=[data['validated_findings'][0]['id']])
         else:raise AssertionError(request.stage)
         if kwargs.get('validate_output'):kwargs['validate_output'](output)
         return SimpleNamespace(data=output)
@@ -147,7 +146,7 @@ def test_invalid_claim_repairs_are_bounded_and_no_unvalidated_facts_persist(oppo
     _,result,_=research(flow)
     assert result['status']=='failed'
     assert all(not c['findings'] for c in result['categories'].values())
-    assert len([v for v in flow[2].calls if v.stage=='opportunity_evaluate'])==10
+    assert len([v for v in flow[2].calls if v.stage=='opportunity_structure'])==10
 
 
 def test_quota_resume_does_not_repeat_paid_retrieval(opportunity_flow):
@@ -159,7 +158,7 @@ def test_quota_resume_does_not_repeat_paid_retrieval(opportunity_flow):
 def test_reasoning_and_planning_use_gemini_native_json_schema():
     context={'category':'internship_insights','sources':[{'ref':0,'excerpt':'Example interns report SGD 1500 per month.'}],'allowed_fields':['compensation']}
     adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture',max_output_tokens=4096),None)
-    for stage in ('opportunity_evaluate','opportunity_plan'):
+    for stage in ('opportunity_structure','opportunity_plan'):
         payload=adapter._payload(AIInput(stage=stage,context=json.dumps(context)))
         assert payload['model']=='gemini-3.5-flash-lite' and payload['response_format']['type']=='json_schema'
         assert 'max_tokens' in payload and 'max_completion_tokens' not in payload
@@ -169,9 +168,9 @@ def test_reasoning_and_planning_use_gemini_native_json_schema():
 def test_forged_quotes_refs_and_unbacked_value_are_rejected():
     source=ResearchSource(source_id='a',platform='other',url='https://example.test/report',evidence='Interns receive SGD 1500 per month.')
     base={'field':'compensation','value':'SGD 1500 per month','refs':[0],'quotes':[source.evidence],'confidence':'low','evidence_type':'candidate_reported','scope':'exact'}
-    assert validate_claims(Evaluation(findings=[base]),'internship_insights',[source])
+    assert validate_claims(StructuredFindings(findings=[base]),'internship_insights',[source])
     for change in ({'refs':[1]},{'value':'SGD 9000'},{'quotes':['SGD 9000']}):
-        with pytest.raises(AIError):validate_claims(Evaluation(findings=[{**base,**change}]),'internship_insights',[source])
+        with pytest.raises(AIError):validate_claims(StructuredFindings(findings=[{**base,**change}]),'internship_insights',[source])
 
 
 def test_expired_category_refresh_does_not_repeat_fresh_categories(opportunity_flow):
@@ -207,7 +206,7 @@ def test_durable_restart_reuses_completed_searches(opportunity_flow):
 def test_employee_pay_is_qualified_for_an_internship_and_conflicts_stay_separate():
     evidence='Example full-time employees report SGD 5000 monthly; another report says SGD 6000 monthly.'
     source=ResearchSource(source_id='a',platform='other',url='https://example.test/report',evidence=evidence)
-    output=Evaluation(findings=[{'field':'compensation','value':value,'refs':[0],'quotes':[evidence],'confidence':'high','evidence_type':'candidate_reported','scope':'exact','conflict_group':'salary'} for value in ('SGD 5000 monthly','SGD 6000 monthly')])
+    output=StructuredFindings(findings=[{'field':'compensation','value':value,'refs':[0],'quotes':[evidence],'confidence':'high','evidence_type':'candidate_reported','scope':'exact','conflict_group':'salary'} for value in ('SGD 5000 monthly','SGD 6000 monthly')])
     result=validate_claims(output,'internship_insights',[source],{'company':'Example','employment_type':'internship'})
     assert len(result)==2 and all(f.scope=='related_employment' and f.confidence=='low' for f in result)
     assert [f.value for f in result]==['SGD 5000 monthly','SGD 6000 monthly']
@@ -232,7 +231,7 @@ def test_optional_live_provider_contract_smoke():
                 context={'opportunity':public,'category':'interview_intelligence','allowed_fields':['recruitment_stages','preparation_topics'],
                     'sources':[{'ref':0,'title':results[0].title,'excerpt':results[0].evidence}]}
                 def validate(output):validate_claims(output,'interview_intelligence',results[:1],public)
-                await router.generate(AIInput(stage='opportunity_evaluate',context=json.dumps(context)),Operation('live-public-smoke','public','opportunity_evaluate'),current_revision=lambda:'public',validate_output=validate)
+                await router.generate(AIInput(stage='opportunity_structure',context=json.dumps(context)),Operation('live-public-smoke','public','opportunity_structure'),current_revision=lambda:'public',validate_output=validate)
     asyncio.run(run())
 
 
@@ -254,7 +253,7 @@ def test_duplicate_claims_merge_real_citations_without_averaging():
     text='Interns receive SGD 1500 monthly.'
     a=ResearchSource(source_id='a',platform='other',url='https://example.test/a',evidence=text)
     b=a.model_copy(update={'source_id':'b','url':'https://example.test/b'})
-    claims=Evaluation(findings=[{'field':'compensation','value':'SGD 1500 monthly','refs':[i],'quotes':[text],'confidence':'low','evidence_type':'candidate_reported','scope':'exact'} for i in (0,1)])
+    claims=StructuredFindings(findings=[{'field':'compensation','value':'SGD 1500 monthly','refs':[i],'quotes':[text],'confidence':'low','evidence_type':'candidate_reported','scope':'exact'} for i in (0,1)])
     result=dedupe_findings('internship_insights',validate_claims(claims,'internship_insights',[a,b]))
     assert len(result)==1 and set(result[0].source_ids)=={'a','b'} and result[0].value=='SGD 1500 monthly'
 
@@ -269,18 +268,18 @@ def test_follow_up_evidence_reaches_reasoner_without_discarding_previous_finding
             return [values[0].model_copy(update={'url':values[0].url+'/followup','evidence':values[0].evidence+' A followup report adds detail.'})]
         return values
     async def generate(request,operation,**kwargs):
-        if request.stage!='opportunity_evaluate':return await original_generate(request,operation,**kwargs)
+        if request.stage!='opportunity_structure':return await original_generate(request,operation,**kwargs)
         primary.calls.append(request);data=json.loads(request.context);text=data['sources'][0]['excerpt']
         if quota_followup and 'followup' in text and data['category'] not in paused:
             paused.add(data['category'])
             raise AIError('rate_limited',limit_scope='user',retry_after=1)
-        output=Evaluation(findings=[{'field':data['allowed_fields'][0],'value':text,'refs':[0],'quotes':[text],'confidence':'low','evidence_type':'candidate_reported','scope':'exact'}],follow_up_query=None if 'followup' in text else 'Example '+data['category']+' followup')
+        output=StructuredFindings(findings=[{'field':data['allowed_fields'][0],'value':text,'refs':[0],'quotes':[text],'confidence':'low','evidence_type':'candidate_reported','scope':'exact'}],follow_up_query=None if 'followup' in text else 'Example '+data['category']+' followup')
         kwargs['validate_output'](output)
         return SimpleNamespace(data=output)
     search.collect_opportunity_query=collect;primary.generate=generate
     ingest(flow);_,result,_=research(flow)
     assert len(search.calls)==10
-    evaluations=[json.loads(call.context) for call in primary.calls if call.stage=='opportunity_evaluate']
+    evaluations=[json.loads(call.context) for call in primary.calls if call.stage=='opportunity_structure']
     assert len(evaluations)==(15 if quota_followup else 10)
     assert len([data for data in evaluations if 'followup' not in data['sources'][0]['excerpt']])==5
     for category in result['categories'].values():
@@ -293,7 +292,7 @@ def test_workspace_reports_quota_wait_instead_of_research_unavailable(opportunit
     flow=opportunity_flow;primary=flow[2];original=primary.generate;paused=False
     async def generate(request,operation,**kwargs):
         nonlocal paused
-        if request.stage=='opportunity_evaluate' and json.loads(request.context)['category']=='interview_intelligence' and not paused:
+        if request.stage=='opportunity_structure' and json.loads(request.context)['category']=='interview_intelligence' and not paused:
             paused=True
             raise AIError('rate_limited',limit_scope='user',retry_after=2)
         return await original(request,operation,**kwargs)
@@ -325,7 +324,7 @@ def test_global_validation_failure_reports_specific_code_and_ends_workspace_spin
 def test_quota_pause_does_not_reset_the_invalid_response_repair_budget(opportunity_flow):
     flow=opportunity_flow;primary=flow[2];primary.invalid=True;original=primary.generate;attempts={}
     async def generate(request,operation,**kwargs):
-        if request.stage=='opportunity_evaluate':
+        if request.stage=='opportunity_structure':
             category=json.loads(request.context)['category'];attempts[category]=attempts.get(category,0)+1
             if attempts[category]==2:raise AIError('rate_limited',limit_scope='user',retry_after=1)
         return await original(request,operation,**kwargs)
@@ -341,7 +340,26 @@ def test_one_invalid_citation_does_not_discard_independently_supported_findings(
     text='Example candidates report a technical interview.'
     source=ResearchSource(source_id='s1',platform='other',url='https://example.test/report',evidence=text)
     good={'field':'recruitment_stages','value':'technical interview','refs':[0],'quotes':[text],'confidence':'medium','evidence_type':'candidate_reported','scope':'exact'}
-    output=Evaluation(findings=[good,{**good,'value':'fabricated stage'}])
+    output=StructuredFindings(findings=[good,{**good,'quotes':['fabricated source quote']}])
     findings,rejected=supported_claims(output,'interview_intelligence',[source])
     assert rejected==1 and len(findings)==1 and findings[0].value=='technical interview'
     assert findings[0].quotes==[text]
+
+
+def test_category_can_follow_up_but_retains_only_three_useful_sources(opportunity_flow):
+    flow=opportunity_flow;search=flow[4];collect=search.collect_opportunity_query
+    primary=flow[2];generate=primary.generate
+    async def three(context,query):
+        values=await collect(context,query)
+        first=values[0]
+        return [first.model_copy(update={'url':first.url+f'/{i}','source_id':first.source_id+str(i)}) for i in range(3)]
+    async def suggest(request,operation,**kwargs):
+        result=await generate(request,operation,**kwargs)
+        if request.stage=='opportunity_structure':result.data.follow_up_query='Example additional focused evidence'
+        return result
+    search.collect_opportunity_query=three;primary.generate=suggest
+    ingest(flow);_,result,_=research(flow)
+    assert result['status']=='completed' and len(search.calls)==10
+    job=flow[1].research_contexts.find_one({'kind':'opportunity_job'})
+    assert all(len(values)<=3 for values in job['retained_sources'].values())
+    assert all(category['searches']==2 for category in result['categories'].values())

@@ -63,3 +63,16 @@ it('loads version-pinned evidence only when its disclosure is opened',async()=>{
  await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.some(call=>call[0]==='/goals/goal/opportunity-research/findings/f0000000000000001/evidence?research_id=research')).toBe(true));
  expect((await screen.findAllByText('Interns report SGD 1500 per month')).length).toBeGreaterThan(0);
 });
+
+it.each([
+ ['no_relevant_sources','The searches did not find sources relevant to this category.'],
+ ['information_not_found','Relevant sources were found, but they did not provide supported information for this category.'],
+ ['validation_failed','Proposed findings could not be verified. Available findings are preserved; refresh this section to retry.'],
+ ['provider_failed','A research provider could not complete the request. Available findings are preserved; refresh this section to retry.'],
+] as const)('explains the %s outcome without a generic no-results message',async(outcome,message)=>{
+ value.categories.interview_intelligence={...result,outcome,findings:[],warnings:[],status:outcome.endsWith('failed')?'failed':'completed'};
+ render(<OpportunityIntelligence goalId="goal" version={1} selectionVersion={2}/>);
+ await screen.findByText(message);
+ const category=screen.getByText('Interview Intelligence').closest('details')!;
+ expect(within(category).queryByText('No supported findings are available yet.')).not.toBeInTheDocument();
+});

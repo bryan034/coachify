@@ -93,12 +93,39 @@
           "title": "Status",
           "type": "string"
         },
+        "outcome": {
+          "anyOf": [
+            {
+              "enum": [
+                "findings_found",
+                "no_relevant_sources",
+                "information_not_found",
+                "validation_failed",
+                "provider_failed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        },
         "findings": {
           "items": {
             "$ref": "#/$defs/Finding"
           },
           "maxItems": 20,
           "title": "Findings",
+          "type": "array"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Source Ids",
           "type": "array"
         },
         "missing_fields": {
@@ -833,7 +860,7 @@
         "evidence": {
           "anyOf": [
             {
-              "maxLength": 2400,
+              "maxLength": 8000,
               "minLength": 1,
               "type": "string"
             },

@@ -6,9 +6,12 @@ the latest goal automatically; a new extracted JD replaces the conversation.
 
 Brave research exclusively calls `/res/v1/llm/context`, including discovery,
 interview research and Opportunity Intelligence. Legacy search/answers mode settings
-are ignored. Fuller extraction uses 30 candidates, six URLs, 8,192 context tokens,
-2,048 per URL and six snippets per URL; saved evidence is capped at 2,400 characters
-per source. Gemini 3.5 Flash Lite runs every reasoning/extraction/chat stage. See
+are ignored. Opportunity research retains the best three useful URLs per category
+after bounded follow-ups; reaching three initial URLs does not stop a weak search.
+Other research uses up to six URLs. Retrieval considers 30 candidates, 8,192 context
+tokens, 2,048 per URL and six snippets per URL. Saved evidence allows 8,000 characters
+per source for Opportunity and 2,400 for other research, within model budgets.
+Gemini 3.5 Flash Lite runs every reasoning/extraction/chat stage. See
 [retrieval and evidence parameters](ANALYSIS_CONTRACTS.md).
 
 ## JD inputs — J01/J06/J07
@@ -24,11 +27,12 @@ characters; original documents and full extracted text are transient.
 - `GET /api/v1/career/workspace` — Open the account's latest goal and processing state.
 - `POST /api/v1/career/workspace/jd` — Extract a new JD, save it as current and start interview research. Requires a UUID idempotency key.
 - `PATCH /api/v1/career/workspace/review` — Compatibility API for saving structured details, skills and conditions. The app uses chat for edits. Requires session ID, expected review version and UUID idempotency key.
+- `POST /api/v1/career/workspace/summary` — Generate a Gemini Markdown overview from the current goal and completed, linked research. Requires session/goal version, research ID and UUID idempotency key; supports background operations.
 - `POST /api/v1/career/workspace/messages` — Ask scoped questions about the saved role, requirements and interviews. Clear questions use focused retrieval; ambiguous ones use a small router. Ask for changes to any supported goal field here. The agent asks guided questions until the change is specific, then validates and saves it automatically.
 - `GET /api/v1/career/workspace/operations/{operation_id}` — Read an account-owned extraction/chat job and its automatic quota countdown.
 - `POST /api/v1/career/workspace/retry` — Resume expired work or retry failed research.
 
-Successful extraction fills the saved goal overview immediately while keeping the user in the chat. Public retrieval overlaps full JD extraction after the identity check. The chat shows progress until extraction and all applicable research categories plus summary finish successfully, then types one combined response word by word. A new JD replaces the entire goal only after successful extraction. LangGraph researches public opportunity evidence. The chat composer opens after the combined response is ready; the underlying saved-goal APIs remain available while research is pending or unavailable; interview claims require saved evidence. The initial explanation is built from saved fields without another model call. It
+Successful extraction fills the saved goal overview immediately while keeping the user in the chat. Public retrieval overlaps full JD extraction after the identity check. The chat shows progress until extraction and all applicable research categories plus summary finish successfully, then types one combined response word by word. A new JD replaces the entire goal only after successful extraction. LangGraph researches public opportunity evidence. The chat composer opens after the combined response is ready; the underlying saved-goal APIs remain available while research is pending or unavailable; interview claims require saved evidence. The initial explanation is written by Gemini from saved goal fields and completed research; Python validates and restores citations. Temporary observed activity disappears when the answer is ready. Missing details and explicit further-research requests can trigger a focused Brave search selected by Gemini. Public searches use only saved employer/role/location and an allowlisted focus; answers cite retrieved evidence without automatically changing the goal. It
 covers role scope, high-level skills, supported interview stages and an explicitly
 sourced round count (unknown otherwise). Unknown stages remain unknown. No confirmation button or
 conversation selector is used. Every stage uses the server-only `GEMINI_API_KEY`
@@ -110,15 +114,15 @@ attachment's limitations. Choosing a direction automatically makes it current.
 - `POST /api/v1/career/goals/{id}/opportunity-research` — Start/reuse/refresh with expected goal/selection versions and UUID idempotency; optional category refresh.
 
 The configured path starts after goal validation. Gemini plans role-tailored queries, five LangGraph
-branches retrieve Brave LLM Context and use the primary reasoner for cited evidence,
-then Gemini selects validated summary findings. Each category saves progress independently;
+branches retrieve Brave LLM Context and use Gemini to structure cited findings,
+then Python builds overview references from saved findings. Each category saves progress independently;
 failed categories retain other results. The overview has expandable Interview Intelligence,
 Internship Insights, Career Progression, Historical Conversion Rates and Company and Team Culture with sources/confidence/context, dates,
 missing information and targeted refresh. No-company targets research all five categories as explicitly general role context.
 
 Durable jobs and category cache use existing `research_contexts`; typed immutable reports
 extend `interview_research`. Worker leases, checkpoint/restart recovery and receipt/version
-checks prevent duplicate paid retrieval and stale publication. Gemini evaluates all categories
+checks prevent duplicate paid retrieval and stale publication. Gemini structures all categories
 against the existing JSON fields and exact citations. See [feature specification, graph, API models, limits and setup](OPPORTUNITY_INTELLIGENCE.md).
 
 Legacy interview endpoints remain readable/compatible:
@@ -194,6 +198,13 @@ There is no original-content restore action; startup clears its retired stored c
 only when their versions change. Finding evidence is fetched on expansion through
 `/goals/{id}/opportunity-research/findings/{finding_id}/evidence?research_id={id}`.
 Standard responses omit source excerpts, quotes and duplicate interview structures.
-Exact quotes allow whitespace-only normalization; checked presentation summaries stay
-separate from evidence. Missing information is a successful “not found” result, not a
-category failure. See [the contract](ANALYSIS_CONTRACTS.md#canonical-goal-and-compact-reads--28-october-2026).
+Exact quotes allow whitespace-only normalization. Values may paraphrase cited excerpts
+from a single Gemini structuring pass. Source IDs match the cited records exactly, and every
+number must occur verbatim in a cited excerpt. Quotes stay separate from displayed text. The final finding wording is shown directly
+in chat; no second Gemini grading, rewrite or overview-selection call is made. Generation and storage share label/text rules,
+and rejected findings retain precise field-level repair feedback. Missing information
+is a successful “not found” result, not a category failure. See [the contract](ANALYSIS_CONTRACTS.md#canonical-goal-and-compact-reads--28-october-2026).
+
+Category outcomes distinguish irrelevant results, absent facts, validation failures
+and provider failures. Category refresh preserves cached findings and retained source
+links. See [coverage outcomes](OPPORTUNITY_INTELLIGENCE.md#coverage-outcomes-and-follow-ups).

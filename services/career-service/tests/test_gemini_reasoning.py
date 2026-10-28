@@ -9,7 +9,7 @@ from app.ai.adapter import AIAdapter,AIError,MODEL_OUTPUTS,Operation
 from app.ai.config import GeminiSettings
 from app.ai.contracts import AIInput
 from app.ai.opportunity_config import OpportunitySettings
-from app.ai.opportunity_contracts import Evaluation,FIELD_GUIDANCE
+from app.ai.opportunity_contracts import StructuredFindings,FIELD_GUIDANCE
 from app.ai.routing import ModelRouter
 from app.clients.search_sources import SourceAPIs
 from app.repositories.goals import now
@@ -80,7 +80,7 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
             payload=json.loads(request.content)
             assert payload['model']=='gemini-3.5-flash-lite' and payload['response_format']['type']=='json_schema'
             schema=payload['response_format']['json_schema']
-            assert schema['name']=='opportunity_evaluate'
+            assert schema['name']=='opportunity_structure'
             supplied=json.loads(payload['messages'][1]['content'])
             assert supplied['field_guidance']==FIELD_GUIDANCE[category]
             excerpt=supplied['sources'][0]['excerpt']
@@ -96,8 +96,8 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
                 'sources':[{'ref':i,'title':s.title,'url':s.url,'excerpt':s.evidence} for i,s in enumerate(selected)]}
             public={'company':'Example','employment_type':'internship'}
             adapter=AIAdapter(GeminiSettings(enabled=True,api_key='synthetic-gemini',max_output_tokens=4096),client)
-            result=await adapter.generate(AIInput(stage='opportunity_evaluate',context=json.dumps(context)),
-                Operation('synthetic','1','opportunity_evaluate'),current_revision=lambda:'1',
+            result=await adapter.generate(AIInput(stage='opportunity_structure',context=json.dumps(context)),
+                Operation('synthetic','1','opportunity_structure'),current_revision=lambda:'1',
                 validate_output=lambda output:supported_claims(output,category,selected,public))
         findings,rejected=supported_claims(result.data,category,selected,public)
         assert not rejected and {f.field for f in findings}==set(fields)
@@ -110,7 +110,7 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
         assert all(f.source_ids==[sources[0].source_id] and f.quotes[0] in sources[0].evidence for f in findings)
         # Provider schema success alone cannot authorise an alias or forged quote.
         for changes in ({'field':'salary'},{'quotes':['Invented interview detail.']}):
-            invalid=Evaluation(findings=[result.data.findings[0].model_copy(update=changes)])
+            invalid=StructuredFindings(findings=[result.data.findings[0].model_copy(update=changes)])
             with pytest.raises(AIError):supported_claims(invalid,category,selected,public)
     asyncio.run(run())
 

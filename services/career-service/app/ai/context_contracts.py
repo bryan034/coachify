@@ -15,6 +15,7 @@ class ContextPlan(Contract):
     needs_reasoning:bool=False
     missing:bool=False
     clarification:Evidence|None=None
+    research_focus:Literal["location","compensation","eligibility","dates","role_details","interviews","workplace","career_progression","conversion"]|None=None
     resolved_question:Evidence
 
 CONTEXT_PROMPT='''Understand the user's question for ONE saved career goal using the supplied index
@@ -39,5 +40,9 @@ Only setting/refining this career goal, understanding its job description, saved
 and sourced opportunity/interview preparation are in scope. A job-related label does not authorise
 general document processing, producing deliverables, medical/legal advice or arbitrary questions.
 Mixed requests containing an unrelated task must be off_topic; do not fulfil the unrelated part.
-Do not answer the user in this plan. Missing facts stay missing.
+For missing public goal details or an explicit request for further/current research, select
+research_focus: location, compensation, eligibility, dates, role_details, interviews,
+workplace, career_progression or conversion. Python constructs a public-only search
+from the saved employer/role and this focus; never include personal user information.
+Do not research ambiguous, edit or off_topic requests. Do not answer in this plan.
 '''

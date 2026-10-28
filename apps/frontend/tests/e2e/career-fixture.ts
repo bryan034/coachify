@@ -36,6 +36,23 @@ export function careerFixture(url:string,input:Json):Json{
  const parsed=new URL(url),path=parsed.pathname;
  if(!path.includes('/career/'))return input;
  const value=canonical(input),goalId=path.match(/\/goals\/([^/]+)/)?.[1]||latest?.current?.goal?._id;
+ if(path.endsWith('/workspace/summary')){
+  const goal=(value.current?.goal?value:latest)?.current?.goal;
+  if(!goal)throw new Error('Summary fixture requires a saved goal');
+  const report=reports.get(goal._id)||publicReport(goal._id);
+  const labels:Record<string,string>={interview_intelligence:'Interview findings',internship_insights:'Internship experience',career_progression:'Career progression and conversion salary',conversion_outcomes:'Historical full-time conversion rates',company_intelligence:'Company and team culture'};
+  return {reply:[
+   '## Your career goal',`Let’s look at ${goal.role}${goal.company?' at '+goal.company:''}.`,
+   goal.location?`**Location:** ${goal.location}`:'',
+   '### Role overview',goal.summary||'',...(goal.responsibilities||[]).map((v:string)=>'- '+v),
+   '### Skills for this role',...(goal.skills||[]).map((v:Json)=>`- **${v.name}** — ${v.priority}`),
+   ...(goal.non_skill_requirements?.length?['### Qualifications and conditions',...goal.non_skill_requirements.map((v:Json)=>'- '+v.description)]:[]),
+   ...Object.entries(report.categories as Record<string,Json>).flatMap(([key,category])=>[
+    '### '+labels[key],...(category.findings||[]).map((finding:Json)=>'- '+finding.value+' '+(report.sources||[]).filter((s:Json)=>finding.source_ids.includes(s.source_id)).map((s:Json)=>`[Source](${s.url})`).join(' ')),
+   ]),
+   'What would you like clarified or researched next?',
+  ].filter(Boolean).join('\n\n')};
+ }
  if(path.includes('/opportunity-research')){
   let report:Json=value.categories?value:reports.get(goalId)||publicReport(goalId);
   if(value.categories)reports.set(goalId,report);

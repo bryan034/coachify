@@ -20,12 +20,12 @@ from app.ai.waiting import quota_progress
 from app.ai.metrics import usage_observer
 from app.ai.opportunity_contracts import FIELD_GUIDANCE
 from app.workflows.model_waits import resume_obsolete_model_waits
-from app.clients.search_sources import SourceRateLimit
+from app.clients.search_sources import SourceRateLimit,OPPORTUNITY_SOURCE_LIMIT
 from app.repositories.goals import GoalError,now,fingerprint
 from app.schemas.analysis import ResearchContext,ResearchSource,InterviewResearch,Generation
 from app.schemas.opportunity import CATEGORIES,FIELDS,CategoryResult,OpportunityReport,Summary
 from .store import OpportunityStore
-from .sources import pool
+from .sources import pool,retain_useful
 from .queries import ACTIVITIES,planned_queries
 from app.domain.review import MAPPING_VERSION
 from .domain import whitespace,public_opportunity,validate_claims,summary_input,dedupe_findings,supported_claims
@@ -125,17 +125,7 @@ class OpportunityEngine:
                     attempts+=1
                     result=await self.ai.generate(AIInput(stage=stage,context=json.dumps(data,separators=(',',':'),ensure_ascii=False)),
                         Operation(job['owner'],job['goal_id'],stage),current_revision=lambda:job['goal_id'],validate_output=validate)
-                    validated=validate(result.data) if validate else None
-                    if stage=='opportunity_evaluate':
-                        accepted={(f.field,f.value,tuple(f.quotes)) for f in validated[0]} if validated else set()
-                        summaries=[{'ref':i,'summary':item.summary,'quotes':item.quotes} for i,item in enumerate(result.data.findings) if item.summary and whitespace(item.summary)!=whitespace(item.value) and (item.field,item.summary,tuple(item.quotes)) in accepted]
-                        if summaries:
-                            expected={item['ref'] for item in summaries}
-                            def support_check(output):
-                                if set(output.supported_refs)!=expected:
-                                    raise AIError('invalid_output',True,reason='provenance',fields=('summary',),
-                                        violations=[{'field':f'findings.{i}.summary','issue':'summary_not_supported'} for i in sorted(expected-set(output.supported_refs))])
-                            await self.generate(job,'opportunity_support',{'claims':summaries},support_check)
+                    if validate:validate(result.data)
                     return result.data
                 except AIError as error:
                     logger.warning('node=%s attempt=%s error_code=%s reason=%s limit_scope=%s',stage,attempt+1,error.code,error.reason,error.limit_scope)
@@ -174,9 +164,10 @@ class OpportunityEngine:
         category=state['category'];job=await self.job(state);old=CategoryResult.model_validate(job['categories'][category])
         if old.status not in ('pending','running'):return {'results':{category:old.model_dump(mode='json')}}
         started=time.monotonic();stamp=now();queries=job['queries'].get(category,[]);history=job.get('history',{}).get(category,[])
-        evidence=[ResearchSource.model_validate(v) for v in job.get('evidence',{}).get(category,[])]
+        evidence=pool([*job.get('evidence',{}).get(category,[]),*job.get('retained_sources',{}).get(category,[])])
         evaluated=list(job.get('evaluated',{}).get(category,[]))
         findings=old.findings;rejected=0;model_calls=0;error_code=None;pending=False
+        relevant_ids=set(job.get('relevant_sources',{}).get(category,[]))|set(old.source_ids)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}.status':'running'})
         try:
             rounds=0 if job.get('evaluation_complete',{}).get(category) else min(self.settings.max_searches,1+self.settings.max_followups)
@@ -200,25 +191,29 @@ class OpportunityEngine:
                             if not retryable or attempt==self.settings.retries:raise
                             await asyncio.sleep(.5*2**attempt)
                     history.append(query)
-                    evidence=pool([s.model_dump(mode='json') for s in [*(sources or []),*evidence]])[:self.settings.max_searches*6]
+                    evidence=pool([s.model_dump(mode='json') for s in [*(sources or []),*evidence]])[:(self.settings.max_searches+1)*OPPORTUNITY_SOURCE_LIMIT]
                     await thread(self.store.update,job['_id'],job['worker_token'],**{f'evidence.{category}':[s.model_dump(mode='json') for s in evidence],f'history.{category}':history})
                 # Quota pauses resume the unfinished evaluation, not earlier successful ones.
                 if history[index] in evaluated:continue
                 if not evidence:continue
                 # Keep useful passages even when a richer source exceeds the model
                 # evidence allowance without discarding all useful source text.
-                selected=select_evidence(evidence[:self.settings.max_searches*6],self.settings.evidence_tokens)
+                selected=select_evidence(evidence,self.settings.evidence_tokens)
                 if not selected:break
-                def validate(output):return supported_claims(output,category,selected,job['public'])
+                def validate(output):
+                    if any(ref<0 or ref>=len(selected) for ref in output.relevant_refs):
+                        raise AIError('invalid_output',True,reason='provenance',fields=('relevant_refs',),violations=[{'field':'relevant_refs','issue':'source_index_out_of_range'}])
+                    return supported_claims(output,category,selected,job['public'])
                 model_calls+=1
-                output=await self.generate(job,'opportunity_evaluate',{'opportunity':job['public'],'category':category,'allowed_fields':FIELDS[category],'field_guidance':FIELD_GUIDANCE[category],
+                output=await self.generate(job,'opportunity_structure',{'opportunity':job['public'],'category':category,'allowed_fields':FIELDS[category],'field_guidance':FIELD_GUIDANCE[category],
                     'existing_findings':[{'field':f.field,'value':f.value[:120],'scope':f.scope} for f in findings[:8]],
-                    'sources':[{'ref':i,'title':s.title,'url':s.url,'excerpt':s.evidence,'published_date':s.published_date.isoformat() if s.published_date else None,'reliability':s.reliability} for i,s in enumerate(selected)]},validate)
+                    'sources':[{'ref':i,'source_id':s.source_id,'title':s.title,'url':s.url,'excerpt':s.evidence,'published_date':s.published_date.isoformat() if s.published_date else None,'reliability':s.reliability} for i,s in enumerate(selected)]},validate)
+                relevant_ids.update(selected[ref].source_id for ref in output.relevant_refs)
                 current,discarded=supported_claims(output,category,selected,job['public']);rejected+=discarded
                 findings=dedupe_findings(category,[*findings,*current])
                 present={f.field for f in findings}
                 adequate=set(FIELDS[category])<=present and all(f.confidence in ('high','medium') and f.scope=='exact' and not f.conflict_group for f in findings)
-                query=' '.join((output.follow_up_query or '').split())[:180]
+                query=' '.join((output.follow_up_query or (queries[index+1] if not findings and index+1<len(queries) else '')).split())[:180]
                 complete=adequate or not query or query.casefold() in {q.casefold() for q in history} or index+1>=rounds
                 if not complete:
                     if len(queries)<=index+1:queries.append(query)
@@ -227,7 +222,8 @@ class OpportunityEngine:
                 # Findings, next query and evaluation cursor commit together before any next call.
                 await thread(self.store.update,job['_id'],job['worker_token'],**{
                     f'categories.{category}.findings':[f.model_dump(mode='json') for f in findings],
-                    f'evaluated.{category}':evaluated,f'evaluation_complete.{category}':complete,f'queries.{category}':queries})
+                    f'evaluated.{category}':evaluated,f'evaluation_complete.{category}':complete,f'queries.{category}':queries,
+                    f'relevant_sources.{category}':list(relevant_ids)})
                 if complete:break
         except AIError as error:
             error_code=error.code
@@ -244,6 +240,9 @@ class OpportunityEngine:
         except (GoalError,TimeoutError,ValueError) as error:
             error_code='source_timeout' if isinstance(error,TimeoutError) else 'source_unavailable'
             logger.warning('category=%s error_code=%s exception_type=%s',category,error_code,type(error).__name__)
+        findings,retained=retain_useful(category,findings,evidence,relevant_ids)
+        await thread(self.store.update,job['_id'],job['worker_token'],**{f'retained_sources.{category}':[s.model_dump(mode='json') for s in retained]})
+        outcome=None if pending else 'validation_failed' if error_code in ('invalid_output','incomplete_output') else 'provider_failed' if error_code else 'findings_found' if findings else 'information_not_found' if relevant_ids else 'no_relevant_sources'
         missing=[field for field in FIELDS[category] if field not in {f.field for f in findings}]
         status='pending' if pending else 'partial' if error_code and findings else 'failed' if error_code else 'completed'
         warnings=[]
@@ -252,7 +251,7 @@ class OpportunityEngine:
         if any(f.confidence in ('low','insufficient_evidence') for f in findings):warnings.append('Some findings have limited confidence; inspect their sources before relying on them.')
         if any(f.scope!='exact' for f in findings):warnings.append('Some reports concern related roles, locations or employment types.')
         if any(f.conflict_group for f in findings):warnings.append('Conflicting reports are preserved separately; figures are not averaged.')
-        result=CategoryResult(status=status,findings=findings,missing_fields=missing,warnings=warnings,error_code=error_code,
+        result=CategoryResult(status=status,outcome=outcome,source_ids=[s.source_id for s in retained],findings=findings,missing_fields=missing,warnings=warnings,error_code=error_code,
             researched_at=stamp,expires_at=stamp+timedelta(hours=self.settings.incomplete_hours if missing or error_code else self.settings.freshness_hours),
             searches=len(history),model_calls=min(20,old.model_calls+model_calls),latency_ms=int((time.monotonic()-started)*1000))
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}':result.model_dump(mode='json')})
@@ -262,12 +261,15 @@ class OpportunityEngine:
     async def quality(self,state):
         # Revalidate persisted branch values; missing citations can never reach summary/storage.
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
-        sources={s.source_id:s for s in pool([*job.get('sources',[]),*[s for values in job.get('evidence',{}).values() for s in values]])}
+        sources={s.source_id:s for s in pool([s for values in job.get('retained_sources',job.get('evidence',{})).values() for s in values])}
         for key,result in categories.items():
             valid=[f for f in result.findings if all(s in sources and whitespace(q) in whitespace(sources[s].evidence or '') for s,q in zip(f.source_ids,f.quotes))]
             if len(valid)!=len(result.findings):
-                result.findings=valid;result.warnings=(result.warnings+['Some claims exceeded the bounded evidence budget.'])[:10]
-                result.missing_fields=[f for f in FIELDS[key] if f not in {v.field for v in valid}]
+                result.warnings=(result.warnings+['Some claims exceeded the bounded evidence budget.'])[:10]
+                result.error_code='invalid_output';result.outcome='validation_failed'
+                result.status='partial' if valid else 'failed'
+            result.findings=dedupe_findings(key,valid)
+            result.missing_fields=[f for f in FIELDS[key] if f not in {v.field for v in result.findings}]
             await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{key}':result.model_dump(mode='json')})
         return {'results':{k:v.model_dump(mode='json') for k,v in categories.items()}}
 
@@ -275,12 +277,11 @@ class OpportunityEngine:
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in state['results'].items()};facts=summary_input(categories)
         if not facts or any(v.status=='pending' for v in categories.values()):return {'summary':{}}
         await thread(self.store.rows.update_one,{'_id':job['_id'],'worker_token':job['worker_token']},{'$addToSet':{'activities':'preparing_summary'}})
-        ids={v['id'] for v in facts}
-        def validate(output):
-            if any(ref not in ids for refs in output.model_dump().values() for ref in refs):raise AIError('invalid_output',True,reason='provenance')
-        # A failed/paused summary is unfinished research. Let the durable worker
-        # resume it; do not publish a successful-looking response without it.
-        summary=await self.generate(job,'opportunity_summary',{'validated_findings':facts},validate)
+        # Display the structuring model's wording verbatim; overview references
+        # are selected locally so no additional model can rewrite or block it.
+        ids=list(dict.fromkeys(f['id'] for f in facts))
+        considerations=[f['id'] for f in facts if f['scope']!='exact' or f['confidence'] in ('low','insufficient_evidence') or f['conflict_group']]
+        summary=Summary(overview_refs=ids[:3],key_takeaway_refs=ids[3:9],consideration_refs=considerations[:6])
         await thread(self.store.update,job['_id'],job['worker_token'],summary_error=False)
         return {'summary':summary.model_dump()}
 
@@ -290,7 +291,7 @@ class OpportunityEngine:
         pending=any(v.status=='pending' for v in categories.values());applicable=[v for v in categories.values() if v.status!='not_applicable'];failed=bool(applicable) and all(v.status=='failed' for v in applicable)
         complete=all(v.status in ('completed','not_applicable') for v in categories.values())
         status='failed' if failed else 'completed' if complete else 'partial'
-        stamp=now();sources=pool([*job.get('sources',[]),*[s for values in job.get('evidence',{}).values() for s in values]])
+        stamp=now();sources=pool([s for values in job.get('retained_sources',job.get('evidence',{})).values() for s in values])
         primary=getattr(self.ai,'primary',self.ai);coordinator=getattr(self.ai,'context',None)
         models={k:v for k,v in {'reasoning':getattr(getattr(primary,'settings',None),'model',None),'coordination':getattr(getattr(coordinator,'settings',None),'model',None)}.items() if v}
         report=OpportunityReport(models=models,fingerprint=context.details_fingerprint,opportunity_id=context.details_fingerprint if context.company else None,
@@ -299,7 +300,7 @@ class OpportunityEngine:
         record=InterviewResearch(_id=str(ObjectId()),version=cache['version'],skill_mapping_version=MAPPING_VERSION,created_at=stamp,updated_at=stamp,
             **context.model_dump(),intelligence=report,sources=sources,
             research_status='failed' if failed else 'succeeded' if any(v.findings for v in categories.values()) else 'no_findings',last_researched_at=stamp,
-            generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-five-intents-v2',generated_at=stamp))
+            generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-structured-findings-v3',generated_at=stamp))
         record=await thread(self.store.research.finish,context,cache['token'],record)
         if not pending:await thread(self.store.rows.update_one,{'_id':identifier,'worker_token':token},{'$addToSet':{'activities':'research_complete'}})
         failure=next((v.error_code for v in categories.values() if v.error_code),None)

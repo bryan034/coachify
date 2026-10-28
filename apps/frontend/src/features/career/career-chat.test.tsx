@@ -19,6 +19,19 @@ beforeEach(()=>{
  vi.mocked(careerApi).mockImplementation(async(path,_token,options)=>{
   if(path.includes('/opportunity-research'))return research as never;
   if(path==='/workspace/jd')return active as never;
+  if(path==='/workspace/summary'){
+   const g=active.current.goal!;
+   const labels={interview_intelligence:'Interview findings',internship_insights:'Internship experience',career_progression:'Career progression and conversion salary',conversion_outcomes:'Historical full-time conversion rates',company_intelligence:'Company and team culture'};
+   const reach=[...active.coverage].reverse().find(v=>v.target_sources!=null);
+   return {reply:[
+    '## Your career goal',`Let’s look at ${g.role}.`,g.location,g.summary,
+    g.requirements_need_review?'The role context changed; please review the requirements.':'',
+    ...g.responsibilities||[], '### Skills for this role', ...g.skills.map(v=>`- **${v.name}** — ${v.priority}`),
+    reach?`${reach.useful_sources||0} distinct sources. ${(reach.useful_sources||0)<(reach.target_sources||3)?'Findings remain limited.':''}`:'',
+    ...Object.entries(research.categories).flatMap(([key,c])=>['### '+labels[key as keyof typeof labels],...(c?.findings||[]).map(f=>f.value+' '+(research.sources||[]).filter(v=>f.source_ids.includes(v.source_id)).map(v=>`[Source](${v.url})`).join(' '))]),
+    'What would you like clarified or researched next?',
+   ].filter(Boolean).join('\n\n')} as never;
+  }
   if(path==='/workspace/messages'){
    if(failChat)throw new Error('Provider unavailable');
    return {reply:'Practise Python for the reported coding exercise.',proposed_skills:null} as never;
@@ -202,7 +215,7 @@ it('shows initial research activity in the chat and replaces it when research is
  }finally{view?.unmount();vi.useRealTimers();}
 });
 
-it('summarises category findings without an extra answering call',async()=>{
+it('requests a Gemini overview after research completes',async()=>{
  research.categories.interview_intelligence!.findings[0].value='Recruiter screen and 3 reported interview rounds';
  await chat();
  expect(screen.getByRole('log')).toHaveTextContent('3 reported interview rounds');
@@ -360,7 +373,7 @@ it('shows observed research steps during JD extraction without exposing provider
   await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
   expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
   expect(replace).not.toHaveBeenCalledWith('/career-goal');
-  expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Saving your career goal');
+  expect(screen.queryByRole('status',{name:'Career goal progress'})).toBeNull();
  }finally{view?.unmount();vi.useRealTimers();}
 });
 
@@ -417,4 +430,66 @@ it.each(['research_failed','expired'])('keeps saved goal details readable after 
  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
  expect(screen.queryByText('PRIVATE provider diagnostic')).toBeNull();
+});
+
+
+it('shows all saved structured findings verbatim when research completes',async()=>{
+ const category=research.categories.interview_intelligence!;
+ category.findings=Array.from({length:6},(_,i)=>({...category.findings[0],finding_id:'f'+String(i+1).padStart(16,'0'),value:`Structured finding ${i+1}: the team describes its interview experience.`}));
+ await chat();
+ const log=screen.getByRole('log');
+ for(const finding of category.findings)expect(log).toHaveTextContent(finding.value);
+ expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/messages')).toBe(false);
+});
+
+it('waits for the generated overview and sends its exact saved snapshot',async()=>{
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ let complete:()=>void=()=>{};
+ api.mockImplementation(async(path,token,options)=>{
+  if(path==='/workspace/summary')await new Promise<void>(resolve=>{complete=resolve;});
+  return original(path,token,options);
+ });
+ mount();await screen.findByText('Preparing your career-goal summary…');
+ expect(screen.queryByText(/Let’s look at Engineer/)).toBeNull();
+ expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+ const call=api.mock.calls.find(([path])=>path==='/workspace/summary')!;
+ expect(JSON.parse(call[2]!.body as string)).toEqual({session_id:active.session_id,expected_version:1,research_id:active.research_id});
+ await act(async()=>complete());
+ await screen.findByText(/Let’s look at Engineer/);
+ expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ expect(screen.queryByText('Preparing your career-goal summary…')).toBeNull();
+});
+
+it('retries a failed overview with the same key and keeps saved details accessible',async()=>{
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;let fail=true;
+ api.mockImplementation(async(path,token,options)=>{
+  if(path==='/workspace/summary'&&fail)throw new Error('Synthetic failure');
+  return original(path,token,options);
+ });
+ mount();await screen.findByRole('button',{name:'Retry'});
+ expect(screen.getByRole('button',{name:'Role and research details'})).toBeEnabled();
+ const first=api.mock.calls.find(([path])=>path==='/workspace/summary')![2]?.headers;
+ fail=false;fireEvent.click(screen.getByRole('button',{name:'Retry'}));
+ await screen.findByText(/Let’s look at Engineer/);
+ const calls=api.mock.calls.filter(([path])=>path==='/workspace/summary');
+ expect(calls).toHaveLength(2);expect(calls[1][2]?.headers).toEqual(first);
+});
+
+it('removes focused research progress when the cited follow-up answer arrives',async()=>{
+ await chat();const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation(async(path,token,options)=>{
+  if(path==='/workspace/messages')return {operation_id:'e'.repeat(32),status:'running',activities:['understanding_question','searching_question'],retry_after:null,result:null} as never;
+  if(path.startsWith('/workspace/operations/'))return {operation_id:'e'.repeat(32),status:'succeeded',result:{reply:'The internship is in Singapore. [Source](https://example.test/job)'}} as never;
+  return original(path,token,options);
+ });
+ vi.useFakeTimers();
+ try{
+  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Find the internship location'}});
+  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Send message'})));
+  expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Searching public sources');
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
+  expect(screen.getByRole('log')).toHaveTextContent('The internship is in Singapore');
+  expect(screen.queryByRole('status',{name:'Career goal progress'})).toBeNull();
+  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ }finally{vi.useRealTimers();}
 });

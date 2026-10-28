@@ -117,6 +117,24 @@ class Chat(Contract):
     mode:Literal['question','refine']='question'
     conversation:list[Message]=Field(default_factory=list,max_length=12)
 
+class SummaryRequest(Contract):
+    session_id:str=Field(pattern=r'^[0-9a-f]{24}$')
+    expected_version:int=Field(strict=True,ge=1)
+    research_id:str=Field(pattern=r'^[0-9a-f]{24}$')
+
+class SummaryReply(Contract):
+    reply:str=Field(min_length=1,max_length=30000)
+
+@router.post('/summary',response_model=SummaryReply|OperationView,responses={202:{'model':OperationView}})
+async def summary(body:SummaryRequest,request:Request,response:Response,account=Depends(owner),
+                  key=Depends(request_key),prefer:str|None=Header(default=None,alias='Prefer')):
+    from app.workflows.goal_summary import summarize
+    if prefer=='respond-async':
+        response.status_code=202
+        return request.app.state.operations.submit(account,key,fingerprint(body.model_dump(mode='json')),'summary',
+            lambda:summarize(request,account,body))
+    return await summarize(request,account,body)
+
 @router.post('/messages',response_model=WorkspaceChatReply|OperationView,responses={202:{'model':OperationView}})
 async def message(body:Chat,request:Request,response:Response,account=Depends(owner),prefer:str|None=Header(default=None,alias='Prefer'),idempotency_key:str|None=Header(default=None,alias='Idempotency-Key')):
     if prefer == 'respond-async':

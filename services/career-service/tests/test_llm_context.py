@@ -170,3 +170,17 @@ def test_rich_retrieval_keeps_citation_quotes_within_the_existing_contract():
     items=evidence_items(AIInput(stage='interview_synthesis',public_context=ResearchContext(role='Analyst',field='Data'),sources=[source]))
     assert items and all(0<len(v['text'])<=600 and v['text'] in source.evidence for v in items)
     assert all(v['source_ids']==['rich'] for v in items)
+
+
+def test_opportunity_requests_and_retains_only_three_brave_sources():
+    async def run():
+        def handler(request):
+            assert request.url.params['maximum_number_of_urls']=='3'
+            return httpx.Response(200,json={'grounding':{'generic':[
+                {'url':f'https://example.test/{i}','snippets':[f'Candidate {i} reports an interview.']}
+                for i in range(6)]}})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            sources=await SourceAPIs(client,brave_key='fixture').collect_opportunity_query(
+                ResearchContext(role='Analyst',field='Data'),'Analyst interview')
+        assert len(sources)==3 and len({s.url for s in sources})==3
+    asyncio.run(run())

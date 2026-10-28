@@ -150,7 +150,7 @@ class ResearchSource(Contract):
     platform: Literal['employer', 'reddit', 'glassdoor', 'other']
     url: SourceUrl
     title: Text | None = None
-    evidence: Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=2400)] | None = None
+    evidence: Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=8000)] | None = None
     reported_date: date | None = None
     published_date: date | None = None
     role_match: Literal['exact', 'related', 'unknown'] = 'unknown'

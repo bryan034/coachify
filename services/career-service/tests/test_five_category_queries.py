@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 from app.ai.adapter import AIError
 from app.ai.jd_scope import JobIdentity
-from app.ai.opportunity_contracts import QueryPlan,Evaluation,PROMPTS
+from app.ai.opportunity_contracts import QueryPlan,StructuredFindings,PROMPTS
 from app.repositories.goals import now
 from app.schemas.analysis import ResearchSource
 from app.schemas.opportunity import CATEGORIES,LEGACY_FIELDS,CategoryResult,OpportunityReport
@@ -68,18 +68,19 @@ def test_v1_reports_stay_readable_but_v2_requires_five_explicit_statuses():
     assert len(OpportunityReport(categories={k:CategoryResult(status='completed') for k in CATEGORIES},**base).categories)==5
 
 
-@pytest.mark.parametrize(('text','valid'),[
- ('Example interns in the 2025 Singapore cohort had a 50% full-time conversion rate.',True),
- ('One Example intern received a return offer in 2025.',False),
- ('Example interns had a 50% conversion rate.',False),
- ('Example company revenue grew 50% in 2025.',False),
+@pytest.mark.parametrize(('text','value','valid'),[
+ ('Example interns in the 2025 cohort had a 50% conversion rate.','The 2025 intern conversion rate was 50%.',True),
+ ('One Example intern received a return offer in 2025.','The 2025 intern conversion rate was 50%.',False),
+ ('Example interns had a 50% conversion rate.','The intern conversion rate was 50%.',True),
+ ('Example company revenue grew 50% in 2025.','The intern conversion rate was 75%.',False),
 ])
-def test_conversion_percentage_needs_historical_intern_cohort_evidence(text,valid):
+def test_conversion_numbers_must_match_but_missing_year_is_not_a_failure(text,value,valid):
     source=ResearchSource(source_id='s',platform='other',url='https://example.test/cohort',evidence=text)
-    output=Evaluation(findings=[dict(field='conversion_rate',value=text,refs=[0],quotes=[text],confidence='medium',evidence_type='candidate_reported',scope='exact')])
-    if valid:assert validate_claims(output,'conversion_outcomes',[source])[0].value==text
+    output=StructuredFindings(findings=[dict(field='conversion_rate',value=value,refs=[0],quotes=[text],confidence='medium',evidence_type='candidate_reported',scope='exact')])
+    if valid:assert validate_claims(output,'conversion_outcomes',[source])[0].value==value
     else:
         with pytest.raises(AIError):validate_claims(output,'conversion_outcomes',[source])
+
 
 
 def test_unfinished_legacy_jobs_gain_missing_categories_without_losing_evidence(opportunity_flow):
@@ -102,14 +103,14 @@ def test_summary_budget_preserves_evidence_from_all_five_categories():
     assert all(sum(item['category']==category for item in selected)==12 for category in CATEGORIES)
 
 
-@pytest.mark.parametrize(('text','valid'),[
- ('Example conversion offer in 2025 is SGD 5000 monthly base salary.',True),
- ('Example salaries are competitive and generous.',False),
- ('Example conversion pay in 2025 is 5000 monthly, currency unknown.',False),
+@pytest.mark.parametrize(('text','value','valid'),[
+ ('Example conversion offer in 2025 is SGD 5000 monthly base salary.','The 2025 offer has monthly base pay of SGD 5000.',True),
+ ('Example salaries are competitive and generous.','The monthly offer is SGD 5000.',False),
+ ('Example conversion pay in 2025 is 5000 monthly, currency unknown.','Monthly pay is 5000 in 2025; currency is unknown.',True),
 ])
-def test_conversion_salary_cannot_invent_amount_or_currency(text,valid):
+def test_salary_numbers_are_exact_without_forcing_absent_currency(text,value,valid):
     source=ResearchSource(source_id='s',platform='other',url='https://example.test/salary',evidence=text)
-    output=Evaluation(findings=[dict(field='conversion_salary',value=text,refs=[0],quotes=[text],confidence='medium',evidence_type='candidate_reported',scope='exact')])
-    if valid:assert validate_claims(output,'career_progression',[source])[0].value==text
+    output=StructuredFindings(findings=[dict(field='conversion_salary',value=value,refs=[0],quotes=[text],confidence='medium',evidence_type='candidate_reported',scope='exact')])
+    if valid:assert validate_claims(output,'career_progression',[source])[0].value==value
     else:
         with pytest.raises(AIError):validate_claims(output,'career_progression',[source])

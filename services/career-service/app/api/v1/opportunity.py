@@ -29,7 +29,7 @@ async def presentation(request,account,goal):
     record=await thread(service.store.research.records.get_research,job['research_id']) if job.get('research_id') else None
     if not job['finished']:service.launch(job['_id'])
     return jsonable_encoder({**availability,'job_id':job['_id'],'career_target_id':goal.id,'status':job['status'],
-        'research_id':record.id if record else None,'research_version':record.version if record else None,'sources':pool([*job.get('sources',[]),*[s for values in job.get('evidence',{}).values() for s in values]]),'categories':job['categories'],'finished':job['finished'],
+        'research_id':record.id if record else None,'research_version':record.version if record else None,'sources':pool([s for values in job.get('retained_sources',job.get('evidence',{})).values() for s in values]),'categories':job['categories'],'finished':job['finished'],
         'summary':job.get('summary',{}),'metrics':job.get('metrics',{}),'error_code':job.get('error_code'),'updated_at':job['updated_at'],
         'retry_after':max(0,int((job['next_attempt_at']-now()).total_seconds())) if not job['finished'] else None},by_alias=True)
 

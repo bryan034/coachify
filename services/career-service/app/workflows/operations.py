@@ -70,12 +70,17 @@ class Operations:
                     break
                 return job.view()
             if job.kind == kind and job.status in ('running', 'repairing', 'waiting_quota'):
-                if kind=='jd' and job.digest==digest:
+                if kind in ('jd','summary') and job.digest==digest:
                     # A remount/new tab can issue a new key for the same retained JD.
                     # Reconnect to the owned operation instead of making another LLM call.
                     job.aliases.add(key)
                     return job.view()
                 raise OperationConflict('operation_in_progress','Another request is still being processed. Wait for it to finish before submitting different input.')
+        if kind == 'summary':
+            for job in self.jobs.values():
+                if job.owner == owner and job.kind == kind and job.digest == digest and job.error is None:
+                    job.aliases.add(key)
+                    return job.view()
         job = Pending(owner, key, digest, kind)
         self.jobs[job.id] = job
         job.task = asyncio.create_task(self.run(job, execute))

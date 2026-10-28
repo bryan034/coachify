@@ -23,6 +23,7 @@ from pydantic import ValidationError
 from app.ai.waiting import quota_progress,quota_reason
 from app.ai.metrics import usage_observer
 from app.ai.recovery import recover_responses,validation_feedback,issues_for,schema_fields
+from app.ai.goal_summary import GoalSummary,SUMMARY_PROMPT
 from app.ai.context_contracts import ContextPlan,CONTEXT_PROMPT
 from app.ai.research_planning import ResearchPlan,ResearchAssessment,PLAN_PROMPT,ASSESS_PROMPT,planning_input
 from app.ai.config import AISettings
@@ -36,12 +37,11 @@ from app.ai.interview_contracts import InterviewFindings,interview_input
 from app.ai.qa_contracts import QuestionRoute,FocusedAnswer
 from app.ai.goal_edit_contracts import GoalEditDecision
 
-from app.ai.opportunity_contracts import QueryPlan,Evaluation,SupportedSummaries,PROMPTS as OPPORTUNITY_PROMPTS
-from app.schemas.opportunity import Summary
+from app.ai.opportunity_contracts import QueryPlan,StructuredFindings,PROMPTS as OPPORTUNITY_PROMPTS
 from app.ai.discovery_contracts import OUTPUTS as DISCOVERY_OUTPUTS, PROMPTS as DISCOVERY_PROMPTS
 
 usage_logger = logging.getLogger('uvicorn.error.ai_usage')
-MODEL_OUTPUTS = {'jd_scope':JobIdentity,**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_evaluate':Evaluation,'opportunity_support':SupportedSummaries,'opportunity_summary':Summary, 'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
+MODEL_OUTPUTS = {'goal_summary':GoalSummary,'jd_scope':JobIdentity,**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_structure':StructuredFindings,'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
 
 PROMPT_VERSION = 'career-ai-v19'
 SYSTEM_PROMPT = '''You are Coachify's career assistant. Return only JSON matching the supplied schema.
@@ -558,7 +558,9 @@ class AIAdapter:
             response_format = {'type': 'json_schema', 'json_schema': {'name': request.stage,
                 'strict': strict, 'schema': strict_schema(schema) if strict else schema}}
         # Native structured output already carries the schema; avoid sending it twice.
-        if request.stage=='jd_scope':
+        if request.stage=='goal_summary':
+            instructions=SUMMARY_PROMPT
+        elif request.stage=='jd_scope':
             instructions=JD_SCOPE_PROMPT
         elif request.stage in DISCOVERY_PROMPTS:
             instructions=DISCOVERY_PROMPTS[request.stage]
@@ -584,7 +586,7 @@ class AIAdapter:
         if mode == 'json_object':
             instructions += '\nJSON schema: ' + json.dumps(schema, separators=(',', ':'))
         schema_bytes = len(json.dumps(response_format, separators=(',', ':')).encode())
-        output_tokens = min(self.settings.max_output_tokens, {'jd_scope':768,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'discovery_turn':1024,'discovery_plan':512,'discovery_extract':2048,'discovery_summary':256,'opportunity_plan':768,'opportunity_evaluate':2048,'opportunity_summary':512}.get(request.stage,self.settings.max_output_tokens))
+        output_tokens = min(self.settings.max_output_tokens, {'goal_summary':8192,'jd_scope':768,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'discovery_turn':1024,'discovery_plan':512,'discovery_extract':2048,'discovery_summary':256,'opportunity_plan':768,'opportunity_structure':2048}.get(request.stage,self.settings.max_output_tokens))
         safety_margin = max(1024, self.settings.context_tokens // 10)
         input_budget = self.settings.context_tokens - output_tokens - safety_margin
         if input_budget <= 0:
@@ -615,7 +617,7 @@ class AIAdapter:
             fits_budget, size = fits(current)
             if fits_budget:
                 return current
-            if current.stage=='goal_edit':raise AIError('context_limit')
+            if current.stage in ('goal_edit','goal_summary'):raise AIError('context_limit')
             if len(current.conversation) > 1:
                 # The last message is the current user input; keep it intact.
                 remove_count = 2 if len(current.conversation) > 2 else 1
