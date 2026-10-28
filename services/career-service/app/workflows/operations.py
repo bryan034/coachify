@@ -6,12 +6,14 @@ A restart loses unfinished transient work; validated goals remain in MongoDB.
 import asyncio
 import math
 import time
+import logging
 from dataclasses import dataclass, field
 from uuid import uuid4
 from app.ai.waiting import quota_progress,quota_reason
 from app.ai.recovery import recover_responses,validation_progress
 from app.repositories.goals import GoalError
 from app.workflows.activity import activity_observer,LABELS
+from app.ai.adapter import AIError
 
 
 class OperationConflict(GoalError):
@@ -111,6 +113,12 @@ class Operations:
             raise
         except Exception as error:
             job.status, job.error = 'failed', error
+            if isinstance(error,AIError):
+                job.validation_feedback={'reason':error.reason,'fields':list(error.fields),'violations':list(error.violations)}
+            logging.getLogger('uvicorn.error.ai_usage').warning(
+                'operation_failed operation_id=%s kind=%s error_code=%s reason=%s',
+                job.id,job.kind,error.code if isinstance(error,AIError) else 'operation_failed',
+                error.reason if isinstance(error,AIError) else None)
         finally:
             job.resume_at = None
             activity_observer.reset(activity_context)

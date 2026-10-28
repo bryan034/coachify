@@ -186,12 +186,14 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 'provider_json':'The AI provider rejected the generated JSON.',
                 'json_syntax':'The model returned malformed JSON.',
                 'response_envelope':'The model returned an unexpected response format.',
-                'provenance':'The model returned unsupported source claims.',
+                'provenance':'The AI response could not be matched to its approved evidence or citations.',
             }
             action='retry extraction' if request.url.path.endswith('/jd/extract') else 'retry your message'
             payload['detail']=descriptions[error.reason]+' Your previous inputs and saved progress are unchanged; '+action+'.'
             payload['diagnostic']={'reason':error.reason,'fields':list(error.fields)}
             if error.violations:payload['diagnostic']['violations']=list(error.violations)
+        operation_id=request.path_params.get('operation_id')
+        if operation_id:payload['operation_id']=operation_id
         headers = {'Retry-After': str(error.retry_after)} if error.retry_after is not None else None
         return JSONResponse(payload,status,headers=headers)
 

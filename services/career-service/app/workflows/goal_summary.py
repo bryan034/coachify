@@ -1,6 +1,5 @@
 """Transient Gemini presentation; canonical goal and research stay unchanged."""
 import json
-import re
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
 from app.ai.adapter import AIError, Operation
@@ -8,6 +7,8 @@ from app.ai.contracts import AIInput
 from app.ai.routing import chat_models
 from app.repositories.goals import GoalError
 from app.workflows.activity import activity
+from app.workflows.structured import structured_node
+from app.workflows.citations import normalize_citations, render_citations, citation_error
 
 
 async def summarize(request, account, body):
@@ -33,24 +34,30 @@ async def summarize(request, account, body):
                'categories': record.intelligence.categories, 'source_ids': list(sources)}
 
     def validate(output):
-        refs = re.findall(r'\[([^\]\n]+)\]', output.reply)
-        if any(ref not in sources for ref in refs) or re.search(r'https?://|\]\(', output.reply):
-            raise AIError('invalid_output', True, reason='provenance', fields=('reply',))
-        cited = set(refs)
-        required = {sid for category in record.intelligence.categories.values()
-                    for finding in category.findings for sid in finding.source_ids}
-        if not required <= cited:
-            raise AIError('invalid_output', True, reason='provenance', fields=('reply',))
+        _, cited = normalize_citations(output.reply, sources)
+        # A finding can have several corroborating sources; one supporting citation
+        # per finding is enough. Never require all corroborators to be repeated.
+        if any(not cited.intersection(finding.source_ids)
+               for category in record.intelligence.categories.values() for finding in category.findings):
+            raise citation_error('missing_finding_citation')
 
     activity('preparing_summary')
     encoded = json.dumps(jsonable_encoder(context), separators=(',', ':'))
     if len(encoded) > 40000:
         raise AIError('context_limit')
-    result = await chat_models(request.app.state).generate(
-        AIInput(stage='goal_summary', context=encoded),
-        Operation(account, str(body.expected_version), 'goal_summary'),
-        current_revision=lambda: str(body.expected_version), validate_output=validate)
-    validate(result.data)
+    @structured_node
+    async def present(state):
+        # Each repair rechecks ownership/version before another paid generation.
+        await snapshot()
+        result = await chat_models(request.app.state).generate(
+            AIInput(stage='goal_summary', context=encoded),
+            Operation(account, str(body.expected_version), 'goal_summary'),
+            current_revision=lambda: str(body.expected_version), validate_output=validate)
+        validate(result.data)
+        return result.data
+
+    result = await present({})
     await snapshot()  # A replaced goal/research must never publish a stale overview.
-    reply = re.sub(r'\[([^\]\n]+)\]', lambda m: f'[Source]({sources[m[1]]})', result.data.reply)
+    normalized, _ = normalize_citations(result.reply, sources)
+    reply = render_citations(normalized, sources)
     return {'reply': reply}

@@ -39,7 +39,7 @@ def test_overview_uses_structured_data_and_restores_verified_links():
         request,body,checks,calls,_=environment()
         result=await summarize(request,'owner',body)
         assert '[Source](https://example.test/job)' in result['reply']
-        assert len(checks)==2 and calls[0].stage=='goal_summary'
+        assert len(checks)==3 and calls[0].stage=='goal_summary'
         context=json.loads(calls[0].context)
         assert context['goal']['role']=='Analyst' and context['source_ids']==['s1']
         assert 'owner' not in context and 'Singapore' not in calls[0].context
