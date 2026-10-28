@@ -39,7 +39,7 @@ test('saved goal categories, guided refinement, replacement and CV handoff on de
  await expect(page.getByRole('heading',{name:'Qualifications',exact:true})).toBeVisible();
  await expect(page.getByRole('status').filter({hasText:'Researching opportunity information'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
- await expect(page.getByRole('link',{name:/Assess my skills/})).toHaveAttribute('href','/cv');
+ await expect(page.getByRole('link',{name:/Upload my CV/})).toHaveAttribute('href','/cv');
  researching=false;
  await expect(page.locator('details.intelligence-section').filter({has:page.getByText('Interview Intelligence',{exact:true})})).toContainText('Technical interview');
  await page.screenshot({path:test.info().outputPath('goal-overview-desktop.png'),fullPage:true});
@@ -63,7 +63,7 @@ test('saved goal categories, guided refinement, replacement and CV handoff on de
  await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
  expect(extractions).toBe(1);
  await page.reload();await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
- await page.getByRole('link',{name:/Assess my skills/}).click();
+ await page.getByRole('link',{name:/Upload my CV/}).click();
  await expect(page).toHaveURL(/\/cv$/);
  await expect(page.getByRole('heading',{name:'Resume & Tracker'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
@@ -93,6 +93,9 @@ test('Opportunity Intelligence preserves partial categories, citations and targe
   return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',review:{review_id:'1'.repeat(24),version:1,target_type:'specific_job',extraction:goal,requirements_need_review:false},current:{selection_version:1,goal},research:null,coverage:[],error:null,retry_after:null})});
  });
  await page.goto('/career-goal');await expect(page.getByRole('heading',{name:'Opportunity Intelligence'})).toBeVisible();
+ const cvSkills=page.getByRole('region',{name:'Your CV skills'});
+ await expect(cvSkills.getByRole('heading',{name:'CV skills available'})).toBeVisible();
+ await expect(cvSkills).not.toContainText(/assessed|assessment|evaluated/iu);
  await expect(page.getByText('This category could not finish. Other results are preserved; refresh this section to retry.')).toBeVisible();
  await page.getByText('Internship Insights',{exact:true}).click();
  const internships=page.locator('details.intelligence-section').filter({has:page.getByText('Internship Insights',{exact:true})});
