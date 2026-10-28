@@ -1,6 +1,5 @@
 """Gemini interprets and selects saved context; reasoning is delegated selectively."""
 import json
-import re
 from langgraph.graph import StateGraph,START,END
 from langsmith import tracing_context
 from starlette.concurrency import run_in_threadpool as thread
@@ -15,6 +14,7 @@ from app.schemas.jd import JDReply
 from app.workflows.structured import structured_node
 from app.ai.routing import chat_models
 from app.workflows.activity import activity
+from app.workflows.citations import normalize_citations, render_citations
 
 
 async def semantic_chat(request,account,row,body):
@@ -73,18 +73,21 @@ async def semantic_chat(request,account,row,body):
             return {'result':JDReply(reply=missing,proposed_skills=None)}
         activity('answering_question')
         stage='focused_answer' if plan.needs_reasoning else 'context_answer'
+        def reply_sources(output):
+            return {source['source_id']: source['url'] for ref in output.references
+                    for source in state['links'].get(ref, [])}
         def validate(output):
             if output.status=='answered' and (not output.references or any(ref not in state['links'] for ref in output.references)):
                 raise AIError('invalid_output',True,reason='provenance',fields=('references',))
-            if re.search(r'https?://|\]\(',output.reply):
-                raise AIError('invalid_output',True,reason='provenance',fields=('reply',))
+            normalize_citations(output.reply, reply_sources(output),strict_markers=False)
         result=await generate(stage,{'goal':state['title'],'facts':state['facts'],'partial':state['partial']},
                               question=plan.resolved_question,validate=validate)
         validate(result)
         if result.status!='answered':return {'result':JDReply(reply=REFUSAL if result.status=='off_topic' else missing,proposed_skills=None)}
         # Citation URLs are restored from saved sources, never supplied by either model.
         sources={v['source_id']:v for ref in result.references for v in state['links'].get(ref,[])}
-        reply=result.reply
+        normalized,_=normalize_citations(result.reply,reply_sources(result),strict_markers=False)
+        reply=render_citations(normalized,reply_sources(result))
         for i,source in enumerate(sources.values(),1):
             link=f'[Source {i}]({source["url"]})'
             if len(reply)+len(link)+12>4000:break

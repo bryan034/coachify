@@ -34,7 +34,7 @@ export type CurrentGoal = {review_selection?:{id:string;version:number}|null;sel
 export type CareerContext = {cvs:{id:string;filename:string;status:string;version:number;extraction_version:string}[];cv_service_available:boolean;ai_available:boolean};
 export class CareerApiError extends ApiError {
  retryAt:number|null;
- constructor(message:string,status:number,public code?:string,retryAfter?:number){
+ constructor(message:string,status:number,public code?:string,retryAfter?:number,public operationId?:string){
   super(message,status);this.retryAt=typeof retryAfter==='number'&&Number.isFinite(retryAfter)&&retryAfter>0?Date.now()+retryAfter*1000:null;
  }
 }
@@ -45,7 +45,7 @@ export async function careerApi<T>(path:string,token:string, options:RequestInit
  const body=await response.json().catch(()=>({}));
  if(!response.ok){
   if(response.status===401)window.dispatchEvent(new CustomEvent('coachify:expired',{detail:token}));
-  throw new CareerApiError(typeof body.detail==='string'?body.detail:'Career Goal is unavailable. Please retry.',response.status,body.code,body.retry_after);
+  throw new CareerApiError(typeof body.detail==='string'?body.detail:'Career Goal is unavailable. Please retry.',response.status,body.code,body.retry_after,typeof body.operation_id==='string'?body.operation_id:undefined);
  }
  return body as T;
 }

@@ -280,6 +280,12 @@ use synthetic adapters without MongoDB: summary citation validation, stale-goal 
 public-only follow-up queries, ambiguous/off-topic/edit search exclusion and summary-operation
 reuse. Frontend chat tests mock the summary endpoint and verify completion and follow-ups.
 
+`test_chat_citation_recovery.py` checks grouped markers, approved URL normalization,
+rejection of forged destinations, per-finding citation coverage, summary-only bounded
+repairs, discarded-response privacy, owner-scoped failed-operation diagnostics and
+operation IDs. Frontend API coverage checks that error objects retain operation IDs.
+These checks use synthetic responses; they do not establish live-provider quality.
+
 ## Saved CV checks
 
 CV tests cover parsing restrictions, extraction/evidence validation, ownership,

@@ -15,6 +15,16 @@ Pasted text stays in browser memory until explicitly submitted for extraction. `
 
 Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
 
+Goal summaries use bounded corrections for invalid model output, with at most six
+repairs. Verified citation formatting is normalized locally; unknown sources and
+forged destinations still fail. Each finding requires a supporting citation.
+Rejected model text is not retained. Failed AI operation responses include
+`operation_id` and fixed issue codes under `diagnostic.violations`; the ID also
+appears in the initial 202 response, polling URL and content-free failure logs.
+Operations are owner-scoped, remain in worker memory for at most 24 hours and are
+lost on restart; they are not stored in MongoDB. See
+[analysis contracts](ANALYSIS_CONTRACTS.md) for recovery and diagnostic details.
+
 ## Explicit CV clarification context — C-series integration
 
 - `GET /api/v1/career/goals/current/cv-confirmation` reports the exact current goal, goal version and selection version, whether that revision is confirmed, its context and an actionable reason when unavailable.
