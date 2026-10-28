@@ -47,6 +47,16 @@ class OperationView(Contract):
     validation_feedback: dict | None = None
 
 
+class OperationError(Contract):
+    operation_id:str=Field(pattern=r'^[0-9a-f]{32}$')
+    code:str
+    detail:str
+    diagnostic:dict|None=None
+    provider_error:dict|None=None
+    retry_after:int|None=None
+    limit_scope:Literal['provider','user']|None=None
+
+
 class WorkspaceChatReply(JDReply):
     edit_status:Literal['clarifying','saved','cancelled']|None=None
     workspace:WorkspaceView|None=None

@@ -78,8 +78,15 @@ owner/version-checked goal fields and completed linked research. It accepts sess
 expected_version and research_id plus the existing UUID idempotency header; async clients
 use `Prefer: respond-async` and the existing operations polling endpoint. The result is
 `{reply: Markdown}`. Python restores allowlisted citation markers to verified source URLs.
-Unknown markers and model-authored URLs fail validation. All finding citations must be
-represented. The result is checked against the current goal/research again before publication.
+Grouped markers and model-written Markdown/bare URLs are normalized locally only
+when they match approved source IDs or exact approved URLs. Unknown references and
+unapproved destinations still fail validation. Each finding needs at least one of its
+supporting sources cited; every corroborating source need not be repeated.
+Async summary presentation uses the existing bounded repair wrapper (up to six
+corrections), with owner/version checks before every generation and publication.
+Only the presentation step is retried; saved research and Brave retrieval are reused.
+Safe reply violations distinguish unknown_source_reference, unapproved_source_url
+and missing_finding_citation without including failed text, IDs or URLs. The result is checked against the current goal/research again before publication.
 Summary operations are reused by owner and snapshot for 24 hours in worker memory;
 no raw conversation, additional domain records or persisted summaries are introduced.
 
@@ -210,8 +217,16 @@ owner-scoped operation ID. Both require a UUID Idempotency-Key in this mode. Pol
 `GET /workspace/operations/{operation_id}` for running/repairing/waiting_quota/succeeded state,
 a retry_after countdown, a repairing status with safe validation_feedback diagnostics,
 or the validated result. Polling makes no model calls. Failed
-jobs return the original HTTP status/code through the normal exception handlers; they
-never return unvalidated provider bodies. Without the header, compatibility APIs still
+jobs return the original HTTP status/code through the normal exception handlers. AI
+failure responses also include operation_id and fixed validation issue codes in
+`diagnostic.violations`. The frontend preserves the ID as CareerApiError.operationId.
+Content-free operation_failed logs carry the same ID and operation kind. Failed
+operations retain only safe validation feedback and the error, never rejected replies.
+To locate an operation, use the initial POST's 202 response or the Network polling URL;
+GET of a failed operation repeats its error without another provider call. Operations
+live only in worker memory for up to 24 hours and are lost on service restart; there is
+no MongoDB operation record or raw-response lookup. They never return unvalidated
+provider bodies. Without the header, compatibility APIs still
 return immediate 429 errors and their retry delay.
 
 The frontend retains the JD request key in its transient career session across

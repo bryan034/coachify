@@ -42,7 +42,12 @@ when a timed quota is reached, the unfinished model step waits and resumes autom
 with a countdown and no approval or resubmission. Waiting does not consume the model's
 execution timeout. Invalid JSON/schema responses trigger automatic corrections in the
 failed LangGraph node, with at most six repairs.
-The model receives only the latest field/type issues; the UI shows “Refining the response…”.
+The model receives only the latest field/type issues; the UI shows “Refining the response…”. Summary generation uses the same bounded corrections. Verified citation formatting is normalized locally; unknown sources still fail. Each finding requires a supporting citation, rather than every corroborating source.
+Failed AI operation responses include `operation_id` and fixed issue codes under
+`diagnostic.violations`. Find the ID in the initial 202 response or Network polling URL;
+it also appears in content-free failure logs. Operations are held in worker memory
+for at most 24 hours, lost on restart, and never stored in MongoDB. Rejected model text
+is not retained.
 A complete JSON object wrapped only in a Markdown code fence is unwrapped locally,
 then passes the same duplicate-key, schema and provenance checks without another call.
 Gemini receives an inlined, fixed-shape decoding schema without length/count/range

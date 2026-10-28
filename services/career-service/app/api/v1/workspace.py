@@ -13,7 +13,7 @@ from app.domain.questions import direct_route,REFUSAL
 from app.repositories.goals import GoalError,fingerprint,stable_id,now
 from app.schemas.analysis import Contract
 from app.schemas.jd import JDSource,SaveReview,ChatText
-from app.schemas.workspace import WorkspaceView,OperationView,WorkspaceChatReply,WorkspaceProgress
+from app.schemas.workspace import WorkspaceView,OperationView,OperationError,WorkspaceChatReply,WorkspaceProgress
 
 router=APIRouter(prefix='/api/v1/career/workspace',tags=['Single career workspace / LangGraph'])
 
@@ -144,7 +144,7 @@ async def message(body:Chat,request:Request,response:Response,account=Depends(ow
             lambda: answer_message(body,request,account,key))
     return await answer_message(body,request,account,request_key(idempotency_key) if idempotency_key else str(uuid4()))
 
-@router.get('/operations/{operation_id}',response_model=OperationView)
+@router.get('/operations/{operation_id}',response_model=OperationView,responses={503:{'model':OperationError,'description':'Failed AI operation with its ID and safe validation diagnostics.'}})
 async def operation(operation_id:str,request:Request,account=Depends(owner)):
     return request.app.state.operations.read(account,operation_id)
 
