@@ -2,6 +2,7 @@ import {expect, type Locator, type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import {createLocalAccount} from './account-helpers';
+import {seedCanonicalGoal,confirmCanonicalGoal} from './canonical-career';
 import type {CvConversation, CvDetail} from '../../src/features/cv-ingestion/types';
 
 export const chatAnswer = "I wrote the Python loader for six months with my tutor's help. I also used Pandas to clean the data. My teammate wrote SQL.";
@@ -15,18 +16,8 @@ export async function setupChatScenario(page: Page) {
   const account = await createLocalAccount(page, 'Synthetic conversational CV reviewer');
   const profile = await (await account.get('/api/v1/profile')).json();
   expect((await account.finish({expected_version: profile.version, occupational_status: 'employed', no_previous_education: true})).ok()).toBeTruthy();
-  const source = 'SYNTHETIC VACANCY: Build reports using Python. Query data using SQL.';
-  const created = await page.request.post('/api/v1/career/targets', {headers: account.headers, data: {
-    mutation_id: crypto.randomUUID(), target_type: 'specific_job', role: 'Synthetic data analyst', field: 'Data analytics',
-    reviewed_source_text: source, skills: [{name: 'Python', evidence: 'Build reports using Python.'}, {name: 'SQL', evidence: 'Query data using SQL.'}],
-  }});
-  expect(created.status()).toBe(201); const target = await created.json();
-  const confirmed = await page.request.post(`/api/v1/career/targets/${target.id}/confirm`, {headers: account.headers,
-    data: {mutation_id: crypto.randomUUID(), expected_version: target.version}});
-  expect(confirmed.ok()).toBeTruthy(); const confirmedTarget = await confirmed.json();
-  expect((await page.request.put('/api/v1/career/targets/selection', {headers: account.headers, data: {
-    mutation_id: crypto.randomUUID(), expected_version: 0, career_target_id: target.id, career_target_version: confirmedTarget.version,
-  }})).ok()).toBeTruthy();
+  const target=await seedCanonicalGoal(account,{role:'Synthetic data analyst',field:'Data analytics',skills:[{name:'Python',evidence:'Build reports using Python.'},{name:'SQL',evidence:'Query data using SQL.'}]});
+  await confirmCanonicalGoal(page,account,target);
   const upload = await page.request.post('/api/v1/cv/uploads', {headers: account.headers,
     multipart: {mutation_id: crypto.randomUUID(), file: {name: 'synthetic-chat-cv.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       buffer: readFileSync(path.resolve(__dirname, '../fixtures/synthetic-clarification-cv.docx'))}}});

@@ -48,6 +48,8 @@ version/data after preview.
 
 Inline profile-editing checks verify opening existing values, discarding edits on
 Cancel, retaining drafts after a failed save, and refreshing the saved summary.
+The editor stays locked until loaded profile values populate its fields, preventing
+a new selection from being overwritten during initial loading.
 The full-stack summary journey verifies employment edits survive reload.
 
 Onboarding presentation checks verify full-screen desktop/mobile layouts, a bottom

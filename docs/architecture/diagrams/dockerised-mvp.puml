@@ -12,9 +12,10 @@ skinparam componentBackgroundColor white
 skinparam databaseBackgroundColor #EFF6FA
 
 actor "User browser" as Browser
-component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nAccount-level manual declarations" as Profile
-cloud "Configured LLM provider\nGroq initially; server-side adapter" as LLM
-cloud "Permitted public interview sources\nCompany sites, Reddit, Glassdoor\nAvailability and access restrictions apply" as Sources
+component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nAccount-owned manual capability declarations" as Profile
+cloud "Configured CV model API\nOpenAI-compatible extraction, routing and interpretation" as CVLLM
+cloud "Career model router\nGemini 3.5 Flash Lite: extraction / reasoning / edits\nSame Gemini client: chat + research coordination" as LLM
+cloud "Brave LLM Context API\nConfigured API access required" as Sources
 
 node "Docker Compose — focused design" {
   node "Next.js / React / TypeScript" as Web <<Docker container>>
@@ -22,10 +23,10 @@ node "Docker Compose — focused design" {
 
   package "Private backend network" {
     node "CV analyser\nservices/cv-service" as CV <<Docker container>> {
-      artifact "Saved upload/review, resumable text chat,\ncorrections, clarifications, explicit CV selection\n/api/v1/cv" as CVAPI
+      artifact "Saved upload/review and resumable text chat\nSource-linked clarification, correction and selection\n/api/v1/cv" as CVAPI
     }
     node "JD / career and skills analyser\nservices/career-service" as Career <<Docker container>> {
-      artifact "Specific job or career exploration\nReviewed target confirmation and selection\nAI target generation, research and gaps planned\n/api/v1/career" as CareerAPI
+      artifact "Specific JD or conversational discovery\nOne canonical CareerGoal + explicit CV confirmation\nStructured skills and five-category Opportunity Intelligence\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
     }
     node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
       artifact "Generate plans from versioned analyses\nEdit plans and track task progress\n/api/v1/roadmaps (planned)" as RoadmapAPI
@@ -34,7 +35,7 @@ node "Docker Compose — focused design" {
 
   node "MongoDB — local development" as Mongo <<Docker container>> {
     database "CV-owned database\ncvs\ncv_selections + cv_conversations (operational)" as CVDB
-    database "Career-owned database\ncareer_goals + career_target_selections (operational)\ninterview_research\nskill_gap_analyses" as CareerDB
+    database "Career-owned database\ncareer_goals + career_state (operational)\ninterview_research\nskill_gap_analyses" as CareerDB
     database "Roadmap-owned database\nPlans, milestones and task history\nSchema to be expanded" as RoadmapDB
   }
   artifact "Service-private temporary CV storage\nOriginal-file cleanup per policy" as Uploads <<Private storage>>
@@ -43,16 +44,16 @@ node "Docker Compose — focused design" {
 Browser --> Web : Use application
 Web --> Gateway : /api/v1 requests
 Gateway --> Profile : Existing account / profile routes
-Gateway --> CV : CV routes
+Gateway --> CV : Saved CV and conversation routes
 Gateway --> Career : Career routes
 Gateway --> Roadmap : Roadmap routes (planned)
 
 ' API dependencies point from caller to the service it calls.
-CV --> Profile : Validate account / read declarations / confirmed manual additions
-CV --> Career : Read selected confirmed context and exact versions
-Profile --> CV : Validate explicitly attached source item/version
+CV --> Profile : Validate session / read declarations / confirmed additions
+Profile --> CV : Validate explicit source attachment
+CV --> Career : Current confirmed goal/version/selection projection
 Career --> Profile : Validate session / read selected context
-Career ..> CV : Future selected CV input with source version vector
+Career --> CV : Read effective CV skills and extraction version
 Roadmap --> Profile : Read deadline and availability
 Roadmap --> Career : Read selected versioned gap analysis
 
@@ -60,15 +61,22 @@ CV --> CVDB : Own records only
 Career --> CareerDB : Own records only
 Roadmap --> RoadmapDB : Own records only
 CV --> Uploads : Temporary original access
-CV --> LLM : Structured extraction, bounded chat routing and clarification interpretation
-Career ..> LLM : Future target skills / research synthesis / gap analysis
-Career ..> Sources : Future bounded permitted research retrieval
-Roadmap --> LLM : Personalised roadmap generation
+CV --> CVLLM : Bounded extraction, routing and interpretation
+Career --> LLM : Goal interpretation / scoped chat / cited research synthesis
+Career --> Sources : LangGraph parallel LLM Context research branches
+Roadmap ..> LLM : Future personalised roadmap generation
 
 note bottom of Career
   One career_goals model: specific_job or career_exploration.
+  CV acknowledgement binds the exact current goal/version/selection.
+  Automatic goal saves do not silently confirm CV context.
   company may be null. Interview research is reusable public context;
   private CV/chat data must not enter that shared research.
+  Validate job identity; overlap full JD extraction with public-only retrieval.
+  Matching early evidence seeds the existing research job after goal saving.
+  Cards update on extraction; chat retains observed activity until both results succeed.
+  Gemini writes one cited overview from JD details and completed research.
+  Temporary observed activity disappears on completion; scoped follow-up chat can search Brave.
   Persist structured output and bounded evidence, not full raw JD text.
   JD originals/previews use service-private temporary parsing storage.
 end note
@@ -87,10 +95,18 @@ legend bottom
   Existing Profile/auth is shown only as an external dependency.
   Dashboard, review/scheduling and future services are intentionally omitted;
   extend this diagram when their scope is agreed.
-  Current implementation: Profile/auth/manual declarations, saved CV flow,
-  configured extraction/interpretation, source reconciliation, temporary Career previews,
-  reviewed targets/conditions and a target-bound input contract. AI target generation, research,
-  gap analysis and roadmap remain planned.
+  Current implementation: Profile/auth, temporary Career JD previews,
+  optional-CV exploration, one autosaved current goal/chat, LangGraph research, saved CV upload/review/chat and data contracts.
+  Importance review, advisory skills and versioned research orchestration/review are implemented.
+  Brave retrieval exclusively uses LLM Context; historical AI answer attribution remains readable.
+  Source-linked CV interpretation is implemented; broader registry mapping, assessment, gap analysis and roadmaps are planned.
+  Synthetic tests do not establish live-provider quality or deployed readiness.
+  career_state (including version-bound CV acknowledgement) and research_contexts are operational metadata.
+  career_checkpoints / career_checkpoint_writes retain safe graph state for 24h.
+  Gemini/Brave provider quotas and task context/output/time limits remain enforced.
+  Opportunity Intelligence embeds typed categories/findings/summary in interview_research.
+  Durable category jobs/receipts reuse research_contexts; no duplicate domain collections.
+  Gemini plans, evaluates cited evidence and selects validated summaries using unchanged JSON models.
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend
 @enduml

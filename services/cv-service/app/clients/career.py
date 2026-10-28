@@ -41,10 +41,10 @@ class CareerTargetProvider:
     def __init__(self, client): self.client = client
 
     async def selected_context(self, authorization):
-        return await self._read('/api/v1/career/targets/selected-context', authorization, allow_none=True)
+        return await self._read('/api/v1/career/goals/current/confirmed-context', authorization, allow_none=True)
 
     async def context(self, authorization, identifier, version):
-        result = await self._read('/api/v1/career/targets/' + quote(identifier, safe='') + '/confirmed-context',
+        result = await self._read('/api/v1/career/goals/' + quote(identifier, safe='') + '/confirmed-context',
                                   authorization, params={'expected_version': version})
         if result['id'] != identifier or result['version'] != version:
             raise Conflict('The confirmed Career context changed. Refresh before preparing questions.')

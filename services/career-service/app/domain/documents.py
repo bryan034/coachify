@@ -7,11 +7,11 @@ from pypdf import PdfReader
 from app.schemas.preview import MAX_FILE, MAX_TEXT
 
 
-def validate_text(text):
+def validate_text(text, *, max_text=MAX_TEXT):
     if not text.strip():
         raise ValueError('No readable text was found. Paste the description or choose another file; scanned PDFs require OCR, which is not available yet.')
-    if len(text) > MAX_TEXT:
-        raise ValueError('The preview exceeds 20,000 characters. Paste just one job description instead; nothing was truncated.')
+    if len(text) > max_text:
+        raise ValueError(f'The preview exceeds {max_text:,} characters. Paste just one job description instead; nothing was truncated.')
     return text
 
 

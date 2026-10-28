@@ -4,7 +4,7 @@
 |---|---|---|
 | Profile | P01-P16; C07 manual declarations | Existing accounts/email verification/revocable sessions, canonical onboarding and education, declared deadline/capacity/temporary availability, profile versions; account-embedded manual capability declarations and their own revision |
 | CV | C01-C09, with C07 composition | Saved CVs, ingestion state, extracted facts/skills and bounded evidence, CV-specific correction/removal overlays, clarification questions/answers, processing operations, explicit saved-CV selection and private resumable CV conversations |
-| Career | J-series; G01-G07 | Transient JD previews, immutable reviewed career_goals and versioned explicit selection; research, AI target generation and gap analyses remain planned |
+| Career | J01–J13; G01–G07; SCRUM-282/310 | Canonical career_goals, one career_state workspace and CV confirmation stamp, public interview/opportunity research, workflow checkpoints and future skill_gap_analyses; raw JD text stays transient |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Consumed planning-input snapshots, milestones, tasks, progress history, proposed/applied revisions |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
 | Review | A01 orchestration; S01-S06 | Manual/scheduled review state, pace analysis, schedules, approval preferences |
@@ -15,7 +15,7 @@
 - Profile -> CV: validate an explicitly chosen matching CV item/version before a manual attachment; no CV is needed for a plain declaration.
 - CV -> Career: authenticate and validate the owner’s selected confirmed target, skill IDs and exact target/selection versions for relevant clarification.
 - Career -> Profile: validate the account/session and completed onboarding.
-- Planned Career -> CV: consume an explicitly selected effective CV plus declarations and exact source versions.
+- Career -> CV: read owner-scoped saved metadata and effective evidence through the CV API; preserve CV identifiers and provenance in its internal projection. Future assessment additionally requires explicit registry mapping and complete input revalidation.
 - Planned Career -> Profile: versioned background/planning inputs; manual additions use the Profile declaration API, while CV-specific corrections use CV.
 - Planned Roadmap -> Profile/Career: generation inputs and freshness checks.
 - Planned Roadmap -> Review: verify the current automatic-application policy.
@@ -52,22 +52,18 @@ Effective input retains CV ID, extraction/effective version, selection version a
 declaration version. A consumer also retains its confirmed target version and any
 Profile version actually used. Revalidation around assembly detects changed
 inputs; this is not a cross-service transaction. Historical analysis inputs must
-remain immutable. Career persists reviewed target snapshots in `career_goals` and operational
-selection in `career_target_selections`. Confirmation and selection are explicit separate
-operations; confirmed snapshots are immutable. A replacement creates a new target,
-then an explicit selection switch. CV retains the exact target/selection/extraction
-snapshot used to prepare questions and rechecks selection after preparation.
-Pending prompts follow current relevance; factual answers/skips remain source-bound.
-AI target generation and J/G analysis admission are still unimplemented; neither
-saving a target nor finishing clarification claims analysis or readiness.
+remain immutable. Career persists one canonical current goal in `career_goals` and its pointer/workspace in `career_state`. JD and discovery share that authority. Automatic saving is independent of CV confirmation: `career_state.cv_confirmation` records goal ID, goal version, selection version, projection hash and confirmation time. Reads reject a stale stamp after an edit or replacement, without deleting earlier CV facts. The acknowledgement does not advance the goal or selection version. It has its own bounded retry receipts.
+
+The projection retains up to 200 named skills and 100 complete non-skill requirements, including source identities, categories, origins and AND/OR alternatives. CV derives its name-based skill relevance keys without claiming equivalence to Career's registry or mastery. Qualification conditions use neutral education matching. Other requirement categories stay generic, unresolved context; exact source relevance never infers citizenship, location or eligibility from unrelated CV text. Full descriptions/evidence remain bounded at 600 characters, without truncation.
+
+Older UUID reviewed-target documents and their selection metadata are retained as historical data. They do not form a second active target flow. Canonical history filters their schema explicitly. Namespaced canonical `create_key` metadata keeps the legacy uniqueness index compatible with new writes; no index drop, data deletion or automatic target conversion occurs. CV retains exact goal/selection/extraction versions when preparing prompts and rechecks them before publication. A confirmed goal or completed clarification is not an assessment or readiness claim.
 
 ## Clarification interpretation and reconciliation
 
 CV retains original answers separately from validated, source-scoped interpretations.
 Attribution, assistance, known values and uncertainty live at individual skill-source
 scope; denied team support does not erase another source. Partial dates retain their
-precision and never imply months using a skill. Career's optional confirmed conditions
-provide qualification/date relevance with bounded source evidence or labelled guidance.
+precision and never imply months using a skill. Career's confirmed projection preserves qualification/date relevance and generic requirement context, bounded evidence, original provenance and alternative groups.
 
 Changed extraction candidates and explicit replacement comparisons stay in the CV
 aggregate until the user accepts mappings or keeps the prior result. Reapplied answers
@@ -107,7 +103,7 @@ Each action has an independent receipt. A message requesting several actions may
 partially succeed, particularly across CV and Profile; recovery retries unfinished
 actions rather than claiming a distributed transaction. Pending action cards
 remain tied to the original source/version context. Career continues to own
-confirmed target editing and future analysis; finishing a CV conversation does
+canonical goal editing, confirmation and future analysis; finishing a CV conversation does
 not generate an assessment or roadmap.
 
 ## P04–P06 ownership decision
@@ -119,3 +115,9 @@ owner/version boundary. This supersedes the original roadmap-owned P04–P06 map
 Roadmap will consume a snapshot through an API and own scheduling/results. It must
 retain the source profile version, planning revision and explicit calendar context.
 No roadmap generation or cross-service stale-plan notification is implemented yet.
+
+## Career research and discovery
+
+LangGraph runs inside Career. Public retrieval uses only permitted public role/employer context, with owner-linked reports and typed citations. Private CV evidence, manual declarations and CV conversation messages do not enter shared research. Discovery and JD intake publish through the same goal persistence path. Current goals use owner/version-checked edits; research revisions remain immutable and compact progress/evidence reads avoid repeating full source payloads.
+
+Career's 512 KiB CV transport/projection admission limit is separate from CV's 12 MiB stored-record boundary and conversation limits. An over-limit response is actionable failure, not an empty CV or permission to truncate sources. Model-specific context selection remains separately bounded. Synthetic provider tests do not measure live-provider quality, cost or comparative usability.

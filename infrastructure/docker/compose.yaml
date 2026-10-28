@@ -33,6 +33,52 @@ services:
       mongodb:
         condition: service_healthy
     networks: [backend, database]
+  career-service:
+    build: ../../services/career-service
+    environment:
+      PROFILE_SERVICE_URL: http://profile-service:8000
+      CV_SERVICE_URL: http://cv-service:8000
+      MONGODB_URI: mongodb://coachify_career:${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}@mongodb:27017/coachify_career
+      MONGODB_DATABASE: coachify_career
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-45}
+      AI_RETRIES: ${AI_RETRIES:-1}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-4096}
+      AI_CONTEXT_TOKENS: ${AI_CONTEXT_TOKENS:-65536}
+      GEMINI_REASONING_MODEL: ${GEMINI_REASONING_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DISCOVERY_TARGET_LISTINGS: ${DISCOVERY_TARGET_LISTINGS:-10}
+      DISCOVERY_MAX_LISTINGS: ${DISCOVERY_MAX_LISTINGS:-20}
+      DISCOVERY_TARGET_EMPLOYERS: ${DISCOVERY_TARGET_EMPLOYERS:-5}
+      DISCOVERY_MAX_FOLLOWUPS: ${DISCOVERY_MAX_FOLLOWUPS:-2}
+      DISCOVERY_FRESHNESS_HOURS: ${DISCOVERY_FRESHNESS_HOURS:-168}
+      OPPORTUNITY_ENABLED: ${OPPORTUNITY_ENABLED:-true}
+      OPPORTUNITY_MAX_SEARCHES: ${OPPORTUNITY_MAX_SEARCHES:-2}
+      OPPORTUNITY_MAX_FOLLOWUPS: ${OPPORTUNITY_MAX_FOLLOWUPS:-1}
+      OPPORTUNITY_CONCURRENCY: ${OPPORTUNITY_CONCURRENCY:-3}
+      OPPORTUNITY_TIMEOUT_SECONDS: ${OPPORTUNITY_TIMEOUT_SECONDS:-30}
+      OPPORTUNITY_RETRIES: ${OPPORTUNITY_RETRIES:-1}
+      OPPORTUNITY_SCHEMA_REPAIRS: ${OPPORTUNITY_SCHEMA_REPAIRS:-1}
+      OPPORTUNITY_EVIDENCE_TOKENS: ${OPPORTUNITY_EVIDENCE_TOKENS:-8192}
+      OPPORTUNITY_FRESHNESS_HOURS: ${OPPORTUNITY_FRESHNESS_HOURS:-168}
+      OPPORTUNITY_INCOMPLETE_HOURS: ${OPPORTUNITY_INCOMPLETE_HOURS:-1}
+      OPPORTUNITY_RUN_SECONDS: ${OPPORTUNITY_RUN_SECONDS:-300}
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
+      BRAVE_SEARCH_MODE: llm_context
+      TMPDIR: /tmp
+    depends_on:
+      profile-service:
+        condition: service_started
+      mongodb-career-init:
+        condition: service_completed_successfully
+    networks: [backend, database]
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=0700,uid=10001,gid=10001
+    mem_limit: 768m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
   cv-service:
     build: ../../services/cv-service
     environment:
@@ -49,8 +95,8 @@ services:
     depends_on:
       profile-service:
         condition: service_started
-      mongodb:
-        condition: service_healthy
+      mongodb-career-init:
+        condition: service_completed_successfully
     networks: [backend, database]
     read_only: true
     volumes: [cv_uploads:/app/uploads]
@@ -60,26 +106,21 @@ services:
     pids_limit: 64
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-  career-service:
-    build: ../../services/career-service
+  mongodb-career-init:
+    image: mongo:8.0
     environment:
-      PROFILE_SERVICE_URL: http://profile-service:8000
-      MONGODB_URI: mongodb://coachify_career:${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}@mongodb:27017/coachify_career
-      MONGODB_DATABASE: coachify_career
-      TMPDIR: /tmp
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+      CAREER_DB_PASSWORD: ${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}
+      CV_DB_PASSWORD: ${CV_DB_PASSWORD:?Set CV_DB_PASSWORD}
+    volumes:
+      - ../mongodb/init-career.js:/setup/init-career.js:ro
+    command: ["mongosh", "--nodb", "--quiet", "/setup/init-career.js"]
     depends_on:
-      profile-service:
-        condition: service_started
       mongodb:
         condition: service_healthy
-    networks: [backend, database]
-    read_only: true
-    tmpfs:
-      - /tmp:size=32m,mode=0700,uid=10001,gid=10001
-    mem_limit: 768m
-    pids_limit: 64
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
+    networks: [database]
+    restart: "no"
   mailpit:
     image: axllent/mailpit:v1.32.0
     profiles: [development]
@@ -93,13 +134,9 @@ services:
       MONGO_INITDB_ROOT_USERNAME: coachify_admin
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       PROFILE_DB_PASSWORD: ${PROFILE_DB_PASSWORD:?Set PROFILE_DB_PASSWORD}
-      CV_DB_PASSWORD: ${CV_DB_PASSWORD:?Set CV_DB_PASSWORD}
-      CAREER_DB_PASSWORD: ${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}
     volumes:
       - profile_data:/data/db
       - ../mongodb/init-profile.js:/docker-entrypoint-initdb.d/init-profile.js:ro
-      - ../mongodb/init-cv.js:/docker-entrypoint-initdb.d/init-cv.js:ro
-      - ../mongodb/init-career.js:/docker-entrypoint-initdb.d/init-career.js:ro
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 5s

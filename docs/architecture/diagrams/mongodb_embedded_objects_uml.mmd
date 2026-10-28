@@ -8,11 +8,306 @@ class CvSkill {
     +String proficiency?
     +Number experience_months?
     +String context?
+    +SkillClaim[] sources
     +Evidence[] evidence
     +String evidence_type?
     +Boolean explicit
     +String[] item_ids
 }
+
+class TargetSkill {
+    +String item_id?
+    +String skill_id? [null_while_pending]
+    +String group_id?
+    +String group_operator [all|any]
+    +String correction [extracted|user]
+    +String name
+    +String category
+    +String priority [required|preferred|unspecified|conflicting|suggested]
+    +String priority_evidence?
+    +String priority_origin?
+    +String required_proficiency?
+    +Number required_experience_months?
+    +String context?
+    +String evidence? [bounded_2400_chars_for_pooled_sources]
+    +String origin
+    +String[] source_urls
+}
+
+class InterviewSkill {
+    +String evidence_origin [source_excerpt|brave_summary]
+    +String summary_id?
+    +String skill_id? [null_while_unmapped]
+    +String name
+    +String category
+    +String interview_stage?
+    +String assessment_type?
+    +String difficulty?
+    +String[] question_patterns
+    +Number independent_report_count
+    +String[] source_ids
+}
+
+class ResearchSource {
+    +String source_id
+    +String platform
+    +String url
+    +String title?
+    +String evidence?
+    +Date reported_date?
+    +Date published_date?
+    +String role_match?
+    +String reliability?
+    +String report_group? [verified_origin_only]
+    +Date retrieved_at?
+}
+
+class GapResult {
+    +String skill_id
+    +String name
+    +String gap_type
+    +String match_status
+    +String importance?
+    +String cv_proficiency?
+    +String required_proficiency?
+    +String explanation
+    +String recommendation?
+}
+
+class cvs {
+    +CvSkill[] skills
+}
+
+class career_goals {
+    +TargetSkill[] skills
+    +NonSkillRequirement[] non_skill_requirements
+    +ReviewContent content? [review]
+}
+
+class NonSkillRequirement {
+    +String requirement_id
+    +String category
+    +String description
+    +String priority [required|preferred|unspecified|conflicting|suggested]
+    +String priority_evidence?
+    +String priority_origin?
+    +String evidence
+    +String origin
+    +String correction [extracted|user]
+    +String[] source_urls
+    +String group_id?
+    +String group_operator [all|any]
+    +Number minimum_months?
+    +Number maximum_months?
+    +String completion_status
+}
+
+class ReviewContent {
+    +String employment_type [unknown_if_unstated]
+    +String role?
+    +String field?
+    +String company?
+    +String location?
+    +String seniority_level?
+    +String job_url?
+    +String summary?
+    +String[] responsibilities
+    +TargetSkill[] skills
+    +NonSkillRequirement[] non_skill_requirements
+}
+
+class interview_research {
+    +BraveAnswer[] summaries
+    +ResearchCoverage[] coverage
+    +InterviewSkill[] skills
+    +ResearchSource[] sources
+}
+
+class skill_gap_analyses {
+    +GapResult[] job_skill_gaps
+    +GapResult[] interview_prep_gaps
+}
+
+cvs *-- CvSkill : embeds
+career_goals *-- TargetSkill : embeds
+career_goals *-- NonSkillRequirement : embeds
+career_goals *-- ReviewContent : temporary intake content
+ReviewContent *-- TargetSkill
+ReviewContent *-- NonSkillRequirement
+%% InterviewSkill is retained only for archived records and in-memory Q&A projections.
+interview_research *-- ResearchSource : embeds
+skill_gap_analyses *-- GapResult : embeds
+
+class Generation {
+    +String provider
+    +String model
+    +String prompt_version
+    +String schema_version
+    +Date generated_at
+}
+
+class InputVersions {
+    +String cv_id [UUID_or_legacy_ObjectId]
+    +Number cv_version
+    +String extraction_version
+    +Number profile_version
+    +ObjectId career_goal_id
+    +Number career_goal_version
+    +String generation_version
+    +ResearchVersion[] research
+}
+
+class ResearchVersion {
+    +ObjectId id
+    +Number version
+}
+
+career_goals *-- Generation : provenance
+interview_research *-- Generation : provenance
+skill_gap_analyses *-- Generation : provenance
+skill_gap_analyses *-- InputVersions : pins
+InputVersions *-- ResearchVersion : pins
+
+class Answer {
+    +String status [answered|partial|skipped]
+    +String value?
+    +String quote?
+}
+class Turn {
+    +String question
+    +Answer answer
+    +String reply
+}
+class RoleSuggestion {
+    +String role
+    +String field
+    +String rationale
+    +String uncertainty
+}
+class CvContext {
+    +String mode
+    +String cv_id [UUID_or_legacy_ObjectId]?
+    +String filename?
+    +Number version?
+    +String extraction_version?
+    +Number profile_version?
+    +String attachment_sha256?
+}
+career_goals *-- Answer : draft answers
+career_goals *-- Turn : draft turns
+career_goals *-- RoleSuggestion : draft suggestions
+career_goals *-- CvContext : optional context
+
+class ResearchCoverage {
+    +String platform [brave; reddit for historical records only]
+    +String status
+    +Number round [0|1]
+}
+interview_research *-- ResearchCoverage : API availability
+
+class BraveAnswer {
+    +String summary_id
+    +String provider [brave]
+    +String text [max_2400_chars]
+    +String[] source_ids
+    +AnswerClaim[] claims
+}
+class AnswerClaim {
+    +String text [AI_synthesis_not_source_quote]
+    +String[] source_ids
+}
+interview_research *-- BraveAnswer : AI synthesis
+BraveAnswer *-- AnswerClaim : attributed spans
+InterviewSkill --> BraveAnswer : summary_id_optional
+
+class InterviewProcess {
+    +Number round_count? [explicit_only]
+    +InterviewEvidence round_count_evidence?
+    +InterviewStage[] stages
+}
+class InterviewStage {
+    +String name
+    +String assessment_type?
+    +InterviewEvidence evidence
+}
+class InterviewEvidence {
+    +String evidence_origin
+    +String summary_id?
+    +String[] source_ids
+    +String text
+}
+%% InterviewProcess is derived in-memory for Q&A; new reports store category findings only.
+InterviewProcess *-- InterviewStage
+InterviewProcess *-- InterviewEvidence
+InterviewStage *-- InterviewEvidence
+
+class OpportunityReport {
+    +String fingerprint
+    +String opportunity_id? [null_for_general_targets]
+    +String employment_type
+    +String job_url?
+    +Map categories
+    +Summary summary
+    +String status
+    +Date researched_at
+    +Date expires_at
+}
+class CategoryResult {
+    +String status
+    +Finding[] findings
+    +String[] missing_fields
+    +String[] warnings
+    +String error_code?
+    +Date researched_at?
+    +Date expires_at?
+    +Number searches
+    +Number model_calls
+    +Number latency_ms
+    +Number estimated_cost_usd?
+}
+class Finding {
+    +String finding_id
+    +String field
+    +String value [checked_evidence_grounded_summary]
+    +String confidence
+    +String evidence_type
+    +String[] source_ids
+    +String[] quotes
+    +String scope
+    +String conflict_group?
+    +Date last_verified_at
+}
+class Summary {
+    +String[] overview_refs
+    +String[] key_takeaway_refs
+    +String[] consideration_refs
+}
+interview_research *-- OpportunityReport : optional_intelligence
+OpportunityReport *-- CategoryResult : five_independent_categories
+CategoryResult *-- Finding
+OpportunityReport *-- Summary : validated_finding_refs_only
+Finding --> ResearchSource : exact_quotes_and_source_ids
+
+class DiscoveryEvidence {
+    +String research_id
+    +String selected_area
+    +String[] related_roles
+    +String specificity
+    +Number listings_analysed
+    +Number employers_analysed
+    +String coverage
+    +String[] source_ids
+    +Date researched_at
+}
+career_goals *-- DiscoveryEvidence : optional_market_provenance
+%% TargetSkill and NonSkillRequirement origin additionally support market_research.
+%% Listing frequencies, original terms and full claim references stay in immutable research_contexts snapshots.
+
+%% OpportunityReport schema v2 embeds five CategoryResult values: interviews,
+%% internship experience, career progression/salary, historical conversion outcomes,
+%% and company/team culture. Version 1 retains its original three-category contract.
+%% Exact cited Finding objects and existing interview_research persistence are reused.
+
 
 class CapabilityDeclaration {
     +String id
@@ -97,7 +392,6 @@ class cv_conversations {
     +Object active_question?
     +Object receipts
 }
-note for cv_conversations "CV-owned operational history. Transcript revisions do not advance CV evidence. Manual-only chats have no CV reference."
 
 class ChatMessage {
     +String id
@@ -118,106 +412,50 @@ class ChatAction {
     +Object original_mutation?
     +Date lease_until?
 }
-note for ChatAction "Durable execution state and exact retry bodies. Public responses exclude internal snapshots, leases and mutation controls."
 
 class users {
     +CapabilityDeclaration[] capability_declarations
     +Integer declarations_version
 }
-note for users "Logical users is the existing accounts authority. Manual declarations remain available without any CV."
 
-class TargetSkill {
-    +String skill_id
-    +String name
-    +String category
-    +String priority
-    +String required_proficiency?
-    +Number required_experience_months?
-    +String context?
-    +String evidence?
-    +String origin
-    +String[] source_urls
+class CvConfirmation {
+    +String goal_id
+    +Integer goal_version
+    +Integer selection_version
+    +String projection_hash
+    +Date confirmed_at
 }
 
-class TargetCondition {
-    +String id
-    +String kind [qualification/date]
-    +String label
+class ConfirmedRequirement {
+    +String id [stable_projection_identity]
+    +String source_requirement_id
+    +String kind [qualification/date/requirement]
+    +String source_category
+    +String source_priority
+    +String source_origin
     +String description
-    +String[] item_kinds
-    +String[] match_terms
     +String evidence?
-    +String origin [user_reviewed_jd/user_guidance]
+    +String group_id?
+    +String group_operator?
 }
 
-class InterviewSkill {
-    +String skill_id
-    +String name
-    +String category
-    +String interview_stage?
-    +String assessment_type?
-    +String difficulty?
-    +String[] question_patterns
-    +Number independent_report_count
-    +String[] source_ids
+class career_state {
+    +CvConfirmation cv_confirmation?
+    +Object[] cv_confirmation_receipts
 }
 
-class ResearchSource {
-    +String source_id
-    +String platform
-    +String url
-    +String title?
-    +String evidence?
-    +Date reported_date?
-    +Date published_date?
-    +String role_match?
-    +String reliability?
-}
-
-class GapResult {
-    +String skill_id
-    +String name
-    +String gap_type
-    +String match_status
-    +String importance?
-    +String cv_proficiency?
-    +String required_proficiency?
-    +String explanation
-    +String recommendation?
-}
-
-class cvs {
-    +CvSkill[] skills
-    +CvItem[] items
-}
-
-class career_goals {
-    +TargetSkill[] skills
-    +TargetCondition[] conditions
-}
-
-class interview_research {
-    +InterviewSkill[] skills
-    +ResearchSource[] sources
-}
-
-class skill_gap_analyses {
-    +GapResult[] job_skill_gaps
-    +GapResult[] interview_prep_gaps
-}
-
-cvs *-- CvSkill : embeds
-cvs *-- CvItem : embeds
-cvs *-- Clarification : source-bound answers and interpretation
-cv_conversations *-- ChatMessage : bounded retained segments
-ChatMessage *-- ChatAction : per-action outcomes
-CvItem *-- SkillClaim : scoped effective attribution
-CvItem *-- Evidence : bounded source excerpts
-users *-- CapabilityDeclaration : embeds
-CapabilityDeclaration *-- Contribution : preserves descriptions
-CapabilityDeclaration *-- CvReference : optional validated attachment
-career_goals *-- TargetSkill : embeds
-career_goals *-- TargetCondition : optional confirmed relevance
-interview_research *-- InterviewSkill : embeds
-interview_research *-- ResearchSource : embeds
-skill_gap_analyses *-- GapResult : embeds
+cvs *-- CvItem : source items
+cvs *-- Clarification : source-linked answers and interpretation
+CvItem *-- SkillClaim : source-scoped attribution
+CvItem *-- Evidence : bounded excerpts
+cv_conversations *-- ChatMessage : retained bounded segments
+ChatMessage *-- ChatAction : independent outcomes and exact retries
+users *-- CapabilityDeclaration : Profile-owned manual evidence
+CapabilityDeclaration *-- Contribution : preserves explanations
+CapabilityDeclaration *-- CvReference : explicit attachment
+career_state *-- CvConfirmation : acknowledgement only
+CvConfirmation --> ConfirmedRequirement : projection preserves source provenance
+note for CvConfirmation "Exact canonical goal/selection/projection identity; no independent target store and no assessment claim."
+note for ConfirmedRequirement "Generic eligibility/location constraints stay unresolved context; no forced qualification interpretation. Alternatives and full bounded evidence survive projection."
+note for cv_conversations "Operational CV history, separate from factual evidence revisions. Manual-only history may have no CV reference."
+note for ChatAction "Public responses exclude internal leases, execution snapshots and original mutation controls."

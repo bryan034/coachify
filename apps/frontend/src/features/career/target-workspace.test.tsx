@@ -2,12 +2,16 @@ import {act,fireEvent,render,screen,waitFor,within} from '@testing-library/react
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {TargetWorkspace} from './target-workspace';
 import {CareerGoal} from './career-goal';
+import CareerLayout from '../../app/(workspace)/career-goal/layout';
+import {importCareer,type CareerPreview} from '@/lib/api/career';
 import {targetApi} from '@/lib/api/career-targets';
 import {ApiError} from '@/lib/api/profile';
 import {savedTarget,emptyTargets} from '../../../tests/fixtures/career-targets';
 import type {CareerTarget,TargetList} from './target-types';
 const session=vi.hoisted(()=>({token:'owner-a-token',account:{id:'owner-a'}}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>session}));
+vi.mock('next/navigation',()=>({useRouter:()=>({push:vi.fn(),replace:vi.fn()})}));
+vi.mock('@/lib/api/career',()=>({importCareer:vi.fn(),careerApi:vi.fn()}));
 vi.mock('@/lib/api/career-targets',()=>({targetApi:{list:vi.fn(),create:vi.fn(),confirm:vi.fn(),select:vi.fn()}}));
 beforeEach(()=>{vi.clearAllMocks();session.token='owner-a-token';session.account={id:'owner-a'};vi.mocked(targetApi.list).mockResolvedValue(structuredClone(emptyTargets));});
 const source='Data analyst\nUse Python to clean data.\nCommunicate results clearly.';
@@ -64,8 +68,16 @@ describe('reviewed Career targets',()=>{
  it('describes the returned current selection when an old retry receipt is replayed',async()=>{
   const first={...savedTarget('first'),status:'confirmed' as const,version:2},second={...savedTarget('second'),role:'Design researcher',status:'confirmed' as const,version:2};const selection={career_target_id:first.id,career_target_version:2,version:4};vi.mocked(targetApi.list).mockResolvedValue({...emptyTargets,targets:[first,second],selection,selected_target:first});vi.mocked(targetApi.select).mockResolvedValue(selection);render(<TargetWorkspace {...props()}/>);await screen.findByRole('link',{name:'Review CV clarifications'});fireEvent.click(within(screen.getByLabelText('Career target second')).getByRole('button',{name:'Select target'}));await screen.findByText('The saved target selection changed after this request. Review the current selected target before continuing.');expect(screen.getByLabelText('Selected Career target')).toHaveTextContent('Data analyst');expect(screen.queryByText(/Selected Design researcher instead/)).not.toBeInTheDocument();
  });
- it('clears private target drafts and ignores late responses after account changes',async()=>{
-  let finish!:(target:CareerTarget)=>void;vi.mocked(targetApi.create).mockImplementation(()=>new Promise(done=>finish=done));const view=render(<CareerGoal/>);fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:source}});await fillJob();fireEvent.click(screen.getByRole('button',{name:'Save target draft'}));await waitFor(()=>expect(targetApi.create).toHaveBeenCalled());session.account={id:'owner-b'};session.token='owner-b-token';view.rerender(<CareerGoal/>);await act(async()=>finish(savedTarget()));expect(screen.getByRole('textbox',{name:'Target role'})).toHaveValue('');expect(screen.getByRole('textbox',{name:'Job description'})).toHaveValue('');expect(screen.queryByLabelText('Career target target-analyst')).not.toBeInTheDocument();
+ it('clears private Career drafts and ignores late import responses through the account-scoped layout',async()=>{
+  let finish!:(value:CareerPreview)=>void;vi.mocked(importCareer).mockImplementation(()=>new Promise(done=>finish=done));
+  const view=render(<CareerLayout><CareerGoal/></CareerLayout>);fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:source}});fireEvent.click(screen.getByRole('tab',{name:'Job URL'}));fireEvent.change(screen.getByLabelText('Job description URL'),{target:{value:'https://example.test/private-role'}});fireEvent.click(screen.getByRole('button',{name:'Import job page'}));
+  await waitFor(()=>expect(importCareer).toHaveBeenCalled());session.account={id:'owner-b'};session.token='owner-b-token';view.rerender(<CareerLayout><CareerGoal/></CareerLayout>);
+  await act(async()=>finish({kind:'url',text:'Private owner A imported role',source_name:'Private role',notices:[]}));
+  expect(screen.getByRole('textbox',{name:'Job description'})).toHaveValue('');expect(screen.queryByText('Private owner A imported role')).not.toBeInTheDocument();expect(vi.mocked(importCareer).mock.calls[0][3].aborted).toBe(true);
  });
- it('keeps preview and review inputs available when saved targets cannot load',async()=>{vi.mocked(targetApi.list).mockRejectedValue(new Error('Targets unavailable.'));render(<CareerGoal/>);expect(await screen.findByRole('alert')).toHaveTextContent('Targets unavailable');expect(screen.getByRole('textbox',{name:'Job description'})).toBeEnabled();expect(screen.getByRole('textbox',{name:'Target role'})).toBeEnabled();expect(screen.getByRole('button',{name:'Save target draft'})).toBeDisabled();expect(screen.getByRole('button',{name:'Retry saved targets'})).toBeEnabled();});
+ it('keeps current-goal previews editable through a failed import without depending on the retired target store',async()=>{
+  vi.mocked(targetApi.list).mockRejectedValue(new Error('Targets unavailable.'));vi.mocked(importCareer).mockRejectedValue(new Error('Preview service unavailable.'));
+  render(<CareerLayout><CareerGoal/></CareerLayout>);fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:source}});fireEvent.click(screen.getByRole('tab',{name:'Job URL'}));fireEvent.change(screen.getByLabelText('Job description URL'),{target:{value:'https://example.test/role'}});fireEvent.click(screen.getByRole('button',{name:'Import job page'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Preview service unavailable.');expect(screen.getByRole('button',{name:'Import job page'})).toBeEnabled();fireEvent.click(screen.getByRole('tab',{name:'Paste description'}));expect(screen.getByRole('textbox',{name:'Job description'})).toHaveValue(source);expect(screen.getByRole('textbox',{name:'Job description'})).toBeEnabled();expect(screen.getByRole('button',{name:'Extract career goal'})).toBeEnabled();expect(targetApi.list).not.toHaveBeenCalled();expect(screen.queryByRole('button',{name:'Save target draft'})).not.toBeInTheDocument();
+ });
 });

@@ -289,3 +289,19 @@ test('background tabs do not poll sessions and there is no inactivity logout',as
  expect(requests.filter(url=>url.endsWith('/auth/session'))).toHaveLength(validations);
  expect(screen.getByTestId('account')).toHaveTextContent('Synthetic');expect(field).toBeVisible();expect(field).toHaveValue('My unfinished explanation');
 });
+
+test('ordinary tab switches revalidate without clearing the profile or remounting drafts',async()=>{
+ render(<ProfileProvider><Probe/><input aria-label="Draft" defaultValue="Unsaved work"/></ProfileProvider>);
+ await waitFor(()=>expect(screen.getByTestId('loading')).toHaveTextContent('false'));
+ fireEvent.click(screen.getByText('Create',{exact:true}));
+ await waitFor(()=>expect(screen.getByTestId('profile')).toHaveTextContent('Private course'));
+ Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+ fireEvent(document,new Event('visibilitychange'));
+ expect(screen.getByTestId('profile')).toHaveTextContent('Private course');
+ expect(screen.getByTestId('loading')).toHaveTextContent('false');
+ Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});
+ fireEvent(document,new Event('visibilitychange'));
+ await act(async()=>{});
+ expect(screen.getByTestId('profile')).toHaveTextContent('Private course');
+ expect(screen.getByLabelText('Draft')).toHaveValue('Unsaved work');
+});

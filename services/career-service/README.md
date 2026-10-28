@@ -1,53 +1,44 @@
 # Career service
 
-Prepares temporary job-description previews and saves owner-scoped, reviewed
-career targets. Profile supplies authentication and onboarding state; Career owns
-structured targets in MongoDB. No AI interpretation or automatic guidance is used.
+Career owns transient job inputs, the account's canonical goal and guided chat, conversational discovery and cited public research. JD intake and discovery share the same structured goal persistence path. Configured Gemini/Brave access is required for live interpretation and research; previews make no model calls. Synthetic tests do not establish live quality or provider cost.
 
-## Input previews — J01 / J06 / J07
+## JD inputs — J01 / J06 / J07
 
-Pasted descriptions stay in browser memory. `POST /api/v1/career/imports/url`
-prepares an editable public-page preview; `POST /api/v1/career/imports/document`
-accepts PDF, DOCX or UTF-8 TXT up to 10 MiB. Descriptions have a 20,000-character
-limit. Previews and originals are temporary; no full source is saved. See
-[SPECIFICATION.md](SPECIFICATION.md) for parser and network safeguards.
+Pasted text stays in browser memory until explicitly submitted for extraction. `POST /api/v1/career/imports/url` and `/imports/document` return bounded temporary previews; `/explorations/cv/document` supplies optional temporary CV context. Inputs and originals are not retained as raw JD/CV text. URL/document safeguards are detailed in [SPECIFICATION.md](SPECIFICATION.md).
 
-## Reviewed target context — J09 foundation / SCRUM-310
+## Canonical goal and chat — J02–J05 / J09
 
-`GET` and `POST /api/v1/career/targets` list and save structured target drafts.
-Lists return 20 targets per page with an opaque `next_cursor`; pass that cursor
-to read older targets. `selected_target` always includes the current selection,
-even when it is outside the page. Pagination preserves all saved history.
-Specific-job skills require a bounded verbatim excerpt from the transient reviewed
-JD. Exploration skills are the user's personal guidance, explicitly labelled as
-such; they are not generated recommendations or employer requirements.
-Optional qualification/date conditions use the same source distinction. Each
-names the relevant CV sections and specific subject phrases so clarification can
-defer unrelated records. Job subject phrases must occur in the cited JD excerpt.
+- `GET /api/v1/career/workspace` returns one owner-scoped saved workspace; `/workspace/progress` supports lightweight polling.
+- `POST /api/v1/career/workspace/jd` starts or reconnects to versioned JD intake. A validated identity overlaps full extraction with public-only retrieval. Successful extraction saves the goal; combined chat output waits for extraction and research to complete.
+- `POST /api/v1/career/workspace/messages` asks scoped questions or refines the current goal. Ambiguous edits retain a private pending question; valid edits save with owner/version checks and retry receipts.
+- `/api/v1/career/goals` and `/goals/current` expose canonical structured history/current state. Goals edit in place with versions. A replacement becomes current only after validated saving.
 
-`GET /api/v1/career/targets/{id}` restores a saved target. `POST
-/api/v1/career/targets/{id}/confirm` confirms its reviewed, non-empty set of skills
-or qualification/date conditions.
-`PUT /api/v1/career/targets/selection` explicitly selects a confirmed version.
-Confirmation does not select it automatically. Content is immutable; save a new
-target to change requirements, preserving previous snapshots.
+Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
 
-`GET /api/v1/career/targets/selected-context` and `GET
-/api/v1/career/targets/{id}/confirmed-context?expected_version=N` supply CV with
-the authenticated, selected target identity, type, skill IDs, conditions and selection fence.
-Stale or unselected context is rejected. Saving/selecting a target never starts or
-regenerates an assessment.
+## Explicit CV clarification context — C-series integration
 
-## Access, setup and remaining scope
+- `GET /api/v1/career/goals/current/cv-confirmation` reports the exact current goal, goal version and selection version, whether that revision is confirmed, its context and an actionable reason when unavailable.
+- `POST /api/v1/career/goals/current/cv-confirmation` acknowledges those exact versions with a UUID mutation key. It does not create another goal, advance selection or imply assessment.
+- `GET /api/v1/career/goals/current/confirmed-context` returns the current valid confirmed projection or null. `/goals/{goal_id}/confirmed-context?expected_version=...` validates a pinned current revision for CV consumers.
 
-All product endpoints require a verified session and completed initial setup.
-Responses are `no-store`; request/source contents are not logged. `MONGODB_URI`
-and optional `MONGODB_DATABASE` (default `coachify_career`) enable saved targets.
-Missing/unavailable storage returns a recoverable 503 for targets; previews still
-work. Run the tests using [tests/README.md](tests/README.md).
+Career automatic saving does not silently confirm a goal for CV review. `career_state.cv_confirmation` records goal ID/version, selection version, projection hash and confirmation time; edits/replacements invalidate it. Bounded receipts make lost-response retries exact. Up to 200 skills and 100 complete requirements retain source/category/origin and alternative-group metadata. Generic eligibility/location requirements remain unresolved context, without invented CV facts. Older UUID target snapshots remain historical data; production does not expose a second active `/targets` workflow.
 
-AI extraction, AI-generated career exploration, J02–J05 semantic interpretation,
-automatic non-skill interpretation, interview research and gap analysis remain
-unimplemented. This implements a manual reviewed-context foundation for J09,
-not all J09 acceptance criteria. No Groq key is required. See
-[setup](../../docs/setup.md) and [API contracts](../../contracts/api/career.yaml).
+## Saved CV context — J08 / J09
+
+`GET /api/v1/career/context` lists available CV context; `/context/assessment` checks whether owned saved CV skill input is available. This does not compute mastery, skill gaps or readiness. Reads forward the owner's revocable session to CV and verify detail identity/owner. The adapter accepts the saved `{cvs, selection}` API and legacy read responses, preserving UUID/ObjectId references, unknown proficiency, attribution, guidance and evidence.
+
+Career's CV transport/projection intake is bounded at **512 KiB**, separately from CV's larger storage limit. Oversized input returns an actionable error and is never truncated. Internal projection schema is [career-cv-snapshot.schema.json](../../contracts/api/models/career-cv-snapshot.schema.json); the public CV response remains [cv.schema.json](../../contracts/api/models/cv.schema.json). Original `skill:*` source identities are not automatically equivalent to Career's dotted registry: future analysis must resolve mapping explicitly.
+
+## Discovery and public research — J08 / J10 / J12 / J13
+
+`/api/v1/career/discoveries` provides conversational direction setting, explicit area approval and researched requirement review without requiring a CV. It publishes through the same canonical goal store. See [CAREER_DISCOVERY.md](CAREER_DISCOVERY.md) for exact session/message/research routes and models.
+
+`GET` / `POST /api/v1/career/goals/{id}/opportunity-research` read/start/reuse/refresh owner-linked public research, with independently saved category outcomes. Interviews, internship experience, career progression/conversion salary, historical conversion rates and culture retain citations, uncertainty and missing fields. Progress is compact and evidence loads on demand. See [OPPORTUNITY_INTELLIGENCE.md](OPPORTUNITY_INTELLIGENCE.md) and [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md) for graph, models, bounded Gemini/Brave retrieval and version/quota recovery.
+
+Saved-goal Q&A uses backend topic routing and allowlisted projected facts. Explicit further-research requests may start scoped public retrieval. Private CV evidence and personal chat are excluded from shared research. Unknown information stays unknown; no assessment computation or roadmap is generated.
+
+## Access and setup
+
+Every endpoint requires a verified account and completed canonical onboarding. Owner checks and no-store responses apply to private data. Services use authenticated APIs rather than foreign MongoDB collections. Environment files remain private and must be configured by the user; agents use synthetic settings. See [application setup](../../docs/setup.md), [OpenAPI](../../contracts/api/career.yaml) and [tests](tests/README.md).
+
+Canonical writes retain namespaced `create_key` metadata to coexist with the legacy unique index. History filters record shape explicitly. No index drop, destructive data migration or automatic conversion of older target snapshots occurs. Gap analysis and roadmap generation remain planned.

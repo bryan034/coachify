@@ -1,31 +1,21 @@
 # Coachify architecture
 
-Use the focused design references below for CV, JD/skills-analysis and roadmap
-work. The repository also retains the broader six-service scaffold for future
-expansion. P01–P16 and account-level manual declarations are available in Profile.
-CV supplies saved upload/review, resumable text conversations, corrections, explicit
-selection, interpreted target-relevant clarifications and versioned capability inputs. Raw answers remain
-separate from validated source-linked claims; replacement review and manual
-attachment repair require explicit choices. Career provides temporary URL/document
-previews, reviewed target skills and qualification/date conditions, and explicit
-confirmation/selection. The target-bound CV handoff captures the selected source
-and target revisions for a future consumer to revalidate. AI target generation,
-research, assessment admission, gap analysis, result staleness and roadmap
-generation remain planned. CV extraction, free-text conversation routing and answer interpretation require an
-explicitly configured provider; synthetic tests do not establish production model
-quality.
+The implemented slice combines Profile/account access, saved conversational CV review and Career's canonical goal/research workspace. The broader six-service scaffold remains future context. CV owns factual evidence, correction overlays, source-linked clarification and private resumable messages. Profile owns manual declarations. Career owns one current goal and public-context research; an explicit acknowledgement of its exact goal/version/selection makes it usable for CV clarification.
+
+Career JD/discovery/research uses configured Gemini/Brave adapters. CV extraction, conversation routing and clarification interpretation use its separate configurable OpenAI-compatible provider. Model output is validated before factual publication. Synthetic checks establish workflow and contract behavior, not live-model quality. Assessment computation, broad registry mapping, gap analysis and roadmaps remain planned.
 
 ## Working design references
 
 | File | Purpose |
 |---|---|
-| [MongoDB collections](diagrams/mongodb_collections_uml.mmd) | Five logical collections with existing account identity, CV ownership and planned Career references; operational records shown separately. |
+| [MongoDB collections](diagrams/mongodb_collections_uml.mmd) | Supplied skills-service model: users, cvs, career_goals, interview_research and skill_gap_analyses, with ID references. |
 | [Embedded objects](diagrams/mongodb_embedded_objects_uml.mmd) | Supplied CvSkill, TargetSkill, InterviewSkill, ResearchSource and GapResult structures embedded in those collections. |
 | [Dockerised CV/JD/roadmap architecture](diagrams/dockerised-mvp.puml) | Scoped MongoDB design for CV ingestion, JD/career/skills analysis and roadmap services, with existing frontend/gateway/Profile dependencies. Expand as more services are designed. |
 
-The Mermaid sources reconcile the supplied model with C-facing ownership. Open
-`.mmd` files in a Mermaid preview and `.puml` files in a PlantUML preview. Detailed
-schemas and implementation status remain in the owning service contracts.
+The Mermaid sources follow the supplied design, with collection naming and
+identity/version/provenance details aligned to the implemented contracts. Open `.mmd` files in a Mermaid
+preview and `.puml` files in a PlantUML preview. These are design references;
+implementation status and detailed API contracts remain in the owning service.
 The skills-service model spans CV and Career responsibilities in the current
 checkout: map collection ownership through Jira contract task SCRUM-310 and the
 [service boundaries](service-boundaries.md), rather than creating duplicate user
@@ -81,7 +71,7 @@ flowchart TB
     Roadmap --> Atlas
     Review --> Atlas
     CV --> LLM
-    Career -. Future interpretation .-> LLM
+    Career --> LLM
     Roadmap --> LLM
 ```
 
@@ -91,10 +81,10 @@ flowchart TB
 - Browser API calls use the gateway's `/api/v1` routes. Server-side Next.js reads may use an internal gateway URL.
 - Each backend service owns its data and deploys independently. The dashboard aggregates through APIs and has no independent database.
 - Five logical databases may share an Atlas deployment with service-scoped credentials. Local development can use one additional MongoDB container.
-- CV background execution belongs inside its service container, backed by durable operations and bounded leases; no separate broker is needed.
-- The original CV is staged in a private Docker volume with bounded retention and cleanup. Only structured facts and bounded evidence persist as domain data. A purged original requires explicit re-upload for reprocessing; no public permanent file URL is provided.
-- Task completion and reopening trigger automatic dashboard refetches. Scheduled reviews analyse pace separately and generate candidate revisions; a current approval policy controls application.
-- Replanning preserves completed work and student edits. It does not silently change target jobs, deadlines, or availability.
+- CV processing/conversation tasks and Career workflows execute inside their owning services with durable operation state, bounded work and recovery fencing. No separate worker microservice is introduced.
+- The original CV is staged in a private host-backed Docker volume. Extracted and clarified information persists in MongoDB. Successful processing triggers eventual original-file deletion and cleanup.
+- Future task completion/reopening will trigger dashboard refetches; scheduled reviews and authorised revision application remain planned.
+- Planned replanning must preserve completed work and student edits without silently changing goals, deadlines or availability.
 - No additional AI microservice, message broker, or vector database is part of the first scaffold.
 
 ## Authentication status
@@ -103,15 +93,13 @@ The profile slice supports verified email/password accounts and optional Google.
 
 See [service boundaries](service-boundaries.md), [API planning](../api/README.md), and [MongoDB guidance](../../infrastructure/mongodb/README.md).
 
-## Career preview slice — J01/J06/J07
+## Career input, goal and research
 
-Career Goal has three temporary input methods. The preview requests use no LLM
-and do not persist source text. Reviewed targets use a separate Career-owned database.
-Career validates sessions via the Profile API and returns URL/document previews.
-Original uploads use private tmpfs and are closed/deleted after processing. Source
-text exists only in request/process/browser memory. Reviewed role/field/skills and
-bounded evidence persist in immutable `career_goals` snapshots; explicit confirmation
-and versioned selection supply CV context. Career makes no AI calls.
+Preview parsing validates URLs/documents without model calls or persisted raw sources. Explicit extraction and conversational discovery save structured canonical goals through the same Career persistence path. One live workspace per account uses owner/version checks; Career's automatic saves can start cited public research without silently confirming that goal for CV clarification. Temporary checkpoints expire independently of persistent goals and research.
+
+The `career_state.cv_confirmation` stamp stores the exact goal ID/version, selection version, projection hash and acknowledgement time. Bounded confirmation receipts support exact retries. Context reads revalidate the stamp against the current canonical goal and selection, including a goal edit that advances its version before selection changes. Confirmation does not create another goal record or advance selection merely to record acknowledgement. Earlier UUID reviewed targets remain historical records; canonical reads filter their shape instead of treating them as current ObjectId goals.
+
+Career reads saved CVs through the CV API and preserves their original UUIDs, source attribution and uncertainty. Its internal projection also accepts earlier ObjectId CV references. The 512 KiB Career intake limit is independent of CV's larger record limit; oversized data is rejected clearly without truncation. A source-identity mapping version is not treated as equivalent to Career's dotted skill registry, so future analysis remains responsible for explicit mapping.
 
 ## Saved CV and manual declarations — C01–C09
 
@@ -125,10 +113,10 @@ choice and never becomes extra proof merely through repetition. See
 [Profile declaration rules](../../services/profile-service/SPECIFICATION.md#manual-capabilities--c07).
 
 Material clarification uses the owner’s current confirmed Career context through
-its API. No selected target defers preparation; a dependency outage offers retry.
+its API. No confirmed current goal defers preparation; a dependency outage offers retry.
 Preparation records exact target/selection/extraction versions and rechecks current
 selection. Pending questions follow relevance; answers and skips remain source facts
-across target switches. A reviewed target or completed clarification does not imply
+across target switches. A confirmed goal or completed clarification does not imply
 a generated gap analysis or job readiness.
 
 The conversational screen uses a CV-owned operational history with independent

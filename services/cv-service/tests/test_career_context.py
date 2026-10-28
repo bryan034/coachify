@@ -29,8 +29,8 @@ def test_career_adapter_owner_forwarding_and_versioned_paths():
         return httpx.Response(200, json=context())
     assert run_provider(handler) == context()
     assert run_provider(handler, 'context', 'target-a', 1) == context()
-    assert requests[0].url.path == '/api/v1/career/targets/selected-context'
-    assert requests[1].url.path == '/api/v1/career/targets/target-a/confirmed-context'
+    assert requests[0].url.path == '/api/v1/career/goals/current/confirmed-context'
+    assert requests[1].url.path == '/api/v1/career/goals/target-a/confirmed-context'
     assert requests[1].url.params['expected_version'] == '1'
     assert all(request.headers['authorization'] == 'Bearer synthetic-owner' for request in requests)
 
@@ -54,7 +54,7 @@ def test_career_failures_are_not_misreported_as_deferred(code):
 @pytest.mark.parametrize('changes', [
     {'confirmed': False}, {'confirmed': 1}, {'version': '1'}, {'selection_version': 0},
     {'type': 'exploration'}, {'role': ''}, {'skill_ids': ['skill:SQL']},
-    {'skill_ids': ['skill:sql', 'skill:sql']}, {'skill_ids': ['skill:s' + str(i) for i in range(41)]},
+    {'skill_ids': ['skill:sql', 'skill:sql']}, {'skill_ids': ['skill:s' + str(i) for i in range(201)]},
     {'untrusted_extra': 'ignored fields are not allowed'},
 ])
 def test_career_response_shape_is_strict(changes):
@@ -242,3 +242,42 @@ def test_read_waiting_for_career_uses_the_latest_cv_version(harness):
     assert result.json()['cv_version'] == saved['version'] > cv['version']
     question = next(question for question in result.json()['questions'] if question['id'] == project['id'])
     assert question['status'] == 'answered' and question['answer'] == 'I built the Python endpoint with supervision.'
+
+
+def test_canonical_goal_projection_accepts_full_bounds_and_retains_generic_requirements():
+    from uuid import uuid4
+    requirement={'id':str(uuid4()),'kind':'requirement','label':'Eligibility requirement',
+        'description':'Eligibility must be reviewed.','item_kinds':['education','experience','project','skill'],
+        'match_terms':['Eligibility must be reviewed.'],'evidence':'An explicit employer condition.',
+        'origin':'user_reviewed_jd','source_requirement_id':'eligibility-one','source_category':'eligibility',
+        'source_priority':'required','source_origin':'employer','group_id':'alternatives','group_operator':'any'}
+    payload=context(skill_ids=['skill:skill '+str(i) for i in range(200)],conditions=[{**requirement,'id':str(uuid4())} for _ in range(100)])
+    saved=run_provider(lambda request:httpx.Response(200,json=payload))
+    assert len(saved['skill_ids'])==200 and len(saved['conditions'])==100
+    assert saved['conditions'][0]['source_category']=='eligibility'
+    assert saved['conditions'][0]['group_operator']=='any'
+    from app.clarification.service import matching_conditions
+    from app.schemas.cv import ConfirmedContext
+    item={'kind':'education','title':'Computer Science degree','description':'University course','evidence':[]}
+    assert matching_conditions(item,ConfirmedContext.model_validate(payload),'qualification')==[]
+
+
+def test_confirmed_qualification_subject_is_relevant_without_assuming_credential_met():
+    from uuid import uuid4
+    from app.clarification.service import matching_conditions
+    from app.schemas.cv import ConfirmedContext
+    description='A Computer Science diploma is required.'
+    condition={'id':str(uuid4()),'kind':'qualification','label':'Qualification requirement',
+        'description':description,'item_kinds':['education'],'match_terms':['Computer Science'],
+        'evidence':description,'origin':'user_reviewed_jd','source_requirement_id':'qualification-one',
+        'source_category':'qualification','source_priority':'required','source_origin':'employer',
+        'group_id':None,'group_operator':'all'}
+    payload=context(conditions=[condition])
+    saved=run_provider(lambda request:httpx.Response(200,json=payload))
+    typed=ConfirmedContext.model_validate(saved)
+    source={'kind':'education','title':'Education','description':'Synthetic University, Computer Science.','evidence':[]}
+    before=deepcopy(source)
+    assert matching_conditions(source,typed,'qualification')==typed.conditions
+    assert source==before
+    unrelated={**source,'description':'Synthetic University, Accountancy diploma.'}
+    assert matching_conditions(unrelated,typed,'qualification')==[]

@@ -2,12 +2,12 @@ import { openCvReviewTools } from '../fixtures/cv-ui';
 import { expect, type Locator, type Page } from '@playwright/test';
 import path from 'node:path';
 import { createLocalAccount } from './account-helpers';
+import {seedCanonicalGoal,confirmCanonicalGoal} from './canonical-career';
 import type { CvDetail, Reconciliation } from '../../src/features/cv-ingestion/types';
 
 export const mixedAnswer = "I wrote the Python loader for six months with my tutor's help. I also used Pandas to clean the data. My teammate wrote SQL.";
 const qualificationAnswer = 'I completed the Computer Science diploma in 2024.';
 const qualification = 'A Computer Science diploma is required.';
-const source = `SYNTHETIC VACANCY: Data analyst internship. Build reports using Python. Query data using SQL. ${qualification}`;
 const repo = path.resolve(__dirname, '../../../..');
 export type Chapter = (title: string, text: string, focus?: Locator) => Promise<void>;
 export type Account = Awaited<ReturnType<typeof createLocalAccount>>;
@@ -29,31 +29,14 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  const question = (heading: string) => page.locator('.cv-question').filter({ has: page.getByRole('heading', { name: heading, exact: true }) });
  const projectQuestion = () => question('What did you personally contribute, and what did teammates or guidance cover?');
 
+ const target=await seedCanonicalGoal(account,{role:'Synthetic data analyst internship',field:'Data analytics',skills:[{name:'Python',evidence:'Build reports using Python.'},{name:'SQL',evidence:'Query data using SQL.'}],conditions:[{description:qualification,evidence:qualification,category:'Qualifications'}]});
+ const targetId=target.id;
  await page.goto('/career-goal');
- await chapter('1. Review the target requirements', 'The account has completed setup. This fictional job asks for Python, SQL and a Computer Science diploma. Requirements are reviewed by the user; the full JD is temporary.', page.getByRole('textbox', { name: 'Job description', exact: true }));
- await page.getByRole('textbox', { name: 'Job description', exact: true }).fill(source);
- await page.getByLabel('Target role', { exact: true }).fill('Synthetic data analyst internship');
- await page.getByLabel('Career field', { exact: true }).fill('Data analytics');
- await page.getByLabel('Skill name 1', { exact: true }).fill('Python');
- await page.getByRole('textbox', { name: /^Exact JD excerpt 1/ }).fill('Build reports using Python.');
- await page.getByRole('button', { name: 'Add skill', exact: true }).click();
- await page.getByLabel('Skill name 2', { exact: true }).fill('SQL');
- await page.getByRole('textbox', { name: /^Exact JD excerpt 2/ }).fill('Query data using SQL.');
- await page.getByRole('button', { name: 'Add qualification or date condition', exact: true }).click();
- await page.getByLabel('Condition name 1', { exact: true }).fill('Computer Science diploma');
- await page.getByLabel('Requirement 1', { exact: true }).fill(qualification);
- await page.getByLabel('Relevant subject phrases 1', { exact: true }).fill('Computer Science');
- await page.getByLabel('Condition JD excerpt 1', { exact: true }).fill(qualification);
- await chapter('2. Keep qualifications separate from skills', 'The diploma is a non-skill condition, supported by an exact JD excerpt. It can make an education question relevant without becoming a skill or verifying eligibility.', page.getByRole('region', { name: 'Qualification and date conditions', exact: true }));
- await page.getByRole('button', { name: 'Save target draft', exact: true }).click();
- await expect.poll(async () => (await (await account.get('/api/v1/career/targets')).json()).targets.length).toBe(1);
- const targets = await (await account.get('/api/v1/career/targets')).json();
- const targetId = targets.targets[0].id;
- expect(targets.targets[0].conditions[0]).toMatchObject({kind: 'qualification', match_terms: ['Computer Science'], evidence: qualification});
- const target = page.getByRole('article', { name: `Career target ${targetId}`, exact: true });
- await target.getByRole('button', { name: 'Confirm target', exact: true }).click();
- await target.getByRole('button', { name: 'Select target', exact: true }).click();
- await expect(target.getByRole('button', { name: 'Selected target', exact: true })).toBeVisible();
+ await chapter('1. Review the target requirements', 'The test account uses a pre-seeded synthetic canonical goal. The displayed skills and diploma requirement are saved by Career; this walkthrough does not evaluate live extraction.', page.getByRole('heading',{name:'Synthetic data analyst internship',exact:true}));
+ await expect(page.getByText(qualification,{exact:true}).first()).toBeVisible();
+ await chapter('2. Confirm this goal for CV review', 'Automatic saving is separate from explicit confirmation. Review the displayed requirements, then acknowledge this exact goal version before CV questions use it.',page.getByRole('region',{name:'Goal confirmation for CV review'}));
+ const context=await confirmCanonicalGoal(page,account,target);
+ expect(context.conditions).toEqual(expect.arrayContaining([expect.objectContaining({description:qualification,evidence:qualification})]));
 
  await page.goto('/cv');await openCvReviewTools(page);
  await chapter('3. Upload a CV, then select it', 'Upload, parsing, saved records and service calls are real. The document and model are synthetic test fixtures. Uploading alone does not change the selected CV.', page.getByLabel('CV document', { exact: true }));
@@ -109,7 +92,7 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  const failedCv = await readCv(cvId);
  const beforeRetry = failedCv.clarifications.find(q => q.interpretation_status === 'failed')!;
  const failedSelection = (await (await account.get('/api/v1/cv')).json()).selection;
- const failedTarget = await (await account.get('/api/v1/career/targets/selected-context')).json();
+ const failedTarget = await (await account.get('/api/v1/career/goals/current/confirmed-context')).json();
  const failedDeclarations = await (await account.get('/api/v1/profile/capabilities')).json();
  const failedParams = new URLSearchParams({expected_version: String(failedCv.version), expected_selection_version: String(failedSelection.version), expected_declarations_version: String(failedDeclarations.version), expected_target_id: failedTarget.id, expected_target_version: String(failedTarget.version), expected_target_selection_version: String(failedTarget.selection_version)});
  expect((await account.get(`/api/v1/cv/${cvId}/analysis-input?${failedParams}`)).status()).toBe(409);
@@ -180,7 +163,7 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  await expect(page.getByText('Standalone declaration; no CV evidence link.', {exact: true})).toBeVisible();
 
  const selected = (await (await account.get('/api/v1/cv')).json()).selection;
- const selectedTarget = await (await account.get('/api/v1/career/targets/selected-context')).json();
+ const selectedTarget = await (await account.get('/api/v1/career/goals/current/confirmed-context')).json();
  manual = await (await account.get('/api/v1/profile/capabilities')).json();
  const params = new URLSearchParams({expected_version: String(replacement.version), expected_selection_version: String(selected.version), expected_declarations_version: String(manual.version), expected_target_id: targetId, expected_target_version: String(selectedTarget.version), expected_target_selection_version: String(selectedTarget.selection_version)});
  const response = await account.get(`/api/v1/cv/${replacementId}/analysis-input?${params}`);

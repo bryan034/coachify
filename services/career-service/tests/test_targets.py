@@ -310,10 +310,23 @@ def test_target_payload_limit_and_unicode_are_separate_from_preview_limits(harne
     assert client.post(BASE, json={**draft(), 'skills': [{'name': 'ﷺ' * 200, 'evidence': 'Use Python'}]}).status_code == 201
 
 
+def legacy_without_storage(*args):
+    # Retired API failure/recovery coverage uses an explicit test-only router.
+    # Production create_app() exposes only canonical-goal confirmation.
+    from anyio import CapacityLimiter
+    from app.api.v1.targets import router
+    app=create_app(*args)
+    app.state.target_repository=None
+    app.state.target_database=None
+    app.state.target_limiter=CapacityLimiter(8)
+    app.include_router(router)
+    return app
+
+
 def test_storage_outage_and_missing_configuration_do_not_break_previews(monkeypatch):
     monkeypatch.delenv('MONGODB_URI', raising=False)
     processor = lambda *_: {'kind': 'url', 'text': 'Synthetic preview', 'source_name': 'example.test', 'notices': []}
-    with TestClient(create_app(profile(), processor)) as client:
+    with TestClient(legacy_without_storage(profile(), processor)) as client:
         assert client.get(BASE, headers=AUTH).status_code == 503
         assert client.post('/api/v1/career/imports/url', headers=AUTH, json={'url': 'https://example.test'}).status_code == 200
     repository = MemoryTargetRepository()
@@ -339,7 +352,7 @@ def test_failed_database_initialization_recovers_on_later_request(monkeypatch):
         if len(attempts) == 1: raise ServerSelectionTimeoutError('synthetic startup outage')
         return repository
     monkeypatch.setattr('app.api.v1.targets.TargetRepository', initialize)
-    app = create_app(profile())
+    app = legacy_without_storage(profile())
     with TestClient(app) as client:
         app.state.target_database = 'synthetic owned database'
         assert client.get(BASE, headers=AUTH).status_code == 503

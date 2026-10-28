@@ -1,51 +1,29 @@
-# MongoDB storage plan
+# MongoDB service storage
 
-The active setup is `infrastructure/docker/compose.yaml`. Profile owns `coachify_profile`, CV owns `coachify_ingestion`, and Career owns `coachify_career`. Each uses separate credentials and communicates with other services through APIs. See the [application setup guide](../../docs/setup.md).
-
-
-The logical `users` entity maps to the existing Profile `accounts` collection and its UUID account ID. The five logical domain collections do not prohibit separate operation, selection, idempotency or immutable-history records. There is no account migration or cross-service collection access.
+The active stack uses separate `coachify_profile`, `coachify_ingestion` and `coachify_career` databases and scoped service users. Profile initialization handles fresh volumes; the idempotent `mongodb-career-init` job creates missing Career/CV users on existing volumes without resetting credentials or data. Root credentials belong only to MongoDB and its setup job, never application services. See [application setup](../../docs/setup.md).
 
 ## Ownership
 
-| Service | Planned database |
-|---|---|
-| Profile | `coachify_profile` |
-| CV ingestion | `coachify_ingestion` |
-| Career assessment | `coachify_career` |
-| Roadmap and tasks | `coachify_roadmap` |
-| Review and scheduling | `coachify_review` |
+Profile's existing `accounts` collection is the logical `users` authority, retaining UUID account IDs and manual declarations. CV owns saved `cvs`, processing/history, explicit `cv_selections` and private bounded `cv_conversations`. Career owns canonical `career_goals`, public `interview_research`, future `skill_gap_analyses`, and operational `career_state`, research jobs and checkpoints. Planned Roadmap/Review services own their future records; Dashboard remains stateless.
 
-The dashboard service is stateless and has no MongoDB credentials. Each data-owning service will receive its own database-scoped credentials. Services use APIs to request another service's records rather than reading its collections.
+Services access foreign records through authenticated APIs. CV IDs remain UUID strings; Career's internal CV projection also accepts existing ObjectId references without remapping. Career-owned goal/research identities remain ObjectIds. There is no account or CV-ID migration.
 
-## Local development
+## Canonical goal and historical compatibility
 
-A local MongoDB container writes database files to a named volume mounted at `/data/db`. Its data persists independently of replacing the container. Never use a root credential as a normal application-service credential. The current local MongoDB is standalone; code uses atomic document updates and explicit versions, not an assumed multi-document transaction.
+`career_state` holds the current canonical goal pointer/workspace. The version-specific `cv_confirmation` stamp records goal ID/version, selection version, projection hash and confirmation time; bounded receipts support exact retries. Automatic Career saves do not implicitly confirm CV context. A changed goal or selection invalidates the stamp on reads, while earlier CV answers stay source-bound.
 
-`init-profile.js`, `init-cv.js` and `init-career.js` provision credentials only on a fresh volume. For an existing development volume, preserve existing passwords and add any missing `CV_DB_PASSWORD` and `CAREER_DB_PASSWORD` to the Compose environment. Recreate the MongoDB container without deleting the volume so it receives those variables, then run the idempotent provisioning scripts using the existing administrator credential:
+Older UUID reviewed-target records and their selection metadata remain historical data, outside the active canonical flow. Canonical history queries filter record shape instead of validating legacy records as new goals. Namespaced canonical `create_key` metadata preserves coexistence with the legacy unique `(user_id, create_key)` index. No index drop, data deletion or automatic historical-target conversion is required.
 
-```sh
-docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up -d mongodb
-docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml exec mongodb sh -c 'mongosh --quiet --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin /docker-entrypoint-initdb.d/init-cv.js'
-docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml exec mongodb sh -c 'mongosh --quiet --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin /docker-entrypoint-initdb.d/init-career.js'
-```
+## Local persistence and setup
 
-The scripts create missing database users and do not reset existing credentials. Do not delete the database volume to apply this change.
+MongoDB data persists in its named `/data/db` volume. Preserve stored passwords when reusing it; changing configuration does not change a database user's saved credential. Apply missing service-user setup through the existing one-shot initialization job. Do not use volume deletion as a setup or migration step. Private standalone local MongoDB operations use atomic document updates and version checks rather than assuming distributed transactions.
 
-Career stores immutable reviewed snapshots in `career_goals` and one operational
-selection record per owner in `career_target_selections`. This follows current SCRUM-310;
-the earlier `career_targets` diagram name had no implemented data and requires no
-rename or migration. Confirmation and selection are separate document operations.
-Selection uses compare-and-set and durable idempotency receipts. No cross-service
-transaction is implied; consumers retain and revalidate exact source versions.
-Full JD text is transient, including on draft creation; only bounded evidence
-snippets and structured fields are saved.
+Agents use separate disposable projects/databases with explicit synthetic settings. MongoDB 8 checks need a compatible Docker/runner kernel; local functional validation on MongoDB 7 is reported separately and does not establish intended-version compatibility. No workaround should silently bypass MongoDB's startup guard or change host settings.
+
+## CV originals and history
+
+Only CV mounts `cv_uploads`, which temporarily retains private original PDF/DOCX files for the documented retry window. MongoDB stores structured extraction and bounded evidence, not a public file URL or full parsing text. Cleanup respects processing leases and records deletion. Expired originals require re-upload; metadata expiry alone cannot remove a filesystem file. Saved conversation segments do not automatically expire and are separate from factual CV versions.
 
 ## Production proposal
 
-Use MongoDB Atlas via private service environment configuration. Atlas manages its own database storage, so an Atlas deployment does not use the local `mongodb_data` volume. Hosting for Next.js and FastAPI is separate.
-
-Indexes, validation, and any transaction/topology requirements are implementation work. They must be designed for MongoDB, not copied from the older PostgreSQL proposal.
-
-## CV uploads are separate
-
-The `cv_uploads` volume temporarily holds private original PDFs/DOCX files for the documented retry window. Only CV mounts it. MongoDB retains structured extraction and bounded evidence, not the full parsing text or a public file URL. Cleanup respects active processing leases and records deletion; expiring MongoDB metadata alone cannot delete a filesystem upload. Once the original expires, retry requires re-uploading the same source. See the CV service specification for limits and recovery behavior.
+Atlas may provide external managed MongoDB storage with service-scoped credentials; application hosting remains separate. It would not use the local data volume. Index/topology choices must be validated against the deployed environment. See the [collection diagram](../../docs/architecture/diagrams/mongodb_collections_uml.mmd) and owning service contracts.

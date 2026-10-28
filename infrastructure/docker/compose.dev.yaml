@@ -1,0 +1,38 @@
+# Opt-in development override; combine with compose.yaml.
+# Mount source folders only, never the repository/service roots or .env files.
+services:
+  frontend:
+    build:
+      target: development
+    environment:
+      NODE_ENV: development
+      # Webpack polling detects bind-mount edits reliably on Docker Desktop.
+      WATCHPACK_POLLING: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - ../../apps/frontend/src:/repo/apps/frontend/src:ro
+      - ../../apps/frontend/public:/repo/apps/frontend/public:ro
+      - ../../apps/frontend/next.config.ts:/repo/apps/frontend/next.config.ts:ro
+      - ../../apps/frontend/tsconfig.json:/repo/apps/frontend/tsconfig.json:ro
+      - frontend_dev_cache:/repo/apps/frontend/.next
+  profile-service:
+    environment:
+      APP_ENV: development
+      PYTHONDONTWRITEBYTECODE: "1"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/service/app", "--reload-delay", "0.5"]
+    volumes:
+      - ../../services/profile-service/app:/service/app:ro
+  career-service:
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/service/app", "--reload-delay", "0.5", "--no-access-log"]
+    volumes:
+      - ../../services/career-service/app:/service/app:ro
+  cv-service:
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/service/app", "--reload-delay", "0.5", "--no-access-log"]
+    volumes:
+      - ../../services/cv-service/app:/service/app:ro
+volumes:
+  frontend_dev_cache: {}

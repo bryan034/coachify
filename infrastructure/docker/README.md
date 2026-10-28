@@ -1,36 +1,49 @@
 # Docker deployment structure
 
-The active slice includes Profile, CV saved upload/review, Career previews and reviewed targets, and an optional development Mailpit inbox in `infrastructure/docker/compose.yaml`. See the [application setup guide](../../docs/setup.md). CV and Career use separate database credentials. CV retains private originals temporarily; Career previews use bounded tmpfs and only structured reviewed targets persist. Career makes no AI calls. Remaining services still use inactive scaffold templates.
+The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV ingestion/review, canonical Career goal/research, scoped MongoDB users and an optional development Mailpit inbox. Roadmap/dashboard/review remain source scaffolds. See [application setup](../../docs/setup.md).
 
+## Storage and service boundaries
 
-`compose.yaml.example` is an intentionally inactive deployment blueprint. It uses a `scaffold` profile for application services, and references comment-only Dockerfile examples. It cannot build or start a working Coachify application. Do not interpret Compose schema validity as application readiness.
+- `web` connects the gateway and frontend; `backend` carries API dependencies and permitted outbound provider traffic; the isolated `database` network keeps MongoDB private.
+- Profile owns account/manual-declaration data. CV owns `coachify_ingestion`, its worker and private `cv_uploads` volume. Career owns `coachify_career` and its public research/checkpoint metadata.
+- CV upload routes retain their 11 MiB multipart gateway allowance, disabled buffering and upload rate limit. Provider credentials are server-side. CV parsing dependencies and private writable upload ownership are required.
+- Career uses a non-root read-only container and bounded private tmpfs for temporary previews. Its database-user initialization also provisions missing CV users on existing volumes without resetting credentials or deleting data.
+- `mongodb_data` persists structured data independently from temporary CV originals. Do not delete it when applying code, routing, credentials or index-compatibility changes.
 
-## Planned components
+## Configuration
 
-- NGINX gateway: one public application entry point.
-- Next.js frontend: private Node.js server container.
-- Six FastAPI service containers.
-- Optional local MongoDB container under `local-db`; proposed production database is external Atlas.
-- `cv_uploads`: private original-file staging volume, mounted only by the CV service.
-- `mongodb_data`: local MongoDB data volume, unrelated to CV staging.
+Configure private values yourself, preserving existing database passwords. Agents must not inspect environment files. Career uses `AI_ENABLED`, `GEMINI_API_KEY`, `GEMINI_REASONING_MODEL` and `BRAVE_API_KEY`; its default reasoning model is `gemini-3.5-flash-lite`. CV has a separate configurable OpenAI-compatible adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
 
-## Networks
+The three implemented services communicate through authenticated APIs. CV receives `CAREER_SERVICE_URL`; Profile receives `CV_SERVICE_URL` for explicit source attachment; Career receives its CV API URL. No service reads another service's database. Tests use `compose.test.yaml` and deterministic synthetic model responses, with explicit synthetic settings and `--env-file /dev/null` in isolated projects.
 
-- `web`: gateway and frontend.
-- `backend`: gateway and backend services; retains outbound access for external identity, Atlas, and LLM connections where needed.
-- `database`: local MongoDB and the five data-owning services; isolated network with no MongoDB host port.
+`compose.yaml.example` remains an inactive historical blueprint. Its schema validity does not prove a deployable application.
 
-## Before making it runnable
+## Hot reload during development
 
-1. Choose and pin supported runtime/image and dependency versions.
-2. Add valid Next.js pages/layouts and FastAPI startup entry points.
-3. Turn the Dockerfile examples into actual service Dockerfiles.
-4. Complete NGINX routing and the chosen authentication integration.
-5. Add service-scoped environment loading and MongoDB users/credentials.
-6. Configure health checks and readiness dependencies.
-7. Review the deployment blueprint and then produce an active Compose file.
+From the repository root, run this yourself with your existing private configuration:
 
-`compose.test.yaml` is an explicit override for disposable integration tests. It
-adds a synthetic model HTTP boundary and permits HTTP only in the development
-CV container. It refuses documents without the synthetic fixture marker. Never
-apply this override to a personal-data or production stack. See [tests](../../docs/testing.md).
+```sh
+docker compose --env-file infrastructure/docker/.env \
+  -f infrastructure/docker/compose.yaml \
+  -f infrastructure/docker/compose.dev.yaml up --build -d
+docker compose --env-file infrastructure/docker/.env \
+  -f infrastructure/docker/compose.yaml \
+  -f infrastructure/docker/compose.dev.yaml restart gateway
+```
+
+Open `http://localhost:8080`. Build once when switching to this mode. Afterward,
+Next.js Fast Refresh updates UI changes and Uvicorn reloads Python changes in
+Profile, Career and CV. NGINX forwards the HMR WebSocket. Webpack polling is enabled
+for Docker Desktop bind mounts. Some React edits trigger a full refresh and reset
+unsaved browser state; Python reloads interrupt in-flight requests.
+
+Only source/public/config paths are mounted, read-only. Dependencies stay in the
+image; `.next` uses a separate development cache volume. No environment files are
+mounted, and agents must not read them or run commands that load private values.
+MongoDB retains its existing data volume; do not use `down -v` to switch modes.
+
+Rebuild for dependency or Dockerfile changes. Recreate containers after changing
+runtime settings yourself. Restart the affected API for JSON/data snapshot changes
+(Uvicorn's default watcher tracks Python); restart the gateway for NGINX changes.
+Continue using both `-f` options for development commands. Omit `compose.dev.yaml`
+and rebuild/recreate to return to the production-style configuration.

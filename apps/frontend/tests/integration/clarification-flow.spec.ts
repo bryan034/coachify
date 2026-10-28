@@ -2,17 +2,10 @@ import { openCvReviewTools } from '../fixtures/cv-ui';
 import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
 import { createLocalAccount } from './account-helpers';
+import {seedCanonicalGoal,confirmCanonicalGoal} from './canonical-career';
 
-const source = 'Synthetic analyst vacancy. Build reports using Python. Query data using SQL. Work with a team and explain your findings.';
 const projectAnswer = 'I wrote the SQL queries. A teammate built the Python application, with guidance from our tutor.';
 const workAnswer = 'I checked reporting output under supervision. I do not know the full Python implementation.';
-
-async function confirmAndSelect(page: Page, id: string) {
- const card = page.getByRole('article', { name: `Career target ${id}`, exact: true });
- await card.getByRole('button', { name: 'Confirm target', exact: true }).click();
- await card.getByRole('button', { name: 'Select target', exact: true }).click();
- await expect(card.getByRole('button', { name: 'Selected target', exact: true })).toBeVisible();
-}
 
 test('confirmed Career targets drive saved project, work and skill clarification across reloads and target switches', async ({ page, browser }) => {
  test.setTimeout(150_000);
@@ -20,30 +13,16 @@ test('confirmed Career targets drive saved project, work and skill clarification
  const account = await createLocalAccount(page, 'Synthetic clarification reviewer');
  const profile = await (await account.get('/api/v1/profile')).json();
  expect((await account.finish({ expected_version: profile.version, occupational_status: 'employed', no_previous_education: true })).ok()).toBeTruthy();
- await page.goto('/career-goal');
- await page.getByRole('textbox', { name: 'Job description', exact: true }).fill(source);
- await page.getByLabel('Target role', { exact: true }).fill('Synthetic data analyst');
- await page.getByLabel('Career field', { exact: true }).fill('Data analytics');
- await page.getByLabel('Skill name 1', { exact: true }).fill('Python');
- await page.getByRole('textbox', { name: /^Exact JD excerpt 1/ }).fill('Build reports using Python.');
- await page.getByRole('button', { name: 'Add skill', exact: true }).click();
- await page.getByLabel('Skill name 2', { exact: true }).fill('SQL');
- await page.getByRole('textbox', { name: /^Exact JD excerpt 2/ }).fill('Query data using SQL.');
- await page.getByRole('button', { name: 'Save target draft', exact: true }).click();
- await expect.poll(async () => (await (await account.get('/api/v1/career/targets')).json()).targets.length).toBe(1);
- const saved = await (await account.get('/api/v1/career/targets')).json();
- const targetId = saved.targets[0].id;
- expect(saved.selection.career_target_id).toBeNull();
- expect(saved.targets[0]).toMatchObject({ status: 'draft', company: null, requirements_source: 'user_reviewed_jd' });
- expect(JSON.stringify(saved.targets)).not.toContain(source);
- const targetCard = page.getByRole('article', { name: `Career target ${targetId}`, exact: true });
- await targetCard.getByRole('button', { name: 'Confirm target', exact: true }).click();
- expect((await (await account.get('/api/v1/career/targets')).json()).selection.career_target_id).toBeNull();
- await targetCard.getByRole('button', { name: 'Select target', exact: true }).click();
- await expect(targetCard.getByRole('button', { name: 'Selected target', exact: true })).toBeVisible();
+ const target=await seedCanonicalGoal(account,{role:'Synthetic data analyst',field:'Data analytics',skills:[{name:'Python',evidence:'Build reports using Python.'},{name:'SQL',evidence:'Query data using SQL.'}]});
+ const targetId=target.id;
+ const saved=await (await account.get('/api/v1/career/goals/current')).json();
+ expect(saved.goal._id).toBe(targetId);
+ expect(await (await account.get('/api/v1/career/goals/current/confirmed-context')).json()).toBeNull();
+ const initialContext=await confirmCanonicalGoal(page,account,target);
+ expect(initialContext).toMatchObject({id:targetId,confirmed:true,role:'Synthetic data analyst'});
  await page.reload();
- await expect(page.getByRole('textbox', { name: 'Job description', exact: true })).toHaveValue('');
- await expect(page.getByRole('article', { name: `Career target ${targetId}`, exact: true })).toContainText('Build reports using Python.');
+ await expect(page.getByRole('heading',{name:'Confirmed for CV review',exact:true})).toBeVisible();
+ expect(await (await account.get('/api/v1/career/goals/current/confirmed-context')).json()).toEqual(initialContext);
 
  await page.goto('/cv');await openCvReviewTools(page);
  await page.getByLabel('CV document', { exact: true }).setInputFiles(path.join(process.cwd(), 'tests/fixtures/synthetic-clarification-cv.docx'));
@@ -83,25 +62,18 @@ test('confirmed Career targets drive saved project, work and skill clarification
  await expect(page.getByRole('button', { name: 'Edit explanation', exact: true })).toHaveCount(2);
  await expect(page.getByRole('button', { name: 'Answer voluntarily', exact: true })).toHaveCount(1);
 
- // Unrelated personal guidance changes relevance, never the saved contribution.
- await page.goto('/career-goal');
- await page.getByRole('radio', { name: 'Career exploration', exact: true }).check();
- await page.getByLabel('Target role', { exact: true }).fill('Synthetic visual designer');
- await page.getByLabel('Career field', { exact: true }).fill('Design');
- await page.getByLabel('Skill name 1', { exact: true }).fill('Illustration');
- await page.getByLabel('Guidance/context 1 (optional)', { exact: true }).fill('A direction I want to explore, not an employer requirement.');
- await page.getByRole('button', { name: 'Save target draft', exact: true }).click();
- await expect.poll(async () => (await (await account.get('/api/v1/career/targets')).json()).targets.length).toBe(2);
- const targets = await (await account.get('/api/v1/career/targets')).json();
- const exploration = targets.targets.find((target: { id: string }) => target.id !== targetId);
- expect(exploration.skills[0].origin).toBe('user_guidance');
- await confirmAndSelect(page, exploration.id);
+ // An unrelated canonical exploration changes relevance, never the saved contribution.
+ const exploration=await seedCanonicalGoal(account,{role:'Synthetic visual designer',field:'Design',target_type:'career_exploration',skills:[{name:'Illustration'}]});
+ const explorationGoal=await (await account.get('/api/v1/career/goals/current')).json();
+ expect(explorationGoal.goal.target_type).toBe('career_exploration');
+ expect(await (await account.get('/api/v1/career/goals/current/confirmed-context')).json()).toBeNull();
+ await confirmCanonicalGoal(page,account,exploration);
  await page.goto('/cv');await openCvReviewTools(page);
  await page.getByRole('button', { name: 'Prepare relevant questions', exact: true }).click();
  await expect(page.getByText('No relevant clarification questions are pending for this target. This does not confirm capability or complete an analysis.', { exact: true })).toBeVisible();
  await expect(page.getByRole('button', { name: 'Edit explanation', exact: true })).toHaveCount(2);
  await expect(page.getByLabel('Confirmed clarification target', { exact: true })).toContainText('Synthetic visual designer');
- const selectedExploration = await (await account.get('/api/v1/career/targets/selected-context')).json();
+ const selectedExploration = await (await account.get('/api/v1/career/goals/current/confirmed-context')).json();
  expect(selectedExploration).toMatchObject({ id: exploration.id, type: 'career_exploration', confirmed: true });
  const explorationQuestions = await (await account.get(`/api/v1/cv/${cvId}/clarifications`)).json();
  expect(explorationQuestions).toMatchObject({ prepared: true, deferred: false });
@@ -110,14 +82,13 @@ test('confirmed Career targets drive saved project, work and skill clarification
  expect(switched.effective_version).toBe(clarified.effective_version);
  expect(switched.clarifications).toEqual(clarified.clarifications);
 
- await page.goto('/career-goal');
- await page.getByRole('article', { name: `Career target ${targetId}`, exact: true }).getByRole('button', { name: 'Select target', exact: true }).click();
- await expect(page.getByRole('article', { name: `Career target ${targetId}`, exact: true }).getByRole('button', { name: 'Selected target', exact: true })).toBeVisible();
+ const restored=await seedCanonicalGoal(account,{goal_id:targetId,role:'Synthetic data analyst',field:'Data analytics',skills:[{name:'Python',evidence:'Build reports using Python.'},{name:'SQL',evidence:'Query data using SQL.'}]});
+ await confirmCanonicalGoal(page,account,restored);
  await page.goto('/cv');await openCvReviewTools(page);
  await page.getByRole('button', { name: 'Prepare relevant questions', exact: true }).click();
  await expect(page.getByRole('button', { name: 'Skip and continue', exact: true })).toHaveCount(0);
  await expect(page.getByLabel('Confirmed clarification target', { exact: true })).toContainText('Synthetic data analyst');
- const selectedAgain = await (await account.get('/api/v1/career/targets/selected-context')).json();
+ const selectedAgain = await (await account.get('/api/v1/career/goals/current/confirmed-context')).json();
  expect(selectedAgain).toMatchObject({ id: targetId, type: 'specific_job', confirmed: true });
  expect(selectedAgain.selection_version).toBeGreaterThan(selectedExploration.selection_version);
  const returnedQuestions = await (await account.get(`/api/v1/cv/${cvId}/clarifications`)).json();
@@ -139,7 +110,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
  const snapshot = await input.json();
  expect(snapshot.items.find((item: { kind: string }) => item.kind === 'project').description).toBe(final.original_items.find((item: { kind: string }) => item.kind === 'project').description);
  expect(snapshot.skills.find((skill: { skill_id: string }) => skill.skill_id === 'skill:sql').sources).toEqual(expect.arrayContaining([expect.objectContaining({ attribution: 'personal', evidence: expect.arrayContaining([expect.objectContaining({ excerpt: 'I wrote the SQL queries.' })]) })]));
- const currentTarget = await (await account.get('/api/v1/career/targets/selected-context')).json();
+ const currentTarget = await (await account.get('/api/v1/career/goals/current/confirmed-context')).json();
  expect(currentTarget).toMatchObject({ id: targetId, confirmed: true, type: 'specific_job' });
  await page.screenshot({ path: test.info().outputPath('confirmed-target-clarifications.png'), fullPage: true });
 
@@ -149,9 +120,10 @@ test('confirmed Career targets drive saved project, work and skill clarification
   const other = await createLocalAccount(otherPage, 'Synthetic separate target owner');
   const otherProfile = await (await other.get('/api/v1/profile')).json();
   expect((await other.finish({ expected_version: otherProfile.version, occupational_status: 'employed', no_previous_education: true })).ok()).toBeTruthy();
-  expect((await other.get(`/api/v1/career/targets/${targetId}`)).status()).toBe(404);
-  expect((await other.get(`/api/v1/career/targets/${targetId}/confirmed-context?expected_version=${currentTarget.version}`)).status()).toBe(404);
+  // A context outside this account's current selection is a generic conflict; it reveals no goal data.
+  expect((await other.get(`/api/v1/career/goals/${targetId}/confirmed-context?expected_version=${currentTarget.version}`)).status()).toBe(409);
+  expect(await (await other.get('/api/v1/career/goals/current/cv-confirmation')).json()).toMatchObject({goal_id:null,confirmed:false,context:null});
   expect((await other.get(`/api/v1/cv/${cvId}/clarifications`)).status()).toBe(404);
-  expect(await (await other.get('/api/v1/career/targets/selected-context')).json()).toBeNull();
+  expect(await (await other.get('/api/v1/career/goals/current/confirmed-context')).json()).toBeNull();
  } finally { await otherContext.close(); }
 });

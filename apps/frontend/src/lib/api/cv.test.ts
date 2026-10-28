@@ -33,6 +33,15 @@ describe('CV service boundary',()=>{
   const context={...confirmedTarget,skill_ids:[],conditions:[condition]};response(clarificationState(savedCv(),context));expect((await cvApi.questions('cv','token',signal())).context?.skill_ids).toEqual([]);
   response({...clarificationState(savedCv()),context:{...context,conditions:[{...condition,item_kinds:['unknown']}]}});await expect(cvApi.questions('cv','token',signal())).rejects.toThrow('incomplete response');
  });
+ it('accepts all canonical Career requirements with their original grouping and origins',async()=>{
+  const conditions:TargetCondition[]=Array.from({length:100},(_,i)=>({id:`requirement-${i}`,kind:'requirement',label:`Requirement ${i}`,description:'A role-specific requirement.',item_kinds:['education','experience','project','skill'],match_terms:['degree','diploma','bachelor','master','phd','certificate','certification'],evidence:'A role-specific requirement.',origin:'employer',source_requirement_id:`original-${i}`,category:'Other',priority:'required',group_id:'alternatives',group_operator:'any'}));
+  const context={...confirmedTarget,skill_ids:Array.from({length:200},(_,i)=>`skill:capability ${i}`),conditions};
+  response(clarificationState(savedCv(),context));const saved=await cvApi.questions('cv','token',signal());expect(saved.context?.skill_ids).toHaveLength(200);expect(saved.context?.conditions).toEqual(conditions);
+  response({...chat,context});expect((await cvApi.conversation('chat','token',signal())).context?.conditions).toHaveLength(100);
+  response(clarificationState(savedCv(),{...context,conditions:[{...conditions[0],match_terms:[...conditions[0].match_terms,'over-limit']}]}));await expect(cvApi.questions('cv','token',signal())).rejects.toThrow('incomplete response');
+  response(clarificationState(savedCv(),{...context,conditions:[{...conditions[0],group_operator:'maybe'} as unknown as TargetCondition]}));await expect(cvApi.questions('cv','token',signal())).rejects.toThrow('incomplete response');
+  response(clarificationState(savedCv(),{...context,skill_ids:[...context.skill_ids,'skill:over-limit']}));await expect(cvApi.questions('cv','token',signal())).rejects.toThrow('incomplete response');
+ });
  it('rejects invalid partial dates instead of presenting fabricated precision',async()=>{const cv=savedCv();response({...cv,items:[{...cv.items[0],start_date:'2023-02-29'}]});await expect(cvApi.get(cv.id,'token',signal())).rejects.toThrow('incomplete response');response({...cv,items:[{...cv.items[0],start_date:'2024',end_date:'2025-02'}]});expect((await cvApi.get(cv.id,'token',signal())).items[0].start_date).toBe('2024');});
  it('validates interpretation states and source attribution before rendering them',async()=>{
   const cv=savedCv(),question={id:'q',item_id:cv.items[0].id,kind:'project',question:'What did you do?',uncertainty_key:'contribution',status:'answered',answer:'I used Python.',career_target_id:'target',career_target_version:1,interpretation_status:'verified'};

@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {createLocalAccount,fillCurrentEmployment} from './account-helpers';
 test('Career previews validate real sessions, read a document and discard source on reload',async({page})=>{
- await createLocalAccount(page,'Synthetic Career user');
+ const account=await createLocalAccount(page,'Synthetic Career user');
  await page.getByRole('button',{name:'Employed',exact:true}).click();
  await fillCurrentEmployment(page);
  await page.getByRole('button',{name:'No applicable previous education'}).click();
@@ -11,13 +11,43 @@ test('Career previews validate real sessions, read a document and discard source
  await page.getByRole('tab',{name:'Upload document'}).click();
  const source='Synthetic analyst\nResponsibilities\n• Research & communicate findings.\nSQL or Python.';
  await page.getByLabel('Job description document',{exact:true}).setInputFiles({name:'role.txt',mimeType:'text/plain',buffer:Buffer.from(source)});
- await page.getByRole('button',{name:'Read document'}).click();
  await expect(page.getByRole('textbox',{name:'Review and edit the preview'})).toHaveValue(source);
  await page.getByRole('tab',{name:'Job URL'}).click();await page.getByLabel('Job description URL',{exact:true}).fill('http://127.0.0.1/job');
  await page.getByRole('button',{name:'Import job page'}).click();await expect(page.getByRole('tabpanel').getByRole('alert')).toContainText('Private, local and internal');
  await page.getByRole('tab',{name:'Paste description'}).click();await page.getByRole('textbox',{name:'Job description',exact:true}).fill(source);
  const stored=await page.evaluate(()=>JSON.stringify([Object.entries(localStorage),Object.entries(sessionStorage)]));expect(stored).not.toContain('Synthetic analyst');
- page.once('dialog',dialog=>dialog.accept());await page.reload();
- await expect(page.getByRole('textbox',{name:'Job description',exact:true})).toHaveValue('');
+ const failure=page.waitForResponse(response=>response.url().includes('/api/v1/career/workspace/operations/')&&response.status()===503);
+ const extraction=page.waitForResponse(response=>response.url().endsWith('/api/v1/career/workspace/jd')&&response.request().method()==='POST');
+ await page.getByRole('button',{name:'Extract career goal'}).click();
+ await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
+ const response=await extraction;
+ expect(response.status()).toBe(202);
+ expect(await response.json()).toMatchObject({operation_id:expect.any(String),status:'running'});
+ const failedOperation=await failure;
+ expect(await failedOperation.json()).toMatchObject({code:'not_configured'});
+ await expect(page.getByRole('log').getByRole('alert')).toContainText('AI is disabled');
+ await expect(page.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeEnabled();
+ const goals=await account.get('/api/v1/career/goals');
+ expect(goals.ok()).toBe(true);
+ expect((await goals.json()).reviews).toEqual([]);
+ await page.reload();await expect(page.getByRole('status').filter({hasText:'No job description is available'})).toBeVisible();
  const signedOut=await page.request.post('/api/v1/career/imports/url',{data:{url:'https://example.test/job'}});expect(signedOut.status()).toBe(401);
+});
+
+test('Career goal confirmation persists through the real gateway and owner database',async({page})=>{
+ const account=await createLocalAccount(page,'Synthetic Goal user');
+ await page.getByRole('button',{name:'Employed',exact:true}).click();await fillCurrentEmployment(page);
+ await page.getByRole('button',{name:'No applicable previous education'}).click();
+ await page.getByRole('button',{name:'Enter Coachify',exact:true}).click();
+ await page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true}).click();
+ await page.getByRole('button',{name:'Explore careers'}).click();
+ await expect(page).toHaveURL(/\/career-goal\/discovery$/);
+ await expect(page.getByRole('heading',{name:'Career discovery'})).toBeVisible();
+ const saved=await page.request.post('/api/v1/career/goals/confirm',{headers:{...account.headers,'Idempotency-Key':crypto.randomUUID()},data:{target_type:'specific_job',role:'Synthetic analyst',field:'Research',expected_selection_version:0}});
+ expect(saved.status()).toBe(200);expect((await saved.json()).goal.readiness).toBe('pending');
+ await page.goto('/career-goal/chat');await page.reload();await page.getByRole('button',{name:'Role and research details'}).click();
+ await expect(page.getByRole('heading',{name:'Synthetic analyst',exact:true})).toBeVisible();
+ const restored=await account.get('/api/v1/career/goals/current');
+ expect((await restored.json()).goal.role).toBe('Synthetic analyst');
 });

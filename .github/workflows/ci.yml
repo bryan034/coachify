@@ -88,12 +88,13 @@ jobs:
 
   profile-integration:
     name: Profile MongoDB integration
-    runs-on: ubuntu-latest
+    # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     services:
       mongodb:
         image: mongo:8.0
-        ports: [27017:27017]
+        ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
           --health-interval 5s --health-timeout 5s --health-retries 20
@@ -109,14 +110,19 @@ jobs:
         env:
           MONGODB_TEST_URI: mongodb://localhost:27017
 
-  cv-integration:
-    name: CV MongoDB integration
-    runs-on: ubuntu-latest
+  analysis-integration:
+    name: Analysis MongoDB contracts (${{ matrix.service }})
+    # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [career, cv]
     services:
       mongodb:
         image: mongo:8.0
-        ports: [27017:27017]
+        ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
           --health-interval 5s --health-timeout 5s --health-retries 20
@@ -125,41 +131,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e '.[test]'
-        working-directory: services/cv-service
-      - run: python -m pytest
-        working-directory: services/cv-service
-        env:
-          MONGODB_TEST_URI: mongodb://localhost:27017
-
-  career-integration:
-    name: Career MongoDB integration
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    services:
-      mongodb:
-        image: mongo:8.0
-        ports: [27017:27017]
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
-          --health-interval 5s --health-timeout 5s --health-retries 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: python -m pip install -e '.[test]'
-        working-directory: services/career-service
-      - run: python -m pytest
-        working-directory: services/career-service
+      - name: Validate contracts and MongoDB repositories
+        working-directory: services/${{ matrix.service }}-service
+        run: |
+          python -m pip install -e '.[test]'
+          python -m pytest
         env:
           MONGODB_TEST_URI: mongodb://localhost:27017
 
   local-ui-integration:
     name: Local UI and MongoDB integration
-    runs-on: ubuntu-latest
+    # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
+      AI_ENABLED: 'false'
       APP_ENV: development
       AUTH_MODE: local_test
       COMPOSE_PROFILES: development
@@ -172,8 +158,8 @@ jobs:
       GATEWAY_PORT: '8081'
       MONGO_ROOT_PASSWORD: ci-only-root-password
       PROFILE_DB_PASSWORD: ci-only-profile-password
-      CV_DB_PASSWORD: ci-only-cv-password
       CAREER_DB_PASSWORD: ci-only-career-password
+      CV_DB_PASSWORD: ci-only-cv-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -191,6 +177,14 @@ jobs:
         env:
           PROFILE_E2E_BASE_URL: http://localhost:8081
           MAILPIT_BASE_URL: http://localhost:8026
+      - name: Upload local integration test artifacts
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: local-ui-integration-results
+          path: apps/frontend/test-results/integration/
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Service logs on failure
         if: ${{ failure() }}
         run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml logs --tail=100
@@ -201,7 +195,7 @@ jobs:
   test-gate:
     name: Test gate
     if: ${{ always() }}
-    needs: [frontend-unit, frontend-e2e, backend, profile-integration, cv-integration, career-integration, local-ui-integration]
+    needs: [frontend-unit, frontend-e2e, backend, profile-integration, analysis-integration, local-ui-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -211,14 +205,12 @@ jobs:
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           LOCAL_UI_RESULT: ${{ needs.local-ui-integration.result }}
+          ANALYSIS_RESULT: ${{ needs.analysis-integration.result }}
           INTEGRATION_RESULT: ${{ needs.profile-integration.result }}
-          CV_INTEGRATION_RESULT: ${{ needs.cv-integration.result }}
-          CAREER_INTEGRATION_RESULT: ${{ needs.career-integration.result }}
         run: |
           test "$UNIT_RESULT" = success
           test "$E2E_RESULT" = success
           test "$BACKEND_RESULT" = success
           test "$INTEGRATION_RESULT" = success
-          test "$CV_INTEGRATION_RESULT" = success
-          test "$CAREER_INTEGRATION_RESULT" = success
           test "$LOCAL_UI_RESULT" = success
+          test "$ANALYSIS_RESULT" = success

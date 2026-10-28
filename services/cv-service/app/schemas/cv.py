@@ -125,13 +125,19 @@ class Extraction(StrictModel):
 
 class TargetCondition(StrictModel):
     id: UUID
-    kind: Literal['qualification', 'date']
+    kind: Literal['qualification', 'date', 'requirement']
     label: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
-    description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+    description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)]
     item_kinds: list[Literal['education', 'experience', 'project', 'skill']] = Field(min_length=1, max_length=4)
-    match_terms: list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]] = Field(min_length=1, max_length=5)
-    evidence: Annotated[str, StringConstraints(min_length=1, max_length=500)] | None = None
+    match_terms: list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)]] = Field(min_length=1, max_length=7)
+    evidence: Annotated[str, StringConstraints(min_length=1, max_length=600)] | None = None
     origin: Literal['user_reviewed_jd', 'user_guidance']
+    source_requirement_id: str | None = None
+    source_category: str | None = None
+    source_priority: str | None = None
+    source_origin: str | None = None
+    group_id: str | None = None
+    group_operator: Literal['all', 'any'] = 'all'
 
 
 class ConfirmedContext(StrictModel):
@@ -139,11 +145,11 @@ class ConfirmedContext(StrictModel):
     version: int = Field(ge=1, strict=True)
     type: Literal['specific_job', 'career_exploration']
     confirmed: Literal[True]
-    skill_ids: list[Annotated[str, Field(min_length=7, max_length=4000)]] = Field(max_length=40)
+    skill_ids: list[Annotated[str, Field(min_length=7, max_length=4000)]] = Field(max_length=200)
     selection_version: int = Field(default=1, ge=1, strict=True)
     role: str = Field(default='', max_length=200)
     field: str = Field(default='', max_length=200)
-    conditions: list[TargetCondition] = Field(default_factory=list, max_length=20)
+    conditions: list[TargetCondition] = Field(default_factory=list, max_length=100)
 
     @field_validator('confirmed', mode='before')
     @classmethod

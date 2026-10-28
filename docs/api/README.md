@@ -5,12 +5,14 @@ service below; its README lists individual endpoints grouped by Jira story.
 
 | Main prefix | What it leads to | Service folder | Status |
 |---|---|---|---|
-| `/api/v1/profile` | Email/password access, verification, onboarding, background, planning and account-owned capability declarations | [profile-service](../../services/profile-service/README.md) | Available |
-| `/api/v1/cv` | Saved CV review, resumable text conversations, interpreted clarifications, dates, source reconciliation, attachment assessment and versioned target-bound inputs | [cv-service](../../services/cv-service/README.md) | Available; extraction, free-text routing and interpretation need a configured provider; assessment execution remains planned |
-| `/api/v1/career` | Temporary JD previews, reviewed target drafts, explicit confirmation/selection and versioned confirmed context | [career-service](../../services/career-service/README.md) | Reviewed targets available; AI interpretation, exploration chat and skill-gap analysis remain planned |
+| `/api/v1/profile` | Email/password access, verification, onboarding, background, education, planning preferences and profile versions | [profile-service](../../services/profile-service/README.md) | Available |
+| `/api/v1/cv` | Saved CV upload, extraction, clarification, correction, capability input and private conversation history | [cv-service](../../services/cv-service/README.md) | Saved upload, selection, interpretation and resumable review available; live models require configuration |
+| `/api/v1/career` | Career exploration, temporary JD/CV previews, saved role/skill/condition review, one autosaved goal/chat with explicit version-bound CV confirmation, LangGraph JD interpretation, advisory skills and Brave interview evidence; skill gaps remain planned | [career-service](../../services/career-service/README.md) | Available; external AI/research requires configured provider access |
 | `/api/v1/roadmaps` | Roadmap generation, milestones, task progress and revisions | [roadmap-service](../../services/roadmap-service/README.md) | Planned |
 | `/api/v1/dashboard` | Daily, weekly, monthly and whole-roadmap progress | [dashboard-service](../../services/dashboard-service/README.md) | Planned |
 | `/api/v1/reviews`, `/api/v1/review-schedules` | Manual or scheduled pace reviews and adaptation preferences | [review-service](../../services/review-service/README.md) | Planned |
 
 Page URLs such as `/profile` and `/roadmap` belong to the frontend. They are not API
 endpoints. Private `/internal/v1` routes are not exposed through the gateway.
+
+Career discovery session/message/research routes are implemented under `/api/v1/career/discoveries`; see [Career service](../../services/career-service/README.md).
