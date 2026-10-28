@@ -1,3 +1,4 @@
+import { openCvReviewTools } from '../fixtures/cv-ui';
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -9,7 +10,7 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  const before = await (await account.get('/api/v1/profile')).json();
  const complete = await account.finish({ expected_version: before.version, occupational_status: 'employed', no_previous_education: true });
  expect(complete.ok()).toBeTruthy();
- await page.goto('/cv');
+ await page.goto('/cv');await openCvReviewTools(page);
  await page.getByLabel('Capability name', { exact: true }).fill('Public speaking');
  await page.getByLabel('Capability description', { exact: true }).fill('I presented a synthetic class project.');
  await page.getByRole('button', { name: 'Add capability', exact: true }).click();
@@ -35,7 +36,7 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  await editor.getByLabel('Description', { exact: true }).fill('I wrote SQL queries; another teammate implemented the Python application.');
  await editor.getByRole('button', { name: 'Save correction', exact: true }).click();
  await expect(editor).not.toBeVisible();
- await page.reload();
+ await page.reload();await openCvReviewTools(page);
  await expect(page.getByRole('region', { name: 'Projects', exact: true }).locator('.cv-copy')).toHaveText('I wrote SQL queries; another teammate implemented the Python application.');
  // Exercise the real Profile -> CV -> Profile authenticated reference check.
  await page.getByLabel('Capability name', { exact: true }).fill('Python');

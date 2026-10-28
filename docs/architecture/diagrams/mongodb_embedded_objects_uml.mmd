@@ -88,6 +88,38 @@ class Clarification {
     +Object reconciled_from?
 }
 
+class cv_conversations {
+    +String user_id
+    +String cv_id?
+    +Integer segment
+    +Integer revision
+    +ChatMessage[] messages
+    +Object active_question?
+    +Object receipts
+}
+note for cv_conversations "CV-owned operational history. Transcript revisions do not advance CV evidence. Manual-only chats have no CV reference."
+
+class ChatMessage {
+    +String id
+    +Integer sequence
+    +String role [user/assistant]
+    +String text
+    +Date created_at
+    +ChatAction[] actions
+}
+
+class ChatAction {
+    +String id
+    +String kind
+    +String status
+    +String item_id?
+    +String question_id?
+    +Object source_snapshot
+    +Object original_mutation?
+    +Date lease_until?
+}
+note for ChatAction "Durable execution state and exact retry bodies. Public responses exclude internal snapshots, leases and mutation controls."
+
 class users {
     +CapabilityDeclaration[] capability_declarations
     +Integer declarations_version
@@ -177,6 +209,8 @@ class skill_gap_analyses {
 cvs *-- CvSkill : embeds
 cvs *-- CvItem : embeds
 cvs *-- Clarification : source-bound answers and interpretation
+cv_conversations *-- ChatMessage : bounded retained segments
+ChatMessage *-- ChatAction : per-action outcomes
 CvItem *-- SkillClaim : scoped effective attribution
 CvItem *-- Evidence : bounded source excerpts
 users *-- CapabilityDeclaration : embeds

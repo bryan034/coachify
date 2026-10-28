@@ -42,6 +42,19 @@ class cv_selections {
 }
 note for cv_selections "One selection per owner. Explicit selection only; upload never changes it. Operational metadata does not add a sixth logical domain authority."
 
+class cv_conversations {
+    <<operational>>
+    +String _id [opaque UUID]
+    +String user_id [account UUID]
+    +String cv_id?
+    +Integer segment
+    +Integer revision
+    +Object[] messages
+    +String previous_conversation_id?
+    +Date updated_at
+}
+note for cv_conversations "Private bounded segments with paginated messages and action receipts. Independent revision; no second capability authority. Nullable CV supports manual-only entry. No automatic history expiry."
+
 class career_goals {
     +String _id [opaque UUID]
     +String user_id [account UUID]
@@ -107,6 +120,8 @@ class skill_gap_analyses {
 
 users "1" --> "0..*" cvs : owns
 users "1" --> "0..1" cv_selections : owns selection metadata
+users "1" --> "0..*" cv_conversations : owns private history
+cv_conversations --> cvs : optional source reference
 cv_selections --> cvs : validates selected reference
 users "1" --> "0..*" career_goals : creates
 users "1" --> "0..1" career_target_selections : explicitly selects

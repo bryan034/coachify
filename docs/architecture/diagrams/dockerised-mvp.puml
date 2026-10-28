@@ -22,7 +22,7 @@ node "Docker Compose — focused design" {
 
   package "Private backend network" {
     node "CV analyser\nservices/cv-service" as CV <<Docker container>> {
-      artifact "Saved upload/review, corrections,\nclarifications, explicit CV selection\n/api/v1/cv" as CVAPI
+      artifact "Saved upload/review, resumable text chat,\ncorrections, clarifications, explicit CV selection\n/api/v1/cv" as CVAPI
     }
     node "JD / career and skills analyser\nservices/career-service" as Career <<Docker container>> {
       artifact "Specific job or career exploration\nReviewed target confirmation and selection\nAI target generation, research and gaps planned\n/api/v1/career" as CareerAPI
@@ -33,7 +33,7 @@ node "Docker Compose — focused design" {
   }
 
   node "MongoDB — local development" as Mongo <<Docker container>> {
-    database "CV-owned database\ncvs\ncv_selections (operational)" as CVDB
+    database "CV-owned database\ncvs\ncv_selections + cv_conversations (operational)" as CVDB
     database "Career-owned database\ncareer_goals + career_target_selections (operational)\ninterview_research\nskill_gap_analyses" as CareerDB
     database "Roadmap-owned database\nPlans, milestones and task history\nSchema to be expanded" as RoadmapDB
   }
@@ -48,7 +48,7 @@ Gateway --> Career : Career routes
 Gateway --> Roadmap : Roadmap routes (planned)
 
 ' API dependencies point from caller to the service it calls.
-CV --> Profile : Validate account / read versioned manual declarations
+CV --> Profile : Validate account / read declarations / confirmed manual additions
 CV --> Career : Read selected confirmed context and exact versions
 Profile --> CV : Validate explicitly attached source item/version
 Career --> Profile : Validate session / read selected context
@@ -60,7 +60,7 @@ CV --> CVDB : Own records only
 Career --> CareerDB : Own records only
 Roadmap --> RoadmapDB : Own records only
 CV --> Uploads : Temporary original access
-CV --> LLM : Structured extraction and bounded clarification interpretation
+CV --> LLM : Structured extraction, bounded chat routing and clarification interpretation
 Career ..> LLM : Future target skills / research synthesis / gap analysis
 Career ..> Sources : Future bounded permitted research retrieval
 Roadmap --> LLM : Personalised roadmap generation

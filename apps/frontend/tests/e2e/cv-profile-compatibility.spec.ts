@@ -1,7 +1,9 @@
+import { openCvReviewTools, mockEmptyConversation } from '../fixtures/cv-ui';
 import { test, expect, type Page } from '@playwright/test';
 import { policy, savedCv, emptyDeclarations, clarificationState, confirmedTarget } from '../fixtures/cv';
 
 async function workspace(page: Page) {
+  await mockEmptyConversation(page);
   let sessionStatus = 200;
   let sessionChecks = 0;
   let release: (() => void) | undefined;
@@ -33,6 +35,7 @@ async function workspace(page: Page) {
   });
   await page.route('**/api/v1/cv{,/**}', route => {
     const path = new URL(route.request().url()).pathname;
+    if (path.includes('/conversations')) return route.fallback();
     if (route.request().method() !== 'GET') writes.push(path);
     if (path.endsWith('/policy')) return route.fulfill({ json: policy });
     if (path === '/api/v1/cv') return route.fulfill({ json: { cvs: [cv], selection: { cv_id: cv.id, version: 1 } } });
@@ -56,11 +59,12 @@ async function visibility(page: Page, state: 'visible' | 'hidden') {
 }
 
 async function enterDrafts(page: Page) {
-  await page.goto('/cv');
+  await page.goto('/cv');await openCvReviewTools(page);
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toBeEnabled();
   await page.getByRole('button', { name: 'Edit or remove Team dashboard' }).click();
   await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Unsaved correction: I prepared the data.');
   await page.getByRole('textbox', { name: 'Your explanation' }).fill('Unsaved explanation: I wrote the Python cleanup script.');
+  await page.getByRole('textbox', { name: 'Message Coachify', exact: true }).fill('Unsaved chat: I also cleaned the reporting data.');
   await page.getByLabel('Capability name', { exact: true }).fill('Public speaking');
   await page.getByLabel('Capability description', { exact: true }).fill('Unsaved capability: I presented our results.');
   await page.getByLabel('CV document', { exact: true }).setInputFiles({ name: 'draft-cv.pdf', mimeType: 'application/pdf', buffer: Buffer.from('Synthetic unsent upload; boundary APIs are mocked.') });
@@ -69,6 +73,7 @@ async function enterDrafts(page: Page) {
 async function expectDrafts(page: Page) {
   await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Unsaved correction: I prepared the data.');
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toHaveValue('Unsaved explanation: I wrote the Python cleanup script.');
+  await expect(page.getByRole('textbox', { name: 'Message Coachify', exact: true })).toHaveValue('Unsaved chat: I also cleaned the reporting data.');
   await expect(page.getByLabel('Capability name', { exact: true })).toHaveValue('Public speaking');
   await expect(page.getByLabel('Capability description', { exact: true })).toHaveValue('Unsaved capability: I presented our results.');
   expect(await page.getByLabel('CV document', { exact: true }).evaluate((input: HTMLInputElement) => input.files?.[0]?.name)).toBe('draft-cv.pdf');

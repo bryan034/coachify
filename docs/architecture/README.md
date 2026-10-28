@@ -3,15 +3,15 @@
 Use the focused design references below for CV, JD/skills-analysis and roadmap
 work. The repository also retains the broader six-service scaffold for future
 expansion. P01–P16 and account-level manual declarations are available in Profile.
-CV supplies saved upload/review, corrections, explicit selection, interpreted
-target-relevant clarifications and versioned capability inputs. Raw answers remain
+CV supplies saved upload/review, resumable text conversations, corrections, explicit
+selection, interpreted target-relevant clarifications and versioned capability inputs. Raw answers remain
 separate from validated source-linked claims; replacement review and manual
 attachment repair require explicit choices. Career provides temporary URL/document
 previews, reviewed target skills and qualification/date conditions, and explicit
 confirmation/selection. The target-bound CV handoff captures the selected source
 and target revisions for a future consumer to revalidate. AI target generation,
 research, assessment admission, gap analysis, result staleness and roadmap
-generation remain planned. CV extraction and answer interpretation require an
+generation remain planned. CV extraction, free-text conversation routing and answer interpretation require an
 explicitly configured provider; synthetic tests do not establish production model
 quality.
 
@@ -130,3 +130,11 @@ Preparation records exact target/selection/extraction versions and rechecks curr
 selection. Pending questions follow relevance; answers and skips remain source facts
 across target switches. A reviewed target or completed clarification does not imply
 a generated gap analysis or job readiness.
+
+The conversational screen uses a CV-owned operational history with independent
+revisions and action receipts. It can resume without a CV for manual declarations,
+handle side questions without evidence changes, and show explicit correction/addition
+choices. Messages and source-bound interpretations remain distinct. The server
+retains paginated history in bounded segments without automatic expiry; a new
+continuation links back to its full segment. See
+[conversation boundaries](service-boundaries.md#conversational-cv-review).

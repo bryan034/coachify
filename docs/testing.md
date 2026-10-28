@@ -159,3 +159,35 @@ preserve origin/history, and allow dismissal after the previous CV changes. Manu
 attachment tests check project-derived skills, fingerprints, explicit detach/reattach
 and semantic no-op refresh. Target-bound input checks exercise both target types and
 version races without invoking an assessment or roadmap service.
+
+## Saved CV conversation
+
+The CV suite exercises the account-owned conversation store against both the
+in-memory repository and disposable MongoDB. Coverage includes resumable and
+manual-only conversations, ordered pagination, segment rollover, revision
+conflicts, exact retries after a lost response, partial multi-action outcomes,
+interrupted processing and recovery after a fact was saved but its chat receipt
+was not. Listing history uses projected metadata rather than loading old message
+bodies. Transcript activity is checked separately from evidence versions.
+
+Routing and interpretation tests reject foreign source IDs, unsupported excerpts,
+invalid actions and malformed or oversized provider responses. They preserve the
+full user answer, including negation and team attribution, while appending bounded
+source-linked clarification events. Session revocation during processing, stale
+target/source context, provider capacity and storage limits are checked before
+publishing facts. Corrections and manual additions still require explicit approval.
+
+Frontend tests cover saved history, source choices, confirmation cards, async save
+receipts, retries with the original mutation body, stale responses and account/CV
+switches. The full-stack `cv-chat.spec.ts` uses the real local gateway, services and
+MongoDB with the deterministic model fixture. Its journeys include rich answers,
+questions without evidence changes, additional context, correction cancel/save,
+reload/resume, skips, manual-only capabilities, ambiguous references, stale cards
+and partial failures. Existing saved-upload, Profile and Career journeys remain in
+the suite. Boundary browser checks also cover unsent chat drafts through temporary
+session failures and the absence of private CV content in browser storage.
+
+Use synthetic accounts and documents for recordings. A recording of this fixture
+workflow demonstrates interaction and persistence, not live-model interpretation
+quality. Conversational quality and comparative usability still need evaluation
+with the configured model and representative users.

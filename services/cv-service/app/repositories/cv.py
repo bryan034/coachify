@@ -4,10 +4,12 @@ from threading import RLock
 from pymongo import ASCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from app.domain.errors import Conflict
+from app.repositories.conversations import ConversationRepository, MemoryConversationRepository
 
 
 class CvRepository:
     def __init__(self, database):
+        self.conversations = ConversationRepository(database)
         self.collection = database.cvs
         self.selections = database.cv_selections
         self.collection.create_index([('user_id', ASCENDING), ('upload_key', ASCENDING)], unique=True)
@@ -68,6 +70,7 @@ class CvRepository:
 class MemoryCvRepository:
     """Deterministic test adapter implementing the same compare-and-set boundary."""
     def __init__(self):
+        self.conversations = MemoryConversationRepository()
         self.documents, self.selections = {}, {}
         self.lock = RLock()
 

@@ -21,7 +21,7 @@ webfont files and is not bundled.
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
 | `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
 | `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
-| `/cv` | Saved PDF/DOCX upload, processing/recovery, explicit CV selection, evidence review/corrections, manual capabilities, selected-target clarification preparation and saved answer/skip; gap analysis remains planned |
+| `/cv` | Resumable text conversation for CV review, clarification, corrections and manual capabilities; saved uploads/explicit selection and detailed evidence remain accessible; gap analysis remains planned |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
 | `/calendar` | Current week/month views; events and task actions unavailable |
 | `/career`, `/reviews` | Matching placeholders for existing reserved routes |
@@ -79,6 +79,21 @@ corrections; changed documents use a new CV identity. Failed/conflicting writes 
 local drafts, while logout/account changes discard them. Unconfigured extraction
 and unavailable confirmed Career context are shown explicitly, without synthetic
 results. See [CV feature behavior](src/features/cv-ingestion/README.md).
+
+The CV conversation is the primary review surface. The selected/viewed source and
+Career context stay identifiable, and **CV files** and **Your CV summary** provide
+access to saved uploads, source evidence and direct correction/reconciliation
+controls. Users can answer, add context or ask questions in the same composer.
+Ordinary explanations save through validated interpretation; explicit corrections
+and manual additions use Save/Cancel action cards. Unknown details and skips do
+not become missing skills.
+
+Conversation history is stored by the CV service and resumes after reload. The
+client paginates earlier messages and can revisit previous segments without
+storing CV text in browser storage. Message receipt, pending processing and applied
+changes are distinct states. Recovery retains the original request identity after
+an unknown network outcome; delayed responses cannot update a different displayed
+conversation. Career target editing stays on `/career-goal`.
 
 FastAPI owns validation, resource ownership and database writes. See
 [application setup](../../docs/setup.md) for environment and Docker setup.

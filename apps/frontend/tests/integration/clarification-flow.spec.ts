@@ -1,3 +1,4 @@
+import { openCvReviewTools } from '../fixtures/cv-ui';
 import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
 import { createLocalAccount } from './account-helpers';
@@ -44,7 +45,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
  await expect(page.getByRole('textbox', { name: 'Job description', exact: true })).toHaveValue('');
  await expect(page.getByRole('article', { name: `Career target ${targetId}`, exact: true })).toContainText('Build reports using Python.');
 
- await page.goto('/cv');
+ await page.goto('/cv');await openCvReviewTools(page);
  await page.getByLabel('CV document', { exact: true }).setInputFiles(path.join(process.cwd(), 'tests/fixtures/synthetic-clarification-cv.docx'));
  await page.getByRole('button', { name: 'Upload CV', exact: true }).click();
  let cvId = '';
@@ -78,7 +79,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
  // Python attributed only to a teammate is no longer an active proficiency question.
  expect(clarified.skills.find((skill: { skill_id: string }) => skill.skill_id === 'skill:sql').sources).toEqual(expect.arrayContaining([expect.objectContaining({ attribution: 'personal' })]));
  expect(clarified.effective_version).toBe(afterAnswers.effective_version);
- await page.reload();
+ await page.reload();await openCvReviewTools(page);
  await expect(page.getByRole('button', { name: 'Edit explanation', exact: true })).toHaveCount(2);
  await expect(page.getByRole('button', { name: 'Answer voluntarily', exact: true })).toHaveCount(1);
 
@@ -95,7 +96,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
  const exploration = targets.targets.find((target: { id: string }) => target.id !== targetId);
  expect(exploration.skills[0].origin).toBe('user_guidance');
  await confirmAndSelect(page, exploration.id);
- await page.goto('/cv');
+ await page.goto('/cv');await openCvReviewTools(page);
  await page.getByRole('button', { name: 'Prepare relevant questions', exact: true }).click();
  await expect(page.getByText('No relevant clarification questions are pending for this target. This does not confirm capability or complete an analysis.', { exact: true })).toBeVisible();
  await expect(page.getByRole('button', { name: 'Edit explanation', exact: true })).toHaveCount(2);
@@ -112,7 +113,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
  await page.goto('/career-goal');
  await page.getByRole('article', { name: `Career target ${targetId}`, exact: true }).getByRole('button', { name: 'Select target', exact: true }).click();
  await expect(page.getByRole('article', { name: `Career target ${targetId}`, exact: true }).getByRole('button', { name: 'Selected target', exact: true })).toBeVisible();
- await page.goto('/cv');
+ await page.goto('/cv');await openCvReviewTools(page);
  await page.getByRole('button', { name: 'Prepare relevant questions', exact: true }).click();
  await expect(page.getByRole('button', { name: 'Skip and continue', exact: true })).toHaveCount(0);
  await expect(page.getByLabel('Confirmed clarification target', { exact: true })).toContainText('Synthetic data analyst');

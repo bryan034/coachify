@@ -1,3 +1,4 @@
+import { openCvReviewTools } from '../fixtures/cv-ui';
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -22,7 +23,7 @@ for (const scenario of cases) {
     const background = await (await account.get('/api/v1/profile')).json();
     expect(background.onboarding_complete).toBe(true);
 
-    await page.goto('/cv');
+    await page.goto('/cv');await openCvReviewTools(page);
     await page.getByLabel('Capability name', { exact: true }).fill('Public speaking');
     await page.getByLabel('Capability description', { exact: true }).fill('I presented a synthetic group project.');
     await page.getByRole('button', { name: 'Add capability', exact: true }).click();
@@ -56,7 +57,7 @@ for (const scenario of cases) {
     const current = await edited.json();
     expect(current.version).toBeGreaterThan(background.version);
     expect(current.onboarding_complete).toBe(true);
-    await page.reload();
+    await page.reload();await openCvReviewTools(page);
     await expect(page.getByLabel('Selected CV', { exact: true })).toContainText(cvId);
     await expect(page.getByText('I presented a synthetic group project.', { exact: true })).toBeVisible();
     expect(await (await account.get('/api/v1/profile/capabilities')).json()).toEqual(declarations);

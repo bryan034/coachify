@@ -25,3 +25,22 @@ export type DeclarationLink = { declaration_id: string; status: 'standalone' | '
 export type DeclarationLinks = { declarations_version: number; links: DeclarationLink[] };
 export type DeclarationInput = { expected_version: number; mutation_id: string; name: string; description: string; mode: 'new' | 'distinct' | 'attach'; attach_to_id?: string; cv_match?: CvMatch };
 export type ItemInput = { expected_version: number; mutation_id: string; action: 'update' | 'remove'; title?: string; description?: string; proficiency?: string | null; experience_months?: number | null; start_date?: string | null; end_date?: string | null; ongoing?: boolean };
+
+export type ConversationActionKind = 'clarify' | 'correct' | 'remove' | 'add_capability' | 'choose_source' | 'route' | 'skip';
+export type ConversationActionStatus = 'awaiting_confirmation' | 'needs_source' | 'pending' | 'saved' | 'failed' | 'cancelled' | 'stale';
+export type ConversationAction = {
+ id: string; kind: ConversationActionKind; status: ConversationActionStatus; title: string; summary: string;
+ item_id?: string | null; item_title?: string | null; question_id?: string | null; error?: string | null;
+ changes: {field: string; before: string | null; after: string | null}[];
+ choices: {id: string; label: string; description: string; kind: 'item' | 'declaration'}[];
+};
+export type ConversationMessage = {id: string; sequence: number; role: 'user' | 'assistant'; text: string; created_at: string; actions: ConversationAction[]};
+export type CvConversation = {
+ id: string; cv_id: string | null; revision: number; read_only: boolean; previous_conversation_id: string | null;
+ active_question: {id: string; item_id: string; title: string; question: string} | null;
+ context: ConfirmedTargetContext | null; context_error?: string | null; messages: ConversationMessage[]; next_before: number | null;
+ limits: {max_message_chars: number; max_messages: number};
+};
+export type ConversationList = {conversations: {id:string;cv_id:string|null;updated_at:string;read_only:boolean;message_count:number}[]};
+export type ConversationInput = {mutation_id: string; expected_revision: number; text: string; command?: 'review' | 'continue' | 'skip'; item_id?: string};
+export type ConversationDecision = {mutation_id: string; expected_revision: number; decision: 'save' | 'cancel' | 'retry'; item_id?: string; mode?: 'attach' | 'distinct'; attach_to_id?: string};

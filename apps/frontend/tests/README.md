@@ -88,7 +88,7 @@ voluntary return, reload, target switching and owner isolation.
 
 Profile compatibility checks exercise delayed editor initialization and shared
 session recovery. The C-series browser fixture keeps an unsaved correction,
-clarification answer, manual capability and selected file through hide/show,
+clarification answer, chat message, manual capability and selected file through hide/show,
 temporary validation failure/retry and simulated back/forward-cache restoration.
 It verifies masking, keyboard focus, expiry/account-change cleanup and more than
 five minutes without an inactivity lock. These fixtures simulate lifecycle events;
@@ -109,3 +109,20 @@ repair and replacement reconciliation. The shared
 asserts the target-bound input contract through the real services without creating
 an assessment or claiming live model accuracy. The synthetic fixture accepts only
 its labelled test model and fixed fixture answers.
+
+Conversational CV checks reuse these saved-record behaviors through the new
+`CV files` and `Your CV summary` disclosures. Boundary session tests also preserve
+an unsent chat message through connection recovery and clear it on account change.
+The additive `integration/cv-chat.spec.ts` suite exercises saved chat history,
+read-only side questions and hypotheticals, additional source facts, selective
+correction with Save/Cancel, reload/resume, unknown skips, manual-only declarations,
+ambiguous source choices, stale proposals, duplicate message identities, invalid
+model source references, and partial failure followed by action-specific retry.
+
+`integration/chat-workflow.ts` is shared by the main chat journey and its local
+recording. It checks the real Profile/CV/Career/Mongo state behind visible actions,
+including preservation of original answers, guidance and unrelated skill facts.
+The synthetic HTTP provider accepts only a finite labelled message set. These
+checks establish application behavior and validation, not live-model language
+understanding. The recording uses synthetic accounts and data with real local
+services; it does not demonstrate deployment, assessment generation or readiness.

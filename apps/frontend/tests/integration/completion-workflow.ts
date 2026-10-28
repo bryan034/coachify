@@ -1,3 +1,4 @@
+import { openCvReviewTools } from '../fixtures/cv-ui';
 import { expect, type Locator, type Page } from '@playwright/test';
 import path from 'node:path';
 import { createLocalAccount } from './account-helpers';
@@ -54,7 +55,7 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  await target.getByRole('button', { name: 'Select target', exact: true }).click();
  await expect(target.getByRole('button', { name: 'Selected target', exact: true })).toBeVisible();
 
- await page.goto('/cv');
+ await page.goto('/cv');await openCvReviewTools(page);
  await chapter('3. Upload a CV, then select it', 'Upload, parsing, saved records and service calls are real. The document and model are synthetic test fixtures. Uploading alone does not change the selected CV.', page.getByLabel('CV document', { exact: true }));
  const cvId = await upload();
  expect((await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBeNull();
@@ -174,7 +175,7 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  expect(replacement.skills.find(skill => skill.skill_id === 'skill:python')?.experience_months).toBe(6);
  expect(replacement.skills.some(skill => skill.skill_id === 'skill:pandas')).toBe(true);
  expect(replacement.skills.some(skill => skill.skill_id === 'skill:sql')).toBe(false);
- await page.reload();
+ await page.reload();await openCvReviewTools(page);
  await expect(projectQuestion()).toContainText(mixedAnswer);
  await expect(page.getByText('Standalone declaration; no CV evidence link.', {exact: true})).toBeVisible();
 

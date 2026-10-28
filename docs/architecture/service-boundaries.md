@@ -3,7 +3,7 @@
 | Service | Story groups | Owned data |
 |---|---|---|
 | Profile | P01-P16; C07 manual declarations | Existing accounts/email verification/revocable sessions, canonical onboarding and education, declared deadline/capacity/temporary availability, profile versions; account-embedded manual capability declarations and their own revision |
-| CV | C01-C09, with C07 composition | Saved CVs, ingestion state, extracted facts/skills and bounded evidence, CV-specific correction/removal overlays, clarification questions/answers, processing operations, explicit saved-CV selection |
+| CV | C01-C09, with C07 composition | Saved CVs, ingestion state, extracted facts/skills and bounded evidence, CV-specific correction/removal overlays, clarification questions/answers, processing operations, explicit saved-CV selection and private resumable CV conversations |
 | Career | J-series; G01-G07 | Transient JD previews, immutable reviewed career_goals and versioned explicit selection; research, AI target generation and gap analyses remain planned |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Consumed planning-input snapshots, milestones, tasks, progress history, proposed/applied revisions |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
@@ -11,7 +11,7 @@
 
 ## API dependencies
 
-- CV -> Profile: validate account/session and read account declarations with their revision.
+- CV -> Profile: validate account/session, read account declarations with their revision, and submit explicitly confirmed conversational capability additions through the existing declaration API.
 - Profile -> CV: validate an explicitly chosen matching CV item/version before a manual attachment; no CV is needed for a plain declaration.
 - CV -> Career: authenticate and validate the owner’s selected confirmed target, skill IDs and exact target/selection versions for relevant clarification.
 - Career -> Profile: validate the account/session and completed onboarding.
@@ -79,6 +79,36 @@ The additive target-bound analysis-input envelope includes the confirmed goal an
 complete CV/declaration/selection revisions. It rejects unfinished interpretations
 and changed inputs during assembly. This is a captured snapshot requiring consumer
 revalidation, not distributed atomic admission or result-specific stale tracking.
+
+## Conversational CV review
+
+The CV service owns `cv_conversations` as operational records, separate from the
+five logical domain authorities. A conversation references one CV or has no CV for
+manual-capability entry. Profile remains the authority for those declarations;
+CV never writes Profile's database. Conversation messages and action receipts
+are private, owner-scoped data, not shared interview research or a second skill store.
+
+Conversation revisions do not advance CV evidence versions. Messages are saved
+before provider routing; typed action proposals pass ownership, source, version
+and domain validation before execution. Ordinary clarification answers use the
+existing interpretation lifecycle. Explicit corrections, removals and manual
+additions require a user action. A reply explaining a question changes no evidence.
+Additional factual turns retain earlier explanations and their provenance; a
+correction changes only the affected source/fields.
+
+History is paginated and bounded per segment. A full segment remains readable
+while an explicitly started continuation links back to it. Saved conversations
+do not expire automatically. Raw message content stays off browser storage and
+logs. Existing saved clarifications are displayed as earlier records, not invented
+assistant dialogue. Detailed limits and API states belong in the
+[CV specification](../../services/cv-service/SPEC.md) and API contract.
+
+Each action has an independent receipt. A message requesting several actions may
+partially succeed, particularly across CV and Profile; recovery retries unfinished
+actions rather than claiming a distributed transaction. Pending action cards
+remain tied to the original source/version context. Career continues to own
+confirmed target editing and future analysis; finishing a CV conversation does
+not generate an assessment or roadmap.
 
 ## P04–P06 ownership decision
 

@@ -2,7 +2,7 @@
 
 Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
-**Status:** P01–P16 background, planning, account access and onboarding are implemented. CV supports saved PDF/DOCX extraction, claim-scoped clarification interpretation, partial-date corrections, explicit source reconciliation, manual-capability links and saved-CV selection. Extraction and interpretation need a configured provider. Career saves reviewed target skills and qualification/date conditions with explicit confirmation/selection. CV supplies a target-bound input contract; actual assessment admission, stale-result tracking, AI target generation, exploration chat and gap/roadmap generation remain planned. Tests use synthetic model responses. The local setup uses email/password and OTP. See [setup instructions](docs/setup.md).
+**Status:** P01–P16 background, planning, account access and onboarding are implemented. CV supports saved PDF/DOCX extraction, resumable text conversations, claim-scoped clarification interpretation, partial-date corrections, explicit source reconciliation, manual-capability links and saved-CV selection. Extraction, free-text routing and interpretation need a configured provider. Career saves reviewed target skills and qualification/date conditions with explicit confirmation/selection. CV supplies a target-bound input contract; actual assessment admission, stale-result tracking, AI target generation, exploration chat and gap/roadmap generation remain planned. Tests use synthetic model responses. The local setup uses email/password and OTP. See [setup instructions](docs/setup.md).
 
 ## Stack
 

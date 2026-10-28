@@ -5,6 +5,363 @@ info:
     and explicit versioned selection.
   version: 0.1.0
 paths:
+  "/api/v1/cv/conversations":
+    get:
+      tags:
+      - C-series conversation
+      summary: Listing
+      operationId: listing_api_v1_cv_conversations_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: cv_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Cv Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ConversationList"
+        '401':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Service Unavailable
+    post:
+      tags:
+      - C-series conversation
+      summary: Start
+      operationId: start_api_v1_cv_conversations_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ConversationStart"
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ConversationView"
+        '401':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Service Unavailable
+  "/api/v1/cv/conversations/{conversation_id}":
+    get:
+      tags:
+      - C-series conversation
+      summary: Read
+      operationId: read_api_v1_cv_conversations__conversation_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Conversation Id
+      - name: before
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            minimum: 1
+          - type: 'null'
+          title: Before
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 40
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ConversationView"
+        '401':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Service Unavailable
+  "/api/v1/cv/conversations/{conversation_id}/messages":
+    post:
+      tags:
+      - C-series conversation
+      summary: Send
+      operationId: send_api_v1_cv_conversations__conversation_id__messages_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Conversation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ConversationSend"
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ConversationView"
+        '401':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Service Unavailable
+  "/api/v1/cv/conversations/{conversation_id}/actions/{action_id}":
+    post:
+      tags:
+      - C-series conversation
+      summary: Decide
+      operationId: decide_api_v1_cv_conversations__conversation_id__actions__action_id__post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Conversation Id
+      - name: action_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Action Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ConversationDecision"
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ConversationView"
+        '401':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Conflict
+        '413':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Request Entity Too Large
+        '422':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+          description: Service Unavailable
   /api/v1/cv/policy:
     get:
       summary: Policy
@@ -1354,6 +1711,386 @@ paths:
           description: Service Unavailable
 components:
   schemas:
+    ActiveQuestion:
+      properties:
+        id:
+          type: string
+          title: Id
+        item_id:
+          type: string
+          title: Item Id
+        title:
+          type: string
+          title: Title
+        question:
+          type: string
+          title: Question
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - item_id
+      - title
+      - question
+      title: ActiveQuestion
+    ChatAction:
+      properties:
+        id:
+          type: string
+          title: Id
+        kind:
+          type: string
+          enum:
+          - clarify
+          - correct
+          - remove
+          - add_capability
+          - choose_source
+          - route
+          - skip
+          title: Kind
+        status:
+          type: string
+          enum:
+          - awaiting_confirmation
+          - needs_source
+          - pending
+          - saved
+          - failed
+          - cancelled
+          - stale
+          title: Status
+        title:
+          type: string
+          title: Title
+        summary:
+          type: string
+          title: Summary
+        item_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Item Id
+        item_title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Item Title
+        question_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Question Id
+        changes:
+          items:
+            "$ref": "#/components/schemas/ChatChange"
+          type: array
+          title: Changes
+        choices:
+          items:
+            "$ref": "#/components/schemas/ChatChoice"
+          type: array
+          maxItems: 260
+          title: Choices
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - kind
+      - status
+      - title
+      - summary
+      title: ChatAction
+    ChatChange:
+      properties:
+        field:
+          type: string
+          title: Field
+        before:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Before
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: After
+      additionalProperties: false
+      type: object
+      required:
+      - field
+      title: ChatChange
+    ChatChoice:
+      properties:
+        id:
+          type: string
+          title: Id
+        label:
+          type: string
+          title: Label
+        description:
+          type: string
+          title: Description
+        kind:
+          type: string
+          enum:
+          - item
+          - declaration
+          title: Kind
+          default: item
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - label
+      - description
+      title: ChatChoice
+    ChatLimits:
+      properties:
+        max_message_chars:
+          type: integer
+          title: Max Message Chars
+          default: 4000
+        max_messages:
+          type: integer
+          title: Max Messages
+          default: 500
+      additionalProperties: false
+      type: object
+      title: ChatLimits
+    ChatMessage:
+      properties:
+        id:
+          type: string
+          title: Id
+        sequence:
+          type: integer
+          title: Sequence
+        role:
+          type: string
+          enum:
+          - user
+          - assistant
+          title: Role
+        text:
+          type: string
+          title: Text
+        created_at:
+          type: string
+          title: Created At
+        actions:
+          items:
+            "$ref": "#/components/schemas/ChatAction"
+          type: array
+          title: Actions
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - sequence
+      - role
+      - text
+      - created_at
+      title: ChatMessage
+    ConversationDecision:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+        decision:
+          type: string
+          enum:
+          - save
+          - cancel
+          - retry
+          title: Decision
+        item_id:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Item Id
+        mode:
+          anyOf:
+          - type: string
+            enum:
+            - attach
+            - distinct
+          - type: 'null'
+          title: Mode
+        attach_to_id:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Attach To Id
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      - mutation_id
+      - decision
+      title: ConversationDecision
+    ConversationList:
+      properties:
+        conversations:
+          items:
+            "$ref": "#/components/schemas/ConversationSummary"
+          type: array
+          title: Conversations
+      additionalProperties: false
+      type: object
+      required:
+      - conversations
+      title: ConversationList
+    ConversationSend:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+        text:
+          type: string
+          maxLength: 4000
+          minLength: 1
+          title: Text
+        command:
+          anyOf:
+          - type: string
+            enum:
+            - review
+            - continue
+            - skip
+          - type: 'null'
+          title: Command
+        item_id:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Item Id
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      - mutation_id
+      - text
+      title: ConversationSend
+    ConversationStart:
+      properties:
+        cv_id:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Cv Id
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+      additionalProperties: false
+      type: object
+      required:
+      - mutation_id
+      title: ConversationStart
+    ConversationSummary:
+      properties:
+        id:
+          type: string
+          title: Id
+        cv_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cv Id
+        updated_at:
+          type: string
+          title: Updated At
+        read_only:
+          type: boolean
+          title: Read Only
+        message_count:
+          type: integer
+          title: Message Count
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - cv_id
+      - updated_at
+      - read_only
+      - message_count
+      title: ConversationSummary
+    ConversationView:
+      properties:
+        id:
+          type: string
+          title: Id
+        cv_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cv Id
+        revision:
+          type: integer
+          title: Revision
+        read_only:
+          type: boolean
+          title: Read Only
+        previous_conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Previous Conversation Id
+        active_question:
+          anyOf:
+          - "$ref": "#/components/schemas/ActiveQuestion"
+          - type: 'null'
+        context:
+          anyOf:
+          - "$ref": "#/components/schemas/ConfirmedContext"
+          - type: 'null'
+        context_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Context Error
+        messages:
+          items:
+            "$ref": "#/components/schemas/ChatMessage"
+          type: array
+          title: Messages
+        next_before:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Next Before
+        limits:
+          "$ref": "#/components/schemas/ChatLimits"
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - cv_id
+      - revision
+      - read_only
+      - messages
+      title: ConversationView
     AnalysisInput:
       properties:
         schema_version:

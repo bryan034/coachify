@@ -1,13 +1,16 @@
 import { test, expect } from '@playwright/test';
+import { mockEmptyConversation } from '../fixtures/cv-ui';
 import { policy, emptyDeclarations } from '../fixtures/cv';
 
 const categories = [{ id: 'university', label: 'University' }, { id: 'secondary', label: 'Secondary School' }];
 test('workspace uses saved profile data, preserves navigation and leaves missing services disconnected', async ({ page }) => {
+ await mockEmptyConversation(page);
  await page.addInitScript(() => { localStorage.setItem('coachify.access-epoch','1'); sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
  const apiCalls: string[] = [];
  let saved = { version: 0, onboarding_complete:true, occupational_status: null as string | null, school_category: null as string | null, education_context: null as string | null, education_review_required: false, education: {} as Record<string, unknown>, current_study_year: null as number | null };
  await page.route('**/api/**', async route => {
   const url = new URL(route.request().url());
+  if (url.pathname.includes('/cv/conversations')) return route.fallback();
     if (url.pathname.endsWith('/auth/session')) return route.fulfill({json:{id:'synthetic',name:'Synthetic',provider:'local_test',onboarding_complete:false}});
     if (url.pathname.endsWith('/auth/logout')) return route.fulfill({json:{ok:true}}); apiCalls.push(url.pathname);
   if(url.pathname.endsWith('/cv/policy'))return route.fulfill({json:policy});

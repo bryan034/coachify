@@ -9,6 +9,9 @@ from fastapi.responses import JSONResponse
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from app.api.v1.cv import router
+from app.api.v1.conversations import router as conversation_router
+from app.clients.conversation import ConversationRouter
+from app.conversation.service import ConversationService
 from app.clients.extractor import Extractor
 from app.clients.interpretation import Interpreter
 from app.clients.career import CareerTargetProvider, service_url
@@ -43,7 +46,7 @@ class BodyLimit:
 
 
 def create_app(repository=None, profile_client=None, extractor=None, settings=None, target_provider=None,
-               parser=None, start_worker=True, interpreter=None):
+               parser=None, start_worker=True, interpreter=None, chat_provider=None):
     settings = settings or Settings.environment()
     @asynccontextmanager
     async def lifespan(app):
@@ -64,6 +67,7 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
             app.state.interpreter = interpreter or Interpreter()
             app.state.files = FileStore(settings.storage_path)
             app.state.service = CvService(app.state.repository, app.state.files, settings)
+            app.state.conversations = ConversationService(app.state.service, chat_provider or ConversationRouter())
             if target_provider is not None: app.state.target_provider = target_provider
             else:
                 career_client = await stack.enter_async_context(httpx.AsyncClient(
@@ -75,6 +79,7 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
             task = asyncio.create_task(app.state.worker.run()) if start_worker else None
             try: yield
             finally:
+                await app.state.conversations.close()
                 if task:
                     task.cancel()
                     with suppress(asyncio.CancelledError): await task
@@ -82,6 +87,7 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
     app = FastAPI(title='Coachify CV API', version='0.1.0', lifespan=lifespan,
                   description='C01–C09 saved CV upload, review, source corrections, clarification and explicit versioned selection.')
     app.add_middleware(BodyLimit, maximum=settings.max_file_bytes)
+    app.include_router(conversation_router)
     app.include_router(router)
 
     @app.get('/health', include_in_schema=False)
