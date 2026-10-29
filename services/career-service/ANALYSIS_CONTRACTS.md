@@ -11,9 +11,9 @@ analysis references. Existing legacy API routes remain compatible.
 `app/workflows/career.py` uses LangGraph for transient JD interpretation/validation,
 optional exploration skill generation, research reuse, Brave searches,
 evidence assessment, synthesis and publication. `app/workflows/exploration.py` handles
-exploratory model turns separately. The saved goal cards update as soon as extraction validates. The chat waits for the JD
-and all applicable research categories plus summary to succeed, then types a single
-combined explanation without leaving the chat. Progress remains visible during the wait.
+exploratory model turns separately. The saved goal cards update as soon as extraction validates. The chat waits for the saved JD and a finished linked research report, then automatically
+requests a concise combined explanation without leaving the chat. Finished partial
+coverage can be summarised with its limitations; actively running categories still wait. Progress remains visible during the wait.
 Technical failure offers retry; no-findings explicitly means insufficient evidence.
 
 A query plan uses public role/field/company/location/seniority. Missing company means
@@ -80,8 +80,12 @@ use `Prefer: respond-async` and the existing operations polling endpoint. The re
 `{reply: Markdown}`. Python restores allowlisted citation markers to verified source URLs.
 Grouped markers and model-written Markdown/bare URLs are normalized locally only
 when they match approved source IDs or exact approved URLs. Unknown references and
-unapproved destinations still fail validation. Each finding needs at least one of its
-supporting sources cited; every corroborating source need not be repeated.
+unapproved destinations still fail validation. Gemini selects the key points in roughly
+150-250 words, citing the research takeaways it mentions; omitted lower-priority findings
+do not require citations. A nonempty research report still requires a supporting citation.
+The summary input includes saved finding values and confidence/scope/status, without
+repeating their original quotations. Python appends exactly one closing line:
+`Ask me anything about this goal set!`
 Async summary presentation uses the existing bounded repair wrapper (up to six
 corrections), with owner/version checks before every generation and publication.
 Only the presentation step is retried; saved research and Brave retrieval are reused.
@@ -538,9 +542,12 @@ it does not show the JD introduction or research response independently.
 
 Quota waits preserve cursors and resume automatically, including the summary step. A
 transient top-level timeout/unavailability retries once through durable recovery.
-Permanent failures and exhausted retries retain the saved goal and available findings
-without publishing the combined initial response. No schema or HTTP failure is treated
-as successful research. The in-memory JD operation still reports extraction completion;
+Finished partial reports retain their failure statuses and can be summarised in chat
+with the available findings and explicit limitations. Fully failed reports and expired
+workspaces still offer research recovery. The chat never shows Resume research merely
+because its saved report is loading, nor restarts research after a summary/read failure;
+those retries repeat only the report read or presentation step. No schema or HTTP failure
+is treated as successful research. The in-memory JD operation still reports extraction completion;
 clients use workspace/research state to determine combined readiness.
 
 

@@ -300,3 +300,8 @@ reuse. Frontend chat tests mock the summary endpoint and verify completion and f
 rejection of forged destinations, per-finding citation coverage, summary-only bounded
 repairs, discarded-response privacy, owner-scoped failed-operation diagnostics and
 operation IDs. Frontend API coverage checks that error objects retain operation IDs.
+
+Chat completion regressions cover delayed saved-report reads, automatic summary startup,
+finished partial coverage, report-read retry without paid research, concise selection of
+saved key points, and the exact final invitation appearing once. Backend tests also
+verify pending categories remain blocked and summary context omits repeated quotations.
