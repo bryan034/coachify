@@ -1,11 +1,7 @@
 # API contracts
 
-`profile.yaml` describes the implemented Profile API and is generated from the
-FastAPI application. `career.yaml` describes temporary previews, adaptive exploration, temporary JD skill review
-and explicit goal confirmation; `cv.yaml` describes owner-scoped CV reads. Other
-endpoint contracts remain empty shells. [models/](models/) contains SCRUM-310 JSON Schemas for CVs, career
-goals, interview research and gap analyses; these do not add endpoint routes.
+`profile.yaml`, `cv.yaml` and `career.yaml` describe the implemented FastAPI boundaries. CV includes saved upload/review, source selection, clarification, capability input and resumable conversations. Career includes canonical goal/chat, research/discovery and explicit version-bound confirmation for CV context. Other service endpoint contracts remain shells.
 
-Individual endpoint explanations live in each service README; the
-[API overview](../../docs/api/README.md) maps prefixes to services. Keep schemas
-aligned with implementation. Private internal routes stay behind the gateway.
+[models/](models/) contains JSON Schemas. `cv.schema.json` is the authoritative public saved-CV response. `career-cv-snapshot.schema.json` is Career's internal projection of that response and legacy CV reads; it is not a second CV store or a separate public CV API. Career goal/research/gap schemas describe their owning models without claiming that assessment computation is implemented.
+
+Individual endpoint explanations live in service READMEs; the [API overview](../../docs/api/README.md) maps prefixes to services. Keep generated schemas aligned with implementation. Private internal routes stay behind the gateway.

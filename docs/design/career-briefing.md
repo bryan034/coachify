@@ -23,7 +23,9 @@ this layout.
 Rows retain saved order; numbers are a reading aid, not a skill-gap ranking or a
 recommended sequence. Requirements are not labelled as personal deficiencies.
 An extracted CV does not establish a match against individual goal requirements.
-The CV link is retained, but dedicated upload/assessment is still planned.
+The CV link opens the saved upload/review and conversational clarification workflow.
+Clarification requires explicit confirmation of the current goal and selection revision;
+an automatically saved goal is not sufficient. Assessment computation remains planned.
 Research progress/retry remains available, with findings inside the research
 accordion. No mock DBS data or reference-draft self-check is copied into accounts.
 

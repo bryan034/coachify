@@ -4,6 +4,15 @@ Run `python -m pytest` from this service after installing `.[test]` in its own
 virtual environment. Both Profile and Career use an `app` package, so run each
 service's tests independently rather than importing both into one Python process.
 
+The shared test harness clears inherited application database, provider and tracing
+settings before collection and before each test. `MONGODB_TEST_URI` remains an
+explicit disposable-database opt-in; tests can inject mocks and synthetic settings
+after setup. Default HTTPX/Requests transports and the preview socket connector
+are blocked. Supply an already populated `TIKTOKEN_CACHE_DIR` when using a cached
+runtime; tests do not download tokenizer assets or opt into live provider calls.
+The public Docker-template test must use the user-approved clean tracked template
+in an isolated copy when environment-file access is otherwise prohibited.
+
 Tests use synthetic text/files, fake Profile responses and mocked website
 transport/DNS. They cover PDF/DOCX/TXT parsing in real child processes,
 authentication, no-store responses, file cleanup, limits, invalid files, safe XML,
@@ -64,3 +73,16 @@ legacy reports/jobs, and historical conversion-rate evidence. Opportunity tests
 exercise five parallel branches, partial failures, bounded follow-ups and paid-evidence
 reuse. HTTP-mocked field mapping covers every schema-v2 category including conversion
 salary/currency and historical percentages; live providers remain opt-in only.
+
+## Saved CV and canonical confirmation compatibility
+
+CV client/contract checks cover the public saved-CV API plus legacy read shapes, UUID/ObjectId reference roundtrips, sparse owner metadata, exact detail identity, provenance, fractional duration and unknown proficiency. Arrays above 200 entries remain valid within the existing 512 KiB admission bound. Declared and chunked oversized HTTP responses fail before unbounded JSON decoding, with no truncation. Public CV and internal Career projection schemas are tested separately.
+
+Canonical-confirmation checks exercise explicit acknowledgement, version/selection/projection races, owner isolation, receipt-key reuse and lost-response replay. Editing or replacing the goal invalidates its CV context without deleting saved CV facts. Mixed legacy UUID target/canonical ObjectId history and the legacy unique index require compatibility checks without destructive migration. Legacy target domain tests use an explicit injected test adapter; they do not establish that production has a parallel active target flow.
+
+One upstream test reads the public Docker environment template. The user's narrow exception permits that exact test against a clean tracked public template in an isolated copy. It does not permit agents or other tests to inspect local environment files or modified examples. Use only synthetic settings and disposable databases. Local functional checks against MongoDB 7 do not establish MongoDB 8 compatibility; intended-version checks require a compatible runner. Final counts and evidence belong in the integration handoff, not a historical test-discovery total.
+
+Security regressions cover bounded operation/alias retention, fresh polling errors,
+current-context quota retries, real review edits during research acquisition and
+link-publication races. CV-list regressions follow cursors while preserving a
+single 512 KiB intake budget and reject malformed/repeated continuation pages.

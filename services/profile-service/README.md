@@ -3,6 +3,27 @@
 Stores each user's background, education and planning preferences so future
 assessments and roadmaps can use their saved information. P01–P16 are available.
 
+## Manual capabilities — C07
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/profile/capabilities` | Read account-level capability declarations, their revision and text/count limits. |
+| `POST /api/v1/profile/capabilities` | Add a declaration without a CV, keep a same-name claim distinct, or explicitly attach another description. |
+| `POST /api/v1/profile/capabilities/attachment` | Explicitly refresh/change a declaration's CV evidence link or detach it while preserving the statement and link history. |
+
+Declarations belong to the existing account and survive CV uploads and selection
+changes. Writes use body `expected_version` and `mutation_id`; repeated input with
+the same key replays safely. Same-name matches require an explicit attach/distinct
+choice. CV attachments validate the exact owner-visible item/version through
+`CV_SERVICE_URL` (default `http://cv-service:8000`). Plain additions need no CV
+service. Matching uses effective skill evidence from projects, work, education or
+standalone skills. Team-only, observed or denied support cannot establish that
+source link. Attachments retain an item fingerprint when available; unknown older
+fingerprints stay unverified. An unchanged source fingerprint is not invalidated
+by an unrelated CV edit. Manual descriptions remain user declarations; unknown ability levels
+and experience stay null. Detailed limits and persistence rules are in the
+[service specification](SPECIFICATION.md#manual-capabilities--c07).
+
 ## Shared profile — P01–P08
 
 | Endpoint | What it does |
@@ -61,7 +82,10 @@ supply inputs; they do not generate a roadmap.
 
 Private requests use a Coachify session bearer. Email accounts sign in with email
 and password. The current local configuration disables Google sign-in. New registrations
-accept any valid email address and require an emailed OTP. Development can use synthetic accounts with a chooser that only prefills email,
+accept any valid email address and require an emailed OTP before an account is created.
+Pending details live in the expiring verification attempt; resume that attempt or
+start registration again. Verified accounts keep their existing sign-in behavior.
+Development can use synthetic accounts with a chooser that only prefills email,
 or email/password sign-in with real Gmail delivery; see the [setup guide](../../docs/setup.md#local-emailpassword-sign-in-and-real-gmail-delivery).
 
 ## Initial setup — P13/P14
@@ -79,7 +103,7 @@ Employed users also provide employer, role and industry. Unemployed users answer
 
 | Endpoint | What it does |
 |---|---|
-| `POST /api/v1/profile/auth/verify-email` | Activate a pending account using its six-digit emailed OTP. |
+| `POST /api/v1/profile/auth/verify-email` | Create the verified account, or finish eligible legacy verification, using its six-digit emailed OTP. |
 | `POST /api/v1/profile/auth/resend-verification` | Send a replacement code subject to cooldown/rate limits. |
 
 Pending accounts have no private session. Codes expire in 10 minutes, allow five

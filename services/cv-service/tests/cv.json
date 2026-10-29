@@ -1,26 +1,390 @@
 {
-  "version": 1,
-  "skill_mapping_version": "skills-v1",
-  "created_at": "2026-01-01T00:00:00Z",
-  "updated_at": "2026-01-01T00:00:00Z",
-  "_id": "000000000000000000000001",
-  "user_id": "11111111-1111-4111-8111-111111111111",
-  "file_name": "synthetic.txt",
-  "file_type": "txt",
-  "skills": [
+  "id": "466a34e1-fff4-40b8-abce-adbe78308198",
+  "file_name": "same-name.docx",
+  "file_type": "docx",
+  "status": "ready",
+  "operation_id": "b75e4e6f-98b9-4929-b88b-302aa144ab75",
+  "version": 3,
+  "extraction_version": 1,
+  "effective_version": 1,
+  "profile_version": 4,
+  "created_at": "2026-10-28T15:23:17.189522+00:00",
+  "updated_at": "2026-10-28T15:23:17.305210+00:00",
+  "error": null,
+  "source_available": true,
+  "items": [
     {
-      "skill_id": "language.sql",
-      "name": "SQL",
-      "category": "language",
+      "id": "3934681098841f658d1b62e4a2b9d5d8",
+      "source_fingerprint": "e9c6e989ae17f3ac394970afab0f9a3c6eaa423556615d1f6bd8bac270a266f0",
+      "kind": "education",
+      "title": "Example University",
+      "description": "Education: Example University, Computing",
+      "provenance": "explicit",
+      "evidence": [
+        {
+          "id": "b1",
+          "excerpt": "Education: Example University, Computing",
+          "location": "Paragraph 1"
+        }
+      ],
+      "skill_ids": [],
+      "skill_names": [],
+      "category": "unspecified",
       "proficiency": null,
       "experience_months": null,
-      "evidence": "I wrote the SQL query only.",
-      "original_evidence": "Delivered the entire data platform.",
-      "evidence_type": "user_declaration",
-      "explicit": true
+      "start_date": null,
+      "end_date": null,
+      "ongoing": false,
+      "context": null,
+      "removed": false,
+      "supporting_item_ids": [],
+      "support_uncertain": false,
+      "uncertainties": [],
+      "skill_claims": []
+    },
+    {
+      "id": "dec4b26f070be165d5c34d7b9f7ec90d",
+      "source_fingerprint": "552070eda893a6864539e6fe468101e594fc13d42943e8d2c00e8b3831940603",
+      "kind": "project",
+      "title": "Project A",
+      "description": "Project A: Team built a Python and SQL application.",
+      "provenance": "explicit",
+      "evidence": [
+        {
+          "id": "b2",
+          "excerpt": "Project A: Team built a Python and SQL application.",
+          "location": "Paragraph 2"
+        }
+      ],
+      "skill_ids": [
+        "skill:python",
+        "skill:sql"
+      ],
+      "skill_names": [
+        "Python",
+        "SQL"
+      ],
+      "category": "unspecified",
+      "proficiency": null,
+      "experience_months": null,
+      "start_date": null,
+      "end_date": null,
+      "ongoing": false,
+      "context": null,
+      "removed": false,
+      "supporting_item_ids": [],
+      "support_uncertain": false,
+      "uncertainties": [
+        "personal_contribution"
+      ],
+      "skill_claims": [
+        {
+          "skill_id": "skill:python",
+          "name": "Python",
+          "attribution": "unknown",
+          "assistance": "unknown",
+          "proficiency": null,
+          "experience_months": null,
+          "evidence": [
+            {
+              "id": "b2",
+              "excerpt": "Project A: Team built a Python and SQL application.",
+              "location": "Paragraph 2"
+            }
+          ],
+          "evidence_type": "explicit",
+          "support_uncertain": false
+        },
+        {
+          "skill_id": "skill:sql",
+          "name": "SQL",
+          "attribution": "unknown",
+          "assistance": "unknown",
+          "proficiency": null,
+          "experience_months": null,
+          "evidence": [
+            {
+              "id": "b2",
+              "excerpt": "Project A: Team built a Python and SQL application.",
+              "location": "Paragraph 2"
+            }
+          ],
+          "evidence_type": "explicit",
+          "support_uncertain": false
+        }
+      ]
+    },
+    {
+      "id": "3570d4f8b27fce6d17144b6b6dbae18e",
+      "source_fingerprint": "867f450775c955dc9468e2fc79ef9ef7e04122860c5e587359006e021d4b35f5",
+      "kind": "skill",
+      "title": "SQL",
+      "description": "Independent SQL queries for a personal dataset.",
+      "provenance": "explicit",
+      "evidence": [
+        {
+          "id": "b3",
+          "excerpt": "Independent SQL queries for a personal dataset.",
+          "location": "Paragraph 3"
+        }
+      ],
+      "skill_ids": [
+        "skill:sql"
+      ],
+      "skill_names": [
+        "SQL"
+      ],
+      "category": "unspecified",
+      "proficiency": null,
+      "experience_months": null,
+      "start_date": null,
+      "end_date": null,
+      "ongoing": false,
+      "context": null,
+      "removed": false,
+      "supporting_item_ids": [],
+      "support_uncertain": false,
+      "uncertainties": [
+        "proficiency"
+      ],
+      "skill_claims": [
+        {
+          "skill_id": "skill:sql",
+          "name": "SQL",
+          "attribution": "unknown",
+          "assistance": "unknown",
+          "proficiency": null,
+          "experience_months": null,
+          "evidence": [
+            {
+              "id": "b3",
+              "excerpt": "Independent SQL queries for a personal dataset.",
+              "location": "Paragraph 3"
+            }
+          ],
+          "evidence_type": "explicit",
+          "support_uncertain": false
+        }
+      ]
     }
   ],
-  "extraction_status": "succeeded",
-  "extraction_version": "extract-1",
-  "profile_version": 1
+  "skills": [
+    {
+      "skill_id": "skill:python",
+      "name": "Python",
+      "category": "unspecified",
+      "proficiency": null,
+      "experience_months": null,
+      "context": null,
+      "evidence": [
+        {
+          "id": "b2",
+          "excerpt": "Project A: Team built a Python and SQL application.",
+          "location": "Paragraph 2"
+        }
+      ],
+      "evidence_type": "explicit",
+      "explicit": true,
+      "item_ids": [
+        "dec4b26f070be165d5c34d7b9f7ec90d"
+      ],
+      "sources": [
+        {
+          "item_id": "dec4b26f070be165d5c34d7b9f7ec90d",
+          "evidence_type": "explicit",
+          "explicit": true,
+          "support_uncertain": false,
+          "attribution": "unknown",
+          "assistance": "unknown",
+          "proficiency": null,
+          "experience_months": null,
+          "evidence": [
+            {
+              "id": "b2",
+              "excerpt": "Project A: Team built a Python and SQL application.",
+              "location": "Paragraph 2"
+            }
+          ]
+        }
+      ],
+      "conflicting_fields": []
+    },
+    {
+      "skill_id": "skill:sql",
+      "name": "SQL",
+      "category": "unspecified",
+      "proficiency": null,
+      "experience_months": null,
+      "context": null,
+      "evidence": [
+        {
+          "id": "b2",
+          "excerpt": "Project A: Team built a Python and SQL application.",
+          "location": "Paragraph 2"
+        },
+        {
+          "id": "b3",
+          "excerpt": "Independent SQL queries for a personal dataset.",
+          "location": "Paragraph 3"
+        }
+      ],
+      "evidence_type": "explicit",
+      "explicit": true,
+      "item_ids": [
+        "dec4b26f070be165d5c34d7b9f7ec90d",
+        "3570d4f8b27fce6d17144b6b6dbae18e"
+      ],
+      "sources": [
+        {
+          "item_id": "dec4b26f070be165d5c34d7b9f7ec90d",
+          "evidence_type": "explicit",
+          "explicit": true,
+          "support_uncertain": false,
+          "attribution": "unknown",
+          "assistance": "unknown",
+          "proficiency": null,
+          "experience_months": null,
+          "evidence": [
+            {
+              "id": "b2",
+              "excerpt": "Project A: Team built a Python and SQL application.",
+              "location": "Paragraph 2"
+            }
+          ]
+        },
+        {
+          "item_id": "3570d4f8b27fce6d17144b6b6dbae18e",
+          "evidence_type": "explicit",
+          "explicit": true,
+          "support_uncertain": false,
+          "attribution": "unknown",
+          "assistance": "unknown",
+          "proficiency": null,
+          "experience_months": null,
+          "evidence": [
+            {
+              "id": "b3",
+              "excerpt": "Independent SQL queries for a personal dataset.",
+              "location": "Paragraph 3"
+            }
+          ]
+        }
+      ],
+      "conflicting_fields": []
+    }
+  ],
+  "original_items": [
+    {
+      "id": "3934681098841f658d1b62e4a2b9d5d8",
+      "source_fingerprint": null,
+      "kind": "education",
+      "title": "Example University",
+      "description": "Education: Example University, Computing",
+      "provenance": "explicit",
+      "evidence": [
+        {
+          "id": "b1",
+          "excerpt": "Education: Example University, Computing",
+          "location": "Paragraph 1"
+        }
+      ],
+      "skill_ids": [],
+      "skill_names": [],
+      "category": "unspecified",
+      "proficiency": null,
+      "experience_months": null,
+      "start_date": null,
+      "end_date": null,
+      "ongoing": false,
+      "context": null,
+      "removed": false,
+      "supporting_item_ids": [],
+      "support_uncertain": false,
+      "uncertainties": [],
+      "skill_claims": []
+    },
+    {
+      "id": "dec4b26f070be165d5c34d7b9f7ec90d",
+      "source_fingerprint": null,
+      "kind": "project",
+      "title": "Project A",
+      "description": "Project A: Team built a Python and SQL application.",
+      "provenance": "explicit",
+      "evidence": [
+        {
+          "id": "b2",
+          "excerpt": "Project A: Team built a Python and SQL application.",
+          "location": "Paragraph 2"
+        }
+      ],
+      "skill_ids": [
+        "skill:python",
+        "skill:sql"
+      ],
+      "skill_names": [
+        "Python",
+        "SQL"
+      ],
+      "category": "unspecified",
+      "proficiency": null,
+      "experience_months": null,
+      "start_date": null,
+      "end_date": null,
+      "ongoing": false,
+      "context": null,
+      "removed": false,
+      "supporting_item_ids": [],
+      "support_uncertain": false,
+      "uncertainties": [
+        "personal_contribution"
+      ],
+      "skill_claims": []
+    },
+    {
+      "id": "3570d4f8b27fce6d17144b6b6dbae18e",
+      "source_fingerprint": null,
+      "kind": "skill",
+      "title": "SQL",
+      "description": "Independent SQL queries for a personal dataset.",
+      "provenance": "explicit",
+      "evidence": [
+        {
+          "id": "b3",
+          "excerpt": "Independent SQL queries for a personal dataset.",
+          "location": "Paragraph 3"
+        }
+      ],
+      "skill_ids": [
+        "skill:sql"
+      ],
+      "skill_names": [
+        "SQL"
+      ],
+      "category": "unspecified",
+      "proficiency": null,
+      "experience_months": null,
+      "start_date": null,
+      "end_date": null,
+      "ongoing": false,
+      "context": null,
+      "removed": false,
+      "supporting_item_ids": [],
+      "support_uncertain": false,
+      "uncertainties": [
+        "proficiency"
+      ],
+      "skill_claims": []
+    }
+  ],
+  "clarifications": [],
+  "extraction": {
+    "provider": "synthetic-test",
+    "model": "fixture",
+    "prompt_version": "1",
+    "schema_version": "1"
+  },
+  "notices": [],
+  "reconciliation": [],
+  "reconciliation_candidate_id": null,
+  "review_required": false
 }

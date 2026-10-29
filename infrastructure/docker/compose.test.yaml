@@ -1,0 +1,24 @@
+# Apply only to a disposable test project alongside compose.yaml.
+# The fixture refuses unlabelled documents and makes no external model calls.
+services:
+  career-service:
+    environment:
+      COACHIFY_SYNTHETIC_TEST_FIXTURES: '1'
+    volumes: [../testing/seed-career.py:/fixture/seed-career.py:ro]
+  cv-service:
+    environment:
+      APP_ENV: development
+      CV_LLM_BASE_URL: http://cv-model-fixture:9000/v1
+      CV_LLM_MODEL: synthetic-integration-fixture
+      CV_LLM_API_KEY: synthetic-no-provider-key
+      CV_LLM_ALLOW_HTTP: 'true'
+    depends_on: [cv-model-fixture]
+  cv-model-fixture:
+    image: python:3.12-slim
+    command: [python, /fixture/cv-model.py]
+    user: '10001:10001'
+    read_only: true
+    volumes: [../testing/cv-model.py:/fixture/cv-model.py:ro]
+    networks: [backend]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]

@@ -47,7 +47,7 @@ class VerificationRepository:
         changes = {'challenge_id': challenge, 'email': account['email'], 'delivery': 'sending',
                    'code_hash': keyed(settings.otp_secret, account['id'], account['email'], challenge, code),
                    'code_expires_at': timestamp + timedelta(minutes=10), 'resend_at': timestamp + timedelta(seconds=60),
-                   'attempt_expires_at': timestamp + timedelta(minutes=30)}
+                   'attempt_expires_at': timestamp + timedelta(minutes=30), 'expires_at': timestamp + timedelta(minutes=30)}
         conditions = {'_id': flow['_id'], 'attempt': flow['attempt'], 'status': 'pending', 'otp_verified': {'$ne': True},
                       '$or': [{'resend_at': {'$exists': False}}, {'resend_at': {'$lte': timestamp}}]}
         selected = self.flows.find_one_and_update(conditions, {'$set': changes}, return_document=ReturnDocument.AFTER)

@@ -1,46 +1,22 @@
 # Docker deployment structure
 
-The active slice includes Profile, Career exploration/goal persistence, CV read APIs, a service-user setup job and a development-only Mailpit inbox in `infrastructure/docker/compose.yaml`, with `infrastructure/gateway/nginx.conf` and `infrastructure/mongodb/init-profile.js`. See the [application setup guide](../../docs/setup.md). Career uses a read-only container and private, bounded tmpfs for temporary uploads. Career and CV connect only to their scoped databases; explicit exploration turns use backend-only AI settings, while previews do not call AI. The remaining notes below describe the original scaffold templates.
+The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV ingestion/review, canonical Career goal/research, scoped MongoDB users and an optional development Mailpit inbox. Roadmap/dashboard/review remain source scaffolds. See [application setup](../../docs/setup.md).
 
+## Storage and service boundaries
 
-`compose.yaml.example` is an intentionally inactive deployment blueprint. It uses a `scaffold` profile for application services, and references comment-only Dockerfile examples. It cannot build or start a working Coachify application. Do not interpret Compose schema validity as application readiness.
+- `web` connects the gateway and frontend; `backend` carries API dependencies and permitted outbound provider traffic; the isolated `database` network keeps MongoDB private.
+- Profile owns account/manual-declaration data. CV owns `coachify_ingestion`, its worker and private `cv_uploads` volume. Career owns `coachify_career` and its public research/checkpoint metadata.
+- CV upload routes retain their 11 MiB multipart gateway allowance, disabled buffering and upload rate limit. Provider credentials are server-side. CV parsing dependencies and private writable upload ownership are required.
+- Career uses a non-root read-only container and bounded private tmpfs for temporary previews. Its database-user initialization also provisions missing CV users on existing volumes without resetting credentials or deleting data.
+- `mongodb_data` persists structured data independently from temporary CV originals. Do not delete it when applying code, routing, credentials or index-compatibility changes.
 
-## Planned components
+## Configuration
 
-- NGINX gateway: one public application entry point.
-- Next.js frontend: private Node.js server container.
-- Six FastAPI service containers.
-- Optional local MongoDB container under `local-db`; proposed production database is external Atlas.
-- `cv_uploads`: private original-file staging volume, mounted only by the CV service.
-- `mongodb_data`: local MongoDB data volume, unrelated to CV staging.
+Configure private values yourself, preserving existing database passwords. Agents must not inspect environment files. Career uses `AI_ENABLED`, `GEMINI_API_KEY`, `GEMINI_REASONING_MODEL` and `BRAVE_API_KEY`; its default reasoning model is `gemini-3.5-flash-lite`. CV has a separate configurable OpenAI-compatible adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
 
-## Networks
+The three implemented services communicate through authenticated APIs. CV receives `CAREER_SERVICE_URL`; Profile receives `CV_SERVICE_URL` for explicit source attachment; Career receives its CV API URL. No service reads another service's database. Tests use `compose.test.yaml` and deterministic synthetic model responses, with explicit synthetic settings and `--env-file /dev/null` in isolated projects.
 
-- `web`: gateway and frontend.
-- `backend`: gateway and backend services; retains outbound access for external identity, Atlas, and LLM connections where needed.
-- `database`: local MongoDB and the five data-owning services; isolated network with no MongoDB host port.
-
-## Before making it runnable
-
-1. Choose and pin supported runtime/image and dependency versions.
-2. Add valid Next.js pages/layouts and FastAPI startup entry points.
-3. Turn the Dockerfile examples into actual service Dockerfiles.
-4. Complete NGINX routing and the chosen authentication integration.
-5. Add service-scoped environment loading and MongoDB users/credentials.
-6. Configure health checks and readiness dependencies.
-7. Review the deployment blueprint and then produce an active Compose file.
-
-No image pulls, builds, container starts, network creation, or volume creation are performed by this scaffold.
-
-## Active environment example
-
-The public `.env.example` includes only consumed inputs for email/Gmail OTP delivery,
-service-scoped database passwords, `AI_ENABLED`, `GEMINI_API_KEY`,
-`GEMINI_REASONING_MODEL` and `BRAVE_API_KEY`. Every model stage uses that Gemini
-model setting; the default is `gemini-3.5-flash-lite`. Unused provider/model/response settings,
-Gemini-chat switches and Brave search-mode options are omitted because production
-ignores them. Optional tuning uses the defaults documented in the service specifications.
-Keep existing database passwords and private credentials when applying template changes.
+`compose.yaml.example` remains an inactive historical blueprint. Its schema validity does not prove a deployable application.
 
 ## Hot reload during development
 

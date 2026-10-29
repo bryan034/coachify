@@ -1,35 +1,637 @@
 {
   "$defs": {
-    "CvSkill": {
-      "additionalProperties": false,
+    "Clarification": {
       "properties": {
-        "skill_id": {
-          "maxLength": 120,
-          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)+$",
-          "title": "Skill Id",
+        "id": {
+          "title": "Id",
           "type": "string"
         },
-        "name": {
-          "maxLength": 160,
-          "minLength": 1,
-          "title": "Name",
+        "item_id": {
+          "title": "Item Id",
           "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "project",
+            "work",
+            "other"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "uncertainty_key": {
+          "title": "Uncertainty Key",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "unanswered",
+            "answered",
+            "skipped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "answer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Answer"
+        },
+        "career_target_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Career Target Id"
+        },
+        "career_target_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Career Target Version"
+        },
+        "career_target_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Career Target Type"
+        },
+        "extraction_version": {
+          "title": "Extraction Version",
+          "type": "integer"
+        },
+        "reconciliation_required": {
+          "default": false,
+          "title": "Reconciliation Required",
+          "type": "boolean"
+        },
+        "uncertainty": {
+          "title": "Uncertainty",
+          "type": "string"
+        },
+        "answer_revision": {
+          "default": 0,
+          "title": "Answer Revision",
+          "type": "integer"
+        },
+        "answer_sequence": {
+          "default": 0,
+          "title": "Answer Sequence",
+          "type": "integer"
+        },
+        "interpretation_status": {
+          "default": "not_requested",
+          "enum": [
+            "not_requested",
+            "pending",
+            "ready",
+            "failed"
+          ],
+          "title": "Interpretation Status",
+          "type": "string"
+        },
+        "interpretation_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Error"
+        },
+        "resolution": {
+          "default": "unresolved",
+          "enum": [
+            "unresolved",
+            "resolved",
+            "partial",
+            "unanswerable"
+          ],
+          "title": "Resolution",
+          "type": "string"
+        },
+        "interpretation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SavedInterpretation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "followup_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Followup Of"
+        },
+        "reconciled_from": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reconciled From"
+        }
+      },
+      "required": [
+        "id",
+        "item_id",
+        "kind",
+        "question",
+        "uncertainty_key",
+        "status",
+        "answer",
+        "career_target_id",
+        "career_target_version",
+        "extraction_version",
+        "uncertainty"
+      ],
+      "title": "Clarification",
+      "type": "object"
+    },
+    "CvItem": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source_fingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Fingerprint"
+        },
+        "kind": {
+          "enum": [
+            "education",
+            "experience",
+            "project",
+            "skill"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "provenance": {
+          "enum": [
+            "explicit",
+            "inferred",
+            "user_corrected",
+            "user_clarified"
+          ],
+          "title": "Provenance",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "skill_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Skill Ids",
+          "type": "array"
+        },
+        "skill_names": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Skill Names",
+          "type": "array"
         },
         "category": {
-          "maxLength": 160,
-          "minLength": 1,
+          "default": "unspecified",
           "title": "Category",
           "type": "string"
         },
         "proficiency": {
           "anyOf": [
             {
-              "enum": [
-                "beginner",
-                "intermediate",
-                "advanced",
-                "expert"
-              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Proficiency"
+        },
+        "experience_months": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Experience Months"
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Date"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Date"
+        },
+        "ongoing": {
+          "default": false,
+          "title": "Ongoing",
+          "type": "boolean"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context"
+        },
+        "removed": {
+          "title": "Removed",
+          "type": "boolean"
+        },
+        "supporting_item_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Supporting Item Ids",
+          "type": "array"
+        },
+        "support_uncertain": {
+          "default": false,
+          "title": "Support Uncertain",
+          "type": "boolean"
+        },
+        "uncertainties": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Uncertainties",
+          "type": "array"
+        },
+        "skill_claims": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SkillClaim"
+          },
+          "title": "Skill Claims",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "description",
+        "provenance",
+        "evidence",
+        "skill_ids",
+        "proficiency",
+        "experience_months",
+        "removed"
+      ],
+      "title": "CvItem",
+      "type": "object"
+    },
+    "CvSkill": {
+      "properties": {
+        "skill_id": {
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "proficiency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Proficiency"
+        },
+        "experience_months": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Experience Months"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Context"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "evidence_type": {
+          "title": "Evidence Type",
+          "type": "string"
+        },
+        "explicit": {
+          "title": "Explicit",
+          "type": "boolean"
+        },
+        "item_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Item Ids",
+          "type": "array"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SkillSource"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "conflicting_fields": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Conflicting Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "skill_id",
+        "name",
+        "category",
+        "proficiency",
+        "experience_months",
+        "context",
+        "evidence",
+        "evidence_type",
+        "explicit",
+        "item_ids",
+        "sources"
+      ],
+      "title": "CvSkill",
+      "type": "object"
+    },
+    "ErrorInfo": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "title": "ErrorInfo",
+      "type": "object"
+    },
+    "Evidence": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "excerpt": {
+          "title": "Excerpt",
+          "type": "string"
+        },
+        "location": {
+          "title": "Location",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "excerpt",
+        "location"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "ExtractionMetadata": {
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "prompt_version": {
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "prompt_version",
+        "schema_version"
+      ],
+      "title": "ExtractionMetadata",
+      "type": "object"
+    },
+    "InterpretationMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "prompt_version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "maxLength": 30,
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "prompt_version",
+        "schema_version"
+      ],
+      "title": "InterpretationMetadata",
+      "type": "object"
+    },
+    "InterpretedClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_id": {
+          "maxLength": 4000,
+          "minLength": 7,
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "attribution": {
+          "enum": [
+            "personal",
+            "team",
+            "observed",
+            "denied",
+            "unknown"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "assistance": {
+          "default": "unknown",
+          "enum": [
+            "independent",
+            "assisted",
+            "supervised",
+            "unknown"
+          ],
+          "title": "Assistance",
+          "type": "string"
+        },
+        "proficiency": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "minLength": 1,
               "type": "string"
             },
             {
@@ -44,7 +646,7 @@
             {
               "maximum": 1200,
               "minimum": 0,
-              "type": "integer"
+              "type": "number"
             },
             {
               "type": "null"
@@ -53,10 +655,10 @@
           "default": null,
           "title": "Experience Months"
         },
-        "context": {
+        "evidence_excerpt": {
           "anyOf": [
             {
-              "maxLength": 600,
+              "maxLength": 500,
               "minLength": 1,
               "type": "string"
             },
@@ -65,19 +667,306 @@
             }
           ],
           "default": null,
-          "title": "Context"
+          "title": "Evidence Excerpt"
+        },
+        "changed_fields": {
+          "items": {
+            "enum": [
+              "attribution",
+              "assistance",
+              "proficiency",
+              "experience_months"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Changed Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "skill_id",
+        "name",
+        "attribution",
+        "changed_fields"
+      ],
+      "title": "InterpretedClaim",
+      "type": "object"
+    },
+    "InterpretedDates": {
+      "additionalProperties": false,
+      "properties": {
+        "start_date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}(?:-\\d{2}(?:-\\d{2})?)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Date"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}(?:-\\d{2}(?:-\\d{2})?)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Date"
+        },
+        "ongoing": {
+          "default": false,
+          "title": "Ongoing",
+          "type": "boolean"
+        },
+        "changed_fields": {
+          "items": {
+            "enum": [
+              "start_date",
+              "end_date",
+              "ongoing"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Changed Fields",
+          "type": "array"
+        },
+        "evidence_excerpt": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Evidence Excerpt",
+          "type": "string"
+        }
+      },
+      "required": [
+        "changed_fields",
+        "evidence_excerpt"
+      ],
+      "title": "InterpretedDates",
+      "type": "object"
+    },
+    "SavedInterpretation": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Item Id",
+          "type": "string"
+        },
+        "answer_revision": {
+          "minimum": 1,
+          "title": "Answer Revision",
+          "type": "integer"
+        },
+        "resolution": {
+          "enum": [
+            "resolved",
+            "partial",
+            "unanswerable"
+          ],
+          "title": "Resolution",
+          "type": "string"
+        },
+        "claims": {
+          "items": {
+            "$ref": "#/$defs/InterpretedClaim"
+          },
+          "maxItems": 20,
+          "title": "Claims",
+          "type": "array"
+        },
+        "dates": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterpretedDates"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "statement_excerpt": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Statement Excerpt"
+        },
+        "resolved_uncertainties": {
+          "items": {
+            "enum": [
+              "personal_contribution",
+              "responsibility",
+              "proficiency",
+              "duration",
+              "claim",
+              "qualification",
+              "date"
+            ],
+            "type": "string"
+          },
+          "maxItems": 7,
+          "title": "Resolved Uncertainties",
+          "type": "array"
+        },
+        "remaining_uncertainties": {
+          "items": {
+            "enum": [
+              "personal_contribution",
+              "responsibility",
+              "proficiency",
+              "duration",
+              "claim",
+              "qualification",
+              "date"
+            ],
+            "type": "string"
+          },
+          "maxItems": 7,
+          "title": "Remaining Uncertainties",
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 2000,
+          "title": "Summary",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/InterpretationMetadata"
+        },
+        "applied_sequence": {
+          "minimum": 1,
+          "title": "Applied Sequence",
+          "type": "integer"
+        },
+        "extraction_version": {
+          "minimum": 1,
+          "title": "Extraction Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_id",
+        "answer_revision",
+        "resolution",
+        "summary",
+        "metadata",
+        "applied_sequence",
+        "extraction_version"
+      ],
+      "title": "SavedInterpretation",
+      "type": "object"
+    },
+    "SkillClaim": {
+      "properties": {
+        "skill_id": {
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "attribution": {
+          "enum": [
+            "personal",
+            "team",
+            "observed",
+            "denied",
+            "unknown"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "assistance": {
+          "enum": [
+            "independent",
+            "assisted",
+            "supervised",
+            "unknown"
+          ],
+          "title": "Assistance",
+          "type": "string"
+        },
+        "proficiency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Proficiency"
+        },
+        "experience_months": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Experience Months"
         },
         "evidence": {
-          "maxLength": 600,
-          "minLength": 1,
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
           "title": "Evidence",
+          "type": "array"
+        },
+        "evidence_type": {
+          "title": "Evidence Type",
+          "type": "string"
+        },
+        "support_uncertain": {
+          "title": "Support Uncertain",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "skill_id",
+        "name",
+        "attribution",
+        "assistance",
+        "proficiency",
+        "experience_months",
+        "evidence",
+        "evidence_type",
+        "support_uncertain"
+      ],
+      "title": "SkillClaim",
+      "type": "object"
+    },
+    "SkillSource": {
+      "properties": {
+        "item_id": {
+          "title": "Item Id",
           "type": "string"
         },
         "evidence_type": {
-          "enum": [
-            "cv",
-            "user_declaration"
-          ],
           "title": "Evidence Type",
           "type": "string"
         },
@@ -85,11 +974,36 @@
           "title": "Explicit",
           "type": "boolean"
         },
-        "original_evidence": {
+        "support_uncertain": {
+          "title": "Support Uncertain",
+          "type": "boolean"
+        },
+        "attribution": {
+          "default": "unknown",
+          "enum": [
+            "personal",
+            "team",
+            "observed",
+            "denied",
+            "unknown"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "assistance": {
+          "default": "unknown",
+          "enum": [
+            "independent",
+            "assisted",
+            "supervised",
+            "unknown"
+          ],
+          "title": "Assistance",
+          "type": "string"
+        },
+        "proficiency": {
           "anyOf": [
             {
-              "maxLength": 600,
-              "minLength": 1,
               "type": "string"
             },
             {
@@ -97,79 +1011,166 @@
             }
           ],
           "default": null,
-          "title": "Original Evidence"
+          "title": "Proficiency"
+        },
+        "experience_months": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experience Months"
+        },
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
         }
       },
       "required": [
-        "skill_id",
-        "name",
-        "category",
-        "evidence",
+        "item_id",
         "evidence_type",
-        "explicit"
+        "explicit",
+        "support_uncertain"
       ],
-      "title": "CvSkill",
+      "title": "SkillSource",
       "type": "object"
     }
   },
-  "additionalProperties": false,
-  "description": "CV API boundary snapshot, not permission to query the CV database.",
   "properties": {
-    "_id": {
+    "id": {
       "title": "Id",
       "type": "string"
     },
-    "version": {
-      "minimum": 1,
-      "title": "Version",
-      "type": "integer"
-    },
-    "schema_version": {
-      "const": "analysis-v1",
-      "default": "analysis-v1",
-      "title": "Schema Version",
-      "type": "string"
-    },
-    "skill_mapping_version": {
-      "maxLength": 160,
-      "minLength": 1,
-      "title": "Skill Mapping Version",
-      "type": "string"
-    },
-    "created_at": {
-      "format": "date-time",
-      "title": "Created At",
-      "type": "string"
-    },
-    "updated_at": {
-      "format": "date-time",
-      "title": "Updated At",
-      "type": "string"
-    },
-    "user_id": {
-      "title": "User Id",
-      "type": "string"
-    },
     "file_name": {
-      "maxLength": 160,
-      "minLength": 1,
       "title": "File Name",
       "type": "string"
     },
     "file_type": {
       "enum": [
         "pdf",
-        "docx",
-        "txt"
+        "docx"
       ],
       "title": "File Type",
       "type": "string"
     },
-    "file_url": {
+    "status": {
+      "enum": [
+        "queued",
+        "processing",
+        "ready",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "operation_id": {
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "extraction_version": {
+      "title": "Extraction Version",
+      "type": "integer"
+    },
+    "effective_version": {
+      "title": "Effective Version",
+      "type": "integer"
+    },
+    "profile_version": {
+      "title": "Profile Version",
+      "type": "integer"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "title": "Updated At",
+      "type": "string"
+    },
+    "error": {
       "anyOf": [
         {
-          "maxLength": 160,
-          "minLength": 1,
+          "$ref": "#/$defs/ErrorInfo"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_available": {
+      "title": "Source Available",
+      "type": "boolean"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/CvItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "skills": {
+      "items": {
+        "$ref": "#/$defs/CvSkill"
+      },
+      "title": "Skills",
+      "type": "array"
+    },
+    "original_items": {
+      "items": {
+        "$ref": "#/$defs/CvItem"
+      },
+      "title": "Original Items",
+      "type": "array"
+    },
+    "clarifications": {
+      "items": {
+        "$ref": "#/$defs/Clarification"
+      },
+      "title": "Clarifications",
+      "type": "array"
+    },
+    "extraction": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExtractionMetadata"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "notices": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notices",
+      "type": "array"
+    },
+    "reconciliation": {
+      "items": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "title": "Reconciliation",
+      "type": "array"
+    },
+    "reconciliation_candidate_id": {
+      "anyOf": [
+        {
           "type": "string"
         },
         {
@@ -177,51 +1178,36 @@
         }
       ],
       "default": null,
-      "title": "File Url"
+      "title": "Reconciliation Candidate Id"
     },
-    "skills": {
-      "items": {
-        "$ref": "#/$defs/CvSkill"
-      },
-      "maxItems": 200,
-      "title": "Skills",
-      "type": "array"
-    },
-    "extraction_status": {
-      "enum": [
-        "pending",
-        "processing",
-        "succeeded",
-        "failed"
-      ],
-      "title": "Extraction Status",
-      "type": "string"
-    },
-    "extraction_version": {
-      "maxLength": 160,
-      "minLength": 1,
-      "title": "Extraction Version",
-      "type": "string"
-    },
-    "profile_version": {
-      "minimum": 1,
-      "title": "Profile Version",
-      "type": "integer"
+    "review_required": {
+      "title": "Review Required",
+      "type": "boolean"
     }
   },
   "required": [
-    "_id",
-    "version",
-    "skill_mapping_version",
-    "created_at",
-    "updated_at",
-    "user_id",
+    "id",
     "file_name",
     "file_type",
-    "extraction_status",
+    "status",
+    "operation_id",
+    "version",
     "extraction_version",
-    "profile_version"
+    "effective_version",
+    "profile_version",
+    "created_at",
+    "updated_at",
+    "error",
+    "source_available",
+    "items",
+    "skills",
+    "original_items",
+    "clarifications",
+    "extraction",
+    "notices",
+    "reconciliation",
+    "review_required"
   ],
-  "title": "CvSnapshot",
+  "title": "CvDetail",
   "type": "object"
 }

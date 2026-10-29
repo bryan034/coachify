@@ -194,7 +194,7 @@ def test_approved_parenthesised_urls_are_not_rejected(text):
 def test_structured_summary_places_each_points_citations_next_to_its_text():
     async def run():
         request,body,_,_,record=environment()
-        request.app.state.workspace_store.goals.current=lambda owner:{'goal':NS(id='goal',role='Analyst',field='Data',company='Example',
+        request.app.state.workspace_store.goals.current=lambda owner:{'goal':NS(id='goal',version=1,role='Analyst',field='Data',company='Example',
             location='Singapore',job_url='https://example.test/jobs_(internship)',
             skills=[{'name':'SQL','source_urls':['https://example.test/qualifications_(SQL)']}])}
         payloads=[]

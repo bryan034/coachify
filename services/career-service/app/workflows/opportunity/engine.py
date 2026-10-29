@@ -388,7 +388,7 @@ class OpportunityEngine:
         row=await thread(self.app.state.workspace_store.row,job['owner']);w=row.get('workspace',{})
         if str(row.get('goal_id'))!=job['goal_id'] or w.get('run_id')!=job['run']:return
         try:
-            await thread(self.store.research.attach,job['owner'],job['goal_id'],job['selection'],job['_id'],job['digest'],record)
+            await thread(self.store.research.attach,job['owner'],job['goal_id'],job['selection'],job['_id'],job['digest'],record,goal_version=job.get('goal_version',w.get('revision')))
             categories=record.intelligence.categories.values()
             pending=not job['finished'] or any(v.status in ('pending','running') for v in categories)
             failed=any(v.status in ('failed','partial') or v.error_code for v in categories)

@@ -235,3 +235,78 @@ def test_brave_policy_rebuilds_old_mixed_provider_cache_and_preserves_history(fl
     historical=client.get(BASE+goal.id+'/interview-research?research_id='+old_id,headers=headers())
     assert historical.status_code==200 and goal_view(historical)['research']['_id']==old_id
     assert goal_view(research(flow))['reused'] is True
+
+
+def edit_current_goal(client,goal,**changes):
+    saved=goal_view(client.get(BASE+goal.id,headers=headers()))
+    content=copy.deepcopy(saved['content']);content.update(changes)
+    result=client.patch(BASE+goal.id+'/review',headers=headers(),json={'expected_version':saved['version'],'content':content})
+    assert result.status_code==200,result.text
+    return goal_view(result)
+
+
+def test_real_review_edit_during_retrieval_rejects_late_attachment(flow):
+    import asyncio
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    client,db,ai,sources,goal=flow
+    started=threading.Event();release=threading.Event();collect=sources.collect
+    async def blocked(context):
+        started.set();await asyncio.to_thread(release.wait)
+        return await collect(context)
+    sources.collect=blocked
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending=pool.submit(research,flow)
+        try:
+            assert started.wait(5)
+            changed=edit_current_goal(client,goal,role='Product Analyst')
+            assert changed['version']==2
+            # The original flaw needs no selection change: the real review API
+            # modifies the same canonical goal document in place.
+            assert db.career_state.find_one({'_id':OWNER})['version']==1
+        finally:release.set()
+        result=pending.result(timeout=10)
+    assert result.status_code==409,result.text
+    assert not db.career_state.find_one({'_id':OWNER}).get('research_links')
+    assert db.interview_research.count_documents({})==1  # Immutable public history survives.
+    latest=goal_view(client.get(BASE+goal.id+'/interview-research',headers=headers()))
+    assert latest['research'] is None and latest['context']['role']=='Product Analyst'
+    assert research(flow,expected_version=2).status_code==200
+
+
+@pytest.mark.parametrize('changes',[{'role':'Product Analyst'},{'summary':'Updated personal review of the same public role.'}])
+def test_old_research_is_explicit_history_until_current_revision_is_attached(flow,changes):
+    client,db,ai,sources,goal=flow
+    key=str(uuid4());body={'expected_version':1,'expected_selection_version':1}
+    first=client.post(BASE+goal.id+'/interview-research',headers=headers(key),json=body)
+    assert first.status_code==200,first.text
+    original=goal_view(first)['research'];identifier=original['_id']
+    edit_current_goal(client,goal,**changes)
+    current=goal_view(client.get(BASE+goal.id+'/interview-research',headers=headers()))
+    assert current['research'] is None and current['status']=='missing'
+    historical=goal_view(client.get(BASE+goal.id+'/interview-research?research_id='+identifier,headers=headers()))
+    assert historical['historical'] and historical['research']==original
+    assert historical['context']['role']==original['role']
+    assert client.post(BASE+goal.id+'/interview-research',headers=headers(key),json=body).status_code==409
+    refreshed=research(flow,expected_version=2)
+    assert refreshed.status_code==200,refreshed.text
+    assert goal_view(client.get(BASE+goal.id+'/interview-research',headers=headers()))['research'] is not None
+    assert db.interview_research.find_one({'_id':ObjectId(identifier)}) is not None
+
+
+def test_edit_between_link_write_and_final_check_leaves_only_historical_link(flow,monkeypatch):
+    client,db,ai,sources,goal=flow
+    repo=client.app.state.research_store;original=repo.state.update_one;changed=[]
+    def race(query,update,*args,**kwargs):
+        result=original(query,update,*args,**kwargs)
+        if not changed and any(key.startswith('research_link_meta.') for key in update.get('$set',{})):
+            changed.append(True);edit_current_goal(client,goal,role='Product Analyst')
+        return result
+    monkeypatch.setattr(repo.state,'update_one',race)
+    result=research(flow)
+    assert result.status_code==409,result.text
+    assert changed
+    history=repo.linked(OWNER,goal.id)
+    assert len(history)==1 and repo.read(OWNER,goal.id) is None
+    assert repo.read(OWNER,goal.id,history[0]) is not None
+    assert repo.linked(OWNER,goal.id,current=True)==[]

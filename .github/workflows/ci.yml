@@ -62,6 +62,8 @@ jobs:
     name: Backend tests (${{ matrix.service }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TIKTOKEN_CACHE_DIR: /tmp/coachify-tiktoken
     strategy:
       fail-fast: false
       matrix:
@@ -75,12 +77,15 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e '.[test]'
-      - name: Run pytest (allow empty suites)
+      - name: Provision Career tokenizer before test network isolation
+        if: matrix.service == 'career'
+        run: python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
+      - name: Run pytest (only unimplemented services may have empty suites)
         shell: bash
         run: |
           status=0
           python -m pytest || status=$?
-          if [ "$status" -eq 5 ]; then
+          if [ "$status" -eq 5 ] && [[ '${{ matrix.service }}' =~ ^(roadmap|dashboard|review)$ ]]; then
             echo "No pytest tests collected; passing this service."
             exit 0
           fi
@@ -115,6 +120,8 @@ jobs:
     # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
+    env:
+      TIKTOKEN_CACHE_DIR: /tmp/coachify-tiktoken
     strategy:
       fail-fast: false
       matrix:
@@ -131,11 +138,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install analysis test dependencies
+        working-directory: services/${{ matrix.service }}-service
+        run: python -m pip install -e '.[test]'
+      - name: Provision Career tokenizer before test network isolation
+        if: matrix.service == 'career'
+        working-directory: services/${{ matrix.service }}-service
+        run: python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
       - name: Validate contracts and MongoDB repositories
         working-directory: services/${{ matrix.service }}-service
-        run: |
-          python -m pip install -e '.[test]'
-          python -m pytest
+        run: python -m pytest
         env:
           MONGODB_TEST_URI: mongodb://localhost:27017
 
@@ -169,7 +181,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
         working-directory: apps/frontend
-      - run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml up --build -d
+      - run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml up --build -d
       - name: Wait for the gateway and API
         run: curl --fail --silent --show-error --retry 20 --retry-delay 2 --retry-all-errors http://localhost:8081/api/v1/profile/auth-config
       - run: npx playwright test --config playwright.integration.config.ts
@@ -187,10 +199,10 @@ jobs:
           if-no-files-found: ignore
       - name: Service logs on failure
         if: ${{ failure() }}
-        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml logs --tail=100
+        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml logs --tail=100
       - name: Remove disposable test services
         if: ${{ always() }}
-        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml down -v
+        run: docker compose -p ci-profile -f infrastructure/docker/compose.yaml -f infrastructure/docker/compose.test.yaml down -v
 
   test-gate:
     name: Test gate

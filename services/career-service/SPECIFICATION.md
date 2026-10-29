@@ -1,4 +1,4 @@
-> The current single-workspace LangGraph flow is described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). It supersedes earlier explicit goal confirmation/session selection; preview input safeguards below remain unchanged.
+> The current single-workspace LangGraph flow is described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). It supplies the canonical goal/workspace. CV clarification uses a separate explicit acknowledgement of that exact current goal revision; preview input safeguards below remain unchanged.
 
 # Career Goal previews and exploration
 
@@ -7,7 +7,7 @@
 The user's revised scope on 25 October 2026 supersedes the earlier source-storage
 plan for J01/J06/J07 previews. J08 exploration and J09 goal confirmation are also
 implemented. Raw or extracted source text must not be persisted. The preview endpoints do not perform AI processing or save structured goals.
-Internal AI/provider and data-contract foundations are described in
+Implemented AI/provider workflows and data contracts are described in
 [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md). Raw-source recovery stays excluded; J02–J04 structured review and J08/J09
 structured exploration/goal persistence is implemented separately.
 
@@ -88,6 +88,13 @@ permitted. Saved review editing, reclassification and confirmation follow
 calls or database writes. Sources remain transient, and reload restores only
 structured information. J05 importance review and J10 advisory exploration skills use this same review
 boundary. J12/J13 research orchestration, versioned storage and review UI are
-implemented with an injectable source API boundary; source connectors are deferred.
-Unconnected acquisition returns unavailable and preserves previous research.
+implemented with Gemini/Brave source adapters and an injectable synthetic test boundary. Unconfigured or unavailable acquisition preserves previous goal/research state.
 Gap analysis and roadmap generation remain future work.
+
+## Canonical confirmation for CV review
+
+The canonical goal stays the single active Career authority. Its automatic save is separate from an explicit CV-review acknowledgement. Confirmation stores the exact goal ID/version, selection version and projection hash in `career_state`, with acknowledgement time and bounded idempotency receipts. It does not duplicate goal content or advance goal/selection versions. Current and pinned context reads revalidate all identities, including edits before pointer updates. Stale confirmation requires user review again; earlier source-bound CV answers remain saved.
+
+Projection preserves all bounded goal skills/requirements, their provenance and AND/OR groups. Qualification conditions may support neutral education clarification. Other categories remain generic requirements with conservative exact-description relevance; the service does not infer eligibility/location from unrelated CV text. Unknown values stay unknown. See the [Career README](README.md#explicit-cv-clarification-context--c-series-integration) for endpoints and the generated contract for exact schemas.
+
+CV context is read through its owner-authenticated API. The Career projection has a 512 KiB streaming/document admission bound, preserves complete evidence within that bound and rejects oversize clearly without truncation. It preserves source IDs rather than claiming registry equivalence or assessed mastery. Older UUID target records remain retained history; canonical storage metadata preserves compatibility with the old uniqueness index without index deletion or data migration.

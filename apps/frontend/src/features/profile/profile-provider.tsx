@@ -9,17 +9,25 @@ export type Verification = { verification_required: true; challenge_id: string; 
 type Credentials = { name?: string; email?: string; password?: string; credential?: string };
 type Session = {
  mode: Mode | null; googleEnabled: boolean; developmentToolsEnabled: boolean; verification: Verification | null; token?: string; account: Account | null; profile: Profile | null; categories: Category[];
- sessionError: string; loading: boolean; configError: string; loadError: string; logoutError: string;
+ loading: boolean; configError: string; loadError: string; logoutError: string; sessionError: string; sessionChecking: boolean;
  beginAccess: (intent: 'login' | 'register') => Promise<Access>;
  completeAccess: (input: Credentials) => Promise<boolean>;
  verifyEmail: (code: string) => Promise<boolean>; resendVerification: () => Promise<void>;
  cancelAccess: () => void;
- signOut: () => void; retryLogout: () => void; reload: () => void; setProfile: (profile: Profile) => boolean;
+ signOut: () => void; retryLogout: () => void; reload: () => void; retrySession: () => Promise<void>; setProfile: (profile: Profile) => boolean;
 };
 const Context = createContext<Session | null>(null);
 const SESSION = 'coachify.session';
 const EPOCH = 'coachify.access-epoch';
 const PENDING = 'coachify.pending-logout';
+const SESSION_CHECK_TIMEOUT = 10_000;
+function validAccount(value: unknown): value is Account {
+ if (!value || typeof value !== 'object') return false;
+ const account = value as Partial<Account>;
+ return typeof account.id === 'string' && !!account.id.trim() && typeof account.name === 'string'
+  && ['google', 'email', 'local_test'].includes(account.provider || '')
+  && (account.expires_at === undefined || (typeof account.expires_at === 'string' && Number.isFinite(Date.parse(account.expires_at))));
+}
 function secret() { return crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', ''); }
 function nextEpoch() {
  const previous = Number(localStorage.getItem(EPOCH) || 0);
@@ -35,6 +43,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  const currentAccount = useRef<Account | null>(null);
  const [token, setToken] = useState<string>();
  const activeToken = useRef<string | undefined>(undefined);
+ const activeEpoch = useRef<string | undefined>(undefined);
  const attempt = useRef<Access | null>(null);
  const operation = useRef(0);
  const [account, setAccount] = useState<Account | null>(null);
@@ -44,11 +53,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  const [configError, setConfigError] = useState('');
  const [loadError, setLoadError] = useState('');
  const [logoutError, setLogoutError] = useState('');
- const [sessionError,setSessionError]=useState('');
+ const [sessionError, setSessionError] = useState('');
+ const [sessionChecking, setSessionChecking] = useState(false);
+ const validation = useRef<{ controller: AbortController; promise: Promise<void> } | null>(null);
+ const needsProfileValidation = useRef(false);
  const [retry, setRetry] = useState(0);
  const reload = useCallback(() => setRetry(n => n + 1), []);
  const clear = useCallback(() => {
-  operation.current++; latestProfile.current = null; currentAccount.current = null; activeToken.current = undefined; setToken(undefined); setAccount(null); setProfile(null); setLoadError(''); setSessionError('');
+  validation.current?.controller.abort(); validation.current = null; needsProfileValidation.current = false;
+  operation.current++; latestProfile.current = null; currentAccount.current = null; activeToken.current = undefined; activeEpoch.current = undefined; setToken(undefined); setAccount(null); setProfile(null); setLoadError(''); setSessionError(''); setSessionChecking(false);
   sessionStorage.removeItem(SESSION);
  }, []);
  const cancelAccess = useCallback(() => {
@@ -71,6 +84,68 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   window.google?.accounts.id.disableAutoSelect();
   if (old) { sessionStorage.setItem(PENDING, old); void retryLogout(); }
  }, [cancelAccess, clear, retryLogout]);
+ const validateSession = useCallback((refreshProfile = false, mask = true): Promise<void> => {
+  const checkedToken = activeToken.current; const checkedAccount = currentAccount.current;
+  if (!checkedToken || !checkedAccount) return Promise.resolve();
+  const epoch = activeEpoch.current;
+  if (!epoch || localStorage.getItem(EPOCH) !== epoch) { clear(); return Promise.resolve(); }
+  if (refreshProfile) needsProfileValidation.current = true;
+  const blocking = mask || !!sessionError;
+  if (validation.current) {
+   if (blocking) setSessionChecking(true);
+   return validation.current.promise;
+  }
+  const controller = new AbortController();
+  const flight = { controller, promise: Promise.resolve() };
+  validation.current = flight; setSessionChecking(blocking);
+  const current = () => validation.current === flight && activeToken.current === checkedToken
+   && currentAccount.current?.id === checkedAccount.id && localStorage.getItem(EPOCH) === epoch;
+  let timeout: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_, reject) => {
+   timeout = setTimeout(() => { controller.abort(); reject(new Error('Session validation timed out.')); }, SESSION_CHECK_TIMEOUT);
+  });
+  async function check() {
+   const who = await profileApi<unknown>('/auth/session', { signal: controller.signal }, checkedToken);
+   if (!current() || controller.signal.aborted) return;
+   if (!validAccount(who)) throw new Error('Session response could not be validated.');
+   if (who.id !== checkedAccount!.id || (who.expires_at && Date.parse(who.expires_at) <= Date.now()))
+    throw new ApiError('Your session is no longer valid. Please sign in again.', 401);
+   const refresh = needsProfileValidation.current;
+   const saved = refresh ? await profileApi<Profile>('', { signal: controller.signal }, checkedToken) : undefined;
+   if (refresh && (!saved || !Number.isSafeInteger(saved.version) || saved.version < 0
+       || !saved.education || typeof saved.education !== 'object' || typeof saved.onboarding_complete !== 'boolean'))
+    throw new Error('Profile validation unavailable.');
+   return { who, saved };
+  }
+  flight.promise = (async () => {
+   try {
+    const result = await Promise.race([check(), deadline]);
+    if (!current() || controller.signal.aborted || !result) return;
+    if (result.saved) {
+     const saved = result.saved;
+     if ((!latestProfile.current || saved.version >= latestProfile.current.version)
+         && !(latestProfile.current?.onboarding_complete && !saved.onboarding_complete)) {
+      latestProfile.current = saved; setProfile(saved);
+     }
+     needsProfileValidation.current = false;
+    }
+    currentAccount.current = result.who; setAccount(result.who); setSessionError('');
+   } catch (error) {
+    if (!current()) return;
+    if (error instanceof ApiError && error.status === 401) signOut();
+    else setSessionError('Session validation unavailable. Reconnect before continuing. Your unsaved work is still in this tab.');
+   } finally {
+    clearTimeout(timeout!);
+    if (validation.current === flight) {
+     if (activeEpoch.current !== localStorage.getItem(EPOCH)) clear();
+     else { validation.current = null; setSessionChecking(false); }
+    }
+   }
+  })();
+  return flight.promise;
+ }, [clear, signOut, sessionError]);
+ const retrySession = useCallback(() => validateSession(), [validateSession]);
+ useEffect(() => () => { validation.current?.controller.abort(); validation.current = null; }, []);
  useEffect(() => {
   function changed(event: StorageEvent) {
    if (event.key === EPOCH) { cancelAccess(); clear(); setLoading(false); }
@@ -81,12 +156,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   function expired(event: Event) {
    if ((event as CustomEvent).detail === activeToken.current) signOut();
   }
-  // A normal tab switch must not unmount forms. BFCache restoration still performs a full check.
-  function restored(event: PageTransitionEvent) { if (event.persisted && activeToken.current) { setProfile(null); setLoading(true); reload(); } }
+  // Keep drafts mounted while revalidating access; the workspace guard masks them until the check completes.
+  function visible() { if (document.visibilityState === 'visible') void validateSession(); }
+  function restored(event: PageTransitionEvent) { if (event.persisted) void validateSession(true); }
   window.addEventListener('storage', changed); window.addEventListener('coachify:expired', expired);
-  window.addEventListener('pageshow', restored);
-  return () => { window.removeEventListener('storage', changed); window.removeEventListener('coachify:expired', expired); window.removeEventListener('pageshow', restored); };
- }, [cancelAccess, clear, reload, signOut]);
+  document.addEventListener('visibilitychange', visible); window.addEventListener('pageshow', restored);
+  return () => { window.removeEventListener('storage', changed); window.removeEventListener('coachify:expired', expired); document.removeEventListener('visibilitychange', visible); window.removeEventListener('pageshow', restored); };
+ }, [cancelAccess, clear, reload, signOut, validateSession]);
  useEffect(() => {
   const controller = new AbortController(); const id = ++operation.current;
   setDevelopmentToolsEnabled(false); setLoading(true); setConfigError(''); setLoadError(''); setProfile(null);
@@ -103,15 +179,18 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     let stored: { token: string; epoch: string } | null;
     try { stored = JSON.parse(sessionStorage.getItem(SESSION) || 'null'); }
     catch { clear(); return; }
-    if (!stored || stored.epoch !== localStorage.getItem(EPOCH)) { clear(); return; }
+    if (!stored || typeof stored.token !== 'string' || !stored.token || typeof stored.epoch !== 'string' || stored.epoch !== localStorage.getItem(EPOCH)) { clear(); return; }
     let who: Account;
     try { who = await profileApi<Account>('/auth/session', { signal: controller.signal }, stored.token); }
     catch (error) {
      if (controller.signal.aborted || id !== operation.current) return;
      if (error instanceof ApiError && error.status === 401) { clear(); nextEpoch(); return; } throw error;
     }
-    if (controller.signal.aborted || id !== operation.current) return;
-    activeToken.current = stored.token; setToken(stored.token); currentAccount.current = who; setAccount(who);
+    if (controller.signal.aborted || id !== operation.current || stored.epoch !== localStorage.getItem(EPOCH)) return;
+    if (!validAccount(who)) throw new Error('Session response could not be validated. Please retry connection.');
+    if ((currentAccount.current && who.id !== currentAccount.current.id)
+        || (who.expires_at && Date.parse(who.expires_at) <= Date.now())) { clear(); nextEpoch(); return; }
+    activeToken.current = stored.token; activeEpoch.current = stored.epoch; setToken(stored.token); currentAccount.current = who; setAccount(who);
     try {
      const saved = await profileApi<Profile>('', { signal: controller.signal }, stored.token);
      if (!controller.signal.aborted && id === operation.current && (!latestProfile.current || saved.version >= latestProfile.current.version)
@@ -141,7 +220,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   if (attempt.current !== access || localStorage.getItem(EPOCH) !== access.epoch) return false;
   attempt.current = null; setVerification(null); sessionStorage.removeItem(PENDING); setLogoutError('');
   sessionStorage.setItem(SESSION, JSON.stringify({ token: access.session_token, epoch: access.epoch }));
-  activeToken.current = access.session_token; currentAccount.current = who; setToken(access.session_token); setAccount(who); setProfile(null); reload();
+  activeToken.current = access.session_token; activeEpoch.current = access.epoch; currentAccount.current = who; setToken(access.session_token); setAccount(who); setProfile(null); reload();
   return true;
  }, [reload]);
  const completeAccess = useCallback(async (input: Credentials) => {
@@ -174,23 +253,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  }, [token]);
  useEffect(() => {
   if (!token || !account) return;
-  const controller = new AbortController();
-  async function validate() {
-   try { await profileApi<Account>('/auth/session', { signal: controller.signal }, token); if(activeToken.current===token&&!controller.signal.aborted)setSessionError(''); }
-   catch (error) {
-    if (controller.signal.aborted || activeToken.current !== token) return;
-    if (error instanceof ApiError && error.status === 401) signOut();
-    else setSessionError('Session validation unavailable. Reconnect before continuing; your draft is still in this tab.');
-   }
-  }
-  const visible=()=>{if(document.visibilityState==='visible')void validate();};
-  document.addEventListener('visibilitychange',visible);
-  const poll = window.setInterval(() => { if(document.visibilityState==='visible')void validate(); }, 30_000);
+  const poll = window.setInterval(() => { if (document.visibilityState === 'visible') void validateSession(false, false); }, 30_000);
   const expiry = account.expires_at ? Date.parse(account.expires_at) - Date.now() : null;
   const timer = expiry === null ? undefined : window.setTimeout(() => { if (activeToken.current === token) signOut(); }, Math.max(0, expiry));
-  return () => { controller.abort(); document.removeEventListener('visibilitychange',visible); clearInterval(poll); if (timer !== undefined) clearTimeout(timer); };
- }, [token, account, signOut]);
- return <Context.Provider value={{ mode, googleEnabled, developmentToolsEnabled, verification, token, account, profile, categories, sessionError, loading, configError, loadError, logoutError, beginAccess, completeAccess, verifyEmail, resendVerification, cancelAccess, signOut, retryLogout, reload, setProfile: acceptProfile }}>{children}</Context.Provider>;
+  return () => { clearInterval(poll); if (timer !== undefined) clearTimeout(timer); };
+ }, [token, account, signOut, validateSession]);
+ return <Context.Provider value={{ mode, googleEnabled, developmentToolsEnabled, verification, token, account, profile, categories, loading, configError, loadError, logoutError, sessionError, sessionChecking, beginAccess, completeAccess, verifyEmail, resendVerification, cancelAccess, signOut, retryLogout, reload, retrySession, setProfile: acceptProfile }}>{children}</Context.Provider>;
 }
 export function useProfile() {
  const session = useContext(Context); if (!session) throw new Error('ProfileProvider is required.'); return session;

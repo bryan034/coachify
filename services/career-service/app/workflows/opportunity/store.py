@@ -55,7 +55,7 @@ class OpportunityStore:
         pending=[k for k,v in categories.items() if v['status']=='pending']
         summary_pending=bool(cached and any(w.startswith('Overall summary unavailable;') for w in cached.intelligence.warnings))
         retained={category:[s for s in sources if s['source_id'] in set(value.get('source_ids',[]))|{sid for finding in value['findings'] for sid in finding['source_ids']}][:OPPORTUNITY_SOURCE_LIMIT] for category,value in categories.items()}
-        row={'_id':identifier,'kind':'opportunity_job','owner':owner,'goal_id':goal.id,'selection':selection,'session':session,'run':run,
+        row={'_id':identifier,'kind':'opportunity_job','owner':owner,'goal_id':goal.id,'goal_version':goal.version,'selection':selection,'session':session,'run':run,
              'digest':digest,'public':public,'context':context.model_dump(mode='json'),'status':'pending' if pending or summary_pending else cached.intelligence.status,
              'finished':not (pending or summary_pending),'prefetched':bool(seed),'queries_planned':bool((seed or {}).get('queries_planned')),'categories':categories,'sources':sources,'queries':(seed or {}).get('queries',{}),'evidence':(seed or {}).get('evidence',{}),'history':(seed or {}).get('history',{}),
              'retained_sources':retained,'requested':pending,'research_id':cached.id if cached else None,'created_at':now(),'updated_at':now(),'next_attempt_at':now(), 'summary':cached.intelligence.summary.model_dump() if cached else {}}
@@ -74,8 +74,12 @@ class OpportunityStore:
             return self.start(owner,goal,selection,session,run,key,command)
         return row
 
-    def latest(self,owner,goal_id):
-        return self.rows.find_one({'kind':'opportunity_job','owner':owner,'goal_id':goal_id},sort=[('created_at',-1)])
+    def latest(self,owner,goal_id,goal_version=None):
+        query={'kind':'opportunity_job','owner':owner,'goal_id':goal_id}
+        if goal_version is not None:
+            query['$or']=[{'goal_version':goal_version}]
+            if goal_version==1:query['$or'].append({'goal_version':{'$exists':False}})
+        return self.rows.find_one(query,sort=[('created_at',-1)])
 
     def claim(self,identifier,token):
         return self.rows.find_one_and_update({'_id':identifier,'finished':False,'next_attempt_at':{'$lte':now()},

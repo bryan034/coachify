@@ -1,14 +1,21 @@
 import { test, expect } from '@playwright/test';
+import { mockEmptyConversation } from '../fixtures/cv-ui';
+import { policy, emptyDeclarations } from '../fixtures/cv';
 
 const categories = [{ id: 'university', label: 'University' }, { id: 'secondary', label: 'Secondary School' }];
 test('workspace uses saved profile data, preserves navigation and leaves missing services disconnected', async ({ page }) => {
+ await mockEmptyConversation(page);
  await page.addInitScript(() => { localStorage.setItem('coachify.access-epoch','1'); sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
  const apiCalls: string[] = [];
  let saved = { version: 0, onboarding_complete:true, occupational_status: null as string | null, school_category: null as string | null, education_context: null as string | null, education_review_required: false, education: {} as Record<string, unknown>, current_study_year: null as number | null };
  await page.route('**/api/**', async route => {
   const url = new URL(route.request().url());
+  if (url.pathname.includes('/cv/conversations')) return route.fallback();
     if (url.pathname.endsWith('/auth/session')) return route.fulfill({json:{id:'synthetic',name:'Synthetic',provider:'local_test',onboarding_complete:false}});
     if (url.pathname.endsWith('/auth/logout')) return route.fulfill({json:{ok:true}}); apiCalls.push(url.pathname);
+  if(url.pathname.endsWith('/cv/policy'))return route.fulfill({json:policy});
+  if(url.pathname === '/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
+  if(url.pathname.endsWith('/profile/capabilities'))return route.fulfill({json:emptyDeclarations});
   expect(url.pathname.startsWith('/api/v1/profile')).toBe(true);
   if (url.pathname.endsWith('/planning-inputs')) return route.fulfill({json:{profile_version:saved.version,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
   if(url.pathname.endsWith('/auth-config')) return route.fulfill({json:{mode:'local_test'}});
@@ -43,19 +50,21 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   await link.click();
   await expect(link).toHaveAttribute('aria-current','page');
   await expect(page.getByRole('heading',{level:1,name:heading})).toBeVisible();
-  await expect(page.locator('.feature-notice')).toContainText('Coming soon');
+  if(label==='Resume & Tracker')await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
+  else await expect(page.locator('.feature-notice')).toContainText('Coming soon');
  }
  await page.getByRole('button',{name:'Month',exact:true}).click();
  await expect(page.getByRole('button',{name:'Month',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('[aria-label="Month calendar"] .dh')).toHaveCount(7);
  await expect(page.getByRole('button',{name:'+ Add',exact:true})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Resume & Tracker'}).click();
- await expect(page.getByRole('button',{name:'Upload resume'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Upload CV'})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
  await page.getByRole('button',{name:'Courses',exact:true}).click();
  await expect(page.getByRole('heading',{name:'No courses to show yet'})).toBeVisible();
  await expect(page.getByRole('link',{name:'Edit planning preferences →'})).toBeVisible();
- expect(apiCalls.every(p=>p.startsWith('/api/v1/profile'))).toBe(true);
+ expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
+ expect(apiCalls).toContain('/api/v1/cv/policy');
  // Mobile navigation and calendar scrolling stay inside their containers.
  await page.setViewportSize({width:390,height:844});
  for(const label of ['Home','Resume & Tracker','Chats & Socials','Calendar & Events']) {

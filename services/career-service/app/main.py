@@ -19,6 +19,7 @@ from app.ai.jd_scope import CareerScopeError
 from app.clients.cvs import CvClient
 from app.repositories.goals import GoalStore, GoalError
 from app.api.v1.goals import router as goals_router
+from app.api.v1.cv_confirmation import router as cv_confirmation_router
 from app.api.v1.jd import router as jd_router
 from app.api.v1.reviews import router as reviews_router
 from app.api.v1.guidance import router as guidance_router
@@ -47,7 +48,7 @@ class BodyLimit:
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
             return await self.app(scope, receive, send)
-        maximum = MAX_BODY if scope['path'].endswith('/document') else 256 * 1024 if '/career/jd/' in scope['path'] or '/career/workspace/' in scope['path'] or scope['path'].endswith('/review') else 96 * 1024 if '/explorations/' in scope['path'] else 16 * 1024
+        maximum = MAX_BODY if scope['path'].endswith('/document') else 256 * 1024 if '/career/targets' in scope['path'] or '/career/jd/' in scope['path'] or '/career/workspace/' in scope['path'] or scope['path'].endswith('/review') else 96 * 1024 if '/explorations/' in scope['path'] else 16 * 1024
         headers = dict(scope.get('headers', []))
         try: declared = int(headers.get(b'content-length', b'0'))
         except ValueError: declared = maximum + 1
@@ -65,10 +66,16 @@ class BodyLimit:
         await self.app(scope, limited_receive, send)
 
 
-def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None, research_client=None, context_ai=None):
+def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None, research_client=None, context_ai=None, target_repository=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.slots = asyncio.Semaphore(2)
+        # Explicit legacy test adapter only. Production uses the canonical goal.
+        if target_repository is not None:
+            from anyio import CapacityLimiter
+            app.state.target_repository=target_repository
+            app.state.target_database=None
+            app.state.target_limiter=CapacityLimiter(8)
         app.state.operations = Operations()
         mongo = None
         db = database
@@ -131,7 +138,11 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     app.include_router(discovery_router)
     app.include_router(opportunity_router)
     app.include_router(workspace_router)
+    app.include_router(cv_confirmation_router)
     app.include_router(goals_router)
+    if target_repository is not None:
+        from app.api.v1.targets import router as legacy_targets_router
+        app.include_router(legacy_targets_router)
     app.include_router(jd_router)
     app.include_router(research_router)
     app.include_router(guidance_router)

@@ -199,8 +199,7 @@
               }
             }
           }
-        },
-        "description": "Converse using bounded context, refine recommendations, or automatically queue research once a direction is clear. Remains available during research."
+        }
       }
     },
     "/api/v1/career/discoveries/{session_id}/research": {
@@ -266,8 +265,7 @@
               }
             }
           }
-        },
-        "description": "Compatibility retry/refresh of the current scope. Ordinary clear-direction messages start research automatically; final goal confirmation remains explicit."
+        }
       }
     },
     "/api/v1/career/goals/{goal_id}/opportunity-research/progress": {
@@ -699,6 +697,97 @@
         }
       }
     },
+    "/api/v1/career/workspace/summary": {
+      "post": {
+        "tags": [
+          "Single career workspace / LangGraph"
+        ],
+        "summary": "Summary",
+        "operationId": "summary_api_v1_career_workspace_summary_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Prefer",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prefer"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SummaryReply"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OperationView"
+                    }
+                  ],
+                  "title": "Response Summary Api V1 Career Workspace Summary Post"
+                }
+              }
+            }
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/career/workspace/messages": {
       "post": {
         "tags": [
@@ -920,6 +1009,167 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspaceView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/current/cv-confirmation": {
+      "get": {
+        "tags": [
+          "Canonical goal CV confirmation"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_career_goals_current_cv_confirmation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvConfirmationView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Canonical goal CV confirmation"
+        ],
+        "summary": "Confirm",
+        "operationId": "confirm_api_v1_career_goals_current_cv_confirmation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmCvGoal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvConfirmationView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/career/goals/current/confirmed-context": {
+      "get": {
+        "tags": [
+          "Canonical goal CV confirmation"
+        ],
+        "summary": "Selected Context",
+        "operationId": "selected_context_api_v1_career_goals_current_confirmed_context_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CvConfirmedContext"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Selected Context Api V1 Career Goals Current Confirmed Context Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/confirmed-context": {
+      "get": {
+        "tags": [
+          "Canonical goal CV confirmation"
+        ],
+        "summary": "Confirmed Context",
+        "operationId": "confirmed_context_api_v1_career_goals__goal_id__confirmed_context_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "expected_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Expected Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvConfirmedContext"
                 }
               }
             }
@@ -1925,97 +2175,6 @@
           }
         ]
       }
-    },
-    "/api/v1/career/workspace/summary": {
-      "post": {
-        "tags": [
-          "Single career workspace / LangGraph"
-        ],
-        "summary": "Summary",
-        "operationId": "summary_api_v1_career_workspace_summary_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "Prefer",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Prefer"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SummaryRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SummaryReply"
-                    },
-                    {
-                      "$ref": "#/components/schemas/OperationView"
-                    }
-                  ],
-                  "title": "Response Summary Api V1 Career Workspace Summary Post"
-                }
-              }
-            }
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationView"
-                }
-              }
-            },
-            "description": "Accepted"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -2346,7 +2505,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^[0-9a-f]{24}$"
+                "pattern": "^(?:[0-9a-f]{24}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$"
               },
               {
                 "type": "null"
@@ -2487,6 +2646,109 @@
         ],
         "title": "Chat"
       },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 12000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage"
+      },
+      "ConfirmCvGoal": {
+        "properties": {
+          "expected_goal_id": {
+            "type": "string",
+            "title": "Expected Goal Id"
+          },
+          "expected_goal_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Goal Version"
+          },
+          "expected_selection_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Selection Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "title": "Mutation Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_goal_id",
+          "expected_goal_version",
+          "expected_selection_version",
+          "mutation_id"
+        ],
+        "title": "ConfirmCvGoal"
+      },
+      "ConversationMemory": {
+        "properties": {
+          "interests": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Interests"
+          },
+          "preferences": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Preferences"
+          },
+          "rejected_directions": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Rejected Directions"
+          },
+          "open_questions": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Open Questions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ConversationMemory"
+      },
       "CurrentCareerGoal": {
         "properties": {
           "selection_version": {
@@ -2527,6 +2789,253 @@
           "goal"
         ],
         "title": "CurrentCareerGoal"
+      },
+      "CvConfirmationView": {
+        "properties": {
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Version"
+          },
+          "selection_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Selection Version"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "default": false
+          },
+          "context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CvConfirmedContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "selection_version"
+        ],
+        "title": "CvConfirmationView"
+      },
+      "CvConfirmedContext": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "specific_job",
+              "career_exploration"
+            ],
+            "title": "Type"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "const": true,
+            "title": "Confirmed",
+            "default": true
+          },
+          "skill_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Skill Ids"
+          },
+          "selection_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Selection Version"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/CvTargetCondition"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Conditions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "type",
+          "skill_ids",
+          "selection_version",
+          "role",
+          "field"
+        ],
+        "title": "CvConfirmedContext"
+      },
+      "CvTargetCondition": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "qualification",
+              "date",
+              "requirement"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "item_kinds": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "education",
+                "experience",
+                "project",
+                "skill"
+              ]
+            },
+            "type": "array",
+            "title": "Item Kinds"
+          },
+          "match_terms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Match Terms"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "user_reviewed_jd",
+              "user_guidance"
+            ],
+            "title": "Origin"
+          },
+          "source_requirement_id": {
+            "type": "string",
+            "title": "Source Requirement Id"
+          },
+          "source_category": {
+            "type": "string",
+            "title": "Source Category"
+          },
+          "source_priority": {
+            "type": "string",
+            "title": "Source Priority"
+          },
+          "source_origin": {
+            "type": "string",
+            "title": "Source Origin"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "group_operator": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Group Operator",
+            "default": "all"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "description",
+          "item_kinds",
+          "match_terms",
+          "origin",
+          "source_requirement_id",
+          "source_category",
+          "source_priority",
+          "source_origin"
+        ],
+        "title": "CvTargetCondition"
       },
       "Decision": {
         "properties": {
@@ -3622,6 +4131,55 @@
         ],
         "title": "JDSource"
       },
+      "MarketSummary": {
+        "properties": {
+          "responsibility_refs": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Responsibility Refs"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendedSkill"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Skills"
+          },
+          "specialisations": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Specialisations"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "responsibility_refs"
+        ],
+        "title": "MarketSummary"
+      },
       "Message": {
         "properties": {
           "role": {
@@ -3817,6 +4375,81 @@
           "evidence"
         ],
         "title": "NonSkillRequirement"
+      },
+      "OperationError": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Operation Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "diagnostic": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diagnostic"
+          },
+          "provider_error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Error"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "provider",
+                  "user"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operation_id",
+          "code",
+          "detail"
+        ],
+        "title": "OperationError"
       },
       "OperationView": {
         "properties": {
@@ -4485,6 +5118,57 @@
           "url"
         ],
         "title": "PublicSource"
+      },
+      "RecommendedSkill": {
+        "properties": {
+          "skill_refs": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Skill Refs"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "requirement_type": {
+            "type": "string",
+            "enum": [
+              "core",
+              "specialisation",
+              "optional"
+            ],
+            "title": "Requirement Type"
+          },
+          "relevance": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Relevance"
+          },
+          "learning_priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Learning Priority"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "requirement_type",
+          "relevance",
+          "learning_priority"
+        ],
+        "title": "RecommendedSkill"
       },
       "ResearchCommand": {
         "properties": {
@@ -5579,6 +6263,49 @@
         "type": "object",
         "title": "Summary"
       },
+      "SummaryReply": {
+        "properties": {
+          "reply": {
+            "type": "string",
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Reply"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reply"
+        ],
+        "title": "SummaryReply"
+      },
+      "SummaryRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Session Id"
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "research_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Research Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "expected_version",
+          "research_id"
+        ],
+        "title": "SummaryRequest"
+      },
       "TargetSkill": {
         "properties": {
           "skill_id": {
@@ -6296,296 +7023,6 @@
           "exploration_id"
         ],
         "title": "WorkspaceView"
-      },
-      "SummaryRequest": {
-        "properties": {
-          "session_id": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{24}$",
-            "title": "Session Id"
-          },
-          "expected_version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Version"
-          },
-          "research_id": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{24}$",
-            "title": "Research Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "session_id",
-          "expected_version",
-          "research_id"
-        ],
-        "title": "SummaryRequest"
-      },
-      "SummaryReply": {
-        "properties": {
-          "reply": {
-            "type": "string",
-            "maxLength": 30000,
-            "minLength": 1,
-            "title": "Reply"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "reply"
-        ],
-        "title": "SummaryReply"
-      },
-      "OperationError": {
-        "properties": {
-          "operation_id": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{32}$",
-            "title": "Operation Id"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "detail": {
-            "type": "string",
-            "title": "Detail"
-          },
-          "diagnostic": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Diagnostic"
-          },
-          "provider_error": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Error"
-          },
-          "retry_after": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Retry After"
-          },
-          "limit_scope": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "provider",
-                  "user"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit Scope"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "operation_id",
-          "code",
-          "detail"
-        ],
-        "title": "OperationError"
-      },
-      "ConversationMemory": {
-        "properties": {
-          "interests": {
-            "items": {
-              "type": "string",
-              "maxLength": 160,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 6,
-            "title": "Interests"
-          },
-          "preferences": {
-            "items": {
-              "type": "string",
-              "maxLength": 160,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 6,
-            "title": "Preferences"
-          },
-          "rejected_directions": {
-            "items": {
-              "type": "string",
-              "maxLength": 160,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 6,
-            "title": "Rejected Directions"
-          },
-          "open_questions": {
-            "items": {
-              "type": "string",
-              "maxLength": 160,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 3,
-            "title": "Open Questions"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ConversationMemory"
-      },
-      "ChatMessage": {
-        "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "user",
-              "assistant"
-            ],
-            "title": "Role"
-          },
-          "content": {
-            "type": "string",
-            "maxLength": 12000,
-            "minLength": 1,
-            "title": "Content"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "ChatMessage"
-      },
-      "MarketSummary": {
-        "properties": {
-          "responsibility_refs": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "maxItems": 20,
-            "title": "Responsibility Refs"
-          },
-          "skills": {
-            "items": {
-              "$ref": "#/components/schemas/RecommendedSkill"
-            },
-            "type": "array",
-            "maxItems": 30,
-            "title": "Skills"
-          },
-          "specialisations": {
-            "items": {
-              "type": "string",
-              "maxLength": 160,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 4,
-            "title": "Specialisations"
-          },
-          "question": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 600,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Question"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "responsibility_refs"
-        ],
-        "title": "MarketSummary"
-      },
-      "RecommendedSkill": {
-        "properties": {
-          "skill_refs": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "maxItems": 10,
-            "title": "Skill Refs"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "requirement_type": {
-            "type": "string",
-            "enum": [
-              "core",
-              "specialisation",
-              "optional"
-            ],
-            "title": "Requirement Type"
-          },
-          "relevance": {
-            "type": "string",
-            "maxLength": 600,
-            "minLength": 1,
-            "title": "Relevance"
-          },
-          "learning_priority": {
-            "type": "string",
-            "enum": [
-              "high",
-              "medium",
-              "low"
-            ],
-            "title": "Learning Priority"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "name",
-          "requirement_type",
-          "relevance",
-          "learning_priority"
-        ],
-        "title": "RecommendedSkill"
       }
     },
     "securitySchemes": {

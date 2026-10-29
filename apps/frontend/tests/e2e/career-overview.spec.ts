@@ -1,10 +1,21 @@
 import {careerFixture} from './career-fixture';
+import {mockEmptyConversation} from '../fixtures/cv-ui';
+import {policy,emptyDeclarations} from '../fixtures/cv';
 import {test,expect} from '@playwright/test';
 
 test('saved briefing accordions, guided refinement, replacement and CV handoff on desktop and mobile',async({page})=>{
+ await mockEmptyConversation(page);
+ await page.route('**/api/v1/profile/capabilities',route=>route.fulfill({json:emptyDeclarations}));
+ await page.route('**/api/v1/cv{,/**}',route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/policy'))return route.fulfill({json:policy});
+  if(path==='/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
+  return route.fallback();
+ });
  await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/capabilities'))return route.fallback();
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
   if(path.endsWith('/auth/session'))return route.fulfill({json:careerFixture(route.request().url(),{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'})});
   return route.fulfill({json:careerFixture(route.request().url(),{version:1,onboarding_complete:true,occupational_status:'employed',education:{}})});
@@ -31,7 +42,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.getByText('Degree in a related discipline',{exact:true})).toBeVisible();
  await expect(page.getByRole('status').filter({hasText:'Researching opportunity information'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
- await expect(page.getByRole('link',{name:/Assess my skills/})).toHaveAttribute('href','/cv');
+ await expect(page.getByRole('link',{name:/Upload my CV/})).toHaveAttribute('href','/cv');
  researching=false;
  await page.getByText('Interviews & company research',{exact:false}).click();
  await expect(page.locator('details.intelligence-section').filter({has:page.getByText('Interview Intelligence',{exact:true})})).toContainText('Technical interview');
@@ -56,9 +67,11 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
  expect(extractions).toBe(1);
  await page.reload();await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
- await page.getByRole('link',{name:/Assess my skills/}).click();
+ await page.getByRole('link',{name:/Upload my CV/}).click();
  await expect(page).toHaveURL(/\/cv$/);
  await expect(page.getByRole('heading',{name:'Resume & Tracker'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
+ await expect(page.getByLabel('CV document',{exact:true})).toBeEnabled();
 });
 
 test('Opportunity Intelligence preserves partial categories, citations and targeted refresh on mobile',async({page})=>{
@@ -84,6 +97,9 @@ test('Opportunity Intelligence preserves partial categories, citations and targe
   return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',review:{review_id:'1'.repeat(24),version:1,target_type:'specific_job',extraction:goal,requirements_need_review:false},current:{selection_version:1,goal},research:null,coverage:[],error:null,retry_after:null})});
  });
  await page.goto('/career-goal');
+ const cvSkills=page.getByRole('region',{name:'Your CV skills'});
+ await expect(cvSkills.getByRole('heading',{name:'CV skills available'})).toBeVisible();
+ await expect(cvSkills).not.toContainText(/assessed|assessment|evaluated/iu);
  await page.getByText('Interviews & company research',{exact:false}).click();
  await expect(page.getByRole('heading',{name:'Opportunity Intelligence'})).toBeVisible();
  await expect(page.getByText('This category could not finish. Other results are preserved; refresh this section to retry.')).toBeVisible();

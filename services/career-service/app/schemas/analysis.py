@@ -52,6 +52,21 @@ def public_url(value):
 
 
 DomainId = Annotated[str, BeforeValidator(object_id), StringConstraints(pattern=r'^[0-9a-f]{24}$')]
+
+
+def cv_reference(value):
+    # CV owns its identifier format. Existing ObjectId references retain BSON
+    # identity; new saved-CV UUIDs remain their original strings.
+    if isinstance(value, ObjectId): return str(value)
+    if isinstance(value, str) and re.fullmatch('[0-9a-f]{24}', value): return value
+    if isinstance(value, str) and str(UUID(value)) == value: return value
+    raise ValueError('Expected a canonical saved-CV UUID or existing ObjectId.')
+
+
+CvReference = Annotated[str, BeforeValidator(cv_reference), StringConstraints(pattern=r'^(?:[0-9a-f]{24}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$')]
+CvSkillId = Annotated[str, StringConstraints(pattern=r'^(?:skill:.+|[a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)+)$', max_length=4000)]
+CvText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
+
 AccountId = Annotated[str, BeforeValidator(account_id), StringConstraints(pattern=r'^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')]
 SourceUrl = Annotated[str, BeforeValidator(public_url)]
 
@@ -81,18 +96,41 @@ class Generation(Contract):
         return value.replace(microsecond=(value.microsecond // 1000) * 1000)
 
 
+class CvSourceEvidence(Contract):
+    id: Text
+    excerpt: Annotated[str, StringConstraints(min_length=1, max_length=4000)]
+    location: CvText
+
+
+class CvSkillSource(Contract):
+    item_id: Text
+    evidence_type: Literal['cv', 'user_declaration', 'explicit', 'inferred', 'user_corrected', 'user_clarified', 'uncertain', 'mixed']
+    explicit: bool = Field(strict=True)
+    support_uncertain: bool = Field(strict=True)
+    attribution: Literal['personal', 'team', 'observed', 'denied', 'unknown']
+    assistance: Literal['independent', 'assisted', 'supervised', 'unknown']
+    proficiency: CvText | None = None
+    experience_months: Annotated[float, Field(strict=True, ge=0, le=1200, allow_inf_nan=False)] | None = None
+    evidence: list[CvSourceEvidence] = Field(default_factory=list, max_length=200)
+
+
 class CvSkill(Contract):
-    skill_id: SkillId
-    name: Text
+    skill_id: CvSkillId
+    name: CvText
     category: Text
     proficiency: Proficiency | None = None
-    experience_months: Count | None = None
-    context: Evidence | None = None
-    evidence: Evidence
-    evidence_type: Literal['cv', 'user_declaration']
+    experience_months: Annotated[float, Field(strict=True, ge=0, le=1200, allow_inf_nan=False)] | None = None
+    context: CvText | None = None
+    evidence: Evidence | None = None
+    evidence_type: Literal['cv', 'user_declaration', 'explicit', 'inferred', 'user_corrected', 'user_clarified', 'uncertain', 'mixed']
     explicit: bool = Field(strict=True)
     # Original extraction and current contribution remain distinct. No proof required.
     original_evidence: Evidence | None = None
+    source_evidence: list[CvSourceEvidence] = Field(default_factory=list)
+    reported_proficiency: CvText | None = None
+    item_ids: list[str] = Field(default_factory=list, max_length=160)
+    sources: list[CvSkillSource] = Field(default_factory=list, max_length=160)
+    conflicting_fields: list[str] = Field(default_factory=list, max_length=20)
 
 
 class TargetSkill(Contract):
@@ -235,11 +273,12 @@ class Document(Contract):
 
 class CvSnapshot(Document):
     """CV API boundary snapshot, not permission to query the CV database."""
+    id: CvReference = Field(alias='_id')
     user_id: AccountId
-    file_name: Text
+    file_name: CvText
     file_type: Literal['pdf', 'docx', 'txt']
     file_url: Text | None = None
-    skills: list[CvSkill] = Field(default_factory=list, max_length=200)
+    skills: list[CvSkill] = Field(default_factory=list)
     extraction_status: Literal['pending', 'processing', 'succeeded', 'failed']
     extraction_version: Text
     profile_version: Version
@@ -297,7 +336,7 @@ class CareerGoal(Document):
     source_review_id: DomainId | None = None
     source_review_version: Version | None = None
     requirements_need_review: bool = False
-    source_cv_id: DomainId | None = None
+    source_cv_id: CvReference | None = None
     source_cv_version: Version | None = None
     source_extraction_version: Text | None = None
     source_profile_version: Version | None = None
@@ -440,7 +479,7 @@ class ResearchVersion(Contract):
 
 
 class InputVersions(Contract):
-    cv_id: DomainId
+    cv_id: CvReference
     cv_version: Version
     extraction_version: Text
     profile_version: Version
@@ -458,7 +497,7 @@ class InputVersions(Contract):
 
 class SkillGapAnalysis(Document):
     user_id: AccountId
-    cv_id: DomainId
+    cv_id: CvReference
     career_goal_id: DomainId
     research_ids: list[DomainId] = Field(default_factory=list, max_length=20)
     inputs: InputVersions
@@ -496,17 +535,22 @@ def mongo_document(model: Document):
             return [bson_dates(item) for item in value]
         return value
     data = bson_dates(model.model_dump(by_alias=True, mode='python'))
-    data['_id'] = ObjectId(model.id)
+    data['_id'] = (model.id if isinstance(model, CvSnapshot) and len(model.id) != 24 else ObjectId(model.id))
     for name in ('cv_id', 'career_goal_id', 'selected_career_goal_id', 'result_id', 'exploration_draft_id', 'source_review_id', 'source_cv_id'):
         if data.get(name):
-            data[name] = ObjectId(data[name])
+            data[name] = data[name] if name in ('cv_id', 'source_cv_id') and len(str(data[name])) != 24 else ObjectId(data[name])
     if 'research_ids' in data:
         data['research_ids'] = [ObjectId(value) for value in data['research_ids']]
     if data.get('inputs'):
         for name in ('cv_id', 'career_goal_id'):
-            data['inputs'][name] = ObjectId(data['inputs'][name])
+            data['inputs'][name] = data['inputs'][name] if name == 'cv_id' and len(str(data['inputs'][name])) != 24 else ObjectId(data['inputs'][name])
         for ref in data['inputs']['research']:
             ref['id'] = ObjectId(ref['id'])
+    # Preserve the retired unique(user_id, create_key) index without modifying
+    # legacy records or dropping constraints. All canonical goal/draft IDs share
+    # one stable namespaced key, including in-place draft promotion.
+    if isinstance(model, CareerGoal) or data.get('record_type') in {'exploration_draft','requirement_review'}:
+        data['create_key']='canonical:'+str(model.id)
     # Mongo stores datetimes in UTC; ISO strings are reserved for API JSON.
     for name in ('created_at', 'updated_at', 'last_researched_at'):
         if data.get(name):

@@ -24,7 +24,7 @@ webfont files and is not bundled.
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
 | `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
 | `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
-| `/cv` | Resume/skills/tracker layout; dedicated upload/assessment unavailable, with a link to optional temporary Career Goal attachments |
+| `/cv` | Saved CV upload/selection, resumable text review, interpreted clarification, correction/reconciliation and Profile-owned manual capabilities |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
 | `/calendar` | Current week/month views; events and task actions unavailable |
 | `/career`, `/reviews` | Matching placeholders for existing reserved routes |
@@ -83,11 +83,10 @@ Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
 `src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
 content stays in the account-scoped Career route provider, never browser storage.
 **Extract career goal** starts the LangGraph JD workflow. Validated role/skill/condition
-information immediately becomes the account's latest goal. The browser stays in chat while the saved goal overview is populated. Saved skills appear in expandable learning-focus rows; eligibility, responsibilities and cited research are in collapsible context sections. The starting-point sidebar reads CV status without inferring per-skill gaps. See the [briefing data map and proposed extensions](../../docs/design/career-briefing.md). Research status updates on this page without hiding the extracted goal. **Refine goal** opens guided chat; **Set a new goal** opens fresh JD inputs while preserving the current goal until successful replacement. Brave interview
-the validated JD summary, cited research and follow-up composer open together only after both extraction and research succeed. Progress is visible meanwhile.
+information immediately becomes the account's latest goal. The browser stays in chat while the saved goal overview is populated. Saved skills appear in expandable learning-focus rows; eligibility, responsibilities and cited research are in collapsible context sections. The starting-point sidebar distinguishes available CV skills, a missing CV, saved CVs without available skills, and unavailable status. Its links open the implemented CV workspace without claiming a per-skill assessment. See the [briefing data map and proposed extensions](../../docs/design/career-briefing.md). Research status updates on this page without hiding the extracted goal. **Refine goal** opens guided chat; **Set a new goal** opens fresh JD inputs while preserving the current goal until successful replacement.
+The validated JD summary, cited research and follow-up composer open together only after both extraction and research finish. Progress is visible meanwhile.
 Unavailable sources produce a retry state; no-findings stays explicit. One current
-conversation is loaded from `/api/v1/career/workspace`; there is no session picker or
-confirmation button. A new successfully interpreted JD resets that conversation.
+conversation is loaded from `/api/v1/career/workspace`; there is no session picker. The saved goal overview has a separate explicit confirmation for using the current revision in CV clarification. A new successfully interpreted JD resets that conversation.
 Manual changes happen through guided chat. The agent asks for missing details, then
 automatically validates and saves the requested fields; users can cancel a pending edit
 in chat. The manual form and Apply button are removed. Message keys make retries
@@ -149,16 +148,9 @@ manual entry works even when the suggestion service is unavailable.
 
 Never-employed unemployed users with a last school answer graduation year immediately after choosing it. The year is saved in education, displayed on My profile and editable in the same single-page form. Explicit no previous education skips this question.
 
-## Inactivity and drafts
+## Session recovery and drafts
 
-Ordinary browser-tab switches revalidate the session without clearing Profile or
-unmounting workspace forms. Unsaved JD/chat work remains in React memory. Visible
-pointer, keyboard, input and scroll activity renew a five-minute deadline; visibility
-changes check elapsed wall-clock time, including background/sleep time. After five
-minutes, a blocking refresh prompt keeps the workspace mounted but inert. Refresh
-is explicit and discards temporary inputs. Sign-out, session expiry/revocation and
-cross-account changes still clear private state immediately. Browser/OS tab discard
-and manual refresh cannot preserve these memory-only drafts.
+Ordinary tab switches and periodic session checks preserve mounted forms and unsent CV/Career drafts. Temporary validation failures offer retry; authentication expiry, revocation, sign-out and account changes clear private state. There is no five-minute inactivity lock or forced refresh policy. Unsent drafts remain in React memory, so explicit browser refresh, browser/OS tab discard or confirmed navigation may discard them. CV upload/source switches ask before discarding an unsent draft.
 
 ## Docker Fast Refresh
 
@@ -183,12 +175,7 @@ links and AI-summary attribution remain visible in research details.
 The initial career-goal explanation reports useful interview source coverage. If the
 research budget cannot find three distinct useful URLs, it labels the findings as limited.
 
-The overview checks `GET /api/v1/career/context/assessment` for the signed-in
-account. Missing CVs or successfully extracted CVs without skills show **Assess my
-skills**, linking to `/cv`; pending/failed extraction also needs assessment. An API
-failure stays unknown and offers retry, rather than implying the database is empty.
-An evaluated CV shows **View my CV**. This is a capability-input check, not a gap
-analysis or readiness score. Dedicated CV upload/assessment on `/cv` remains planned.
+The overview checks `GET /api/v1/career/context/assessment` for owner-scoped CV availability. Missing, pending, failed and successfully extracted sources remain distinct from a service failure. The link opens the implemented saved-CV review screen. The compatibility status named `evaluated` indicates available extracted skill input; it does not establish mastery, an assessment computation or a readiness score.
 
 Opportunity Intelligence adds five expandable sections beneath the saved goal
 cards: interviews, internship experience, career progression/conversion salary, historical conversion rates and company/team culture. Category findings
@@ -254,11 +241,20 @@ Opportunity category notices distinguish irrelevant sources, absent facts, valid
 failures and provider failures/timeouts using the backend outcome. Legacy saved
 reports without an outcome retain their existing status messages.
 
-Completed research chat displays every retained Gemini-structured finding verbatim
-with citations. Overview ordering uses stored finding IDs and makes no additional
-model request; frontend rendering does not paraphrase the saved wording.
+The initial chat overview is generated from the saved goal and completed research.
+The backend validates its structured points and attaches the saved source links;
+the frontend renders the returned wording without paraphrasing it. Detailed
+Opportunity Intelligence preserves individual saved findings and their citations.
 
 Explore careers uses the goal-chat layout at `/career-goal/discovery`. Discovery alone
 keeps its owner-scoped transcript on the server, permits chat during automatic research,
 and clears the composer on send without overwriting the next draft. Final goal saving
 still requires explicit review and confirmation. See [Career Discovery](../../services/career-service/CAREER_DISCOVERY.md).
+
+## Saved conversational CV review
+
+The CV workspace starts with a text conversation. **CV files** provides uploads and explicit source selection; **Your CV summary** provides saved evidence and direct review tools. Users can answer, add context or ask questions in one composer. Ordinary explanations save through validated interpretation; corrections, removals and manual additions retain explicit action cards. Unknown details and skips remain uncertain.
+
+History is stored by CV and resumes after reload, including manual-only conversations with no uploaded CV. Messages are paginated in retained bounded segments. The client does not store CV text in browser storage. Message receipt, interpretation progress and factual save are distinct. Retry retains the original request after an unknown network outcome, and delayed responses cannot update a different displayed CV/account. Older loaded action pages refresh their statuses; full segments expose outstanding work before continuation.
+
+Career remains the single goal authority. The saved goal overview shows whether the current goal/version/selection has been confirmed for CV review. Confirmation is explicit and independent of Career's automatic saving. A changed or replaced goal requires a fresh confirmation; earlier source-bound CV answers remain saved. CV context preserves requirement provenance and alternatives rather than treating unknown eligibility or location as a qualification fact. No second active target editor is required.
