@@ -9,7 +9,7 @@ from app.ai.goal_summary import SUMMARY_CLOSING
 from app.repositories.goals import GoalError
 from app.workflows.activity import activity
 from app.workflows.structured import structured_node
-from app.workflows.citations import normalize_citations, render_citations, citation_error
+from app.workflows.citations import summary_text, source_links
 
 
 async def summarize(request, account, body):
@@ -30,22 +30,53 @@ async def summarize(request, account, body):
 
     goal, record = await snapshot()
     sources = {s.source_id: s.url for s in record.sources}
-    # Exclude private owner/operational metadata and original source excerpts.
+    references = {}
+    research_refs = set()
+
+    def goal_sources(urls):
+        identifiers=[]
+        for url in urls:
+            if not url:continue
+            identifier=next((key for key,value in sources.items() if value==url),None)
+            if identifier is None:
+                identifier='goal_source_'+str(len(sources))
+                while identifier in sources:identifier+='_'  # Never collide with stored IDs.
+                sources[identifier]=url
+            if identifier not in identifiers:identifiers.append(identifier)
+        return identifiers
+
     fields = ('target_type', 'role', 'field', 'company', 'location', 'seniority_level', 'employment_type', 'interests', 'preferences',
               'summary', 'responsibilities', 'skills', 'non_skill_requirements', 'requirements_need_review')
-    # Summarise validated values, not the repeated original evidence quotations.
+    goal_data=jsonable_encoder({k:getattr(goal,k,None) for k in fields})
+    goal_data['reference']='goal'
+    references['goal']=goal_sources([getattr(goal,'job_url',None)])
+    for field,prefix in (('skills','skill'),('non_skill_requirements','condition')):
+        for index,item in enumerate(goal_data.get(field) or []):
+            ref=f'{prefix}_{index}';item['reference']=ref
+            references[ref]=goal_sources(item.pop('source_urls',[]))
     categories=jsonable_encoder(record.intelligence.categories)
-    for category in categories.values():
+    for name,category in categories.items():
+        ref='coverage_'+name;category['reference']=ref;references[ref]=[]
+        category.pop('source_ids',None)
         for finding in category.get('findings',[]):
             finding.pop('quotes',None)
-    context = {'goal': {k: getattr(goal, k, None) for k in fields},
-               'categories': categories, 'source_ids': list(sources)}
+            ref='research_'+str(len(research_refs));finding['reference']=ref
+            references[ref]=finding.pop('source_ids');research_refs.add(ref)
+    context={'goal':goal_data,'categories':categories}
 
     def validate(output):
-        _, cited = normalize_citations(output.reply, sources)
-        # A concise overview selects key findings rather than reproducing them all.
-        if any(category.findings for category in record.intelligence.categories.values()) and not cited:
-            raise citation_error('missing_finding_citation')
+        used=set()
+        for index,block in enumerate(output.blocks):
+            if any(ref not in references for ref in block.references):
+                raise AIError('invalid_output',True,reason='provenance',fields=('blocks','references'),
+                    violations=({'field':f'blocks.{index}.references','issue':'unknown_fact_reference'},))
+            if not block.text.replace(SUMMARY_CLOSING,'').strip():
+                raise AIError('invalid_output',True,reason='schema_validation',fields=('blocks','text'),
+                    violations=({'field':f'blocks.{index}.text','issue':'empty_summary_point'},))
+            used.update(block.references)
+        if research_refs and not used.intersection(research_refs):
+            raise AIError('invalid_output',True,reason='provenance',fields=('blocks','references'),
+                violations=({'field':'blocks','issue':'missing_research_reference'},))
 
     activity('preparing_summary')
     encoded = json.dumps(jsonable_encoder(context), separators=(',', ':'))
@@ -64,7 +95,11 @@ async def summarize(request, account, body):
 
     result = await present({})
     await snapshot()  # A replaced goal/research must never publish a stale overview.
-    normalized, _ = normalize_citations(result.reply, sources)
-    reply = render_citations(normalized, sources)
-    reply=reply.replace(SUMMARY_CLOSING,'').strip()+'\n\n'+SUMMARY_CLOSING
-    return {'reply': reply}
+    points=[]
+    for block in result.blocks:
+        text=summary_text(block.text.replace(SUMMARY_CLOSING,''))
+        ids=list(dict.fromkeys(identifier for ref in block.references for identifier in references[ref]))
+        citations=source_links(ids,sources)
+        point=text+(' '+citations if citations else '')
+        points.append('- '+point)
+    return {'reply':'## Your career goal\n\n'+'\n\n'.join(points)+'\n\n'+SUMMARY_CLOSING}

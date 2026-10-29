@@ -305,3 +305,15 @@ Chat completion regressions cover delayed saved-report reads, automatic summary 
 finished partial coverage, report-read retry without paid research, concise selection of
 saved key points, and the exact final invitation appearing once. Backend tests also
 verify pending categories remain blocked and summary context omits repeated quotations.
+
+Structured summary coverage checks per-point fact references, unknown-reference rejection,
+job-description/requirement citation registration, inline placement and deduplication,
+plain-prose escaping, and the real adapter's JSON/schema boundary. Follow-up regressions
+include balanced-parenthesis URLs, angle destinations and forged destinations. Frontend
+Markdown tests verify that links sit in the paragraph/list item they support and that
+escaped model links do not become active citations.
+
+`test_followup_citations.py` verifies grouped fact markers become inline verified links,
+unknown/undeclared references are rejected, source URLs deduplicate within a claim,
+fresh-search references resolve, and expanded answers respect the reply limit. The
+frontend interview-list regression checks the links are inside their supported stage.
