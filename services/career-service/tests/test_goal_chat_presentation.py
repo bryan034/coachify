@@ -15,10 +15,10 @@ from app.workflows.context_chat import semantic_chat
 from app.workflows.operations import Operations
 
 
-def environment(reply='## Your career goal\nAn interview is reported. [s1]'):
+def environment(reply='An interview is reported.',references=('research_0',)):
     goal=NS(id='goal',role='Analyst',field='Data',company='Example',location=None)
     record=NS(sources=[ResearchSource(source_id='s1',platform='other',url='https://example.test/job',evidence='The internship is in Singapore.')],
-              intelligence=NS(status='completed',categories={}))
+              intelligence=NS(status='completed',categories={'interviews':NS(status='completed',findings=[NS(source_ids=['s1'],value='An interview is reported.')])}))
     checks=[]
     def check(*args):
         checks.append(args)
@@ -26,7 +26,7 @@ def environment(reply='## Your career goal\nAn interview is reported. [s1]'):
     calls=[]
     async def generate(request,operation,**kwargs):
         calls.append(request)
-        output=GoalSummary(reply=reply)
+        output=GoalSummary(blocks=[{'text':reply,'references':list(references)}])
         kwargs['validate_output'](output)
         return NS(data=output)
     repo=NS(check=check,goals=NS(current=lambda owner:{'goal':goal}))
@@ -38,18 +38,18 @@ def test_overview_uses_structured_data_and_restores_verified_links():
     async def run():
         request,body,checks,calls,_=environment()
         result=await summarize(request,'owner',body)
-        assert '[Source](https://example.test/job)' in result['reply']
+        assert '[Source](<https://example.test/job>)' in result['reply']
         assert len(checks)==3 and calls[0].stage=='goal_summary'
         context=json.loads(calls[0].context)
-        assert context['goal']['role']=='Analyst' and context['source_ids']==['s1']
+        assert context['goal']['role']=='Analyst' and context['categories']['interviews']['findings'][0]['reference']=='research_0'
         assert 'owner' not in context and 'Singapore' not in calls[0].context
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('reply',['Invented [s999]','See https://untrusted.test','[Source](https://untrusted.test)'])
-def test_overview_rejects_invented_sources(reply):
+@pytest.mark.parametrize('ref',['missing_fact','https://untrusted.test','s999'])
+def test_overview_rejects_invented_sources(ref):
     async def run():
-        request,body,*_=environment(reply)
+        request,body,*_=environment(references=(ref,))
         with pytest.raises(AIError):await summarize(request,'owner',body)
     asyncio.run(run())
 
@@ -116,7 +116,7 @@ def test_summary_remount_reuses_the_same_operation():
 
 def test_overview_requires_citations_for_retained_findings():
     async def run():
-        request,body,_,_,record=environment('A claim without its citation.')
+        request,body,_,_,record=environment('A claim without its citation.',references=('goal',))
         record.intelligence.categories={'interviews':NS(findings=[NS(source_ids=['s1'])])}
         with pytest.raises(AIError):await summarize(request,'owner',body)
     asyncio.run(run())

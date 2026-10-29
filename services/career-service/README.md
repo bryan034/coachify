@@ -32,7 +32,7 @@ characters; original documents and full extracted text are transient.
 - `GET /api/v1/career/workspace/operations/{operation_id}` — Read an account-owned extraction/chat job and its automatic quota countdown.
 - `POST /api/v1/career/workspace/retry` — Resume expired work or retry failed research.
 
-Successful extraction fills the saved goal overview immediately while keeping the user in the chat. Public retrieval overlaps full JD extraction after the identity check. After extraction and research finish, the chat automatically loads the saved report and types a concise Gemini overview of the key points. Finished partial results include their limitations. The overview ends with “Ask me anything about this goal set!” A new JD replaces the entire goal only after successful extraction. LangGraph researches public opportunity evidence. The chat composer opens after the combined response is ready; the underlying saved-goal APIs remain available while research is pending or unavailable; interview claims require saved evidence. The initial explanation is written by Gemini from saved goal fields and completed research; Python validates and restores citations. Temporary observed activity disappears when the answer is ready. Missing details and explicit further-research requests can trigger a focused Brave search selected by Gemini. Public searches use only saved employer/role/location and an allowlisted focus; answers cite retrieved evidence without automatically changing the goal. It
+Successful extraction fills the saved goal overview immediately while keeping the user in the chat. Public retrieval overlaps full JD extraction after the identity check. After extraction and research finish, the chat automatically loads the saved report and types a concise Gemini overview as short, single-idea bullets, including the role overview. Finished partial results include their limitations. The overview ends with “Ask me anything about this goal set!” A new JD replaces the entire goal only after successful extraction. LangGraph researches public opportunity evidence. The chat composer opens after the combined response is ready; the underlying saved-goal APIs remain available while research is pending or unavailable; interview claims require saved evidence. The initial explanation is written by Gemini from saved goal fields and completed research; Python validates and restores citations. Temporary observed activity disappears when the answer is ready. Missing details and explicit further-research requests can trigger a focused Brave search selected by Gemini. Public searches use only saved employer/role/location and an allowlisted focus; answers cite retrieved evidence without automatically changing the goal. It
 covers role scope, high-level skills, supported interview stages and an explicitly
 sourced round count (unknown otherwise). Unknown stages remain unknown. No confirmation button or
 conversation selector is used. Every stage uses the server-only `GEMINI_API_KEY`
@@ -42,7 +42,7 @@ when a timed quota is reached, the unfinished model step waits and resumes autom
 with a countdown and no approval or resubmission. Waiting does not consume the model's
 execution timeout. Invalid JSON/schema responses trigger automatic corrections in the
 failed LangGraph node, with at most six repairs.
-The model receives only the latest field/type issues; the UI shows “Refining the response…”. Summary generation uses the same bounded corrections. Verified citation formatting is normalized locally; unknown sources still fail. Selected research takeaways require supporting citations; the concise overview need not repeat every saved finding. Loading a saved report or retrying summary generation does not restart research.
+The model receives only the latest field/type issues; the UI shows “Refining the response…”. Summary generation uses the same bounded corrections. Gemini returns plain-text points and saved-fact references; Python builds source links beside each point, including saved JD/requirement sources. Unknown references still fail. Model-written links cannot become summary citations. Selected research takeaways require supporting references; the concise overview need not repeat every saved finding. Loading a saved report or retrying summary generation does not restart research.
 Failed AI operation responses include `operation_id` and fixed issue codes under
 `diagnostic.violations`. Find the ID in the initial 202 response or Network polling URL;
 it also appears in content-free failure logs. Operations are held in worker memory
@@ -88,7 +88,7 @@ being repeated. Changed identity discards early results, and provider waits are 
 
 Operation/workspace `activities` expose fixed observed steps. Chat shows typed summaries
 and stays open; the Career Goal button opens already populated cards. The initial response
-and composer wait for both results. Follow-up questions can use cited company/internship
+and composer wait for both results. Follow-up answers replace internal fact markers with the actual saved links beside each claim. Follow-up questions can use cited company/internship
 findings as well as the JD.
 Both JD extraction APIs reject unrelated documents with HTTP 422 `career_scope`.
 Question/refine paths refuse unrelated tasks and instruction overrides. See the
