@@ -194,17 +194,30 @@ truth. The [README](README.md) lists available endpoints, and the
   Google accounts missing email are upgraded only after that exact subject is
   verified, then complete Coachify OTP verification without changing their owner. Email,
   local and Google identities never auto-link by matching name/email.
-- Registration creates a pending server-owned account ID. No private token/session
-  is usable before `email_verified=true`. Duplicate registration cannot replace a
-  password or profile; pending accounts resume through credential-verified sign-in.
-  The same registration attempt is idempotent; concurrent different registrations
-  for one identity produce one winner and one conflict.
+- Registration keeps a prospective server-owned account ID and hashed credentials
+  in the expiring verification attempt. It does not reserve a durable account or
+  email identity before mailbox proof. Retry or resend within that attempt to
+  continue; after losing it, start registration again. Pending candidates cannot
+  sign in with a password. OTP publication creates the verified account, and an
+  activation-attempt marker recovers a committed write whose response was lost.
+  The same registration attempt is idempotent; concurrent proved registrations
+  for one identity produce one winner and one conflict, never a session for the
+  other attempt's account.
+- An older unverified email/local signup may still finish verification after
+  proving its original password. A fresh registration can reclaim only an exact,
+  empty reservation after its own OTP proof, using a fresh account ID and owner.
+  Existing profile/history, mutation receipts, sessions, capabilities, migration
+  or verification metadata make a reservation ineligible. Unknown legacy fields
+  fail closed. Verified and Google accounts cannot be reclaimed; Google still
+  requires its exact subject. The conditional replacement rejects concurrent
+  changes and invalidates old account-bound proofs without inheriting owner data.
 - Start access using random `flow_id`/`attempt_id`, an increasing generation and
   `intent`. The server returns a nonce. Complete with those IDs plus a random
   `session_token`, and either email/password (optional display name on registration)
   or a Google credential. The browser generates 256-bit secrets with Web Crypto.
   Provider attempts initially last ten minutes; a proved credential awaiting email
-  verification has a 30-minute access window. New generations supersede old attempts.
+  verification has a 30-minute access window and TTL; completed flows retain a
+  two-day TTL to cover their 24-hour sessions. New generations supersede old attempts.
 - Completion binds account, session hash, mode and a keyed request fingerprint to
   the access attempt. Changed retries, expired/cancelled/superseded callbacks and
   cross-account verification are rejected. An identical committed request can
@@ -224,8 +237,9 @@ truth. The [README](README.md) lists available endpoints, and the
   per mailbox too. Failed SMTP sends remain recoverable and never activate an
   account. Counters are reserved atomically; code publication and consumption are
   conditional, so concurrent or cancelled requests cannot enable an unrelated session.
-- Successful code consumption records a keyed receipt, marks the account verified,
-  then conditionally publishes its session. A failure between these writes is safe
+- Successful code consumption records a keyed receipt, creates the staged account
+  (or verifies its eligible existing account), then conditionally publishes its session.
+  The pending credential candidate is removed after publication. A failure between these writes is safe
   to retry with the identical verification request. Only the winning code can recover
   that session; consumption cannot be replayed to create a different one.
 - Coachify sessions last 24 hours and store only SHA-256 secret hashes server-side.

@@ -82,7 +82,10 @@ supply inputs; they do not generate a roadmap.
 
 Private requests use a Coachify session bearer. Email accounts sign in with email
 and password. The current local configuration disables Google sign-in. New registrations
-accept any valid email address and require an emailed OTP. Development can use synthetic accounts with a chooser that only prefills email,
+accept any valid email address and require an emailed OTP before an account is created.
+Pending details live in the expiring verification attempt; resume that attempt or
+start registration again. Verified accounts keep their existing sign-in behavior.
+Development can use synthetic accounts with a chooser that only prefills email,
 or email/password sign-in with real Gmail delivery; see the [setup guide](../../docs/setup.md#local-emailpassword-sign-in-and-real-gmail-delivery).
 
 ## Initial setup — P13/P14
@@ -100,7 +103,7 @@ Employed users also provide employer, role and industry. Unemployed users answer
 
 | Endpoint | What it does |
 |---|---|
-| `POST /api/v1/profile/auth/verify-email` | Activate a pending account using its six-digit emailed OTP. |
+| `POST /api/v1/profile/auth/verify-email` | Create the verified account, or finish eligible legacy verification, using its six-digit emailed OTP. |
 | `POST /api/v1/profile/auth/resend-verification` | Send a replacement code subject to cooldown/rate limits. |
 
 Pending accounts have no private session. Codes expire in 10 minutes, allow five

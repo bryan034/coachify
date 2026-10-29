@@ -200,8 +200,18 @@ def test_concurrent_google_creation_has_one_account(setup):
     def verify(credential, audience, nonce):
         return {'sub': 'same-subject', 'name': 'Synthetic', 'email':'same@example.test','email_verified':True}
     with patch('app.api.v1.accounts.verify_google', side_effect=verify):
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(lambda a: complete(client, a, credential='verified')[0].status_code, attempts))
+        proofs = []
+        for attempt in attempts:
+            access = {key: attempt[key] for key in ('flow_id', 'attempt_id')}
+            access['session_token'] = token_urlsafe(32)
+            pending = client.post(BASE + '/auth/complete', json={**access, 'credential': 'verified'})
+            assert pending.status_code == 200
+            proofs.append({**access, 'challenge_id': pending.json()['challenge_id'], 'code': repo.mailer.messages[-1][1]})
+    assert repo.accounts.count_documents({}) == 0
+    # Account creation now races at mailbox-proof publication. Capture each
+    # synthetic email before racing, so one attempt cannot read another's code.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda proof: client.post(BASE + '/auth/verify-email', json=proof).status_code, proofs))
     assert sorted(results) == [200, 409]
     assert repo.accounts.count_documents({}) == 1
 
@@ -264,10 +274,10 @@ def test_logout_storage_failure_is_retryable_without_deleting_saved_data(setup):
     assert client.app.state.repository.collection.count_documents({}) == 1
 
 
-def pending_account(client, email=None):
+def pending_account(client, email=None, password=PASSWORD):
     attempt=begin(client)
     body={'flow_id':attempt['flow_id'],'attempt_id':attempt['attempt_id'],'session_token':token_urlsafe(32),
-          'name':'Synthetic pending','email':email or uuid4().hex+'@example.test','password':PASSWORD}
+          'name':'Synthetic pending','email':email or uuid4().hex+'@example.test','password':password}
     response=client.post(BASE+'/auth/complete',json=body)
     assert response.status_code==200,response.text
     assert response.json()['verification_required']
@@ -276,20 +286,46 @@ def pending_account(client, email=None):
     return body,verify,response.json()
 
 
+def test_unproved_registration_does_not_reserve_email_or_create_account(setup):
+    client, repo = setup
+    attacker, _, _ = pending_account(client, email='available@example.test', password='Attacker chosen passphrase')
+    assert repo.accounts.count_documents({}) == 0
+    rightful, proof, _ = pending_account(client, email=attacker['email'])
+    verified = client.post(BASE + '/auth/verify-email', json=proof)
+    assert verified.status_code == 200, verified.text
+    assert repo.accounts.count_documents({}) == 1
+    assert client.get(BASE + '/auth/session', headers={'Authorization': 'Bearer ' + attacker['session_token']}).status_code == 401
+    assert client.get(BASE + '/auth/session', headers={'Authorization': 'Bearer ' + rightful['session_token']}).status_code == 200
+
+
+def legacy_reservation(client, repo, email=None):
+    """Represent a pre-fix persisted signup, including its still-pending OTP."""
+    body, proof, _ = pending_account(client, email=email)
+    flow = repo.flows.find_one({'_id': digest(body['flow_id'])})
+    account = flow['registration_candidate']
+    repo.accounts.insert_one(account)
+    repo.flows.update_one({'_id': flow['_id']}, {'$unset': {'registration_candidate': '', 'registration_replaces': ''}})
+    return account, body, proof
+
+
 def test_pending_account_requires_email_password_and_otp_before_private_session(setup):
     client,repo=setup
     body,verify,pending=pending_account(client)
     headers={'Authorization':'Bearer '+body['session_token']}
     assert client.get(BASE,headers=headers).status_code==401
     assert client.get(BASE+'/auth/session',headers=headers).status_code==401
-    account=repo.accounts.find_one({'email':body['email']})
+    assert repo.accounts.count_documents({}) == 0
+    flow = repo.flows.find_one({'_id':digest(body['flow_id'])})
+    account = flow['registration_candidate']
     assert account['password_hash'].startswith('$argon2id$')
     assert PASSWORD not in str(account)
+    assert flow['expires_at'] == flow['attempt_expires_at']
     assert verify['code'] not in str(repo.flows.find_one({'_id':digest(body['flow_id'])}))
     assert verify['code'] not in str(pending)
     result=client.post(BASE+'/auth/verify-email',json=verify)
     assert result.status_code==200
     assert result.json()['email_verified'] is True
+    assert 'registration_candidate' not in repo.flows.find_one({'_id':flow['_id']})
     assert client.get(BASE,headers=headers).json()['onboarding_state']=='missing'
     assert client.post(BASE+'/auth/verify-email',json=verify).json()==result.json()
     assert client.post(BASE+'/auth/verify-email',json={**verify,'session_token':token_urlsafe(32)}).status_code==409
@@ -314,7 +350,7 @@ def test_wrong_otp_exhaustion_and_expiry_fail_closed(setup):
     for _ in range(5):
         assert client.post(BASE+'/auth/verify-email',json={**verify,'code':wrong}).status_code==400
     assert client.post(BASE+'/auth/verify-email',json=verify).status_code==400
-    assert not repo.accounts.find_one({'email':body['email']})['email_verified']
+    assert repo.accounts.count_documents({}) == 0
     body,verify,_=pending_account(client)
     repo.flows.update_one({'_id':digest(body['flow_id'])},{'$set':{'code_expires_at':now()-timedelta(seconds=1)}})
     assert client.post(BASE+'/auth/verify-email',json=verify).status_code==400
@@ -356,14 +392,14 @@ def test_delivery_failure_and_cancelled_codes_never_activate_accounts(setup):
     with patch.object(repo.mailer,'send_otp',side_effect=HTTPException(503,'Synthetic mail outage')):
         failed,body=complete(client,attempt)
     assert failed.status_code==503
-    assert repo.accounts.count_documents({})==1
+    assert repo.accounts.count_documents({})==0
     retry=client.post(BASE+'/auth/complete',json=body)
     assert retry.json()['verification_required']
     verify={k:body[k] for k in ('flow_id','attempt_id','session_token')}
     verify.update(challenge_id=retry.json()['challenge_id'],code=repo.mailer.messages[-1][1])
     client.post(BASE+'/auth/attempts/cancel',json={k:body[k] for k in ('flow_id','attempt_id')})
     assert client.post(BASE+'/auth/verify-email',json=verify).status_code==409
-    assert not repo.accounts.find_one({})['email_verified']
+    assert repo.accounts.count_documents({})==0
 
 
 def test_concurrent_otp_verification_is_single_use_and_idempotent(setup):
@@ -393,15 +429,183 @@ def test_email_case_normalization_password_check_and_no_duplicate_registration(s
     assert repo.accounts.count_documents({})==1
 
 
-def test_pending_account_resumes_verification_only_after_password_proof(setup):
+def test_legacy_pending_account_resumes_verification_only_after_password_proof(setup):
     client,repo=setup
-    body,verify,_=pending_account(client)
+    legacy, body, _ = legacy_reservation(client, repo)
     bad,_=complete(client,begin(client,'login'),email=body['email'],password='Incorrect passphrase')
     assert bad.status_code==401
     recovered,_=complete(client,begin(client,'login'),email=body['email'],password=PASSWORD)
     assert recovered.status_code==200
     assert recovered.json()['email_verified']
+    assert recovered.json()['id'] == legacy['id']
     assert repo.accounts.count_documents({})==1
+
+
+@pytest.mark.parametrize('ending', ['cancelled', 'superseded', 'expired'])
+def test_unverified_candidates_expire_or_cancel_without_reserving_identity(setup, ending):
+    client, repo = setup
+    body, proof, _ = pending_account(client)
+    if ending == 'cancelled':
+        client.post(BASE + '/auth/attempts/cancel', json={key: body[key] for key in ('flow_id', 'attempt_id')})
+    elif ending == 'superseded':
+        begin(client, flow=body['flow_id'], generation=2)
+    else:
+        repo.flows.update_one({'_id': digest(body['flow_id'])}, {'$set': {'attempt_expires_at': now() - timedelta(seconds=1)}})
+    assert client.post(BASE + '/auth/verify-email', json=proof).status_code == 409
+    assert repo.accounts.count_documents({}) == 0
+    _, fresh_proof, _ = pending_account(client, email=body['email'])
+    assert client.post(BASE + '/auth/verify-email', json=fresh_proof).status_code == 200
+
+
+def test_pending_registration_retries_keep_one_candidate_and_cannot_change_credentials(setup):
+    client, repo = setup
+    body, proof, receipt = pending_account(client)
+    flow = repo.flows.find_one({'_id': digest(body['flow_id'])})
+    assert client.post(BASE + '/auth/complete', json=body).json() == receipt
+    changed = client.post(BASE + '/auth/complete', json={**body, 'password': 'Another synthetic passphrase'})
+    assert changed.status_code == 409
+    assert repo.flows.find_one({'_id': flow['_id']})['registration_candidate'] == flow['registration_candidate']
+    assert repo.accounts.count_documents({}) == 0
+    login, _ = complete(client, begin(client, 'login'), email=body['email'])
+    assert login.status_code == 401
+    assert client.post(BASE + '/auth/verify-email', json=proof).status_code == 200
+
+
+def test_two_proved_registrations_cannot_adopt_each_others_account(setup):
+    client, repo = setup
+    first, first_proof, _ = pending_account(client, email='concurrent@example.test')
+    second, second_proof, _ = pending_account(client, email=first['email'], password='Another synthetic passphrase')
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(lambda proof: client.post(BASE + '/auth/verify-email', json=proof), [first_proof, second_proof]))
+    assert sorted(response.status_code for response in responses) == [200, 409]
+    winner = next(response.json()['id'] for response in responses if response.status_code == 200)
+    loser_body, loser_proof = (first, first_proof) if responses[0].status_code == 409 else (second, second_proof)
+    assert client.post(BASE + '/auth/verify-email', json=loser_proof).status_code == 409
+    assert client.post(BASE + '/auth/complete', json=loser_body).status_code == 409
+    assert repo.accounts.find_one({})['id'] == winner
+    assert repo.accounts.count_documents({}) == repo.sessions.count_documents({}) == 1
+
+
+def test_committed_signup_with_lost_insert_response_recovers_only_its_original_proof(setup):
+    client, repo = setup
+    body, proof, _ = pending_account(client)
+    insert = repo.accounts.insert_one
+    def commit_then_fail(document):
+        insert(document)
+        raise AutoReconnect('Synthetic response lost after account insert')
+    with patch.object(repo.accounts, 'insert_one', side_effect=commit_then_fail):
+        assert client.post(BASE + '/auth/verify-email', json=proof).status_code == 503
+    assert repo.accounts.count_documents({}) == 1
+    assert repo.sessions.count_documents({}) == 0
+    wrong = '000000' if proof['code'] != '000000' else '111111'
+    assert client.post(BASE + '/auth/verify-email', json={**proof, 'code': wrong}).status_code == 400
+    recovered = client.post(BASE + '/auth/verify-email', json=proof)
+    assert recovered.status_code == 200
+    assert client.post(BASE + '/auth/complete', json=body).json() == recovered.json()
+    assert repo.accounts.count_documents({}) == repo.sessions.count_documents({}) == 1
+
+
+def test_legacy_reservation_reclaim_uses_new_owner_and_invalidates_old_otp(setup):
+    client, repo = setup
+    legacy, old_body, old_proof = legacy_reservation(client, repo)
+    body, proof, _ = pending_account(client, email=old_body['email'], password='Rightful new synthetic passphrase')
+    assert repo.accounts.find_one({})['id'] == legacy['id']
+    verified = client.post(BASE + '/auth/verify-email', json=proof)
+    assert verified.status_code == 200, verified.text
+    account = repo.accounts.find_one({})
+    assert account['id'] != legacy['id'] and account['owner'] != legacy['owner']
+    assert repo.accounts.count_documents({}) == 1
+    assert client.post(BASE + '/auth/verify-email', json=old_proof).status_code == 409
+    assert client.post(BASE + '/auth/complete', json=old_body).status_code == 409
+    assert client.get(BASE, headers={'Authorization': 'Bearer ' + body['session_token']}).json()['version'] == 0
+    rejected, _ = complete(client, begin(client, 'login'), email=body['email'], password=old_body['password'])
+    assert rejected.status_code == 401
+    accepted, _ = complete(client, begin(client, 'login'), email=body['email'], password=body['password'])
+    assert accepted.status_code == 200 and accepted.json()['id'] == account['id']
+
+
+@pytest.mark.parametrize('protection', ['profile_versions', 'profile_mutations', 'capability_mutations',
+                                      'session', 'declarations', 'migration', 'verified_history', 'unknown_metadata',
+                                      'malformed_legacy'])
+def test_legacy_reclaim_preserves_saved_data_and_protected_records(setup, protection):
+    client, repo = setup
+    legacy, old_body, _ = legacy_reservation(client, repo)
+    _, proof, _ = pending_account(client, email=old_body['email'])
+    database = repo.accounts.database
+    if protection in ('profile_versions', 'profile_mutations'):
+        database[protection].insert_one({'owner': legacy['owner'], 'version': 1, 'mutation_id': 'synthetic'})
+    elif protection == 'capability_mutations':
+        database.capability_mutations.insert_one({'user_id': legacy['id'], 'mutation_id': 'synthetic'})
+    elif protection == 'session':
+        repo.sessions.insert_one({'account_id': legacy['id'], 'revoked': True})
+    else:
+        changes = {'declarations': {'capability_declarations': [{'id': 'synthetic', 'statement': 'Preserve me'}]},
+                   'migration': {'migration_pending': True}, 'verified_history': {'email_verified_at': now()},
+                   'unknown_metadata': {'legacy_import': True}, 'malformed_legacy': {'email': None}}[protection]
+        repo.accounts.update_one({'id': legacy['id']}, {'$set': changes})
+    before = repo.accounts.find_one({'id': legacy['id']})
+    assert client.post(BASE + '/auth/verify-email', json=proof).status_code == 409
+    assert repo.accounts.find_one({'id': legacy['id']}) == before
+    assert repo.accounts.count_documents({}) == 1
+    response, _ = complete(client, begin(client), email=old_body['email'])
+    assert response.status_code == 409
+
+
+def test_legacy_replacement_rechecks_record_at_atomic_write(setup):
+    client, repo = setup
+    legacy, body, _ = legacy_reservation(client, repo)
+    _, proof, _ = pending_account(client, email=body['email'])
+    replace = repo.accounts.find_one_and_replace
+    def verification_wins(query, document, **kwargs):
+        repo.accounts.update_one({'id': legacy['id']}, {'$set': {'email_verified': True, 'email_verified_at': now()}})
+        return replace(query, document, **kwargs)
+    with patch.object(repo.accounts, 'find_one_and_replace', side_effect=verification_wins):
+        assert client.post(BASE + '/auth/verify-email', json=proof).status_code == 409
+    assert repo.accounts.find_one({})['id'] == legacy['id']
+    assert repo.accounts.count_documents({}) == 1
+
+
+def test_lost_legacy_replacement_response_replays_its_fresh_identity(setup):
+    client, repo = setup
+    legacy, body, old_proof = legacy_reservation(client, repo)
+    _, proof, _ = pending_account(client, email=body['email'])
+    replace = repo.accounts.find_one_and_replace
+    def commit_then_fail(*args, **kwargs):
+        replace(*args, **kwargs)
+        raise AutoReconnect('Synthetic response lost after reservation replacement')
+    with patch.object(repo.accounts, 'find_one_and_replace', side_effect=commit_then_fail):
+        assert client.post(BASE + '/auth/verify-email', json=proof).status_code == 503
+    current = repo.accounts.find_one({})
+    assert current['id'] != legacy['id']
+    assert client.post(BASE + '/auth/verify-email', json=old_proof).status_code == 409
+    result = client.post(BASE + '/auth/verify-email', json=proof)
+    assert result.status_code == 200 and result.json()['id'] == current['id']
+    assert repo.accounts.count_documents({}) == repo.sessions.count_documents({}) == 1
+
+
+def test_unverified_google_reservation_requires_its_subject_login_and_is_not_reclaimed(setup):
+    client, repo = setup
+    google(client)
+    attempt = begin(client)
+    access = {key: attempt[key] for key in ('flow_id', 'attempt_id')}
+    access['session_token'] = token_urlsafe(32)
+    with patch('app.core.auth.id_token.verify_oauth2_token', return_value=claims(attempt)):
+        pending = client.post(BASE + '/auth/complete', json={**access, 'credential': 'verified'})
+    assert pending.status_code == 200
+    flow = repo.flows.find_one({'_id': digest(attempt['flow_id'])})
+    legacy = flow['registration_candidate']
+    repo.accounts.insert_one(legacy)
+    repo.flows.update_one({'_id': flow['_id']}, {'$unset': {'registration_candidate': '', 'registration_replaces': ''}})
+    new_attempt = begin(client)
+    with patch('app.core.auth.id_token.verify_oauth2_token', return_value=claims(new_attempt)):
+        rejected, _ = complete(client, new_attempt, credential='verified')
+    assert rejected.status_code == 409
+    assert repo.accounts.find_one({})['id'] == legacy['id']
+    login = begin(client, 'login')
+    with patch('app.core.auth.id_token.verify_oauth2_token', return_value=claims(login)):
+        recovered, _ = complete(client, login, credential='verified')
+    assert recovered.status_code == 200 and recovered.json()['id'] == legacy['id']
+    assert repo.accounts.count_documents({}) == 1
 
 
 def finish_setup(client,headers,version=0,key=None,**changes):
