@@ -560,3 +560,9 @@ it('waits for a published report to finish without offering to restart research'
   expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/retry')).toBe(false);
  }finally{view?.unmount();vi.useRealTimers();}
 });
+
+it('keeps recovery available for a saved legacy goal without any research report',async()=>{
+ active={...active,research_id:null};mount();
+ await screen.findByRole('button',{name:'Resume research'});
+ expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
+});
