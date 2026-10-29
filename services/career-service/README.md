@@ -10,14 +10,19 @@ Pasted text stays in browser memory until explicitly submitted for extraction. `
 
 - `GET /api/v1/career/workspace` returns one owner-scoped saved workspace; `/workspace/progress` supports lightweight polling.
 - `POST /api/v1/career/workspace/jd` starts or reconnects to versioned JD intake. A validated identity overlaps full extraction with public-only retrieval. Successful extraction saves the goal; combined chat output waits for extraction and research to complete.
+- `POST /api/v1/career/workspace/summary` generates a concise Gemini overview from the saved goal and finished revision-linked research, including partial reports with explicit limitations. It supports the same owner-scoped background operations and snapshot retries.
 - `POST /api/v1/career/workspace/messages` asks scoped questions or refines the current goal. Ambiguous edits retain a private pending question; valid edits save with owner/version checks and retry receipts.
 - `/api/v1/career/goals` and `/goals/current` expose canonical structured history/current state. Goals edit in place with versions. A replacement becomes current only after validated saving.
 
 Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
 
+After extraction and research finish, chat automatically loads the saved report and presents a concise overview as short, single-idea bullets, ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Saved goal cards are available immediately after extraction, while the composer waits for the combined response.
+
 Goal summaries use bounded corrections for invalid model output, with at most six
-repairs. Verified citation formatting is normalized locally; unknown sources and
-forged destinations still fail. Each finding requires a supporting citation.
+repairs. Gemini returns plain-text blocks with backend-assigned fact references; Python
+escapes model text and attaches only saved source links beside each point. Unknown fact
+references fail validation. Follow-up answers resolve inline fact references to saved
+links beside their claims; unapproved URLs fail validation.
 Rejected model text is not retained. Failed AI operation responses include
 `operation_id` and fixed issue codes under `diagnostic.violations`; the ID also
 appears in the initial 202 response, polling URL and content-free failure logs.
@@ -44,7 +49,7 @@ Career's CV transport/projection intake is bounded at **512 KiB**, separately fr
 
 ## Discovery and public research — J08 / J10 / J12 / J13
 
-`/api/v1/career/discoveries` provides conversational direction setting, explicit area approval and researched requirement review without requiring a CV. It publishes through the same canonical goal store. See [CAREER_DISCOVERY.md](CAREER_DISCOVERY.md) for exact session/message/research routes and models.
+`/api/v1/career/discoveries` provides conversational direction setting without requiring a CV. A clear direction automatically starts research; ambiguous directions receive a focused question. Bounded conversation context supports follow-up chat during research. Reviewed requirements still need explicit confirmation before publication through the same canonical goal store. See [CAREER_DISCOVERY.md](CAREER_DISCOVERY.md) for exact session/message/research routes and models.
 
 `GET` / `POST /api/v1/career/goals/{id}/opportunity-research` read/start/reuse/refresh owner-linked public research, with independently saved category outcomes. Interviews, internship experience, career progression/conversion salary, historical conversion rates and culture retain citations, uncertainty and missing fields. Progress is compact and evidence loads on demand. See [OPPORTUNITY_INTELLIGENCE.md](OPPORTUNITY_INTELLIGENCE.md) and [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md) for graph, models, bounded Gemini/Brave retrieval and version/quota recovery.
 

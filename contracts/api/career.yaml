@@ -2646,6 +2646,31 @@
         ],
         "title": "Chat"
       },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 12000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage"
+      },
       "ConfirmCvGoal": {
         "properties": {
           "expected_goal_id": {
@@ -2676,6 +2701,53 @@
           "mutation_id"
         ],
         "title": "ConfirmCvGoal"
+      },
+      "ConversationMemory": {
+        "properties": {
+          "interests": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Interests"
+          },
+          "preferences": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Preferences"
+          },
+          "rejected_directions": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Rejected Directions"
+          },
+          "open_questions": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Open Questions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ConversationMemory"
       },
       "CurrentCareerGoal": {
         "properties": {
@@ -2973,7 +3045,9 @@
               "ASK_CLARIFICATION",
               "SUGGEST_ROLES",
               "CONFIRM_AREA",
-              "START_RESEARCH"
+              "START_RESEARCH",
+              "ANSWER",
+              "REFINE_SKILLS"
             ],
             "title": "Action"
           },
@@ -3005,7 +3079,7 @@
               "$ref": "#/components/schemas/Suggestion"
             },
             "type": "array",
-            "maxItems": 3,
+            "maxItems": 5,
             "title": "Recommendations"
           },
           "reply": {
@@ -3013,6 +3087,39 @@
             "maxLength": 600,
             "minLength": 1,
             "title": "Reply"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ConversationMemory"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Source Ids"
+          },
+          "excluded_skills": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Excluded Skills"
+          },
+          "requested_skills": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Requested Skills"
           }
         },
         "additionalProperties": false,
@@ -3192,6 +3299,24 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Decision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "title": "Messages"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketSummary"
               },
               {
                 "type": "null"
@@ -4005,6 +4130,55 @@
           "text"
         ],
         "title": "JDSource"
+      },
+      "MarketSummary": {
+        "properties": {
+          "responsibility_refs": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Responsibility Refs"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendedSkill"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Skills"
+          },
+          "specialisations": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Specialisations"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "responsibility_refs"
+        ],
+        "title": "MarketSummary"
       },
       "Message": {
         "properties": {
@@ -4944,6 +5118,57 @@
           "url"
         ],
         "title": "PublicSource"
+      },
+      "RecommendedSkill": {
+        "properties": {
+          "skill_refs": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Skill Refs"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "requirement_type": {
+            "type": "string",
+            "enum": [
+              "core",
+              "specialisation",
+              "optional"
+            ],
+            "title": "Requirement Type"
+          },
+          "relevance": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Relevance"
+          },
+          "learning_priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Learning Priority"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "requirement_type",
+          "relevance",
+          "learning_priority"
+        ],
+        "title": "RecommendedSkill"
       },
       "ResearchCommand": {
         "properties": {

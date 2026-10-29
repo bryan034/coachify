@@ -90,3 +90,35 @@ it('explains career-only scope without exposing provider diagnostics',()=>{
  expect(screen.getByRole('alert')).toHaveTextContent('Please provide a job description');
  expect(screen.queryByText(/PRIVATE/)).toBeNull();
 });
+
+it('renders each summary citation beside its own point, preserving saved URL parentheses',()=>{
+ const {container}=render(<AgentMarkdown>{'## Your career goal\n\n- An Analyst internship. [Source](<https://example.test/jobs_(internship)>)\n\n- SQL \\[required\\]. [Source](<https://skills.test/SQL_(required)>)\n\n- An interview is reported. [Source](<https://interviews.test/report>)\n\nAsk me anything about this goal set!'}</AgentMarkdown>);
+ const intro=screen.getByText(/An Analyst internship/).closest('li')!;
+ expect(intro.querySelector('a')).toHaveAttribute('href','https://example.test/jobs_(internship)');
+ const points=screen.getAllByRole('listitem');
+ expect(points).toHaveLength(3);
+ expect(points[1]).toHaveTextContent('SQL [required].');
+ expect(points[1].querySelector('a')).toHaveAttribute('href','https://skills.test/SQL_(required)');
+ expect(points[2]).toHaveTextContent('An interview is reported.');
+ expect(points[2].querySelector('a')).toHaveAttribute('href','https://interviews.test/report');
+ expect(container.querySelectorAll('a')).toHaveLength(3);
+ expect(screen.getByText('Ask me anything about this goal set!')).toBeVisible();
+});
+
+it('does not turn escaped model prose into a citation or HTML link',()=>{
+ render(<AgentMarkdown>{'A \\[made-up link\\]\\(https://unapproved.test\\) and \\<https://unapproved.test\\>. [Source](<https://approved.test/report>)'}</AgentMarkdown>);
+ expect(screen.getAllByRole('link')).toHaveLength(1);
+ expect(screen.getByRole('link')).toHaveAttribute('href','https://approved.test/report');
+});
+
+it('shows source links inside the interview stage instead of internal fact markers',()=>{
+ const reply='1. **Online test**: 50 questions. [Source](<https://reports.test/interview_(online)>)\n2. **Supervisor interview**: a short interview. [Source](<https://candidates.test/report>)';
+ const {container}=render(<AgentMarkdown>{reply}</AgentMarkdown>);
+ const stages=screen.getAllByRole('listitem');
+ expect(stages).toHaveLength(2);
+ expect(stages[0]).toHaveTextContent('Online test: 50 questions.');
+ expect(stages[0].querySelector('a')).toHaveAttribute('href','https://reports.test/interview_(online)');
+ expect(stages[1].querySelector('a')).toHaveAttribute('href','https://candidates.test/report');
+ expect(container).not.toHaveTextContent(/\[f\d/);
+ expect(container).not.toHaveTextContent('Sources:');
+});

@@ -47,14 +47,8 @@ async def focused_chat(request,account,row,body):
         facts,links,truncated=facts_for(chosen,goal,research,include_evidence)
         return {**state,'facts':facts,'links':links,'partial':truncated}
     def finish(reply,refs,links):
-        sources={v['source_id']:v for ref in refs for v in links.get(ref,[])}
-        if sources:
-            # URLs come from stored validated sources, never model output.
-            for i,v in enumerate(sources.values(),1):
-                citation=f'[Source {i}]({v["url"]})'
-                if len(reply)+len(citation)+12>4000:break
-                reply+=('\n\nSources: ' if i==1 else ' · ')+citation
-        return JDReply(reply=reply,proposed_skills=None)
+        from app.workflows.citations import fact_citations
+        return JDReply(reply=fact_citations(reply,refs,links),proposed_skills=None)
     async def answer(state):
         chosen=state['route']
         if chosen.topic=='edit':return {'result':None}

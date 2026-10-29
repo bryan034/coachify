@@ -317,14 +317,11 @@ h2,h3{font-family:var(--font-heading);letter-spacing:-.02em}
 .career-discovery-page .card>.card{padding:20px;display:grid;gap:12px}
 .career-discovery-page .row{flex-wrap:wrap;align-items:stretch}
 .career-discovery-page .row>.btn{flex:1 1 180px;min-width:0;max-width:100%;height:auto;min-height:44px;padding:12px 16px;white-space:normal;line-height:1.5}
-.career-discovery-page label{display:block;font-size:13px;font-weight:500;line-height:1.6}
-.career-discovery-page label:has(input[type=checkbox]){display:flex;align-items:flex-start;gap:10px;font-weight:400}
-.career-discovery-page input[type=checkbox]{flex-shrink:0;margin-top:4px}
-.career-discovery-page input:not([type=checkbox]),.career-discovery-page textarea{display:block;width:100%;min-width:0;border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;color:inherit;background:var(--side);line-height:1.6}
-.career-discovery-page textarea{min-height:100px;resize:vertical}
-.career-discovery-page .agent-composer{display:grid;gap:14px;padding:20px 0 0}
-.career-discovery-page .agent-composer>.btn{justify-self:start}
-.career-discovery-page .agent-message{max-width:100%;margin-bottom:0}
+.career-discovery-page>.card label{display:block;font-size:13px;font-weight:500;line-height:1.6}
+.career-discovery-page>.card label:has(input[type=checkbox]){display:flex;align-items:flex-start;gap:10px;font-weight:400}
+.career-discovery-page>.card input[type=checkbox]{flex-shrink:0;margin-top:4px}
+.career-discovery-page>.card input:not([type=checkbox]),.career-discovery-page>.card textarea{display:block;width:100%;min-width:0;border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;color:inherit;background:var(--side);line-height:1.6}
+.career-discovery-page>.card textarea{min-height:100px;resize:vertical}
 .career-discovery-page ul{padding-left:20px}
 .career-discovery-page li{margin:8px 0;overflow-wrap:anywhere}
 .career-discovery-page blockquote{margin:10px 0;padding-left:12px;border-left:2px solid var(--line);font-size:13px;color:var(--mute)}

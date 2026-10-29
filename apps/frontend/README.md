@@ -15,8 +15,8 @@ webfont files and is not bundled.
 |---|---|
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
-| `/career-goal` | Saved goal overview with category cards, research progress, guided refinement and CV assessment handoff; new accounts see JD inputs/exploration |
-| `/career-goal/discovery` | Goal-setting conversation, explicit area approval, researched requirement cards and reviewed shared-goal confirmation |
+| `/career-goal` | Saved career briefing with expandable learning focus, starting-point sidebar, collapsible role/research context, guided refinement and CV handoff; new accounts see JD inputs/exploration |
+| `/career-goal/discovery` | Chat with bounded memory, automatic concurrent research, cited skill recommendations and explicit shared-goal confirmation |
 | `/career-goal?new=1` | Replace the goal using a new text, URL or document JD; preserve the previous goal until extraction succeeds |
 | `/career-goal/chat` | Saved-goal Q&A or separate career exploration; `?refine=1` opens guided goal refinement |
 | `/onboarding` | P13/P14 full-screen question-by-question setup, ending with Enter Coachify |
@@ -83,8 +83,8 @@ Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
 `src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
 content stays in the account-scoped Career route provider, never browser storage.
 **Extract career goal** starts the LangGraph JD workflow. Validated role/skill/condition
-information immediately becomes the account's latest goal. The browser stays in chat while the saved goal overview is populated. Skills and non-skill requirements are grouped into category cards, with responsibilities and interview preparation kept separate. Research status updates on this page without hiding the extracted goal. **Refine goal** opens guided chat; **Set a new goal** opens fresh JD inputs while preserving the current goal until successful replacement. Brave interview
-the validated JD summary, cited research and follow-up composer open together only after both extraction and research succeed. Progress is visible meanwhile.
+information immediately becomes the account's latest goal. The browser stays in chat while the saved goal overview is populated. Saved skills appear in expandable learning-focus rows; eligibility, responsibilities and cited research are in collapsible context sections. The starting-point sidebar distinguishes available CV skills, a missing CV, saved CVs without available skills, and unavailable status. Its links open the implemented CV workspace without claiming a per-skill assessment. See the [briefing data map and proposed extensions](../../docs/design/career-briefing.md). Research status updates on this page without hiding the extracted goal. **Refine goal** opens guided chat; **Set a new goal** opens fresh JD inputs while preserving the current goal until successful replacement.
+The validated JD summary, cited research and follow-up composer open together only after both extraction and research finish. Progress is visible meanwhile.
 Unavailable sources produce a retry state; no-findings stays explicit. One current
 conversation is loaded from `/api/v1/career/workspace`; there is no session picker. The saved goal overview has a separate explicit confirmation for using the current revision in CV clarification. A new successfully interpreted JD resets that conversation.
 Manual changes happen through guided chat. The agent asks for missing details, then
@@ -95,6 +95,9 @@ The details panel exposes interview topics, stages, assessments, uncertainty and
 source evidence. Ordinary follow-up requests send only session/version, the current
 message and at most one recent exchange; the backend retrieves only the relevant
 saved fields. Independent questions omit that history from model input.
+The extracted-goal chat clears submitted text immediately and keeps the composer
+editable while a reply is pending. Replies preserve the next draft; failures restore
+the submitted message only when no newer draft exists, with retry available separately.
 Recent JD turns are temporary. Reload restores the latest structured goal/research,
 not the original JD or a full chat transcript. Exploration uses its own LangGraph
 path; choosing a suggested direction makes it current, then generates advisory skills
@@ -201,8 +204,16 @@ JD summary and final sourced research summary use word-by-word validated Markdow
 (reduced-motion support and Show full response). The Career Goal button explicitly
 opens populated cards; ordinary questions and refinement become available after the
 combined initial response is ready. The frontend requests `/workspace/summary` after
-extraction and research finish, then renders Gemini's structured Markdown and validated
-citations. Progress is removed once this answer is ready. Summary retries preserve their
+extraction and research finish, then renders a concise Gemini overview of the key
+points with validated citations and the final line “Ask me anything about this goal set!”
+Follow-up fact markers such as `[f1, f3]` also render as source-domain links beside the supported claim.
+The summary uses short bullets throughout, including its role overview, rather than an opening paragraph.
+Each summary point has inline source-domain links generated by the backend from its
+saved-fact references. Plain model text is escaped; URLs and Markdown written by the
+model cannot create citations. Saved URLs containing parentheses remain intact.
+A saved report loading after workspace completion shows a loading state, never a
+spurious Resume research button. Finished partial reports can be summarised with
+coverage limits. Report-read and summary retries do not restart completed research. Progress is removed once this answer is ready. Summary retries preserve their
 operation key. Follow-up questions stay in the same conversation and can initiate public
 Brave research through Gemini's backend context route; their observed steps disappear
 when the cited reply arrives. Public answers do not silently edit the saved goal.
@@ -230,9 +241,15 @@ Opportunity category notices distinguish irrelevant sources, absent facts, valid
 failures and provider failures/timeouts using the backend outcome. Legacy saved
 reports without an outcome retain their existing status messages.
 
-Completed research chat displays every retained Gemini-structured finding verbatim
-with citations. Overview ordering uses stored finding IDs and makes no additional
-model request; frontend rendering does not paraphrase the saved wording.
+The initial chat overview is generated from the saved goal and completed research.
+The backend validates its structured points and attaches the saved source links;
+the frontend renders the returned wording without paraphrasing it. Detailed
+Opportunity Intelligence preserves individual saved findings and their citations.
+
+Explore careers uses the goal-chat layout at `/career-goal/discovery`. Discovery alone
+keeps its owner-scoped transcript on the server, permits chat during automatic research,
+and clears the composer on send without overwriting the next draft. Final goal saving
+still requires explicit review and confirmation. See [Career Discovery](../../services/career-service/CAREER_DISCOVERY.md).
 
 ## Saved conversational CV review
 

@@ -13,7 +13,7 @@ function researchPending(workspace:CareerWorkspace){
  return ['research_pending','researching','waiting_quota'].includes(workspace.phase);
 }
 function responseReady(workspace:CareerWorkspace,research?:OpportunityView){
- return !!workspace.current.goal&&workspace.phase==='ready'&&!!research&&research.career_target_id===workspace.current.goal._id&&research.research_id===workspace.research_id&&research.finished!==false&&research.status==='completed'&&Object.values(research.categories).every(category=>category?.status==='completed'||category?.status==='not_applicable');
+ return !!workspace.current.goal&&['ready','research_failed'].includes(workspace.phase)&&!!research&&research.career_target_id===workspace.current.goal._id&&research.research_id===workspace.research_id&&research.finished!==false&&['completed','partial'].includes(research.status)&&Object.values(research.categories).every(category=>category&&!['pending','running'].includes(category.status));
 }
 function researchSummary(research?:OpportunityView,coverage:CareerWorkspace['coverage']=[]){
  if(!research)return '';
@@ -34,6 +34,7 @@ function researchSummary(research?:OpportunityView,coverage:CareerWorkspace['cov
 export function JobReviewChat(){
  const {token}=useProfile(),session=useCareerSession(),router=useRouter();
  const [research,setResearch]=useState<OpportunityView>();
+ const [researchRetry,setResearchRetry]=useState(0);
  const [summary,setSummary]=useState<{key:string;reply:string}>();
  const [summaryRetry,setSummaryRetry]=useState(0);
  const summaryReceipt=useRef<{body:string;key:string}|null>(null);
@@ -57,11 +58,15 @@ export function JobReviewChat(){
  },[retryAt]);
  const [message,setMessage]=useState(''),[turns,setTurns]=useState<{message:string;reply:string}[]>([]),[details,setDetails]=useState(false);
  const messageReceipt=useRef<{body:string;key:string}|null>(null);
+ const sending=useRef(false);
+ const [failedMessage,setFailedMessage]=useState('');
  const controller=useRef<AbortController|null>(null),key=useRef(session.jdKey||crypto.randomUUID()),revision=useRef(''),source=useRef(session.jd),latest=useRef(session);latest.current=session;
  const refining=useRef(typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('refine')==='1');
  const chatCooldown=!!error&&isTokenLimit(code)&&secondsLeft>0;
  const waitLabel=(operation?.limit_scope||workspace?.limit_scope)==='user'?'Waiting for the AI service to resume':'Waiting for the research service to resume';
  const goal=workspace?.current.goal;const researchReady=!!workspace&&responseReady(workspace,research);
+ const matchingResearch=!!research&&research.career_target_id===goal?._id&&research.research_id===workspace?.research_id;
+ const loadingResearch=!!goal&&!!workspace?.research_id&&(!matchingResearch||research?.finished===false);
  const summaryKey=JSON.stringify([workspace?.session_id,goal?.version,workspace?.research_id]);
  const ready=researchReady&&summary?.key===summaryKey;
  useEffect(()=>{
@@ -78,11 +83,16 @@ export function JobReviewChat(){
  const detailsReady=!!goal&&(researchReady||workspace?.phase==='research_failed'||workspace?.phase==='expired');
  useEffect(()=>{
   if(!token||!goal||!workspace?.research_id)return;const abort=new AbortController();
-  void careerApi<OpportunityView>(`/goals/${goal._id}/opportunity-research?research_id=${workspace.research_id}`,token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted)setResearch(v);}).catch(c=>{if(!abort.signal.aborted)reportError(c,'Could not load research.');});
-  return()=>abort.abort();
- },[token,goal?._id,workspace?.research_id]);
- function receive(value:CareerWorkspace){
-  if(revision.current!==value.session_id){setTurns([]);setMessage('');messageReceipt.current=null;revision.current=value.session_id||'';}
+  let timer:ReturnType<typeof setTimeout>;setError('');setCode('');
+  async function load(){try{
+   const value=await careerApi<OpportunityView>(`/goals/${goal!._id}/opportunity-research?research_id=${workspace!.research_id}`,token!,{signal:abort.signal});
+   if(abort.signal.aborted)return;setResearch(value);
+   if(value.finished===false)timer=setTimeout(()=>void load(),2000);
+  }catch(c){if(!abort.signal.aborted)reportError(c,'Could not load research.');}}
+  void load();return()=>{abort.abort();clearTimeout(timer);};
+ },[token,goal?._id,workspace?.research_id,researchRetry]);
+ function receive(value:CareerWorkspace,preserveDraft=false){
+  if(revision.current!==value.session_id){setTurns([]);if(!preserveDraft)setMessage('');setFailedMessage('');messageReceipt.current=null;revision.current=value.session_id||'';}
   setRetryAt(value.phase==='waiting_quota'?Date.now()+(value.retry_after||60)*1000:null);
   setWorkspace(value);
  }
@@ -105,14 +115,16 @@ export function JobReviewChat(){
  const dirty=useRef(false);dirty.current=!!message;
  useEffect(()=>{const warn=(e:BeforeUnloadEvent)=>{if(dirty.current){e.preventDefault();e.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[]);
  async function retry(){if(!token||busy||secondsLeft>0)return;setBusy(true);setError('');setCode('');try{receive(await careerApi<CareerWorkspace>('/workspace/retry',token,{method:'POST'}));}catch(c){reportError(c,'Retry failed.');}finally{setBusy(false);}}
- async function send(){
-  if(!workspace?.session_id||!goal||!ready||!token||busy||!message.trim()||chatCooldown)return;
-  const input=message.trim(),abort=new AbortController();controller.current=abort;setPendingMessage(input);setBusy(true);setError('');setCode('');
+ async function send(text=message){
+  if(!workspace?.session_id||!goal||!ready||!token||busy||sending.current||!text.trim()||chatCooldown)return;
+  const input=text.trim(),abort=new AbortController();sending.current=true;controller.current=abort;setPendingMessage(input);setBusy(true);setError('');setCode('');setFailedMessage('');
+  // Clear the submitted text immediately; a retry must preserve any newer draft.
+  setMessage(current=>current.trim()===input?'':current);
   const body=JSON.stringify({session_id:workspace.session_id,expected_version:goal.version,message:input,mode:refining.current?'refine':'question',conversation:turns.slice(-1).flatMap(t=>[{role:'user',content:t.message},{role:'assistant',content:t.reply}])});
   if(messageReceipt.current?.body!==body)messageReceipt.current={body,key:crypto.randomUUID()};
   try{const result=await careerOperation<{reply:string;workspace?:CareerWorkspace;edit_status?:string}>('/workspace/messages',token,{method:'POST',signal:abort.signal,headers:{'Idempotency-Key':messageReceipt.current.key},body},operationProgress);
-   if(!abort.signal.aborted){if(result.workspace)receive(result.workspace);setTurns(p=>[...p,{message:input,reply:result.reply}].slice(-30));setMessage('');setRetryAt(null);messageReceipt.current=null;}}
-  catch(c){if(!abort.signal.aborted)reportError(c,'Could not answer. Your message is retained.');}finally{if(!abort.signal.aborted){setBusy(false);setPendingMessage(null);setOperation(null);}}
+   if(!abort.signal.aborted){if(result.workspace)receive(result.workspace,true);setTurns(p=>[...p,{message:input,reply:result.reply}].slice(-30));setRetryAt(null);messageReceipt.current=null;}}
+  catch(c){if(!abort.signal.aborted){setFailedMessage(input);setMessage(current=>current||input);reportError(c,'Could not answer. Your message is retained.');}}finally{sending.current=false;if(!abort.signal.aborted){setBusy(false);setPendingMessage(null);setOperation(null);}}
  }
  return <section className="page on career-agent-page">
   <header className="agent-page-header"><div><p className="small">Your direction, one conversation</p><h1>Career Goal</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>{if(!dirty.current||window.confirm('Leave and discard unsent edits? Your saved goal stays current.'))router.push('/career-goal');}}>← Career Goal</button></header>
@@ -127,21 +139,21 @@ export function JobReviewChat(){
     {!ready&&<AgentProgress steps={[...extractionSteps,...(operation?.activities||[]),...(workspace?.activities||[])]}/>}
     <div className="agent-message assistant" key="initial-answer"><span className="agent-message-label">Coachify</span>
      {ready&&<AgentReply onProgress={followReply}>{refining.current?'What would you like to refine in your career goal? We can work through your role, location, skills, qualifications or responsibilities. Tell me what feels different, and I’ll ask for any details needed before saving the update.':summary!.reply}</AgentReply>}{<>
-      {(!workspace||researchPending(workspace)||researchReady&&!ready)&&!error&&<AgentActivity
-       label={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':researchReady&&!ready?'Preparing your career-goal summary…':workspace?.phase==='researching'||workspace?.phase==='research_pending'?'Researching interview expectations…':source.current?'Extracting your career goal…':'Opening your career goal…'}
+      {(!workspace||researchPending(workspace)||loadingResearch||researchReady&&!ready)&&!error&&<AgentActivity
+       label={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':loadingResearch?'Loading your saved research…':researchReady&&!ready?'Preparing your career-goal summary…':workspace?.phase==='researching'||workspace?.phase==='research_pending'?'Researching interview expectations…':source.current?'Extracting your career goal…':'Opening your career goal…'}
        detail={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?(secondsLeft>0?`Resuming in ${secondsLeft} seconds.`:'Retrying research…'):workspace?.current.goal?'Your goal is saved. I’m finishing the research so I can present both results together.':undefined}/>}
-      {workspace?.error&&(workspace.phase==='waiting_quota'||isTokenLimit(workspace.error_code))&&<p role="alert" className="small">{workspace.phase==='waiting_quota'?'Research is waiting for the service quota to reset. Your career goal remains saved.':workspace.error}</p>}
-      {workspace&&(['research_failed','expired'].includes(workspace.phase)||workspace.phase==='ready'&&!researchReady&&!researchPending(workspace))&&<button className="btn pri" disabled={busy} onClick={()=>void retry()}>Resume research</button>}
+      {!researchReady&&workspace?.error&&(workspace.phase==='waiting_quota'||isTokenLimit(workspace.error_code))&&<p role="alert" className="small">{workspace.phase==='waiting_quota'?'Research is waiting for the service quota to reset. Your career goal remains saved.':workspace.error}</p>}
+      {workspace&&!researchReady&&!loadingResearch&&(['research_failed','expired'].includes(workspace.phase)||workspace.phase==='ready'&&(!workspace.research_id||matchingResearch&&research?.finished!==false&&research?.status==='failed'))&&<button className="btn pri" disabled={busy} onClick={()=>void retry()}>Resume research</button>}
      </>}
     </div>
     {ready&&workspace?.edit_question&&!turns.length&&!pendingMessage&&<div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentReply onProgress={followReply}>{workspace.edit_question}</AgentReply></div>}
     {turns.map((turn,i)=><div className="agent-exchange" key={i}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.message}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentReply animate={i===turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div></div>)}
     {pendingMessage&&<div className="agent-exchange"><div className="agent-message user"><span className="agent-message-label">You</span><p>{pendingMessage}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentProgress steps={operation?.activities||[]}/><AgentActivity label={operation?.status==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':'Preparing your answer…'} detail={operation?.status==='waiting_quota'?`Resuming automatically in ${secondsLeft} seconds.`:'Using your career goal and saved interview research.'}/></div></div>}
-    {ready&&<p className="small">Want to change your career goal? Tell the agent what to update. Clear requests are saved automatically.</p>}
-    {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||chatCooldown} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(ready&&message.trim())void send();else if(researchReady&&!ready)setSummaryRetry(v=>v+1);else void retry();}}/>}
+    {error&&failedMessage&&message!==failedMessage&&<p className="small">Message awaiting retry: {failedMessage}</p>}
+    {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||chatCooldown} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(ready&&failedMessage)void send(failedMessage);else if(ready&&message.trim())void send();else if(researchReady&&!ready)setSummaryRetry(v=>v+1);else if(loadingResearch)setResearchRetry(v=>v+1);else void retry();}}/>}
    </div>
    <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
-   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message Coachify" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} disabled={busy||!ready} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||!ready||!message.trim()||chatCooldown}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
+   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message Coachify" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} disabled={!ready} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||!ready||!message.trim()||chatCooldown}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
   </div>
  </section>;
 }

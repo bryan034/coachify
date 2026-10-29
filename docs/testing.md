@@ -97,7 +97,13 @@ public identifier, when running `npm run test:e2e --workspace apps/frontend`.
 Run Career pytest from `services/career-service` in a separate virtual environment
 (`python -m pip install -e ".[test]"`, then `python -m pytest`). The existing CI
 career matrix job now runs these tests. Do not collect Profile and Career together
-in one Python process because both use an `app` package. Frontend tests cover
+in one Python process because both use an `app` package. The shared Career harness
+clears inherited application database, provider and tracing settings before collection
+and each test; only `MONGODB_TEST_URI` remains an explicit disposable-database opt-in.
+Default HTTPX/Requests transports and the preview socket connector are blocked.
+Tests inject synthetic settings and mock transports after setup; use an already
+populated `TIKTOKEN_CACHE_DIR` because tokenizer downloads are blocked too.
+Frontend tests cover
 three methods, Unicode, failure recovery, method-switch races and temporary state.
 The full-stack Career browser test uses the usual disposable Compose stack and
 Mailpit variables; no live Gemini key or live website is used. Career imports are rate
@@ -187,22 +193,27 @@ Foreground extraction regressions cover reconnecting an identical JD under a new
 key during a 600-second simulated quota wait, replay/ownership checks, safe
 different-input conflicts and chat navigation retaining its request key. A Chromium
 journey leaves/reopens pending extraction and reaches the saved goal without 409s.
-The optional `OPPORTUNITY_LIVE_TEST=1` smoke consumes actual configured public
-provider requests; it is skipped by default. Frontend unit/browser checks cover
+The live Opportunity smoke remains skipped by the shared synthetic harness, which
+clears inherited `OPPORTUNITY_LIVE_TEST` and blocks provider transports. Live-provider
+evaluation needs a separately authorized isolated setup. Frontend unit/browser checks cover
 source/confidence/date transparency, partial status and category-only refresh.
 
-Career Discovery tests cover broad/specific directions, scope confirmation before
-search, owner/version/idempotency boundaries, source quotations, stage mismatch,
+Career Discovery tests cover broad/specific directions, automatic research for a
+clear direction, owner/version/idempotency boundaries, source quotations, stage mismatch,
 deduplicated listing frequencies, limited/no evidence, provider errors, quota recovery,
 immutable refresh evidence, interrupted conversation-commit recovery with payload-bound
 checkpoint replay, and shared goal persistence without a CV. Frontend tests
-cover category review and explicit confirmation using the existing goal endpoint;
+cover category review and explicit final confirmation using the existing goal endpoint;
 `career-discovery.spec.ts` checks the same journey and mobile width in Chromium.
-Provider requests are mocked. The optional live Opportunity test remains opt-in.
+Transcript/context regressions cover reload, duplicate-message replay, bounded memory
+and recent context, messages during research, optional questions, scope changes and
+re-synthesis before stale results can publish. Context-list checks retain the newest
+distinct entries while validating every supplied entry before trimming. Provider
+requests are mocked.
 
 
 Gemini reasoning migration regressions use synthetic settings and HTTP responses:
-all production stages share Gemini 3.5 Flash Lite and ignore unused provider/model/key
+all Career production stages share Gemini 3.5 Flash Lite and ignore unused provider/model/key
 switches. Brave grounding snippets
 pass through the real JSON-schema adapter into every existing research field in all
 five categories; model round-trips, exact citations, invalid aliases and forged
@@ -234,10 +245,11 @@ operation/workspace activity arrays; domain schema artifacts are unchanged.
 
 Gemini rejection regressions cover native invalid-key/model/project/schema/parameter
 errors, malformed bodies, safe API/log diagnostics, no schema-free fallback, and a
-single explicit model override across every role. The Docker-template check reads
-only the public `.env.example`, verifies that every declared key is consumed by the
-active Compose file, and requires example secrets to remain blank. Private environment
-files and live provider credentials are not used.
+single explicit model override across every Career role. The Docker-template check
+uses only the user-approved clean tracked public template in an isolated copy,
+verifies that every declared key is consumed by the active Compose file, and requires
+example secrets to remain blank. This exact-test exception does not permit inspecting
+modified local examples or other environment files. Live provider credentials are not used.
 
 `services/career-service/tests/test_compact_workspace.py` covers canonical goal promotion,
 in-place edits/version conflicts, activation recovery, compact progress/results, lazy
@@ -285,6 +297,23 @@ rejection of forged destinations, per-finding citation coverage, summary-only bo
 repairs, discarded-response privacy, owner-scoped failed-operation diagnostics and
 operation IDs. Frontend API coverage checks that error objects retain operation IDs.
 These checks use synthetic responses; they do not establish live-provider quality.
+
+Chat completion regressions cover delayed saved-report reads, automatic summary startup,
+finished partial coverage, report-read retry without paid research, concise selection of
+saved key points, and the exact final invitation appearing once. Backend tests also
+verify pending categories remain blocked and summary context omits repeated quotations.
+
+Structured summary coverage checks per-point fact references, unknown-reference rejection,
+job-description/requirement citation registration, inline placement and deduplication,
+plain-prose escaping, and the real adapter's JSON/schema boundary. Follow-up regressions
+include balanced-parenthesis URLs, angle destinations and forged destinations. Frontend
+Markdown tests verify that links sit in the paragraph/list item they support and that
+escaped model links do not become active citations.
+
+`test_followup_citations.py` verifies grouped fact markers become inline verified links,
+unknown/undeclared references are rejected, source URLs deduplicate within a claim,
+fresh-search references resolve, and expanded answers respect the reply limit. The
+frontend interview-list regression checks the links are inside their supported stage.
 
 ## Saved CV checks
 

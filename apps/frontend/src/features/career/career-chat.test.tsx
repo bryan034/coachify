@@ -29,7 +29,7 @@ beforeEach(()=>{
     ...g.responsibilities||[], '### Skills for this role', ...g.skills.map(v=>`- **${v.name}** — ${v.priority}`),
     reach?`${reach.useful_sources||0} distinct sources. ${(reach.useful_sources||0)<(reach.target_sources||3)?'Findings remain limited.':''}`:'',
     ...Object.entries(research.categories).flatMap(([key,c])=>['### '+labels[key as keyof typeof labels],...(c?.findings||[]).map(f=>f.value+' '+(research.sources||[]).filter(v=>f.source_ids.includes(v.source_id)).map(v=>`[Source](${v.url})`).join(' '))]),
-    'What would you like clarified or researched next?',
+    'Ask me anything about this goal set!',
    ].filter(Boolean).join('\n\n')} as never;
   }
   if(path==='/workspace/messages'){
@@ -492,4 +492,117 @@ it('removes focused research progress when the cited follow-up answer arrives',a
   expect(screen.queryByRole('status',{name:'Career goal progress'})).toBeNull();
   expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
  }finally{vi.useRealTimers();}
+});
+
+it('loads saved research before automatically summarising without flashing Resume research',async()=>{
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ let complete:()=>void=()=>{};
+ api.mockImplementation(async(path,token,options)=>{
+  if(path.includes('/opportunity-research'))await new Promise<void>(resolve=>{complete=resolve;});
+  return original(path,token,options);
+ });
+ mount();await screen.findByText('Loading your saved research…');
+ expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
+ expect(api.mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
+ await act(async()=>complete());
+ await screen.findByText('Ask me anything about this goal set!');
+ expect(api.mock.calls.filter(([path])=>path==='/workspace/summary')).toHaveLength(1);
+ expect(api.mock.calls.some(([path])=>path==='/workspace/retry')).toBe(false);
+ expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
+ expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+});
+
+it('summarises saved results when research finished with partial coverage',async()=>{
+ active={...active,phase:'research_failed',error:'Some categories could not finish.',error_code:'research_unavailable'};
+ research={...research,status:'partial',finished:true,categories:{...research.categories,company_intelligence:{...research.categories.interview_intelligence!,status:'failed',findings:[],error_code:'source_timeout'}}};
+ await chat();
+ expect(screen.getByRole('log')).toHaveTextContent('Technical interview');
+ expect(screen.getByRole('log')).toHaveTextContent('Ask me anything about this goal set!');
+ expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
+ expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/retry')).toBe(false);
+});
+
+it('retries loading a saved report without restarting completed research',async()=>{
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;let fail=true;
+ api.mockImplementation(async(path,token,options)=>{
+  if(path.includes('/opportunity-research')&&fail)throw new Error('Synthetic report read failure');
+  return original(path,token,options);
+ });
+ mount();await screen.findByRole('button',{name:'Retry'});
+ expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
+ fail=false;fireEvent.click(screen.getByRole('button',{name:'Retry'}));
+ await screen.findByText('Ask me anything about this goal set!');
+ expect(api.mock.calls.some(([path])=>path==='/workspace/retry')).toBe(false);
+});
+
+it('shows the generated key points rather than requiring all findings in the chat overview',async()=>{
+ research.categories.interview_intelligence!.findings.push({...research.categories.interview_intelligence!.findings[0],finding_id:'f0000000000000002',value:'A lower-priority saved detail.'});
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation(async(path,token,options)=>path==='/workspace/summary'?{reply:'## Your career goal\n\nFocus on Python and prepare for a technical interview.\n\nAsk me anything about this goal set!'} as never:original(path,token,options));
+ mount();await screen.findByText('Ask me anything about this goal set!');
+ expect(screen.getByRole('log')).not.toHaveTextContent('A lower-priority saved detail.');
+ fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
+ expect(screen.getByText(/A lower-priority saved detail/)).toBeVisible();
+});
+
+it('waits for a published report to finish without offering to restart research',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  research={...research,finished:false,status:'running'};
+  await act(async()=>{view=mount();});
+  expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
+  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
+  research=report();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Ask me anything about this goal set!');
+  expect(vi.mocked(careerApi).mock.calls.filter(([path])=>path==='/workspace/summary')).toHaveLength(1);
+  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/retry')).toBe(false);
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+
+it('keeps recovery available for a saved legacy goal without any research report',async()=>{
+ active={...active,research_id:null};mount();
+ await screen.findByRole('button',{name:'Resume research'});
+ expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
+});
+
+it('clears extracted-goal messages immediately and keeps the next draft after a reply',async()=>{
+ await chat();
+ let resolve!:(value:never)=>void;
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation((path,token,options)=>path==='/workspace/messages'?new Promise(done=>{resolve=done;}):original(path,token,options));
+ const box=screen.getByRole('textbox',{name:'Message Coachify'});
+ fireEvent.change(box,{target:{value:'Explain SQL'}});
+ fireEvent.keyDown(box,{key:'Enter'});
+ expect(box).toHaveValue('');expect(box).toBeEnabled();
+ expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+ expect(screen.getByRole('log')).toHaveTextContent('Explain SQL');
+ fireEvent.change(box,{target:{value:'What about Python?'}});
+ await act(async()=>resolve({reply:'SQL is used for database queries.'} as never));
+ expect(box).toHaveValue('What about Python?');
+ expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled();
+});
+
+it('retries a failed extracted-goal message without replacing the next draft',async()=>{
+ await chat();
+ let reject!:(error:Error)=>void;
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation((path,token,options)=>path==='/workspace/messages'?new Promise((_done,no)=>{reject=no;}):original(path,token,options));
+ const box=screen.getByRole('textbox',{name:'Message Coachify'});
+ fireEvent.change(box,{target:{value:'Explain SQL'}});
+ fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+ expect(box).toHaveValue('');
+ fireEvent.change(box,{target:{value:'My next question'}});
+ await act(async()=>reject(new Error('Synthetic connection failure')));
+ expect(box).toHaveValue('My next question');
+ expect(screen.getByText('Message awaiting retry: Explain SQL')).toBeInTheDocument();
+ api.mockImplementation(original);
+ fireEvent.click(screen.getByRole('button',{name:'Retry'}));
+ await screen.findByText('Practise Python for the reported coding exercise.');
+ expect(box).toHaveValue('My next question');
+ const calls=api.mock.calls.filter(([path])=>path==='/workspace/messages');
+ expect(calls).toHaveLength(2);
+ expect(calls[1][2]?.body).toEqual(calls[0][2]?.body);
+ expect(calls[1][2]?.headers).toEqual(calls[0][2]?.headers);
 });
