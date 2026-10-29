@@ -12,11 +12,17 @@ const workspace:CareerWorkspace={session_id:'session',revision:1,kind:'jd',phase
 
 function overview(value=workspace){return render(<CareerSessionProvider><CareerGoalOverview workspace={value} onReload={vi.fn()}/></CareerSessionProvider>);}
 beforeEach(()=>{vi.resetAllMocks();params.forEach((_,key)=>params.delete(key));vi.mocked(careerApi).mockImplementation(async(path)=>path==='/workspace'?workspace as never:{status:'no_cv',cv_uploaded:false,skills_evaluated:false} as never);});
-it('shows every saved item in its own category card and offers guided refinement and replacement',async()=>{
+it('shows saved skills in briefing accordions and keeps refinement and replacement',async()=>{
  overview();expect(screen.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
- expect(screen.getByRole('heading',{name:'Technical skills'}).closest('article')).toHaveTextContent('SQL');
- expect(screen.getByRole('heading',{name:'Transferable skills'}).closest('article')).toHaveTextContent('Teamwork');
- expect(screen.getByRole('heading',{name:'Qualifications'}).closest('article')).toHaveTextContent('A relevant degree');
+ expect(screen.getByRole('heading',{name:'Your learning focus'})).toBeVisible();
+ expect(screen.getByText('SQL').closest('details')).toHaveAttribute('open');
+ expect(screen.getByText('Teamwork').closest('details')).not.toHaveAttribute('open');
+ fireEvent.click(screen.getByText('Eligibility & commitment'));
+ expect(screen.getByText('A relevant degree')).toBeVisible();
+ expect(screen.getByText('A relevant degree is preferred.')).toBeVisible();
+ expect(screen.getByText('2 saved skills')).toBeVisible();
+ expect(screen.getByText('Required by role')).toBeVisible();
+ expect(screen.getByText('Preferred by role')).toBeVisible();
  expect(screen.getByRole('link',{name:'Refine goal'})).toHaveAttribute('href','/career-goal/chat?refine=1');
  expect(await screen.findByRole('link',{name:/Assess my skills/})).toHaveAttribute('href','/cv');
  fireEvent.click(screen.getByRole('button',{name:/Set a new goal/}));expect(push).toHaveBeenCalledWith('/career-goal?new=1');
@@ -48,4 +54,38 @@ it('new-goal mode keeps the saved goal untouched and opens the input methods',()
  params.set('new','1');render(<CareerSessionProvider><CareerGoalHome/></CareerSessionProvider>);
  expect(screen.getByRole('textbox',{name:'Job description'})).toBeVisible();expect(careerApi).not.toHaveBeenCalled();
  expect(screen.getByRole('link',{name:'← Back to saved goal'})).toHaveAttribute('href','/career-goal');
+});
+
+it('preserves AND/OR, provenance and safe sources without inventing learning guidance',async()=>{
+ const goal={...workspace.current.goal!,skills:[{...extraction.skills[0],group_id:'alternatives',group_operator:'any' as const,context:'Maintain relational data.',evidence:'SQL or another query language.',source_urls:['https://example.test/job','javascript:alert(1)']},{...extraction.skills[1],origin:'generated_guidance' as const,priority:'suggested' as const}]};
+ overview({...workspace,current:{...workspace.current,goal}});
+ expect(screen.getByText('Maintain relational data.')).toBeVisible();
+ expect(screen.getByText('SQL or another query language.')).toBeVisible();
+ expect(screen.getByText(/Alternative requirement/)).toBeVisible();
+ expect(screen.getByRole('link',{name:'example.test ↗'})).toHaveAttribute('href','https://example.test/job');
+ expect(document.querySelector('a[href^="javascript:"]')).toBeNull();
+ fireEvent.click(screen.getByText('Teamwork'));
+ expect(screen.getByText('AI planning suggestion')).toBeVisible();
+ expect(screen.getByText('Suggested guidance')).toBeVisible();
+ expect(screen.queryByText('A way to practise')).not.toBeInTheDocument();
+ await screen.findByRole('link',{name:/Assess my skills/});
+});
+it('keeps empty goal sections explicit and never labels individual skills as assessed',async()=>{
+ vi.mocked(careerApi).mockResolvedValue({status:'evaluated',cv_uploaded:true,skills_evaluated:true});
+ overview({...workspace,current:{...workspace.current,goal:{...workspace.current.goal!,skills:[],responsibilities:[],non_skill_requirements:[],summary:null}}});
+ expect(screen.getByText(/No skills are listed/)).toBeVisible();
+ fireEvent.click(screen.getByText('Eligibility & commitment'));
+ expect(screen.getByText(/No non-skill requirements/)).toBeVisible();
+ fireEvent.click(screen.getByText('What you would work on'));
+ expect(screen.getByText('No responsibilities were saved for this goal.')).toBeVisible();
+ expect(await screen.findByText('Your saved CV contains extracted skills. These have not been compared against this goal.')).toBeVisible();
+});
+
+it('retries a failed research job without replacing the saved goal',async()=>{
+ const reload=vi.fn();
+ render(<CareerSessionProvider><CareerGoalOverview workspace={{...workspace,phase:'research_failed'}} onReload={reload}/></CareerSessionProvider>);
+ fireEvent.click(screen.getByRole('button',{name:'Retry research'}));
+ await waitFor(()=>expect(careerApi).toHaveBeenCalledWith('/workspace/retry','synthetic-token',{method:'POST'}));
+ await waitFor(()=>expect(reload).toHaveBeenCalledOnce());
+ expect(screen.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
 });

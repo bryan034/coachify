@@ -1,7 +1,7 @@
 import {careerFixture} from './career-fixture';
 import {test,expect} from '@playwright/test';
 
-test('saved goal categories, guided refinement, replacement and CV handoff on desktop and mobile',async({page})=>{
+test('saved briefing accordions, guided refinement, replacement and CV handoff on desktop and mobile',async({page})=>{
  await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
@@ -23,13 +23,17 @@ test('saved goal categories, guided refinement, replacement and CV handoff on de
  });
  await page.goto('/career-goal');
  await expect(page.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Technical skills'})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Transferable skills'})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Qualifications',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Your learning focus'})).toBeVisible();
+ await expect(page.getByText('Python',{exact:true})).toBeVisible();
+ await page.getByText('Teamwork',{exact:true}).click();
+ await expect(page.getByText('No further detail was saved for this skill.',{exact:false})).toBeVisible();
+ await page.getByText('Eligibility & commitment',{exact:false}).click();
+ await expect(page.getByText('Degree in a related discipline',{exact:true})).toBeVisible();
  await expect(page.getByRole('status').filter({hasText:'Researching opportunity information'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
  await expect(page.getByRole('link',{name:/Assess my skills/})).toHaveAttribute('href','/cv');
  researching=false;
+ await page.getByText('Interviews & company research',{exact:false}).click();
  await expect(page.locator('details.intelligence-section').filter({has:page.getByText('Interview Intelligence',{exact:true})})).toContainText('Technical interview');
  await page.screenshot({path:test.info().outputPath('goal-overview-desktop.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
@@ -79,7 +83,9 @@ test('Opportunity Intelligence preserves partial categories, citations and targe
   }
   return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',review:{review_id:'1'.repeat(24),version:1,target_type:'specific_job',extraction:goal,requirements_need_review:false},current:{selection_version:1,goal},research:null,coverage:[],error:null,retry_after:null})});
  });
- await page.goto('/career-goal');await expect(page.getByRole('heading',{name:'Opportunity Intelligence'})).toBeVisible();
+ await page.goto('/career-goal');
+ await page.getByText('Interviews & company research',{exact:false}).click();
+ await expect(page.getByRole('heading',{name:'Opportunity Intelligence'})).toBeVisible();
  await expect(page.getByText('This category could not finish. Other results are preserved; refresh this section to retry.')).toBeVisible();
  await page.getByText('Internship Insights',{exact:true}).click();
  const internships=page.locator('details.intelligence-section').filter({has:page.getByText('Internship Insights',{exact:true})});

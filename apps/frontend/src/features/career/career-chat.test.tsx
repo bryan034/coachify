@@ -566,3 +566,43 @@ it('keeps recovery available for a saved legacy goal without any research report
  await screen.findByRole('button',{name:'Resume research'});
  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
 });
+
+it('clears extracted-goal messages immediately and keeps the next draft after a reply',async()=>{
+ await chat();
+ let resolve!:(value:never)=>void;
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation((path,token,options)=>path==='/workspace/messages'?new Promise(done=>{resolve=done;}):original(path,token,options));
+ const box=screen.getByRole('textbox',{name:'Message Coachify'});
+ fireEvent.change(box,{target:{value:'Explain SQL'}});
+ fireEvent.keyDown(box,{key:'Enter'});
+ expect(box).toHaveValue('');expect(box).toBeEnabled();
+ expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+ expect(screen.getByRole('log')).toHaveTextContent('Explain SQL');
+ fireEvent.change(box,{target:{value:'What about Python?'}});
+ await act(async()=>resolve({reply:'SQL is used for database queries.'} as never));
+ expect(box).toHaveValue('What about Python?');
+ expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled();
+});
+
+it('retries a failed extracted-goal message without replacing the next draft',async()=>{
+ await chat();
+ let reject!:(error:Error)=>void;
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation((path,token,options)=>path==='/workspace/messages'?new Promise((_done,no)=>{reject=no;}):original(path,token,options));
+ const box=screen.getByRole('textbox',{name:'Message Coachify'});
+ fireEvent.change(box,{target:{value:'Explain SQL'}});
+ fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+ expect(box).toHaveValue('');
+ fireEvent.change(box,{target:{value:'My next question'}});
+ await act(async()=>reject(new Error('Synthetic connection failure')));
+ expect(box).toHaveValue('My next question');
+ expect(screen.getByText('Message awaiting retry: Explain SQL')).toBeInTheDocument();
+ api.mockImplementation(original);
+ fireEvent.click(screen.getByRole('button',{name:'Retry'}));
+ await screen.findByText('Practise Python for the reported coding exercise.');
+ expect(box).toHaveValue('My next question');
+ const calls=api.mock.calls.filter(([path])=>path==='/workspace/messages');
+ expect(calls).toHaveLength(2);
+ expect(calls[1][2]?.body).toEqual(calls[0][2]?.body);
+ expect(calls[1][2]?.headers).toEqual(calls[0][2]?.headers);
+});
