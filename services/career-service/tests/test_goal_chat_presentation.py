@@ -16,7 +16,7 @@ from app.workflows.operations import Operations
 
 
 def environment(reply='## Your career goal\nAn interview is reported. [s1]'):
-    goal=NS(id='goal',role='Analyst',field='Data',company='Example',location=None)
+    goal=NS(id='goal',version=1,role='Analyst',field='Data',company='Example',location=None)
     record=NS(sources=[ResearchSource(source_id='s1',platform='other',url='https://example.test/job',evidence='The internship is in Singapore.')],
               intelligence=NS(status='completed',categories={}))
     checks=[]
@@ -29,8 +29,8 @@ def environment(reply='## Your career goal\nAn interview is reported. [s1]'):
         output=GoalSummary(reply=reply)
         kwargs['validate_output'](output)
         return NS(data=output)
-    repo=NS(check=check,goals=NS(current=lambda owner:{'goal':goal}))
-    state=NS(workspace_store=repo,research_store=NS(read=lambda *args:record),ai=NS(generate=generate))
+    repo=NS(check=check,goals=NS(current=lambda owner:{'goal':goal}),reviews=NS(version=lambda *args:goal.version))
+    state=NS(workspace_store=repo,research_store=NS(read=lambda *args,**kwargs:record),ai=NS(generate=generate))
     return NS(app=NS(state=state)),NS(session_id='session',expected_version=1,research_id='research'),checks,calls,record
 
 

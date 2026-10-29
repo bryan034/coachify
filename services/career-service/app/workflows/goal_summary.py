@@ -8,6 +8,7 @@ from app.ai.routing import chat_models
 from app.repositories.goals import GoalError
 from app.workflows.activity import activity
 from app.workflows.structured import structured_node
+from app.workflows.current import workspace_revision
 from app.workflows.citations import normalize_citations, render_citations, citation_error
 
 
@@ -20,7 +21,7 @@ async def summarize(request, account, body):
         if w.get('phase') != 'ready' or w.get('research_id') != body.research_id:
             raise GoalError('Research changed or is incomplete. Reload your career goal.')
         goal = (await thread(repo.goals.current, account))['goal']
-        record = await thread(request.app.state.research_store.read, account, goal.id, body.research_id)
+        record = await thread(request.app.state.research_store.read, account, goal.id, body.research_id, current=True, goal_version=goal.version)
         if not record or not record.intelligence or record.intelligence.status != 'completed':
             raise GoalError('Complete opportunity research before preparing the summary.')
         return goal, record
@@ -52,7 +53,7 @@ async def summarize(request, account, body):
         result = await chat_models(request.app.state).generate(
             AIInput(stage='goal_summary', context=encoded),
             Operation(account, str(body.expected_version), 'goal_summary'),
-            current_revision=lambda: str(body.expected_version), validate_output=validate)
+            current_revision=workspace_revision(repo,account,body.session_id,body.expected_version), validate_output=validate)
         validate(result.data)
         return result.data
 

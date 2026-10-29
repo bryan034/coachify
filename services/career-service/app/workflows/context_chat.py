@@ -12,6 +12,7 @@ from app.domain.questions import REFUSAL,MISSING
 from app.repositories.questions import QuestionStore,GOAL_FIELDS
 from app.schemas.jd import JDReply
 from app.workflows.structured import structured_node
+from app.workflows.current import workspace_revision
 from app.ai.routing import chat_models
 from app.workflows.activity import activity
 from app.workflows.citations import normalize_citations, render_citations
@@ -26,7 +27,7 @@ async def semantic_chat(request,account,row,body):
         result=await chat_models(request.app.state).generate(AIInput(stage=stage,
             context=json.dumps(jsonable_encoder(context),separators=(',',':')),
             conversation=[*history,Message(role='user',content=question or body.message)]),
-            Operation(account,revision,stage),current_revision=lambda:revision,validate_output=validate)
+            Operation(account,revision,stage),current_revision=workspace_revision(repo,account,body.session_id,body.expected_version),validate_output=validate)
         return result.data
 
     async def plan_context(state):
@@ -47,8 +48,9 @@ async def semantic_chat(request,account,row,body):
         if plan.topic in ('edit','off_topic') or plan.clarification:return state
         if plan.research_focus:
             from app.workflows.goal_question import research_question
+            current=workspace_revision(repo,account,body.session_id,body.expected_version)
             async def check():
-                await thread(repo.check,account,body.session_id,body.expected_version)
+                if await current()!=revision:raise AIError('stale_input',True)
             facts,links=await research_question(request,state['title'],plan.research_focus,check)
             return {**state,'facts':facts,'links':links,'partial':False}
         if plan.missing:return state

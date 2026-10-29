@@ -87,7 +87,7 @@ corrections), with owner/version checks before every generation and publication.
 Only the presentation step is retried; saved research and Brave retrieval are reused.
 Safe reply violations distinguish unknown_source_reference, unapproved_source_url
 and missing_finding_citation without including failed text, IDs or URLs. The result is checked against the current goal/research again before publication.
-Summary operations are reused by owner and snapshot for 24 hours in worker memory;
+Summary operations are reused by owner and snapshot for up to 24 hours in the bounded worker cache;
 no raw conversation, additional domain records or persisted summaries are introduced.
 
 Gemini context routing can select a public research focus for missing details or explicit
@@ -221,11 +221,11 @@ jobs return the original HTTP status/code through the normal exception handlers.
 failure responses also include operation_id and fixed validation issue codes in
 `diagnostic.violations`. The frontend preserves the ID as CareerApiError.operationId.
 Content-free operation_failed logs carry the same ID and operation kind. Failed
-operations retain only safe validation feedback and the error, never rejected replies.
+operations retain bounded safe error data and validation feedback, never exception objects, request tracebacks or rejected replies.
 To locate an operation, use the initial POST's 202 response or the Network polling URL;
-GET of a failed operation repeats its error without another provider call. Operations
+GET of a failed operation reconstructs a fresh error with the same safe status/code, without another provider call. Operations
 live only in worker memory for up to 24 hours and are lost on service restart; there is
-no MongoDB operation record or raw-response lookup. They never return unvalidated
+no MongoDB operation record or raw-response lookup. Default retention limits are 128 jobs per worker, 16 per owner and 32 reconnect aliases per retained job. Admission evicts the oldest terminal entry when needed; it does not cancel active work or discard accepted aliases within a retained job. Full active capacity or alias capacity returns `429` / `operation_capacity`. A terminal cache eviction is reported as an expired/unavailable operation on later polling; durable goals and research remain intact. They never return unvalidated
 provider bodies. Without the header, compatibility APIs still
 return immediate 429 errors and their retry delay.
 
@@ -234,13 +234,15 @@ chat remounts. Reposting the identical JD with another key while it is pending
 reattaches to the existing owner/kind/digest operation; accepted key aliases replay
 that operation's result, without extra extraction calls. A different pending input
 returns `409` / `operation_in_progress`; a reused key with changed details returns
-`409` / `operation_key_reused`. Only these fixed conflict explanations are displayed;
+`409` / `operation_key_reused`. Capacity admission returns `429` / `operation_capacity`. Only fixed conflict/capacity explanations are displayed;
 raw provider diagnostics stay out of the interface. No raw JD is added to storage.
 
 `ai/waiting.py` provides a task-local progress callback. The adapter suspends its active
-execution deadline while sleeping, rechecks cancellation/revision, then retries only the
+execution deadline while sleeping, rechecks cancellation/revision every five seconds during long waits, then retries only the
 unfinished payload. A quota rejection is not an invalid-output correction attempt and
 is not charged to the token ledger. It does not repeat completed routing/retrieval steps.
+Public question research applies the same workspace/review checks during Brave
+cooldowns, preserving the full provider delay and four-attempt retrieval ceiling.
 Foreground jobs run outside gateway HTTP timeouts; the UI waits without another POST or
 approval. Research continues to use its MongoDB checkpoint/lease pause path, isolated
 from foreground callbacks. Non-resetting input/context/output caps, bad credentials,
@@ -586,3 +588,10 @@ keeps at most three useful sources. Relevant-but-uninformative sources and irrel
 results have distinct outcomes. Opportunity excerpts allow 8,000 characters per source;
 other retrieval paths retain their smaller adapter budget. Existing model input/token
 budgets still bound every structuring request.
+
+
+### Research revision binding
+
+`career_state.research_link_meta` pins each linked immutable research ID to `goal_version` and its normalized public `context_key`; research retry receipts pin the same goal revision. Shared attachment validates the canonical goal both before and after the selection CAS. A concurrent edit can leave a historical link, but never makes that old result current. Default interview reads, projected Q&A and summaries require current links. Explicit historical research IDs stay owner-linked and readable. Legacy links without revision metadata are accepted as current only for an unchanged version-1 goal with matching public context; otherwise a normal refresh/reuse creates the current acknowledgement without deleting history. Opportunity jobs additionally record `goal_version`, and current status lookups filter that revision.
+
+Transient chat routing, focused answers, edits and summaries pass live, thread-pooled workspace checks into the model adapter. The guard accepts existing synchronous callbacks and asynchronous callbacks. It rechecks session/canonical-review revision through provider cooldowns, exits stale work without another provider request and releases the transient operation slot.

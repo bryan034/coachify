@@ -22,7 +22,10 @@ Rejected model text is not retained. Failed AI operation responses include
 `operation_id` and fixed issue codes under `diagnostic.violations`; the ID also
 appears in the initial 202 response, polling URL and content-free failure logs.
 Operations are owner-scoped, remain in worker memory for at most 24 hours and are
-lost on restart; they are not stored in MongoDB. See
+lost on restart; they are not stored in MongoDB. Retention is capped at 128 jobs
+per worker, 16 per owner and 32 reconnect aliases per job. Capacity evicts the
+oldest terminal jobs; active work is preserved and excess admission returns 429.
+Failed polling reconstructs a fresh error from safe data, without retained tracebacks. See
 [analysis contracts](ANALYSIS_CONTRACTS.md) for recovery and diagnostic details.
 
 ## Explicit CV clarification context — C-series integration
@@ -35,7 +38,7 @@ Career automatic saving does not silently confirm a goal for CV review. `career_
 
 ## Saved CV context — J08 / J09
 
-`GET /api/v1/career/context` lists available CV context; `/context/assessment` checks whether owned saved CV skill input is available. This does not compute mastery, skill gaps or readiness. Reads forward the owner's revocable session to CV and verify detail identity/owner. The adapter accepts the saved `{cvs, selection}` API and legacy read responses, preserving UUID/ObjectId references, unknown proficiency, attribution, guidance and evidence.
+`GET /api/v1/career/context` lists available CV context; `/context/assessment` checks whether owned saved CV skill input is available. This does not compute mastery, skill gaps or readiness. Reads forward the owner's revocable session to CV and verify detail identity/owner. The adapter accepts the saved `{cvs, selection}` API and legacy read responses, preserving UUID/ObjectId references, unknown proficiency, attribution, guidance and evidence. Continuation cursors retain older CV choices within one bounded 512 KiB list budget.
 
 Career's CV transport/projection intake is bounded at **512 KiB**, separately from CV's larger storage limit. Oversized input returns an actionable error and is never truncated. Internal projection schema is [career-cv-snapshot.schema.json](../../contracts/api/models/career-cv-snapshot.schema.json); the public CV response remains [cv.schema.json](../../contracts/api/models/cv.schema.json). Original `skill:*` source identities are not automatically equivalent to Career's dotted registry: future analysis must resolve mapping explicitly.
 
@@ -44,6 +47,8 @@ Career's CV transport/projection intake is bounded at **512 KiB**, separately fr
 `/api/v1/career/discoveries` provides conversational direction setting, explicit area approval and researched requirement review without requiring a CV. It publishes through the same canonical goal store. See [CAREER_DISCOVERY.md](CAREER_DISCOVERY.md) for exact session/message/research routes and models.
 
 `GET` / `POST /api/v1/career/goals/{id}/opportunity-research` read/start/reuse/refresh owner-linked public research, with independently saved category outcomes. Interviews, internship experience, career progression/conversion salary, historical conversion rates and culture retain citations, uncertainty and missing fields. Progress is compact and evidence loads on demand. See [OPPORTUNITY_INTELLIGENCE.md](OPPORTUNITY_INTELLIGENCE.md) and [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md) for graph, models, bounded Gemini/Brave retrieval and version/quota recovery.
+
+Private research links and retry receipts bind the goal revision and public context. Default reads exclude older links after an edit; explicit historical IDs remain readable. Legacy unversioned links need refresh after the first goal revision. Chat and summary quota waits recheck the current workspace at least every five seconds before any further model call.
 
 Saved-goal Q&A uses backend topic routing and allowlisted projected facts. Explicit further-research requests may start scoped public retrieval. Private CV evidence and personal chat are excluded from shared research. Unknown information stays unknown; no assessment computation or roadmap is generated.
 
