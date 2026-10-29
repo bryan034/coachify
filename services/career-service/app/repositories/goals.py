@@ -47,7 +47,7 @@ class GoalStore:
         data = self.goals.find_one({'_id': ObjectId(identifier), 'user_id': owner, 'record_type': 'exploration_draft'})
         if not data:
             raise GoalError('Exploration was not found.', 404)
-        for key in ('processing', 'receipts', 'start_hash'):
+        for key in ('processing', 'receipts', 'start_hash', 'create_key'):
             data.pop(key, None)
         return GoalDraft.model_validate(data)
 
@@ -111,7 +111,7 @@ class GoalStore:
                 'review_selection':state.get('selected_review') or ({'id':str(goal['source_review_id']),'version':goal['source_review_version']} if goal and goal.get('source_review_id') else None)}
 
     def list(self, owner):
-        goals = list(self.goals.find({'user_id': owner, 'record_type': {'$nin': ['exploration_draft', 'requirement_review']}}).sort('created_at', -1).limit(50))
+        goals = list(self.goals.find({'user_id': owner, '_id': {'$type':'objectId'}, 'record_type': {'$nin': ['exploration_draft', 'requirement_review']}}).sort('created_at', -1).limit(50))
         drafts = list(self.goals.find({'user_id': owner, 'record_type': 'exploration_draft'}).sort('updated_at', -1).limit(10))
         return {'goals': [CareerGoal.model_validate({k:v for k,v in g.items() if k in CareerGoal.model_fields or k=='_id'}) for g in goals],
                 'explorations': [self.draft(str(d['_id']), owner) for d in drafts]}

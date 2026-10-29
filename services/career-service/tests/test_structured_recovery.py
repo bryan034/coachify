@@ -43,7 +43,8 @@ def test_graph_repairs_repeated_schema_json_and_truncated_responses_then_display
                 with tracing_context(enabled=False): result=await graph.compile().ainvoke({},config={'recursion_limit':3})
             finally:
                 quota_progress.reset(quota);validation_progress.reset(observer);recover_responses.reset(enabled)
-        assert result['result'].role=='Analyst' and len(calls)==7 and waits==[7]
+        assert result['result'].role=='Analyst' and len(calls)==7
+        assert sum(waits)==7 and all(0<pause<=5 for pause in waits)
         assert {'field':'company','issue':'missing'} in feedback[0]['violations']
         assert {'field':'skills.0.category','issue':'missing'} in feedback[1]['violations']
         assert calls[2]==calls[3]  # A quota wait preserves the current corrective payload.

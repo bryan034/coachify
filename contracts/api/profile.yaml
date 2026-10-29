@@ -634,6 +634,122 @@ paths:
                 $ref: '#/components/schemas/Done'
       security:
       - HTTPBearer: []
+  /api/v1/profile/capabilities:
+    get:
+      tags:
+      - C07 manual capabilities
+      summary: Get Capabilities
+      operationId: get_capabilities_api_v1_profile_capabilities_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityView'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityError'
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - C07 manual capabilities
+      summary: Add Capability
+      operationId: add_capability_api_v1_profile_capabilities_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapabilityCreate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityView'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityError'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/profile/capabilities/attachment:
+    post:
+      tags:
+      - C07 manual capabilities
+      summary: Reconcile Attachment
+      operationId: reconcile_attachment_api_v1_profile_capabilities_attachment_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapabilityAttachment'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityView'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityError'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityError'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
 components:
   schemas:
     AccountView:
@@ -670,6 +786,38 @@ components:
       - provider
       - expires_at
       title: AccountView
+    AttachmentHistory:
+      properties:
+        at:
+          type: string
+          format: date-time
+          title: At
+        previous:
+          anyOf:
+          - $ref: '#/components/schemas/CvMatch'
+          - type: 'null'
+        previous_source_fingerprint:
+          anyOf:
+          - type: string
+            pattern: ^[a-f0-9]{64}$
+          - type: 'null'
+          title: Previous Source Fingerprint
+        attached_to:
+          anyOf:
+          - $ref: '#/components/schemas/CvMatch'
+          - type: 'null'
+        attached_source_fingerprint:
+          anyOf:
+          - type: string
+            pattern: ^[a-f0-9]{64}$
+          - type: 'null'
+          title: Attached Source Fingerprint
+      type: object
+      required:
+      - at
+      - previous
+      - attached_to
+      title: AttachmentHistory
     Attempt:
       properties:
         flow_id:
@@ -775,6 +923,146 @@ components:
       - intent
       - generation
       title: Begin
+    CapabilityAttachment:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Mutation Id
+        declaration_id:
+          type: string
+          maxLength: 80
+          minLength: 1
+          title: Declaration Id
+        cv_match:
+          anyOf:
+          - $ref: '#/components/schemas/CvMatch'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      - declaration_id
+      - cv_match
+      title: CapabilityAttachment
+    CapabilityCreate:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Mutation Id
+        name:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Name
+        description:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Description
+        mode:
+          type: string
+          enum:
+          - new
+          - distinct
+          - attach
+          title: Mode
+        attach_to_id:
+          anyOf:
+          - type: string
+            maxLength: 80
+            minLength: 1
+          - type: 'null'
+          title: Attach To Id
+        cv_match:
+          anyOf:
+          - $ref: '#/components/schemas/CvMatch'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      - name
+      - description
+      - mode
+      title: CapabilityCreate
+    CapabilityError:
+      properties:
+        detail:
+          type: string
+          title: Detail
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+        matches:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/Declaration'
+            type: array
+          - type: 'null'
+          title: Matches
+      type: object
+      required:
+      - detail
+      title: CapabilityError
+    CapabilityLimits:
+      properties:
+        max_declarations:
+          type: integer
+          title: Max Declarations
+          default: 100
+        name:
+          type: integer
+          title: Name
+          default: 120
+        description:
+          type: integer
+          title: Description
+          default: 2000
+        max_contributions:
+          type: integer
+          title: Max Contributions
+          default: 10
+      type: object
+      title: CapabilityLimits
+    CapabilityView:
+      properties:
+        user_id:
+          type: string
+          title: User Id
+        version:
+          type: integer
+          title: Version
+        declarations:
+          items:
+            $ref: '#/components/schemas/Declaration'
+          type: array
+          title: Declarations
+        limits:
+          $ref: '#/components/schemas/CapabilityLimits'
+      type: object
+      required:
+      - user_id
+      - version
+      - declarations
+      title: CapabilityView
     CapacityWindow:
       properties:
         start_date:
@@ -892,6 +1180,24 @@ components:
       - attempt_id
       - session_token
       title: Complete
+    Contribution:
+      properties:
+        id:
+          type: string
+          title: Id
+        description:
+          type: string
+          title: Description
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - description
+      - created_at
+      title: Contribution
     CountryView:
       properties:
         code:
@@ -927,6 +1233,97 @@ components:
       - kind
       - name
       title: CustomInstitution
+    CvMatch:
+      properties:
+        cv_id:
+          type: string
+          maxLength: 80
+          minLength: 1
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Cv Id
+        item_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Item Id
+        cv_version:
+          type: integer
+          minimum: 0.0
+          title: Cv Version
+      additionalProperties: false
+      type: object
+      required:
+      - cv_id
+      - item_id
+      - cv_version
+      title: CvMatch
+    Declaration:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        description:
+          type: string
+          title: Description
+        skill_id:
+          type: string
+          title: Skill Id
+        provenance:
+          type: string
+          const: user_declared
+          title: Provenance
+        proficiency:
+          type: 'null'
+          title: Proficiency
+        experience_months:
+          type: 'null'
+          title: Experience Months
+        independence:
+          type: 'null'
+          title: Independence
+        contributions:
+          items:
+            $ref: '#/components/schemas/Contribution'
+          type: array
+          title: Contributions
+        attached_to:
+          anyOf:
+          - $ref: '#/components/schemas/CvMatch'
+          - type: 'null'
+        attached_source_fingerprint:
+          anyOf:
+          - type: string
+            pattern: ^[a-f0-9]{64}$
+          - type: 'null'
+          title: Attached Source Fingerprint
+        attachment_history:
+          items:
+            $ref: '#/components/schemas/AttachmentHistory'
+          type: array
+          maxItems: 100
+          title: Attachment History
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - name
+      - description
+      - skill_id
+      - provenance
+      - contributions
+      - created_at
+      - updated_at
+      title: Declaration
     Done:
       properties:
         ok:

@@ -1,4 +1,5 @@
 import os
+from anyio import CapacityLimiter
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -11,12 +12,17 @@ from app.api.v1.accounts import router as account_router
 from app.repositories.accounts import AccountRepository
 from app.repositories.profile import ProfileRepository
 from app.core.mail import SmtpMailer, mail_settings
+from app.api.v1.capabilities import router as capability_router
+from app.repositories.capabilities import CapabilityRepository
 
 
-def create_app(repository=None, accounts=None, mailer=None):
+def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.auth_settings = auth_settings()
+        # Attachments call CV, which authenticates back through Profile. Reserve
+        # separate capacity so these waits cannot exhaust the auth/DB thread pool.
+        app.state.capability_limiter = CapacityLimiter(8)
         client = None
         if repository is None:
             uri = os.getenv("MONGODB_URI")
@@ -26,9 +32,11 @@ def create_app(repository=None, accounts=None, mailer=None):
             database = client[os.getenv("MONGODB_DATABASE", "coachify_profile")]
             app.state.repository = ProfileRepository(database)
             app.state.accounts = AccountRepository(database, mailer or SmtpMailer(mail_settings(app.state.auth_settings.environment)))
+            app.state.capabilities = CapabilityRepository(database)
         else:
             app.state.repository = repository
             app.state.accounts = accounts
+            app.state.capabilities = capabilities or (CapabilityRepository(accounts.accounts.database) if accounts is not None else None)
         try:
             yield
         finally:
@@ -38,6 +46,7 @@ def create_app(repository=None, accounts=None, mailer=None):
     app = FastAPI(title="Coachify profile API", version="0.1.0", description="Verified email/password accounts, optional Google, and revocable owner-scoped sessions.", lifespan=lifespan)
     app.include_router(router)
     app.include_router(account_router)
+    app.include_router(capability_router)
 
     @app.middleware("http")
     async def private_responses(request, call_next):

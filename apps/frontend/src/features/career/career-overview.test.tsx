@@ -1,4 +1,4 @@
-import {fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {CareerGoalHome,CareerGoalOverview} from './career-overview';
 import {CareerSessionProvider} from './career-session';
@@ -24,25 +24,43 @@ it('shows saved skills in briefing accordions and keeps refinement and replaceme
  expect(screen.getByText('Required by role')).toBeVisible();
  expect(screen.getByText('Preferred by role')).toBeVisible();
  expect(screen.getByRole('link',{name:'Refine goal'})).toHaveAttribute('href','/career-goal/chat?refine=1');
- expect(await screen.findByRole('link',{name:/Assess my skills/})).toHaveAttribute('href','/cv');
+ expect(await screen.findByRole('link',{name:/Upload my CV/})).toHaveAttribute('href','/cv');
  fireEvent.click(screen.getByRole('button',{name:/Set a new goal/}));expect(push).toHaveBeenCalledWith('/career-goal?new=1');
  expect(vi.mocked(careerApi).mock.calls.every(call=>!call[2]?.method)).toBe(true);
 });
 it('displays extracted categories while research is still running',async()=>{
  overview({...workspace,phase:'researching',research_id:null});expect(screen.getByText('SQL')).toBeVisible();
  expect(screen.getByText('Researching opportunity information. Your extracted goal is already saved.')).toBeVisible();
- await screen.findByRole('link',{name:/Assess my skills/});
+ await screen.findByRole('link',{name:/Upload my CV/});
 });
-it.each(['no_cv','not_evaluated'])('routes missing or unevaluated capabilities to CV upload: %s',async(status)=>{
+it.each([
+ {status:'no_cv',heading:'Add your CV background',action:'Upload my CV',description:'No saved CV was found.'},
+ {status:'not_evaluated',heading:'CV skills are not available yet',action:'Review my CV',description:'A CV is saved, but no successfully extracted skills were found.'},
+])('distinguishes missing CV from saved CV without available skills: $status',async({status,heading,action,description})=>{
  vi.mocked(careerApi).mockResolvedValue({status,cv_uploaded:status!=='no_cv',skills_evaluated:false});overview();
- expect(await screen.findByRole('link',{name:/Assess my skills/})).toHaveAttribute('href','/cv');
- expect(screen.queryByText('Your assessed skills are saved')).not.toBeInTheDocument();
+ const card=screen.getByRole('region',{name:'Your CV skills'});
+ expect(await within(card).findByRole('heading',{name:heading})).toBeVisible();
+ expect(within(card).getByRole('link',{name:new RegExp(action)})).toHaveAttribute('href','/cv');
+ expect(card).toHaveTextContent(description);
+ expect(card).not.toHaveTextContent(/assessed|assessment|evaluated/iu);
+});
+it('describes extracted CV skills as available without claiming an assessment was run',async()=>{
+ vi.mocked(careerApi).mockResolvedValue({status:'evaluated',cv_uploaded:true,skills_evaluated:true});overview();
+ const card=screen.getByRole('region',{name:'Your CV skills'});
+ expect(await within(card).findByRole('heading',{name:'CV skills available'})).toBeVisible();
+ expect(card).toHaveTextContent('extracted or user-clarified skills available to review');
+ expect(within(card).getByRole('link',{name:/View my CV/})).toHaveAttribute('href','/cv');
+ expect(card).not.toHaveTextContent(/assessed|assessment|evaluated/iu);
+ expect(card).not.toHaveTextContent(/mastered|proven/iu);
 });
 it('does not mistake unavailable CV data for an empty database and allows retry',async()=>{
  let first=true;vi.mocked(careerApi).mockImplementation(async path=>{if(path==='/context/assessment'){if(first){first=false;throw new Error('Unavailable');}return {status:'evaluated',cv_uploaded:true,skills_evaluated:true} as never;}return {finished:true,categories:{}} as never;});overview();
- fireEvent.click(await screen.findByRole('button',{name:'Retry skill check'}));
+ expect(await screen.findByRole('heading',{name:'CV skills status unavailable'})).toBeVisible();
+ expect(screen.getByRole('region',{name:'Your CV skills'})).toHaveTextContent('We couldn’t check your saved CV.');
+ expect(screen.queryByText(/No saved CV was found/)).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Retry CV check'}));
  expect(await screen.findByRole('link',{name:/View my CV/})).toHaveAttribute('href','/cv');
- expect(screen.queryByRole('link',{name:/Assess my skills/})).not.toBeInTheDocument();
+ expect(screen.queryByRole('link',{name:/Upload my CV/})).not.toBeInTheDocument();
 });
 it('restores the overview after reload instead of showing a new input form',async()=>{
  render(<CareerSessionProvider><CareerGoalHome/></CareerSessionProvider>);
@@ -68,7 +86,7 @@ it('preserves AND/OR, provenance and safe sources without inventing learning gui
  expect(screen.getByText('AI planning suggestion')).toBeVisible();
  expect(screen.getByText('Suggested guidance')).toBeVisible();
  expect(screen.queryByText('A way to practise')).not.toBeInTheDocument();
- await screen.findByRole('link',{name:/Assess my skills/});
+ await screen.findByRole('link',{name:/Upload my CV/});
 });
 it('keeps empty goal sections explicit and never labels individual skills as assessed',async()=>{
  vi.mocked(careerApi).mockResolvedValue({status:'evaluated',cv_uploaded:true,skills_evaluated:true});
@@ -78,7 +96,11 @@ it('keeps empty goal sections explicit and never labels individual skills as ass
  expect(screen.getByText(/No non-skill requirements/)).toBeVisible();
  fireEvent.click(screen.getByText('What you would work on'));
  expect(screen.getByText('No responsibilities were saved for this goal.')).toBeVisible();
- expect(await screen.findByText('Your saved CV contains extracted skills. These have not been compared against this goal.')).toBeVisible();
+ const cvSkills=screen.getByRole('region',{name:'Your CV skills'});
+ expect(await within(cvSkills).findByRole('heading',{name:'CV skills available'})).toBeVisible();
+ expect(cvSkills).toHaveTextContent('These are separate from your goal’s requirements.');
+ expect(cvSkills).toHaveTextContent('A comparison against this goal is not available yet.');
+ expect(cvSkills).not.toHaveTextContent(/assessed|assessment|evaluated|upload.*planned/iu);
 });
 
 it('retries a failed research job without replacing the saved goal',async()=>{

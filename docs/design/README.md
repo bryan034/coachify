@@ -8,8 +8,9 @@ The visual reference defines the sidebar, typography, colour tokens, cards, tabl
 and responsive layouts. Sample users and activity are not live application data:
 the integrated screens use empty states until the relevant service is implemented.
 Profile and planning-preference controls are connected to the Profile service;
-the Roadmap screen shows their saved summary. Upload, bookings, networking,
-event/task mutations and roadmap generation remain unavailable. Roadmap/expert
+the Roadmap screen shows their saved summary. Saved CV upload, review and clarification
+are available. Bookings, networking, event/task mutations and roadmap generation
+remain unavailable. Roadmap/expert
 filters and week/month calendar toggles change presentation only.
 
 See the [Profile service README](../../services/profile-service/README.md) for

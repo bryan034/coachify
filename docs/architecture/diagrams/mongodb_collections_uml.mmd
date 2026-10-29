@@ -2,27 +2,32 @@ classDiagram
 direction TB
 
 class users {
-    +String id [canonical_UUID]
+    +String id [canonical UUID]
+    +String owner [existing auth namespace]
     +String name
     +String email
     +String auth_provider
     +Date created_at
     +Date updated_at
+    +CapabilityDeclaration[] capability_declarations
+    +Integer declarations_version
 }
 
 class cvs {
-    +Number version
-    +String schema_version
-    +String skill_mapping_version
-    +ObjectId _id [PK]
-    +String user_id [Profile_UUID]
+    +String _id [opaque UUID]
+    +String user_id [account UUID]
     +String file_name
-    +String file_url?
+    +String private_original_reference?
     +String file_type
     +CvSkill[] skills
-    +String extraction_status
-    +String extraction_version
-    +Number profile_version
+    +String processing_status [derived]
+    +Integer extraction_version
+    +Integer version
+    +Integer effective_version
+    +CvItem[] items
+    +Object corrections
+    +Clarification[] clarifications
+    +Object reconciliation_candidate?
     +Date created_at
     +Date updated_at
 }
@@ -91,7 +96,7 @@ class skill_gap_analyses {
     +String skill_mapping_version
     +ObjectId _id [PK]
     +String user_id [Profile_UUID]
-    +ObjectId cv_id [FK]
+    +String cv_id [UUID_or_legacy_ObjectId]
     +ObjectId career_goal_id [FK]
     +ObjectId[] research_ids
     +GapResult[] job_skill_gaps
@@ -123,6 +128,7 @@ note for interview_research "Immutable public-context revisions; shared seven-da
 
 %% Opportunity Intelligence reuses these collections: no duplicate targets/opportunities collection.
 %% research_contexts also holds owner/goal/run-scoped durable jobs, command receipts, per-category progress/evidence and public cache leases.
+%% Opportunity jobs pin goal_version; stale revisions cannot publish current research links.
 %% Public report fingerprints include material structured opportunity context; raw JD/CV/chat remain excluded.
 
 %% Career Discovery: private sessions/jobs and immutable public-evidence snapshots in research_contexts.
@@ -135,3 +141,67 @@ note for interview_research "Immutable public-context revisions; shared seven-da
 
 %% Discovery-only private research_contexts sessions additionally retain messages and compact conversation memory.
 %% Public evidence snapshots exclude these messages; other Career workflows keep their existing retention rules.
+
+class cv_selections {
+    <<operational>>
+    +String _id [account UUID]
+    +String selected_cv_id?
+    +Integer version
+}
+
+class cv_upload_capacity {
+    <<operational>>
+    +String _id [uploads]
+    +Integer revision
+    +Map entries [bounded_per_CV_reservations]
+    +Integer untracked_bytes
+    +String blocked?
+}
+
+class cv_model_usage {
+    <<operational>>
+    +String _id [daily]
+    +Integer revision
+    +String day [UTC_date]
+    +Integer total
+    +Map owners [bounded_hashed_account_counts]
+}
+
+class cv_conversations {
+    <<operational>>
+    +String _id [opaque UUID]
+    +String user_id [account UUID]
+    +String cv_id?
+    +Integer segment
+    +Integer revision
+    +Object[] messages
+    +String previous_conversation_id?
+    +Date updated_at
+}
+
+class career_state {
+    <<operational>>
+    +String _id [Profile_UUID]
+    +ObjectId goal_id?
+    +Integer version [selection_revision]
+    +Object workspace
+    +Object cv_confirmation?
+    +Object[] cv_confirmation_receipts
+    +Map research_links
+    +Map research_link_meta [goal_version_context_key_reused]
+    +Object[] research_receipts [pins_goal_version]
+}
+
+users "1" --> "0..1" cv_selections : owns explicit source selection
+cv_selections --> cvs : validates owner and version
+cv_upload_capacity --> cvs : reserves record and original capacity
+note for cv_upload_capacity "One journaled CAS ledger; owner/global totals derived from at most 20,000 fixed-shape entries. File locks and generation checks fence publication/deletion; no TTL release of uncertain bytes."
+note for cv_model_usage "Journaled daily provider-attempt admission across extraction, routing and clarification. Newer days reset counts; backwards clocks do not. Separate fixed OS-locked slots enforce owner/global concurrency."
+users "1" --> "0..*" cv_conversations : owns private retained history
+cv_conversations --> cvs : optional source reference
+users "1" --> "0..1" career_state : owns current goal metadata
+career_state --> career_goals : exact current goal reference
+note for cvs "CV-owned structured evidence, overlays, interpretation and history. UUID IDs and private temporary originals; public reads expose no path or owner metadata."
+note for cv_conversations "Nullable CV permits manual-only entry. Bounded messages/action receipts have separate transcript revisions; no automatic history expiry."
+note for career_state "Automatic goal saving is distinct from explicit CV confirmation. Stamp binds goal ID/version, selection revision and projection hash. Changes invalidate it without another goal record or deleting CV facts."
+note for career_goals "Older UUID reviewed-target documents remain retained history, excluded from canonical ObjectId reads. Canonical create_key metadata preserves the legacy uniqueness index; no destructive migration."

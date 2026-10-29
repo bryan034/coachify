@@ -4,7 +4,7 @@ from app.schemas.analysis import EmploymentType
 from typing import Literal
 from pydantic import Field, model_validator
 from app.schemas.analysis import (Contract, Document, DomainId, Evidence, Generation, Text, TargetSkill,
-    NonSkillRequirement, SourceUrl, AccountId)
+    NonSkillRequirement, SourceUrl, AccountId, CvReference, CvText)
 
 Question = Literal['aspirations', 'education', 'experience', 'skills', 'interests', 'preferences']
 QUESTIONS = {
@@ -75,8 +75,8 @@ class Turn(Contract):
 
 class CvContext(Contract):
     mode: Literal['none', 'temporary', 'saved'] = 'none'
-    cv_id: DomainId | None = None
-    filename: Text | None = None
+    cv_id: CvReference | None = None
+    filename: CvText | None = None
     extraction_version: Text | None = None
     profile_version: int | None = Field(default=None, ge=1)
     version: int | None = Field(default=None, ge=1)
@@ -104,7 +104,7 @@ class GoalDraft(Document):
 
 class StartExploration(Contract):
     consent: Literal[True]
-    cv_id: DomainId | None = None
+    cv_id: CvReference | None = None
     temporary_filename: Text | None = None
 
     @model_validator(mode='after')
@@ -164,9 +164,9 @@ class AssessmentStatus(Contract):
 
 
 class CvSummary(Contract):
-    id: DomainId = Field(alias='_id')
-    user_id: AccountId
-    file_name: Text
+    id: CvReference = Field(alias='_id')
+    user_id: AccountId | None = None
+    file_name: CvText
     extraction_status: Literal['pending', 'processing', 'succeeded', 'failed']
     extraction_version: Text
     version: int = Field(strict=True, ge=1)

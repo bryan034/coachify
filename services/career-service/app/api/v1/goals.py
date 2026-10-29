@@ -58,7 +58,7 @@ async def context(request: Request, account=Depends(owner)):
         try:
             cvs=await request.app.state.cv.list(request.headers.get('authorization',''))
             items=[{'id':cv.id,'filename':cv.file_name,'status':cv.extraction_status,
-                    'version':cv.version,'extraction_version':cv.extraction_version} for cv in cvs if cv.user_id==account]
+                    'version':cv.version,'extraction_version':cv.extraction_version} for cv in cvs if cv.user_id in (None,account)]
         except GoalError: available=False
     return {'cvs':items, 'cv_service_available':available,
             'ai_available':request.app.state.ai.settings.enabled}
@@ -72,7 +72,9 @@ async def assessment_status(request: Request, account=Depends(owner)):
     try:
         if cv_client is None:raise GoalError('CV service unavailable.',503)
         token=request.headers.get('authorization','')
-        rows=[cv for cv in (await cv_client.list(token))[:50] if cv.user_id==account]
+        # Saved-CV summaries are already scoped by the forwarded session and omit
+        # owner metadata. Detail reads below still verify the exact owner.
+        rows=[cv for cv in (await cv_client.list(token))[:50] if cv.user_id in (None,account)]
         uploaded=bool(rows)
         if not rows:return AssessmentStatus(status='no_cv',cv_uploaded=False,skills_evaluated=False)
         ready=[cv for cv in rows if cv.extraction_status=='succeeded']

@@ -251,7 +251,7 @@ class CareerWorkflow:
         record=await thread(self.app.state.research_store.records.get_research,state['research_id'])
         # Only public, source-validated research reaches the explanation gate.
         if not record or record.research_status not in ('succeeded','no_findings'):raise GoalError('Interview research needs retry.',503)
-        await thread(self.app.state.research_store.attach,state['owner'],state['goal_id'],state['selection'],state['run'],state['run'],record,reused=state.get('cache',{}).get('reused',False))
+        await thread(self.app.state.research_store.attach,state['owner'],state['goal_id'],state['selection'],state['run'],state['run'],record,goal_version=state['revision'],reused=state.get('cache',{}).get('reused',False))
         await thread(self.workspaces.phase,state['owner'],state['session'],state['run'],'ready',coverage=state.get('coverage',[]),research_id=record.id,error=None,error_code=None,retry_after=None)
 
     def config(self,owner,workspace):

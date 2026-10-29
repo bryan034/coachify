@@ -67,6 +67,7 @@ test('signed-out deep links and unavailable configuration never expose private U
 
 test('email-only registration accepts a non-Gmail address and verifies OTP without Google', async ({page}) => {
  let googleRequests=0;
+ const account={id:'synthetic-email',name:'Synthetic Account',provider:'email',email:'synthetic-user@outlook.com',email_verified:true};
  let registration:{email:string;password:string;session_token:string;credential?:string}|undefined;
  page.on('request', request=>{if(request.url().startsWith('https://accounts.google.com/'))googleRequests++;});
  await page.route('**/api/v1/profile**',route=>{
@@ -80,8 +81,9 @@ test('email-only registration accepts a non-Gmail address and verifies OTP witho
   }
   if(path.endsWith('/auth/verify-email')){
    expect(route.request().postDataJSON().code).toBe('123456');
-   return route.fulfill({json:{id:'synthetic-email',name:'Synthetic Account',provider:'email',email:'synthetic-user@outlook.com',email_verified:true}});
+   return route.fulfill({json:account});
   }
+  if(path.endsWith('/auth/session'))return route.fulfill({json:account});
   if(path.endsWith('/school-categories'))return route.fulfill({json:[]});
   return route.fulfill({json:{version:0,onboarding_complete:false,occupational_status:null,school_category:null,education_context:null,education_review_required:false,education:{}}});
  });

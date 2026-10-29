@@ -8,10 +8,11 @@ class CvSkill {
     +String proficiency?
     +Number experience_months?
     +String context?
-    +String evidence
-    +String original_evidence?
-    +String evidence_type
+    +SkillClaim[] sources
+    +Evidence[] evidence
+    +String evidence_type?
     +Boolean explicit
+    +String[] item_ids
 }
 
 class TargetSkill {
@@ -146,7 +147,7 @@ class Generation {
 }
 
 class InputVersions {
-    +ObjectId cv_id
+    +String cv_id [UUID_or_legacy_ObjectId]
     +Number cv_version
     +String extraction_version
     +Number profile_version
@@ -185,7 +186,7 @@ class RoleSuggestion {
 }
 class CvContext {
     +String mode
-    +ObjectId cv_id?
+    +String cv_id [UUID_or_legacy_ObjectId]?
     +String filename?
     +Number version?
     +String extraction_version?
@@ -306,3 +307,157 @@ career_goals *-- DiscoveryEvidence : optional_market_provenance
 %% internship experience, career progression/salary, historical conversion outcomes,
 %% and company/team culture. Version 1 retains its original three-category contract.
 %% Exact cited Finding objects and existing interview_research persistence are reused.
+
+
+class CapabilityDeclaration {
+    +String id
+    +String skill_id
+    +String name
+    +String description
+    +String provenance [user_declared]
+    +String proficiency [null]
+    +Number experience_months [null]
+    +Boolean independence [null]
+    +Contribution[] contributions
+    +CvReference attached_to?
+    +String attached_source_fingerprint?
+    +Object[] attachment_history
+    +Date created_at
+    +Date updated_at
+}
+
+class Contribution {
+    +String id
+    +String description
+    +Date created_at
+}
+
+class CvReference {
+    +String cv_id
+    +String item_id
+    +Integer cv_version
+}
+
+class Evidence {
+    +String id
+    +String excerpt
+    +String location
+}
+
+class CvItem {
+    +String id
+    +String kind
+    +String title
+    +String description
+    +String provenance
+    +Evidence[] evidence
+    +String[] skill_ids
+    +String proficiency?
+    +Number experience_months?
+    +String start_date? [year/month/day precision]
+    +String end_date? [year/month/day precision]
+    +Boolean ongoing
+    +SkillClaim[] skill_claims
+    +Boolean removed
+}
+
+class SkillClaim {
+    +String skill_id
+    +String attribution [personal/team/observed/denied/unknown]
+    +String assistance [independent/assisted/supervised/unknown]
+    +String proficiency?
+    +Number experience_months?
+    +Evidence[] evidence
+    +Boolean support_uncertain
+}
+
+class Clarification {
+    +String id
+    +String item_id
+    +String uncertainty_key
+    +String answer?
+    +Integer answer_revision
+    +String interpretation_status
+    +String resolution
+    +Object interpretation?
+    +Object reconciled_from?
+    +String _capacity_token? [private_pending_generation]
+    +Integer _capacity_retry_bytes? [private_bounded_receipt_room]
+}
+
+class cv_conversations {
+    +String user_id
+    +String cv_id?
+    +Integer segment
+    +Integer revision
+    +ChatMessage[] messages
+    +Object active_question?
+    +Object receipts
+}
+
+class ChatMessage {
+    +String id
+    +Integer sequence
+    +String role [user/assistant]
+    +String text
+    +Date created_at
+    +ChatAction[] actions
+}
+
+class ChatAction {
+    +String id
+    +String kind
+    +String status
+    +String item_id?
+    +String question_id?
+    +Object source_snapshot
+    +Object original_mutation?
+    +Date lease_until?
+}
+
+class users {
+    +CapabilityDeclaration[] capability_declarations
+    +Integer declarations_version
+}
+
+class CvConfirmation {
+    +String goal_id
+    +Integer goal_version
+    +Integer selection_version
+    +String projection_hash
+    +Date confirmed_at
+}
+
+class ConfirmedRequirement {
+    +String id [stable_projection_identity]
+    +String source_requirement_id
+    +String kind [qualification/date/requirement]
+    +String source_category
+    +String source_priority
+    +String source_origin
+    +String description
+    +String evidence?
+    +String group_id?
+    +String group_operator?
+}
+
+class career_state {
+    +CvConfirmation cv_confirmation?
+    +Object[] cv_confirmation_receipts
+}
+
+cvs *-- CvItem : source items
+cvs *-- Clarification : source-linked answers and interpretation
+CvItem *-- SkillClaim : source-scoped attribution
+CvItem *-- Evidence : bounded excerpts
+cv_conversations *-- ChatMessage : retained bounded segments
+ChatMessage *-- ChatAction : independent outcomes and exact retries
+users *-- CapabilityDeclaration : Profile-owned manual evidence
+CapabilityDeclaration *-- Contribution : preserves explanations
+CapabilityDeclaration *-- CvReference : explicit attachment
+career_state *-- CvConfirmation : acknowledgement only
+CvConfirmation --> ConfirmedRequirement : projection preserves source provenance
+note for CvConfirmation "Exact canonical goal/selection/projection identity; no independent target store and no assessment claim."
+note for ConfirmedRequirement "Generic eligibility/location constraints stay unresolved context; no forced qualification interpretation. Alternatives and full bounded evidence survive projection."
+note for cv_conversations "Operational CV history, separate from factual evidence revisions. Manual-only history may have no CV reference."
+note for ChatAction "Public responses exclude internal leases, execution snapshots and original mutation controls."

@@ -1,8 +1,7 @@
 # Run Coachify locally
 
 Use Docker Desktop, Node.js 24 and Python 3.12. The active local stack contains
-NGINX, the Next.js frontend, the Profile API, the Career preview API and MongoDB. Other backend services
-are placeholders. See the [API overview](api/README.md) and individual service
+NGINX, the Next.js frontend, Profile, saved CV ingestion/review, Career goal/research and MongoDB. Roadmap, Dashboard and Review remain placeholders. See the [API overview](api/README.md) and individual service
 READMEs for feature details.
 
 ## Configure and start
@@ -22,7 +21,7 @@ Gmail SMTP. Fill in these values before starting:
 | `SMTP_USERNAME`, `SMTP_FROM` | Your Gmail sender address (use the same address for both). |
 | `SMTP_PASSWORD` | That sender's Google App Password, without spaces. |
 | `OTP_HASH_SECRET` | Generate once with `openssl rand -hex 32`. |
-| `MONGO_ROOT_PASSWORD`, `PROFILE_DB_PASSWORD` | Generate each separately with `openssl rand -hex 24`. Preserve existing values when reusing your database. |
+| `MONGO_ROOT_PASSWORD`, `PROFILE_DB_PASSWORD`, `CV_DB_PASSWORD`, `CAREER_DB_PASSWORD` | Generate each separately with `openssl rand -hex 24`. Preserve existing values when reusing your database. |
 
 Keep the supplied `APP_ENV=development`, `AUTH_MODE=email`, SMTP host, port and
 security values. No Google OAuth variables or Mailpit variables are needed.
@@ -111,25 +110,49 @@ sign-in. Deploy behind HTTPS; the local Compose file is a development deployment
 not a complete public production hosting configuration. School lookups still need
 no API key or download.
 
-## Career Goal previews
+## Career goal and CV confirmation
 
-The normal Compose command also builds and starts `career-service`. No new
-credentials, MongoDB users or Gemini key are required. Open `/career-goal` after
-sign-in and initial profile setup. Paste a description, import a public URL, or
-upload a PDF/DOCX/TXT document. All previews are temporary; refreshing or leaving
-the page discards them. No descriptions or original files are saved in MongoDB.
-Only future approved structured information will be persisted after its schema
-is agreed. The [Career service README](../services/career-service/README.md)
-explains endpoints and current limitations.
+Career supports temporary text/URL/PDF/DOCX/TXT previews without model calls or persisted raw sources. Explicit JD extraction and conversational discovery use configured Gemini/Brave and save structured canonical goals/research. The current goal and chat appear at `/career-goal`; successful goal saves are automatic, while a new JD preserves the old goal until validated replacement. Provider failures retain saved progress. See the [Career service](../services/career-service/README.md).
 
-Career verifies sessions through Profile over the internal Docker network. Its
-private temporary upload directory is a bounded tmpfs, not a persistent volume.
-If running Career independently, install `.[test]` from `services/career-service` in a
-separate Python environment, set `PROFILE_SERVICE_URL=http://localhost:8080` with
-the Profile stack already running, then run `uvicorn app.main:app --port 8001
---no-access-log` from the Career service directory (one command line). Explicitly
-load any service-specific environment file when running outside Compose. Use a
-verified Coachify session for API tests. There are no save/analysis endpoints yet.
+Before using that goal for target-relevant CV clarification, review the saved goal and explicitly confirm its current revision for CV review. Career stores acknowledgement of the exact goal ID/version/selection, not a second target record. Editing or replacing the goal requires confirmation again. Previously saved CV answers remain source-bound. Old reviewed-target snapshots are retained historical data rather than another active selection screen.
+
+Career accesses CV only through its owner-authenticated API. The internal projection preserves original source identities and uncertainty, with a separate 512 KiB intake limit. Oversized data produces an actionable error without truncation; CV review itself remains available. This is not skill mastery or an assessment computation. Private preview buffers use bounded tmpfs; canonical goals/research use the scoped Career database.
+
+## Saved CV upload and review
+
+Open `/cv` after signing in and completing initial setup. CV records are stored
+in `coachify_ingestion`; manual capability declarations stay with the existing
+Profile account. Uploading a file never changes the selected CV. Choose a ready
+CV explicitly before using its versioned capability input.
+
+The Compose file uses a 10 MiB file limit and an 11 MiB gateway request limit
+to allow multipart overhead. PDF/DOCX parsing is bounded; OCR is not included.
+Originals use the private `cv_uploads` volume for the documented retry window.
+Only structured extraction and bounded evidence are saved in MongoDB.
+
+Configure `CV_LLM_MODEL` and `CV_LLM_API_KEY` yourself in private settings to enable structured extraction, text routing and clarification-answer interpretation.
+`CV_LLM_BASE_URL` defaults to
+`https://api.groq.com/openai/v1`. Choose a model supporting JSON object output;
+the server validates the schema and cited evidence before publication. Keys
+stay on the server. Missing configuration is an actionable processing error,
+never a synthetic successful extraction. No provider calls are needed for
+automated tests. See [Groq compatibility](https://console.groq.com/docs/openai)
+and [structured output modes](https://console.groq.com/docs/structured-outputs).
+
+CV obtains the current canonical goal projection through Career using the same owner session, after explicit confirmation of its exact goal/version/selection revision. Compose supplies `CAREER_SERVICE_URL=http://career-service:8000`; set it
+explicitly for direct service runs. On the CV screen, start a guided chat review, answer naturally or skip; detailed evidence and direct review controls remain in the summary. The raw answer is saved before interpretation.
+Supported changes appear against the relevant source, including personal/team
+attribution, assistance, explicit skill details and optional partial dates. A failed
+interpretation leaves the answer available for retry; a saved answer alone does
+not mean the uncertainty is resolved. Reload restores answers and skips. Changing or replacing the confirmed goal updates relevance without deleting those source facts or repeating resolved
+questions. No confirmed current goal defers preparation; an unavailable service shows a retry.
+Reprocessing or explicitly comparing a replacement can require a source-by-source
+review before applying a candidate. Manual capability links report changed or
+removed sources and can be explicitly relinked or detached without losing the
+declaration. The target-bound analysis input checks current revisions and requires
+the future consumer to revalidate them. Assessment admission, gap analysis,
+saved-result staleness and roadmap generation remain unimplemented. See the
+[CV specification](../services/cv-service/SPEC.md).
 
 ## Stop without deleting data
 
@@ -137,8 +160,7 @@ verified Coachify session for API tests. There are no save/analysis endpoints ye
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml down
 ```
 
-The MongoDB container includes an `rseq` compatibility setting for this machine's
-Docker Desktop kernel. Review the deployment environment before production.
+MongoDB 8 requires a compatible kernel. Do not treat a local startup compatibility failure as an application test pass or silently bypass the server's guard. CI's MongoDB jobs use the compatible pinned runner; local MongoDB 7 functional checks are reported separately.
 See [testing](testing.md) for automated checks and disposable test stacks.
 
 ## Gemini reasoning configuration
@@ -216,16 +238,7 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
 ```
 
-For exploration turns set `AI_ENABLED=true` and your server-only `GEMINI_API_KEY`.
-Without AI configuration transient JD import previews still work;
-exploration and JD extraction/clarification require a configured provider. Open
-Career Goal → Explore careers, or select **Extract career goal** after preparing a JD
-to use the same chat page. Extraction sends the JD to the configured AI; results
-remain temporary candidates until a future publishing workflow. Use a processed CV if one exists, continue
-without one, or attach a temporary CV with the accuracy warning. Dedicated Resume
-& Tracker uploads remain planned. Temporary originals/text are discarded; saved
-progress may require the same CV to be reattached after reload. Every confirmed
-goal stays requirements pending until J03/J10 skill generation is implemented.
+For Career interpretation/research, configure `AI_ENABLED`, `GEMINI_API_KEY` and `BRAVE_API_KEY` yourself. Without those settings, temporary import previews and saved reads remain available; model-backed extraction, discovery and research report their unavailable state. Use the implemented Resume & Tracker upload/review for durable CV context, or deliberately continue Career without a CV. Temporary Career attachments are not durable CV extraction. Structured goals save through the canonical workspace; explicit CV confirmation does not claim job readiness or completed analysis.
 
 ## Docker hot reload
 
@@ -243,8 +256,7 @@ Rebuild the Career image once after installing the new LangGraph/checkpointer/to
 Use `AI_ENABLED=true`, `GEMINI_API_KEY` and `BRAVE_API_KEY`. Chat output stays
 bounded at 1,024 tokens, interview synthesis at 2,048 and JD extraction at 4,096;
 `AI_MAX_OUTPUT_TOKENS` remains the overall ceiling. `AI_TIMEOUT_SECONDS`,
-`AI_RETRIES` and `AI_CONTEXT_TOKENS` retain their task limits. Production never
-imposes no local token-per-minute admission limit.
+`AI_RETRIES` and `AI_CONTEXT_TOKENS` retain their task limits. Production imposes no local token-per-minute admission limit; provider quotas and bounded requests still apply.
 Google/Brave HTTP 429 responses still pause unfinished work using the provider's
 retry delay. Saved goals and completed research steps survive a wait.
 
@@ -281,3 +293,9 @@ The existing Gemini/Brave keys also support the new discovery route.
 Optional `DISCOVERY_*` sample/freshness limits and rebuild instructions are described
 in [Career Discovery](../services/career-service/CAREER_DISCOVERY.md). Rebuild both
 Career and frontend after source changes; production containers do not mount source.
+
+## Session and verification boundaries
+
+There is no new five-minute inactivity lock. Recoverable session checks preserve drafts; actual expiry/revocation, sign-out and account changes clear private state. Browser reload/discard and confirmed navigation can lose unsent React-memory drafts. CV history is saved on the server, separately from unsent text.
+
+Startup/configuration commands in this guide are for the user to run with private settings. Agents must not read environment files. Automated verification uses isolated resources and explicit synthetic settings; the approved public-template test exception applies only to that exact test against a clean tracked template. Existing recordings from before an integration demonstrate that earlier build, not the newly merged application.

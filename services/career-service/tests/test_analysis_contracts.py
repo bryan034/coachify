@@ -11,6 +11,21 @@ from app.schemas.analysis import (CareerGoal, CvSnapshot, InterviewResearch, Res
     SkillGapAnalysis, mongo_document)
 
 
+def read_stored_goal(document):
+    """Exercise the real repository boundary for operational storage metadata."""
+    from app.repositories.analysis import AnalysisRepository
+    class Collection:
+        def find_one(self,query):
+            assert query=={'_id':document['_id'],'user_id':document['user_id']}
+            return copy.deepcopy(document)
+    class Database:
+        def with_options(self,**_):return self
+        def __getitem__(self,name):
+            assert name=='career_goals'
+            return Collection()
+    return AnalysisRepository(Database()).get_private('career_goals',str(document['_id']),document['user_id'])
+
+
 @pytest.mark.parametrize('scenario', ['specific_job', 'career_exploration'])
 def test_both_goal_scenarios_preserve_null_company_and_unknown_proficiency(documents, scenario):
     data = documents['goal']
@@ -30,7 +45,11 @@ def test_objectids_roundtrip_bson_without_changing_account_uuid(documents):
     assert isinstance(data['_id'], ObjectId)
     assert isinstance(data['user_id'], str)
     restored = BSON(BSON.encode(data)).decode(codec_options=CodecOptions(tz_aware=True))
-    assert CareerGoal.model_validate(restored) == goal
+    assert restored['create_key']=='canonical:'+goal.id
+    # create_key is storage-only compatibility metadata, not a public field.
+    with pytest.raises(ValidationError):CareerGoal.model_validate(restored)
+    assert read_stored_goal(restored)==goal
+    assert 'create_key' not in read_stored_goal(restored).model_dump()
 
 
 @pytest.mark.parametrize('field,value', [('source_text', 'full description'), ('raw_jd', 'full description'),
@@ -133,7 +152,7 @@ def test_missing_research_is_partial_and_unknown_not_shortfall(documents):
 def test_json_schema_artifacts_match_models():
     root = Path(__file__).resolve().parents[3] / 'contracts/api/models'
     for name, model in [('career-goal', CareerGoal), ('interview-research', InterviewResearch),
-                        ('skill-gap-analysis', SkillGapAnalysis), ('cv', CvSnapshot)]:
+                        ('skill-gap-analysis', SkillGapAnalysis), ('career-cv-snapshot', CvSnapshot)]:
         assert json.loads((root / f'{name}.schema.json').read_text()) == model.model_json_schema(by_alias=True)
 
 
@@ -173,3 +192,42 @@ def test_legacy_importance_normalizes_and_conflicts_block_readiness(documents):
     with pytest.raises(ValidationError):CareerGoal.model_validate(data)
     data['readiness']='pending'
     assert CareerGoal.model_validate(data).skills[0].priority=='conflicting'
+
+
+@pytest.mark.parametrize('cv_id', ['22222222-2222-4222-8222-222222222222', '000000000000000000000001'])
+def test_cv_references_roundtrip_without_remapping_career_identity(documents, cv_id):
+    from app.schemas.goals import CvContext, StartExploration
+    goal = CareerGoal.model_validate({**documents['goal'], 'source_cv_id': cv_id})
+    stored = mongo_document(goal)
+    assert isinstance(stored['_id'], ObjectId)
+    assert stored['source_cv_id'] == (ObjectId(cv_id) if len(cv_id) == 24 else cv_id)
+    restored = BSON(BSON.encode(stored)).decode(codec_options=CodecOptions(tz_aware=True))
+    assert restored['create_key']=='canonical:'+goal.id
+    restored_goal=read_stored_goal(restored)
+    assert restored_goal.id==goal.id and restored_goal.user_id==goal.user_id
+    assert restored_goal.source_cv_id==cv_id
+    assert CvContext(mode='saved', cv_id=cv_id).cv_id == cv_id
+    assert StartExploration(consent=True, cv_id=cv_id).cv_id == cv_id
+    result = SkillGapAnalysis.model_validate({**documents['analysis'], 'cv_id': cv_id,
+        'inputs': {**documents['analysis']['inputs'], 'cv_id': cv_id}})
+    data = mongo_document(result)
+    assert data['cv_id'] == data['inputs']['cv_id']
+    assert SkillGapAnalysis.model_validate(BSON(BSON.encode(data)).decode(
+        codec_options=CodecOptions(tz_aware=True))).cv_id == cv_id
+
+
+@pytest.mark.parametrize('cv_id', ['not-a-reference', '../other', '22222222-2222-4222-8222-22222222222Z'])
+def test_cv_reference_validation_does_not_relax_career_domain_ids(documents, cv_id):
+    from app.schemas.goals import StartExploration
+    with pytest.raises(ValidationError): StartExploration(consent=True, cv_id=cv_id)
+    with pytest.raises(ValidationError): CareerGoal.model_validate({**documents['goal'], '_id': '22222222-2222-4222-8222-222222222222'})
+
+
+def test_unmapped_cv_source_identity_cannot_silently_enter_registry_analysis(documents):
+    from app.clients.cvs import MAPPING_VERSION
+    cv = CvSnapshot.model_validate({**documents['cv'], 'skill_mapping_version': MAPPING_VERSION})
+    goal = CareerGoal.model_validate(documents['goal'])
+    result = SkillGapAnalysis.model_validate(documents['analysis'])
+    research = [InterviewResearch.model_validate(documents['research'])]
+    with pytest.raises(ContractConflict, match='mapping versions disagree'):
+        validate_inputs(result.user_id, result.inputs, cv, goal, research, 1)

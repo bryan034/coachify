@@ -1,45 +1,56 @@
+"""Public saved-CV contract and storage guarantees after Career integration."""
+from copy import deepcopy
 import json
-import os
 from pathlib import Path
 from uuid import uuid4
 import pytest
 from pydantic import ValidationError
-from pymongo import MongoClient
-from app.schemas.cv import CvSnapshot
-from app.repositories.cvs import CvRepository
+from app.domain.errors import Conflict
+from app.schemas.cv import CvDetail, ItemMutation
+from tests.conftest import ready
 
 
 def fixture():
     return json.loads((Path(__file__).parent / 'cv.json').read_text())
 
 
-def test_authoritative_cv_schema_matches_career_wire_snapshot():
+def test_authoritative_cv_schema_describes_the_public_saved_cv_response():
     artifact = Path(__file__).resolve().parents[3] / 'contracts/api/models/cv.schema.json'
-    assert CvSnapshot.model_json_schema(by_alias=True) == json.loads(artifact.read_text())
-    assert CvSnapshot.model_validate(fixture()).skills[0].proficiency is None
+    assert CvDetail.model_json_schema() == json.loads(artifact.read_text())
+    value = CvDetail.model_validate(fixture())
+    assert value.status == 'ready'
+    assert value.skills[0].proficiency is None
+    assert 'file_url' not in value.model_dump() and 'user_id' not in value.model_dump()
 
 
-@pytest.mark.parametrize('changes', [{'user_id':'not-uuid'}, {'file_url':'https://public.test/cv.pdf'},
-    {'source_text':'private raw CV'}, {'extraction_status':'failed'}, {'version':True}])
-def test_invalid_cv_records_are_rejected(changes):
-    with pytest.raises(ValidationError): CvSnapshot.model_validate({**fixture(), **changes})
+@pytest.mark.parametrize('changes', [
+    {'user_id': 'not-uuid'}, {'file_url': 'https://public.test/cv.pdf'},
+    {'source_text': 'private raw CV'}, {'extraction_status': 'failed'},
+    {'expected_version': True},
+])
+def test_invalid_cv_write_controls_are_rejected(changes, harness):
+    client, *_ = harness
+    cv = ready(harness)
+    body = {'expected_version': cv['version'], 'mutation_id': str(uuid4()),
+            'action': 'update', 'title': 'A deliberate correction', **changes}
+    with pytest.raises(ValidationError): ItemMutation.model_validate(body)
+    before = client.get('/api/v1/cv/' + cv['id']).json()
+    result = client.patch('/api/v1/cv/' + cv['id'] + '/items/' + cv['items'][0]['id'], json=body)
+    assert result.status_code == 422
+    assert client.get('/api/v1/cv/' + cv['id']).json() == before
 
 
-def test_cv_mongo_roundtrip_and_private_owner_isolation():
-    uri = os.getenv('MONGODB_TEST_URI')
-    if not uri: pytest.skip('Set MONGODB_TEST_URI to a disposable MongoDB.')
-    client = MongoClient(uri, serverSelectionTimeoutMS=3000)
-    name = 'coachify_cv_test_' + uuid4().hex
-    try:
-        client.admin.command('ping')
-        repo = CvRepository(client[name]); repo.ensure_indexes()
-        data = fixture(); owner = data['user_id']
-        record = repo.save(data, owner)
-        assert repo.save(data, owner) == record
-        assert repo.get(record.id, owner) == record
-        assert repo.get(record.id, 'foreign') is None
-        data['file_name'] = 'changed.txt'
-        with pytest.raises(ValueError): repo.save(data, owner)
-        assert client[name].cvs.count_documents({}) == 1
-    finally:
-        client.drop_database(name); client.close()
+def test_cv_repository_roundtrip_idempotency_and_private_owner_isolation(harness):
+    _, app, *_ = harness
+    cv = ready(harness)
+    repo = app.state.repository
+    original = repo.get('owner-a', cv['id'])
+    assert repo.insert(deepcopy(original)) == original
+    assert repo.get('owner-a', cv['id']) == original
+    assert repo.get('owner-b', cv['id']) is None
+    assert len(repo.list('owner-a')) == 1
+    conflicting = deepcopy(original)
+    conflicting['upload_fingerprint'] = 'different synthetic file fingerprint'
+    with pytest.raises(Conflict): repo.insert(conflicting)
+    assert len(repo.list('owner-a')) == 1
+    assert repo.get('owner-a', cv['id']) == original

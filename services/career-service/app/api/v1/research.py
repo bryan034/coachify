@@ -40,10 +40,12 @@ def presentation(record,context,*,status=None,reused=False,historical=False):
 @router.get('/{goal_id}/interview-research')
 async def read(goal_id:str,request:Request,research_id:str|None=Query(default=None),account=Depends(owner)):
     goal=await run_in_threadpool(goal_for,request,account,goal_id);repo=repository(request)
-    record=await run_in_threadpool(repo.read,account,goal.id,identifier(research_id) if research_id else None)
-    context=context_for(goal);cache=await run_in_threadpool(repo.cache.find_one,{'_id':context.reuse_key()}) or {}
+    record=await run_in_threadpool(repo.read,account,goal.id,identifier(research_id) if research_id else None,goal_version=goal.version)
+    context=ResearchContext(**{key:getattr(record,key) for key in ResearchContext.model_fields}) if research_id and record else context_for(goal)
+    cache=await run_in_threadpool(repo.cache.find_one,{'_id':context.reuse_key()}) or {}
     state=await run_in_threadpool(goals(request).current,account)
     status=record.research_status if research_id and record else cache.get('status','missing')
+    if record is None and status in ('succeeded','no_findings'):status='missing'
     if status=='processing' and cache.get('lease',{}).get('expires_at',now())<=now():status='failed'
     history=await run_in_threadpool(repo.linked,account,goal.id)
     reused=await run_in_threadpool(repo.was_reused,account,goal.id,record)
@@ -60,11 +62,11 @@ async def acquire(goal_id:str,body:ResearchRequest,request:Request,account=Depen
         raise GoalError('Your selected goal changed. Reload before researching.')
     started=await run_in_threadpool(repo.begin,context,body.refresh)
     if started.get('processing'):
-        old=await run_in_threadpool(repo.read,account,goal.id)
+        old=await run_in_threadpool(repo.read,account,goal.id,goal_version=goal.version)
         return jsonable_encoder(presentation(old,context,status='processing'),by_alias=True)
     if started.get('record'):
         record=started['record']
-        await run_in_threadpool(repo.attach,account,goal.id,body.expected_selection_version,key,digest,record,reused=True)
+        await run_in_threadpool(repo.attach,account,goal.id,body.expected_selection_version,key,digest,record,goal_version=goal.version,reused=True)
         return jsonable_encoder(presentation(record,context,reused=True),by_alias=True)
     token=started['token']
     try:
@@ -78,7 +80,7 @@ async def acquire(goal_id:str,body:ResearchRequest,request:Request,account=Depen
                 created_at=stamp,updated_at=stamp,**context.model_dump(),sources=sources,summaries=batch.summaries,skills=skills,process=result.data.process,
                 research_status='succeeded' if skills or result.data.process.stages or result.data.process.round_count is not None else 'no_findings',last_researched_at=stamp,generation=result.generation)
             record=await run_in_threadpool(repo.finish,context,token,record)
-            await run_in_threadpool(repo.attach,account,goal.id,body.expected_selection_version,key,digest,record)
+            await run_in_threadpool(repo.attach,account,goal.id,body.expected_selection_version,key,digest,record,goal_version=goal.version)
             return jsonable_encoder(presentation(record,context),by_alias=True)
     except (GoalError,AIError,TimeoutError,ValueError,PyMongoError,asyncio.CancelledError) as error:
         await run_in_threadpool(repo.fail,context,token,'unavailable' if isinstance(error,GoalError) and error.status==503 else 'failed')

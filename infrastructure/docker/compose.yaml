@@ -28,6 +28,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       MONGODB_URI: mongodb://coachify_profile:${PROFILE_DB_PASSWORD:?Set PROFILE_DB_PASSWORD}@mongodb:27017/coachify_profile
       MONGODB_DATABASE: coachify_profile
+      CV_SERVICE_URL: http://cv-service:8000
     depends_on:
       mongodb:
         condition: service_healthy
@@ -81,9 +82,24 @@ services:
   cv-service:
     build: ../../services/cv-service
     environment:
+      APP_ENV: ${APP_ENV:-production}
       PROFILE_SERVICE_URL: http://profile-service:8000
+      CAREER_SERVICE_URL: http://career-service:8000
       MONGODB_URI: mongodb://coachify_cv:${CV_DB_PASSWORD:?Set CV_DB_PASSWORD}@mongodb:27017/coachify_ingestion
       MONGODB_DATABASE: coachify_ingestion
+      CV_STORAGE_PATH: /app/uploads
+      CV_MAX_FILE_BYTES: '10485760'
+      CV_MAX_SAVED_CVS_PER_OWNER: ${CV_MAX_SAVED_CVS_PER_OWNER:-50}
+      CV_MAX_SAVED_CVS_GLOBAL: ${CV_MAX_SAVED_CVS_GLOBAL:-10000}
+      CV_MAX_ORIGINAL_BYTES_PER_OWNER: ${CV_MAX_ORIGINAL_BYTES_PER_OWNER:-104857600}
+      CV_MAX_ORIGINAL_BYTES_GLOBAL: ${CV_MAX_ORIGINAL_BYTES_GLOBAL:-10737418240}
+      CV_MODEL_CALLS_PER_OWNER_PER_DAY: ${CV_MODEL_CALLS_PER_OWNER_PER_DAY:-120}
+      CV_MODEL_CALLS_GLOBAL_PER_DAY: ${CV_MODEL_CALLS_GLOBAL_PER_DAY:-2000}
+      CV_MODEL_CONCURRENT_PER_OWNER: ${CV_MODEL_CONCURRENT_PER_OWNER:-1}
+      CV_MODEL_CONCURRENT_GLOBAL: ${CV_MODEL_CONCURRENT_GLOBAL:-3}
+      CV_LLM_BASE_URL: ${CV_LLM_BASE_URL:-https://api.groq.com/openai/v1}
+      CV_LLM_MODEL: ${CV_LLM_MODEL:-}
+      CV_LLM_API_KEY: ${CV_LLM_API_KEY:-}
     depends_on:
       profile-service:
         condition: service_started
@@ -91,6 +107,11 @@ services:
         condition: service_completed_successfully
     networks: [backend, database]
     read_only: true
+    volumes: [cv_uploads:/app/uploads]
+    tmpfs:
+      - /tmp:size=64m,mode=0700,uid=10001,gid=10001
+    mem_limit: 768m
+    pids_limit: 64
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   mongodb-career-init:
@@ -137,3 +158,4 @@ networks:
     internal: true
 volumes:
   profile_data: {}
+  cv_uploads: {}

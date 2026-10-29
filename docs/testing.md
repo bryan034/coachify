@@ -3,24 +3,12 @@
 ## Current state
 
 The profile slice has component, browser and API tests plus real MongoDB integration.
-Career has preview/AI/contract tests and CV has contract tests; Roadmap, Dashboard
-and Review still have empty suites. Empty suites pass; real failures do not.
+Career has preview/AI/contract/workflow tests; CV has parser, saved-operation, interpretation, owner/mutation, conversation and handoff tests. Only the unimplemented Roadmap, Dashboard and Review services may pass with empty suites. Implemented services must collect tests.
 See [application setup](setup.md) and the affected service README for setup and service details.
 
 ## Suite maintenance
 
-Keep tests for distinct behaviours and boundaries, including cross-service contracts.
-When consolidating overlapping tests, move unique assertions into the retained case.
-Remove obsolete UI journeys when the current journey covers their useful checks;
-do not remove valid failing tests to make CI pass.
-
-The 26 October 2026 cleanup removed nine cases: three overlapping/default-only
-Career backend checks, three superseded form-based onboarding cases, two duplicate
-chat retry/formatting cases and one obsolete manual goal editor browser journey.
-Retry preservation, Markdown formatting, provider scope, saved-goal reload and mobile
-research-source assertions remain in the current tests. That cleanup left 772 discovered
-cases: 648 backend, 95 frontend component/unit, 17 mocked browser and 12 full-stack
-browser cases. Parameterised cases are counted separately.
+Preserve checks for distinct behavior and boundaries, including cross-service contracts. If a UI journey is replaced, retain its useful ownership, draft, retry and validation assertions against the new flow. Do not weaken or remove valid failures to obtain a pass. Historical discovery totals and earlier passing logs are not evidence for the current merged tree; report exact current results separately.
 
 ## Local commands
 
@@ -46,9 +34,7 @@ python -m pytest
 ```
 
 Each service's `tests/` directory is the pytest discovery root. Raw pytest exits 5
-when no tests are collected; CI treats only that code as success. All other
-nonzero exit codes fail. The profile integration job starts MongoDB; ordinary
-backend unit jobs do not.
+when no tests are collected; CI permits it only for the three unimplemented scaffolds. Other nonzero exits fail. Profile, CV and Career integration jobs start MongoDB; ordinary backend unit jobs do not.
 
 ## Automation
 
@@ -108,10 +94,27 @@ public identifier, when running `npm run test:e2e --workspace apps/frontend`.
 
 ## Career input/previews
 
-Run Career pytest from `services/career-service` in a separate virtual environment
-(`python -m pip install -e ".[test]"`, then `python -m pytest`). The existing CI
-career matrix job now runs these tests. Do not collect Profile and Career together
-in one Python process because both use an `app` package. Frontend tests cover
+Run Career pytest from `services/career-service` in a separate virtual environment.
+Provision its tokenizer cache before the suite enables network isolation:
+
+```sh
+python -m pip install -e ".[test]"
+export TIKTOKEN_CACHE_DIR="$(mktemp -d)"
+python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
+python -m pytest
+```
+
+The provisioning command downloads the vocabulary used by the pinned tokenizer;
+reuse an already populated `TIKTOKEN_CACHE_DIR` when running offline. Both Career
+CI paths provision it into a disposable runner cache after dependency installation
+and before pytest. Do not collect Profile and Career together
+in one Python process because both use an `app` package. The shared Career harness
+clears inherited application database, provider and tracing settings before collection
+and each test; only `MONGODB_TEST_URI` remains an explicit disposable-database opt-in.
+Default HTTPX/Requests transports and the preview socket connector are blocked.
+Tests inject synthetic settings and mock transports after setup; use an already
+populated `TIKTOKEN_CACHE_DIR` because tokenizer downloads are blocked too.
+Frontend tests cover
 three methods, Unicode, failure recovery, method-switch races and temporary state.
 The full-stack Career browser test uses the usual disposable Compose stack and
 Mailpit variables; no live Gemini key or live website is used. Career imports are rate
@@ -138,9 +141,7 @@ labelled inferences, structured job fields and URL metadata, context-only chat,
 proposal approval, invalid history, empty results and recoverable failures. They
 verify raw JD text is excluded from chat requests and unknown requirements are not
 promoted to employer facts; they do not establish live-model extraction accuracy. Browser coverage checks
-automatic document reading, the shared chat and explicit proposal approval. Activity
-tests verify drafts survive tab switches, interaction renews the five-minute deadline,
-and expiry blocks the mounted workspace until explicit refresh.
+automatic document reading, the shared chat and explicit proposal approval. Session compatibility checks verify draft-preserving revalidation, explicit retry and actual authentication expiry. The upstream idle-activity component is not mounted by the merged workspace; its standalone tests do not establish an active inactivity policy.
 
 Docker hot-reload verification uses an isolated Compose project with `/dev/null`
 as its environment-file source and explicit synthetic settings. A disposable client
@@ -203,22 +204,27 @@ Foreground extraction regressions cover reconnecting an identical JD under a new
 key during a 600-second simulated quota wait, replay/ownership checks, safe
 different-input conflicts and chat navigation retaining its request key. A Chromium
 journey leaves/reopens pending extraction and reaches the saved goal without 409s.
-The optional `OPPORTUNITY_LIVE_TEST=1` smoke consumes actual configured public
-provider requests; it is skipped by default. Frontend unit/browser checks cover
+The live Opportunity smoke remains skipped by the shared synthetic harness, which
+clears inherited `OPPORTUNITY_LIVE_TEST` and blocks provider transports. Live-provider
+evaluation needs a separately authorized isolated setup. Frontend unit/browser checks cover
 source/confidence/date transparency, partial status and category-only refresh.
 
-Career Discovery tests cover broad/specific directions, scope confirmation before
-search, owner/version/idempotency boundaries, source quotations, stage mismatch,
+Career Discovery tests cover broad/specific directions, automatic research for a
+clear direction, owner/version/idempotency boundaries, source quotations, stage mismatch,
 deduplicated listing frequencies, limited/no evidence, provider errors, quota recovery,
 immutable refresh evidence, interrupted conversation-commit recovery with payload-bound
 checkpoint replay, and shared goal persistence without a CV. Frontend tests
-cover category review and explicit confirmation using the existing goal endpoint;
+cover category review and explicit final confirmation using the existing goal endpoint;
 `career-discovery.spec.ts` checks the same journey and mobile width in Chromium.
-Provider requests are mocked. The optional live Opportunity test remains opt-in.
+Transcript/context regressions cover reload, duplicate-message replay, bounded memory
+and recent context, messages during research, optional questions, scope changes and
+re-synthesis before stale results can publish. Context-list checks retain the newest
+distinct entries while validating every supplied entry before trimming. Provider
+requests are mocked.
 
 
 Gemini reasoning migration regressions use synthetic settings and HTTP responses:
-all production stages share Gemini 3.5 Flash Lite and ignore unused provider/model/key
+all Career production stages share Gemini 3.5 Flash Lite and ignore unused provider/model/key
 switches. Brave grounding snippets
 pass through the real JSON-schema adapter into every existing research field in all
 five categories; model round-trips, exact citations, invalid aliases and forged
@@ -250,10 +256,11 @@ operation/workspace activity arrays; domain schema artifacts are unchanged.
 
 Gemini rejection regressions cover native invalid-key/model/project/schema/parameter
 errors, malformed bodies, safe API/log diagnostics, no schema-free fallback, and a
-single explicit model override across every role. The Docker-template check reads
-only the public `.env.example`, verifies that every declared key is consumed by the
-active Compose file, and requires example secrets to remain blank. Private environment
-files and live provider credentials are not used.
+single explicit model override across every Career role. The Docker-template check
+uses only the user-approved clean tracked public template in an isolated copy,
+verifies that every declared key is consumed by the active Compose file, and requires
+example secrets to remain blank. This exact-test exception does not permit inspecting
+modified local examples or other environment files. Live provider credentials are not used.
 
 `services/career-service/tests/test_compact_workspace.py` covers canonical goal promotion,
 in-place edits/version conflicts, activation recovery, compact progress/results, lazy
@@ -300,6 +307,7 @@ reuse. Frontend chat tests mock the summary endpoint and verify completion and f
 rejection of forged destinations, per-finding citation coverage, summary-only bounded
 repairs, discarded-response privacy, owner-scoped failed-operation diagnostics and
 operation IDs. Frontend API coverage checks that error objects retain operation IDs.
+These checks use synthetic responses; they do not establish live-provider quality.
 
 Chat completion regressions cover delayed saved-report reads, automatic summary startup,
 finished partial coverage, report-read retry without paid research, concise selection of
@@ -317,3 +325,100 @@ escaped model links do not become active citations.
 unknown/undeclared references are rejected, source URLs deduplicate within a claim,
 fresh-search references resolve, and expanded answers respect the reply limit. The
 frontend interview-list regression checks the links are inside their supported stage.
+
+## Saved CV checks
+
+CV tests cover parsing restrictions, extraction/evidence validation, ownership,
+durable worker processing and lease fencing, idempotency, correction overlays,
+clarification answer/skip behavior, explicit selection and versioned capability
+input. Profile capability tests cover account-field preservation, normalized
+matching, explicit attachment/distinct declarations and concurrent retries.
+
+The full-stack CV browser test additionally exercises the real HTTP model adapter
+against a deterministic synthetic server. Start the disposable stack with both
+`-f infrastructure/docker/compose.yaml` and
+`-f infrastructure/docker/compose.test.yaml`, and provide all four test database
+passwords including `CV_DB_PASSWORD` and `CAREER_DB_PASSWORD`. The override uses a development-only HTTP
+fixture and must not be used for personal CVs or production. It rejects sources
+without the explicit synthetic marker. Generate the committed synthetic DOCX
+fixtures with `python infrastructure/testing/make-cv-fixtures.py`.
+
+The saved CV journey checks manual entry before upload, extraction, no automatic
+selection, saved correction after reload and exact-source reprocessing, versioned
+handoff, provider failure isolation and cross-account access. The clarification integration journey uses the canonical Career goal with explicit version-bound confirmation and real CV HTTP context requests: project/work answers, skill skips, reload, goal changes, reconfirmation and voluntary answers. It verifies preserved effective versions and owner isolation. These checks establish application behavior and contract
+handling, not real-provider extraction quality; evaluate the configured model on
+reviewed synthetic CVs before relying on its interpretation.
+
+Profile compatibility adds unit and browser coverage for C-series drafts through session
+revalidation, transient or malformed validation responses, explicit retry and
+expiry/account changes. Healthy periodic checks remain silent; there is no new
+inactivity lock. The real-service branch matrix covers students, National Service,
+employment and both unemployment paths, including edits after a saved CV upload.
+Its uploads are paced to the unchanged gateway limit of six per minute because
+the synthetic accounts share one IP. Native browser cache eligibility and actual
+model interpretation quality are not established by these checks.
+
+## C-series interpretation completion
+
+Clarification tests separate answer receipt, interpretation status and factual
+resolution. Synthetic cases cover personal/team/observed/denied contribution,
+explicit new personal skills, unknown values, independent supporting sources,
+attribute preservation, partial dates, distinct follow-ups and effective no-ops.
+Execution tests cover concurrent identical requests, live/expired interpretation
+leases, bounded capacity and late-result rejection. Model output is tested for
+wrong identities, unsupported excerpts, unrelated field changes and manufactured
+date precision. These checks do not establish live-model semantic accuracy.
+
+Source reconciliation tests retain both results, require explicit same-kind mapping,
+preserve origin/history, and allow dismissal after the previous CV changes. Manual
+attachment tests check project-derived skills, fingerprints, explicit detach/reattach
+and semantic no-op refresh. Target-bound input checks exercise both target types and
+version races without invoking an assessment or roadmap service.
+
+## Saved CV conversation
+
+The CV suite exercises the account-owned conversation store against both the
+in-memory repository and disposable MongoDB. Coverage includes resumable and
+manual-only conversations, ordered pagination, segment rollover, revision
+conflicts, exact retries after a lost response, partial multi-action outcomes,
+interrupted processing and recovery after a fact was saved but its chat receipt
+was not. Listing history uses projected metadata rather than loading old message
+bodies. Transcript activity is checked separately from evidence versions.
+
+Routing and interpretation tests reject foreign source IDs, unsupported excerpts,
+invalid actions and malformed or oversized provider responses. They preserve the
+full user answer, including negation and team attribution, while appending bounded
+source-linked clarification events. Session revocation during processing, stale
+target/source context, provider capacity and storage limits are checked before
+publishing facts. Corrections and manual additions still require explicit approval.
+
+Frontend tests cover saved history, source choices, confirmation cards, async save
+receipts, retries with the original mutation body, stale responses and account/CV
+switches. The full-stack `cv-chat.spec.ts` uses the real local gateway, services and
+MongoDB with the deterministic model fixture. Its journeys include rich answers,
+questions without evidence changes, additional context, correction cancel/save,
+reload/resume, skips, manual-only capabilities, ambiguous references, stale cards
+and partial failures. Existing saved-upload, Profile and Career journeys remain in
+the suite. Boundary browser checks also cover unsent chat drafts through temporary
+session failures and the absence of private CV content in browser storage.
+
+Use synthetic accounts and documents for recordings. A recording of this fixture
+workflow demonstrates interaction and persistence, not live-model interpretation
+quality. Conversational quality and comparative usability still need evaluation
+with the configured model and representative users.
+
+## Canonical goal confirmation and compatibility
+
+Career automatic save remains separate from version-specific CV acknowledgement. Confirmation tests must cover exact goal/selection/projection identities, edits between reads and CAS, switches, foreign ownership, changed mutation bodies and lost-response retries. A stale acknowledgement cannot confirm a newer goal. Generic requirements preserve original category/origin and AND/OR alternatives; location/eligibility is not silently converted into qualification evidence. Prior CV facts survive goal changes.
+
+Career's saved-CV adapter tests preserve UUID/ObjectId references, original source identities, attribution, unknown proficiency, fractional months, conflicts and full evidence. More than 200 skills/excerpts are accepted within its existing 512 KiB document/streaming admission bound. Oversized data fails explicitly before unbounded decoding, without truncation. Public CV and internal Career schemas are checked separately. Mixed legacy UUID target/canonical ObjectId history and existing uniqueness indexes need non-destructive compatibility checks.
+
+The integrated browser journey should save a canonical goal using synthetic fixture data, explicitly confirm its current revision through the real API, then use the saved CV conversation. Fixture seeding belongs only to a disposable test database, never an application auth bypass. Existing chat/upload/Profile journeys retain their original assertions through the new disclosures and current Career flow.
+
+## Environment and evidence boundaries
+
+Use disposable databases and synthetic documents/accounts. Never mount a personal environment file into tests. One upstream public-template test has a narrow user-approved exception: run that exact test against a clean tracked public template in an isolated test copy. It does not authorize inspecting modified local examples or other environment files.
+
+On the observed Docker Desktop kernel, MongoDB 8 refused startup because of its known kernel compatibility guard. Isolated MongoDB 7 can establish functional repository behavior, but does not establish intended MongoDB 8 compatibility. MongoDB-backed CI uses a compatible pinned Ubuntu 22.04 runner. Report local functional checks, intended-version CI, browser fixtures and real-service journeys distinctly. Do not bypass the guard or change host settings as an incidental test repair.
+
+The previous C-series captioned recording uses synthetic models and the pre-integration build. It is retained as a workflow reference, not proof of the merged Career confirmation flow or live-model accuracy. Re-record or exercise the integrated journey after the final code changes. Cost, latency, interpretation quality and comparative usability require separately authorized live-model/user evaluation.

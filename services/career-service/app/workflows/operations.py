@@ -7,6 +7,7 @@ import asyncio
 import math
 import time
 import logging
+import re
 from dataclasses import dataclass, field
 from uuid import uuid4
 from app.ai.waiting import quota_progress,quota_reason
@@ -14,12 +15,50 @@ from app.ai.recovery import recover_responses,validation_progress
 from app.repositories.goals import GoalError
 from app.workflows.activity import activity_observer,LABELS
 from app.ai.adapter import AIError
+from app.ai.jd_scope import CareerScopeError
 
 
 class OperationConflict(GoalError):
-    def __init__(self,code,message):
+    def __init__(self,code,message,status=409):
         self.code=code
-        super().__init__(message)
+        super().__init__(message,status)
+
+
+@dataclass(frozen=True)
+class Failure:
+    """Retain bounded public diagnostics, never an exception or request frames."""
+    kind: str
+    values: dict
+
+    @classmethod
+    def capture(cls, error):
+        if isinstance(error, AIError):
+            # AIError revalidates all diagnostic fields and does not accept raw
+            # provider text. Reconstruct once to detach mutable caller values.
+            code=error.code if isinstance(error.code,str) and re.fullmatch(r'[a-z_]{1,80}',error.code) else 'unavailable'
+            safe = AIError(code, bool(error.retryable), reason=error.reason,
+                fields=error.fields, violations=error.violations, provider=error.provider,
+                provider_error=error.provider_error, limit_scope=error.limit_scope,
+                retry_after=error.retry_after, input_count=error.input_count)
+            return cls('ai', {name: getattr(safe, name) for name in
+                ('code','retryable','reason','fields','violations','provider','provider_error',
+                 'limit_scope','retry_after','input_count')})
+        if isinstance(error, CareerScopeError): return cls('scope', {})
+        if isinstance(error, GoalError):
+            if not isinstance(error.message,str) or len(error.message)>1024:
+                return cls('goal', {'message':'This temporary operation failed. Retry your retained input.','status':503})
+            values = {'message': error.message, 'status': error.status if type(error.status) is int and 400<=error.status<=599 else 503}
+            if isinstance(error, OperationConflict):
+                code=error.code if isinstance(error.code,str) and re.fullmatch(r'[a-z_]{1,80}',error.code) else 'operation_failed'
+                return cls('operation', {**values, 'code': code})
+            return cls('goal', values)
+        return cls('goal', {'message': 'This temporary operation failed. Retry your retained input.', 'status': 503})
+
+    def exception(self):
+        if self.kind == 'ai': return AIError(**self.values)
+        if self.kind == 'scope': return CareerScopeError()
+        if self.kind == 'operation': return OperationConflict(**self.values)
+        return GoalError(**self.values)
 
 
 @dataclass
@@ -36,7 +75,7 @@ class Pending:
     provider: str | None = None
     validation_feedback: dict | None = None
     result: dict | None = None
-    error: Exception | None = None
+    error: Failure | None = None
     task: asyncio.Task | None = None
     activities: list[str] = field(default_factory=list)
     aliases: set[str] = field(default_factory=set)
@@ -51,8 +90,28 @@ class Pending:
 class Operations:
     lifetime = 86400
 
-    def __init__(self):
+    def __init__(self, *, max_jobs=128, max_owner_jobs=16, max_aliases=32):
+        if any(type(value) is not int or value < 1 for value in (max_jobs,max_owner_jobs,max_aliases)):
+            raise ValueError('Operation capacities must be positive integers.')
+        self.max_jobs, self.max_owner_jobs, self.max_aliases = max_jobs,max_owner_jobs,max_aliases
         self.jobs = {}
+
+    def alias(self, job, key):
+        if key != job.key and key not in job.aliases:
+            if len(job.aliases) >= self.max_aliases:
+                raise OperationConflict('operation_capacity', 'Too many reconnect attempts. Use the existing operation link or retry after it finishes.', 429)
+            job.aliases.add(key)
+
+    def make_room(self, owner):
+        # Evict only terminal cache entries. Never cancel another owner's active
+        # request to admit a new one, or forget aliases within a retained job.
+        for same_owner, limit in ((True,self.max_owner_jobs),(False,self.max_jobs)):
+            candidates = [job for job in self.jobs.values() if not same_owner or job.owner == owner]
+            if len(candidates) < limit: continue
+            terminal = sorted((job for job in candidates if job.status in ('succeeded','failed')), key=lambda job: job.created)
+            if not terminal:
+                raise OperationConflict('operation_capacity', 'Career is processing the current requests. Retry shortly; your saved goal is unchanged.', 429)
+            del self.jobs[terminal[0].id]
 
     def prune(self):
         for id, job in list(self.jobs.items()):
@@ -75,14 +134,15 @@ class Operations:
                 if kind in ('jd','summary') and job.digest==digest:
                     # A remount/new tab can issue a new key for the same retained JD.
                     # Reconnect to the owned operation instead of making another LLM call.
-                    job.aliases.add(key)
+                    self.alias(job,key)
                     return job.view()
                 raise OperationConflict('operation_in_progress','Another request is still being processed. Wait for it to finish before submitting different input.')
         if kind == 'summary':
             for job in self.jobs.values():
                 if job.owner == owner and job.kind == kind and job.digest == digest and job.error is None:
-                    job.aliases.add(key)
+                    self.alias(job,key)
                     return job.view()
+        self.make_room(owner)
         job = Pending(owner, key, digest, kind)
         self.jobs[job.id] = job
         job.task = asyncio.create_task(self.run(job, execute))
@@ -109,10 +169,10 @@ class Operations:
             job.status = 'succeeded'
         except asyncio.CancelledError:
             job.status = 'failed'
-            job.error = GoalError('This temporary operation was cancelled. Retry your retained input.', 409)
+            job.error = Failure.capture(GoalError('This temporary operation was cancelled. Retry your retained input.', 409))
             raise
         except Exception as error:
-            job.status, job.error = 'failed', error
+            job.status, job.error = 'failed', Failure.capture(error)
             if isinstance(error,AIError):
                 job.validation_feedback={'reason':error.reason,'fields':list(error.fields),'violations':list(error.violations)}
             logging.getLogger('uvicorn.error.ai_usage').warning(
@@ -131,7 +191,7 @@ class Operations:
         job = self.jobs.get(id)
         if job is None or job.owner != owner:
             raise GoalError('Temporary operation not found. Retry your retained input.', 404)
-        if job.error is not None: raise job.error
+        if job.error is not None: raise job.error.exception()
         return job.view()
 
     async def close(self):

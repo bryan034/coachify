@@ -158,30 +158,39 @@ test('saved school stays compact until Change school is chosen and a blank optio
   expect(saved.education).toMatchObject({institution:{name:'Synthetic school'},course:null});
 });
 
-
-test('loaded profile fields are populated before editing and saving unlock', async () => {
+test('a delayed profile populates the editor before the first edit can be overwritten', async () => {
   saved = { ...initial, version: 1, occupational_status: 'student', school_category: 'university' };
+  const fetchImmediately = vi.mocked(fetch).getMockImplementation()!;
+  let releaseProfile!: () => void;
+  const profileResponse = new Promise<void>(resolve => { releaseProfile = resolve; });
+  vi.mocked(fetch).mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/profile') && !init?.method) await profileResponse;
+    return fetchImmediately(url, init);
+  });
   const editorStates: { populated: boolean; locked: boolean }[] = [];
   function ReadinessCheck() {
     const { profile, loading } = useProfile();
-    // Observe the commit before passive effects populate the editor. A user must
-    // never be offered an editable form whose loaded values can still overwrite it.
+    // Inspect the committed controls before passive effects populate the editor.
     React.useLayoutEffect(() => {
       if (!profile || loading) return;
       const status = screen.getByRole('combobox', { name: 'Occupational status' }) as HTMLSelectElement;
-      editorStates.push({
-        populated: status.value === profile.occupational_status,
-        locked: status.matches(':disabled') && (screen.getByRole('button', { name: 'Save background' }) as HTMLButtonElement).disabled,
-      });
+      const save = screen.getByRole('button', { name: 'Save background' }) as HTMLButtonElement;
+      editorStates.push({ populated: status.value === profile.occupational_status, locked: status.matches(':disabled') && save.disabled });
     }, [profile, loading]);
     return null;
   }
   render(<ProfileProvider><ProfileForm /><ReadinessCheck /></ProfileProvider>);
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/profile'))).toBe(true));
+  expect(screen.getByRole('combobox', { name: 'Occupational status' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save background' })).toBeDisabled();
+  await act(async () => { releaseProfile(); });
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save background' })).toBeEnabled());
   expect(editorStates.length).toBeGreaterThan(0);
   expect(editorStates.every(state => state.populated || state.locked)).toBe(true);
   expect(screen.getByRole('combobox', { name: 'Occupational status' })).toHaveValue('student');
   fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'employed' } });
+  await act(async () => {});
+  expect(screen.getByRole('combobox', { name: 'Occupational status' })).toHaveValue('employed');
   fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
   await screen.findByText('Profile saved.');
   expect(saved.occupational_status).toBe('employed');

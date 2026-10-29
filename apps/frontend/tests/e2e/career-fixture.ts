@@ -36,6 +36,10 @@ export function careerFixture(url:string,input:Json):Json{
  const parsed=new URL(url),path=parsed.pathname;
  if(!path.includes('/career/'))return input;
  const value=canonical(input),goalId=path.match(/\/goals\/([^/]+)/)?.[1]||latest?.current?.goal?._id;
+ if(path.endsWith('/goals/current/cv-confirmation')){
+  const current=value.current?.goal?value.current:latest?.current,goal=current?.goal;
+  return {goal_id:goal?._id||null,goal_version:goal?.version||null,selection_version:current?.selection_version||0,confirmed:false,context:null,reason:goal?null:'Save a career goal before confirming it for CV review.'};
+ }
  if(path.endsWith('/workspace/summary')){
   const goal=(value.current?.goal?value:latest)?.current?.goal;
   if(!goal)throw new Error('Summary fixture requires a saved goal');

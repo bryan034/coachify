@@ -9,6 +9,7 @@ import {careerApi,refreshWorkspace,type AssessmentStatus,type CareerWorkspace,ty
 import {useCareerSession} from './career-session';
 import {CareerGoal} from './career-goal';
 import {OpportunityIntelligence} from './opportunity-intelligence';
+import {CvGoalConfirmationCard} from './cv-goal-confirmation';
 import {sourceLink} from './source-links';
 
 const processing=['research_pending','researching','waiting_quota'];
@@ -71,6 +72,7 @@ export function CareerGoalOverview({workspace,loadError='',onReload}:{workspace:
   <nav className="briefing-jump-links" aria-label="Briefing sections"><a href="#priorities">Learning focus</a><a href="#next-step">Next step</a><a href="#opportunity">Role details</a><Link href="/career-goal/chat?refine=1">Refine goal</Link><button onClick={()=>{session.chooseJD(null);router.push('/career-goal?new=1');}}>Set a new goal <span aria-hidden="true">↗</span></button></nav>
   {loadError&&<div className="notice" role="alert">{loadError} <button className="btn ghost sm" onClick={onReload}>Retry loading goal</button></div>}
   {goal.requirements_need_review&&<p className="notice">Your role context changed. Refine your goal to review which requirements still apply.</p>}
+  <CvGoalConfirmationCard key={`${token}:${goal._id}:${goal.version}:${workspace.current.selection_version}`} goal={goal} selectionVersion={workspace.current.selection_version} token={token} onReload={onReload}/>
   {working&&<p className="notice" role="status">{workspace.phase==='waiting_quota'?`Research is waiting for the service allowance and will resume automatically${workspace.retry_after?` in about ${workspace.retry_after} seconds`:''}.`:'Researching opportunity information. Your extracted goal is already saved.'}</p>}
   {workspace.phase==='research_failed'&&<div className="notice" role="alert"><p>Opportunity research could not finish. Your saved goal remains available.</p><button className="btn ghost sm" disabled={retrying} onClick={()=>void retryResearch()}>{retrying?'Resuming research…':'Retry research'}</button>{retryError&&<p>{retryError}</p>}</div>}
   <div className="briefing-grid"><div className="briefing-learning">
@@ -85,12 +87,12 @@ export function CareerGoalOverview({workspace,loadError='',onReload}:{workspace:
     <details><summary>How this briefing was put together <span>Sources &amp; limits +</span></summary><p>Your role, skills, conditions and responsibilities come from your saved career goal. Each skill keeps its origin and any saved supporting evidence. User refinements and AI suggestions are labelled separately from job requirements.</p><p>{[goal.field,goal.seniority_level].filter(Boolean).join(' · ')}</p>{goal.job_url&&<RequirementSources urls={[goal.job_url]}/>}<p>Company research keeps its sources, verification dates, uncertainty and related-role or conflicting-report labels. The CV check only reports whether extracted skills are saved; it does not assess individual requirements or hiring readiness.</p><p>Personalised learning outcomes, practice ideas and self-check answers are not available yet.</p></details>
    </section>
   </div>
-  <aside className="briefing-context" aria-label="Your starting point"><section className="briefing-assessment" id="starting-point" aria-labelledby="assessment-title"><span className="briefing-mini-icon"><Icon name="bolt"/></span>
-   <h2 id="assessment-title">{!assessment?'Checking your starting point…':assessment.status==='evaluated'?'Your assessed skills are saved':assessment.status==='unavailable'?'Skill assessment status unavailable':'First, find your starting point.'}</h2>
-   <p>{!assessment?'Checking your saved CV and extracted skills.':assessment.status==='evaluated'?'Your saved CV contains extracted skills. These have not been compared against this goal.':assessment.status==='unavailable'?'We couldn’t check your saved CV. Retry the check or visit your CV page.':assessment.status==='no_cv'?'No saved CV was found. Review your CV options to bring your background into the picture.':'A CV is saved, but no successfully extracted skills were found. Visit your CV page to continue.'}</p>
-   {assessment?.status==='unavailable'&&<button className="btn ghost sm" onClick={()=>setCheck(v=>v+1)}>Retry skill check</button>}
-   {assessment&&<Link className="btn pri" href="/cv">{assessment.status==='evaluated'?'View my CV':assessment.status==='unavailable'?'Go to CV upload':'Assess my skills'} <span aria-hidden="true">↗</span></Link>}
-   <p className="briefing-micro">No readiness score. Missing evidence doesn’t mean a missing skill. Dedicated CV upload and assessment are still planned.</p>
+  <aside className="briefing-context" aria-label="Your starting point"><section className="briefing-assessment" id="starting-point" aria-label="Your CV skills"><span className="briefing-mini-icon"><Icon name="bolt"/></span>
+   <h2>{!assessment?'Checking your CV…':assessment.status==='evaluated'?'CV skills available':assessment.status==='unavailable'?'CV skills status unavailable':assessment.status==='no_cv'?'Add your CV background':'CV skills are not available yet'}</h2>
+   <p>{!assessment?'Checking your saved CV and extracted skills.':assessment.status==='evaluated'?'Your saved CV has extracted or user-clarified skills available to review. These are separate from your goal’s requirements.':assessment.status==='unavailable'?'We couldn’t check your saved CV. Your career goal is safe; retry the check or visit your CV page.':assessment.status==='no_cv'?'No saved CV was found. Upload a CV to review and clarify your background.':'A CV is saved, but no successfully extracted skills were found. Visit your CV page to check processing or review the source.'}</p>
+   {assessment?.status==='unavailable'&&<button className="btn ghost sm" onClick={()=>setCheck(v=>v+1)}>Retry CV check</button>}
+   {assessment&&<Link className="btn pri" href="/cv">{assessment.status==='evaluated'?'View my CV':assessment.status==='no_cv'?'Upload my CV':assessment.status==='unavailable'?'Open my CV':'Review my CV'} <span aria-hidden="true">↗</span></Link>}
+   <p className="briefing-micro">No readiness score. Missing evidence doesn’t mean a missing skill. A comparison against this goal is not available yet.</p>
   </section><div className="briefing-aside-note"><h3>Build evidence as you learn.</h3><p>A small, well-explained project can connect what you know with what the role asks for.</p></div></aside>
   </div>
   <footer className="briefing-footer"><span>COACHIFY · Your career copilot</span><span>Based on your saved goal · Research carries its own sources</span></footer>

@@ -16,7 +16,7 @@ from app.workflows.operations import Operations
 
 
 def environment(reply='An interview is reported.',references=('research_0',)):
-    goal=NS(id='goal',role='Analyst',field='Data',company='Example',location=None)
+    goal=NS(id='goal',version=1,role='Analyst',field='Data',company='Example',location=None)
     record=NS(sources=[ResearchSource(source_id='s1',platform='other',url='https://example.test/job',evidence='The internship is in Singapore.')],
               intelligence=NS(status='completed',categories={'interviews':NS(status='completed',findings=[NS(source_ids=['s1'],value='An interview is reported.')])}))
     checks=[]
@@ -29,8 +29,8 @@ def environment(reply='An interview is reported.',references=('research_0',)):
         output=GoalSummary(blocks=[{'text':reply,'references':list(references)}])
         kwargs['validate_output'](output)
         return NS(data=output)
-    repo=NS(check=check,goals=NS(current=lambda owner:{'goal':goal}))
-    state=NS(workspace_store=repo,research_store=NS(read=lambda *args:record),ai=NS(generate=generate))
+    repo=NS(check=check,goals=NS(current=lambda owner:{'goal':goal}),reviews=NS(version=lambda *args:goal.version))
+    state=NS(workspace_store=repo,research_store=NS(read=lambda *args,**kwargs:record),ai=NS(generate=generate))
     return NS(app=NS(state=state)),NS(session_id='session',expected_version=1,research_id='research'),checks,calls,record
 
 
@@ -63,6 +63,24 @@ def test_overview_rejects_a_result_for_a_replaced_goal():
             return original(*args)
         request.app.state.workspace_store.check=check
         with pytest.raises(GoalError):await summarize(request,'owner',body)
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('status',['completed','partial'])
+def test_summary_requires_research_linked_to_the_current_goal_revision(status):
+    async def run():
+        request,body,_,calls,record=environment()
+        record.intelligence.status=status
+        reads=[]
+        def read(owner,goal_id,research_id,**kwargs):
+            reads.append((owner,goal_id,research_id,kwargs))
+            # An immutable report from the previous revision remains historical,
+            # but cannot supply a presentation for the current goal.
+            return None if kwargs.get('current') else record
+        request.app.state.research_store.read=read
+        with pytest.raises(GoalError):await summarize(request,'owner',body)
+        assert reads==[('owner','goal','research',{'current':True,'goal_version':1})]
+        assert not calls
     asyncio.run(run())
 
 

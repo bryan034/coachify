@@ -7,6 +7,7 @@ Callers own authenticated context, disclosure, operation state and publication.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import math
 import re
@@ -14,7 +15,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Awaitable, Callable
 from urllib.parse import urlsplit
 from bson import ObjectId
 
@@ -401,10 +402,14 @@ class AIAdapter:
         self.settings, self.client = settings, client
         self.clock, self.sleep = clock, sleep
 
-    def _current(self, operation, request, current_revision, current_versions):
+    async def _current(self, operation, request, current_revision, current_versions):
         if operation.status == 'cancelled':
             raise AIError('cancelled')
-        if operation.revision != current_revision() or operation.versions != request.versions:
+        revision = current_revision()
+        if inspect.isawaitable(revision): revision = await revision
+        if operation.status == 'cancelled':
+            raise AIError('cancelled')
+        if operation.revision != revision or operation.versions != request.versions:
             raise AIError('stale_input', True)
         if request.versions is not None and request.versions != current_versions():
             raise AIError('stale_input', True)
@@ -416,7 +421,7 @@ class AIAdapter:
             raise AIError('timeout', True)
 
     async def generate(self, request: AIInput, operation: Operation, *,
-                       current_revision: Callable[[], str], current_versions: Callable[[], InputVersions | None] = lambda: None, validate_output: Callable | None = None):
+                       current_revision: Callable[[], str | Awaitable[str]], current_versions: Callable[[], InputVersions | None] = lambda: None, validate_output: Callable | None = None):
         try:
             # Snapshot mutable caller state before any awaits.
             try:
@@ -427,7 +432,7 @@ class AIAdapter:
                 raise AIError('not_configured')
             if operation.stage != request.stage or operation.status != 'pending' or not operation.owner:
                 raise AIError('invalid_operation')
-            self._current(operation, request, current_revision, current_versions)
+            await self._current(operation, request, current_revision, current_versions)
             payload = self._payload(request)
         except AIError as error:
             if operation.status not in ('cancelled', 'succeeded'):
@@ -441,7 +446,7 @@ class AIAdapter:
                 async def complete(payload, *, stage, attempt, owner):
                     nonlocal deadline
                     while True:
-                        self._current(operation, request, current_revision, current_versions)
+                        await self._current(operation, request, current_revision, current_versions)
                         try:
                             return await self._complete(payload, stage=stage, attempt=attempt, owner=owner)
                         except AIError as error:
@@ -457,7 +462,15 @@ class AIAdapter:
                             quota_reason.set({'limit_scope':error.limit_scope,'provider':error.provider})
                             progress(delay)
                             try:
-                                await self.sleep(delay)
+                                # A long provider cooldown must not retain an
+                                # obsolete workspace's slot until the whole wait
+                                # expires. Recheck without issuing provider calls.
+                                waiting = delay
+                                while waiting > 0:
+                                    pause = min(5, waiting)
+                                    await self.sleep(pause)
+                                    await self._current(operation, request, current_revision, current_versions)
+                                    waiting -= pause
                             finally:
                                 deadline += self.clock() - started
                                 budget.reschedule(asyncio.get_running_loop().time() + remaining)
@@ -468,7 +481,7 @@ class AIAdapter:
                 for attempt in range(attempts):
                     try:
                         raw = await complete(payload, stage=request.stage, attempt=attempt + 1, owner=operation.owner)
-                        self._current(operation, request, current_revision, current_versions)
+                        await self._current(operation, request, current_revision, current_versions)
                         try:
                             output = MODEL_OUTPUTS[request.stage].model_validate_json(raw)
                             if isinstance(output, ExtractedJD):
@@ -500,7 +513,7 @@ class AIAdapter:
                                 edit_request = request.model_copy(update={'stage': 'jd_edit'})
                                 edit_payload = self._payload(edit_request)
                                 edit_raw = await complete(edit_payload, stage='jd_edit', attempt=1, owner=operation.owner)
-                                self._current(operation, request, current_revision, current_versions)
+                                await self._current(operation, request, current_revision, current_versions)
                                 try:
                                     edits = SkillEdits.model_validate_json(edit_raw)
                                     context = JDExtraction.model_validate(json.loads(request.context)['career_goal'])
@@ -521,7 +534,7 @@ class AIAdapter:
                         # A correction is another complete generation. Do not start
                         # one that is likely to be disconnected by our own deadline.
                         self._require_followup_time(deadline)
-                        self._current(operation, request, current_revision, current_versions)
+                        await self._current(operation, request, current_revision, current_versions)
                         feedback = {'reason': error.reason or 'response_envelope', 'fields': error.fields}
                         payload = {**payload, 'messages': [*payload['messages'], {'role':'system',
                             'content':'The previous extraction failed validation. Generate a fresh result for the same JD. '
@@ -530,7 +543,7 @@ class AIAdapter:
                             'Do not invent facts. Safe validation feedback: '+json.dumps(feedback)}]}
             # No awaits between this last stale check and returning. Persistence
             # must revalidate exact snapshots and use immutable/idempotent writes.
-            self._current(operation, request, current_revision, current_versions)
+            await self._current(operation, request, current_revision, current_versions)
             operation.status = 'succeeded'
             return Generated(output, Generation(provider=self.settings.provider, model=self.settings.model,
                 prompt_version=PROMPT_VERSION, generated_at=datetime.now(timezone.utc)), operation.id)

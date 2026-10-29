@@ -2,6 +2,7 @@
 from langgraph.graph import StateGraph,START,END
 from langsmith import tracing_context
 from app.workflows.structured import structured_node
+from app.workflows.current import workspace_revision
 from app.ai.routing import chat_models
 
 async def focused_chat(request,account,row,body):
@@ -30,7 +31,7 @@ async def focused_chat(request,account,row,body):
     async def generate(stage,context,history=()):
         await thread(repo.check,account,body.session_id,body.expected_version)
         result=await request.app.state.ai.generate(AIInput(stage=stage,context=json.dumps(jsonable_encoder(context)),conversation=[*history,Message(role='user',content=body.message)]),
-            Operation(account,revision,stage),current_revision=lambda:revision)
+            Operation(account,revision,stage),current_revision=workspace_revision(repo,account,body.session_id,body.expected_version))
         return result.data
     async def route(state):
         chosen=direct_route(body.message)
@@ -91,7 +92,7 @@ async def edit_goal(request,account,row,body):
         await thread(repo.check,account,body.session_id,body.expected_version)
         result=await request.app.state.ai.generate(AIInput(stage='goal_edit',context=json.dumps(context,separators=(',',':')),
             conversation=[Message(role='user',content=body.message)]),
-            Operation(account,str(body.expected_version),'goal_edit'),current_revision=lambda:str(body.expected_version),validate_output=validate)
+            Operation(account,str(body.expected_version),'goal_edit'),current_revision=workspace_revision(repo,account,body.session_id,body.expected_version),validate_output=validate)
         validate(result.data)
         return {'decision':result.data}
     graph=StateGraph(dict);graph.add_node('clarify_or_apply_goal_change',structured_node(decide))

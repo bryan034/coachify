@@ -28,8 +28,12 @@ class QuestionStore:
         w=row['workspace'];goal=self.goal(owner,w['review_id'],GOAL_FIELDS[topic])
         identifier=w.get('research_id')
         if not identifier:return goal,{}
-        linked=self.research.linked(owner,str(row['goal_id']))
-        if identifier not in linked:raise GoalError('Research reference was not found for this goal.',404)
+        linked=self.research.linked(owner,str(row['goal_id']),current=True)
+        if identifier not in linked:
+            # Old owned research must not hide current JD facts or leak into an
+            # answer about the revised goal. Foreign references still fail.
+            if identifier in self.research.linked(owner,str(row['goal_id'])):return goal,{}
+            raise GoalError('Research reference was not found for this goal.',404)
         fields={'research_status':1,'sources.source_id':1,'sources.url':1,'sources.title':1}
         fields['intelligence.categories']=1
         if topic in ('interview_process','overview'):fields.update({'process':1,'skills.interview_stage':1,'skills.assessment_type':1,'skills.source_ids':1})

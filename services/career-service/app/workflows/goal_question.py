@@ -43,8 +43,12 @@ async def research_question(request, title, focus, check):
             token = quota_reason.set({'provider': 'brave', 'limit_scope': 'provider'})
             try:
                 observer(error.retry_after)
-                await asyncio.sleep(error.retry_after)
-                await check()
+                waiting = error.retry_after
+                while waiting > 0:
+                    pause = min(5, waiting)
+                    await asyncio.sleep(pause)
+                    await check()
+                    waiting -= pause
             finally:
                 observer(None)
                 quota_reason.reset(token)

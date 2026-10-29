@@ -1,15 +1,17 @@
 import {careerFixture} from './career-fixture';
 import {test,expect,type Page} from '@playwright/test';
 async function workspace(page:Page){
+ let sessionChecks=0;
  await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
-  if(path.endsWith('/auth/session'))return route.fulfill({json:careerFixture(route.request().url(),{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'})});
+  if(path.endsWith('/auth/session')){sessionChecks++;return route.fulfill({json:careerFixture(route.request().url(),{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'})});}
   if(path.endsWith('/school-categories'))return route.fulfill({json:careerFixture(route.request().url(),[])});
   return route.fulfill({json:careerFixture(route.request().url(),{version:1,onboarding_complete:true,occupational_status:'employed',education:{},education_review_required:false})});
  });
  await page.route('**/api/v1/career/workspace',route=>route.fulfill({json:careerFixture(route.request().url(),{phase:'empty',review:null,current:{goal:null},exploration_id:null})}));
+ return {checks:()=>sessionChecks};
 }
 test('Career Goal supports three temporary inputs, recovery and responsive navigation',async({page})=>{
  await workspace(page);const calls:string[]=[];
@@ -135,18 +137,35 @@ test('one exploration conversation chooses a role without a confirmation step',a
  await page.reload();await expect(page.getByRole('log')).toContainText('SQL exercise');expect(turns).toBe(1);
 });
 
-test('switching tabs keeps JD work and five-minute inactivity requires an explicit refresh',async({page,context})=>{
- await workspace(page);await page.goto('/career-goal');
+test('switching tabs and healthy revalidation preserve JD drafts after five minutes',async({page,context})=>{
+ await page.clock.install();
+ const session=await workspace(page);await page.goto('/career-goal');
  const input=page.getByRole('textbox',{name:'Job description',exact:true});
  await input.fill('Unsaved synthetic requirements: SQL.');
  const other=await context.newPage();await other.goto('about:blank');await other.bringToFront();
  await page.bringToFront();
  await expect(input).toHaveValue('Unsaved synthetic requirements: SQL.');
- await page.clock.install();await page.clock.fastForward(5*60*1000+1000);
- await expect(page.getByRole('alertdialog')).toContainText('Refresh required');
- await expect(page.getByRole('button',{name:'Refresh application'})).toBeFocused();
- expect(await input.inputValue()).toBe('Unsaved synthetic requirements: SQL.');
- expect(await input.evaluate(el=>!!el.closest('[inert]'))).toBe(true);
+ const checks=session.checks();
+ await page.evaluate(()=>{
+  Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+  document.dispatchEvent(new Event('visibilitychange'));
+ });
+ await page.clock.fastForward(5*60*1000+1000);
+ expect(session.checks()).toBe(checks);
+ await expect(input).toHaveValue('Unsaved synthetic requirements: SQL.');
+ await expect(page.getByRole('button',{name:'Refresh application'})).toHaveCount(0);
+ await page.evaluate(()=>{
+  Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});
+  document.dispatchEvent(new Event('visibilitychange'));
+ });
+ await expect.poll(()=>session.checks()).toBeGreaterThan(checks);
+ await expect(input).toBeEditable();
+ await expect(input).toHaveValue('Unsaved synthetic requirements: SQL.');
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await expect(page.getByRole('alertdialog')).toHaveCount(0);
+ expect(await input.evaluate(el=>!!el.closest('[inert]'))).toBe(false);
+ await input.fill('Unsaved synthetic requirements: SQL and Python.');
+ await expect(input).toHaveValue('Unsaved synthetic requirements: SQL and Python.');
  await other.close();
 });
 
