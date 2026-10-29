@@ -94,9 +94,20 @@ public identifier, when running `npm run test:e2e --workspace apps/frontend`.
 
 ## Career input/previews
 
-Run Career pytest from `services/career-service` in a separate virtual environment
-(`python -m pip install -e ".[test]"`, then `python -m pytest`). The existing CI
-career matrix job now runs these tests. Do not collect Profile and Career together
+Run Career pytest from `services/career-service` in a separate virtual environment.
+Provision its tokenizer cache before the suite enables network isolation:
+
+```sh
+python -m pip install -e ".[test]"
+export TIKTOKEN_CACHE_DIR="$(mktemp -d)"
+python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
+python -m pytest
+```
+
+The provisioning command downloads the vocabulary used by the pinned tokenizer;
+reuse an already populated `TIKTOKEN_CACHE_DIR` when running offline. Both Career
+CI paths provision it into a disposable runner cache after dependency installation
+and before pytest. Do not collect Profile and Career together
 in one Python process because both use an `app` package. The shared Career harness
 clears inherited application database, provider and tracing settings before collection
 and each test; only `MONGODB_TEST_URI` remains an explicit disposable-database opt-in.

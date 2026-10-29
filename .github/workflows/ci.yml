@@ -62,6 +62,8 @@ jobs:
     name: Backend tests (${{ matrix.service }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/coachify-tiktoken
     strategy:
       fail-fast: false
       matrix:
@@ -75,6 +77,9 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e '.[test]'
+      - name: Provision Career tokenizer before test network isolation
+        if: matrix.service == 'career'
+        run: python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
       - name: Run pytest (only unimplemented services may have empty suites)
         shell: bash
         run: |
@@ -115,6 +120,8 @@ jobs:
     # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
+    env:
+      TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/coachify-tiktoken
     strategy:
       fail-fast: false
       matrix:
@@ -131,11 +138,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install analysis test dependencies
+        working-directory: services/${{ matrix.service }}-service
+        run: python -m pip install -e '.[test]'
+      - name: Provision Career tokenizer before test network isolation
+        if: matrix.service == 'career'
+        working-directory: services/${{ matrix.service }}-service
+        run: python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
       - name: Validate contracts and MongoDB repositories
         working-directory: services/${{ matrix.service }}-service
-        run: |
-          python -m pip install -e '.[test]'
-          python -m pytest
+        run: python -m pytest
         env:
           MONGODB_TEST_URI: mongodb://localhost:27017
 
