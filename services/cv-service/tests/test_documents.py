@@ -95,5 +95,7 @@ def test_concurrent_private_original_publication_is_complete(tmp_path):
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda _: files.write(identifier, data), range(8)))
     assert files.read(identifier) == data
-    assert len(list(tmp_path.iterdir())) == 1
+    assert {path.name for path in tmp_path.iterdir()} == {identifier, '.locks'}
+    assert files.lock_root.is_dir() and len(list(files.lock_root.iterdir())) <= 256
+    assert files.lock_root.stat().st_mode & 0o777 == 0o700
     assert files.path(identifier).stat().st_mode & 0o777 == 0o600

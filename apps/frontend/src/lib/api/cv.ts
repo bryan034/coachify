@@ -6,6 +6,7 @@ type Guard<T> = (value: unknown) => value is T;
 const record = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): v is string => typeof v === 'string';
 const revision = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
+const optionalLimit = (v: unknown) => v === undefined || (revision(v) && v > 0);
 const nullableText = (v: unknown) => v === null || text(v);
 const date = (v: unknown) => text(v) && Number.isFinite(Date.parse(v));
 const list = <T>(v: unknown, guard: Guard<T>, max = 1000): v is T[] => Array.isArray(v) && v.length <= max && v.every(guard);
@@ -58,8 +59,8 @@ export const cvApi = {
  conversation: (id: string, token: string, signal: AbortSignal, before?: number) => request(`/cv/conversations/${encodeURIComponent(id)}${before === undefined ? '' : `?before=${before}&limit=40`}`,token,signal,conversation),
  sendMessage: (id: string, body: ConversationInput, token: string, signal: AbortSignal) => request(`/cv/conversations/${encodeURIComponent(id)}/messages`,token,signal,conversation,json('POST',body)),
  conversationAction: (id: string, actionId: string, body: ConversationDecision, token: string, signal: AbortSignal) => request(`/cv/conversations/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}`,token,signal,conversation,json('POST',body)),
- policy: (token: string, signal: AbortSignal) => request('/cv/policy',token,signal,(v): v is CvPolicy => record(v) && revision(v.max_file_bytes) && v.max_file_bytes > 0 && list(v.formats,(x): x is 'pdf'|'docx'=>x==='pdf'||x==='docx',2) && revision(v.max_answer_chars) && revision(v.max_item_chars) && typeof v.extraction_configured === 'boolean'),
- list: (token: string, signal: AbortSignal) => request('/cv',token,signal,(v): v is CvList => record(v) && list(v.cvs,summary) && selection(v.selection)),
+ policy: (token: string, signal: AbortSignal) => request('/cv/policy',token,signal,(v): v is CvPolicy => record(v) && revision(v.max_file_bytes) && v.max_file_bytes > 0 && list(v.formats,(x): x is 'pdf'|'docx'=>x==='pdf'||x==='docx',2) && revision(v.max_answer_chars) && revision(v.max_item_chars) && typeof v.extraction_configured === 'boolean' && optionalLimit(v.max_saved_cvs) && optionalLimit(v.max_stored_original_bytes)),
+ list: (token: string, signal: AbortSignal, cursor?: string) => request(`/cv${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,token,signal,(v): v is CvList => record(v) && list(v.cvs,summary,v.next_cursor === undefined ? 1000 : 100) && selection(v.selection) && (v.next_cursor === undefined || v.next_cursor === null || (text(v.next_cursor) && v.next_cursor.length > 0 && v.next_cursor.length <= 512))),
  get: (id: string, token: string, signal: AbortSignal) => request(cv(id),token,signal,detail),
  upload: (body: FormData, token: string, signal: AbortSignal) => request('/cv/uploads',token,signal,detail,{method:'POST',body}),
  retry: (id: string, body: {mutation_id:string;expected_version:number}, token: string, signal: AbortSignal) => request(`/cv/operations/${encodeURIComponent(id)}/retry`,token,signal,detail,json('POST',body)),

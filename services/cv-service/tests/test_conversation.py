@@ -317,6 +317,10 @@ def test_revocation_during_interpretation_preserves_answer_without_applying_clai
 
 def test_side_question_while_interpreting_does_not_invalidate_facts(harness):
     client, app, *_ = harness
+    from dataclasses import replace
+    # Preserve this concurrent transcript/evidence-fencing scenario with two
+    # synthetic owner slots; default one-slot fairness is tested separately.
+    app.state.service.model_usage.settings = replace(app.state.settings, model_concurrent_per_owner=2)
     cv, question, chat = source_chat(harness)
     started, release = Event(), Event()
     app.state.conversations.provider = Router(lambda context: ([{'kind': 'clarify',

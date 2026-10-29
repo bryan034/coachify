@@ -10,6 +10,7 @@ from app.schemas.goals import CvSummary
 STATUS = {'queued': 'pending', 'processing': 'processing', 'ready': 'succeeded', 'failed': 'failed'}
 MAPPING_VERSION = 'cv-source-identities-v1'
 MAX_CV_RESPONSE_BYTES = 512 * 1024  # Existing Career document admission limit.
+MAX_CV_LIST_PAGES = 100
 SIZE_LIMIT_MESSAGE = ('Career can read CV data up to 512 KiB. Choose a smaller saved CV or continue without a CV. '
                       'Your saved CV and its evidence are unchanged.')
 
@@ -65,26 +66,41 @@ class CvClient:
     def __init__(self, client):
         self.client = client
 
-    async def read(self, path, token):
+    async def read(self, path, token, *, budget=None):
         # Bound bytes before JSON decoding, including chunked responses. The
         # current CV authority has no aggregate skill/excerpt count limit.
         async with self.client.stream('GET', path, headers={'Authorization': token}, follow_redirects=False) as response:
             if response.status_code != 200: return response.status_code, None
             size = response.headers.get('content-length')
-            if size is not None and int(size) > MAX_CV_RESPONSE_BYTES: raise intake_limit()
+            remaining = MAX_CV_RESPONSE_BYTES if budget is None else budget[0]
+            if size is not None and int(size) > remaining: raise intake_limit()
             body = bytearray()
             async for chunk in response.aiter_bytes():
-                if len(body) + len(chunk) > MAX_CV_RESPONSE_BYTES: raise intake_limit()
+                if len(body) + len(chunk) > remaining: raise intake_limit()
                 body.extend(chunk)
+            if budget is not None: budget[0] -= len(body)
             return response.status_code, json.loads(body)
 
     async def list(self, token):
         try:
-            status, body = await self.read('/api/v1/cv', token)
-            if status != 200: raise ValueError
-            if 'cvs' in body: return [saved_summary(row) for row in body['cvs']]
-            # Existing deployed read-only CV responses remain compatible.
-            return [CvSummary.model_validate(row) for row in body['items']]
+            path='/api/v1/cv';budget=[MAX_CV_RESPONSE_BYTES];items=[];seen=set();cursors=set()
+            for _ in range(MAX_CV_LIST_PAGES):
+                status, body = await self.read(path, token, budget=budget)
+                if status != 200: raise ValueError
+                if 'cvs' not in body:
+                    # Existing deployed read-only CV responses remain compatible.
+                    if items: raise ValueError('CV list contract changed during pagination.')
+                    return [CvSummary.model_validate(row) for row in body['items']]
+                page=[saved_summary(row) for row in body['cvs']]
+                if any(row.id in seen for row in page) or len({row.id for row in page})!=len(page):
+                    raise ValueError('Repeated CV page.')
+                items.extend(page);seen.update(row.id for row in page)
+                cursor=body.get('next_cursor')
+                if cursor is None:return items
+                if not page or not isinstance(cursor,str) or not cursor or len(cursor)>512 or cursor in cursors:
+                    raise ValueError('Invalid CV list continuation.')
+                cursors.add(cursor);path='/api/v1/cv?cursor='+quote(cursor,safe='')
+            raise intake_limit()
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
             raise GoalError('Saved CVs are unavailable. Retry or continue without a CV.', 503) from None
 

@@ -83,8 +83,17 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  expect(dated.clarifications.find(question => question.item_id === projectId)).toMatchObject({reconciliation_required: false, answer: mixedAnswer});
  await expect(projectQuestion()).toContainText(mixedAnswer);
 
- // Deliberate model outage keeps the raw answer; retry never submits another answer revision.
+ // Source changes require fresh preparation while retaining unrelated saved facts.
+ await page.getByRole('button', {name: 'Prepare relevant questions', exact: true}).click();
  const pending = page.locator('.cv-question').filter({has: page.getByRole('button', {name: 'Save explanation', exact: true})});
+ await expect(pending.getByRole('textbox', {name: 'Your explanation', exact: true})).toBeVisible();
+ const reprepared = await readCv(cvId);
+ expect(reprepared.items).toEqual(dated.items);
+ expect(reprepared.skills).toEqual(dated.skills);
+ expect(reprepared.clarifications.find(question => question.item_id === projectId)).toEqual(dated.clarifications.find(question => question.item_id === projectId));
+ await expect(projectQuestion()).toContainText(mixedAnswer);
+
+ // Deliberate model outage keeps the raw answer; retry never submits another answer revision.
  await pending.getByRole('textbox', {name: 'Your explanation', exact: true}).fill('SYNTHETIC_INTERPRETATION_FAILURE');
  await pending.getByRole('button', {name: 'Save explanation', exact: true}).click();
  const failed = question('How would you describe your current familiarity with this skill? Unknown is fine.');

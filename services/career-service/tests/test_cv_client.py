@@ -1,4 +1,5 @@
 import asyncio
+import json
 import httpx
 import pytest
 from app.clients.cvs import CvClient
@@ -20,6 +21,39 @@ def test_cv_api_boundary_uses_metadata_then_owner_scoped_effective_snapshot(docu
             with pytest.raises(GoalError): await client.get(row['_id'],'Bearer synthetic','foreign-owner')
     asyncio.run(check())
     assert seen==['/api/v1/cv','/api/v1/cv/'+row['_id'],'/api/v1/cv/'+row['_id']]
+
+
+def test_saved_cv_pagination_keeps_later_legacy_choices_and_owner_header(saved_cv):
+    first={**saved_cv,'id':'11111111-1111-4111-8111-111111111111'}
+    seen=[]
+    def handler(request):
+        seen.append(str(request.url));assert request.headers['Authorization']=='Bearer synthetic'
+        if request.url.params.get('cursor')=='older/page+key':
+            return httpx.Response(200,json={'cvs':[saved_cv],'selection':{'cv_id':saved_cv['id'],'version':1},'next_cursor':None})
+        return httpx.Response(200,json={'cvs':[first],'selection':{'cv_id':saved_cv['id'],'version':1},'next_cursor':'older/page+key'})
+    async def check():
+        async with httpx.AsyncClient(base_url='http://cv.test',transport=httpx.MockTransport(handler)) as http:
+            assert [row.id for row in await CvClient(http).list('Bearer synthetic')]==[first['id'],saved_cv['id']]
+    asyncio.run(check())
+    assert len(seen)==2 and 'older%2Fpage%2Bkey' in seen[1]
+
+
+@pytest.mark.parametrize('continuation',['repeat','empty','bytes'])
+def test_saved_cv_pagination_rejects_loops_and_enforces_one_total_budget(saved_cv,monkeypatch,continuation):
+    from app.clients import cvs
+    calls=[]
+    if continuation=='bytes':monkeypatch.setattr(cvs,'MAX_CV_RESPONSE_BYTES',len(json.dumps({'cvs':[saved_cv],'next_cursor':'next'}).encode())+100)
+    def handler(request):
+        calls.append(request)
+        page=[saved_cv] if len(calls)==1 or continuation!='empty' else []
+        if continuation=='bytes' and len(calls)>1:page=[{**saved_cv,'id':'11111111-1111-4111-8111-111111111111'}]
+        return httpx.Response(200,json={'cvs':page,'next_cursor':'next'})
+    async def check():
+        async with httpx.AsyncClient(base_url='http://cv.test',transport=httpx.MockTransport(handler)) as http:
+            with pytest.raises(GoalError) as outcome:await CvClient(http).list('Bearer synthetic')
+            assert outcome.value.status==(413 if continuation=='bytes' else 503)
+    asyncio.run(check())
+    assert len(calls)==2
 
 
 @pytest.fixture

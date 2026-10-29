@@ -349,6 +349,7 @@ class Selection(BaseModel):
 class CvList(BaseModel):
     cvs: list[CvSummary]
     selection: Selection
+    next_cursor: str | None = None
 
 
 class QuestionEnvelope(BaseModel):
@@ -385,6 +386,10 @@ class Policy(BaseModel):
     max_text_chars: int
     max_title_chars: int
     max_description_chars: int
+    max_saved_cvs: int
+    max_stored_original_bytes: int
+    max_model_calls_per_day: int
+    max_concurrent_model_calls: int
 
 
 class ApiError(BaseModel):

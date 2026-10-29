@@ -42,6 +42,7 @@ export function SourceReconciliation({detail,list,token,signal,onSaved,refresh}:
  return <section className="cv-section cv-source-reconciliation" aria-label="Source reconciliation">
   <h3>{candidateId?'Review changed source evidence':'Compare a replacement CV'}</h3>
   {loading&&<p role="status">Loading the previous statements and new evidence…</p>}
+  {list?.next_cursor&&<p className="small">To find an older source, open CV files and choose Show more saved CVs.</p>}
   {candidate?<div data-unsaved={Object.keys(choices).length>0} aria-busy={busy}>
    <p className="small">The saved result remains available until you choose. Review the actual evidence; matching names do not transfer an explanation automatically.</p>
    {candidate.notices.map((notice,index)=><p key={index} className="small">{notice}</p>)}

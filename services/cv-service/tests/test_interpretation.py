@@ -123,6 +123,10 @@ def test_pending_answer_is_durable_before_provider_and_recoverable(harness):
 
 def test_newer_answer_fences_late_interpretation(harness):
     client, app, *_ = harness
+    from dataclasses import replace
+    # Exercise two overlapping synthetic responses under an explicitly larger
+    # owner limit; the default one-call guard has separate admission coverage.
+    app.state.service.model_usage.settings = replace(app.state.settings, model_concurrent_per_owner=2)
     cv, question, path = project_question(harness)
     newer_text = 'I only observed Python and SQL work.'
     replacement = FakeInterpreter()
@@ -555,6 +559,10 @@ def test_live_pending_lease_blocks_fresh_retries_and_expiry_allows_recovery(harn
     from app.schemas.cv import Mutation
 
     client, app, *_ = harness
+    from dataclasses import replace
+    # This lease-fencing case deliberately overlaps two synthetic calls. Keep
+    # that scenario explicit while production defaults allow one per account.
+    app.state.service.model_usage.settings = replace(app.state.settings, model_concurrent_per_owner=2)
     cv, question, path = project_question(harness)
     entered, release = Event(), Event()
     interpreter = app.state.interpreter

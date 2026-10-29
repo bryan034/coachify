@@ -10,7 +10,8 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from app.domain.capabilities import digest, effective_items, normalized_name
 from app.domain.errors import Conflict, CvError, Missing
-from app.domain.service import now, iso
+from app.domain.service import now, iso, HISTORY_LIMIT_BYTES
+from app.domain.answer_capacity import preview_chat_answer
 from app.domain.attachments import source_fingerprint
 from app.clarification.service import answer, prepare, envelope, context_identity, retry_interpretation
 from app.schemas.cv import Mutation, AnswerMutation, ItemMutation, PrepareMutation, ConfirmedContext
@@ -190,10 +191,12 @@ class ConversationService:
             raise Conflict('The CV, selected source or Career target changed. Your message is retained; review the current context before trying again.')
         return current
 
-    def route(self, payload):
+    def route(self, owner, payload):
         if not self.slots.acquire(blocking=False):
             raise ValueError('Chat interpretation is busy. Your message is saved; retry shortly.')
-        try: return self.provider.route(payload)
+        try:
+            return self.cv.model_usage.run(owner, self.provider.route, payload,
+                configured=getattr(self.provider, 'configured', True))
         finally: self.slots.release()
 
     async def send(self, app, account, identifier, mutation):
@@ -277,7 +280,7 @@ class ConversationService:
                 await self.guided(app, account, conversation, route, token)
                 return
             payload = await run_in_threadpool(self.routing_payload, owner, conversation, route)
-            result, metadata = await run_in_threadpool(self.route, payload)
+            result, metadata = await run_in_threadpool(self.route, owner, payload)
             result = ConversationRoute.model_validate(result)
             # Validate the whole response before any mutation or confirmation card.
             allowed_ids = {item['id'] for item in payload['items']}
@@ -542,6 +545,10 @@ class ConversationService:
         loop = asyncio.get_running_loop()
         coordinator = self
         class SessionInterpreter:
+            @property
+            def configured(self):
+                return getattr(app.state.interpreter, 'configured', True)
+
             def interpret(self, *args):
                 result = app.state.interpreter.interpret(*args)
                 # A provider request may outlive sign-out. Verify again immediately
@@ -553,6 +560,8 @@ class ConversationService:
         recovered_unanswered = None
         if question_id:
             question = next((q for q in document['clarifications'] if q['id'] == question_id), None)
+            if question and question.get('reconciliation_required'):
+                raise Conflict('This source changed. The earlier explanation is retained as history; send a fresh explanation for the corrected item.')
             if question and question['interpretation_status'] == 'ready': return document, question['interpretation']['summary']
             if question and question['status'] == 'answered':
                 result = await run_in_threadpool(retry_interpretation, self.cv, owner, cv_id, question_id,
@@ -565,17 +574,11 @@ class ConversationService:
         if not question:
             active = conversation.get('active_question')
             if active and active['item_id'] == item['id']:
-                question = next((q for q in document['clarifications'] if q['id'] == active['id']), None)
+                question = next((q for q in document['clarifications'] if q['id'] == active['id']
+                                 and not q.get('reconciliation_required')), None)
         if any(q['item_id'] == item['id'] and q.get('interpretation_status') in {'pending', 'failed'}
                 and not q.get('reconciliation_required') for q in document['clarifications']):
             raise Conflict('An earlier explanation for this source still needs interpretation. Finish or retry it first; this new message remains saved.')
-        # Shared CV history snapshots are intentionally unchanged in this slice.
-        # Reserve all three publication steps before creating an unanswered event,
-        # so a long history cannot accept half a turn and then exhaust the source.
-        history_bytes = len(BSON.encode({'clarifications': document['clarifications'],
-            'overlays': document['overlays'], 'prepared_context': document.get('prepared_context')}))
-        if len(BSON.encode(document)) + 3 * history_bytes + 512 * 1024 > 12 * 1024 * 1024:
-            raise CvError('This CV has reached its saved history limit for another complete explanation. Your message is retained; keep this source for history and use a new saved CV.', 409)
         # An appended statement is a separate source-bound event, never replacement
         # of the previous answer. Its interpretation changes only explicitly named
         # fields; old evidence survives even after cumulative text exceeds 4000 chars.
@@ -586,8 +589,6 @@ class ConversationService:
                 if any(q['id'] == question_id for q in doc['clarifications']): return
                 if len(doc['clarifications']) >= 800:
                     raise CvError('This CV has reached its clarification history capacity. Saved answers remain available; use a new saved source for additional review.', 409)
-                if any(q['item_id'] == item['id'] and q.get('reconciliation_required') for q in doc['clarifications']):
-                    raise Conflict('Review changed-source clarifications before adding more context to this item.')
                 context = conversation.get('context') or {}
                 doc['clarifications'].append({'id': question_id, 'item_id': item['id'],
                     'kind': 'project' if item['kind'] == 'project' else 'work' if item['kind'] == 'experience' else 'other',
@@ -599,6 +600,7 @@ class ConversationService:
                     'answer_revision': 0, 'answer_sequence': 0, 'interpretation_status': 'not_requested',
                     'interpretation_error': None, 'resolution': 'unresolved', 'interpretation': None,
                     'followup_of': parent['id'] if parent else None})
+                preview_chat_answer(doc, question_id, action['_text'], HISTORY_LIMIT_BYTES)
             document = await run_in_threadpool(self.cv.mutate, owner, cv_id,
                 Mutation(expected_version=document['version'], mutation_id=key(action['id'] + ':question-create')),
                 'chat-question:' + action['id'], add_question)

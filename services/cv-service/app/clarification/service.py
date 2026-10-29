@@ -6,6 +6,7 @@ from app.domain.capabilities import digest, effective_items, effective_fingerpri
 from app.domain.errors import Conflict, Missing
 from app.domain.service import bump, now
 from app.schemas.cv import ConfirmedContext, SavedInterpretation
+from app.domain.answer_capacity import reserve, release, CAPACITY_MESSAGE
 
 
 class DeferredTargetProvider:
@@ -22,6 +23,16 @@ def context_identity(context):
 
 def prepared_snapshot(document, context):
     return {**context_identity(context), 'extraction_version': document['extraction_version']}
+
+
+def question_key(document, item_id, uncertainty):
+    # The immutable historical IDs identify the retired source generation. Answers,
+    # provider retries and unrelated edits do not change the next generation's key.
+    historical = sorted(q['id'] for q in document['clarifications']
+        if q['item_id'] == item_id and q['uncertainty'] == uncertainty and q.get('reconciliation_required'))
+    identity = {'item_id': item_id, 'uncertainty': uncertainty}
+    if historical: identity['historical_questions'] = historical
+    return digest(identity)
 
 
 def matching_conditions(item, context, uncertainty):
@@ -82,20 +93,19 @@ def prepare(service, owner, identifier, mutation, raw_context):
         raise Conflict('Your selected Career target changed. Refresh before preparing questions.')
     def transform(document):
         document['prepared_context'] = prepared_snapshot(document, context)
-        existing = {question['uncertainty_key']: question for question in document['clarifications']}
+        existing = {question['uncertainty_key']: question for question in document['clarifications']
+                    if not question.get('reconciliation_required')}
         for item in effective_items(document):
             if item['removed']: continue
-            source_questions = [q for q in document['clarifications'] if q['item_id'] == item['id']]
-            # Explicitly changed evidence must be reconciled before its statements
-            # can be reused. An unanswered old key is never silently recycled.
-            if any(q.get('reconciliation_required') for q in source_questions): continue
+            source_questions = [q for q in document['clarifications']
+                                if q['item_id'] == item['id'] and not q.get('reconciliation_required')]
             if any(q.get('interpretation_status') in {'pending', 'failed'} for q in source_questions): continue
             uncertainties = list(item.get('uncertainties', []))
             attribution = 'personal_contribution' if item['kind'] == 'project' else 'responsibility' if item['kind'] == 'experience' else None
             if attribution in uncertainties and not source_questions: uncertainties = [attribution]
             for uncertainty in uncertainties:
                 if not relevant(item, context, uncertainty): continue
-                key = digest({'item_id': item['id'], 'uncertainty': uncertainty})
+                key = question_key(document, item['id'], uncertainty)
                 if key in existing: continue
                 # An explicit inability to clarify ends this line of questioning.
                 # Other previously prepared questions remain voluntarily available.
@@ -141,7 +151,9 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter):
         if not acquired:
             raise ValueError('Interpretation is busy. Your answer is saved; retry interpretation shortly.')
         if interpreter is None: raise ValueError('Interpretation is not configured. Your answer is saved; retry after configuration.')
-        payload, metadata = interpreter.interpret(item, question, question['answer'], question['answer_revision'])
+        payload, metadata = service.model_usage.run(owner, interpreter.interpret,
+            item, question, question['answer'], question['answer_revision'],
+            configured=getattr(interpreter, 'configured', True))
         result = validate_interpretation(payload, item, question)
         result.update(metadata=metadata, applied_sequence=question['answer_sequence'],
                       extraction_version=saved['extraction_version'])
@@ -168,6 +180,7 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter):
     before = effective_fingerprint(document)
     updated['interpretation_token'] = None
     updated['interpretation_lease_until'] = 0
+    release(updated)
     if error:
         updated.update(interpretation_status='failed', interpretation_error=error, resolution='unresolved')
     else:
@@ -196,6 +209,7 @@ def answer(service, owner, identifier, question_id, mutation, interpreter=None):
             return
         if question['status'] == 'answered' and question['answer'] == mutation.answer: return
         changed_answer = True
+        reserve(question, invocation_token)
         question.update(status='answered', answer=mutation.answer,
             answer_revision=question.get('answer_revision', 0) + 1, answer_sequence=document['version'] + 1,
             interpretation_status='pending', interpretation_error=None, resolution='unresolved',
@@ -224,12 +238,27 @@ def retry_interpretation(service, owner, identifier, question_id, mutation, inte
         if question.get('interpretation_status') == 'ready': return
         if question.get('interpretation_status') == 'pending' and question.get('interpretation_lease_until', 0) > now():
             raise Conflict('This answer is still being interpreted. Wait briefly before retrying; interrupted work becomes retryable after 90 seconds.')
+        if not reserve(question, invocation_token, retry=True):
+            # Repeated interrupted claims may use up their bounded receipt room.
+            # Publish a definitive failure from the reserved result space instead
+            # of leaving an accepted answer permanently pending at the size limit.
+            document['history'].append({'version': document['version'], 'effective_version': document['effective_version'],
+                'operation': 'interpret:' + question_id, 'clarifications': deepcopy(document['clarifications']),
+                'overlays': deepcopy(document['overlays']), 'at': now()})
+            question.update(interpretation_status='failed', interpretation_error=CAPACITY_MESSAGE,
+                            interpretation_token=None, interpretation_lease_until=0)
+            release(question)
+            return
         requested = True
         question.update(interpretation_status='pending', interpretation_error=None, resolution='unresolved',
                         answer_revision=max(1, question.get('answer_revision', 0)),
                         answer_sequence=document['version'] + 1, interpretation_token=invocation_token,
                         interpretation_lease_until=now() + 90)
-    saved = service.mutate(owner, identifier, mutation, 'interpretation-retry:' + question_id, transform)
+    # A retry changes the lease/receipt, not the user's literal explanation or
+    # prior interpretation. Preserve existing snapshots; append the result's
+    # snapshot on publication rather than duplicating content for every claim.
+    saved = service.mutate(owner, identifier, mutation, 'interpretation-retry:' + question_id, transform,
+                           record_history=False)
     if replay or not requested: return saved
     if _question(saved, question_id)[0].get('interpretation_token') != invocation_token:
         return service.get(owner, identifier)

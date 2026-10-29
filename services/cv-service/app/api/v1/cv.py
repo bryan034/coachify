@@ -6,7 +6,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from app.core.auth import bearer, current_account
 from app.domain.errors import Conflict, CvError
-from app.domain.service import detail, selection_view
+from app.domain.service import detail, summary, selection_view
+from app.domain.pagination import decode_cursor, encode_cursor
 from app.schemas.cv import Mutation, SelectionMutation, ItemMutation, AnswerMutation, PrepareMutation
 from app.schemas.cv import CvDetail, CvList, Selection, QuestionEnvelope, CapabilityInput, Policy, ApiError, ConfirmedContext
 from app.clarification.service import answer, prepare, envelope, context_identity, retry_interpretation
@@ -32,10 +33,13 @@ async def policy(request: Request, account=Depends(authenticated)):
 
 
 @router.get('', response_model=CvList)
-async def listing(request: Request, account=Depends(authenticated)):
+async def listing(request: Request, account=Depends(authenticated),
+                  limit: int = Query(default=25, ge=1, le=100), cursor: str | None = Query(default=None, max_length=256)):
     repo = request.app.state.repository
-    return {'cvs': [detail(doc) for doc in await run_in_threadpool(repo.list, account['id'])],
-            'selection': selection_view(await run_in_threadpool(repo.selection, account['id']))}
+    records = await run_in_threadpool(repo.page, account['id'], limit, decode_cursor(cursor))
+    return {'cvs': [summary(doc) for doc in records[:limit]],
+            'selection': selection_view(await run_in_threadpool(repo.selection, account['id'])),
+            'next_cursor': encode_cursor(records[limit - 1]) if len(records) > limit else None}
 
 
 @router.get('/declaration-links', response_model=DeclarationLinks)

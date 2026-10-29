@@ -6,6 +6,18 @@ const signal=()=>new AbortController().signal;
 afterEach(()=>vi.unstubAllGlobals());
 function response(value:unknown,status=200){vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}})));}
 describe('CV service boundary',()=>{
+ it('encodes saved-CV cursors, bounds page size and accepts older unpaged responses',async()=>{
+  const page={cvs:[savedCv()],selection:{cv_id:null,version:0},next_cursor:'next-page'};
+  response(page);expect((await cvApi.list('token',signal(),'opaque+/=')).next_cursor).toBe('next-page');expect(fetch).toHaveBeenCalledWith('/api/v1/cv?cursor=opaque%2B%2F%3D',expect.any(Object));
+  response({...page,next_cursor:{bad:'cursor'}});await expect(cvApi.list('token',signal())).rejects.toThrow('incomplete response');
+  response({...page,cvs:Array.from({length:101},()=>savedCv())});await expect(cvApi.list('token',signal())).rejects.toThrow('incomplete response');
+  response({cvs:[savedCv()],selection:page.selection});expect((await cvApi.list('token',signal())).cvs).toHaveLength(1);
+ });
+ it('validates optional account capacity limits without discarding compatible policy responses',async()=>{
+  response({...policy,max_saved_cvs:50,max_stored_original_bytes:104857600});expect((await cvApi.policy('token',signal())).max_saved_cvs).toBe(50);
+  response({...policy,max_saved_cvs:-1});await expect(cvApi.policy('token',signal())).rejects.toThrow('incomplete response');
+  response(policy);expect((await cvApi.policy('token',signal())).max_file_bytes).toBe(policy.max_file_bytes);
+ });
  const chat: CvConversation={id:'chat-one',cv_id:'cv-one',revision:1,read_only:false,previous_conversation_id:null,active_question:null,context:confirmedTarget,messages:[],next_before:null,limits:{max_message_chars:4000,max_messages:500}};
  it('opens owner-bound resumable chat and sends exact conversation revisions',async()=>{response(chat);await cvApi.openConversation({cv_id:'cv-one',mutation_id:'open-one'},'token',signal());expect(fetch).toHaveBeenCalledWith('/api/v1/cv/conversations',expect.objectContaining({method:'POST',body:JSON.stringify({cv_id:'cv-one',mutation_id:'open-one'})}));const body={expected_revision:3,mutation_id:'turn-one',text:'Why does this matter?'};response(chat);await cvApi.sendMessage('chat/id',body,'token',signal());expect(fetch).toHaveBeenLastCalledWith('/api/v1/cv/conversations/chat%2Fid/messages',expect.objectContaining({method:'POST',body:JSON.stringify(body)}));});
  it('rejects malformed chat actions and unknown action statuses',async()=>{const action={id:'a',kind:'correct',status:'saved',title:'Correction',summary:'Saved',changes:[],choices:[]};const message={id:'m',sequence:1,role:'assistant',text:'Review the action',created_at:'2026-10-28T00:00:00Z',actions:[action]};response({...chat,messages:[{...message,actions:[{...action,status:'verified'}]}]});await expect(cvApi.conversation('chat','token',signal())).rejects.toThrow('incomplete response');response({...chat,messages:[{...message,actions:[{...action,choices:[{id:'other',label:'Other',description:'Invalid reference',kind:'database'}]}]}]});await expect(cvApi.conversation('chat','token',signal())).rejects.toThrow('incomplete response');});

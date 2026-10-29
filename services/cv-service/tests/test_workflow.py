@@ -208,7 +208,8 @@ def test_cleanup_recovers_after_file_deleted_before_tracking(harness, monkeypatc
             raise RuntimeError('Synthetic process interruption before deletion tracking')
         return replace(previous, document)
     monkeypatch.setattr(repo, 'replace', fail_tracking)
-    with pytest.raises(RuntimeError): app.state.worker.cleanup()
+    # One interrupted cleanup must stay recoverable without aborting its batch.
+    app.state.worker.cleanup()
     assert not app.state.files.exists(cv['id'])
     assert repo.get('owner-a', cv['id'])['original_available'] is True
     monkeypatch.setattr(repo, 'replace', replace)

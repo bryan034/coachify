@@ -128,6 +128,7 @@ note for interview_research "Immutable public-context revisions; shared seven-da
 
 %% Opportunity Intelligence reuses these collections: no duplicate targets/opportunities collection.
 %% research_contexts also holds owner/goal/run-scoped durable jobs, command receipts, per-category progress/evidence and public cache leases.
+%% Opportunity jobs pin goal_version; stale revisions cannot publish current research links.
 %% Public report fingerprints include material structured opportunity context; raw JD/CV/chat remain excluded.
 
 %% Career Discovery: private sessions/jobs and immutable public-evidence snapshots in research_contexts.
@@ -144,6 +145,24 @@ class cv_selections {
     +String _id [account UUID]
     +String selected_cv_id?
     +Integer version
+}
+
+class cv_upload_capacity {
+    <<operational>>
+    +String _id [uploads]
+    +Integer revision
+    +Map entries [bounded_per_CV_reservations]
+    +Integer untracked_bytes
+    +String blocked?
+}
+
+class cv_model_usage {
+    <<operational>>
+    +String _id [daily]
+    +Integer revision
+    +String day [UTC_date]
+    +Integer total
+    +Map owners [bounded_hashed_account_counts]
 }
 
 class cv_conversations {
@@ -166,10 +185,16 @@ class career_state {
     +Object workspace
     +Object cv_confirmation?
     +Object[] cv_confirmation_receipts
+    +Map research_links
+    +Map research_link_meta [goal_version_context_key_reused]
+    +Object[] research_receipts [pins_goal_version]
 }
 
 users "1" --> "0..1" cv_selections : owns explicit source selection
 cv_selections --> cvs : validates owner and version
+cv_upload_capacity --> cvs : reserves record and original capacity
+note for cv_upload_capacity "One journaled CAS ledger; owner/global totals derived from at most 20,000 fixed-shape entries. File locks and generation checks fence publication/deletion; no TTL release of uncertain bytes."
+note for cv_model_usage "Journaled daily provider-attempt admission across extraction, routing and clarification. Newer days reset counts; backwards clocks do not. Separate fixed OS-locked slots enforce owner/global concurrency."
 users "1" --> "0..*" cv_conversations : owns private retained history
 cv_conversations --> cvs : optional source reference
 users "1" --> "0..1" career_state : owns current goal metadata

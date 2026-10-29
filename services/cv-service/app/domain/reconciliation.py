@@ -5,6 +5,7 @@ from app.domain.capabilities import digest, effective_items, effective_fingerpri
 from app.domain.errors import Conflict, Missing
 from app.domain.service import bump, now
 from app.schemas.cv import validate_item_dates
+from app.domain.answer_capacity import release as release_answer_capacity
 
 
 def affected_sources(source, items):
@@ -93,6 +94,14 @@ def resolve(service, owner, identifier, mutation):
         same_source = candidate['source_cv_id'] == identifier
         overlays = {key: deepcopy(value) for key, value in document['overlays'].items() if key in by_id and key not in choices} if same_source else {}
         questions = [deepcopy(q) for q in document['clarifications'] if q['item_id'] in by_id and q['item_id'] not in choices] if same_source else []
+        transferred = [q for q in candidate['clarifications'] if choices.get(q['item_id']) and q.get('answer')]
+        if len({q['id'] for q in transferred}) != len(transferred):
+            raise Conflict('The source contains ambiguous answer identities. Keep its history and review the original source before reapplying answers.')
+        identities = {q['id']: digest({'source_cv_id': candidate['source_cv_id'], 'question_id': q['id'],
+            'target_cv_id': identifier, 'target_item_id': choices[q['item_id']]}) for q in transferred}
+        retained_ids = {q['id'] for q in questions}
+        if len(retained_ids) != len(questions):
+            raise Conflict('The retained source contains ambiguous answer identities. Review or archive those source statements before accepting this comparison.')
         for old, target in choices.items():
             if target is None: continue
             patch = candidate['overlays'].get(old, {})
@@ -103,13 +112,20 @@ def resolve(service, owner, identifier, mutation):
             for old_question in candidate['clarifications']:
                 if old_question['item_id'] != old or not old_question.get('answer'): continue
                 question = deepcopy(old_question)
-                identity = digest({'item_id': target, 'uncertainty': question['uncertainty']})
+                release_answer_capacity(question)
+                identity = identities[old_question['id']]
+                if identity[:32] in retained_ids:
+                    raise Conflict('Those source mappings produce duplicate answer identities. Review the chosen source mappings.')
+                retained_ids.add(identity[:32])
                 question.update(id=identity[:32], uncertainty_key=identity, item_id=target,
                     extraction_version=document['extraction_version'] + int(same_source),
                     status='answered', answer_revision=1, interpretation_status='failed',
                     resolution='unresolved', interpretation=None,
                     interpretation_error='Source changed. Retry interpretation against the reviewed evidence.',
+                    interpretation_token=None, interpretation_lease_until=0,
                     reconciliation_required=False,
+                    followup_of=identities[old_question['followup_of']][:32]
+                        if old_question.get('followup_of') in identities else None,
                     reconciled_from={'cv_id': candidate['source_cv_id'], 'item_id': old, 'question_id': old_question['id']})
                 questions.append(question)
         document.update(original_items=deepcopy(candidate['items']), overlays=overlays,

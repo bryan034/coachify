@@ -18,7 +18,7 @@ def test_saved_cv_read_is_owner_scoped_and_read_only(harness):
     assert summary['id'] == cv['id']
     assert 'skills' not in summary and 'file_url' not in summary
     client.headers['Authorization'] = 'Bearer owner-b'
-    assert client.get('/api/v1/cv').json() == {'cvs': [], 'selection': {'cv_id': None, 'version': 0}}
+    assert client.get('/api/v1/cv').json() == {'cvs': [], 'selection': {'cv_id': None, 'version': 0}, 'next_cursor': None}
     assert client.get('/api/v1/cv/' + cv['id']).status_code == 404
     client.headers['Authorization'] = 'Bearer owner-a'
     response = client.get('/api/v1/cv/' + cv['id'])

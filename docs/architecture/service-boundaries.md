@@ -48,6 +48,21 @@ and its revision. Upload success never changes this record. Declaration mutation
 receipts and CV operation/history metadata are operational records allowed beside
 the five logical domain collections; they do not add competing capability stores.
 
+CV also owns the bounded `cv_upload_capacity` operational ledger. Its journaled
+CAS reservation covers record counts and private original bytes before filesystem
+publication. Shared POSIX file locks and generation-bound recovery preserve the
+standalone MongoDB deployment. Capacity is released only after original bytes are
+removed; saved evidence/history remains. Owner/global limits and legacy bootstrap
+rules are specified in the CV service, and public listings use projected keyset
+pages rather than loading every full history.
+
+The separate CV-owned `cv_model_usage` operational document bounds daily provider
+attempts using hashed account identities. A fixed shared POSIX slot pool holds
+per-account/global concurrency through each synchronous provider callback.
+Routing, extraction and clarification use the same guard; cancellation cannot
+release a slot while its thread continues. No Career budget or new capability
+authority is introduced.
+
 Effective input retains CV ID, extraction/effective version, selection version and
 declaration version. A consumer also retains its confirmed target version and any
 Profile version actually used. Revalidation around assembly detects changed

@@ -34,11 +34,11 @@ node "Docker Compose — focused design" {
   }
 
   node "MongoDB — local development" as Mongo <<Docker container>> {
-    database "CV-owned database\ncvs\ncv_selections + cv_conversations (operational)" as CVDB
+    database "CV-owned database\ncvs\ncv_selections + cv_conversations (operational)\ncv_upload_capacity + cv_model_usage (operational)" as CVDB
     database "Career-owned database\ncareer_goals + career_state (operational)\ninterview_research\nskill_gap_analyses" as CareerDB
     database "Roadmap-owned database\nPlans, milestones and task history\nSchema to be expanded" as RoadmapDB
   }
-  artifact "Service-private temporary CV storage\nOriginal-file cleanup per policy" as Uploads <<Private storage>>
+  artifact "Service-private temporary CV storage\nQuota admission, shared POSIX locks and recoverable cleanup" as Uploads <<Private storage>>
 }
 
 Browser --> Web : Use application

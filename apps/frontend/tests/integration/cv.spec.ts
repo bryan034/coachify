@@ -90,6 +90,20 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  expect((await (await account.get('/api/v1/profile/capabilities')).json()).declarations).toHaveLength(2);
  expect((await (await account.get(`/api/v1/cv/${cvId}/clarifications`)).json()).deferred).toBe(true);
 
+ // Use the real paged API with a small page so the selected older CV is absent
+ // from page one. Responses still come from the gateway and MongoDB.
+ await page.route(/\/api\/v1\/cv(?:\?.*)?$/, route => {
+  const url = new URL(route.request().url()); url.searchParams.set('limit', '1');
+  return route.continue({url:url.toString()});
+ });
+ await page.reload(); await openCvReviewTools(page);
+ await expect(page.getByRole('complementary', {name:'Selected CV'})).toContainText(cvId);
+ await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true})).toHaveCount(0);
+ await expect(page.getByRole('region', {name:'Projects',exact:true}).locator('.cv-copy')).toHaveText(project.description);
+ await page.getByRole('button', {name:'Show more saved CVs',exact:true}).click();
+ await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Selected',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button', {name:'Show more saved CVs',exact:true})).toHaveCount(0);
+
  // A different authenticated account sees neither the original nor its saved
  // operation, and an unsigned request cannot enumerate sources.
  const otherContext = await browser.newContext({ baseURL: process.env.PROFILE_E2E_BASE_URL });

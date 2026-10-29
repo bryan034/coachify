@@ -151,7 +151,8 @@ def effective_items(document):
         if overlay.get('provenance') == 'user_clarified': item.update(deepcopy(overlay))
         item['_claims'] = _base_claims(item)
     events = [(q['interpretation'].get('applied_sequence', 0), 0, q['item_id'], q)
-              for q in document.get('clarifications', []) if q.get('interpretation')]
+              for q in document.get('clarifications', [])
+              if q.get('interpretation') and not q.get('reconciliation_required')]
     events.extend(_correction_events(document))
     events.sort(key=lambda event: event[:2])
     for _, correction, identifier, payload in events:
@@ -276,7 +277,8 @@ def effective_fingerprint(document):
         overlay = document.get('overlays', {}).get(item['id'], {})
         value['description'] = overlay.get('description', originals[item['id']]['description'])
         statements = [q['interpretation']['statement_excerpt'] for q in document.get('clarifications', [])
-            if q['item_id'] == item['id'] and q.get('interpretation') and q['interpretation'].get('statement_excerpt')]
+            if q['item_id'] == item['id'] and not q.get('reconciliation_required')
+            and q.get('interpretation') and q['interpretation'].get('statement_excerpt')]
         if statements: value['clarified_statements'] = [normalized_name(text) for text in statements]
         value['claims'] = [{key: claim[key] for key in ('skill_id', 'attribution', 'assistance',
             'proficiency', 'experience_months', 'support_uncertain')} for claim in item['skill_claims']]

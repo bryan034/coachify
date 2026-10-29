@@ -1,4 +1,4 @@
-export type CvPolicy = { max_file_bytes: number; formats: ('pdf' | 'docx')[]; max_answer_chars: number; max_item_chars: number; extraction_configured: boolean };
+export type CvPolicy = { max_file_bytes: number; formats: ('pdf' | 'docx')[]; max_answer_chars: number; max_item_chars: number; extraction_configured: boolean; max_saved_cvs?: number; max_stored_original_bytes?: number };
 export type Evidence = { id: string; excerpt: string; location: string };
 export type Attribution = 'personal' | 'team' | 'observed' | 'denied' | 'unknown';
 export type Assistance = 'independent' | 'assisted' | 'supervised' | 'unknown';
@@ -13,7 +13,7 @@ export type CvDetail = CvSummary & { notices?: string[]; reconciliation?: { item
 export type Reconciliation = { cv_id: string; cv_version: number; candidate_id: string; source_cv_id: string; previous_items: CvItem[]; candidate_items: CvItem[]; affected_item_ids: string[]; previous_answers: Clarification[]; extraction: NonNullable<CvDetail['extraction']>; notices: string[] };
 export type ReconciliationInput = { expected_version: number; mutation_id: string; candidate_id: string; action: 'keep_previous' | 'accept_candidate'; choices: { item_id: string; target_item_id: string | null }[] };
 export type Selection = { cv_id: string | null; version: number };
-export type CvList = { cvs: CvSummary[]; selection: Selection };
+export type CvList = { cvs: CvSummary[]; selection: Selection; next_cursor?: string | null };
 export type TargetCondition = { id: string; kind: 'qualification' | 'date' | 'requirement'; label: string; description: string; item_kinds: CvItem['kind'][]; match_terms: string[]; evidence: string | null; origin: 'user_reviewed_jd' | 'user_guidance' | 'employer' | 'generated_guidance' | 'user_declaration' | 'market_research'; source_requirement_id?: string | null; category?: string | null; priority?: string | null; group_id?: string | null; group_operator?: 'all' | 'any' | null };
 export type ConfirmedTargetContext = { id: string; version: number; type: 'specific_job' | 'career_exploration'; confirmed: true; skill_ids: string[]; selection_version: number; role: string; field: string; conditions?: TargetCondition[] };
 export type Questions = { questions: Clarification[]; deferred: boolean; reason: string | null; cv_version: number; context: ConfirmedTargetContext | null; prepared: boolean };

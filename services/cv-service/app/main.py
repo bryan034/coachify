@@ -75,7 +75,8 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
                     timeout=5, follow_redirects=False, trust_env=False))
                 app.state.target_provider = CareerTargetProvider(career_client)
             options = {'parser': parser} if parser else {}
-            app.state.worker = IngestionWorker(app.state.repository, app.state.files, settings, app.state.extractor, **options)
+            app.state.worker = IngestionWorker(app.state.repository, app.state.files, settings, app.state.extractor,
+                capacity=app.state.service.capacity, model_usage=app.state.service.model_usage, **options)
             task = asyncio.create_task(app.state.worker.run()) if start_worker else None
             try: yield
             finally:
@@ -105,7 +106,10 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
         return JSONResponse({'detail': 'Enter valid fields within the documented limits; keep your draft and correct the input.'}, 422)
 
     @app.exception_handler(CvError)
-    async def domain_error(request, exc): return JSONResponse({'detail': exc.detail}, exc.status)
+    async def domain_error(request, exc):
+        content = {'detail': exc.detail}
+        if getattr(exc, 'code', None): content['code'] = exc.code
+        return JSONResponse(content, exc.status)
 
     @app.exception_handler(PyMongoError)
     async def storage_error(request, exc):

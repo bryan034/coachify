@@ -4,16 +4,22 @@ from copy import deepcopy
 from uuid import uuid4
 from pydantic import ValidationError
 from app.domain.capabilities import validate_extraction, effective_fingerprint
-from app.domain.errors import Conflict
+from app.domain.errors import Conflict, CvError
 from app.domain.service import bump, now
+from app.domain.storage import UploadCapacity
+from app.domain.model_usage import ModelUsage
 from app.domain.reconciliation import candidate_for, affected_sources
 from app.parsing.process import isolated_parse
 
 
 class IngestionWorker:
-    def __init__(self, repository, files, settings, extractor, parser=isolated_parse):
+    def __init__(self, repository, files, settings, extractor, parser=isolated_parse, capacity=None, model_usage=None):
         self.repository, self.files, self.settings = repository, files, settings
         self.extractor, self.parser = extractor, parser
+        self.capacity = capacity or UploadCapacity(repository, files, settings)
+        self.model_usage = model_usage or ModelUsage(repository.model_usage, files.root, settings)
+        self.processing_cursor = None
+        self.cleanup_cursor = None
 
     def claim(self, candidate):
         document = deepcopy(candidate)
@@ -21,13 +27,13 @@ class IngestionWorker:
         if operation['attempt'] >= self.settings.max_attempts:
             operation.update(status='failed', error={'code': 'processing_interrupted',
                 'message': 'Processing was repeatedly interrupted. Check status and retry this saved upload.', 'retryable': True})
-            bump(document)
+            bump(document, operational=True)
             try: self.repository.replace(candidate, document)
             except Conflict: pass
             return None
         operation.update(status='processing', attempt=operation['attempt'] + 1,
                          lease_token=str(uuid4()), lease_until=now() + self.settings.lease_seconds, error=None)
-        bump(document)
+        bump(document, operational=True)
         try: return self.repository.replace(candidate, document)
         except Conflict: return None
 
@@ -37,7 +43,8 @@ class IngestionWorker:
             if not claimed['original_available'] or not self.files.exists(claimed['_id']):
                 raise ValueError('The private original has expired. Reupload the same file to preserve its corrections.')
             parsed = self.parser(self.files.read(claimed['_id']), '.' + claimed['file_type'], self.settings.max_file_bytes)
-            output, metadata = self.extractor.extract(parsed['blocks'])
+            output, metadata = self.model_usage.run(claimed['user_id'], self.extractor.extract, parsed['blocks'],
+                configured=getattr(self.extractor, 'configured', True))
             items = validate_extraction(output, parsed['blocks'], claimed['_id'])
             error = None
         except ValidationError:
@@ -45,7 +52,8 @@ class IngestionWorker:
             error = {'code': 'invalid_extraction', 'message': 'The model returned an invalid extraction. Retry this saved upload.', 'retryable': True}
         except ValueError as exc:
             items, metadata, parsed = None, None, {}
-            error = {'code': 'extraction_failed', 'message': str(exc), 'retryable': True}
+            message = str(exc)
+            error = {'code': 'extraction_failed', 'message': message if len(message) <= 500 else 'CV extraction failed. Retry this saved upload.', 'retryable': True}
         except Exception:
             items, metadata, parsed = None, None, {}
             error = {'code': 'processing_failed', 'message': 'CV processing failed. Saved inputs are safe; retry this upload.', 'retryable': True}
@@ -78,7 +86,14 @@ class IngestionWorker:
                 operation.update(status='ready', error=None)
         if error: operation.update(status='failed', error=error)
         operation.update(lease_token=None, lease_until=0)
-        bump(document)
+        try:
+            # Extraction/candidate/history content never consumes bookkeeping space.
+            bump(document, operational=bool(error and items is None))
+        except CvError:
+            document = deepcopy(current)
+            document['operation'].update(status='failed', lease_token=None, lease_until=0,
+                error={'code': 'history_capacity', 'message': 'The extracted result exceeds this CV’s saved history capacity. Previous evidence is safe; keep this source for history and upload a new CV.', 'retryable': False})
+            bump(document, operational=True)
         try:
             self.repository.replace(current, document)
             return True
@@ -86,30 +101,58 @@ class IngestionWorker:
 
     def cleanup(self):
         timestamp = now()
-        for candidate in self.repository.cleanup_candidates(timestamp):
-            claimed = deepcopy(candidate)
-            claimed['cleanup_token'] = str(uuid4())
-            if claimed['operation']['status'] in {'queued', 'processing'}:
-                claimed['operation'].update(status='failed', lease_token=None, lease_until=0,
-                    error={'code': 'source_expired', 'message': 'The private original expired. Reupload the same file to continue.', 'retryable': False})
-            bump(claimed)
-            try: claimed = self.repository.replace(candidate, claimed)
-            except Conflict: continue
-            self.files.remove(claimed['_id'])
-            # Record deletion after removing bytes; a crash here leaves a tracked,
-            # retryable cleanup record, never an untracked private original.
-            updated = deepcopy(claimed)
-            updated['original_available'] = False
-            updated.pop('cleanup_token', None)
-            bump(updated)
-            try: self.repository.replace(claimed, updated)
-            except Conflict: pass
-        self.files.cleanup_orphans(self.repository.tracked_paths(), timestamp - 3600)
+        candidates = self.repository.cleanup_candidates(timestamp, after=self.cleanup_cursor)
+        if not candidates and self.cleanup_cursor is not None:
+            self.cleanup_cursor = None
+            candidates = self.repository.cleanup_candidates(timestamp)
+        for candidate in candidates:
+            self.cleanup_cursor = candidate['_id']
+            try:
+                with self.files.lock(candidate['_id'], blocking=False) as acquired:
+                    if not acquired: continue
+                    current = self.repository.get(candidate['user_id'], candidate['_id'])
+                    if not current or not current['original_available'] or current['original_expires_at'] > timestamp: continue
+                    if current['operation']['status'] == 'processing' and current['operation']['lease_until'] > timestamp: continue
+                    claimed = deepcopy(current)
+                    claimed['cleanup_token'] = str(uuid4())
+                    if claimed['operation']['status'] in {'queued', 'processing'}:
+                        claimed['operation'].update(status='failed', lease_token=None, lease_until=0,
+                            error={'code': 'source_expired', 'message': 'The private original expired. Reupload the same file to continue.', 'retryable': False})
+                    bump(claimed, operational=True)
+                    claimed = self.repository.replace(current, claimed)
+                    entry = self.capacity.entry(claimed['_id'])
+                    size = self.files.size(claimed['_id'])
+                    self.files.remove(claimed['_id'])
+                    # Physical deletion precedes credit; a crash can overcount
+                    # until recovery, but cannot admit unaccounted original bytes.
+                    self.capacity.release_bytes(claimed['_id'], entry['generation'] if entry else None, size)
+                    updated = deepcopy(claimed)
+                    updated['original_available'] = False
+                    updated.pop('cleanup_token', None)
+                    bump(updated, operational=True)
+                    self.repository.replace(claimed, updated)
+            except Exception:
+                # Advance the cursor even for malformed/oversized legacy records,
+                # filesystem failures or CAS races, so another owner's expiry runs.
+                continue
+        self.capacity.cleanup_orphans(timestamp - 3600)
 
     def run_once(self):
-        for candidate in self.repository.candidates(now()):
-            claimed = self.claim(candidate)
-            if claimed: self.process(claimed)
+        self.capacity.recover()
+        candidates = self.repository.candidates(now(), after=self.processing_cursor)
+        if not candidates and self.processing_cursor is not None:
+            self.processing_cursor = None
+            candidates = self.repository.candidates(now())
+        for candidate in candidates:
+            self.processing_cursor = candidate['_id']
+            try:
+                current = self.repository.get(candidate['user_id'], candidate['_id'])
+                if not current or current['operation']['status'] not in {'queued', 'processing'}: continue
+                if current['operation']['status'] == 'processing' and current['operation']['lease_until'] > now(): continue
+                claimed = self.claim(current)
+                if claimed: self.process(claimed)
+            except Exception:
+                continue
         self.cleanup()
 
     async def run(self):
