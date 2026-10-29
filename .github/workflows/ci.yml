@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/coachify-tiktoken
+      TIKTOKEN_CACHE_DIR: /tmp/coachify-tiktoken
     strategy:
       fail-fast: false
       matrix:
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
-      TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/coachify-tiktoken
+      TIKTOKEN_CACHE_DIR: /tmp/coachify-tiktoken
     strategy:
       fail-fast: false
       matrix:
