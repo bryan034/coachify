@@ -33,3 +33,9 @@ condensed, widely spaced uppercase style. This is a visual approximation for the
 display face, not a claim to include Aeonik Pro. An exact heading match requires
 licensed Aeonik Pro webfonts. Once provided, declare those with `@font-face` and
 change `--font-heading` in `src/styles/globals.css` (under `apps/frontend`).
+
+## Saved career briefing
+
+The `/career-goal` overview follows the supplied career-briefing reference while
+retaining live saved data and shared workspace navigation. See the
+[data map, implemented limits and proposed database extensions](career-briefing.md).

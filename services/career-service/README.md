@@ -1,7 +1,7 @@
 # Career service
 
 Interprets job descriptions, explores career directions and researches opportunities.
-Each account has one saved goal overview with category cards and one live conversation. Manual changes open guided refinement chat; there is no edit form or Apply button. Validated changes become
+Each account has one saved goal briefing with expandable skill requirements, collapsible role/research context and one live conversation. Manual changes open guided refinement chat; there is no edit form or Apply button. Validated changes become
 the latest goal automatically; a new extracted JD replaces the conversation.
 
 Brave research exclusively calls `/res/v1/llm/context`, including discovery,
@@ -187,7 +187,8 @@ and [application setup](../../docs/setup.md). Gap analysis and roadmaps remain p
 
 `POST /api/v1/career/discoveries`, `GET /api/v1/career/discoveries/current`, and owned
 `/discoveries/{id}` message/research routes implement a Gemini goal-setting conversation,
-explicit scope approval, Brave job-listing research and Gemini requirement extraction.
+automatic Brave job-listing research, bounded conversation memory and Gemini skill synthesis.
+Discovery chat remains open during research and supports source-linked follow-up questions.
 The final review uses the existing review/confirmation APIs and target persistence.
 No CV is needed. See [Career Discovery](CAREER_DISCOVERY.md) for exact routes, models,
 configuration, evidence rules, recovery and verification. Saved-goal question APIs remain

@@ -1,8 +1,25 @@
 """Career direction and evidence contracts; targets reuse JDExtraction/RequirementReview."""
-from typing import Literal
+from typing import Annotated, Literal
 from app.schemas.providers import ResearchProvider
-from pydantic import Field
+from pydantic import Field, TypeAdapter, field_validator
 from app.schemas.analysis import Contract, Text, Evidence, Version
+
+_text_list = TypeAdapter(list[Text])
+
+
+def recent_texts(value, limit):
+    """Validate every entry, then keep the newest distinct entries in input order.
+
+    Context lists are ordered oldest first. A duplicate does not renew an older
+    entry's position; spelling is preserved after the usual whitespace trimming.
+    """
+    values = _text_list.validate_python(value)
+    distinct = {}
+    for item in values:
+        key = ' '.join(item.casefold().split())
+        if key not in distinct:
+            distinct[key] = item
+    return list(distinct.values())[-limit:]
 
 class Scope(Contract):
     field: Text
@@ -17,12 +34,36 @@ class Suggestion(Contract):
     typical_work: Evidence
     difference: Evidence
 
+class ConversationMemory(Contract):
+    interests: list[Text] = Field(default_factory=list, max_length=6)
+    preferences: list[Text] = Field(default_factory=list, max_length=6)
+    rejected_directions: list[Text] = Field(default_factory=list, max_length=6)
+    open_questions: list[Text] = Field(default_factory=list, max_length=3)
+
+    @field_validator('interests', 'preferences', 'rejected_directions', 'open_questions', mode='before')
+    @classmethod
+    def retain_recent(cls, value, info):
+        return recent_texts(value, 3 if info.field_name == 'open_questions' else 6)
+
+class ChatMessage(Contract):
+    role: Literal['user','assistant']
+    content: Annotated[str, Field(min_length=1, max_length=12000)]
+
 class Decision(Contract):
-    action: Literal['ASK_CLARIFICATION','SUGGEST_ROLES','CONFIRM_AREA','START_RESEARCH']
+    action: Literal['ASK_CLARIFICATION','SUGGEST_ROLES','CONFIRM_AREA','START_RESEARCH','ANSWER','REFINE_SKILLS']
     scope: Scope | None
     question: Evidence | None
-    recommendations: list[Suggestion]=Field(default_factory=list,max_length=3)
+    recommendations: list[Suggestion]=Field(default_factory=list,max_length=5)
     reply: Evidence
+    memory: ConversationMemory = Field(default_factory=ConversationMemory)
+    source_ids: list[Text] = Field(default_factory=list, max_length=10)
+    excluded_skills: list[Text] = Field(default_factory=list, max_length=60)
+    requested_skills: list[Text] = Field(default_factory=list, max_length=30)
+
+    @field_validator('excluded_skills', 'requested_skills', mode='before')
+    @classmethod
+    def retain_recent_skills(cls, value, info):
+        return recent_texts(value, 60 if info.field_name == 'excluded_skills' else 30)
 
 class Plan(Contract):
     related_roles: list[Text]=Field(min_length=1,max_length=4)
@@ -46,9 +87,21 @@ class Listing(Contract):
 
 class Listings(Contract):
     listings: list[Listing]=Field(max_length=3)
+    question: Evidence | None = None
+    question_refs: list[int] = Field(default_factory=list, max_length=3)
+
+class RecommendedSkill(Contract):
+    skill_refs: list[int] = Field(default_factory=list, max_length=10)
+    name: Text
+    requirement_type: Literal['core','specialisation','optional']
+    relevance: Evidence
+    learning_priority: Literal['high','medium','low']
 
 class MarketSummary(Contract):
     responsibility_refs: list[int]=Field(max_length=20)
+    skills: list[RecommendedSkill] = Field(default_factory=list, max_length=30)
+    specialisations: list[Text] = Field(default_factory=list, max_length=4)
+    question: Evidence | None = None
 
 class StartDiscovery(Contract):
     consent: Literal[True]
@@ -63,7 +116,7 @@ class ResearchDiscovery(Contract):
     confirmed: Literal[True]
     refresh: bool=False
 
-# Public responses contain reviewed structured data; no worker leases or raw messages.
+# Owner-scoped responses include the private transcript; worker leases remain private.
 from app.schemas.analysis import ResearchSource
 from app.schemas.jd import JDExtractionResult
 
@@ -82,6 +135,8 @@ class DiscoverySession(Contract):
     status: Literal['conversation','researching','waiting','failed','review','confirmed']
     stage: str | None
     decision: Decision | None
+    messages: list[ChatMessage] = Field(default_factory=list, max_length=1000)
+    summary: MarketSummary | None = None
     scope: Scope | None
     related_roles: list[Text] = Field(max_length=4)
     sources: list[ResearchSource] = Field(max_length=30)

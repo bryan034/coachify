@@ -58,6 +58,8 @@ export function JobReviewChat(){
  },[retryAt]);
  const [message,setMessage]=useState(''),[turns,setTurns]=useState<{message:string;reply:string}[]>([]),[details,setDetails]=useState(false);
  const messageReceipt=useRef<{body:string;key:string}|null>(null);
+ const sending=useRef(false);
+ const [failedMessage,setFailedMessage]=useState('');
  const controller=useRef<AbortController|null>(null),key=useRef(session.jdKey||crypto.randomUUID()),revision=useRef(''),source=useRef(session.jd),latest=useRef(session);latest.current=session;
  const refining=useRef(typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('refine')==='1');
  const chatCooldown=!!error&&isTokenLimit(code)&&secondsLeft>0;
@@ -89,8 +91,8 @@ export function JobReviewChat(){
   }catch(c){if(!abort.signal.aborted)reportError(c,'Could not load research.');}}
   void load();return()=>{abort.abort();clearTimeout(timer);};
  },[token,goal?._id,workspace?.research_id,researchRetry]);
- function receive(value:CareerWorkspace){
-  if(revision.current!==value.session_id){setTurns([]);setMessage('');messageReceipt.current=null;revision.current=value.session_id||'';}
+ function receive(value:CareerWorkspace,preserveDraft=false){
+  if(revision.current!==value.session_id){setTurns([]);if(!preserveDraft)setMessage('');setFailedMessage('');messageReceipt.current=null;revision.current=value.session_id||'';}
   setRetryAt(value.phase==='waiting_quota'?Date.now()+(value.retry_after||60)*1000:null);
   setWorkspace(value);
  }
@@ -113,14 +115,16 @@ export function JobReviewChat(){
  const dirty=useRef(false);dirty.current=!!message;
  useEffect(()=>{const warn=(e:BeforeUnloadEvent)=>{if(dirty.current){e.preventDefault();e.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[]);
  async function retry(){if(!token||busy||secondsLeft>0)return;setBusy(true);setError('');setCode('');try{receive(await careerApi<CareerWorkspace>('/workspace/retry',token,{method:'POST'}));}catch(c){reportError(c,'Retry failed.');}finally{setBusy(false);}}
- async function send(){
-  if(!workspace?.session_id||!goal||!ready||!token||busy||!message.trim()||chatCooldown)return;
-  const input=message.trim(),abort=new AbortController();controller.current=abort;setPendingMessage(input);setBusy(true);setError('');setCode('');
+ async function send(text=message){
+  if(!workspace?.session_id||!goal||!ready||!token||busy||sending.current||!text.trim()||chatCooldown)return;
+  const input=text.trim(),abort=new AbortController();sending.current=true;controller.current=abort;setPendingMessage(input);setBusy(true);setError('');setCode('');setFailedMessage('');
+  // Clear the submitted text immediately; a retry must preserve any newer draft.
+  setMessage(current=>current.trim()===input?'':current);
   const body=JSON.stringify({session_id:workspace.session_id,expected_version:goal.version,message:input,mode:refining.current?'refine':'question',conversation:turns.slice(-1).flatMap(t=>[{role:'user',content:t.message},{role:'assistant',content:t.reply}])});
   if(messageReceipt.current?.body!==body)messageReceipt.current={body,key:crypto.randomUUID()};
   try{const result=await careerOperation<{reply:string;workspace?:CareerWorkspace;edit_status?:string}>('/workspace/messages',token,{method:'POST',signal:abort.signal,headers:{'Idempotency-Key':messageReceipt.current.key},body},operationProgress);
-   if(!abort.signal.aborted){if(result.workspace)receive(result.workspace);setTurns(p=>[...p,{message:input,reply:result.reply}].slice(-30));setMessage('');setRetryAt(null);messageReceipt.current=null;}}
-  catch(c){if(!abort.signal.aborted)reportError(c,'Could not answer. Your message is retained.');}finally{if(!abort.signal.aborted){setBusy(false);setPendingMessage(null);setOperation(null);}}
+   if(!abort.signal.aborted){if(result.workspace)receive(result.workspace,true);setTurns(p=>[...p,{message:input,reply:result.reply}].slice(-30));setRetryAt(null);messageReceipt.current=null;}}
+  catch(c){if(!abort.signal.aborted){setFailedMessage(input);setMessage(current=>current||input);reportError(c,'Could not answer. Your message is retained.');}}finally{sending.current=false;if(!abort.signal.aborted){setBusy(false);setPendingMessage(null);setOperation(null);}}
  }
  return <section className="page on career-agent-page">
   <header className="agent-page-header"><div><p className="small">Your direction, one conversation</p><h1>Career Goal</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>{if(!dirty.current||window.confirm('Leave and discard unsent edits? Your saved goal stays current.'))router.push('/career-goal');}}>← Career Goal</button></header>
@@ -145,10 +149,11 @@ export function JobReviewChat(){
     {ready&&workspace?.edit_question&&!turns.length&&!pendingMessage&&<div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentReply onProgress={followReply}>{workspace.edit_question}</AgentReply></div>}
     {turns.map((turn,i)=><div className="agent-exchange" key={i}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.message}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentReply animate={i===turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div></div>)}
     {pendingMessage&&<div className="agent-exchange"><div className="agent-message user"><span className="agent-message-label">You</span><p>{pendingMessage}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentProgress steps={operation?.activities||[]}/><AgentActivity label={operation?.status==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':'Preparing your answer…'} detail={operation?.status==='waiting_quota'?`Resuming automatically in ${secondsLeft} seconds.`:'Using your career goal and saved interview research.'}/></div></div>}
-    {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||chatCooldown} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(ready&&message.trim())void send();else if(researchReady&&!ready)setSummaryRetry(v=>v+1);else if(loadingResearch)setResearchRetry(v=>v+1);else void retry();}}/>}
+    {error&&failedMessage&&message!==failedMessage&&<p className="small">Message awaiting retry: {failedMessage}</p>}
+    {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||chatCooldown} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(ready&&failedMessage)void send(failedMessage);else if(ready&&message.trim())void send();else if(researchReady&&!ready)setSummaryRetry(v=>v+1);else if(loadingResearch)setResearchRetry(v=>v+1);else void retry();}}/>}
    </div>
    <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
-   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message Coachify" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} disabled={busy||!ready} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||!ready||!message.trim()||chatCooldown}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
+   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message Coachify" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} disabled={!ready} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||!ready||!message.trim()||chatCooldown}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
   </div>
  </section>;
 }

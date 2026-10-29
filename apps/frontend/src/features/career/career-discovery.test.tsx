@@ -1,4 +1,4 @@
-import {fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {CareerDiscovery} from './career-discovery';
 import {careerApi} from '@/lib/api/career';
@@ -11,24 +11,57 @@ const decision={scope,reply:'You can keep Software Engineering broad.',action:'C
 const extraction={role:'Software Engineering',field:'Software Engineering',company:null,job_url:null,location:'Singapore',seniority_level:'entry_level',employment_type:'unknown',summary:'A sample of real job requirements.',responsibilities:['Build APIs'],non_skill_requirements:[],skills:[{item_id:'sql',name:'SQL',category:'technical',priority:'required',origin:'market_research',evidence:'SQL required.'},{item_id:'py',name:'Python',category:'technical',priority:'preferred',origin:'market_research',evidence:'Python preferred.'}]};
 const base={id:'000000000000000000000001',version:2,status:'conversation',stage:null,decision,scope,related_roles:[],sources:[],stats:[],warnings:[],listings_analysed:0,employers_analysed:0,coverage:null,error_code:null,limit_scope:null,provider:null,retry_after:null,review:null};
 beforeEach(()=>{vi.clearAllMocks();});
-it('uses conversation first, requires explicit scope confirmation, and excludes CV assessment',async()=>{
+it('opens a chat and automatically researches a clear direction without scope confirmation',async()=>{
  vi.mocked(careerApi).mockImplementation(async path=>{
   if(path==='/discoveries/current')return {available:true,session:null} as never;
   if(path==='/discoveries')return {available:true,session:{...base,version:1,decision:null}} as never;
-  if(path.endsWith('/messages'))return {available:true,session:base} as never;
-  return {available:true,session:{...base,version:3,status:'researching',stage:'plan_research'}} as never;
+  return {available:true,session:{...base,version:3,status:'researching',stage:'plan_research',messages:[{role:'user',content:'Software engineering, keep it broad'},{role:'assistant',content:'Researching Software Engineering.'}]}} as never;
  });
  render(<CareerDiscovery/>);await waitFor(()=>expect(screen.queryByText('Opening your saved discovery…')).toBeNull());
+ expect(screen.getByRole('log',{name:'Career agent conversation'})).toBeInTheDocument();
  expect(screen.queryByLabelText(/CV attachment/i)).toBeNull();
  fireEvent.click(screen.getByRole('checkbox'));
- fireEvent.change(screen.getByRole('textbox',{name:'Tell Coachify your career direction'}),{target:{value:'Software engineering, keep it broad'}});
+ fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Software engineering, keep it broad'}});
  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
- await screen.findByText('Your proposed scope');
- expect(vi.mocked(careerApi).mock.calls.some(([path])=>path.endsWith('/research'))).toBe(false);
- fireEvent.click(screen.getByRole('button',{name:'Confirm area and research jobs'}));
+ expect(screen.getByRole('textbox',{name:'Message Coachify'})).toHaveValue('');
  await screen.findByText('Planning job-listing searches');
- const call=vi.mocked(careerApi).mock.calls.find(([path])=>path.endsWith('/research'))!;
- expect(JSON.parse(call[2]!.body as string)).toMatchObject({confirmed:true,scope});
+ expect(screen.queryByRole('button',{name:'Confirm area and research jobs'})).toBeNull();
+ expect(vi.mocked(careerApi).mock.calls.some(([path])=>path.endsWith('/research')||path==='/goals/confirm')).toBe(false);
+ expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+});
+it('clears immediately and preserves a new draft typed while a response is pending',async()=>{
+ let respond!:(value:unknown)=>void;
+ vi.mocked(careerApi).mockImplementation(async path=>{
+  if(path==='/discoveries/current')return {available:true,session:{...base,status:'researching'}} as never;
+  return await new Promise<unknown>(resolve=>{respond=resolve;}) as never;
+ });
+ render(<CareerDiscovery/>);await screen.findByText('Researching your career area');
+ fireEvent.click(screen.getByRole('checkbox'));
+ const input=screen.getByRole('textbox',{name:'Message Coachify'});
+ fireEvent.change(input,{target:{value:'I prefer backend work'}});
+ fireEvent.keyDown(input,{key:'Enter'});
+ expect(input).toHaveValue('');expect(input).toBeEnabled();
+ fireEvent.change(input,{target:{value:'What does that involve?'}});
+ await act(async()=>respond({available:true,session:{...base,version:3,status:'researching',messages:[{role:'user',content:'I prefer backend work'},{role:'assistant',content:'I will keep that preference in mind.'}]}}));
+ expect(input).toHaveValue('What does that involve?');
+ expect(screen.getByRole('log')).toHaveTextContent('I prefer backend work');
+});
+it('retains a failed message for retry without overwriting the next draft',async()=>{
+ let reject!:(error:Error)=>void;
+ vi.mocked(careerApi).mockImplementation(async path=>{
+  if(path==='/discoveries/current')return {available:true,session:base} as never;
+  return await new Promise<unknown>((_resolve,no)=>{reject=no;}) as never;
+ });
+ render(<CareerDiscovery/>);await screen.findByText(decision.reply);
+ fireEvent.click(screen.getByRole('checkbox'));
+ const input=screen.getByRole('textbox',{name:'Message Coachify'});
+ fireEvent.change(input,{target:{value:'Explore backend work'}});
+ fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+ fireEvent.change(input,{target:{value:'My next draft'}});
+ await act(async()=>reject(new Error('Synthetic connection failure')));
+ expect(screen.getByRole('alert')).toHaveTextContent('Message not sent: Explore backend work');
+ expect(screen.getByRole('button',{name:'Retry message'})).toBeEnabled();
+ expect(input).toHaveValue('My next draft');
 });
 it('reviews categorized evidence, removes a skill, then uses the existing goal confirmation API',async()=>{
  const review={current:{goal:{...extraction,_id:'000000000000000000000081',version:1,target_type:'career_exploration'}}};
@@ -58,4 +91,14 @@ it('restores provider wait with its cause while keeping saved evidence visible',
  await screen.findByText('gemini is rate limiting requests');
  expect(screen.getByRole('status')).toHaveTextContent('Resuming in 407 seconds');
  expect(screen.queryByRole('button',{name:'Confirm and save goal'})).toBeNull();
+});
+
+it('shows all five suggested career directions',async()=>{
+ const recommendations=Array.from({length:5},(_,index)=>({area:`Career area ${index+1}`,explanation:'A direction matching your interests.',typical_work:'Representative responsibilities.',difference:'A different kind of work.'}));
+ vi.mocked(careerApi).mockResolvedValue({available:true,session:{...base,decision:{...decision,action:'SUGGEST_ROLES',scope:null,recommendations}}} as never);
+ render(<CareerDiscovery/>);
+ for(const recommendation of recommendations){
+  expect(await screen.findByRole('heading',{name:recommendation.area})).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:`Choose ${recommendation.area}`})).toBeInTheDocument();
+ }
 });
