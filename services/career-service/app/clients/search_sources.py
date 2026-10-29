@@ -10,6 +10,7 @@ import httpx
 from pydantic import ValidationError
 from app.repositories.goals import GoalError,now
 from app.schemas.analysis import ResearchSource
+from app.ai.discovery_config import MAX_URLS_PER_QUERY, BRAVE_CONTEXT_TOKENS
 
 
 OPPORTUNITY_SOURCE_LIMIT=3
@@ -84,7 +85,7 @@ def error_excerpt(text):
     return bool(re.fullmatch(r'(?:error[: ]+)?(?:(?:api |subscription )?key (?:is )?(?:not specified|not provided|missing|invalid)|missing (?:api |subscription )?key|unauthori[sz]ed|authentication failed|access denied|no results found)',value))
 
 
-def context_results(payload):
+def context_results(payload, *, discovery=False):
     if not isinstance(payload,dict) or payload.get('error') or payload.get('type')=='ErrorResponse':
         raise GoalError('Brave LLM Context returned an error instead of research results.',503)
     grounding=payload.get('grounding')
@@ -101,7 +102,33 @@ def context_results(payload):
         meta=meta if isinstance(meta,dict) else {}
         if url not in groups:groups[url]={'url':url,'title':item.get('title') or meta.get('title'),'extra_snippets':[]}
         groups[url]['extra_snippets'].extend(snippets)
+    if discovery:
+        for group in groups.values():group['company']=discovery_employer(group['extra_snippets'])
     return list(groups.values())
+
+
+def discovery_employer(snippets):
+    """Copy only explicit JobPosting employer data from Brave's structured snippets.
+
+    site_name denotes the publisher (possibly a job board), not an employer.
+    Missing/ambiguous employer data stays unknown; never guess from titles/domains.
+    """
+    def names(value,depth=0):
+        if depth>8:return []
+        if isinstance(value,list):return [name for item in value[:50] for name in names(item,depth+1)]
+        if not isinstance(value,dict):return []
+        result=[]
+        organization=value.get('hiringOrganization')
+        if isinstance(organization,dict):organization=organization.get('name')
+        if isinstance(organization,str) and 0<len(organization.strip())<=160:result.append(organization.strip())
+        for key in ('@graph','jobPosting','JobPosting'):
+            result.extend(names(value.get(key),depth+1))
+        return result
+    employers=set()
+    for snippet in snippets:
+        try:employers.update(names(json.loads(snippet)))
+        except (ValueError,TypeError,RecursionError):continue
+    return next(iter(employers)) if len(employers)==1 else None
 
 
 class SourceRateLimit(GoalError):
@@ -211,18 +238,25 @@ class SourceAPIs:
         if self.brave_mode!='llm_context':raise GoalError('Opportunity Intelligence requires Brave LLM Context mode.',503)
         return await self.brave(query,country=search_country(context.location),focus=query,max_sources=OPPORTUNITY_SOURCE_LIMIT,evidence_chars=OPPORTUNITY_EXCERPT_LIMIT)
 
-    async def brave(self,query,*,country='ALL',focus=None,max_sources=6,evidence_chars=2400):
+    async def collect_discovery_query(self,context,query):
+        # Brave ranks up to 50 results before returning at most five contexts.
+        # Discovery then validates relevance; rejection may leave fewer than five.
+        return await self.brave(query,country=search_country(context.location),focus=query,
+            max_sources=MAX_URLS_PER_QUERY,evidence_chars=8000,context_tokens=BRAVE_CONTEXT_TOKENS,search_count=50,threshold='strict',discovery=True)
+
+    async def brave(self,query,*,country='ALL',focus=None,max_sources=6,evidence_chars=2400,
+                    context_tokens=8192,search_count=30,threshold='balanced',discovery=False):
         if not self.brave_key:raise GoalError('The running career service has no Brave API key. After configuring BRAVE_API_KEY, recreate the career-service container and retry.',503)
         headers={'X-Subscription-Token':self.brave_key,'Accept':'application/json'}
         country=country if country in SEARCH_COUNTRIES else 'ALL'
         raw=await body(self.client,'GET','https://api.search.brave.com/res/v1/llm/context',headers=headers,timeout=30,
-            params={'q':query,'country':country,'count':30,'maximum_number_of_urls':max_sources,
-                'maximum_number_of_tokens':8192,'maximum_number_of_tokens_per_url':2048,
+            params={'q':query,'country':country,'count':search_count,'maximum_number_of_urls':max_sources,
+                'maximum_number_of_tokens':context_tokens,'maximum_number_of_tokens_per_url':2048,
                 'maximum_number_of_snippets':30,'maximum_number_of_snippets_per_url':6,
-                'context_threshold_mode':'balanced','enable_local':'false',
+                'context_threshold_mode':threshold,'enable_local':'false',
                 'search_lang':'en','operators':'true','operators_fallback':'false',
                 'spellcheck':'false','enable_source_metadata':'true'})
-        try:results=context_results(json.loads(raw))
+        try:results=context_results(json.loads(raw),discovery=discovery)
         except (ValueError,UnicodeError,TypeError):raise GoalError('Brave returned invalid LLM context data.',503) from None
         sources=[]
         for value in results:
@@ -232,7 +266,12 @@ class SourceAPIs:
             except (ValidationError,ValueError):continue
             # URL safety and canonicalisation apply before this can count as a result.
             from app.clients.research import normalize_sources
-            try:sources.extend(normalize_sources([source]))
+            try:
+                normalized=normalize_sources([source])
+                if discovery:
+                    from app.schemas.discovery import DiscoverySource
+                    normalized=[DiscoverySource(**item.model_dump(),company=value.get('company')) for item in normalized]
+                sources.extend(normalized)
             except GoalError:continue
             if len(sources)>=max_sources:break
         return sources

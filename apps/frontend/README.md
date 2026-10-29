@@ -262,3 +262,17 @@ Explore careers uses the goal-chat layout at `/career-goal/discovery`. Discovery
 keeps its owner-scoped transcript on the server, permits chat during automatic research,
 and clears the composer on send without overwriting the next draft. Final goal saving
 still requires explicit review and confirmation. See [Career Discovery](../../services/career-service/CAREER_DISCOVERY.md).
+
+Career Discovery opens with only the fixed Python-supplied introduction. **New chat**
+clears the visible history, scope, suggestions and draft; the first sent message
+creates a new private session. Opening the page performs no LLM or Brave calls.
+Reload saved progress within an active chat reads its session ID; reopening the page
+starts a clean view. Earlier sessions and confirmed goals remain saved.
+
+The Discovery introduction is fetched only on fresh opening and kept separately from
+the transcript. Subsequent session responses omit it, and it never enters model history.
+
+Career Discovery collects its six research-readiness topics in a numbered bundle,
+omitting topics already answered. Role scope offers “keep it broad”; other questions
+end with “You can say unsure.” There is no repeated clarification preface. Explicit unsure/skip answers count, missing answers do not. The Career
+backend gates automatic research; final goal confirmation is unchanged.

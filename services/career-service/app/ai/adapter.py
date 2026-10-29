@@ -27,6 +27,8 @@ from app.ai.goal_summary import GoalSummary,SUMMARY_PROMPT
 from app.ai.context_contracts import ContextPlan,CONTEXT_PROMPT
 from app.ai.research_planning import ResearchPlan,ResearchAssessment,PLAN_PROMPT,ASSESS_PROMPT,planning_input
 from app.ai.config import AISettings
+from app.ai.discovery_config import EXTRACTION_OUTPUT_TOKENS
+from app.ai.usage import input_tokens
 from app.ai.rejections import classify,safe_diagnostic
 from app.ai.jd_scope import JobIdentity,PROMPT as JD_SCOPE_PROMPT
 from app.ai.contracts import AIInput, OUTPUTS, ResearchOutput, TargetOutput, GapOutput
@@ -589,14 +591,19 @@ class AIAdapter:
         if mode == 'json_object':
             instructions += '\nJSON schema: ' + json.dumps(schema, separators=(',', ':'))
         schema_bytes = len(json.dumps(response_format, separators=(',', ':')).encode())
-        output_tokens = min(self.settings.max_output_tokens, {'goal_summary':8192,'jd_scope':768,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'discovery_turn':2048,'discovery_plan':512,'discovery_extract':2048,'discovery_summary':8192,'opportunity_plan':768,'opportunity_structure':2048}.get(request.stage,self.settings.max_output_tokens))
+        output_tokens = min(self.settings.max_output_tokens, {'goal_summary':8192,'jd_scope':768,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'discovery_turn':4096,'discovery_plan':512,'discovery_assess':2048,'discovery_extract':8192,'discovery_summary':8192,'opportunity_plan':768,'opportunity_structure':2048}.get(request.stage,self.settings.max_output_tokens))
+        if request.stage=='discovery_extract':
+            output_tokens=EXTRACTION_OUTPUT_TOKENS
         safety_margin = max(1024, self.settings.context_tokens // 10)
         input_budget = self.settings.context_tokens - output_tokens - safety_margin
         if input_budget <= 0:
             raise AIError('context_limit')
 
         request = compact_request(request)
-        request = self._fit_request(request, instructions, schema_bytes, input_budget)
+        if request.stage in DISCOVERY_PROMPTS:
+            # Actual token estimates for Discovery; never silently cut evidence.
+            input_budget=min(input_budget,32768)
+        request = self._fit_request(request, instructions, schema_bytes, input_budget,response_format=response_format)
         messages = [{'role': 'system', 'content': instructions},
                     {'role': 'user', 'content': provider_input(request)}]
         payload = {'model': self.settings.model, 'messages': messages, 'response_format': response_format,
@@ -605,14 +612,14 @@ class AIAdapter:
             payload['reasoning_effort']='minimal'
         return payload
 
-    def _fit_request(self, request, instructions, schema_bytes, input_budget):
+    def _fit_request(self, request, instructions, schema_bytes, input_budget, *, response_format=None):
         def messages_for(candidate):
             return [{'role': 'system', 'content': instructions},
                     {'role': 'user', 'content': provider_input(candidate)}]
 
         def fits(candidate):
             messages = messages_for(candidate)
-            size = sum(len(message['content'].encode()) for message in messages) + schema_bytes
+            size = input_tokens({'messages':messages,'response_format':response_format}) if request.stage in DISCOVERY_PROMPTS else sum(len(message['content'].encode()) for message in messages) + schema_bytes
             return size <= input_budget, size
 
         current = request
@@ -620,7 +627,7 @@ class AIAdapter:
             fits_budget, size = fits(current)
             if fits_budget:
                 return current
-            if current.stage in ('goal_edit','goal_summary'):raise AIError('context_limit')
+            if current.stage in ('goal_edit','goal_summary') or current.stage in DISCOVERY_PROMPTS:raise AIError('context_limit')
             if len(current.conversation) > 1:
                 # The last message is the current user input; keep it intact.
                 remove_count = 2 if len(current.conversation) > 2 else 1

@@ -187,8 +187,18 @@ and [application setup](../../docs/setup.md). Gap analysis and roadmaps remain p
 
 `POST /api/v1/career/discoveries`, `GET /api/v1/career/discoveries/current`, and owned
 `/discoveries/{id}` message/research routes implement a Gemini goal-setting conversation,
-automatic Brave job-listing research, bounded conversation memory and Gemini skill synthesis.
-Discovery chat remains open during research and supports source-linked follow-up questions.
+automatic Brave job-listing research after a backend readiness gate, bounded memory
+and Gemini skill synthesis. The six clarification topics must be addressed; explicit
+unsure/skip answers are accepted, and missing topics are bundled. Role scope can
+stay broad without a separate broad-exploration or industry question.
+Discovery opens fresh with a fixed Python introduction and no initial AI calls;
+the introduction is returned only on fresh opening and excluded from model history; a new
+private session starts with the first sent message. Chat remains open during research
+and supports source-linked follow-up questions.
+Discovery assesses and ranks candidates by relevance and available Brave employer metadata;
+faithful paraphrases are accepted and rejected evidence gets one replacement search;
+usable sources survive replacement shortfalls, with honest coverage warnings;
+truncated extraction batches split without discarding completed source work.
 The final review uses the existing review/confirmation APIs and target persistence.
 No CV is needed. See [Career Discovery](CAREER_DISCOVERY.md) for exact routes, models,
 configuration, evidence rules, recovery and verification. Saved-goal question APIs remain

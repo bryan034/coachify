@@ -29,7 +29,20 @@
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "fresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Fresh"
+            }
+          }
+        ],
+        "description": "Read the latest owned discovery. With fresh=true, return only the fixed introduction and capability status, without restoring history or invoking AI."
       }
     },
     "/api/v1/career/discoveries": {
@@ -86,7 +99,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Create a clean private discovery for each new Idempotency-Key; replaying the same key returns the same session. No introduction is stored or returned. No AI or research starts until a message is sent."
       }
     },
     "/api/v1/career/discoveries/{session_id}": {
@@ -200,7 +214,7 @@
             }
           }
         },
-        "description": "Converse using bounded context, refine recommendations, or automatically queue research once a direction is clear. Remains available during research."
+        "description": "Interpret a user message and update evidence-backed understanding. Python bundles unanswered clarification topics in the six-topic order, then automatically starts research once readiness passes. Explicit unsure/skip answers and keep-it-broad role scope are supported; no separate breadth/industry question or scope confirmation."
       }
     },
     "/api/v1/career/discoveries/{session_id}/research": {
@@ -267,7 +281,7 @@
             }
           }
         },
-        "description": "Compatibility retry/refresh of the current scope. Ordinary clear-direction messages start research automatically; final goal confirmation remains explicit."
+        "description": "Compatibility retry or refresh for an owned discovery. Requires matching scope and complete research readiness; missing context returns 422 and must be addressed in chat."
       }
     },
     "/api/v1/career/goals/{goal_id}/opportunity-research/progress": {
@@ -2582,6 +2596,9 @@
           "memory": {
             "$ref": "#/components/schemas/ConversationMemory"
           },
+          "understanding": {
+            "$ref": "#/components/schemas/DiscoveryUnderstanding"
+          },
           "source_ids": {
             "items": {
               "type": "string",
@@ -2836,7 +2853,7 @@
           },
           "sources": {
             "items": {
-              "$ref": "#/components/schemas/ResearchSource"
+              "$ref": "#/components/schemas/DiscoverySource"
             },
             "type": "array",
             "maxItems": 30,
@@ -2991,6 +3008,19 @@
                 "type": "null"
               }
             ]
+          },
+          "introduction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Introduction"
           }
         },
         "additionalProperties": false,
@@ -6586,6 +6616,224 @@
           "learning_priority"
         ],
         "title": "RecommendedSkill"
+      },
+      "DiscoverySource": {
+        "properties": {
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "employer",
+              "reddit",
+              "glassdoor",
+              "other"
+            ],
+            "title": "Platform"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "reported_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Date"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "role_match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "related",
+              "unknown"
+            ],
+            "title": "Role Match",
+            "default": "unknown"
+          },
+          "reliability": {
+            "type": "string",
+            "enum": [
+              "official",
+              "anecdotal",
+              "unverified"
+            ],
+            "title": "Reliability",
+            "default": "unverified"
+          },
+          "report_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Group"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "platform",
+          "url"
+        ],
+        "title": "DiscoverySource"
+      },
+      "DiscoveryAnswer": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unanswered",
+              "known",
+              "unsure",
+              "skipped"
+            ],
+            "title": "Status",
+            "default": "unanswered"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DiscoveryAnswer"
+      },
+      "DiscoveryUnderstanding": {
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "role_family_or_work": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "interest": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "other_interests": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "career_stage": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "location": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "avoided_activities": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "work_preferences": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "skill_ambiguity": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DiscoveryUnderstanding"
       }
     },
     "securitySchemes": {

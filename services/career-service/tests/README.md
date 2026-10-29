@@ -64,3 +64,27 @@ legacy reports/jobs, and historical conversion-rate evidence. Opportunity tests
 exercise five parallel branches, partial failures, bounded follow-ups and paid-evidence
 reuse. HTTP-mocked field mapping covers every schema-v2 category including conversion
 salary/currency and historical percentages; live providers remain opt-in only.
+
+`test_discovery_reliability.py` and Discovery workflow regressions cover the separate
+Brave candidate budget, later relevant sources, index/template exclusion, checked
+relevance references, employer diversity, adaptive truncation splits, compact single-source
+retry, partial results and quota/restart reuse. Provider-budget tests use synthetic
+HTTP transport; workflow recovery checks use disposable MongoDB. No live provider
+credentials or account configuration are loaded.
+
+Discovery reliability coverage also checks faithful paraphrases, backend-owned employer
+metadata, one replacement search on invalid/irrelevant evidence, preserved accepted
+results, and quota-safe resumption without resetting the replacement budget.
+
+Discovery retains usable original sources when the one replacement query returns
+mixed, irrelevant, invalid, duplicate, empty or unavailable evidence. Regression tests
+verify unchanged source provenance, no repeated assessments/extractions of accepted
+sources, and failure only when evidence recovery leaves no usable listings.
+
+Discovery readiness tests cover every required understanding field, explicit blanket
+unsure answers, evidence grounding, material ambiguity, compatibility-endpoint bypass
+prevention, checkpoint replay and invalidation of obsolete direction context.
+
+Bundled clarification checks cover six ordered topics, omission of answered topics,
+keep-it-broad role scope, removed industry/breadth dictionaries, legacy chat reads,
+other-interest personalisation without unrelated searches, and display-only introductions.
