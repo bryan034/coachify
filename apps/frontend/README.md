@@ -214,8 +214,11 @@ JD summary and final sourced research summary use word-by-word validated Markdow
 (reduced-motion support and Show full response). The Career Goal button explicitly
 opens populated cards; ordinary questions and refinement become available after the
 combined initial response is ready. The frontend requests `/workspace/summary` after
-extraction and research finish, then renders Gemini's structured Markdown and validated
-citations. Progress is removed once this answer is ready. Summary retries preserve their
+extraction and research finish, then renders a concise Gemini overview of the key
+points with validated citations and the final line “Ask me anything about this goal set!”
+A saved report loading after workspace completion shows a loading state, never a
+spurious Resume research button. Finished partial reports can be summarised with
+coverage limits. Report-read and summary retries do not restart completed research. Progress is removed once this answer is ready. Summary retries preserve their
 operation key. Follow-up questions stay in the same conversation and can initiate public
 Brave research through Gemini's backend context route; their observed steps disappear
 when the cited reply arrives. Public answers do not silently edit the saved goal.

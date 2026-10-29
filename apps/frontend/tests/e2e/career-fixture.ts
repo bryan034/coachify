@@ -50,7 +50,7 @@ export function careerFixture(url:string,input:Json):Json{
    ...Object.entries(report.categories as Record<string,Json>).flatMap(([key,category])=>[
     '### '+labels[key],...(category.findings||[]).map((finding:Json)=>'- '+finding.value+' '+(report.sources||[]).filter((s:Json)=>finding.source_ids.includes(s.source_id)).map((s:Json)=>`[Source](${s.url})`).join(' ')),
    ]),
-   'What would you like clarified or researched next?',
+   'Ask me anything about this goal set!',
   ].filter(Boolean).join('\n\n')};
  }
  if(path.includes('/opportunity-research')){

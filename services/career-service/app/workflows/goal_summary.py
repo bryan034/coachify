@@ -5,6 +5,7 @@ from starlette.concurrency import run_in_threadpool as thread
 from app.ai.adapter import AIError, Operation
 from app.ai.contracts import AIInput
 from app.ai.routing import chat_models
+from app.ai.goal_summary import SUMMARY_CLOSING
 from app.repositories.goals import GoalError
 from app.workflows.activity import activity
 from app.workflows.structured import structured_node
@@ -17,12 +18,14 @@ async def summarize(request, account, body):
     async def snapshot():
         row = await thread(repo.check, account, body.session_id, body.expected_version)
         w = row['workspace']
-        if w.get('phase') != 'ready' or w.get('research_id') != body.research_id:
+        if w.get('phase') not in ('ready','research_failed') or w.get('research_id') != body.research_id:
             raise GoalError('Research changed or is incomplete. Reload your career goal.')
         goal = (await thread(repo.goals.current, account))['goal']
         record = await thread(request.app.state.research_store.read, account, goal.id, body.research_id)
-        if not record or not record.intelligence or record.intelligence.status != 'completed':
+        if not record or not record.intelligence or record.intelligence.status not in ('completed','partial'):
             raise GoalError('Complete opportunity research before preparing the summary.')
+        if any(getattr(category,'status',None) in ('pending','running') for category in record.intelligence.categories.values()):
+            raise GoalError('Research is still running. Wait before preparing the summary.')
         return goal, record
 
     goal, record = await snapshot()
@@ -30,15 +33,18 @@ async def summarize(request, account, body):
     # Exclude private owner/operational metadata and original source excerpts.
     fields = ('target_type', 'role', 'field', 'company', 'location', 'seniority_level', 'employment_type', 'interests', 'preferences',
               'summary', 'responsibilities', 'skills', 'non_skill_requirements', 'requirements_need_review')
+    # Summarise validated values, not the repeated original evidence quotations.
+    categories=jsonable_encoder(record.intelligence.categories)
+    for category in categories.values():
+        for finding in category.get('findings',[]):
+            finding.pop('quotes',None)
     context = {'goal': {k: getattr(goal, k, None) for k in fields},
-               'categories': record.intelligence.categories, 'source_ids': list(sources)}
+               'categories': categories, 'source_ids': list(sources)}
 
     def validate(output):
         _, cited = normalize_citations(output.reply, sources)
-        # A finding can have several corroborating sources; one supporting citation
-        # per finding is enough. Never require all corroborators to be repeated.
-        if any(not cited.intersection(finding.source_ids)
-               for category in record.intelligence.categories.values() for finding in category.findings):
+        # A concise overview selects key findings rather than reproducing them all.
+        if any(category.findings for category in record.intelligence.categories.values()) and not cited:
             raise citation_error('missing_finding_citation')
 
     activity('preparing_summary')
@@ -60,4 +66,5 @@ async def summarize(request, account, body):
     await snapshot()  # A replaced goal/research must never publish a stale overview.
     normalized, _ = normalize_citations(result.reply, sources)
     reply = render_citations(normalized, sources)
+    reply=reply.replace(SUMMARY_CLOSING,'').strip()+'\n\n'+SUMMARY_CLOSING
     return {'reply': reply}

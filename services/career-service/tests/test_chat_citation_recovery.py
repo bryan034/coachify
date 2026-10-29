@@ -120,3 +120,56 @@ def test_failed_operation_response_includes_id_and_only_safe_validation_details(
             assert (await client.get(path)).status_code==404
         await jobs.close()
     asyncio.run(run())
+
+
+def test_concise_overview_can_select_key_findings_without_repeating_every_citation():
+    async def run():
+        request,body,_,calls,record=environment('The main takeaway is an interview. [s1]')
+        record.sources.append(ResearchSource(source_id='s2',platform='other',url=SOURCES['s2'],evidence='A secondary detail.'))
+        record.intelligence.categories={'interviews':NS(status='completed',findings=[
+            NS(source_ids=['s1'],value='The main takeaway.',quotes=['ORIGINAL_QUOTATION']),
+            NS(source_ids=['s2'],value='A secondary detail.',quotes=['SECOND_QUOTATION'])])}
+        result=await summarize(request,'owner',body)
+        context=json.loads(calls[0].context)
+        assert len(context['categories']['interviews']['findings'])==2
+        assert 'ORIGINAL_QUOTATION' not in calls[0].context and 'quotes' not in calls[0].context
+        assert 'A secondary detail' not in result['reply']
+        assert result['reply'].endswith('Ask me anything about this goal set!')
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('ending',['','Ask me anything about this goal set!','Ask me anything about this goal set!\nAsk me anything about this goal set!'])
+def test_overview_ends_with_the_exact_invitation_once(ending):
+    async def run():
+        request,body,*_=environment('Main takeaway. [s1]\n\n'+ending)
+        result=await summarize(request,'owner',body)
+        assert result['reply'].endswith('Ask me anything about this goal set!')
+        assert result['reply'].count('Ask me anything about this goal set!')==1
+    asyncio.run(run())
+
+
+def test_finished_partial_research_is_summarised_with_its_limitations():
+    async def run():
+        request,body,_,calls,record=environment('Saved interview information. [s1] Other research is incomplete.')
+        original=request.app.state.workspace_store.check
+        def check(*args):
+            row=original(*args);row['workspace']['phase']='research_failed';return row
+        request.app.state.workspace_store.check=check
+        record.intelligence.status='partial'
+        record.intelligence.categories={'interviews':NS(status='completed',findings=[NS(source_ids=['s1'])]),
+            'culture':NS(status='failed',findings=[],warnings=['Source unavailable'])}
+        result=await summarize(request,'owner',body)
+        assert 'Other research is incomplete' in result['reply']
+        assert json.loads(calls[0].context)['categories']['culture']['status']=='failed'
+        assert len(calls)==1
+    asyncio.run(run())
+
+
+def test_summary_does_not_publish_while_a_category_is_still_running():
+    async def run():
+        request,body,_,calls,record=environment()
+        record.intelligence.categories={'interviews':NS(status='running',findings=[])}
+        from app.repositories.goals import GoalError
+        with pytest.raises(GoalError):await summarize(request,'owner',body)
+        assert not calls
+    asyncio.run(run())
