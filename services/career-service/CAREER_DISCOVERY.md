@@ -261,7 +261,7 @@ feature does not implement them.
 
 ## Configuration
 
-Use `AI_ENABLED=true`, server-only `GEMINI_API_KEY`, `BRAVE_API_KEY`, and Career
+Use `AI_ENABLED=true`, server-only `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_API_KEY`, and Career
 MongoDB. All discovery/research/chat/extraction stages use `gemini-3.5-flash-lite` through
 the same adapter; legacy provider/model/chat switches no longer alter routing.
 No new API key, dependency or service is needed. Existing research context creation

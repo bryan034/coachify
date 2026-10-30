@@ -104,7 +104,7 @@ Legacy interview endpoints remain readable/compatible:
 - `POST /api/v1/career/goals/{id}/interview-research` — Explicit legacy research/reuse.
 
 Legacy Search/Answers mode values are ignored. Opportunity Intelligence
-uses the existing `GEMINI_API_KEY` and `BRAVE_API_KEY` when `OPPORTUNITY_ENABLED=true`
+uses the existing `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY` when `OPPORTUNITY_ENABLED=true`
 (default), independently of the Gemini chat switch and legacy Brave mode. It always
 calls LLM Context; no silent provider substitution occurs. Availability responses
 name the specific disabled/missing capability without exposing configuration values.

@@ -172,8 +172,8 @@ Set these server-only values in your private configuration yourself:
 ```dotenv
 AI_ENABLED=true
 GEMINI_REASONING_MODEL=gemini-3.5-flash-lite
-GEMINI_API_KEY=YOUR_PRIVATE_GEMINI_KEY
-BRAVE_API_KEY=YOUR_PRIVATE_BRAVE_KEY
+CAREER_LLM_API_KEY=YOUR_PRIVATE_GEMINI_KEY
+CAREER_RESEARCH_API_KEY=YOUR_PRIVATE_BRAVE_KEY
 ```
 
 The old `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`,
@@ -199,18 +199,19 @@ to `provider_schema` / `provider_parameter`. An unknown rejection remains
 No schema-free fallback or provider change is attempted.
 
 The public [Docker example](../infrastructure/docker/.env.example) contains only
-active inputs for the email/Gmail stack, database passwords and Gemini/LLM Context.
+active stack inputs, including email/auth, database passwords, Career model/research
+credentials and limits, and CV model/upload/usage settings.
 Preserve existing database passwords and private keys; do not overwrite a working
-private configuration with blank template values. Optional tuning retains code defaults.
+private configuration with blank template values. The template lists supported optional tuning defaults; fixed internal wiring remains in Compose.
 
 Keep `AI_ENABLED=false` if you only need current previews. No credentials are
 needed for automated AI tests. Only Career receives the key; never prefix it
 `NEXT_PUBLIC_` or commit it. The service's
 [contract guide](../services/career-service/ANALYSIS_CONTRACTS.md) explains response
-modes and limits. Rebuild Career after editing settings:
+modes and limits. Recreate Career after editing settings (rebuild as well only if its image code changed):
 
 ```sh
-docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up --build -d --no-deps career-service
+docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up -d --force-recreate --no-deps career-service
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
 ```
 
@@ -238,7 +239,7 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
 ```
 
-For Career interpretation/research, configure `AI_ENABLED`, `GEMINI_API_KEY` and `BRAVE_API_KEY` yourself. Without those settings, temporary import previews and saved reads remain available; model-backed extraction, discovery and research report their unavailable state. Use the implemented Resume & Tracker upload/review for durable CV context, or deliberately continue Career without a CV. Temporary Career attachments are not durable CV extraction. Structured goals save through the canonical workspace; explicit CV confirmation does not claim job readiness or completed analysis.
+For Career interpretation/research, configure `AI_ENABLED`, `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY` yourself. Without those settings, temporary import previews and saved reads remain available; model-backed extraction, discovery and research report their unavailable state. Use the implemented Resume & Tracker upload/review for durable CV context, or deliberately continue Career without a CV. Temporary Career attachments are not durable CV extraction. Structured goals save through the canonical workspace; explicit CV confirmation does not claim job readiness or completed analysis.
 
 ## Docker hot reload
 
@@ -253,7 +254,7 @@ or inspect your environment files. Dependencies/image changes still need rebuild
 
 Rebuild the Career image once after installing the new LangGraph/checkpointer/tokenizer dependencies. Subsequent source edits use the existing Docker hot reload setup. No LangSmith account or additional database server is required.
 
-Use `AI_ENABLED=true`, `GEMINI_API_KEY` and `BRAVE_API_KEY`. Chat output stays
+Use `AI_ENABLED=true`, `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY`. Chat output stays
 bounded at 1,024 tokens, interview synthesis at 2,048 and JD extraction at 4,096;
 `AI_MAX_OUTPUT_TOKENS` remains the overall ceiling. `AI_TIMEOUT_SECONDS`,
 `AI_RETRIES` and `AI_CONTEXT_TOKENS` retain their task limits. Production imposes no local token-per-minute admission limit; provider quotas and bounded requests still apply.
@@ -299,3 +300,10 @@ Career and frontend after source changes; production containers do not mount sou
 There is no new five-minute inactivity lock. Recoverable session checks preserve drafts; actual expiry/revocation, sign-out and account changes clear private state. Browser reload/discard and confirmed navigation can lose unsent React-memory drafts. CV history is saved on the server, separately from unsent text.
 
 Startup/configuration commands in this guide are for the user to run with private settings. Agents must not read environment files. Automated verification uses isolated resources and explicit synthetic settings; the approved public-template test exception applies only to that exact test against a clean tracked template. Existing recordings from before an integration demonstrate that earlier build, not the newly merged application.
+
+Career key migration: rename `GEMINI_API_KEY` to `CAREER_LLM_API_KEY` and
+`BRAVE_API_KEY` to `CAREER_RESEARCH_API_KEY` yourself in private settings, preserving
+their values. Legacy names are fallback aliases only when new names are absent; an
+explicitly blank new key takes precedence. The key rename does not change providers
+or the existing `GEMINI_REASONING_MODEL` setting. CV uses its separate `CV_LLM_*`
+settings from the same infrastructure configuration.

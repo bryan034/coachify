@@ -110,3 +110,8 @@ prevention, checkpoint replay and invalidation of obsolete direction context.
 Bundled clarification checks cover six ordered topics, omission of answered topics,
 keep-it-broad role scope, removed industry/breadth dictionaries, legacy chat reads,
 other-interest personalisation without unrelated searches, and display-only introductions.
+
+`test_environment_contract.py` verifies the canonical Career credentials, deprecated
+alias precedence, explicit blank overrides, service-scoped Compose injection and full
+coverage of active Compose inputs in the public `.env.example`. No private env file
+is read; provider and configuration tests use synthetic keys.

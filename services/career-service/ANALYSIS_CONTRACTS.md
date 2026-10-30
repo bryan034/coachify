@@ -197,7 +197,7 @@ extra proposal call within its original operation deadline. Prompt/schema output
 | Process variable | Default / purpose |
 |---|---|
 | `AI_ENABLED` | Enabled when a Gemini key is supplied; explicit false disables model operations |
-| `GEMINI_API_KEY` | Required server-only reasoning credential |
+| `CAREER_LLM_API_KEY` | Required server-only reasoning credential |
 | `GEMINI_REASONING_MODEL` | `gemini-3.5-flash-lite`; one explicit model override shared by every stage |
 | Endpoint | `https://generativelanguage.googleapis.com/v1beta/openai`; fixed server-side |
 | `AI_MAX_OUTPUT_TOKENS` | 4096; overall completion ceiling; chat uses at most 1024 and interview synthesis 2048 |
@@ -205,11 +205,11 @@ extra proposal call within its original operation deadline. Prompt/schema output
 | `AI_TIMEOUT_SECONDS`, `AI_RETRIES` | 45-second total operation; one bounded 5xx retry |
 | Response / token parameter | Native `json_schema` / `max_tokens` |
 | Legacy provider/model switches | `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`, `AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL`, `OPPORTUNITY_GEMINI_MODEL` ignored by production reasoning |
-| `BRAVE_API_KEY` | Required for Brave research |
+| `CAREER_RESEARCH_API_KEY` | Required for Brave research |
 | `BRAVE_SEARCH_MODE` | Deprecated and ignored; every Brave request uses LLM Context |
 
 Every production stage uses the configured Gemini model (Gemini 3.5 Flash Lite by default), with one shared adapter for reasoning
-and coordination. Only `GEMINI_API_KEY` supplies its credential. There is no local
+and coordination. `CAREER_LLM_API_KEY` is its canonical credential setting. There is no local
 token-per-minute admission limit. Unleased pending jobs for unsupported model
 providers become due on Gemini recovery; checkpoints/cursors remain intact and
 Brave/Gemini waits are retained.
@@ -617,3 +617,8 @@ budgets still bound every structuring request.
 `career_state.research_link_meta` pins each linked immutable research ID to `goal_version` and its normalized public `context_key`; research retry receipts pin the same goal revision. Shared attachment validates the canonical goal both before and after the selection CAS. A concurrent edit can leave a historical link, but never makes that old result current. Default interview reads, projected Q&A and summaries require current links. Explicit historical research IDs stay owner-linked and readable. Legacy links without revision metadata are accepted as current only for an unchanged version-1 goal with matching public context; otherwise a normal refresh/reuse creates the current acknowledgement without deleting history. Opportunity jobs additionally record `goal_version`, and current status lookups filter that revision.
 
 Transient chat routing, focused answers, edits and summaries pass live, thread-pooled workspace checks into the model adapter. The guard accepts existing synchronous callbacks and asynchronous callbacks. It rechecks session/canonical-review revision through provider cooldowns, exits stale work without another provider request and releases the transient operation slot.
+
+Deployment uses the service-scoped `CAREER_LLM_API_KEY` and
+`CAREER_RESEARCH_API_KEY` names. `GEMINI_API_KEY` / `BRAVE_API_KEY` are deprecated
+fallbacks only when the corresponding canonical variable is absent; an explicitly
+blank canonical variable wins. Provider/model selection and task budgets are unchanged.

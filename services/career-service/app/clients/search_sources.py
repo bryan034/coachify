@@ -206,7 +206,7 @@ class SourceAPIs:
 
     @classmethod
     def from_environment(cls,client):
-        return cls(client,brave_key=os.getenv('BRAVE_API_KEY',''))
+        return cls(client,brave_key=os.getenv('CAREER_RESEARCH_API_KEY',os.getenv('BRAVE_API_KEY','')).strip())
 
     @property
     def cache_policy(self):return 'public-interview-brave-context-v9:'+self.brave_mode
@@ -246,7 +246,7 @@ class SourceAPIs:
 
     async def brave(self,query,*,country='ALL',focus=None,max_sources=6,evidence_chars=2400,
                     context_tokens=8192,search_count=30,threshold='balanced',discovery=False):
-        if not self.brave_key:raise GoalError('The running career service has no Brave API key. After configuring BRAVE_API_KEY, recreate the career-service container and retry.',503)
+        if not self.brave_key:raise GoalError('The running career service has no research API key. After configuring CAREER_RESEARCH_API_KEY, recreate the career-service container and retry.',503)
         headers={'X-Subscription-Token':self.brave_key,'Accept':'application/json'}
         country=country if country in SEARCH_COUNTRIES else 'ALL'
         raw=await body(self.client,'GET','https://api.search.brave.com/res/v1/llm/context',headers=headers,timeout=30,
