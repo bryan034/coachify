@@ -87,10 +87,15 @@ test('planning preferences persist, detect conflicts, prorate capacity and never
  await expect(prefs.getByLabel('Application date',{exact:true})).toHaveValue(future(100));
  await expect(prefs.getByLabel('Normal hours per week',{exact:true})).toHaveValue('6');
  await expect(prefs.getByRole('button',{name:/^Delete period/})).toHaveCount(2);
+ const workspaceResponse=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/v1/roadmaps/workspace'&&response.ok());
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
- await expect(page.getByText('6 hours/week',{exact:true})).toBeVisible();
- await expect(page.getByText('2 saved',{exact:true})).toBeVisible();
- await page.getByRole('link',{name:'Edit planning preferences →'}).click();
+ const workspace=await (await workspaceResponse).json();
+ expect(workspace.context.planning_defaults.weekly_hours).toBe(6);
+ expect(workspace.context.planning_defaults.application_date).toBe(future(100));
+ expect(workspace.context.planning_defaults.availability_periods).toHaveLength(2);
+ await expect(page.getByText('You previously saved 6 hours a week.',{exact:false})).toBeVisible();
+ await page.getByRole('link',{name:/My profile/}).click();
+ await page.getByRole('link',{name:'Planning preferences ↗'}).click();
  for(const d of [future(3),future(5)]){
   await prefs.getByRole('button',{name:`Delete period ${d}`,exact:true}).click();
   await expect(prefs.getByRole('button',{name:`Delete period ${d}`,exact:true})).toHaveCount(0);

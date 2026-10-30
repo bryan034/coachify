@@ -8,6 +8,12 @@ See [application setup](setup.md) and the affected service README for setup and 
 
 ## Suite maintenance
 
+Assessment and Roadmap contracts compare the complete generated OpenAPI document.
+Their shared API factory fixes error descriptions explicitly because Python 3.12
+and newer interpreters use different HTTP status phrases for 413 and 422.
+The planning integration journey checks Profile defaults through the Roadmap
+workspace response and adviser opening, then returns through Profile to edit them.
+
 Preserve checks for distinct behavior and boundaries, including cross-service contracts. If a UI journey is replaced, retain its useful ownership, draft, retry and validation assertions against the new flow. Do not weaken or remove valid failures to obtain a pass. Historical discovery totals and earlier passing logs are not evidence for the current merged tree; report exact current results separately.
 
 ## Local commands

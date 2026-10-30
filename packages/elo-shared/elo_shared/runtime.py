@@ -218,8 +218,13 @@ def application(title,prefix,*,store=None,upstream=None,model=None):
             for task in tasks: task.cancel()
             if tasks: await asyncio.gather(*tasks,return_exceptions=True)
             if mongo is not None: mongo.close()
+    # Python's HTTPStatus phrases for 413/422 differ between supported runtimes.
+    # Keep the published OpenAPI contract independent of the interpreter version.
+    errors={401:'Unauthorized',403:'Forbidden',404:'Not Found',409:'Conflict',
+            413:'Content Too Large',422:'Unprocessable Content',429:'Too Many Requests',
+            502:'Bad Gateway',503:'Service Unavailable'}
     app=FastAPI(title=title,version='0.1.0',lifespan=lifespan,
-        responses={status:{'model':ErrorView} for status in (401,403,404,409,413,422,429,502,503)})
+        responses={status:{'model':ErrorView,'description':description} for status,description in errors.items()})
     app.add_middleware(BodyLimit)
     @app.middleware('http')
     async def private_response(request,call_next):
