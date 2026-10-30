@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('save, reload, browse international schools, switch status and retry', async ({ page }) => {
-  await page.addInitScript(() => { localStorage.setItem('coachify.access-epoch','1'); sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
+  await page.addInitScript(() => { localStorage.setItem('elo.access-epoch','1'); sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
   // Only the Google and HTTP boundaries are mocked. Production has no test-auth path.
   const categories = [
     { id: 'secondary', label: 'Secondary School' }, { id: 'ite', label: 'Institute of Technical Education' },
@@ -67,7 +67,7 @@ test('save, reload, browse international schools, switch status and retry', asyn
   await expect(page.getByText('Profile saved.')).toBeVisible();
   // Client-side workspace navigation preserves the in-memory Google identity.
   await page.getByRole('link', { name: 'Home', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome to Coachify' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome to elo' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out' }).first()).toBeVisible();
   await page.getByRole('link', { name: 'My profile' }).click();
   await page.goto('/profile/edit');

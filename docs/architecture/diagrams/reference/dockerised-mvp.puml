@@ -1,5 +1,5 @@
-@startuml coachify_dockerised_mvp
-title Coachify — Dockerised MVP architecture
+@startuml elo_dockerised_mvp
+title elo — Dockerised MVP architecture
 top to bottom direction
 skinparam shadowing false
 skinparam componentStyle rectangle

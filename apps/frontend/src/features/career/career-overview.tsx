@@ -95,6 +95,6 @@ export function CareerGoalOverview({workspace,loadError='',onReload}:{workspace:
    <p className="briefing-micro">No readiness score. Missing evidence doesn’t mean a missing skill. A comparison against this goal is not available yet.</p>
   </section><div className="briefing-aside-note"><h3>Build evidence as you learn.</h3><p>A small, well-explained project can connect what you know with what the role asks for.</p></div></aside>
   </div>
-  <footer className="briefing-footer"><span>COACHIFY · Your career copilot</span><span>Based on your saved goal · Research carries its own sources</span></footer>
+  <footer className="briefing-footer"><span>elo · Your career copilot</span><span>Based on your saved goal · Research carries its own sources</span></footer>
  </section>;
 }

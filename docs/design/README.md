@@ -34,7 +34,7 @@ The final shared overrides live in `apps/frontend/src/styles/elo-theme.css`.
 
 ## Original reference
 
-`coachify-web-v1.html` is the user-supplied original design reference, preserved
+`elo-web-v1.html` is the user-supplied original design reference, preserved
 without executing its scripts in the application. The live app uses typed React
 components, Next.js page navigation and existing profile endpoints.
 
@@ -63,7 +63,7 @@ checking Revolut's Singapore page. Revolut declares Aeonik Pro for headings and
 Inter for body text; the font publisher also identifies Aeonik Pro in its Revolut
 case study: https://cotypefoundry.com/fonts-in-use/revolut.
 
-Coachify bundles Inter for both headings and body text. The earlier revision used
+elo bundles Inter for both headings and body text. The earlier revision used
 medium weight, normal case and tighter tracking; labels/buttons no longer use the
 condensed, widely spaced uppercase style. This is a visual approximation for the
 display face, not a claim to include Aeonik Pro. An exact heading match requires

@@ -1,8 +1,8 @@
 {
-  "name": "@coachify/frontend",
+  "name": "@elo/frontend",
   "version": "0.0.0",
   "private": true,
-  "description": "Coachify Next.js workspace UI with profile APIs, Vitest and Playwright.",
+  "description": "elo Next.js workspace UI with profile APIs, Vitest and Playwright.",
   "dependencies": {
     "next": "16.4.3",
     "react": "19.3.1",

@@ -12,7 +12,7 @@ class Settings:
     original_retention_hours: int = 24
     lease_seconds: int = 180
     max_attempts: int = 3
-    storage_path: str = '/tmp/coachify-cv'
+    storage_path: str = '/tmp/elo-cv'
     max_saved_cvs_per_owner: int = 50
     max_saved_cvs_global: int = 10_000
     max_original_bytes_per_owner: int = 100 * 1024 * 1024
@@ -42,7 +42,7 @@ class Settings:
             raise RuntimeError('CV_MODEL_CONCURRENT_PER_OWNER must be less than CV_MODEL_CONCURRENT_GLOBAL to reserve capacity for another account.')
         if limits['model_calls_per_owner_per_day'] > limits['model_calls_global_per_day']:
             raise RuntimeError('CV_MODEL_CALLS_PER_OWNER_PER_DAY must not exceed CV_MODEL_CALLS_GLOBAL_PER_DAY.')
-        return cls(max_file_bytes=maximum, storage_path=os.getenv('CV_STORAGE_PATH', '/tmp/coachify-cv'), **limits)
+        return cls(max_file_bytes=maximum, storage_path=os.getenv('CV_STORAGE_PATH', '/tmp/elo-cv'), **limits)
 
     def policy(self):
         return {'formats': ['pdf', 'docx'], 'max_file_bytes': self.max_file_bytes,

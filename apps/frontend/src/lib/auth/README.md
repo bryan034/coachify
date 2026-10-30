@@ -1,7 +1,14 @@
 # Authentication
 
 Profile owns email/password access, email verification and optional Google sign-in.
-Successful access creates a Coachify session; protected APIs validate that session
+An unregistered email at sign-in shows a missing-account message and a **Create
+new account** link to `/register`. Wrong-password and service errors retain sign-in
+recovery instead of showing the missing-account action.
+The sign-in screen links to `/forgot-password`. Recovery requests an emailed
+six-digit code, then submits it with a new password. A successful reset returns to
+sign-in and invalidates existing sessions; it preserves saved account/profile data.
+Failures retain form inputs for retry. Recovery requires the account's email address.
+Successful access creates a elo session; protected APIs validate that session
 and derive the owner on the server. The frontend keeps its bearer and access epoch
 in tab-scoped session storage. Cross-tab epoch changes clear the old account's
 private state. Google credentials are used for the access exchange, rather than

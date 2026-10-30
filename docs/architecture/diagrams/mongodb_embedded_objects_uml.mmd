@@ -2,7 +2,9 @@ classDiagram
 direction TB
 
 class CvSkill {
-    +String skill_id
+    +String skill_id [legacy source key]
+    +String canonical_skill_id?
+    +String skill_registry_version
     +String name
     +String category
     +String proficiency?
@@ -17,7 +19,9 @@ class CvSkill {
 
 class TargetSkill {
     +String item_id?
-    +String skill_id? [null_while_pending]
+    +String skill_id? [legacy registry]
+    +String canonical_skill_id?
+    +String skill_registry_version
     +String group_id?
     +String group_operator [all|any]
     +String correction [extracted|user]
@@ -461,3 +465,79 @@ note for CvConfirmation "Exact canonical goal/selection/projection identity; no 
 note for ConfirmedRequirement "Generic eligibility/location constraints stay unresolved context; no forced qualification interpretation. Alternatives and full bounded evidence survive projection."
 note for cv_conversations "Operational CV history, separate from factual evidence revisions. Manual-only history may have no CV reference."
 note for ChatAction "Public responses exclude internal leases, execution snapshots and original mutation controls."
+
+class JobDate {
+    +String kind [application_deadline interview job_start]
+    +String text [exact original wording]
+    +String evidence [exact source excerpt]
+    +String date? [full recognized date only]
+}
+career_goals *-- JobDate
+class AssessmentComponent {
+    +String dimension
+    +String status [supported uncertain confirmed_shortfall]
+    +String explanation
+    +String[] evidence_refs
+    +String limitation_quote?
+    +String support_quote?
+}
+class RequirementOutcome {
+    +String ref
+    +String kind
+    +String name
+    +String canonical_skill_id?
+    +String match_status
+    +AssessmentComponent[] components
+    +String mapping_method
+    +String mapping_reason
+    +String recommendation?
+}
+skill_gap_analyses *-- RequirementOutcome : assessment-v1 outcomes
+RequirementOutcome *-- AssessmentComponent
+class PlanningPreferences {
+    +Date start_date?
+    +Date target_date?
+    +Integer horizon_weeks?
+    +Integer weekly_minutes?
+    +DayBudget[] days
+    +Integer max_session_minutes
+    +String time_zone
+    +String learning_preferences
+    +Object[] reduced_periods
+}
+class DayBudget {
+    +Integer day [Monday 0 to Sunday 6]
+    +Integer minutes
+}
+class PlanTask {
+    +String id
+    +String title
+    +String instructions
+    +String completion_outcome
+    +Integer estimated_minutes
+    +String rationale
+    +String[] requirement_refs
+    +String[] prerequisites
+    +String milestone
+    +String status
+    +Boolean removed
+    +Object[] history
+    +String[] user_overrides
+}
+class DailyAllocation {
+    +String task_id
+    +Date date
+    +Integer minutes
+    +Integer order
+}
+class roadmaps {
+    +PlanningPreferences preferences
+    +PlanTask[] tasks
+    +DailyAllocation[] schedule_allocations
+}
+roadmaps *-- PlanningPreferences
+PlanningPreferences *-- DayBudget
+roadmaps *-- PlanTask
+roadmaps *-- DailyAllocation
+%% Older GapResult/InputVersions above remain analysis-v1 Career compatibility.
+%% New Assessment input vectors additionally pin effective/declaration/CV-selection/goal-selection/registry/research-coverage revisions.

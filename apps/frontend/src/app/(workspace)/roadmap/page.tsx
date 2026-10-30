@@ -1,2 +1,2 @@
-import { RoadmapPreview } from '@/features/roadmap/roadmap-preview';
-export default function RoadmapPage() { return <RoadmapPreview/>; }
+import { RoadmapPlanner } from '@/features/roadmap/roadmap-planner';
+export default function RoadmapPage() { return <RoadmapPlanner />; }

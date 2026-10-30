@@ -34,7 +34,7 @@ def mail_settings(environment):
         port = int(os.getenv('SMTP_PORT', '1025' if environment == 'development' else '587'))
         if not 1 <= port <= 65535:
             raise ValueError
-        sender = normalize_email(os.getenv('SMTP_FROM', 'no-reply@coachify.test' if environment == 'development' else ''))
+        sender = normalize_email(os.getenv('SMTP_FROM', 'no-reply@elo.test' if environment == 'development' else ''))
     except ValueError as exc:
         raise RuntimeError('Set a valid SMTP_PORT and SMTP_FROM.') from exc
     username, password = os.getenv('SMTP_USERNAME', ''), os.getenv('SMTP_PASSWORD', '')
@@ -52,14 +52,21 @@ class SmtpMailer:
         self.settings = settings
 
     def send_otp(self, destination, code):
+        self.send_code(destination, code, reset=False)
+
+    def send_password_reset(self, destination, code):
+        self.send_code(destination, code, reset=True)
+
+    def send_code(self, destination, code, reset):
         settings = self.settings
         if not settings.host:
             raise HTTPException(503, 'Email delivery is not configured. Contact your administrator.')
         message = EmailMessage()
         message['From'] = settings.sender
         message['To'] = destination
-        message['Subject'] = 'Verify your Coachify account'
-        message.set_content(f'Your Coachify verification code is: {code}\n\nThis code expires in 10 minutes. Use the latest email if you requested another code. If you did not request this account, ignore this email.')
+        message['Subject'] = 'Reset your elo password' if reset else 'Verify your elo account'
+        purpose = 'password reset' if reset else 'verification'
+        message.set_content(f'Your elo {purpose} code is: {code}\n\nThis code expires in 10 minutes. If you did not request this code, ignore this email.')
         try:
             transport = smtplib.SMTP_SSL if settings.security == 'ssl' else smtplib.SMTP
             options = {'context': ssl.create_default_context()} if settings.security == 'ssl' else {}
@@ -69,5 +76,17 @@ class SmtpMailer:
                 if settings.username:
                     smtp.login(settings.username, settings.password)
                 smtp.send_message(message)
-        except (OSError, smtplib.SMTPException) as exc:
-            raise HTTPException(503, 'Verification email could not be sent. Keep your details and retry.') from exc
+        except smtplib.SMTPAuthenticationError as exc:
+            raise HTTPException(503, 'Email delivery is unavailable because the mail server rejected its credentials. Contact support.') from exc
+        except smtplib.SMTPSenderRefused as exc:
+            raise HTTPException(503, 'The mail server rejected the sending address. Contact support to check the sending mailbox configuration.') from exc
+        except smtplib.SMTPRecipientsRefused as exc:
+            raise HTTPException(503, 'The mail server rejected the recipient address. Check your email address or contact support.') from exc
+        except (ssl.SSLError, smtplib.SMTPNotSupportedError) as exc:
+            raise HTTPException(503, 'A secure connection to the mail server could not be established. Contact support to check email delivery settings.') from exc
+        except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected) as exc:
+            raise HTTPException(503, 'The app could not connect to its outgoing mail server. Keep your details and retry; contact support if this continues.') from exc
+        except smtplib.SMTPException as exc:
+            raise HTTPException(503, f'The mail server rejected the {purpose} email. Keep your details and retry; contact support if this continues.') from exc
+        except OSError as exc:
+            raise HTTPException(503, 'The app could not connect to its outgoing mail server. Keep your details and retry; contact support if this continues.') from exc

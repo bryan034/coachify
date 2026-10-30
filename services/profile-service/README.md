@@ -77,14 +77,22 @@ supply inputs; they do not generate a roadmap.
 | `POST /api/v1/profile/auth/attempts` | Start a registration or sign-in attempt. |
 | `POST /api/v1/profile/auth/complete` | Register with email/password (or configured Google), or sign in; new accounts require email verification. |
 | `POST /api/v1/profile/auth/attempts/cancel` | Cancel an access attempt. |
-| `GET /api/v1/profile/auth/session` | Validate the current Coachify session. |
+| `GET /api/v1/profile/auth/session` | Validate the current elo session. |
 | `POST /api/v1/profile/auth/logout` | Revoke that session without deleting saved data. |
+| `POST /api/v1/profile/auth/forgot-password` | Email a password reset code for an existing verified email/password account. |
+| `POST /api/v1/profile/auth/reset-password` | Set a new password using the code; invalidate old sessions and credential attempts. |
 
-Private requests use a Coachify session bearer. Email accounts sign in with email
-and password. The current local configuration disables Google sign-in. New registrations
+Private requests use a elo session bearer. Email accounts sign in with email
+and password (8–128 characters for registration and password reset). The current local configuration disables Google sign-in. New registrations
 accept any valid email address and require an emailed OTP before an account is created.
 Pending details live in the expiring verification attempt; resume that attempt or
 start registration again. Verified accounts keep their existing sign-in behavior.
+Duplicate registration returns 409 with an explicit email-already-registered message.
+Signing in with an unregistered email returns 404 and offers **Create new account**
+on the sign-in screen. An existing account with an incorrect password returns 401.
+The sign-in screen links to Forgot password. Reset codes expire after ten minutes
+and allow five guesses. Recovery requires the account email address; Google-only
+accounts use Google's recovery. Successful resets preserve all saved profile data.
 Development can use synthetic accounts with a chooser that only prefills email,
 or email/password sign-in with real Gmail delivery; see the [setup guide](../../docs/setup.md#local-emailpassword-sign-in-and-real-gmail-delivery).
 
@@ -133,3 +141,5 @@ reads require the device `time_zone`; optional `start_date` and `end_date` give 
 - [Request/response schemas](../../contracts/api/profile.yaml)
 
 For Python code reload in Docker, use the [development Compose override](../../infrastructure/docker/README.md#hot-reload-during-development). Dependency changes need a rebuild; JSON snapshot changes need an API restart.
+
+Capability responses additionally expose shared `canonical_skill_id` and `skill_registry_version`. Existing declaration IDs, name-based keys, source attachments and mutation semantics are unchanged. Roadmap reads saved planning defaults but owns the user's per-plan preparation target and chosen weekday budgets.

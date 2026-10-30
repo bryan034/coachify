@@ -218,7 +218,7 @@ def test_timeout_and_no_secret_repr():
 
 def test_config_is_server_only_explicit_and_validated(monkeypatch):
     monkeypatch.setenv('AI_ENABLED','true'); monkeypatch.setenv('GEMINI_API_KEY','fixture-key')
-    monkeypatch.setenv('GEMINI_REASONING_MODEL','fixture-model')
+    monkeypatch.setenv('CAREER_LLM_MODEL','fixture-model')
     assert AISettings.from_env().model == 'fixture-model'
     assert not {'requests_per_minute','tokens_per_minute','concurrency'} & AISettings.model_fields.keys()
     for overrides in [{'base_url':'http://insecure.test'}, {'model':''}, {'response_mode':'unsupported'}, {'retries':5}]:

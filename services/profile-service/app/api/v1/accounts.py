@@ -22,7 +22,7 @@ class Complete(Attempt):
     session_token: Secret
     name: str | None = Field(None, max_length=80)
     email: str | None = Field(None, max_length=254)
-    password: str | None = Field(None, min_length=12, max_length=128)
+    password: str | None = Field(None, min_length=8, max_length=128)
     credential: str | None = Field(None, max_length=12000)
 
     @field_validator('email')
@@ -63,6 +63,25 @@ class Nonce(BaseModel):
 class Done(BaseModel):
     ok: bool
 
+class ResetRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    email: str = Field(max_length=254)
+
+    @field_validator('email')
+    @classmethod
+    def valid_email(cls, value):
+        return normalize_email(value)
+
+class ResetComplete(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    challenge_id: Secret
+    code: str = Field(pattern=r'^[0-9]{6}$')
+    password: str = Field(min_length=8, max_length=128)
+
+class ResetReceipt(BaseModel):
+    challenge_id: str
+    message: str
+
 
 def repo(request: Request):
     if getattr(request.app.state, 'accounts', None) is None:
@@ -75,6 +94,14 @@ def local_accounts(request: Request, accounts=Depends(repo)):
         raise HTTPException(404, 'Local accounts are disabled.')
     return accounts.local_accounts()
 
+@router.post('/forgot-password', response_model=ResetReceipt)
+def forgot_password(data: ResetRequest, request: Request, accounts=Depends(repo)):
+    return accounts.password_reset.request(data.email, request.app.state.auth_settings, accounts.mailer)
+
+@router.post('/reset-password', response_model=Done)
+def reset_password(data: ResetComplete, request: Request, accounts=Depends(repo)):
+    return accounts.password_reset.complete(data, request.app.state.auth_settings)
+
 @router.post('/attempts', response_model=Nonce)
 def begin(data: Begin, request: Request, accounts=Depends(repo)):
     return accounts.begin(data, request.app.state.auth_settings)
@@ -84,7 +111,10 @@ def cancel(data: Attempt, accounts=Depends(repo)):
     accounts.cancel(data)
     return {'ok': True}
 
-@router.post('/complete', response_model=AccountView | PendingVerification)
+@router.post('/complete', response_model=AccountView | PendingVerification, responses={
+    401: {'description': 'Incorrect password or invalid provider credential.'},
+    404: {'description': 'No account found. Choose Create new account.'},
+})
 def complete(data: Complete, request: Request, accounts=Depends(repo)):
     return accounts.finish(data, request.app.state.auth_settings, verify_google)
 

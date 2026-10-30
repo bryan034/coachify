@@ -1,8 +1,8 @@
-# Coachify architecture
+# elo architecture
 
-The implemented slice combines Profile/account access, saved conversational CV review and Career's canonical goal/research workspace. The broader six-service scaffold remains future context. CV owns factual evidence, correction overlays, source-linked clarification and private resumable messages. Profile owns manual declarations. Career owns one current goal and public-context research; an explicit acknowledgement of its exact goal/version/selection makes it usable for CV clarification.
+The implemented slice combines Profile/account access, saved conversational CV review and Career's canonical goal/research workspace. The broader seven-service scaffold remains future context. CV owns factual evidence, correction overlays, source-linked clarification and private resumable messages. Profile owns manual declarations. Career owns one current goal and public-context research; an explicit acknowledgement of its exact goal/version/selection makes it usable for CV clarification.
 
-Career JD/discovery/research uses configured Gemini/Brave adapters. CV extraction, conversation routing and clarification interpretation use its separate configurable OpenAI-compatible provider. Model output is validated before factual publication. Synthetic checks establish workflow and contract behavior, not live-model quality. Assessment computation, broad registry mapping, gap analysis and roadmaps remain planned.
+Career JD/discovery/research uses configured Gemini/Brave adapters. CV extraction, conversation routing and clarification interpretation use its separate configurable OpenAI-compatible provider. Model output is validated before factual publication. Synthetic checks establish workflow and contract behavior, not live-model quality. Assessment and Roadmap now implement private versioned comparison and a user-directed planning adviser. Shared explicit skill identities are bundled across producers; live semantic quality remains unverified. See their service specifications for remaining scope.
 
 ## Working design references
 
@@ -29,7 +29,7 @@ traceability. The active sibling diagram uses MongoDB and the requested three
 core services. It does not remove the existing Profile/auth implementation or
 require future dashboard/review services to be built now.
 
-## Broader service scaffold — future context
+## Broader service boundaries
 
 The overview below preserves the wider six-service plan. It is not the focused
 three-service implementation scope and supersedes the PostgreSQL assumptions in
@@ -47,7 +47,8 @@ flowchart TB
         Frontend[Next.js / React / TypeScript / Node.js]
         Profile[FastAPI profile service]
         CV[FastAPI CV ingestion service]
-        Career[FastAPI career assessment service]
+        Career[FastAPI career goal and research service]
+        Assessment[FastAPI private Assessment service]
         Roadmap[FastAPI roadmap and task service]
         Dashboard[FastAPI stateless dashboard service]
         Review[FastAPI review and scheduling service]
@@ -56,6 +57,7 @@ flowchart TB
         Gateway --> Profile
         Gateway --> CV
         Gateway --> Career
+        Gateway --> Assessment
         Gateway --> Roadmap
         Gateway --> Dashboard
         Gateway --> Review
@@ -68,6 +70,8 @@ flowchart TB
     Profile --> Atlas
     CV --> Atlas
     Career --> Atlas
+    Assessment --> Atlas
+    Assessment --> LLM
     Roadmap --> Atlas
     Review --> Atlas
     CV --> LLM
@@ -80,7 +84,7 @@ flowchart TB
 - Next.js supplies pages, shared layouts, rendering, and interactive React components. It does not directly write domain records in MongoDB.
 - Browser API calls use the gateway's `/api/v1` routes. Server-side Next.js reads may use an internal gateway URL.
 - Each backend service owns its data and deploys independently. The dashboard aggregates through APIs and has no independent database.
-- Five logical databases may share an Atlas deployment with service-scoped credentials. Local development can use one additional MongoDB container.
+- Service-owned databases may share an Atlas deployment with service-scoped credentials. Local development can use one additional MongoDB container.
 - CV processing/conversation tasks and Career workflows execute inside their owning services with durable operation state, bounded work and recovery fencing. No separate worker microservice is introduced.
 - The original CV is staged in a private host-backed Docker volume. Extracted and clarified information persists in MongoDB. Successful processing triggers eventual original-file deletion and cleanup.
 - Future task completion/reopening will trigger dashboard refetches; scheduled reviews and authorised revision application remain planned.
@@ -89,7 +93,7 @@ flowchart TB
 
 ## Authentication status
 
-The profile slice supports verified email/password accounts and optional Google. New accounts complete an emailed OTP step before obtaining a revocable 24-hour Coachify session. Development uses a private Mailpit inbox; production uses authenticated encrypted SMTP. Canonical profile completion controls initial onboarding and workspace access. Session bearers live in tab-scoped sessionStorage and are validated before private data loads. Sign-out/account changes clear other tabs. Set the matching Google Web Client ID on both sides for Google mode. See the [application setup guide](../setup.md) for setup and remaining integration limits.
+The profile slice supports verified email/password accounts and optional Google. New accounts complete an emailed OTP step before obtaining a revocable 24-hour elo session. Development uses a private Mailpit inbox; production uses authenticated encrypted SMTP. Canonical profile completion controls initial onboarding and workspace access. Session bearers live in tab-scoped sessionStorage and are validated before private data loads. Sign-out/account changes clear other tabs. Set the matching Google Web Client ID on both sides for Google mode. See the [application setup guide](../setup.md) for setup and remaining integration limits.
 
 See [service boundaries](service-boundaries.md), [API planning](../api/README.md), and [MongoDB guidance](../../infrastructure/mongodb/README.md).
 
@@ -126,3 +130,5 @@ choices. Messages and source-bound interpretations remain distinct. The server
 retains paginated history in bounded segments without automatic expiry; a new
 continuation links back to its full segment. See
 [conversation boundaries](service-boundaries.md#conversational-cv-review).
+
+The active Assessment/Roadmap split, shared skill identities and API handoffs supersede older Career-owned assessment notes above. New services use separate databases and service-scoped model credentials; the adviser UI and its versioned source comparison share `/roadmap`.

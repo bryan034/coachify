@@ -1,6 +1,6 @@
 # MongoDB service storage
 
-The active stack uses separate `coachify_profile`, `coachify_ingestion` and `coachify_career` databases and scoped service users. Profile initialization handles fresh volumes; the idempotent `mongodb-career-init` job creates missing Career/CV users on existing volumes without resetting credentials or data. Root credentials belong only to MongoDB and its setup job, never application services. See [application setup](../../docs/setup.md).
+The active stack uses separate `elo_profile`, `elo_ingestion` and `elo_career` databases and scoped service users. Profile initialization handles fresh volumes; the idempotent `mongodb-career-init` job creates missing Career/CV users on existing volumes without resetting credentials or data. Root credentials belong only to MongoDB and its setup job, never application services. See [application setup](../../docs/setup.md).
 
 ## Ownership
 

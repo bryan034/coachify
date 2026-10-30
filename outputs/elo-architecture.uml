@@ -1,5 +1,6 @@
-@startuml CoachifyArchitecture
-title Coachify — Dockerised MVP Architecture
+@startuml eloArchitecture
+!pragma layout smetana
+title elo — Dockerised MVP Architecture
 top to bottom direction
 skinparam backgroundColor #FFFFFF
 skinparam shadowing false

@@ -19,7 +19,7 @@ export function GoogleSignIn({ onCredential, nonce }: { nonce: string; onCredent
     button.current.replaceChildren();
     window.google.accounts.id.renderButton(button.current, { theme: 'outline', size: 'large' });
   }, [clientId, onCredential, nonce]);
-  if (!clientId) return <p role="status">Sign-in is not configured yet. Contact your Coachify administrator to enable saving.</p>;
+  if (!clientId) return <p role="status">Sign-in is not configured yet. Contact your elo administrator to enable saving.</p>;
   return <>
     <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={render}
       onError={() => setError('Google sign-in could not load. Check your connection and reload.')} />

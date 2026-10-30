@@ -29,7 +29,7 @@ export async function setupChatScenario(page: Page) {
 }
 
 export async function sendChat(page: Page, text: string) {
-  const composer = page.getByRole('textbox', {name: 'Message Coachify', exact: true});
+  const composer = page.getByRole('textbox', {name: 'Message elo', exact: true});
   await expect(composer).toBeEnabled(); await composer.fill(text);
   await page.getByRole('button', {name: 'Send message', exact: true}).click();
   await expect(composer).toBeEnabled(); await expect(composer).toHaveValue('');
@@ -47,12 +47,12 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   const readCv = async (): Promise<CvDetail> => (await account.get(`/api/v1/cv/${cvId}`)).json();
   const chat = page.getByRole('region', {name: 'CV conversation', exact: true});
   await page.goto('/cv');
-  await expect(page.getByRole('textbox', {name: 'Message Coachify', exact: true})).toBeEnabled();
+  await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   await chapter('1. Review your saved CV through a conversation', 'This is a synthetic account and model, using real local services and saves. The CV and Career target were explicitly selected before this walkthrough.', chat);
   await chat.getByRole('button', {name: /^(Review with me|Continue review)$/}).click();
   await expect(chat.locator('.cv-chat-current-topic')).toContainText('Team dashboard');
   await expect(chat).toContainText('Synthetic data analyst');
-  await chapter('2. One focused question', 'Coachify asks about the project contribution that matters to the confirmed target. You can answer naturally, ask why, or skip.', chat.locator('.cv-chat-current-topic'));
+  await chapter('2. One focused question', 'elo asks about the project contribution that matters to the confirmed target. You can answer naturally, ask why, or skip.', chat.locator('.cv-chat-current-topic'));
   await sendChat(page, chatAnswer);
   await expect.poll(async () => (await readCv()).skills.find(skill => skill.skill_id === 'skill:python')?.experience_months).toBe(6);
   const first = await readCv(), projectId = first.items.find(item => item.kind === 'project')!.id;
@@ -93,7 +93,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
 
   const beforeReload = await readChat(account, cvId);
   await page.reload();
-  await expect(page.getByRole('textbox', {name: 'Message Coachify', exact: true})).toBeEnabled();
+  await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   const resumed = await readChat(account, cvId);
   expect(resumed.id).toBe(beforeReload.id); expect(resumed.messages).toEqual(beforeReload.messages);
   await expect(chat.getByText(chatAnswer, {exact: true}).first()).toBeVisible();
@@ -128,7 +128,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   expect(storage).not.toContain(chatAnswer); expect(storage).not.toContain(manualMessage);
   await page.locator('summary').filter({hasText: 'Your CV summary'}).click();
   await page.setViewportSize({width: 390, height: 844});
-  await expect(page.getByRole('textbox', {name: 'Message Coachify', exact: true})).toBeVisible();
+  await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await chapter('12. Continue on a smaller screen', 'The same conversation and composer remain available on mobile. This walkthrough uses a fixed synthetic model fixture; live language understanding has not been evaluated.', chat);
   return {cvId, targetId: scenario.targetId, conversationId: resumed.id, conversation: await readChat(account, cvId), savedCv: await readCv()};

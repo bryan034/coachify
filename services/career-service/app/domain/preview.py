@@ -33,7 +33,7 @@ def run_browser_preview(url,deadline):
     if remaining<=0:raise HTTPException(422,'The import timed out. Paste the description or upload a document.')
     # Parent owns the temporary profile directory and always kills the whole process
     # group before deleting it, including browser descendants after a hard timeout.
-    with tempfile.TemporaryDirectory(prefix='coachify-browser-') as directory:
+    with tempfile.TemporaryDirectory(prefix='elo-browser-') as directory:
         process=subprocess.Popen([sys.executable,'-m','app.workers.browser_preview',str(remaining)],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
             start_new_session=True,env={'PATH':os.defpath,'TMPDIR':directory,'HOME':directory,

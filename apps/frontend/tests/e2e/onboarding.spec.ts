@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('P13 uses canonical completion, guards deep links and distinguishes profile outage',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  let complete=false;let outage=false;
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
@@ -27,12 +27,12 @@ test('P13 uses canonical completion, guards deep links and distinguishes profile
  await page.goto('/onboarding');
  await expect(page).toHaveURL(/\/dashboard$/);
  outage=true;
- await expect(page.getByRole('heading',{name:'Welcome to Coachify'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Welcome to elo'})).toBeVisible();
  await page.goto('/profile');
  await expect(page).toHaveURL(/\/profile$/);
  await expect(page.getByRole('main').getByRole('alert')).toContainText('Synthetic profile outage');
  await expect(page.getByRole('button',{name:'Retry profile'})).toBeVisible();
- await expect(page.getByRole('button',{name:'Enter Coachify'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Enter elo'})).toHaveCount(0);
  outage=false;
  await page.getByRole('button',{name:'Retry profile'}).click();
  await expect(page.getByRole('button',{name:'Edit profile',exact:false})).toBeVisible();
@@ -40,8 +40,8 @@ test('P13 uses canonical completion, guards deep links and distinguishes profile
 
 async function previewSetup(page: import('@playwright/test').Page) {
  await page.addInitScript(() => {
-  localStorage.setItem('coachify.access-epoch','1');
-  sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-preview',epoch:'1'}));
+  localStorage.setItem('elo.access-epoch','1');
+  sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-preview',epoch:'1'}));
   const state = window as unknown as Window & { setupAnimations: string[] };
   state.setupAnimations = [];
   document.addEventListener('animationstart',event => state.setupAnimations.push(event.animationName));

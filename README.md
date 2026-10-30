@@ -1,20 +1,20 @@
-# Coachify
+# elo
 
 Career-readiness planner for users in Singapore, including students, National Service personnel, employed and unemployed users.
 
 **Status:** Profile, onboarding and account access are implemented. CV supports saved PDF/DOCX extraction, resumable text conversations, source-linked clarification interpretation, corrections, explicit source reconciliation and saved-CV selection. Profile owns manual capability declarations. Career has one automatically saved canonical goal/chat per account, JD extraction and cited five-category Opportunity Intelligence. Public research starts alongside JD extraction; once both finish, chat automatically presents a combined overview with inline fact citations. Follow-up questions can start scoped research. Conversational Career Discovery collects all research context (accepting explicit unsure/skip answers) before automatically researching a direction, retains bounded private conversation context and keeps chat open during research; its reviewed target still requires explicit final confirmation through the shared goal persistence path. Saved goals use version-checked edits, compact progress polling and lazy evidence reads. See the [Career service](services/career-service/README.md).
 
-Before CV clarification uses the current goal, the user explicitly confirms its exact goal and selection revision. Subsequent changes require confirmation again. Structured goals, research and CV evidence persist in separate MongoDB service databases; temporary Career workflow checkpoints expire after 24 hours independently of durable discovery messages and CV history. Assessment computation, gap analysis and roadmap generation remain planned. Tests use synthetic provider responses; configured provider access is required for live extraction, chat interpretation and research. See [setup](docs/setup.md).
+Before CV clarification uses the current goal, the user explicitly confirms its exact goal and selection revision. Subsequent changes require confirmation again. Structured goals, research and CV evidence persist in separate MongoDB service databases; temporary Career workflow checkpoints expire after 24 hours independently of durable discovery messages and CV history. A separate Assessment service now compares versioned evidence, while Roadmap hosts saved adviser chat, user-reviewed proposals, daily workload and task progress. Both require their own database and model configuration; live-provider quality is not established by synthetic tests. Tests use synthetic provider responses; configured provider access is required for live extraction, chat interpretation and research. See [setup](docs/setup.md).
 
 ## Stack
 
 - Frontend: Next.js App Router, React, and TypeScript; Node.js server runtime.
-- Backend: six independently deployed Python FastAPI services.
+- Backend: seven independently deployed Python FastAPI service boundaries.
 - Gateway: NGINX reverse proxy and request routing.
 - Database: MongoDB, with separate databases and credentials for data-owning services.
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
-- Account access: email/password accounts with OTP email verification, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
+- Account access: email/password accounts with OTP email verification, emailed-code password recovery, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
 - AI: Career uses configured Gemini reasoning and Brave public research. CV uses a separately configured OpenAI-compatible API for extraction, conversation routing and clarification interpretation. Preview endpoints make no model calls. Application hosting is not selected.
 
 ## Repository layout
@@ -23,8 +23,9 @@ Before CV clarification uses the current goal, the user explicitly confirms its 
 apps/frontend/               Next.js frontend structure
 services/profile-service/    Canonical student profile
 services/cv-service/         CV extraction and clarification
-services/career-service/     Job interpretation and capability assessment
-services/roadmap-service/    Plans, tasks, progress history, and revisions
+services/career-service/     Career goals, JD interpretation and public research
+services/assessment-service/ Private versioned skill comparisons
+services/roadmap-service/    Adviser chat, plans, daily workload and progress
 services/dashboard-service/ Stateless progress aggregation
 services/review-service/    Pace reviews and scheduling
 infrastructure/gateway/     NGINX configuration template
@@ -54,4 +55,8 @@ Use the active `infrastructure/docker/compose.yaml` for Profile, CV and Career. 
 
 Career accesses saved CVs through the authenticated CV API. CV accesses confirmed goal context through Career's API. There is no cross-service database access. Finishing a CV review, extracting skills or confirming a goal does not establish mastery or generate a gap analysis. Keep environment files, credentials, originals and database data out of source control.
 
+The adviser implementation and remaining limits are described in [Roadmap](services/roadmap-service/SPEC.md). [Set up the new services](docs/setup.md#assessment-and-roadmap-adviser) before starting the updated Compose stack.
+
 For Docker source-code hot reload, see the [development setup](infrastructure/docker/README.md#hot-reload-during-development).
+
+Existing installations: read the [rename and data migration notes](docs/setup.md#renamed-installations) before rebuilding; the renamed defaults do not migrate existing volumes.

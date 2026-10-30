@@ -100,7 +100,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
  const initial='Hi, I’m your career agent. Tell me what you’d like to achieve, or what you’re unsure about. We’ll work through it together, one question at a time.';
  return <section className="page on career-agent-page">
   <header className="agent-page-header"><div><p className="small">Your direction, one conversation at a time</p><h1>Career Goal</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>navigate('/career-goal')}>← Career Goal</button></header>
-  <div className="agent-workspace"><div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true"><BrandLogo compact decorative/></span><div><strong>Coachify agent</strong><p className="small">Career exploration</p></div></div><button className="btn ghost sm" disabled={busy} onClick={()=>setShowDetails(v=>!v)}>{showDetails?'Hide details':'Conversation details'}</button></div>
+  <div className="agent-workspace"><div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true"><BrandLogo compact decorative/></span><div><strong>elo agent</strong><p className="small">Career exploration</p></div></div><button className="btn ghost sm" disabled={busy} onClick={()=>setShowDetails(v=>!v)}>{showDetails?'Hide details':'Conversation details'}</button></div>
   {showDetails&&<aside className="agent-details">
     <strong>{current?.goal?`Latest career goal: ${current.goal.role}`:'Your career direction is taking shape'}</strong>
     {draft&&<dl>{Object.entries(draft.answers).map(([topic,answer])=><div key={topic}><dt>{topic}</dt><dd>{answer.status==='skipped'?'Unknown / skipped':answer.value}{answer.status==='partial'?' — still clarifying':''}</dd></div>)}</dl>}
@@ -114,13 +114,13 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
 
   </details>}
   <div className="agent-transcript" ref={transcript} {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">
-   <div className="agent-message assistant"><span className="agent-message-label">Coachify</span><p>{initial}</p></div>
+   <div className="agent-message assistant"><span className="agent-message-label">elo</span><p>{initial}</p></div>
    {!draft&&<p className="agent-cv-reminder small">No CV is required to start. {warning} <Link href="/cv">CV upload</Link></p>}
    {loading&&<p role="status">Opening your conversation…</p>}
-   {draft?.turns.map((turn,index)=><div className="agent-exchange" key={`${draft._id}-${index}`}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.answer.value||'I’m not sure; skip this for now.'}</p></div><div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentReply animate={index===draft.turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div></div>)}
+   {draft?.turns.map((turn,index)=><div className="agent-exchange" key={`${draft._id}-${index}`}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.answer.value||'I’m not sure; skip this for now.'}</p></div><div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply animate={index===draft.turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div></div>)}
    {draft&&(draft.total_turns||0)>draft.turns.length&&<p className="small">Earlier messages are summarised in the saved conversation details.</p>}
    {pending&&<div className="agent-message user"><span className="agent-message-label">You</span><p>{pending}</p></div>}
-   {busy&&<div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentActivity label={activity}/></div>}
+   {busy&&<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentActivity label={activity}/></div>}
    {draft?.context_complete&&!!draft.suggestions.length&&<div className="agent-directions"><p className="small">Directions we can explore · AI guidance</p>{draft.suggestions.map((role,index)=><article key={index}><h2>{role.role}</h2><AgentMarkdown>{role.rationale}</AgentMarkdown><p className="small">Still uncertain: {role.uncertainty}</p><button className="btn ghost sm" disabled={busy} onClick={()=>void chooseDirection(index)}>Explore this direction</button></article>)}</div>}
    {notice&&<p role="status" className="goal-notice">{notice}</p>}
    {error&&<AgentRecovery message={error} code={code} disabled={busy} label="Reload conversation" onRetry={()=>{if(!dirty.current||window.confirm('Reload saved progress and discard unsent edits?')){draftId.current=null;setRetry(v=>v+1);}}}/>}
@@ -128,8 +128,8 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
   </div>
   <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
    <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}>
-   <label className="agent-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>Allow Coachify to send this conversation and chosen CV context to the configured AI provider.</label>
-   <div className="agent-compose-row"><textarea aria-label="Message Coachify" placeholder="Tell me what you’re hoping to achieve…" value={message} maxLength={600} rows={2} disabled={busy||loading} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||loading||!message.trim()||(!consent||needsAttachment||!current)}>↑</button></div>
+   <label className="agent-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>Allow elo to send this conversation and chosen CV context to the configured AI provider.</label>
+   <div className="agent-compose-row"><textarea aria-label="Message elo" placeholder="Tell me what you’re hoping to achieve…" value={message} maxLength={600} rows={2} disabled={busy||loading} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||loading||!message.trim()||(!consent||needsAttachment||!current)}>↑</button></div>
    {<div className="agent-compose-meta"><span className="small">Enter to send · Shift+Enter for a new line</span>{draft?.next_question&&<button type="button" className="btn ghost sm" disabled={busy||!consent||needsAttachment} onClick={()=>void send(true)}>Skip this question</button>}</div>}
    {needsAttachment&&<p role="status" className="small">Reattach the temporary CV above, or start a new conversation without it.</p>}
   </form></div>

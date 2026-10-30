@@ -142,7 +142,7 @@ truth. The [README](README.md) lists available endpoints, and the
 
 ## Saving, ownership and planning handoff
 
-- Private data is owner-scoped through a revocable Coachify session. Google ID
+- Private data is owner-scoped through a revocable elo session. Google ID
   tokens are accepted only during nonce-bound account access, never directly on
   private profile endpoints. Development accounts also require explicit sign-in.
 - Changed saves create immutable full documents in `profile_versions`. The unique
@@ -171,6 +171,22 @@ truth. The [README](README.md) lists available endpoints, and the
 
 ## Account access, environment and verification — P09–P12, P15/P16
 
+- Password recovery (user-requested extension): `/auth/forgot-password` normalizes
+  the email and returns a generic receipt plus a random challenge ID. Only existing
+  verified password accounts receive a six-digit reset email; Google-only identities
+  are never linked by email. Five requests per identity per 15-minute window use
+  the existing hashed rate counters. SMTP failures remain retryable 503 responses.
+- `password_resets` holds hashed challenge IDs, keyed code hashes, account ID,
+  authentication mode, captured password hash, delivery state and an atomic guess
+  counter. Codes expire after ten minutes with TTL cleanup and explicit expiry
+  checks, allow five guesses, and cannot be used before successful delivery.
+  `/auth/reset-password` validates an 8–128-character password and atomically replaces
+  the captured password hash with Argon2id plus `password_changed_at`. Concurrent
+  reset proofs have one winner; older proofs become unusable. Credential-bound
+  sessions and access attempts reject old passwords after reset, including retries.
+  Pre-upgrade sessions are accepted only until the first reset. Recovery never
+  creates a private session or changes owner/profile/history. Codes/passwords stay
+  in page memory and email, outside browser storage and logs.
 - Profile owns accounts, sessions and verification behind `/api/v1/profile`; no
   new application microservice is introduced. MongoDB collections are `accounts`,
   `auth_flows`, `auth_sessions` and `auth_limits`. Unique identity/owner indexes
@@ -183,16 +199,19 @@ truth. The [README](README.md) lists available endpoints, and the
   requires its public client ID in production. Invalid/missing production config
   fails startup; errors never enable local fallback. Query/header/browser mode flags
   cannot change the backend mode. Mode changes require fresh explicit sign-in.
-- New email accounts require normalized, case-insensitive email and a 12–128
+- New email accounts require normalized, case-insensitive email and an 8–128
   character password. Passwords are not trimmed. Argon2id stores only hashes (19 MiB,
-  two iterations, one lane); invalid password and unknown email return the same 401.
+  two iterations, one lane). Per the user-requested sign-in update, an unknown
+  email returns 404 with a clear missing-account message and a frontend link to
+  `/register`; an incorrect password for an existing account returns 401.
+  Unknown addresses still perform the dummy password check before the response.
   Credential requests are bounded to ten per identity in a 15-minute window, with a
-  gateway IP rate limit. Password reset is not part of this iteration.
+  gateway IP rate limit. Password recovery is described above.
 - Google verifies audience, expiry, official issuer and the per-attempt nonce. New
-  Google accounts also require a verified email claim and Coachify OTP verification.
+  Google accounts also require a verified email claim and elo OTP verification.
   Stable `google:<subject>` identity retains existing Google-owned profiles. Earlier
   Google accounts missing email are upgraded only after that exact subject is
-  verified, then complete Coachify OTP verification without changing their owner. Email,
+  verified, then complete elo OTP verification without changing their owner. Email,
   local and Google identities never auto-link by matching name/email.
 - Registration keeps a prospective server-owned account ID and hashed credentials
   in the expiring verification attempt. It does not reserve a durable account or
@@ -242,7 +261,7 @@ truth. The [README](README.md) lists available endpoints, and the
   The pending credential candidate is removed after publication. A failure between these writes is safe
   to retry with the identical verification request. Only the winning code can recover
   that session; consumption cannot be replayed to create a different one.
-- Coachify sessions last 24 hours and store only SHA-256 secret hashes server-side.
+- elo sessions last 24 hours and store only SHA-256 secret hashes server-side.
   Bearers live in tab-scoped sessionStorage; private API responses use no-store.
   Sessions are validated before private content, after restoration/focus, every 30
   seconds and at their expiry timer. Incompatible modes, pending email/migration,

@@ -5,7 +5,7 @@ import { JourneyVisual } from '@/components/ui/journey-visual';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useProfile } from '@/features/profile/profile-provider';
-import { profileApi } from '@/lib/api/profile';
+import { ApiError, profileApi } from '@/lib/api/profile';
 import { GoogleSignIn } from '@/lib/auth/google-sign-in';
 export function AccessFrame({ children, entry = false }: { children: ReactNode; entry?: boolean }) {
  return <div className={`access-page${entry ? ' access-entry' : ''}`}>
@@ -32,18 +32,19 @@ export function AccessScreen({ intent }: { intent: 'login' | 'register' }) {
  const { mode, googleEnabled, verification, account, profile, loading, configError, loadError, beginAccess, completeAccess, cancelAccess, reload, signOut } = useProfile();
  const router = useRouter(); const pathname=usePathname(); const accessPath=intent==='login'?'/login':'/register'; const [nonce, setNonce] = useState(''); const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
  const [accounts, setAccounts] = useState<{ id: string; name: string; email: string }[]>([]); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [revision, setRevision] = useState(0); const locked = useRef(false);
+ const [accountNotFound, setAccountNotFound] = useState(false);
  useEffect(() => {
   if (pathname!==accessPath || account || !mode || configError) return;
-  let active = true; setNonce(''); setError('');
+  let active = true; setNonce(''); setError(''); setAccountNotFound(false);
   beginAccess(intent).then(access => { if (active) setNonce(access.nonce); }).catch(e => { if (active) setError(e.message); });
   if (mode === 'local_test' && intent === 'login') profileApi<{ id: string; name: string; email: string }[]>('/auth/local-accounts').then(list => { if (active) setAccounts(list); }).catch(e => { if (active) setError(e.message); });
   return () => { active = false; cancelAccess(); };
  }, [mode, configError, intent, beginAccess, cancelAccess, revision, account, pathname, accessPath]);
  useEffect(() => { if (pathname===accessPath && account && profile && !loading) router.replace(profile.onboarding_complete ? '/dashboard' : '/onboarding'); }, [account, profile, loading, pathname, accessPath, router]);
  const finish = useCallback(async (credential?: string) => {
-  if (locked.current) return; locked.current = true; setBusy(true); setError('');
+  if (locked.current) return; locked.current = true; setBusy(true); setError(''); setAccountNotFound(false);
   try { await completeAccess(credential ? { credential } : { ...(intent === 'register' ? { name } : {}), email, password }); setPassword(''); }
-  catch (e) { setError(e instanceof Error ? e.message : 'Could not finish. Please retry.'); }
+  catch (e) { setError(e instanceof Error ? e.message : 'Could not finish. Please retry.'); setAccountNotFound(intent === 'login' && e instanceof ApiError && e.status === 404); }
   finally { locked.current = false; setBusy(false); }
  }, [intent, name, email, password, completeAccess]);
  function submit(event: FormEvent) { event.preventDefault(); void finish(); }
@@ -55,12 +56,13 @@ export function AccessScreen({ intent }: { intent: 'login' | 'register' }) {
  {intent === 'register' && <><label htmlFor="account-name">Display name (optional)</label><input id="account-name" autoComplete="nickname" maxLength={80} value={name} onChange={e => setName(e.target.value)} disabled={busy}/></>}
  {mode === 'local_test' && intent === 'login' && accounts.length > 0 && <><label htmlFor="local-account">Choose your development account (optional)</label><select id="local-account" value="" disabled={busy} onChange={e => { const choice=accounts.find(a=>a.id===e.target.value); if(choice) setEmail(choice.email); }}><option value="">Prefill an email</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {a.email}</option>)}</select></>}
  <label htmlFor="account-email">Email address</label><input id="account-email" type="email" autoComplete="email" maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} required disabled={busy}/>
- <label htmlFor="account-password">Password</label><input id="account-password" type="password" autoComplete={intent === 'register' ? 'new-password' : 'current-password'} minLength={12} maxLength={128} value={password} onChange={e=>setPassword(e.target.value)} required disabled={busy}/>
- {intent === 'register' && <p className="small">We’ll email a code to verify your address. Use 12–128 characters for your password. A long, unique passphrase works well.</p>}
- <button className="btn pri" disabled={busy || !nonce || !email || password.length < 12}>{busy ? 'Please wait…' : intent === 'register' ? 'Create account' : 'Sign in'}<span aria-hidden="true">↗</span></button></form>
+ <label htmlFor="account-password">Password</label><input id="account-password" type="password" autoComplete={intent === 'register' ? 'new-password' : 'current-password'} minLength={8} maxLength={128} value={password} onChange={e=>setPassword(e.target.value)} required disabled={busy}/>
+ {intent === 'register' && <p className="small">We’ll email a code to verify your address. Use 8–128 characters for your password. A long, unique passphrase works well.</p>}
+ <button className="btn pri" disabled={busy || !nonce || !email || password.length < 8}>{busy ? 'Please wait…' : intent === 'register' ? 'Create account' : 'Sign in'}<span aria-hidden="true">↗</span></button></form>
  {googleEnabled && nonce && <div className="access-google"><p className="small">Or continue with Google</p><GoogleSignIn key={nonce} nonce={nonce} onCredential={credential => { void finish(credential); }}/></div>}
- {busy && <p role="status">Finishing account access…</p>}{error && <div role="alert"><p className="error">{error}</p><button className="btn ghost sm" onClick={() => setRevision(n => n + 1)}>Start again</button></div>}
- <p className="small access-switch">{intent === 'register' ? 'Already have an account?' : 'New to Coachify?'} <Link className="text-link" href={intent === 'register' ? '/login' : '/register'}>{intent === 'register' ? 'Sign in' : 'Create account'}</Link></p><Link href="/" className="small text-link" onClick={cancelAccess}>Cancel and return home</Link></>}
+ {intent === 'login' && <Link className="text-link small" href="/forgot-password">Forgot password?</Link>}
+ {busy && <p role="status">Finishing account access…</p>}{error && <div role="alert"><p className="error">{error}</p>{accountNotFound ? <Link className="btn pri" href="/register" onClick={cancelAccess}>Create new account</Link> : <button className="btn ghost sm" onClick={() => setRevision(n => n + 1)}>Start again</button>}</div>}
+ <p className="small access-switch">{intent === 'register' ? 'Already have an account?' : 'New to elo?'} <Link className="text-link" href={intent === 'register' ? '/login' : '/register'}>{intent === 'register' ? 'Sign in' : 'Create account'}</Link></p><Link href="/" className="small text-link" onClick={cancelAccess}>Cancel and return home</Link></>}
  </AccessFrame>;
 }
 function VerificationForm() {

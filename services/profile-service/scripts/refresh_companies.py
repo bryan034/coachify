@@ -22,7 +22,7 @@ CANDIDATES = '''SELECT ?company (MAX(?count) AS ?employees) WHERE {
 
 def download(query):
     response = requests.get(ENDPOINT, params={'query': query, 'format': 'json'},
-                            headers={'User-Agent': 'CoachifyReferenceSnapshot/1.0', 'Accept': 'application/sparql-results+json'}, timeout=60)
+                            headers={'User-Agent': 'eloReferenceSnapshot/1.0', 'Accept': 'application/sparql-results+json'}, timeout=60)
     response.raise_for_status()
     return response.json()
 

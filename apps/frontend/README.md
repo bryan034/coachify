@@ -5,7 +5,7 @@ Next.js App Router, React, TypeScript, and a Node.js runtime.
 The UI uses the supplied Elo logo and ink/mint palette, with a broad public hero
 inspired by the Ebury reference. Shared navigation, forms, chat and saved-goal
 briefings use the same visual system. Fonts are bundled in `public/fonts/` with
-the Inter OFL licence; no runtime font request is needed. See the
+the Inter OFL licence; no runtime font request is needed. The browser tab icon uses the supplied `public/brand/elo-app-icon.svg`, referenced by the root layout metadata. See the
 [design guide](../../docs/design/README.md) for tokens and asset provenance.
 
 ## Screens and data
@@ -18,7 +18,7 @@ the Inter OFL licence; no runtime font request is needed. See the
 | `/career-goal/discovery` | Chat with bounded memory, automatic concurrent research, cited skill recommendations and explicit shared-goal confirmation |
 | `/career-goal?new=1` | Replace the goal using a new text, URL or document JD; preserve the previous goal until extraction succeeds |
 | `/career-goal/chat` | Saved-goal Q&A or separate career exploration; `?refine=1` opens guided goal refinement |
-| `/onboarding` | P13/P14 full-screen question-by-question setup, ending with Enter Coachify |
+| `/onboarding` | P13/P14 full-screen question-by-question setup, ending with Enter elo |
 | `/profile` | Occupation, education and employment summary with inline Edit profile, Save changes and Cancel |
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
 | `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
@@ -44,7 +44,7 @@ draft available for retry. Existing JSON APIs and research polling are unchanged
 
 ## Profile and authentication
 
-`ProfileProvider` in the root layout owns the account, Coachify session, server auth
+`ProfileProvider` in the root layout owns the account, elo session, server auth
 mode, profile and load/retry states. Workspace routes withhold private content until
 the session is validated. Session bearers survive same-tab reload in sessionStorage;
 Google credentials are exchanged only during account access. Logout, expiry and
@@ -69,7 +69,7 @@ scroll above the progress footer. X signs out. Student status
 and path save together; other new answers save at step boundaries. Changes to
 retained education needing context review wait for final confirmation. Saved
 answers resume after reload; unsaved typing is discarded, and an empty optional
-course may be offered again. Only **Enter Coachify** completes setup. Employed users also answer separate
+course may be offered again. Only **Enter elo** completes setup. Employed users also answer separate
 workplace and role questions; both are required for new setup completion.
 
 University search starts with a name and an editable country suggestion from
@@ -271,3 +271,7 @@ Career Discovery collects its six research-readiness topics in a numbered bundle
 omitting topics already answered. Role scope offers “keep it broad”; other questions
 end with “You can say unsure.” There is no repeated clarification preface. Explicit unsure/skip answers count, missing answers do not. The Career
 backend gates automatic research; final goal confirmation is unchanged.
+
+## Roadmap adviser
+
+`/roadmap` now opens a persistent adviser conversation with the plan alongside it. It checks extracted/selected CV and Career inputs, obtains the separate Assessment result and proposes activities around user-chosen timeline, weekly/day budgets and learning preferences. Users explicitly Start/Apply a proposal; active edits and task progress preserve history and expose review conflicts. The starting-point tab explains captured comparison evidence. Preferences and activity editors support keyboard focus and mobile widths. See [Roadmap](../../services/roadmap-service/SPEC.md) for limits; this does not implement automatic revisions, exact time slots or live-model quality guarantees.

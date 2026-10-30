@@ -61,7 +61,7 @@ def project(goal, selection_version):
         terms=[requirement.description]
         if qualification:
             terms=qualification_terms(requirement.description)
-        conditions.append({'id':str(uuid5(NAMESPACE_URL, 'coachify:canonical-requirement:'+goal.id+':'+requirement.requirement_id)),
+        conditions.append({'id':str(uuid5(NAMESPACE_URL, 'elo:canonical-requirement:'+goal.id+':'+requirement.requirement_id)),
             'kind':'qualification' if qualification else 'requirement',
             'label':requirement.category.replace('_',' ').capitalize()+' requirement',
             'description':requirement.description, 'item_kinds':['education'] if qualification else ['education','experience','project','skill'],

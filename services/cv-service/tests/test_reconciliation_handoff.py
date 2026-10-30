@@ -234,3 +234,20 @@ def test_date_edit_validates_combined_range_and_preserves_skill_months(harness):
     assert result.status_code == 200, result.text
     edited = next(row for row in result.json()['items'] if row['id'] == item['id'])
     assert edited['experience_months'] == 6 and edited['end_date'] is None and edited['ongoing'] is True
+
+
+def test_separate_assessment_export_needs_selected_source_but_no_target_confirmation(harness):
+    client,app,_,targets,_=harness
+    cv=ready(harness)
+    client.put('/api/v1/cv/selection',json=mutation(0,cv_id=cv['id']))
+    async def forbidden(*args):raise AssertionError('Source-only export must not read Career confirmation.')
+    targets.selected_context=forbidden
+    path=f"/api/v1/cv/{cv['id']}/assessment-input"
+    params={'expected_version':cv['version'],'expected_selection_version':1,'expected_declarations_version':1}
+    response=client.get(path,params=params)
+    assert response.status_code==200,response.text
+    value=response.json()
+    assert value['cv_version']==cv['version'] and value['declarations_version']==1
+    assert value['skills'][0]['canonical_skill_id'] in ('language.python','language.sql')
+    assert targets.context_value is None
+    assert client.get(path,params={**params,'expected_selection_version':0}).status_code==409

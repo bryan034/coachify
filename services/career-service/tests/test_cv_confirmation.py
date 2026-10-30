@@ -171,7 +171,7 @@ def test_existing_legacy_unique_index_allows_multiple_new_goals_and_drafts(docum
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Set MONGODB_TEST_URI for isolated index coexistence test.')
     mongo=MongoClient(uri,serverSelectionTimeoutMS=3000,tz_aware=True)
-    name='coachify_confirmation_test_'+uuid4().hex
+    name='elo_confirmation_test_'+uuid4().hex
     db=mongo[name]
     try:
         mongo.admin.command('ping')

@@ -231,3 +231,23 @@ def test_unmapped_cv_source_identity_cannot_silently_enter_registry_analysis(doc
     research = [InterviewResearch.model_validate(documents['research'])]
     with pytest.raises(ContractConflict, match='mapping versions disagree'):
         validate_inputs(result.user_id, result.inputs, cv, goal, research, 1)
+
+
+def test_shared_skill_identity_preserves_legacy_keys_and_never_guesses_unknowns(documents):
+    from app.schemas.analysis import TargetSkill
+    data=documents['goal']['skills'][0]
+    skill=TargetSkill.model_validate({**data,'name':'Structured Query Language','category':'Unspecified','skill_id':None})
+    assert skill.canonical_skill_id=='language.sql'
+    assert skill.skill_id is None
+    assert skill.skill_registry_version=='skills-v2'
+    unknown=TargetSkill.model_validate({**data,'name':'Unregistered niche tool','skill_id':None})
+    assert unknown.canonical_skill_id is None
+
+
+def test_job_dates_preserve_partial_wording_and_full_date_requires_exact_source_text():
+    from elo_shared.dates import JobDate
+    partial=JobDate(kind='job_start',text='April 2030',evidence='The role starts in April 2030.')
+    assert partial.date is None
+    exact=JobDate(kind='job_start',text='1 April 2030',evidence='Start date: 1 April 2030.')
+    assert exact.date=='2030-04-01'
+    with pytest.raises(ValidationError):JobDate(kind='job_start',text='1 April 2030',evidence='Start sometime in April.')

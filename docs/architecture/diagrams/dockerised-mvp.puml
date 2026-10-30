@@ -1,5 +1,5 @@
-@startuml coachify_dockerised_mvp
-title Coachify — CV, JD / skills analysis and roadmap design
+@startuml elo_dockerised_mvp
+title elo — CV, Career, Assessment and Roadmap adviser
 left to right direction
 skinparam shadowing false
 skinparam componentStyle rectangle
@@ -25,18 +25,22 @@ node "Docker Compose — focused design" {
     node "CV analyser\nservices/cv-service" as CV <<Docker container>> {
       artifact "Saved upload/review and resumable text chat\nSource-linked clarification, correction and selection\n/api/v1/cv" as CVAPI
     }
-    node "JD / career and skills analyser\nservices/career-service" as Career <<Docker container>> {
+    node "Career goal and public research\nservices/career-service" as Career <<Docker container>> {
       artifact "Specific JD or conversational discovery\nOne canonical CareerGoal + explicit CV confirmation\nStructured skills and five-category Opportunity Intelligence\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
     }
+    node "Private capability assessment\nservices/assessment-service" as Assessment <<Docker container>> {
+      artifact "Version-pinned comparison and source evidence\nSeparate role, interview and constraint outcomes\n/api/v1/assessments" as AssessmentAPI
+    }
     node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
-      artifact "Generate plans from versioned analyses\nEdit plans and track task progress\n/api/v1/roadmaps (planned)" as RoadmapAPI
+      artifact "Saved adviser chat beside proposed/active plan\nChosen days, daily workload and task history\n/api/v1/roadmaps" as RoadmapAPI
     }
   }
 
   node "MongoDB — local development" as Mongo <<Docker container>> {
     database "CV-owned database\ncvs\ncv_selections + cv_conversations (operational)\ncv_upload_capacity + cv_model_usage (operational)" as CVDB
-    database "Career-owned database\ncareer_goals + career_state (operational)\ninterview_research\nskill_gap_analyses" as CareerDB
-    database "Roadmap-owned database\nPlans, milestones and task history\nSchema to be expanded" as RoadmapDB
+    database "Career-owned database\ncareer_goals + career_state (operational)\ninterview_research" as CareerDB
+    database "Assessment-owned database\nskill_gap_analyses\nworkspaces with batch checkpoints" as AssessmentDB
+    database "Roadmap-owned database\nroadmaps immutable revisions\nworkspaces with chat and active/draft" as RoadmapDB
   }
   artifact "Service-private temporary CV storage\nQuota admission, shared POSIX locks and recoverable cleanup" as Uploads <<Private storage>>
 }
@@ -46,7 +50,8 @@ Web --> Gateway : /api/v1 requests
 Gateway --> Profile : Existing account / profile routes
 Gateway --> CV : Saved CV and conversation routes
 Gateway --> Career : Career routes
-Gateway --> Roadmap : Roadmap routes (planned)
+Gateway --> Assessment : Assessment owner routes
+Gateway --> Roadmap : Adviser and tasks
 
 ' API dependencies point from caller to the service it calls.
 CV --> Profile : Validate session / read declarations / confirmed additions
@@ -55,16 +60,21 @@ CV --> Career : Current confirmed goal/version/selection projection
 Career --> Profile : Validate session / read selected context
 Career --> CV : Read effective CV skills and extraction version
 Roadmap --> Profile : Read deadline and availability
-Roadmap --> Career : Read selected versioned gap analysis
+Assessment --> CV : Selected effective evidence and versions
+Assessment --> Career : Full goal and linked research snapshot
+Assessment --> Profile : Verify session and current background
+Roadmap --> Assessment : Current comparison and freshness
 
 CV --> CVDB : Own records only
 Career --> CareerDB : Own records only
+Assessment --> AssessmentDB : Own records only
 Roadmap --> RoadmapDB : Own records only
 CV --> Uploads : Temporary original access
 CV --> CVLLM : Bounded extraction, routing and interpretation
 Career --> LLM : Goal interpretation / scoped chat / cited research synthesis
 Career --> Sources : LangGraph parallel LLM Context research branches
-Roadmap ..> LLM : Future personalised roadmap generation
+Assessment --> LLM : Service-scoped evidence interpretation
+Roadmap --> LLM : Service-scoped adviser recommendations
 
 note bottom of Career
   One career_goals model: specific_job or career_exploration.
@@ -91,7 +101,7 @@ end note
 
 legend bottom
   Focused design direction, not a deployment or implementation claim.
-  Core scope: CV analyser, JD/career/skills analyser, roadmap service.
+  Core scope: CV, Career, separate Assessment and Roadmap adviser.
   Existing Profile/auth is shown only as an external dependency.
   Dashboard, review/scheduling and future services are intentionally omitted;
   extend this diagram when their scope is agreed.
@@ -99,7 +109,7 @@ legend bottom
   optional-CV exploration, one autosaved current goal/chat, LangGraph research, saved CV upload/review/chat and data contracts.
   Importance review, advisory skills and versioned research orchestration/review are implemented.
   Brave retrieval exclusively uses LLM Context; historical AI answer attribution remains readable.
-  Source-linked CV interpretation is implemented; broader registry mapping, assessment, gap analysis and roadmaps are planned.
+  Source-linked CV interpretation is implemented; Assessment comparison and Roadmap adviser are implemented with synthetic verification; live quality remains unverified.
   Synthetic tests do not establish live-provider quality or deployed readiness.
   career_state (including version-bound CV acknowledgement) and research_contexts are operational metadata.
   career_checkpoints / career_checkpoint_writes retain safe graph state for 24h.

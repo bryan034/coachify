@@ -1,0 +1,456 @@
+{
+  "$defs": {
+    "DayBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Day",
+          "type": "integer"
+        },
+        "minutes": {
+          "maximum": 1440,
+          "minimum": 0,
+          "title": "Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "day",
+        "minutes"
+      ],
+      "title": "DayBudget",
+      "type": "object"
+    },
+    "Preferences": {
+      "additionalProperties": false,
+      "properties": {
+        "start_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Date"
+        },
+        "target_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Date"
+        },
+        "horizon_weeks": {
+          "anyOf": [
+            {
+              "maximum": 52,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Horizon Weeks"
+        },
+        "weekly_minutes": {
+          "anyOf": [
+            {
+              "maximum": 10080,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weekly Minutes"
+        },
+        "days": {
+          "items": {
+            "$ref": "#/$defs/DayBudget"
+          },
+          "maxItems": 7,
+          "title": "Days",
+          "type": "array"
+        },
+        "max_session_minutes": {
+          "default": 60,
+          "maximum": 1440,
+          "minimum": 1,
+          "title": "Max Session Minutes",
+          "type": "integer"
+        },
+        "time_zone": {
+          "default": "Asia/Singapore",
+          "title": "Time Zone",
+          "type": "string"
+        },
+        "learning_preferences": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Learning Preferences",
+          "type": "string"
+        },
+        "reduced_periods": {
+          "items": {
+            "$ref": "#/$defs/ReducedPeriod"
+          },
+          "maxItems": 100,
+          "title": "Reduced Periods",
+          "type": "array"
+        }
+      },
+      "title": "Preferences",
+      "type": "object"
+    },
+    "ReducedPeriod": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "start_date": {
+          "format": "date",
+          "title": "Start Date",
+          "type": "string"
+        },
+        "end_date": {
+          "format": "date",
+          "title": "End Date",
+          "type": "string"
+        },
+        "weekly_hours": {
+          "maximum": 168,
+          "minimum": 0,
+          "title": "Weekly Hours",
+          "type": "number"
+        }
+      },
+      "required": [
+        "start_date",
+        "end_date",
+        "weekly_hours"
+      ],
+      "title": "ReducedPeriod",
+      "type": "object"
+    },
+    "Schedule": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "needs_preferences",
+            "feasible",
+            "partial",
+            "no_work",
+            "review_needed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "allocations": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Allocations",
+          "type": "array"
+        },
+        "remainders": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Remainders",
+          "type": "object"
+        },
+        "milestones": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Milestones",
+          "type": "array"
+        },
+        "daily_capacity": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Daily Capacity",
+          "type": "object"
+        },
+        "remaining_minutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remaining Minutes"
+        },
+        "total_estimated_minutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Estimated Minutes"
+        },
+        "available_minutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Available Minutes"
+        },
+        "allocated_minutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Allocated Minutes"
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Date"
+        },
+        "cutoff_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cutoff Date"
+        }
+      },
+      "required": [
+        "status",
+        "issues",
+        "allocations",
+        "remainders",
+        "milestones"
+      ],
+      "title": "Schedule",
+      "type": "object"
+    },
+    "Task": {
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "instructions": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Instructions",
+          "type": "string"
+        },
+        "completion_outcome": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Completion Outcome",
+          "type": "string"
+        },
+        "estimated_minutes": {
+          "maximum": 60000,
+          "minimum": 1,
+          "title": "Estimated Minutes",
+          "type": "integer"
+        },
+        "rationale": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "requirement_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Requirement Refs",
+          "type": "array"
+        },
+        "prerequisites": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Prerequisites",
+          "type": "array"
+        },
+        "milestone": {
+          "default": "",
+          "maxLength": 160,
+          "title": "Milestone",
+          "type": "string"
+        },
+        "splittable": {
+          "default": true,
+          "title": "Splittable",
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "not_started",
+            "in_progress",
+            "completed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "removed": {
+          "default": false,
+          "title": "Removed",
+          "type": "boolean"
+        },
+        "definition_review_required": {
+          "default": false,
+          "title": "Definition Review Required",
+          "type": "boolean"
+        },
+        "history": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "History",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "instructions",
+        "completion_outcome",
+        "estimated_minutes",
+        "rationale",
+        "status"
+      ],
+      "title": "Task",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "assessment_id": {
+      "title": "Assessment Id",
+      "type": "string"
+    },
+    "assessment_hash": {
+      "title": "Assessment Hash",
+      "type": "string"
+    },
+    "assessment": {
+      "additionalProperties": true,
+      "title": "Assessment",
+      "type": "object"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/Task"
+      },
+      "title": "Tasks",
+      "type": "array"
+    },
+    "preferences": {
+      "$ref": "#/$defs/Preferences"
+    },
+    "schedule": {
+      "$ref": "#/$defs/Schedule"
+    },
+    "exclusions": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Exclusions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "assessment_id",
+    "assessment_hash",
+    "assessment",
+    "tasks",
+    "preferences",
+    "schedule",
+    "exclusions"
+  ],
+  "title": "Plan",
+  "type": "object"
+}

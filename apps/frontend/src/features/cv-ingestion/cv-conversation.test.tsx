@@ -35,7 +35,7 @@ describe('saved CV conversation', () => {
  it('retains an interrupted draft and retries the same message identity', async () => {
   vi.mocked(cvApi.sendMessage).mockRejectedValue(new Error('Connection interrupted.'));
   render(<CvConversationPanel {...props()}/>);
-  const input=await screen.findByRole('textbox',{name:'Message Coachify'}); await waitFor(()=>expect(input).toBeEnabled());
+  const input=await screen.findByRole('textbox',{name:'Message elo'}); await waitFor(()=>expect(input).toBeEnabled());
   fireEvent.change(input,{target:{value:'Also, five months using React.'}}); fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   await screen.findByRole('alert'); expect(input).toHaveValue('Also, five months using React.');
   fireEvent.click(screen.getByRole('button',{name:'Send message'})); await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledTimes(2));
@@ -45,7 +45,7 @@ describe('saved CV conversation', () => {
   const accepted=new Set<string>(); let server=conversation(); let routed=0;
   vi.mocked(cvApi.sendMessage).mockImplementation(async(_id,body)=>{if(accepted.has(body.mutation_id))return server;accepted.add(body.mutation_id);routed++;server=conversation({revision:3,messages:[message('m1',body.text,[],'user'),message('m2','Your contribution is saved.')]});throw new TypeError('Network response lost.');});
   vi.mocked(cvApi.conversation).mockImplementation(async()=>server);
-  render(<CvConversationPanel {...props()}/>);const input=await screen.findByRole('textbox',{name:'Message Coachify'});await waitFor(()=>expect(input).toBeEnabled());
+  render(<CvConversationPanel {...props()}/>);const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());
   fireEvent.change(input,{target:{value:'I built the React screens.'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByRole('alert');
   fireEvent.click(screen.getByRole('button',{name:'Check saved messages'}));await screen.findByText('Your contribution is saved.');
   expect(input).toHaveValue('I built the React screens.');fireEvent.click(screen.getByRole('button',{name:'Send message'}));
@@ -70,7 +70,7 @@ describe('saved CV conversation', () => {
    if(body.text!=='Why are you asking this question?')throw new TypeError('Response lost after saving.');
    return server;
   });
-  render(<CvConversationPanel {...props()}/>);const input=await screen.findByRole('textbox',{name:'Message Coachify'});await waitFor(()=>expect(input).toBeEnabled());
+  render(<CvConversationPanel {...props()}/>);const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());
   for(const text of ['I built the screens.','I also wrote the tests.']){
    fireEvent.change(input,{target:{value:text}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByRole('alert');
    fireEvent.click(screen.getByRole('button',{name:'Check saved messages'}));await waitFor(()=>expect(screen.queryByRole('alert')).not.toBeInTheDocument());
@@ -88,10 +88,10 @@ describe('saved CV conversation', () => {
   vi.mocked(cvApi.openConversation).mockResolvedValueOnce(original).mockResolvedValueOnce(next);
   vi.mocked(cvApi.sendMessage).mockRejectedValueOnce(new TypeError('Response lost.')).mockResolvedValueOnce(full);
   vi.mocked(cvApi.conversation).mockResolvedValue(full);
-  render(<CvConversationPanel {...props()}/>);const input=await screen.findByRole('textbox',{name:'Message Coachify'});await waitFor(()=>expect(input).toBeEnabled());
+  render(<CvConversationPanel {...props()}/>);const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());
   fireEvent.change(input,{target:{value:'My contribution.'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByRole('alert');
   fireEvent.click(screen.getByRole('button',{name:'Check saved messages'}));fireEvent.click(await screen.findByRole('button',{name:'Continue in a new conversation'}));
-  const resumed=await screen.findByRole('textbox',{name:'Message Coachify'});await waitFor(()=>expect(resumed).toBeEnabled());expect(resumed).toHaveValue('My contribution.');
+  const resumed=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(resumed).toBeEnabled());expect(resumed).toHaveValue('My contribution.');
   fireEvent.click(screen.getByRole('button',{name:'Send message'}));await waitFor(()=>expect(resumed).toHaveValue(''));
   const calls=vi.mocked(cvApi.sendMessage).mock.calls;expect(calls[1][0]).toBe('chat-one');expect(calls[1][1]).toEqual(calls[0][1]);
   expect(screen.getByRole('button',{name:'Previous conversation'})).toBeEnabled();expect(screen.queryByText('My contribution.')).not.toBeInTheDocument();
@@ -99,14 +99,14 @@ describe('saved CV conversation', () => {
  it('keeps a draft through revision conflict and refreshes saved messages before another send',async()=>{
   vi.mocked(cvApi.sendMessage).mockRejectedValue(new CvApiError('Conversation changed.',409));
   vi.mocked(cvApi.conversation).mockResolvedValue(conversation({revision:4,messages:[message('m1','A newer saved response.')]}));
-  render(<CvConversationPanel {...props()}/>); const input=await screen.findByRole('textbox',{name:'Message Coachify'}); await waitFor(()=>expect(input).toBeEnabled());
+  render(<CvConversationPanel {...props()}/>); const input=await screen.findByRole('textbox',{name:'Message elo'}); await waitFor(()=>expect(input).toBeEnabled());
   fireEvent.change(input,{target:{value:'My new explanation'}}); fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   expect(await screen.findByText('A newer saved response.')).toBeVisible(); expect(input).toHaveValue('My new explanation'); expect(cvApi.sendMessage).toHaveBeenCalledTimes(1);
  });
  it('asks a side question without losing the current answer draft',async()=>{
   const initial=conversation({active_question:{id:'q1',item_id:'project-one',title:'ShopTrack',question:'What did you build?'},messages:[message('m1','What did you build?')]});
   vi.mocked(cvApi.openConversation).mockResolvedValue(initial); vi.mocked(cvApi.sendMessage).mockResolvedValue({...initial,revision:2,messages:[...initial.messages,message('m2','This helps describe your own work.')]});
-  render(<CvConversationPanel {...props()}/>); const input=await screen.findByRole('textbox',{name:'Message Coachify'}); await waitFor(()=>expect(input).toBeEnabled());
+  render(<CvConversationPanel {...props()}/>); const input=await screen.findByRole('textbox',{name:'Message elo'}); await waitFor(()=>expect(input).toBeEnabled());
   fireEvent.change(input,{target:{value:'I built the screens'}}); fireEvent.click(screen.getByRole('button',{name:'Why this question?'}));
   await screen.findByText('This helps describe your own work.'); expect(input).toHaveValue('I built the screens'); expect(screen.getByText(/Current topic:/)).toHaveTextContent('ShopTrack');
   expect(vi.mocked(cvApi.sendMessage).mock.calls[0][1]).toMatchObject({text:'Why are you asking this question?'});
@@ -139,7 +139,7 @@ describe('saved CV conversation', () => {
   expect(await screen.findByText('First saved message.')).toBeVisible(); expect(screen.getByText('Recent explanation.')).toBeVisible();
   expect(cvApi.conversation).toHaveBeenCalledWith('chat-one','synthetic-session',expect.any(AbortSignal),20);
   fireEvent.click(screen.getByRole('button',{name:'Previous conversation'})); await screen.findByText('Earlier segment.');
-  expect(screen.queryByRole('button',{name:'Save change'})).not.toBeInTheDocument(); expect(screen.queryByRole('textbox',{name:'Message Coachify'})).not.toBeInTheDocument(); expect(screen.getByRole('button',{name:'Return to current conversation'})).toBeEnabled();
+  expect(screen.queryByRole('button',{name:'Save change'})).not.toBeInTheDocument(); expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument(); expect(screen.getByRole('button',{name:'Return to current conversation'})).toBeEnabled();
  });
  it('lets users finish a proposal in a full current segment before continuing',async()=>{
   const proposal=action();vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({read_only:true,messages:[message('m1','Review this final change.',[proposal])]}));vi.mocked(cvApi.conversationAction).mockResolvedValue(conversation({read_only:true,revision:2,messages:[message('m1','Review this final change.',[{...proposal,status:'cancelled'}])]}));
@@ -179,7 +179,7 @@ describe('saved CV conversation', () => {
   });
   const options=props();render(<CvConversationPanel {...options}/>);fireEvent.click(await screen.findByRole('button',{name:'Show earlier messages'}));
   await screen.findByText('Processing',{selector:'.cv-chat-action-status'});
-  const input=screen.getByRole('textbox',{name:'Message Coachify'});fireEvent.change(input,{target:{value:'My next answer stays here.'}});
+  const input=screen.getByRole('textbox',{name:'Message elo'});fireEvent.change(input,{target:{value:'My next answer stays here.'}});
   await waitFor(()=>expect(screen.getByText(label,{selector:'.cv-chat-action-status'})).toBeVisible(),{timeout:2500});
   expect(screen.queryByText('Processing',{selector:'.cv-chat-action-status'})).not.toBeInTheDocument();expect(input).toHaveValue('My next answer stays here.');
   if(status==='saved')expect(options.onChanged).toHaveBeenCalled();else expect(screen.getByRole('button',{name:'Retry this action'})).toBeEnabled();
@@ -205,7 +205,7 @@ describe('saved CV conversation', () => {
   vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({messages:[message('m81','Current correction.',[proposal])],next_before:81}));
   vi.mocked(cvApi.conversation).mockImplementation(async(_id,_token,_signal,cursor)=>cursor===81?new Promise(resolve=>finish=resolve):conversation({revision:3,messages:[message('m81','Current correction.',[{...proposal,status:'saved'}])],next_before:81}));
   render(<CvConversationPanel {...props()}/>);fireEvent.click(await screen.findByRole('button',{name:'Show earlier messages'}));
-  const input=screen.getByRole('textbox',{name:'Message Coachify'});fireEvent.change(input,{target:{value:'An unsent explanation.'}});fireEvent(window,new Event('focus'));
+  const input=screen.getByRole('textbox',{name:'Message elo'});fireEvent.change(input,{target:{value:'An unsent explanation.'}});fireEvent(window,new Event('focus'));
   await screen.findByText('Saved',{selector:'.cv-chat-action-status'});
   await act(async()=>finish(conversation({messages:[message('m41','Earlier page.'),message('m81','Current correction.',[proposal])],next_before:41})));
   expect(screen.queryByRole('button',{name:'Save change'})).not.toBeInTheDocument();expect(screen.getByText('Saved',{selector:'.cv-chat-action-status'})).toBeVisible();expect(input).toHaveValue('An unsent explanation.');
@@ -220,13 +220,13 @@ describe('saved CV conversation', () => {
  });
  it('preserves multiline composition and rejects over-limit messages without truncating the draft',async()=>{
   vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({limits:{max_message_chars:20,max_messages:500}}));
-  render(<CvConversationPanel {...props()}/>); const input=await screen.findByRole('textbox',{name:'Message Coachify'}); await waitFor(()=>expect(input).toBeEnabled());
+  render(<CvConversationPanel {...props()}/>); const input=await screen.findByRole('textbox',{name:'Message elo'}); await waitFor(()=>expect(input).toBeEnabled());
   fireEvent.change(input,{target:{value:'A complete explanation longer than twenty characters'}}); fireEvent.keyDown(input,{key:'Enter',shiftKey:true});
   expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled(); expect(input).toHaveValue('A complete explanation longer than twenty characters'); expect(cvApi.sendMessage).not.toHaveBeenCalled();
  });
  it('aborts the old conversation and ignores its late result on a CV change',async()=>{
   let finish!:(value:CvConversation)=>void; vi.mocked(cvApi.sendMessage).mockImplementation(()=>new Promise(resolve=>finish=resolve));
-  const options=props(), view=render(<CvConversationPanel key="cv-one" {...options}/>); const input=await screen.findByRole('textbox',{name:'Message Coachify'}); await waitFor(()=>expect(input).toBeEnabled());
+  const options=props(), view=render(<CvConversationPanel key="cv-one" {...options}/>); const input=await screen.findByRole('textbox',{name:'Message elo'}); await waitFor(()=>expect(input).toBeEnabled());
   fireEvent.change(input,{target:{value:'Private source one'}}); fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({id:'chat-two',cv_id:'cv-two',messages:[message('m1','Source two conversation.')]}));
   view.rerender(<CvConversationPanel key="cv-two" {...options} cvId="cv-two" detail={savedCv('cv-two')}/>); await screen.findByText('Source two conversation.');

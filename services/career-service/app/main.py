@@ -81,7 +81,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
         db = database
         if db is None and os.getenv('MONGODB_URI'):
             mongo = MongoClient(os.environ['MONGODB_URI'], tz_aware=True, serverSelectionTimeoutMS=5000)
-            db = mongo[os.getenv('MONGODB_DATABASE','coachify_career')]
+            db = mongo[os.getenv('MONGODB_DATABASE','elo_career')]
         app.state.goal_store = GoalStore(db) if db is not None else None
         app.state.review_store = review_store if review_store is not None else ReviewStore(db) if db is not None else None
         app.state.research_store = ResearchStore(db) if db is not None else None
@@ -132,9 +132,11 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 app.state.profile_client = client
                 yield
 
-    app = FastAPI(title='Coachify Career API', version='0.2.0', lifespan=lifespan,
+    app = FastAPI(title='elo Career API', version='0.2.0', lifespan=lifespan,
         description='One automatically saved career workspace per account. Validated job identity enables concurrent JD extraction and public research, with observed progress and scoped chat. Exploration follows a separate graph.')
     app.add_middleware(BodyLimit)
+    from app.api.v1.assessment_input import router as assessment_input_router
+    app.include_router(assessment_input_router)
     app.include_router(discovery_router)
     app.include_router(opportunity_router)
     app.include_router(workspace_router)
@@ -169,7 +171,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                   'provider_schema':'Gemini rejected the structured-output schema. Check provider_error.fields; your saved goal is unchanged.',
                   'provider_parameter':'Gemini rejected a model request parameter. Check provider_error.fields; your saved goal is unchanged.',
                   'provider_access':'Google project access, API enablement, billing or regional availability needs checking. Your saved goal is unchanged.',
-                  'model_unavailable':'The configured AI model is not available to this provider account. Check GEMINI_REASONING_MODEL access for CAREER_LLM_API_KEY and recreate the Career service.',
+                  'model_unavailable':'The configured AI model is not available to this provider account. Check CAREER_LLM_MODEL access for CAREER_LLM_API_KEY and recreate the Career service.',
                   'invalid_output':'The AI returned an invalid structured response. Your saved progress is unchanged; retry your message.',
                   'timeout':'The AI did not finish within the time limit. Your inputs and saved progress are unchanged; retry the request.',
                   'incomplete_output':'The AI response ended before it was complete, possibly at its output limit. No incomplete result was saved; retry the request.',

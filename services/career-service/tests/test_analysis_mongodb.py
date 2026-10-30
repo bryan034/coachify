@@ -15,7 +15,7 @@ def database():
     uri = os.getenv('MONGODB_TEST_URI')
     if not uri: pytest.skip('Set MONGODB_TEST_URI to a disposable MongoDB.')
     client = MongoClient(uri, serverSelectionTimeoutMS=3000)
-    name = 'coachify_analysis_test_' + uuid4().hex
+    name = 'elo_analysis_test_' + uuid4().hex
     database = client[name]
     try:
         client.admin.command('ping')

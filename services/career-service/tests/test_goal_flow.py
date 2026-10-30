@@ -58,7 +58,7 @@ class FakeCV:
 def flow():
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri: pytest.skip('Set MONGODB_TEST_URI for disposable MongoDB flow tests.')
-    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000); name='coachify_goals_test_'+uuid4().hex
+    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000); name='elo_goals_test_'+uuid4().hex
     def profile(req):
         owner=OTHER if req.headers.get('Authorization')=='Bearer other' else OWNER
         return httpx.Response(200,json={'id':owner,'email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})

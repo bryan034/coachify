@@ -1,0 +1,394 @@
+{
+  "$defs": {
+    "Component": {
+      "additionalProperties": false,
+      "properties": {
+        "dimension": {
+          "enum": [
+            "capability",
+            "proficiency",
+            "duration",
+            "independence",
+            "qualification",
+            "eligibility",
+            "other"
+          ],
+          "title": "Dimension",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "supported",
+            "uncertain",
+            "confirmed_shortfall"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "explanation": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "limitation_quote": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limitation Quote"
+        },
+        "support_quote": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Support Quote"
+        }
+      },
+      "required": [
+        "dimension",
+        "status",
+        "explanation",
+        "evidence_refs"
+      ],
+      "title": "Component",
+      "type": "object"
+    },
+    "InputVersions": {
+      "additionalProperties": false,
+      "properties": {
+        "as_of_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "As Of Date"
+        },
+        "cv_id": {
+          "title": "Cv Id",
+          "type": "string"
+        },
+        "cv_version": {
+          "title": "Cv Version",
+          "type": "integer"
+        },
+        "extraction_version": {
+          "title": "Extraction Version",
+          "type": "integer"
+        },
+        "effective_version": {
+          "title": "Effective Version",
+          "type": "integer"
+        },
+        "cv_selection_version": {
+          "title": "Cv Selection Version",
+          "type": "integer"
+        },
+        "declarations_version": {
+          "title": "Declarations Version",
+          "type": "integer"
+        },
+        "profile_version": {
+          "title": "Profile Version",
+          "type": "integer"
+        },
+        "goal_id": {
+          "title": "Goal Id",
+          "type": "string"
+        },
+        "goal_version": {
+          "title": "Goal Version",
+          "type": "integer"
+        },
+        "goal_selection_version": {
+          "title": "Goal Selection Version",
+          "type": "integer"
+        },
+        "research_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Research Id"
+        },
+        "research_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Research Version"
+        },
+        "research_coverage": {
+          "enum": [
+            "available",
+            "no_findings",
+            "unavailable",
+            "stale",
+            "partial"
+          ],
+          "title": "Research Coverage",
+          "type": "string"
+        },
+        "registry_version": {
+          "title": "Registry Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cv_id",
+        "cv_version",
+        "extraction_version",
+        "effective_version",
+        "cv_selection_version",
+        "declarations_version",
+        "profile_version",
+        "goal_id",
+        "goal_version",
+        "goal_selection_version",
+        "research_id",
+        "research_version",
+        "research_coverage",
+        "registry_version"
+      ],
+      "title": "InputVersions",
+      "type": "object"
+    },
+    "Outcome": {
+      "additionalProperties": true,
+      "properties": {
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "job_skill",
+            "interview_preparation",
+            "constraint"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "match_status": {
+          "enum": [
+            "supported",
+            "partial",
+            "uncertain",
+            "confirmed_shortfall"
+          ],
+          "title": "Match Status",
+          "type": "string"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "recommendation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Recommendation"
+        },
+        "mapping_method": {
+          "enum": [
+            "canonical",
+            "semantic",
+            "unresolved"
+          ],
+          "title": "Mapping Method",
+          "type": "string"
+        },
+        "mapping_reason": {
+          "title": "Mapping Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "kind",
+        "name",
+        "match_status",
+        "components",
+        "recommendation",
+        "mapping_method",
+        "mapping_reason"
+      ],
+      "title": "Outcome",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "assessment-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "request_hash": {
+      "title": "Request Hash",
+      "type": "string"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "inputs": {
+      "$ref": "#/$defs/InputVersions"
+    },
+    "input_hash": {
+      "title": "Input Hash",
+      "type": "string"
+    },
+    "source_snapshot": {
+      "additionalProperties": true,
+      "title": "Source Snapshot",
+      "type": "object"
+    },
+    "evidence": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Evidence",
+      "type": "object"
+    },
+    "target_type": {
+      "enum": [
+        "specific_job",
+        "career_exploration"
+      ],
+      "title": "Target Type",
+      "type": "string"
+    },
+    "role": {
+      "title": "Role",
+      "type": "string"
+    },
+    "job_skill_gaps": {
+      "items": {
+        "$ref": "#/$defs/Outcome"
+      },
+      "title": "Job Skill Gaps",
+      "type": "array"
+    },
+    "interview_prep_gaps": {
+      "items": {
+        "$ref": "#/$defs/Outcome"
+      },
+      "title": "Interview Prep Gaps",
+      "type": "array"
+    },
+    "constraints": {
+      "items": {
+        "$ref": "#/$defs/Outcome"
+      },
+      "title": "Constraints",
+      "type": "array"
+    },
+    "groups": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Groups",
+      "type": "array"
+    },
+    "priorities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Priorities",
+      "type": "array"
+    },
+    "analysis_status": {
+      "enum": [
+        "succeeded",
+        "partial"
+      ],
+      "title": "Analysis Status",
+      "type": "string"
+    },
+    "research_coverage": {
+      "enum": [
+        "available",
+        "no_findings",
+        "unavailable",
+        "stale",
+        "partial"
+      ],
+      "title": "Research Coverage",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "request_hash",
+    "created_at",
+    "inputs",
+    "input_hash",
+    "source_snapshot",
+    "evidence",
+    "target_type",
+    "role",
+    "job_skill_gaps",
+    "interview_prep_gaps",
+    "constraints",
+    "groups",
+    "priorities",
+    "analysis_status",
+    "research_coverage"
+  ],
+  "title": "Result",
+  "type": "object"
+}

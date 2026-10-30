@@ -1,8 +1,8 @@
 {
-  "name": "coachify",
+  "name": "elo",
   "version": "0.0.0",
   "private": true,
-  "description": "Structure-only Coachify monorepo; no application implementation yet.",
+  "description": "Structure-only elo monorepo; no application implementation yet.",
   "workspaces": [
     "apps/frontend"
   ]

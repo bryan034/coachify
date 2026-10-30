@@ -2,7 +2,7 @@ import {careerFixture} from './career-fixture';
 import {test,expect,type Page} from '@playwright/test';
 async function workspace(page:Page){
  let sessionChecks=0;
- await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
@@ -109,7 +109,7 @@ test('reopening a pending JD reconnects and reaches the saved goal without a 409
  complete=true;
  await expect(page.getByRole('log')).toContainText('Let’s look at Analyst');
  await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
- await expect(page.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  await page.getByRole('button',{name:'← Career Goal',exact:true}).click();
  await expect(page).toHaveURL(/\/career-goal$/);
  await expect(page.getByRole('heading',{name:'Analyst',exact:true})).toBeVisible();
@@ -130,7 +130,7 @@ test('one exploration conversation chooses a role without a confirmation step',a
   if(path.endsWith('/messages')){turns++;const input=route.request().postDataJSON();draft.version++;draft.context_complete=true;draft.next_question=null;draft.suggestions=[{role:'Analyst',field:'Data',rationale:'Based on your interests.',uncertainty:'Capabilities need review.'}];draft.turns.push({answer:{value:input.answer},reply:'Analytics is a direction to explore.'});return route.fulfill({json:careerFixture(route.request().url(),draft)});}
   return route.fulfill({json:careerFixture(route.request().url(),draft)});
  });
- await page.goto('/career-goal/chat');await page.getByRole('checkbox',{name:/Allow Coachify/}).check();await page.getByRole('textbox',{name:'Message Coachify'}).fill('I enjoy working with data');await page.getByRole('button',{name:'Send message'}).click();
+ await page.goto('/career-goal/chat');await page.getByRole('checkbox',{name:/Allow elo/}).check();await page.getByRole('textbox',{name:'Message elo'}).fill('I enjoy working with data');await page.getByRole('button',{name:'Send message'}).click();
  await page.getByRole('button',{name:'Explore this direction'}).click();
  await expect(page.getByRole('log')).toContainText('Let’s look at Analyst');
  await expect(page.getByRole('button',{name:/Confirm.*goal/})).toHaveCount(0);
@@ -192,8 +192,8 @@ test('JD extraction stays in chat with observed progress, typed summaries and sa
  await expect(page.getByRole('heading',{name:'Your career goal',exact:true})).toBeVisible();
  expect(await page.locator('.agent-reply[aria-busy="true"]').count()).toBeGreaterThan(0);
  await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
- await expect(page.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
- await page.getByRole('textbox',{name:'Message Coachify'}).fill('Which skills are needed for this goal?');
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ await page.getByRole('textbox',{name:'Message elo'}).fill('Which skills are needed for this goal?');
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole('log')).toContainText('SQL is required for the saved Analyst goal.');
  await page.screenshot({path:test.info().outputPath('jd-chat-summary-mobile.png'),fullPage:true});

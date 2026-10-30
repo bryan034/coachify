@@ -27,7 +27,7 @@ def setup(monkeypatch):
     monkeypatch.setenv('APP_ENV', 'development')
     monkeypatch.setenv('AUTH_MODE', 'local_test')
     mongo = MongoClient(os.environ['MONGODB_TEST_URI'], serverSelectionTimeoutMS=5000)
-    database = mongo['coachify_accounts_test_' + uuid4().hex]
+    database = mongo['elo_accounts_test_' + uuid4().hex]
     accounts = AccountRepository(database, CaptureMailer())
     with TestClient(create_app(ProfileRepository(database), accounts)) as client:
         yield client, accounts
@@ -119,11 +119,29 @@ def test_cancelled_superseded_out_of_order_and_changed_retries(setup):
     assert client.post(BASE + '/auth/complete', json=body).status_code == 409
 
 
-def test_unknown_local_login_does_not_create_an_account(setup):
+@pytest.mark.parametrize('mode', ['local_test', 'email', 'google'])
+def test_unknown_email_login_directs_to_registration_without_creating_an_account(setup, mode):
+    from dataclasses import replace
     client, repo = setup
+    client.app.state.auth_settings = replace(client.app.state.auth_settings, mode=mode)
     attempt = begin(client, 'login')
-    assert complete(client, attempt, account_id='missing')[0].status_code == 401
+    response, _ = complete(client, attempt, email='new@example.test')
+    assert response.status_code == 404
+    assert response.json()['detail'] == 'No account was found for this email address. Create a new account to get started.'
     assert repo.accounts.count_documents({}) == 0
+    assert repo.sessions.count_documents({}) == 0
+    assert repo.mailer.messages == []
+
+
+@pytest.mark.parametrize('password', ['Test1234', 'x' * 128])
+def test_registration_and_sign_in_accept_password_length_boundaries(setup, password):
+    client, repo = setup
+    response, body = complete(client, begin(client), password=password)
+    assert response.status_code == 200, response.text
+    assert response.json()['email_verified'] is True
+    login, _ = complete(client, begin(client, 'login'), email=body['email'], password=password)
+    assert login.status_code == 200 and login.json()['id'] == response.json()['id']
+    assert repo.accounts.count_documents({}) == 1
 
 
 def test_expiry_and_direct_google_bearer_rejected(setup):
@@ -420,8 +438,10 @@ def test_email_case_normalization_password_check_and_no_duplicate_registration(s
     assert response.json()['email']=='case.test@example.test'
     wrong,_=complete(client,begin(client,'login'),email='CASE.TEST@example.test',password='A different passphrase')
     unknown,_=complete(client,begin(client,'login'),email='unknown@example.test',password=PASSWORD)
-    assert wrong.status_code==unknown.status_code==401
-    assert wrong.json()==unknown.json()
+    assert wrong.status_code==401
+    assert wrong.json()['detail']=='Email or password is incorrect.'
+    assert unknown.status_code==404
+    assert 'No account was found for this email address' in unknown.json()['detail']
     good,_=complete(client,begin(client,'login'),email='CASE.TEST@example.test',password=PASSWORD)
     assert good.json()['id']==response.json()['id']
     duplicate,_=complete(client,begin(client),email='case.test@example.test',password='A different passphrase')
@@ -467,7 +487,8 @@ def test_pending_registration_retries_keep_one_candidate_and_cannot_change_crede
     assert repo.flows.find_one({'_id': flow['_id']})['registration_candidate'] == flow['registration_candidate']
     assert repo.accounts.count_documents({}) == 0
     login, _ = complete(client, begin(client, 'login'), email=body['email'])
-    assert login.status_code == 401
+    # An unverified registration candidate has not created an account yet.
+    assert login.status_code == 404
     assert client.post(BASE + '/auth/verify-email', json=proof).status_code == 200
 
 
@@ -709,7 +730,7 @@ def test_password_attempt_rate_limit_is_enforced_without_account_creation(setup)
     email='limited@example.test'
     for _ in range(10):
         response,_=complete(client,begin(client,'login'),email=email,password=PASSWORD)
-        assert response.status_code==401
+        assert response.status_code==404
     assert complete(client,begin(client,'login'),email=email,password=PASSWORD)[0].status_code==429
     assert repo.accounts.count_documents({})==0
 

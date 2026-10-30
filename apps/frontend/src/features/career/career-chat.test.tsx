@@ -65,7 +65,7 @@ describe('single career conversation',()=>{
   expect(screen.queryByText('Previous conversations')).toBeNull();
  });
  it('sends session/version and bounded turns without resending raw JD',async()=>{
-  await chat();fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'How should I prepare?'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  await chat();fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'How should I prepare?'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   await screen.findByText('Practise Python for the reported coding exercise.');
   const body=JSON.parse(vi.mocked(careerApi).mock.calls.find(v=>v[0]==='/workspace/messages')![2]!.body as string);
   expect(body).toMatchObject({session_id:active.session_id,expected_version:1});expect(body).not.toHaveProperty('context');expect(body).not.toHaveProperty('text');
@@ -73,7 +73,7 @@ describe('single career conversation',()=>{
  it('holds the initial response and composer while interview research waits',async()=>{
   active={...active,phase:'waiting_quota',research_id:null,retry_after:60};mount();
   await screen.findByText('Waiting for the research service to resume');
-  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
   expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
   expect(screen.queryByText(/Let’s look at Engineer/)).toBeNull();
   expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
@@ -89,7 +89,7 @@ describe('single career conversation',()=>{
    }
    return original(path,token,options);
   });
-  const box=screen.getByRole('textbox',{name:'Message Coachify'});
+  const box=screen.getByRole('textbox',{name:'Message elo'});
   fireEvent.change(box,{target:{value:'Change my goal'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   await screen.findByText('Which detail would you like to change: role, location or a skill?');
   followup=true;fireEvent.change(box,{target:{value:'Change the location to London'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
@@ -99,7 +99,7 @@ describe('single career conversation',()=>{
   expect(api.mock.calls.filter(c=>c[0]==='/workspace/review')).toHaveLength(0);
  });
  it('reuses the same message key after a failed conversational edit',async()=>{
-  failChat=true;await chat();const box=screen.getByRole('textbox',{name:'Message Coachify'});
+  failChat=true;await chat();const box=screen.getByRole('textbox',{name:'Message elo'});
   fireEvent.change(box,{target:{value:'Change my company to Example'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   await screen.findByRole('button',{name:'Retry'});
   expect(box).toHaveValue('Change my company to Example');
@@ -112,12 +112,12 @@ describe('single career conversation',()=>{
   active=empty;search.set('source','jd');mount();await screen.findByText(/No job description is available/);expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
  });
  it('starts separate exploration without a session chooser or goal confirmation',async()=>{
-  active=empty;mount();await screen.findByText(/Hi, I’m your career agent/);fireEvent.click(screen.getByRole('checkbox',{name:/Allow Coachify/}));fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'I enjoy data'}});await waitFor(()=>expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('What appeals to you about data?');expect(screen.queryByText('Previous conversations')).toBeNull();
+  active=empty;mount();await screen.findByText(/Hi, I’m your career agent/);fireEvent.click(screen.getByRole('checkbox',{name:/Allow elo/}));fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'I enjoy data'}});await waitFor(()=>expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('What appeals to you about data?');expect(screen.queryByText('Previous conversations')).toBeNull();
  });
  it('keeps a pending-context goal current and explains that its requirements need review',async()=>{
   active.current.goal!.requirements_need_review=true;await chat();
   expect(screen.getByRole('log')).toHaveTextContent('The role context changed');
-  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Which requirements need review?'}});
+  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'Which requirements need review?'}});
   expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled();
   expect(screen.queryByRole('button',{name:/Confirm.*goal/})).toBeNull();
  });
@@ -153,7 +153,7 @@ it('counts down a per-user token wait and retains the unsent message',async()=>{
   if(path==='/workspace/messages')throw Object.assign(new Error('The AI provider quota was reached. Retry after 3 seconds.'),{code:'rate_limited',retryAt:Date.now()+3000});
   return original(path,token,options);
  });
- const box=screen.getByRole('textbox',{name:'Message Coachify'});
+ const box=screen.getByRole('textbox',{name:'Message elo'});
  fireEvent.change(box,{target:{value:'Explain Python'}});
  vi.useFakeTimers();
  try{
@@ -182,7 +182,7 @@ it('shows activity inside the pending reply and replaces it with formatted outpu
  let resolve!:(value:never)=>void;
  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
  api.mockImplementation((path,token,options)=>path==='/workspace/messages'?new Promise(done=>{resolve=done;}):original(path,token,options));
- fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Explain SQL'}});
+ fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'Explain SQL'}});
  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
  const status=screen.getByRole('status');
  expect(screen.getByRole('log')).toContainElement(status);
@@ -301,14 +301,14 @@ it('keeps a chat turn pending and delivers the reply automatically when its quot
  });
  vi.useFakeTimers();
  try{
-  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Explain Python'}});
+  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'Explain Python'}});
   await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Send message'}));});
   expect(screen.getByRole('status')).toHaveTextContent('Resuming automatically in 2 seconds');
   expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
   expect(screen.queryByRole('button',{name:'Retry'})).toBeNull();
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
   expect(screen.getByRole('log')).toHaveTextContent('Automatic reply');
-  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toHaveValue('');
+  expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('');
   expect(api.mock.calls.filter(c=>c[0]==='/workspace/messages')).toHaveLength(1);
  }finally{vi.useRealTimers();}
 });
@@ -325,7 +325,7 @@ it('keeps schema correction details in the operation response and displays the r
  });
  vi.useFakeTimers();
  try{
-  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Explain Python'}});
+  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'Explain Python'}});
   await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Send message'}));});
   expect(screen.getByRole('status')).toHaveTextContent('Refining the response');
   expect(screen.queryByRole('alert')).toBeNull();expect(screen.queryByRole('button',{name:'Retry'})).toBeNull();
@@ -341,7 +341,7 @@ it('keeps schema correction details in the operation response and displays the r
 it('restores the latest guided edit question from the saved workspace',async()=>{
  active={...active,edit_question:'Which city or country should the job be based in?'};
  await chat();expect(screen.getByRole('log')).toHaveTextContent('Which city or country should the job be based in?');
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  expect(screen.queryByRole('button',{name:'Edit career goal'})).toBeNull();
 });
 
@@ -371,7 +371,7 @@ it('shows observed research steps during JD extraction without exposing provider
   expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Searching for relevant interview experiences');
   expect(screen.getByRole('log')).not.toHaveTextContent(/Brave|API/);
   await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
-  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
   expect(replace).not.toHaveBeenCalledWith('/career-goal');
   expect(screen.queryByRole('status',{name:'Career goal progress'})).toBeNull();
  }finally{view?.unmount();vi.useRealTimers();}
@@ -393,7 +393,7 @@ it('publishes no initial JD text until the completed research snapshot arrives, 
   expect(goal).toBe(research);
   expect(goal).toHaveTextContent('Build backend services');
   expect(goal).toHaveTextContent('Technical interview');
-  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  }finally{view?.unmount();vi.useRealTimers();}
 });
 
@@ -417,7 +417,7 @@ it('does not publish a failed historical research record even if an older worksp
  await screen.findByRole('button',{name:'Resume research'});
  expect(screen.queryByRole('heading',{name:'Your career goal'})).toBeNull();
  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
 });
 
 
@@ -427,7 +427,7 @@ it.each(['research_failed','expired'])('keeps saved goal details readable after 
  await waitFor(()=>expect(details).toBeEnabled());fireEvent.click(details);
  expect(screen.getByRole('heading',{name:/^Engineer$/})).toBeVisible();
  expect(screen.getByText('Research is incomplete. Your saved goal details remain available.')).toBeVisible();
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
  expect(screen.queryByText('PRIVATE provider diagnostic')).toBeNull();
 });
@@ -451,12 +451,12 @@ it('waits for the generated overview and sends its exact saved snapshot',async()
  });
  mount();await screen.findByText('Preparing your career-goal summary…');
  expect(screen.queryByText(/Let’s look at Engineer/)).toBeNull();
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
  const call=api.mock.calls.find(([path])=>path==='/workspace/summary')!;
  expect(JSON.parse(call[2]!.body as string)).toEqual({session_id:active.session_id,expected_version:1,research_id:active.research_id});
  await act(async()=>complete());
  await screen.findByText(/Let’s look at Engineer/);
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  expect(screen.queryByText('Preparing your career-goal summary…')).toBeNull();
 });
 
@@ -484,13 +484,13 @@ it('removes focused research progress when the cited follow-up answer arrives',a
  });
  vi.useFakeTimers();
  try{
-  fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Find the internship location'}});
+  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'Find the internship location'}});
   await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Send message'})));
   expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Searching public sources');
   await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
   expect(screen.getByRole('log')).toHaveTextContent('The internship is in Singapore');
   expect(screen.queryByRole('status',{name:'Career goal progress'})).toBeNull();
-  expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  }finally{vi.useRealTimers();}
 });
 
@@ -509,7 +509,7 @@ it('loads saved research before automatically summarising without flashing Resum
  expect(api.mock.calls.filter(([path])=>path==='/workspace/summary')).toHaveLength(1);
  expect(api.mock.calls.some(([path])=>path==='/workspace/retry')).toBe(false);
  expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
 });
 
 it('summarises saved results when research finished with partial coverage',async()=>{
@@ -519,7 +519,7 @@ it('summarises saved results when research finished with partial coverage',async
  expect(screen.getByRole('log')).toHaveTextContent('Technical interview');
  expect(screen.getByRole('log')).toHaveTextContent('Ask me anything about this goal set!');
  expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/retry')).toBe(false);
 });
 
@@ -572,7 +572,7 @@ it('clears extracted-goal messages immediately and keeps the next draft after a 
  let resolve!:(value:never)=>void;
  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
  api.mockImplementation((path,token,options)=>path==='/workspace/messages'?new Promise(done=>{resolve=done;}):original(path,token,options));
- const box=screen.getByRole('textbox',{name:'Message Coachify'});
+ const box=screen.getByRole('textbox',{name:'Message elo'});
  fireEvent.change(box,{target:{value:'Explain SQL'}});
  fireEvent.keyDown(box,{key:'Enter'});
  expect(box).toHaveValue('');expect(box).toBeEnabled();
@@ -589,7 +589,7 @@ it('retries a failed extracted-goal message without replacing the next draft',as
  let reject!:(error:Error)=>void;
  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
  api.mockImplementation((path,token,options)=>path==='/workspace/messages'?new Promise((_done,no)=>{reject=no;}):original(path,token,options));
- const box=screen.getByRole('textbox',{name:'Message Coachify'});
+ const box=screen.getByRole('textbox',{name:'Message elo'});
  fireEvent.change(box,{target:{value:'Explain SQL'}});
  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
  expect(box).toHaveValue('');

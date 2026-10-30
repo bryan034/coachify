@@ -1,7 +1,7 @@
 """Fixed Career Discovery copy; opening a chat requires no model generation."""
 
 LEGACY_INTRODUCTION = (
-    "Hi, I’m Coachify’s Career Discovery assistant. This chat helps you choose a career "
+    "Hi, I’m elo’s Career Discovery assistant. This chat helps you choose a career "
     "direction and build a recommended skill set backed by research.\n\n"
     "To start, tell me a field or role you’re interested in, or describe the kind of work "
     "you enjoy. You can keep it broad—no CV, specific vacancy or specialisation is required.\n\n"

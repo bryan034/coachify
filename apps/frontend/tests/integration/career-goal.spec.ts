@@ -5,7 +5,7 @@ test('Career previews validate real sessions, read a document and discard source
  await page.getByRole('button',{name:'Employed',exact:true}).click();
  await fillCurrentEmployment(page);
  await page.getByRole('button',{name:'No applicable previous education'}).click();
- await page.getByRole('button',{name:'Enter Coachify',exact:true}).click();
+ await page.getByRole('button',{name:'Enter elo',exact:true}).click();
  await expect(page).toHaveURL(/\/dashboard$/);
  await page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true}).click();
  await page.getByRole('tab',{name:'Upload document'}).click();
@@ -26,7 +26,7 @@ test('Career previews validate real sessions, read a document and discard source
  const failedOperation=await failure;
  expect(await failedOperation.json()).toMatchObject({code:'not_configured'});
  await expect(page.getByRole('log').getByRole('alert')).toContainText('AI is disabled');
- await expect(page.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeEnabled();
  const goals=await account.get('/api/v1/career/goals');
  expect(goals.ok()).toBe(true);
@@ -39,7 +39,7 @@ test('Career goal confirmation persists through the real gateway and owner datab
  const account=await createLocalAccount(page,'Synthetic Goal user');
  await page.getByRole('button',{name:'Employed',exact:true}).click();await fillCurrentEmployment(page);
  await page.getByRole('button',{name:'No applicable previous education'}).click();
- await page.getByRole('button',{name:'Enter Coachify',exact:true}).click();
+ await page.getByRole('button',{name:'Enter elo',exact:true}).click();
  await page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true}).click();
  await page.getByRole('button',{name:'Explore careers'}).click();
  await expect(page).toHaveURL(/\/career-goal\/discovery$/);

@@ -29,7 +29,7 @@ class AISettings(BaseModel):
         if p.scheme != 'https' or not p.hostname or p.username or p.password or p.query or p.fragment:
             raise ValueError('The model API base URL must use HTTPS without credentials/query.')
         if self.enabled and (not self.model.strip() or not self.api_key.get_secret_value().strip()):
-            raise ValueError('Enabled AI requires GEMINI_REASONING_MODEL and CAREER_LLM_API_KEY.')
+            raise ValueError('Enabled AI requires CAREER_LLM_MODEL and CAREER_LLM_API_KEY.')
         return self
 
     @classmethod
@@ -38,11 +38,11 @@ class AISettings(BaseModel):
         # An explicitly empty canonical key overrides the deprecated alias.
         key=os.getenv('CAREER_LLM_API_KEY',os.getenv('GEMINI_API_KEY','')).strip()
         values={'api_key':key,'enabled':os.getenv('AI_ENABLED','true' if key else 'false'),
-                'model':os.getenv('GEMINI_REASONING_MODEL',REASONING_MODEL).strip()}
+                'model':os.getenv('CAREER_LLM_MODEL',REASONING_MODEL).strip()}
         for field in ('timeout_seconds','retries','max_output_tokens','context_tokens'):
             if 'AI_'+field.upper() in os.environ:values[field]=os.environ['AI_'+field.upper()]
         try:return cls(**values)
-        except ValueError:raise ValueError('Invalid server Gemini configuration. Check AI_ENABLED, CAREER_LLM_API_KEY, GEMINI_REASONING_MODEL and AI task limits.') from None
+        except ValueError:raise ValueError('Invalid server Gemini configuration. Check AI_ENABLED, CAREER_LLM_API_KEY, CAREER_LLM_MODEL and AI task limits.') from None
 
 
 class GeminiSettings(AISettings):

@@ -22,7 +22,7 @@ MAX_SEGMENTS = 100
 LEASE_SECONDS = 90
 
 
-def key(value): return str(uuid5(NAMESPACE_URL, 'coachify-cv-chat:' + value))
+def key(value): return str(uuid5(NAMESPACE_URL, 'elo-cv-chat:' + value))
 
 
 def at_capacity(document):

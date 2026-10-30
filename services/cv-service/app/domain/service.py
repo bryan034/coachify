@@ -80,7 +80,7 @@ class CvService:
         fingerprint = digest({'name': name, 'file_type': file_type, 'hash': source_hash,
                               'cv_id': cv_id, 'expected_version': expected_version})
         previous = None if cv_id else self.repository.by_upload_key(owner, mutation_id)
-        identifier = cv_id or (previous['_id'] if previous else str(uuid5(NAMESPACE_URL, 'coachify:cv:' + owner + ':' + mutation_id)))
+        identifier = cv_id or (previous['_id'] if previous else str(uuid5(NAMESPACE_URL, 'elo:cv:' + owner + ':' + mutation_id)))
         with self.files.lock(identifier):
             self.capacity.recover_one(identifier)
             try:

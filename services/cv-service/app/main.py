@@ -57,7 +57,7 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
                 if not uri: raise RuntimeError('Set MONGODB_URI before starting the CV service.')
                 client = MongoClient(uri, serverSelectionTimeoutMS=5000)
                 stack.callback(client.close)
-                app.state.repository = CvRepository(client[os.getenv('MONGODB_DATABASE', 'coachify_cv')])
+                app.state.repository = CvRepository(client[os.getenv('MONGODB_DATABASE', 'elo_cv')])
             else: app.state.repository = repository
             app.state.profile_client = profile_client or await stack.enter_async_context(httpx.AsyncClient(
                 base_url=os.getenv('PROFILE_SERVICE_URL', 'http://profile-service:8000'), timeout=5,
@@ -85,7 +85,7 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
                     task.cancel()
                     with suppress(asyncio.CancelledError): await task
 
-    app = FastAPI(title='Coachify CV API', version='0.1.0', lifespan=lifespan,
+    app = FastAPI(title='elo CV API', version='0.1.0', lifespan=lifespan,
                   description='C01–C09 saved CV upload, review, source corrections, clarification and explicit versioned selection.')
     app.add_middleware(BodyLimit, maximum=settings.max_file_bytes)
     app.include_router(conversation_router)

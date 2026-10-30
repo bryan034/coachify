@@ -1,4 +1,4 @@
-# Coachify — MVP microservice architecture and API catalogue
+# elo — MVP microservice architecture and API catalogue
 
 Proposed design based on the agreed user stories, including personal-contribution clarification, student-edited roadmaps, persistent dashboards, and scheduled adaptation. This is a design specification; these APIs have not been implemented.
 
@@ -77,7 +77,7 @@ Planning constraints belong to a roadmap rather than a global student profile. T
 
 - Browser APIs below have the common prefix `/api/v1` and are exposed through the gateway.
 - `/internal/v1` APIs are private service-to-service routes and are never forwarded by the public gateway.
-- Students authenticate through the managed identity provider. Coachify does not implement its own password or token issuance endpoints in this design.
+- Students authenticate through the managed identity provider. elo does not implement its own password or token issuance endpoints in this design.
 - All services enforce resource ownership. Internal services use scoped service identities and explicit owner context; they do not trust an arbitrary browser-supplied student ID.
 - Standard writes return 200/201 or 204. Slow extraction, assessment, and generation return 202 with an operation ID and status URL.
 - Browser calls never contain the LLM provider secret. The CV, career, and roadmap services use the provider through a shared client library, not a separate AI service.
@@ -300,4 +300,6 @@ There is no distributed database transaction across services. Persist cross-serv
 - Temporary CV file volume rather than an additional object-storage container. Add private object storage if original uploads must be retained or CV workers scale across hosts.
 - No message broker or cache in the first iteration. Add an event broker/outbox and a projected dashboard only if load or real-time multi-session requirements justify the additional components.
 
-Source for Compose networking and service-name discovery: [Docker documentation](https://docs.docker.com/compose/how-tos/networking/). The service boundaries, APIs, and workflow choices above are proposed specifically for Coachify.
+Source for Compose networking and service-name discovery: [Docker documentation](https://docs.docker.com/compose/how-tos/networking/). The service boundaries, APIs, and workflow choices above are proposed specifically for elo.
+
+The accompanying JPG is rendered from `elo-architecture.uml` with PlantUML’s Smetana layout and converted to JPEG. It remains a historical PostgreSQL design; see `docs/architecture/` for the current implementation.

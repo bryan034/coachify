@@ -43,7 +43,7 @@ def test_research_uses_configured_gemini_even_when_gemini_chat_is_disabled():
 def test_startup_enables_research_with_keys_independently_of_legacy_modes(monkeypatch,mode):
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
-    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['coachify_startup_test_'+uuid4().hex]
+    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_startup_test_'+uuid4().hex]
     monkeypatch.setattr(AISettings,'from_env',classmethod(lambda cls:pytest.fail('Unused provider settings must not be loaded')))
     monkeypatch.setattr(GeminiSettings,'reasoning_from_env',classmethod(lambda cls:GeminiSettings(enabled=True,api_key='synthetic-gemini')))
     monkeypatch.setattr(OpportunitySettings,'from_env',classmethod(lambda cls:OpportunitySettings()))

@@ -21,7 +21,7 @@ test('manual-only chat persists without a fake CV and recovers saved failed mess
   await expect.poll(async () => (await (await account.get('/api/v1/profile/capabilities')).json()).declarations.length).toBe(1);
   expect((await (await account.get('/api/v1/cv')).json()).cvs).toHaveLength(0);
   const before = await readChat(account, null); await page.reload();
-  await expect(page.getByRole('textbox', {name: 'Message Coachify', exact: true})).toBeEnabled();
+  await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   expect((await readChat(account, null)).messages).toEqual(before.messages);
   await sendChat(page, 'SYNTHETIC_CHAT_PROVIDER_FAILURE');
   const failed = await readChat(account, null), action = failed.messages.flatMap(message => message.actions).find(action => action.status === 'failed')!;
@@ -63,7 +63,7 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   await expect.poll(async () => (await readChat(account, cvId)).messages.flatMap(message => message.actions).some(action => action.status === 'pending')).toBe(false);
   expect((await readChat(account, cvId)).messages.filter(message => message.role === 'user' && message.text === body.text)).toHaveLength(1);
   expect(await cv()).toEqual(before);
-  await page.reload(); await expect(page.getByRole('textbox', {name: 'Message Coachify', exact: true})).toBeEnabled();
+  await page.reload(); await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
 
   await sendChat(page, 'SYNTHETIC_CHAT_INVALID_SOURCE');
   expect(await cv()).toEqual(before);

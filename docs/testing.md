@@ -74,8 +74,12 @@ Local CI configuration does not publish a branch or modify GitHub settings.
 ## Real MongoDB and full-stack checks
 
 Set `MONGODB_TEST_URI` to a disposable MongoDB instance when running the profile
-suite to include database tests. They create/drop randomly named `coachify_test_*`
-and `coachify_accounts_test_*` databases. Never use a production connection for tests.
+suite to include database tests. They create/drop randomly named `elo_test_*`
+and `elo_accounts_test_*` databases. Never use a production connection for tests.
+`tests/test_password_reset.py` covers recovery delivery/retry, unknown emails,
+duplicate signup, code expiry and guess limits, concurrent resets, authentication
+mode isolation, and session/old-password invalidation without losing profile data.
+Frontend recovery coverage is in `password-recovery.test.tsx`.
 
 The `local-ui-integration` job provisions a disposable Docker stack and tests
 browser → gateway → API → MongoDB, including SMTP-to-Mailpit OTP verification, email/password A/B isolation, canonical onboarding, history restoration, logout/replay, cross-tab cleanup and profile/planning saves. For a manually provisioned **disposable** local-test stack on port 8081:
@@ -125,7 +129,7 @@ limited at the gateway; use synthetic sources and discard only test-stack data.
 The Career suite tests the OpenAI-compatible adapter through fake HTTP responses;
 no live key, external provider calls or billing are needed. Career and CV each
 validate the exported MongoDB schemas. Their `MONGODB_TEST_URI` tests create/drop
-random `coachify_analysis_test_*` / `coachify_cv_test_*` databases, checking real
+random `elo_analysis_test_*` / `elo_cv_test_*` databases, checking real
 BSON, indexes, private ownership and idempotent/versioned writes. Use only a
 disposable MongoDB. The required `analysis-integration` CI matrix runs both suites
 against MongoDB; ordinary backend jobs skip only their database-dependent tests.
@@ -134,7 +138,7 @@ J08/J09 add fake-provider + real MongoDB flow tests, CV API ownership checks,
 component/browser adaptive chat and JD handoff checks, and a full-stack confirmed-goal reload
 check. The disposable Compose test stack also needs `CAREER_DB_PASSWORD` and
 `CV_DB_PASSWORD`; CI supplies synthetic values. Real provider credentials are never
-used by automated tests. Goal-flow tests create/drop `coachify_goals_test_*` DBs.
+used by automated tests. Goal-flow tests create/drop `elo_goals_test_*` DBs.
 
 JD review tests use synthetic AI outputs for semantic supporting summaries,
 labelled inferences, structured job fields and URL metadata, context-only chat,
@@ -154,7 +158,7 @@ Docker target is built separately to check that the dev target remains opt-in.
 J02–J04 add saved review editing, reset/cancel, atomic skill/condition reclassification,
 source/metadata provenance, mapping-pending states, guarded confirmation, version
 conflicts and immutable history. Career MongoDB tests use random
-`coachify_reviews_test_*` databases. Browser fixtures cover extract → chat proposal →
+`elo_reviews_test_*` databases. Browser fixtures cover extract → chat proposal →
 automatic save → reload → latest goal, including mobile layout. External AI
 remains mocked; these checks do not establish live-model semantic accuracy.
 
@@ -422,3 +426,24 @@ Use disposable databases and synthetic documents/accounts. Never mount a persona
 On the observed Docker Desktop kernel, MongoDB 8 refused startup because of its known kernel compatibility guard. Isolated MongoDB 7 can establish functional repository behavior, but does not establish intended MongoDB 8 compatibility. MongoDB-backed CI uses a compatible pinned Ubuntu 22.04 runner. Report local functional checks, intended-version CI, browser fixtures and real-service journeys distinctly. Do not bypass the guard or change host settings as an incidental test repair.
 
 The previous C-series captioned recording uses synthetic models and the pre-integration build. It is retained as a workflow reference, not proof of the merged Career confirmation flow or live-model accuracy. Re-record or exercise the integrated journey after the final code changes. Cost, latency, interpretation quality and comparative usability require separately authorized live-model/user evaluation.
+
+## Assessment and Roadmap adviser
+
+Run each service separately because they use independent `app` namespaces. With pinned dependencies installed, repository tests can use:
+
+```sh
+cd services/assessment-service
+PYTHONPATH=../../packages/elo-shared:. python -m pytest
+```
+
+Repeat in `services/roadmap-service`. Shared runtime MongoDB race/recovery tests live under `packages/elo-shared/tests` and require an explicit disposable `MONGODB_TEST_URI`; they create/drop only uniquely named `elo_planning_test_*` databases. Never point these tests at application databases. Existing service tests also need the shared package installed or on `PYTHONPATH`. Career tests need a populated local `TIKTOKEN_CACHE_DIR` so synthetic provider checks never download encodings.
+
+New tests cover shared aliases, exact limitation/evidence references, complete requirement coverage, AND/OR rules, explicit partial research, source-change races, owner isolation, pending-operation restart recovery, idempotent lost-response retry, selected-day allocation/conservation, zero capacity, reduced periods, cycles, unsplittable work, proposal activation, stale proposal rejection and completion/definition history. Frontend tests cover input gates, next-message preservation, partial-analysis choice, old-account response isolation and exact retry identities. `roadmap.spec.ts` exercises chat, proposal activation, task completion/reload, evidence view, preference preview and desktop/mobile layout using synthetic HTTP fixtures.
+
+Generated OpenAPI and result schemas must match the owning service models. Tests establish transport/domain behaviour, not the accuracy or usefulness of a live adviser. Use labelled representative CV/goal cases and separately authorised provider evaluation before making semantic-quality claims. Tests that read environment files must not run when the task prohibits that access.
+
+`infrastructure/testing/planner-smoke.py` starts the real Assessment and Roadmap HTTP applications with synthetic source APIs/model adapters against uniquely named disposable MongoDB databases. It checks cross-service capture, partial research, allocation, activation/replay, completion, process restart persistence and owner isolation, then removes its processes/databases. It requires the new service dependencies and an explicit disposable `MONGODB_TEST_URI`.
+
+Assessment's `evaluate.py` is a separate paid-provider opt-in (`RUN_LIVE_ASSESSMENT_EVAL=1` plus an explicitly configured service key). It reports observed versus labelled outcomes for synthetic fixtures under `tests/fixtures/labelled-comparisons.json`; it does not read environment files. The small diagnostic set is not a representative accuracy benchmark. It has not been run as part of synthetic verification.
+
+Compact progress polling is checked separately from full workspace reads. Provider cooldowns persist across retries; a new message key cannot bypass the saved delay. Reconciled task editors retain their original definition and apply only changed fields after reload, preserving concurrent edits to other fields while rejecting same-field conflicts.

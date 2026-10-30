@@ -237,3 +237,15 @@ async def analysis_input(cv_id: str, request: Request, expected_version: int = Q
         raise Conflict('The target or capability inputs changed during assembly. Refresh and retry.')
     return {'schema_version': '2', 'capabilities': snapshot, 'target': target.model_dump(mode='json'),
             'requires_consumer_revalidation': True}
+
+
+@router.get('/{cv_id}/assessment-input', response_model=SourceSnapshot)
+async def assessment_source(cv_id:str,request:Request,expected_version:int=Query(ge=0),
+        expected_selection_version:int=Query(ge=0),expected_declarations_version:int=Query(ge=0),account=Depends(authenticated)):
+    """Effective source snapshot; Assessment separately binds the full Career goal."""
+    snapshot=await capability_input(cv_id,request,expected_version,expected_selection_version,expected_declarations_version,account)
+    document=await run_in_threadpool(service(request).get,account['id'],cv_id)
+    if any(q.get('interpretation_status') in {'pending','failed'} and not q.get('reconciliation_required') for q in document['clarifications']):
+        raise Conflict('A saved explanation still needs interpretation. Retry it before assessment.')
+    if document['version']!=expected_version: raise Conflict('The selected CV changed during assembly. Refresh and retry.')
+    return snapshot

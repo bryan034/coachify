@@ -5,7 +5,7 @@ import { policy, emptyDeclarations } from '../fixtures/cv';
 const categories = [{ id: 'university', label: 'University' }, { id: 'secondary', label: 'Secondary School' }];
 test('workspace uses saved profile data, preserves navigation and leaves missing services disconnected', async ({ page }) => {
  await mockEmptyConversation(page);
- await page.addInitScript(() => { localStorage.setItem('coachify.access-epoch','1'); sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
+ await page.addInitScript(() => { localStorage.setItem('elo.access-epoch','1'); sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
  const apiCalls: string[] = [];
  let saved = { version: 0, onboarding_complete:true, occupational_status: null as string | null, school_category: null as string | null, education_context: null as string | null, education_review_required: false, education: {} as Record<string, unknown>, current_study_year: null as number | null };
  await page.route('**/api/**', async route => {
@@ -16,6 +16,10 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   if(url.pathname.endsWith('/cv/policy'))return route.fulfill({json:policy});
   if(url.pathname === '/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
   if(url.pathname.endsWith('/profile/capabilities'))return route.fulfill({json:emptyDeclarations});
+  if(url.pathname === '/api/v1/roadmaps/workspace') {
+   expect(route.request().method()).toBe('GET');
+   return route.fulfill({json:{version:0,messages:[],operation:null,active:null,draft:null,assessment:null,stale:false,context:{ready:false,model_available:true,issues:[{source:'cv',message:'Upload, extract and select a CV before planning.',href:'/cv'},{source:'career',message:'Extract a Career goal before planning.',href:'/career-goal'}],planning_defaults:{application_date:null,weekly_hours:null,availability_periods:[]}}}});
+  }
   expect(url.pathname.startsWith('/api/v1/profile')).toBe(true);
   if (url.pathname.endsWith('/planning-inputs')) return route.fulfill({json:{profile_version:saved.version,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
   if(url.pathname.endsWith('/auth-config')) return route.fulfill({json:{mode:'local_test'}});
@@ -51,7 +55,11 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   await expect(link).toHaveAttribute('aria-current','page');
   await expect(page.getByRole('heading',{level:1,name:heading})).toBeVisible();
   if(label==='Resume & Tracker')await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
-  else await expect(page.locator('.feature-notice')).toContainText('Coming soon');
+  else if(label==='Roadmap') {
+   await expect(page.getByRole('heading',{name:'Bring your starting point and direction'})).toBeVisible();
+   await expect(page.getByRole('textbox',{name:'Talk through your plan'})).toBeDisabled();
+   await expect(page.getByRole('button',{name:'Send message',exact:true})).toBeDisabled();
+  } else await expect(page.locator('.feature-notice')).toContainText('Coming soon');
  }
  await page.getByRole('button',{name:'Month',exact:true}).click();
  await expect(page.getByRole('button',{name:'Month',exact:true})).toHaveAttribute('aria-pressed','true');
@@ -60,10 +68,12 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.getByRole('navigation').getByRole('link',{name:'Resume & Tracker'}).click();
  await expect(page.getByRole('button',{name:'Upload CV'})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
- await page.getByRole('button',{name:'Courses',exact:true}).click();
- await expect(page.getByRole('heading',{name:'No courses to show yet'})).toBeVisible();
- await expect(page.getByRole('link',{name:'Edit planning preferences →'})).toBeVisible();
- expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
+ await expect(page.getByRole('heading',{name:'Room for your next steps'})).toBeVisible();
+ await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();
+ await expect(page.locator('.roadmap-prerequisites a[href="/career-goal"]')).toBeVisible();
+ await page.getByRole('tab',{name:'Starting point',exact:true}).click();
+ await expect(page.getByRole('tabpanel',{name:'Starting point',exact:true})).toBeVisible();
+ expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
  expect(apiCalls).toContain('/api/v1/cv/policy');
  // Mobile navigation and calendar scrolling stay inside their containers.
  await page.setViewportSize({width:390,height:844});

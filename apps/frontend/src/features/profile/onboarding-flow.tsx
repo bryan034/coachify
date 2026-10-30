@@ -257,7 +257,7 @@ export function OnboardingFlow({ preview = false }: { preview?: boolean }) {
               <button type="button" className="onboarding-continue" disabled={reviewRequired && !noPrevious && !confirmed} onClick={() => void save({ occupational_status: status, school_category: noPrevious ? null : category, no_previous_education: noPrevious,
                 ...(status === 'unemployed' ? { previously_employed: previouslyEmployed } : {}),
                 ...(hasWork ? { employment: { employer: employer.trim(), role: role.trim(), industry: industry.trim() } } : {}),
-                ...(!noPrevious ? { education: educationDraft(), confirm_education_context: true } : {}) }, 'review', true)}>{preview ? 'Finish preview' : 'Enter Coachify'} <span aria-hidden="true">→</span></button>
+                ...(!noPrevious ? { education: educationDraft(), confirm_education_context: true } : {}) }, 'review', true)}>{preview ? 'Finish preview' : 'Enter elo'} <span aria-hidden="true">→</span></button>
             </div>}
           </fieldset>
           {busy && <p role="status" className="onboarding-saving">Saving your answer…</p>}

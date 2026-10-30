@@ -3,7 +3,7 @@ import '../styles/globals.css';
 import '../styles/career-briefing.css';
 import '../styles/elo-theme.css';
 import { ProfileProvider } from '@/features/profile/profile-provider';
-export const metadata = { title: 'Coachify · Your career copilot', description: 'Build your background and work towards your next career move.', icons: { icon: '/brand/elo-mark.svg' } };
+export const metadata = { title: 'elo · Your career copilot', description: 'Build your background and work towards your next career move.', icons: { icon: { url: '/brand/elo-app-icon.svg', type: 'image/svg+xml', sizes: 'any' } } };
 export default function RootLayout({ children }: { children: ReactNode }) {
  return <html lang="en"><body><ProfileProvider>{children}</ProfileProvider></body></html>;
 }

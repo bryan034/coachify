@@ -21,9 +21,9 @@ function configure(handler:(path:string,options?:RequestInit)=>unknown){
 }
 async function open(){render(<CareerDiscovery/>);await screen.findByText(introduction);}
 function send(message='Software engineering, keep it broad'){
- const consent=screen.getByRole('checkbox',{name:/Allow Coachify/});
+ const consent=screen.getByRole('checkbox',{name:/Allow elo/});
  if(!(consent as HTMLInputElement).checked)fireEvent.click(consent);
- fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:message}});
+ fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:message}});
  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
 }
 beforeEach(()=>{vi.clearAllMocks();});
@@ -43,7 +43,7 @@ it('renders bundled clarification as questions without the repeated preface',asy
  await screen.findByText(questions[0]);
  expect(within(screen.getByRole('log')).getAllByRole('listitem')).toHaveLength(6);
  expect(screen.queryByText(/Let’s clarify the remaining context/)).toBeNull();
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toHaveValue('');
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('');
  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path.endsWith('/research'))).toBe(false);
 });
 
@@ -60,19 +60,19 @@ it('opens with only the Python-supplied introduction and makes no mutation reque
 it('starts a session and automatic research only after the user sends a message',async()=>{
  configure(()=>({available:true,session:{...base,status:'researching',stage:'plan_research',messages:[...empty.messages,{role:'user',content:'Software engineering, keep it broad'},{role:'assistant',content:'Researching Software Engineering.'}]}}));
  await open();send();
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toHaveValue('');
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('');
  await screen.findByText('Planning job-listing searches');
  expect(screen.getAllByText(introduction)).toHaveLength(1);
  expect(screen.queryByRole('button',{name:'Confirm area and research jobs'})).toBeNull();
  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path.endsWith('/research')||path==='/goals/confirm')).toBe(false);
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
 });
 
 it('clears immediately and preserves a new draft typed while a response is pending',async()=>{
  let respond!:(value:unknown)=>void;
  configure(()=>new Promise<unknown>(resolve=>{respond=resolve;}));
  await open();send('I prefer backend work');
- const input=screen.getByRole('textbox',{name:'Message Coachify'});
+ const input=screen.getByRole('textbox',{name:'Message elo'});
  expect(input).toHaveValue('');expect(input).toBeEnabled();
  fireEvent.change(input,{target:{value:'What does that involve?'}});
  await waitFor(()=>expect(respond).toBeTypeOf('function'));
@@ -85,7 +85,7 @@ it('retains a failed message for retry without overwriting the next draft',async
  let reject!:(error:Error)=>void;
  configure(()=>new Promise<unknown>((_resolve,no)=>{reject=no;}));
  await open();send('Explore backend work');
- const input=screen.getByRole('textbox',{name:'Message Coachify'});
+ const input=screen.getByRole('textbox',{name:'Message elo'});
  fireEvent.change(input,{target:{value:'My next draft'}});
  await waitFor(()=>expect(reject).toBeTypeOf('function'));
  await act(async()=>reject(new Error('Synthetic connection failure')));
@@ -121,7 +121,7 @@ it('shows provider waits after sending without hiding the composer',async()=>{
  configure(()=>({available:true,introduction,session:{...base,status:'waiting',retry_after:407,limit_scope:'provider',provider:'gemini'}}));
  await open();send();await screen.findByText('gemini is rate limiting requests');
  expect(screen.getByRole('status')).toHaveTextContent('Resuming in 407 seconds');
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toBeEnabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  expect(screen.queryByRole('button',{name:'Confirm and save goal'})).toBeNull();
 });
 
@@ -138,13 +138,13 @@ it('shows all five suggested career directions',async()=>{
 it('New chat clears history, recommendations, scope and the draft without posting',async()=>{
  configure(()=>({available:true,introduction,session:{...base,messages:[...empty.messages,{role:'user',content:'My old direction'},{role:'assistant',content:'Earlier advice'}]}}));
  await open();send('My old direction');await screen.findByText('Earlier advice');
- fireEvent.change(screen.getByRole('textbox',{name:'Message Coachify'}),{target:{value:'Unsent draft'}});
+ fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'Unsent draft'}});
  const posts=vi.mocked(careerApi).mock.calls.filter(([, ,options])=>options?.method==='POST').length;
  fireEvent.click(screen.getByRole('button',{name:'New chat'}));await screen.findByText(introduction);
  expect(screen.getByRole('log').querySelectorAll('.agent-message')).toHaveLength(1);
  expect(screen.queryByText('Earlier advice')).toBeNull();expect(screen.queryByText('My old direction')).toBeNull();
- expect(screen.getByRole('textbox',{name:'Message Coachify'})).toHaveValue('');
- expect(screen.getByRole('checkbox',{name:/Allow Coachify/})).not.toBeChecked();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('');
+ expect(screen.getByRole('checkbox',{name:/Allow elo/})).not.toBeChecked();
  expect(vi.mocked(careerApi).mock.calls.filter(([, ,options])=>options?.method==='POST')).toHaveLength(posts);
 });
 

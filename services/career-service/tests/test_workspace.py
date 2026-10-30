@@ -70,7 +70,7 @@ class Sources:
 def flow():
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
-    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['coachify_workspace_test_'+uuid4().hex];ai=AI();sources=Sources()
+    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_workspace_test_'+uuid4().hex];ai=AI();sources=Sources()
     def profile(req):return httpx.Response(200,json={'id':OTHER if req.headers.get('Authorization')=='Bearer other' else OWNER,'email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
     try:
         with TestClient(create_app(database=db,ai=ai,research_client=sources,profile_client=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile)))) as client:

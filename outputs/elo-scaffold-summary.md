@@ -1,8 +1,8 @@
-# Coachify scaffold created
+# elo scaffold created
 
 The structure is located in the current folder:
 
-`/Users/bryan/Personal Projects/coachify`
+`/Users/bryan/Personal Projects/elo`
 
 ## Included
 

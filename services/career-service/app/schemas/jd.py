@@ -1,3 +1,5 @@
+from elo_shared.dates import JobDate
+from elo_shared.skills import resolve, MAPPING_VERSION
 """Transient JD review contracts; candidates are not canonical analysis skills."""
 from app.schemas.analysis import EmploymentType, DiscoveryEvidence
 
@@ -8,6 +10,13 @@ from app.schemas.analysis import Contract, Text, Evidence, SourceUrl, Proficienc
 ChatText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
 
 class ReviewSkill(Contract):
+    canonical_skill_id: str | None = None
+    skill_registry_version: str = MAPPING_VERSION
+    @model_validator(mode='after')
+    def canonical_identity(self):
+        object.__setattr__(self,'canonical_skill_id',resolve(self.name,self.category))
+        object.__setattr__(self,'skill_registry_version',MAPPING_VERSION)
+        return self
     item_id: Text | None = None
     skill_id: SkillId | None = None
     group_id: Text | None = None
@@ -26,6 +35,7 @@ class ReviewSkill(Contract):
     origin: Literal['employer','generated_guidance','user_declaration','market_research']
 
 class JDExtraction(Contract):
+    job_dates: list[JobDate] = Field(default_factory=list, max_length=8)
     role: Text | None
     field: Text | None
     employment_type: EmploymentType = 'unknown'
