@@ -20,7 +20,7 @@ from app.workflows.opportunity.engine import select_evidence
 
 
 def test_runtime_ignores_legacy_credentials_models_and_chat_switch(monkeypatch):
-    monkeypatch.delenv('GEMINI_REASONING_MODEL',raising=False)
+    monkeypatch.delenv('CAREER_LLM_MODEL',raising=False)
     for name,value in {'AI_ENABLED':'true','AI_PROVIDER':'retired-provider','AI_MODEL':'legacy-model',
         'AI_BASE_URL':'https://legacy.test/v1','AI_API_KEY':'synthetic-legacy',
         'GEMINI_ENABLED':'false','GEMINI_MODEL':'legacy-context-model',
@@ -133,7 +133,7 @@ def test_only_unleased_obsolete_model_waits_resume_without_losing_work(kind):
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
     mongo=MongoClient(uri,tz_aware=True,serverSelectionTimeoutMS=3000)
-    db=mongo['coachify_model_waits_test_'+uuid4().hex];rows=db.research_contexts
+    db=mongo['elo_model_waits_test_'+uuid4().hex];rows=db.research_contexts
     stamp=now();future=stamp+timedelta(seconds=600)
     common={'kind':kind,'provider':'retired-provider','limit_scope':'provider','error_code':'rate_limited',
         'next_attempt_at':future,'status':'pending' if kind=='opportunity_job' else 'waiting',

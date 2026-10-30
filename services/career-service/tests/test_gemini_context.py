@@ -22,7 +22,7 @@ def plan(**changes):return ContextPlan(**{'topic':'skills','item_refs':['s0'],'r
 
 def test_independent_gemini_configuration_and_safe_errors(monkeypatch):
     monkeypatch.setenv('AI_ENABLED','true');monkeypatch.setenv('GEMINI_API_KEY','gemini-fixture');monkeypatch.setenv('AI_API_KEY','unused-fixture')
-    monkeypatch.delenv('GEMINI_REASONING_MODEL',raising=False)
+    monkeypatch.delenv('CAREER_LLM_MODEL',raising=False)
     config=GeminiSettings.from_env()
     assert config.model=='gemini-3.5-flash-lite' and config.api_key.get_secret_value()=='gemini-fixture'
     assert 'gemini-fixture' not in repr(config)

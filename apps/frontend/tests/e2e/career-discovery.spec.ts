@@ -1,7 +1,7 @@
 import {careerFixture} from './career-fixture';
 import {test,expect} from '@playwright/test';
 test('career discovery opens fresh without inference, researches sent messages and saves only after confirmation',async({page},testInfo)=>{
- await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
   if(path.endsWith('/auth/session'))return route.fulfill({json:careerFixture(route.request().url(),{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'})});
@@ -11,7 +11,7 @@ test('career discovery opens fresh without inference, researches sent messages a
  const content={role:'Software Engineering',field:'Software Engineering',company:null,job_url:null,location:'Singapore',seniority_level:'entry_level',summary:'Requirements sampled from ten relevant employer job listings.',responsibilities:['Build reliable APIs'],skills:[{item_id:'sql',name:'SQL',category:'technical',origin:'generated_guidance',priority:'suggested',evidence:null,context:'High learning priority · Useful for querying application data.',source_urls:['https://example.test/jobs/1']},{item_id:'python',name:'Python',category:'technical',origin:'generated_guidance',priority:'suggested',evidence:null,context:'Low learning priority · One optional tool for data processing.',source_urls:['https://example.test/jobs/1']}],non_skill_requirements:[]};
  const decision={scope,reply:'Software Engineering can remain your broader career target. I am researching entry-level jobs in Singapore.',question:null,recommendations:[],action:'START_RESEARCH'};
  const session={id:'000000000000000000000001',version:1,status:'conversation',stage:null,scope,decision,summary:{responsibility_refs:[0],skills:[{name:'SQL',requirement_type:'core',learning_priority:'high',relevance:'Useful for querying application data.',skill_refs:[0]},{name:'Python',requirement_type:'optional',learning_priority:'low',relevance:'One optional tool for data processing.',skill_refs:[1]}],specialisations:[],question:null},related_roles:['Software Engineer','Backend Engineer'],sources:[{source_id:'s1',title:'Example employer listing',url:'https://example.test/jobs/1',published_date:null}],stats:[{name:'SQL',requirement_type:'core',mention_count:8,sample_size:10},{name:'Python',requirement_type:'optional',mention_count:4,sample_size:10}],warnings:['Requirements describe this researched sample, not the whole market.'],listings_analysed:10,employers_analysed:5,coverage:'good',error_code:null,limit_scope:null,provider:null,retry_after:null,review:{review_id:'000000000000000000000002',version:1,extraction:content,}};
- const introduction="Hi, I\u2019m Coachify\u2019s Career Discovery assistant. This chat helps you choose a career direction and build a recommended skill set backed by research.\n\nTo start, tell me a field or role you\u2019re interested in, or describe the kind of work you enjoy. You can keep it broad\u2014no CV, specific vacancy or specialisation is required.\n\nI will ask questions to understand your interests and personalise your goal for you, then research representative roles once we have enough context. You can ask questions or refine the results, and you\u2019ll review and confirm before saving your goal.";
+ const introduction="Hi, I\u2019m elo\u2019s Career Discovery assistant. This chat helps you choose a career direction and build a recommended skill set backed by research.\n\nTo start, tell me a field or role you\u2019re interested in, or describe the kind of work you enjoy. You can keep it broad\u2014no CV, specific vacancy or specialisation is required.\n\nI will ask questions to understand your interests and personalise your goal for you, then research representative roles once we have enough context. You can ask questions or refine the results, and you\u2019ll review and confirm before saving your goal.";
  const bundle="1. Is there a specific role or kind of work you want to explore within this field? You can keep it broad.\n\n2. What interests you about this field? You can say unsure.\n\n3. What other interests do you have, related or unrelated to this field? You can say unsure.\n\n4. What activities do you strongly want to avoid? You can say unsure.\n\n5. What career stage are you looking for: internship, starting out, or experienced? You can say unsure.\n\n6. What work preferences or constraints matter to you? You can say unsure.";
  const profileMessage="Software engineering, keep it broad. I enjoy building applications. Other interests: music. Avoid sales. Entry-level. No work constraints. Singapore.";
  let started=false,researches=0,confirmed=false,starts=0,messagesSent=0;
@@ -43,8 +43,8 @@ test('career discovery opens fresh without inference, researches sent messages a
  await expect(page.getByRole('log')).toContainText('This chat helps you choose a career direction');
  await expect(page.getByRole('log').locator('.agent-message')).toHaveCount(1);
  expect(starts).toBe(0);expect(messagesSent).toBe(0);expect(researches).toBe(0);
- await page.getByRole('checkbox',{name:/Allow Coachify/}).check();
- await page.getByRole('textbox',{name:'Message Coachify'}).fill('Software engineering');
+ await page.getByRole('checkbox',{name:/Allow elo/}).check();
+ await page.getByRole('textbox',{name:'Message elo'}).fill('Software engineering');
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole('log').getByRole('listitem')).toHaveCount(6);
  await expect(page.getByRole('log')).toContainText('What other interests do you have');
@@ -54,11 +54,11 @@ test('career discovery opens fresh without inference, researches sent messages a
  await page.getByRole('log').locator('.agent-message.assistant').last().evaluate(el=>el.scrollIntoView({block:'start'}));
  await page.screenshot({path:testInfo.outputPath('discovery-clarification-bundle-mobile.png'),fullPage:true});
  expect(messagesSent).toBe(1);expect(researches).toBe(0);
- await page.getByRole('textbox',{name:'Message Coachify'}).fill(profileMessage);
+ await page.getByRole('textbox',{name:'Message elo'}).fill(profileMessage);
  await page.getByRole('button',{name:'Send message'}).click();
- await expect(page.getByRole('textbox',{name:'Message Coachify'})).toHaveValue('');
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveValue('');
  await expect(page.getByText('Finding relevant job listings')).toBeVisible();
- await expect(page.getByRole('textbox',{name:'Message Coachify'})).toBeEditable();
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEditable();
  expect(researches).toBe(0);expect(confirmed).toBe(false);
  await expect(page.getByRole('button',{name:'Confirm area and research jobs'})).toHaveCount(0);
  await expect(page.getByRole('heading',{name:'Review your career target'})).toBeVisible();
@@ -67,13 +67,13 @@ test('career discovery opens fresh without inference, researches sent messages a
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await expect(page.getByRole('log')).toContainText('Recommended skills: SQL');
  await expect(page.getByRole('log').getByRole('link')).toHaveAttribute('href','https://example.test/jobs/1');
- await page.getByRole('textbox',{name:'Message Coachify'}).fill('A new unsent question');
+ await page.getByRole('textbox',{name:'Message elo'}).fill('A new unsent question');
  await page.screenshot({path:testInfo.outputPath('discovery-chat-mobile.png'),fullPage:true});
  await page.getByRole('button',{name:'New chat'}).click();
  await expect(page.getByRole('log')).toContainText('This chat helps you choose a career direction');
  await expect(page.getByRole('log').locator('.agent-message')).toHaveCount(1);
  await expect(page.getByRole('log')).not.toContainText('Recommended skills: SQL');
- await expect(page.getByRole('textbox',{name:'Message Coachify'})).toHaveValue('');
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveValue('');
  await expect(page.getByRole('heading',{name:'Review your career target'})).toHaveCount(0);
  expect(starts).toBe(1);expect(messagesSent).toBe(2);
  await page.screenshot({path:testInfo.outputPath('discovery-fresh-mobile.png'),fullPage:true});
@@ -81,8 +81,8 @@ test('career discovery opens fresh without inference, researches sent messages a
  await expect(page.getByRole('log').locator('.agent-message')).toHaveCount(1);
  await expect(page.getByRole('log')).not.toContainText('Software engineering. Keep it broad');
  expect(starts).toBe(1);expect(messagesSent).toBe(2);
- await page.getByRole('checkbox',{name:/Allow Coachify/}).check();
- await page.getByRole('textbox',{name:'Message Coachify'}).fill(profileMessage);
+ await page.getByRole('checkbox',{name:/Allow elo/}).check();
+ await page.getByRole('textbox',{name:'Message elo'}).fill(profileMessage);
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole('heading',{name:'Review your career target'})).toBeVisible();
  expect(starts).toBe(2);expect(messagesSent).toBe(3);

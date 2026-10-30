@@ -4,7 +4,8 @@
 |---|---|---|
 | Profile | P01-P16; C07 manual declarations | Existing accounts/email verification/revocable sessions, canonical onboarding and education, declared deadline/capacity/temporary availability, profile versions; account-embedded manual capability declarations and their own revision |
 | CV | C01-C09, with C07 composition | Saved CVs, ingestion state, extracted facts/skills and bounded evidence, CV-specific correction/removal overlays, clarification questions/answers, processing operations, explicit saved-CV selection and private resumable CV conversations |
-| Career | J01–J13; G01–G07; SCRUM-282/310 | Canonical career_goals, one career_state workspace and CV confirmation stamp, public interview/opportunity research, workflow checkpoints and future skill_gap_analyses; raw JD text stays transient |
+| Career | J01–J13; G01–G07; SCRUM-282/310 | Canonical career_goals, one career_state workspace and CV confirmation stamp, public interview/opportunity research, workflow checkpoints and read-only assessment input exports; raw JD text stays transient |
+| Assessment | G01–G07 | Private immutable skill_gap_analyses, captured evidence/version vectors, comparison checkpoints and current result |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Consumed planning-input snapshots, milestones, tasks, progress history, proposed/applied revisions |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
 | Review | A01 orchestration; S01-S06 | Manual/scheduled review state, pace analysis, schedules, approval preferences |
@@ -15,9 +16,11 @@
 - Profile -> CV: validate an explicitly chosen matching CV item/version before a manual attachment; no CV is needed for a plain declaration.
 - CV -> Career: authenticate and validate the owner’s selected confirmed target, skill IDs and exact target/selection versions for relevant clarification.
 - Career -> Profile: validate the account/session and completed onboarding.
-- Career -> CV: read owner-scoped saved metadata and effective evidence through the CV API; preserve CV identifiers and provenance in its internal projection. Future assessment additionally requires explicit registry mapping and complete input revalidation.
+- Career -> CV: read owner-scoped saved metadata and effective evidence through the CV API; preserve CV identifiers and provenance in its internal projection. New Assessment comparison uses shared canonical identities and complete input revalidation; this Career CV projection remains a compatibility read.
+- Assessment -> Profile/CV/Career: authenticated source snapshots, current versions, effective evidence and owner-linked research; no foreign database reads.
+- Roadmap -> Assessment/Profile: comparison/context and baseline planning inputs; Roadmap owns plan-specific chosen days, proposed/active tasks and daily allocations.
 - Planned Career -> Profile: versioned background/planning inputs; manual additions use the Profile declaration API, while CV-specific corrections use CV.
-- Planned Roadmap -> Profile/Career: generation inputs and freshness checks.
+- Roadmap -> Assessment: source assessment ID/hash and freshness; immutable evidence remains addressable through the Assessment API.
 - Planned Roadmap -> Review: verify the current automatic-application policy.
 - Planned Dashboard -> Roadmap/Career/Review: current progress and dated pace analysis.
 - Planned Review -> Profile/Career/Roadmap: read inputs, request a revision, request authorised application.
@@ -129,10 +132,16 @@ normal weekly capacity and temporary availability periods; all edits use the sam
 owner/version boundary. This supersedes the original roadmap-owned P04–P06 mapping.
 Roadmap will consume a snapshot through an API and own scheduling/results. It must
 retain the source profile version, planning revision and explicit calendar context.
-No roadmap generation or cross-service stale-plan notification is implemented yet.
+The Roadmap adviser now supports reviewed plan generation and daily workloads through Assessment. Result-specific push notifications and scheduled adaptation remain planned.
 
 ## Career research and discovery
 
 LangGraph runs inside Career. Public retrieval uses only permitted public role/employer context, with owner-linked reports and typed citations. Private CV evidence, manual declarations and CV conversation messages do not enter shared research. Discovery and JD intake publish through the same goal persistence path. Current goals use owner/version-checked edits; research revisions remain immutable and compact progress/evidence reads avoid repeating full source payloads.
 
 Career's 512 KiB CV transport/projection admission limit is separate from CV's 12 MiB stored-record boundary and conversation limits. An over-limit response is actionable failure, not an empty CV or permission to truncate sources. Model-specific context selection remains separately bounded. Synthetic provider tests do not measure live-provider quality, cost or comparative usability.
+
+## Assessment and adviser boundary — 30 October 2026
+
+The user's revised architecture separates Assessment from Career and places its UI in Roadmap. Assessment owns a separate database containing `skill_gap_analyses` and operational `workspaces`; Roadmap owns `roadmaps` and its own `workspaces`. Career's old analysis-v1 contracts remain compatibility code, with no automatic data migration. Producer exports preserve owner/reference/version checks. Shared canonical IDs/registry versions are additive; legacy CV/Profile skill keys and source IDs remain stable.
+
+Profile continues to own baseline P04–P06 defaults. User-chosen preparation target/ongoing horizon, weekly/day budgets and learning preferences are specific to the Roadmap plan and do not silently edit the Profile baseline. Day-specific scheduling supersedes the old equal-seven-day assumption only in this planner. The adviser provides recommendations and the user chooses scope and activation; completion does not mutate assessed capability. See [Assessment](../../services/assessment-service/SPEC.md) and [Roadmap](../../services/roadmap-service/SPEC.md) for implemented behaviour and remaining limits.

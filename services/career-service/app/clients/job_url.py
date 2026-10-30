@@ -13,7 +13,7 @@ from app.domain.documents import validate_text
 from app.schemas.preview import MAX_JD_TEXT,URL_NETWORK_TIMEOUT,URL_IMPORT_TIMEOUT
 
 MAX_DOWNLOAD = 2 * 1024 * 1024
-AGENT = 'CoachifyPreview/1.0'
+AGENT = 'eloPreview/1.0'
 
 
 class RenderRequired(ValueError):

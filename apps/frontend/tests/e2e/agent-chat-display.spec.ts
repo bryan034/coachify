@@ -2,7 +2,7 @@ import {careerFixture} from './career-fixture';
 import {test,expect} from '@playwright/test';
 
 test('chat hides validation diagnostics and replaces repair activity with a Markdown answer on desktop and mobile',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
@@ -31,14 +31,14 @@ test('chat hides validation diagnostics and replaces repair activity with a Mark
  await expect(log).not.toContainText('Let’s look at Data Analyst');
  await expect(log.getByRole('heading',{name:'Interview findings'})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Resume research'})).toHaveCount(0);
- await expect(page.getByRole('textbox',{name:'Message Coachify'})).toBeDisabled();
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
  await page.screenshot({path:test.info().outputPath('researching-desktop.png'),fullPage:true});
  ready=true;
  await expect(log).toContainText('Let’s look at Data Analyst');
  await expect(log.getByRole('heading',{name:'Interview findings'})).toBeVisible();
  await expect(log.locator('.agent-message').filter({has:page.getByRole('heading',{name:'Your career goal'})})).toContainText('Interview findings');
  await expect(log.getByRole('status')).toHaveCount(0);
- await page.getByRole('textbox',{name:'Message Coachify'}).fill('How should I prepare?');
+ await page.getByRole('textbox',{name:'Message elo'}).fill('How should I prepare?');
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(log.getByRole('status')).toContainText('Refining the response');
  await expect(log.getByRole('alert')).toHaveCount(0);
@@ -55,21 +55,21 @@ test('chat hides validation diagnostics and replaces repair activity with a Mark
  await page.screenshot({path:test.info().outputPath('answer-desktop.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
  await page.emulateMedia({reducedMotion:'reduce'});
- await expect(page.getByRole('textbox',{name:'Message Coachify'})).toBeVisible();
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  await page.getByRole('button',{name:'Role and research details'}).click();
  await expect(page.locator('.agent-details a').first()).toHaveAttribute('href','https://example.test/report');
  await page.getByRole('button',{name:'Hide details'}).click();
  await page.screenshot({path:test.info().outputPath('answer-mobile.png'),fullPage:true});
  failureMode='invalid_output';
- await page.getByRole('textbox',{name:'Message Coachify'}).fill('Explain the assessment');
+ await page.getByRole('textbox',{name:'Message elo'}).fill('Explain the assessment');
  const diagnostic=page.waitForResponse(r=>r.url().endsWith('/workspace/messages'));
  await page.getByRole('button',{name:'Send message'}).click();
  expect((await (await diagnostic).json()).code).toBe('invalid_output');
  await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeVisible();
  await expect(log.getByRole('alert')).toHaveCount(0);
  await expect(page.getByText('PRIVATE provider JSON diagnostic')).toHaveCount(0);
- await expect(page.getByRole('textbox',{name:'Message Coachify'})).toHaveValue('Explain the assessment');
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveValue('Explain the assessment');
  failureMode='rate_limited';
  await page.getByRole('button',{name:'Retry',exact:true}).click();
  await expect(log.getByRole('alert')).toContainText('AI provider quota');
@@ -77,7 +77,7 @@ test('chat hides validation diagnostics and replaces repair activity with a Mark
 });
 
 test('career goal changes use guided chat without an edit form or Apply button',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});
@@ -106,7 +106,7 @@ test('career goal changes use guided chat without an edit form or Apply button',
   return route.fulfill({json:careerFixture(route.request().url(),workspace())});
  });
  await page.goto('/career-goal/chat?source=jd');
- const log=page.getByRole('log'),box=page.getByRole('textbox',{name:'Message Coachify'});
+ const log=page.getByRole('log'),box=page.getByRole('textbox',{name:'Message elo'});
  await expect(log).toContainText('Let’s look at Data Analyst');
  await expect(page.getByRole('button',{name:'Edit career goal',exact:true})).toHaveCount(0);
  await expect(page.getByRole('form',{name:'Edit career goal review'})).toHaveCount(0);
@@ -130,7 +130,7 @@ test('career goal changes use guided chat without an edit form or Apply button',
 
 test('typing preserves scroll position and research citations sit beside supported claims',async({page})=>{
  await page.emulateMedia({reducedMotion:'no-preference'});
- await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});

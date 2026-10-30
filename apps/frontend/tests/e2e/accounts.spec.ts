@@ -46,7 +46,7 @@ test('P09–P16 Google entry, OTP verification, initial setup, reload and logout
  await page.getByRole('textbox',{name:'Industry',exact:true}).fill('Synthetic industry');
  await page.getByRole('button',{name:'Continue',exact:true}).click();
  await page.getByRole('button',{name:'No applicable previous education'}).click();
- await page.getByRole('button',{name:'Enter Coachify',exact:true}).click();
+ await page.getByRole('button',{name:'Enter elo',exact:true}).click();
  await expect(page).toHaveURL(/\/dashboard$/);
  expect(completed).toBe(1);
  await page.getByRole('button',{name:'Sign out',exact:true}).first().click();

@@ -6,6 +6,6 @@ afterEach(cleanup);
 
 beforeEach(() => {
  sessionStorage.clear(); localStorage.clear();
- localStorage.setItem('coachify.access-epoch', '1');
- sessionStorage.setItem('coachify.session', JSON.stringify({token:'synthetic-session-token',epoch:'1'}));
+ localStorage.setItem('elo.access-epoch', '1');
+ sessionStorage.setItem('elo.session', JSON.stringify({token:'synthetic-session-token',epoch:'1'}));
 });

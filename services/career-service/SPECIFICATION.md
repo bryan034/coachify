@@ -18,7 +18,7 @@ private state. Imports are aborted/ignored after method switch or unmount. Sideb
 link navigation warns before discard; browser refresh/tab close uses beforeunload
 where supported. Reload/leave loses input. No preview source data goes into localStorage,
 sessionStorage, Next.js server caches or MongoDB. Browser document history/undo
-behaviour is browser-managed, not a saved Coachify draft.
+behaviour is browser-managed, not a saved elo draft.
 
 ## API and authentication
 
@@ -143,7 +143,7 @@ calls or database writes. Sources remain transient, and reload restores only
 structured information. J05 importance review and J10 advisory exploration skills use this same review
 boundary. J12/J13 research orchestration, versioned storage and review UI are
 implemented with Gemini/Brave source adapters and an injectable synthetic test boundary. Unconfigured or unavailable acquisition preserves previous goal/research state.
-Gap analysis and roadmap generation remain future work.
+The separate Assessment and Roadmap services now own comparison and user-directed planning; Career only supplies versioned inputs. See their service specifications.
 
 ## Canonical confirmation for CV review
 

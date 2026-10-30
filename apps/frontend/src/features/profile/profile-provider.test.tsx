@@ -50,7 +50,7 @@ test('signed-out entry never loads a private profile; registration and logout cl
  fireEvent.click(screen.getByText('Logout',{exact:true}));
  expect(screen.getByTestId('account')).toHaveTextContent('signed out');
  expect(screen.getByTestId('profile')).toHaveTextContent('empty');
- await waitFor(()=>expect(sessionStorage.getItem('coachify.pending-logout')).toBeNull());
+ await waitFor(()=>expect(sessionStorage.getItem('elo.pending-logout')).toBeNull());
 });
 test('late profile response after logout cannot restore private state',async()=>{
  let release:(response:Response)=>void=()=>{};
@@ -76,7 +76,7 @@ test('failed logout stays locked across remount and offers termination retry',as
  await screen.findByText(/Sign-out is pending/);
  expect(requests.some(url=>url.endsWith('/auth/session')||url.endsWith('/profile'))).toBe(false);
  failedLogout=false;fireEvent.click(screen.getByText('Retry logout'));
- await waitFor(()=>expect(sessionStorage.getItem('coachify.pending-logout')).toBeNull());
+ await waitFor(()=>expect(sessionStorage.getItem('elo.pending-logout')).toBeNull());
  expect(screen.getByTestId('profile')).toHaveTextContent('empty');
 });
 test('cross-tab access change clears the account and ignores earlier session errors',async()=>{
@@ -84,13 +84,13 @@ test('cross-tab access change clears the account and ignores earlier session err
  await waitFor(()=>expect(screen.getByTestId('loading')).toHaveTextContent('false'));
  fireEvent.click(screen.getByText('Create',{exact:true}));
  await waitFor(()=>expect(screen.getByTestId('profile')).toHaveTextContent('Private course'));
- const previous = JSON.parse(sessionStorage.getItem('coachify.session')!).token;
+ const previous = JSON.parse(sessionStorage.getItem('elo.session')!).token;
  fireEvent.click(screen.getByText('Logout',{exact:true}));
  fireEvent.click(screen.getByText('Create',{exact:true}));
  await waitFor(()=>expect(screen.getByTestId('profile')).toHaveTextContent('Private course'));
- act(()=>window.dispatchEvent(new CustomEvent('coachify:expired',{detail:previous})));
+ act(()=>window.dispatchEvent(new CustomEvent('elo:expired',{detail:previous})));
  expect(screen.getByTestId('account')).toHaveTextContent('Synthetic');
- act(()=>window.dispatchEvent(new StorageEvent('storage',{key:'coachify.access-epoch',newValue:'newer'})));
+ act(()=>window.dispatchEvent(new StorageEvent('storage',{key:'elo.access-epoch',newValue:'newer'})));
  expect(screen.getByTestId('account')).toHaveTextContent('signed out');
  expect(screen.getByTestId('profile')).toHaveTextContent('empty');
 });
@@ -186,31 +186,31 @@ test.each([
  const field=await openDraft();sessionRead=async()=>response();
  fireEvent.click(screen.getByText('Validate session'));
  await waitFor(()=>expect(screen.getByTestId('account')).toHaveTextContent('signed out'));
- expect(field).not.toBeInTheDocument();expect(sessionStorage.getItem('coachify.session')).toBeNull();
+ expect(field).not.toBeInTheDocument();expect(sessionStorage.getItem('elo.session')).toBeNull();
 });
 
 test.each([
  ['missing account identity',{name:'Synthetic',provider:'local_test'}],
  ['malformed account expiry',{id:'synthetic-id',name:'Synthetic',provider:'local_test',expires_at:'not-a-date'}],
 ] as const)('%s masks the draft without signing out and allows recovery',async(_,payload)=>{
- const field=await openDraft();const epoch=localStorage.getItem('coachify.access-epoch');const session=sessionStorage.getItem('coachify.session');
+ const field=await openDraft();const epoch=localStorage.getItem('elo.access-epoch');const session=sessionStorage.getItem('elo.session');
  sessionRead=async()=>new Response(JSON.stringify(payload));
  fireEvent.click(screen.getByText('Validate session'));
  await screen.findByRole('dialog',{name:'Connection interrupted'});
  expect(field).toBeInTheDocument();expect(field).not.toBeVisible();expect(field).toHaveValue('My unfinished explanation');
- expect(localStorage.getItem('coachify.access-epoch')).toBe(epoch);expect(sessionStorage.getItem('coachify.session')).toBe(session);
+ expect(localStorage.getItem('elo.access-epoch')).toBe(epoch);expect(sessionStorage.getItem('elo.session')).toBe(session);
  expect(requests.some(url=>url.endsWith('/auth/logout'))).toBe(false);
  sessionRead=undefined;fireEvent.click(screen.getByRole('button',{name:'Retry session'}));
  await waitFor(()=>expect(field).toBeVisible());expect(field).toHaveValue('My unfinished explanation');expect(field).toHaveFocus();
 });
 
 test('malformed initial session readback retains credentials for an explicit connection retry',async()=>{
- localStorage.setItem('coachify.access-epoch','1');
- const session=JSON.stringify({token:'synthetic-session-token',epoch:'1'});sessionStorage.setItem('coachify.session',session);
+ localStorage.setItem('elo.access-epoch','1');
+ const session=JSON.stringify({token:'synthetic-session-token',epoch:'1'});sessionStorage.setItem('elo.session',session);
  sessionRead=async()=>new Response(JSON.stringify({name:'Incomplete identity'}));
  render(<ProfileProvider><Probe/><WorkspaceGuard><Draft/></WorkspaceGuard></ProfileProvider>);
  await screen.findByRole('alert');
- expect(sessionStorage.getItem('coachify.session')).toBe(session);expect(localStorage.getItem('coachify.access-epoch')).toBe('1');
+ expect(sessionStorage.getItem('elo.session')).toBe(session);expect(localStorage.getItem('elo.access-epoch')).toBe('1');
  expect(requests.some(url=>url.endsWith('/auth/logout')||url.endsWith('/profile'))).toBe(false);
  sessionRead=undefined;fireEvent.click(screen.getByRole('button',{name:'Retry connection'}));
  await waitFor(()=>expect(screen.getByTestId('profile')).toHaveTextContent('Private course'));
@@ -268,7 +268,7 @@ test('cross-tab epoch changes discard drafts even when an earlier validation suc
  const field=await openDraft();let release:((response:Response)=>void)|undefined;
  sessionRead=()=>new Promise(resolve=>{release=resolve;});
  fireEvent.click(screen.getByText('Validate session'));
- act(()=>{localStorage.setItem('coachify.access-epoch','newer');window.dispatchEvent(new StorageEvent('storage',{key:'coachify.access-epoch',newValue:'newer'}));});
+ act(()=>{localStorage.setItem('elo.access-epoch','newer');window.dispatchEvent(new StorageEvent('storage',{key:'elo.access-epoch',newValue:'newer'}));});
  await act(async()=>{release!(new Response(JSON.stringify({id:'synthetic-id',name:'Synthetic',provider:'local_test'})));});
  expect(screen.getByTestId('account')).toHaveTextContent('signed out');expect(field).not.toBeInTheDocument();
 });
@@ -277,7 +277,7 @@ test('an epoch change is checked before a delayed storage notification can arriv
  const field=await openDraft();let release:((response:Response)=>void)|undefined;
  sessionRead=()=>new Promise(resolve=>{release=resolve;});
  fireEvent.click(screen.getByText('Validate session'));
- localStorage.setItem('coachify.access-epoch','newer');
+ localStorage.setItem('elo.access-epoch','newer');
  await act(async()=>{release!(new Response(JSON.stringify({id:'synthetic-id',name:'Synthetic',provider:'local_test'})));});
  expect(screen.getByTestId('account')).toHaveTextContent('signed out');expect(field).not.toBeInTheDocument();
 });

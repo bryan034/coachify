@@ -18,8 +18,8 @@ const selection: Guard<TargetSelection> = (value): value is TargetSelection => r
 async function request<T>(path: string, token: string, signal: AbortSignal, guard: Guard<T>, body?: unknown, method='POST'): Promise<T> {
  const response=await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/career/targets${path}`,{method:body===undefined?'GET':method,body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.any([signal,AbortSignal.timeout(30_000)]),cache:'no-store',headers:{Authorization:`Bearer ${token}`,...(body===undefined?{}:{'Content-Type':'application/json'})}});
  const value:unknown=await response.json().catch(()=>null);
- if(!response.ok){if(response.status===401)window.dispatchEvent(new CustomEvent('coachify:expired',{detail:token}));const detail=record(value)?value.detail:null;throw new ApiError(text(detail)?detail:record(detail)&&text(detail.message)?detail.message:response.status===409?'The target or selection changed. Refresh saved targets, review the current choice and retry.':response.status===422?'Check the target fields and exact source excerpts. Your draft is still here.':'Saved career targets are unavailable. Your input is retained; retry when the service is available.',response.status);}
- if(!guard(value))throw new Error('Coachify returned incomplete target information. Refresh saved targets before continuing.');
+ if(!response.ok){if(response.status===401)window.dispatchEvent(new CustomEvent('elo:expired',{detail:token}));const detail=record(value)?value.detail:null;throw new ApiError(text(detail)?detail:record(detail)&&text(detail.message)?detail.message:response.status===409?'The target or selection changed. Refresh saved targets, review the current choice and retry.':response.status===422?'Check the target fields and exact source excerpts. Your draft is still here.':'Saved career targets are unavailable. Your input is retained; retry when the service is available.',response.status);}
+ if(!guard(value))throw new Error('elo returned incomplete target information. Refresh saved targets before continuing.');
  return value;
 }
 export const targetApi={

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('production profile is a summary and direct onboarding preview stays unavailable', async ({ page }) => {
-  await page.addInitScript(() => { localStorage.setItem('coachify.access-epoch', '1'); sessionStorage.setItem('coachify.session', JSON.stringify({ token: 'synthetic-session', epoch: '1' })); localStorage.setItem('development_tools_enabled','true'); });
+  await page.addInitScript(() => { localStorage.setItem('elo.access-epoch', '1'); sessionStorage.setItem('elo.session', JSON.stringify({ token: 'synthetic-session', epoch: '1' })); localStorage.setItem('development_tools_enabled','true'); });
   await page.route('**/api/v1/profile**', route => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/auth-config')) return route.fulfill({ json: { mode: 'email', development_tools_enabled: false } });

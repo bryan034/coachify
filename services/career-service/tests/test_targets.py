@@ -35,7 +35,7 @@ def repository(request):
     uri = os.getenv('MONGODB_TEST_URI')
     if not uri: pytest.skip('Set MONGODB_TEST_URI to test real target persistence and concurrency.')
     mongo = MongoClient(uri, serverSelectionTimeoutMS=3000)
-    name = 'coachify_career_test_' + uuid4().hex
+    name = 'elo_career_test_' + uuid4().hex
     try: yield TargetRepository(mongo[name])
     finally:
         mongo.drop_database(name)

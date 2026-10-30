@@ -299,7 +299,7 @@ local tokens-per-minute limit.
 
 Brave currently documents a 32,768-token total context maximum and 8,192 per URL.
 Gemini 3.5 Flash-Lite documents 1,048,576 input and 65,536 output tokens; these are
-provider maxima, not the amounts Coachify sends or requests.
+provider maxima, not the amounts elo sends or requests.
 
 Model IDs/endpoints follow the provider documentation:
 [Gemini 3.5 Flash Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),

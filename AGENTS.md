@@ -1,4 +1,4 @@
-# AGENTS.md — Coachify
+# AGENTS.md — elo
 
 ## Working rules
 
@@ -13,7 +13,8 @@
 - Before building CV, JD/skills-analysis or roadmap features, read the [MongoDB collections](docs/architecture/diagrams/mongodb_collections_uml.mmd), [embedded objects](docs/architecture/diagrams/mongodb_embedded_objects_uml.mmd) and [three-service architecture](docs/architecture/diagrams/dockerised-mvp.puml). Reconcile them with Jira and service contracts; keep the diagrams current as services are added.
 - Keep domain logic in backend services. Access another service’s data through its API, never its database. Keep schemas, contracts and frontend types consistent.
 - Enforce authentication, ownership and input validation in the backend. Handle failures, retries and concurrent updates without losing data.
-- Never read, edit or indirectly inspect `.env` files or their contents. Give configuration instructions for the user to apply; use synthetic settings for verification.
+- Centralise all user-configurable deployment variables in `infrastructure/docker/.env`. Document every active variable in `infrastructure/docker/.env.example` with safe defaults and blank secrets; update this template and the relevant Compose injection whenever configuration changes. Do not introduce root-level or service-specific environment files. Fixed internal service wiring stays in Compose; inject each setting only into the services that need it.
+- Agents may read, edit and validate the public `infrastructure/docker/.env.example` template. Never read, edit, load or indirectly inspect private environment files (including `infrastructure/docker/.env`) or their contents. Give instructions for the user to apply private values; use explicit synthetic settings and isolated resources for verification.
 - Keep secrets and personal data out of Git, browser bundles, logs and fixtures; use synthetic test data. Keep databases/internal APIs private and credentials out of images.
 - Treat uploads, external content and model output as untrusted data; validate before use or storage.
 

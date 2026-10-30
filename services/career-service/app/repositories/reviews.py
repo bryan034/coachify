@@ -30,11 +30,11 @@ class ReviewStore:
         if row.get('record_type') == 'requirement_review':
             return RequirementReview.model_validate({k:v for k,v in row.items() if k in RequirementReview.model_fields or k=='_id'})
         goal = CareerGoal.model_validate({k:v for k,v in row.items() if k in CareerGoal.model_fields or k=='_id'})
-        content = JDExtraction(role=goal.role, field=goal.field, company=goal.company, location=goal.location,
+        content = JDExtraction(job_dates=goal.job_dates, role=goal.role, field=goal.field, company=goal.company, location=goal.location,
             seniority_level=goal.seniority_level, employment_type=goal.employment_type, job_url=goal.job_url, summary=goal.summary, responsibilities=goal.responsibilities,
             skills=[s.model_dump(mode='json') for s in goal.skills], non_skill_requirements=goal.non_skill_requirements)
         for index,skill in enumerate(content.skills):
-            if not skill.item_id: skill.item_id=str(uuid5(NAMESPACE_URL,f'coachify:{goal.id}:skill:{index}'))
+            if not skill.item_id: skill.item_id=str(uuid5(NAMESPACE_URL,f'elo:{goal.id}:skill:{index}'))
         return RequirementReview(_id=goal.id, user_id=owner, version=goal.version, skill_mapping_version=goal.skill_mapping_version,
             created_at=goal.created_at, updated_at=goal.updated_at, target_type=goal.target_type,
             source_kind={'pasted_jd':'text','url_jd':'url','document_jd':'document','career_exploration':'career_exploration'}[goal.requirements_source],
@@ -132,7 +132,7 @@ class ReviewStore:
         inherited={f:getattr(base,f) for f in ('interests','preferences','exploration_draft_id','exploration_draft_version','source_cv_id','source_cv_version','source_extraction_version','source_profile_version')} if base else {}
         return CareerGoal(**inherited,discovery=draft.discovery,_id=draft.id,user_id=owner,version=draft.version,skill_mapping_version=MAPPING_VERSION,
             created_at=stamp,updated_at=stamp,target_type=draft.target_type,**{f:getattr(content,f) for f in METADATA},
-            skills=skills,non_skill_requirements=content.non_skill_requirements,summary=content.summary,responsibilities=content.responsibilities,
+            job_dates=content.job_dates,skills=skills,non_skill_requirements=content.non_skill_requirements,summary=content.summary,responsibilities=content.responsibilities,
             requirements_source={'text':'pasted_jd','url':'url_jd','document':'document_jd','career_exploration':'career_exploration'}[draft.source_kind],
             generation_version=draft.generation.prompt_version if draft.generation else 'pending-skills',generation=draft.generation,
             readiness='ready' if ready else 'pending',requirements_need_review=draft.requirements_need_review,source_review_id=draft.id,source_review_version=draft.version)

@@ -51,7 +51,7 @@ async function noEducation() {
   await workAnswers();
   await screen.findByRole('heading', { name: 'Your last education path.' });
   fireEvent.click(screen.getByRole('button', { name: 'No applicable previous education' }));
-  await screen.findByRole('button', { name: /Enter Coachify/ });
+  await screen.findByRole('button', { name: /Enter elo/ });
 }
 test('one question at a time; saves do not unlock the app; completion does', async () => {
   await noEducation();
@@ -59,7 +59,7 @@ test('one question at a time; saves do not unlock the app; completion does', asy
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   expect(replace).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: /Enter Coachify/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Enter elo/ }));
   await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard'));
   expect(saved.no_previous_education).toBe(true);
 });
@@ -77,39 +77,39 @@ test('student unlisted school, optional course, extended year and review use exi
   await screen.findByRole('heading', { name: 'Which year are you in?' });
   fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '6' } });
   fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
-  await screen.findByRole('button', { name: /Enter Coachify/ });
+  await screen.findByRole('button', { name: /Enter elo/ });
   expect(saved.education).toMatchObject({ institution: { kind: 'custom', name: 'Synthetic college' }, course: null, study_year: 6 });
   expect(saved.onboarding_complete).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: /Enter Coachify/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Enter elo/ }));
   await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard'));
 });
 test('failed save retains the current question and draft, and supports retry', async () => {
   await noEducation(); failure = 'outage';
-  fireEvent.click(screen.getByRole('button', { name: /Enter Coachify/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Enter elo/ }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Synthetic save outage');
   expect(saved.onboarding_complete).toBe(false); expect(replace).not.toHaveBeenCalled();
-  failure = ''; fireEvent.click(screen.getByRole('button', { name: /Enter Coachify/ }));
+  failure = ''; fireEvent.click(screen.getByRole('button', { name: /Enter elo/ }));
   await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard'));
 });
 test('lost committed finish is confirmed by server readback without another POST', async () => {
-  await noEducation(); failure = 'lost'; fireEvent.click(screen.getByRole('button', { name: /Enter Coachify/ }));
+  await noEducation(); failure = 'lost'; fireEvent.click(screen.getByRole('button', { name: /Enter elo/ }));
   await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard'));
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith('/onboarding/complete'))).toHaveLength(1);
 });
 test('conflict keeps the draft and requires canonical reconciliation before retry', async () => {
-  await noEducation(); failure = 'conflict'; fireEvent.click(screen.getByRole('button', { name: /Enter Coachify/ }));
+  await noEducation(); failure = 'conflict'; fireEvent.click(screen.getByRole('button', { name: /Enter elo/ }));
   await screen.findByRole('button', { name: 'Load latest version and keep my draft' });
-  expect(screen.getByRole('button', { name: /Enter Coachify/ })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Enter elo/ })).toBeDisabled();
   saved = { ...saved, version: 7 }; failure = '';
   fireEvent.click(screen.getByRole('button', { name: 'Load latest version and keep my draft' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: /Enter Coachify/ })).toBeEnabled());
-  fireEvent.click(screen.getByRole('button', { name: /Enter Coachify/ }));
+  await waitFor(() => expect(screen.getByRole('button', { name: /Enter elo/ })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: /Enter elo/ }));
   await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard'));
   expect(saved.version).toBe(8);
 });
 test('X signs out and clears the account rather than skipping onboarding', async () => {
   await open(); fireEvent.click(screen.getByRole('button', { name: 'Exit setup and sign out' }));
-  await waitFor(() => expect(sessionStorage.getItem('coachify.session')).toBeNull());
+  await waitFor(() => expect(sessionStorage.getItem('elo.session')).toBeNull());
   expect(replace).toHaveBeenCalledWith('/');
   expect(screen.queryByRole('heading', { name: 'Where are you right now?' })).not.toBeInTheDocument();
 });
@@ -126,12 +126,12 @@ test('retained education in a changed context waits for explicit review and pres
   fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
   await screen.findByRole('spinbutton'); fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '1' } });
   fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
-  await screen.findByRole('button', { name: /Enter Coachify/ });
+  await screen.findByRole('button', { name: /Enter elo/ });
   expect(saved.version).toBe(4);
   expect(saved.education).toMatchObject({ institution: { name: 'Synthetic old school' } });
-  expect(screen.getByRole('button', { name: /Enter Coachify/ })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Enter elo/ })).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox', { name: /I have reviewed/ }));
-  fireEvent.click(screen.getByRole('button', { name: /Enter Coachify/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Enter elo/ }));
   await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard'));
   expect(saved.education).toMatchObject({ institution: { name: 'Synthetic new school' }, course: 'New course', study_year: 1 });
   expect(saved.confirm_education_context).toBe(true);
@@ -186,7 +186,7 @@ test.each([true, false])('unemployed work history branch: previously employed %s
   expect(saved.previously_employed).toBe(answer);
   expect(saved.employment).toEqual(answer ? { employer: 'Unlisted previous company', role: 'Previous role', industry: 'Unlisted industry' } : {});
   fireEvent.click(screen.getByRole('button', { name: 'No applicable previous education' }));
-  fireEvent.click(await screen.findByRole('button', { name: /Enter Coachify/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Enter elo/ }));
   await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard'));
 });
 
@@ -209,7 +209,7 @@ test('never-employed users answer graduation immediately after their school and 
   expect(saved.education).toMatchObject({ graduation_year: 2024 });
   fireEvent.click(screen.getByRole('button', { name: /No applicable named course/ }));
   expect(await screen.findByText('2024')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /Enter Coachify/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Enter elo/ }));
   await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard'));
 });
 

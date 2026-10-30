@@ -47,7 +47,9 @@ def test_public_example_covers_every_active_compose_input_without_real_secrets()
     values=dict(pairs)
     for name in ('CAREER_LLM_API_KEY','CAREER_RESEARCH_API_KEY','CV_LLM_API_KEY',
                  'SMTP_PASSWORD','OTP_HASH_SECRET','MONGO_ROOT_PASSWORD',
-                 'PROFILE_DB_PASSWORD','CAREER_DB_PASSWORD','CV_DB_PASSWORD'):
+                 'PROFILE_DB_PASSWORD','CAREER_DB_PASSWORD','CV_DB_PASSWORD',
+                 'ASSESSMENT_DB_PASSWORD','ROADMAP_DB_PASSWORD',
+                 'ASSESSMENT_LLM_API_KEY','ROADMAP_LLM_API_KEY'):
         assert values[name]==''
     assert not keys.intersection(aliases)
     career=compose.split('  career-service:\n',1)[1].split('  cv-service:\n',1)[0]
@@ -56,3 +58,19 @@ def test_public_example_covers_every_active_compose_input_without_real_secrets()
     other_services=compose.replace(career,'')
     assert '      CAREER_LLM_API_KEY:' not in other_services
     assert '      CAREER_RESEARCH_API_KEY:' not in other_services
+
+
+@pytest.mark.parametrize('configured', ['synthetic-model', '  synthetic-model  '])
+def test_career_model_setting_is_loaded_and_trimmed(monkeypatch, configured):
+    monkeypatch.setenv('CAREER_LLM_API_KEY', 'synthetic-key')
+    monkeypatch.setenv('CAREER_LLM_MODEL', configured)
+    assert AISettings.from_env().model == 'synthetic-model'
+
+
+def test_blank_career_model_names_the_canonical_setting(monkeypatch):
+    monkeypatch.setenv('CAREER_LLM_API_KEY', 'synthetic-key-do-not-expose')
+    monkeypatch.setenv('CAREER_LLM_MODEL', '  ')
+    with pytest.raises(ValueError) as error:
+        AISettings.from_env()
+    assert 'CAREER_LLM_MODEL' in str(error.value)
+    assert 'synthetic-key-do-not-expose' not in str(error.value)

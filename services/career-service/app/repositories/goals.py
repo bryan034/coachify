@@ -176,7 +176,7 @@ class GoalStore:
             source_extraction_version=draft.cv.extraction_version if draft else None, source_profile_version=draft.cv.profile_version if draft else None)
         # Metadata-equivalent confirmation is a no-op, not a new selection/version.
         previous = self.current(owner)['goal']
-        fields = ('discovery','target_type','field','role','employment_type','company','location','seniority_level','job_url','interests','preferences','source_cv_id','source_cv_version','source_extraction_version','source_profile_version','exploration_draft_id','exploration_draft_version','skills','non_skill_requirements','summary','responsibilities','readiness','requirements_need_review','skill_mapping_version')
+        fields = ('job_dates','discovery','target_type','field','role','employment_type','company','location','seniority_level','job_url','interests','preferences','source_cv_id','source_cv_version','source_extraction_version','source_profile_version','exploration_draft_id','exploration_draft_version','skills','non_skill_requirements','summary','responsibilities','readiness','requirements_need_review','skill_mapping_version')
         if previous and all(getattr(previous, f) == getattr(goal, f) for f in fields):
             receipt={'key':key,'hash':digest}
             changed=self.state.update_one({'_id':owner,'version':state['version'],'receipts.key':{'$ne':key}},

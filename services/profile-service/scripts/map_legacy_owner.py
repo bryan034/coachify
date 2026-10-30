@@ -14,7 +14,7 @@ def main():
     args = parser.parse_args()
     settings = auth_settings()
     with MongoClient(os.environ['MONGODB_URI'], serverSelectionTimeoutMS=5000) as client:
-        database = client[os.getenv('MONGODB_DATABASE', 'coachify_profile')]
+        database = client[os.getenv('MONGODB_DATABASE', 'elo_profile')]
         print(map_legacy_owner(database, settings, args.account_id, args.legacy_owner, args.apply))
 
 

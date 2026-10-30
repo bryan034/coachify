@@ -1,4 +1,6 @@
 import pytest
+import smtplib
+import ssl
 from app.core.auth import auth_settings
 from app.core.mail import mail_settings
 
@@ -94,3 +96,47 @@ def test_default_authentication_is_email_and_ignores_unused_google_credentials(m
     settings = auth_settings()
     assert settings.mode == 'email'
     assert settings.google_client_id == ''
+
+
+def test_reset_email_uses_reset_subject_and_never_exposes_smtp_failure_details(monkeypatch):
+    import smtplib
+    from unittest.mock import patch
+    from fastapi import HTTPException
+    from app.core.mail import SmtpMailer
+    gmail_development(monkeypatch)
+    mailer = SmtpMailer(mail_settings('development'))
+    with patch('app.core.mail.smtplib.SMTP') as transport:
+        mailer.send_password_reset('synthetic@example.test', '123456')
+        message = transport.return_value.__enter__.return_value.send_message.call_args.args[0]
+        assert message['Subject'] == 'Reset your elo password'
+        assert '123456' in message.get_content()
+    with patch('app.core.mail.smtplib.SMTP', side_effect=smtplib.SMTPAuthenticationError(535, b'synthetic-private-provider-detail')):
+        with pytest.raises(HTTPException) as error:
+            mailer.send_otp('synthetic@example.test', '123456')
+        assert error.value.status_code == 503
+        assert 'rejected its credentials' in error.value.detail
+        assert 'synthetic-private-provider-detail' not in error.value.detail
+
+
+@pytest.mark.parametrize('failure,expected', [
+    (OSError('synthetic-private-network-detail'), 'outgoing mail server'),
+    (smtplib.SMTPConnectError(421, b'synthetic-private-response'), 'outgoing mail server'),
+    (smtplib.SMTPServerDisconnected('synthetic-private-response'), 'outgoing mail server'),
+    (ssl.SSLError('synthetic-private-certificate-detail'), 'secure connection'),
+    (smtplib.SMTPNotSupportedError('synthetic-private-response'), 'secure connection'),
+    (smtplib.SMTPSenderRefused(550, b'synthetic-private-response', 'sender@example.test'), 'sending address'),
+    (smtplib.SMTPRecipientsRefused({'recipient@example.test': (550, b'synthetic-private-response')}), 'recipient address'),
+    (smtplib.SMTPDataError(554, b'synthetic-private-response'), 'rejected the verification email'),
+])
+def test_email_delivery_errors_give_specific_safe_recovery_guidance(monkeypatch, failure, expected):
+    from unittest.mock import patch
+    from fastapi import HTTPException
+    from app.core.mail import SmtpMailer
+    gmail_development(monkeypatch)
+    with patch('app.core.mail.smtplib.SMTP', side_effect=failure):
+        with pytest.raises(HTTPException) as error:
+            SmtpMailer(mail_settings('development')).send_otp('recipient@example.test', '123456')
+    assert error.value.status_code == 503
+    assert expected in error.value.detail
+    assert 'synthetic-private' not in error.value.detail
+    assert 'recipient@example.test' not in error.value.detail

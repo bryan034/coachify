@@ -1,0 +1,231 @@
+{
+  "version": "skills-v2",
+  "skills": [
+    {
+      "id": "language.sql",
+      "names": [
+        "SQL",
+        "Structured Query Language"
+      ],
+      "categories": [
+        "Technical",
+        "Language",
+        "Programming",
+        "Programming language"
+      ]
+    },
+    {
+      "id": "language.python",
+      "names": [
+        "Python"
+      ],
+      "categories": [
+        "Technical",
+        "Language",
+        "Programming",
+        "Programming language"
+      ]
+    },
+    {
+      "id": "language.java",
+      "names": [
+        "Java"
+      ],
+      "categories": [
+        "Technical",
+        "Language",
+        "Programming",
+        "Programming language"
+      ]
+    },
+    {
+      "id": "language.javascript",
+      "names": [
+        "JavaScript"
+      ],
+      "categories": [
+        "Technical",
+        "Language",
+        "Programming",
+        "Programming language"
+      ]
+    },
+    {
+      "id": "tool.excel",
+      "names": [
+        "Excel",
+        "Microsoft Excel"
+      ],
+      "categories": [
+        "Technical",
+        "Tool",
+        "Software",
+        "Productivity"
+      ]
+    },
+    {
+      "id": "tool.git",
+      "names": [
+        "Git"
+      ],
+      "categories": [
+        "Technical",
+        "Tool",
+        "Version control"
+      ]
+    },
+    {
+      "id": "interpersonal.communication",
+      "names": [
+        "Communication",
+        "Communication skills"
+      ],
+      "categories": [
+        "Interpersonal",
+        "Soft skill",
+        "Soft skills",
+        "Communication"
+      ]
+    },
+    {
+      "id": "interpersonal.teamwork",
+      "names": [
+        "Teamwork",
+        "Team collaboration"
+      ],
+      "categories": [
+        "Interpersonal",
+        "Soft skill",
+        "Soft skills"
+      ]
+    },
+    {
+      "id": "analytical.problem_solving",
+      "names": [
+        "Problem solving",
+        "Problem-solving"
+      ],
+      "categories": [
+        "Analytical",
+        "Interpersonal",
+        "Soft skill",
+        "Soft skills"
+      ]
+    },
+    {
+      "id": "framework.react",
+      "names": [
+        "React",
+        "React.js",
+        "ReactJS"
+      ],
+      "categories": []
+    },
+    {
+      "id": "framework.nextjs",
+      "names": [
+        "Next.js",
+        "NextJS"
+      ],
+      "categories": []
+    },
+    {
+      "id": "framework.fastapi",
+      "names": [
+        "FastAPI"
+      ],
+      "categories": []
+    },
+    {
+      "id": "language.typescript",
+      "names": [
+        "TypeScript"
+      ],
+      "categories": []
+    },
+    {
+      "id": "tool.docker",
+      "names": [
+        "Docker"
+      ],
+      "categories": []
+    },
+    {
+      "id": "database.mongodb",
+      "names": [
+        "MongoDB"
+      ],
+      "categories": []
+    },
+    {
+      "id": "database.postgresql",
+      "names": [
+        "PostgreSQL",
+        "Postgres"
+      ],
+      "categories": []
+    },
+    {
+      "id": "tool.kubernetes",
+      "names": [
+        "Kubernetes",
+        "K8s"
+      ],
+      "categories": []
+    },
+    {
+      "id": "cloud.aws",
+      "names": [
+        "AWS",
+        "Amazon Web Services"
+      ],
+      "categories": []
+    },
+    {
+      "id": "analytical.data_analysis",
+      "names": [
+        "Data analysis",
+        "Data analytics"
+      ],
+      "categories": []
+    },
+    {
+      "id": "practice.testing",
+      "names": [
+        "Software testing",
+        "Testing"
+      ],
+      "categories": []
+    },
+    {
+      "id": "practice.machine_learning",
+      "names": [
+        "Machine learning",
+        "ML"
+      ],
+      "categories": []
+    },
+    {
+      "id": "practice.project_management",
+      "names": [
+        "Project management"
+      ],
+      "categories": []
+    },
+    {
+      "id": "tool.power_bi",
+      "names": [
+        "Power BI",
+        "Microsoft Power BI"
+      ],
+      "categories": []
+    },
+    {
+      "id": "tool.tableau",
+      "names": [
+        "Tableau"
+      ],
+      "categories": []
+    }
+  ]
+}

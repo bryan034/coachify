@@ -17,9 +17,9 @@ type Session = {
  signOut: () => void; retryLogout: () => void; reload: () => void; retrySession: () => Promise<void>; setProfile: (profile: Profile) => boolean;
 };
 const Context = createContext<Session | null>(null);
-const SESSION = 'coachify.session';
-const EPOCH = 'coachify.access-epoch';
-const PENDING = 'coachify.pending-logout';
+const SESSION = 'elo.session';
+const EPOCH = 'elo.access-epoch';
+const PENDING = 'elo.pending-logout';
 const SESSION_CHECK_TIMEOUT = 10_000;
 function validAccount(value: unknown): value is Account {
  if (!value || typeof value !== 'object') return false;
@@ -149,7 +149,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  useEffect(() => {
   function changed(event: StorageEvent) {
    if (event.key === EPOCH) { cancelAccess(); clear(); setLoading(false); }
-   if (event.key === 'coachify.setup-completed' && event.newValue && currentAccount.current && !latestProfile.current?.onboarding_complete) {
+   if (event.key === 'elo.setup-completed' && event.newValue && currentAccount.current && !latestProfile.current?.onboarding_complete) {
     try { const hint = JSON.parse(event.newValue); if (hint.account_id === currentAccount.current.id) reload(); } catch { /* Ignore malformed non-secret hints. */ }
    }
   }
@@ -159,9 +159,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   // Keep drafts mounted while revalidating access; the workspace guard masks them until the check completes.
   function visible() { if (document.visibilityState === 'visible') void validateSession(); }
   function restored(event: PageTransitionEvent) { if (event.persisted) void validateSession(true); }
-  window.addEventListener('storage', changed); window.addEventListener('coachify:expired', expired);
+  window.addEventListener('storage', changed); window.addEventListener('elo:expired', expired);
   document.addEventListener('visibilitychange', visible); window.addEventListener('pageshow', restored);
-  return () => { window.removeEventListener('storage', changed); window.removeEventListener('coachify:expired', expired); document.removeEventListener('visibilitychange', visible); window.removeEventListener('pageshow', restored); };
+  return () => { window.removeEventListener('storage', changed); window.removeEventListener('elo:expired', expired); document.removeEventListener('visibilitychange', visible); window.removeEventListener('pageshow', restored); };
  }, [cancelAccess, clear, reload, signOut, validateSession]);
  useEffect(() => {
   const controller = new AbortController(); const id = ++operation.current;
@@ -205,8 +205,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
  const beginAccess = useCallback(async (intent: 'login' | 'register') => {
   cancelAccess(); clear();
   const epoch = nextEpoch();
-  let flow = localStorage.getItem('coachify.flow');
-  if (!flow) { flow = secret(); localStorage.setItem('coachify.flow', flow); }
+  let flow = localStorage.getItem('elo.flow');
+  if (!flow) { flow = secret(); localStorage.setItem('elo.flow', flow); }
   const access: Access = { flow_id: flow, attempt_id: secret(), session_token: secret(), nonce: '', epoch };
   attempt.current = access;
   const result = await profileApi<{ nonce: string }>('/auth/attempts', { method: 'POST', body: JSON.stringify({ flow_id: flow, attempt_id: access.attempt_id, generation: Number(epoch), intent }) });
@@ -248,7 +248,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       || (latestProfile.current?.onboarding_complete && !value.onboarding_complete)) return false;
   const completed = !latestProfile.current?.onboarding_complete && value.onboarding_complete;
   latestProfile.current = value; setProfile(value);
-  if (completed && currentAccount.current) localStorage.setItem('coachify.setup-completed', JSON.stringify({ account_id: currentAccount.current.id, version: value.version, at: Date.now() }));
+  if (completed && currentAccount.current) localStorage.setItem('elo.setup-completed', JSON.stringify({ account_id: currentAccount.current.id, version: value.version, at: Date.now() }));
   return true;
  }, [token]);
  useEffect(() => {

@@ -1,5 +1,3 @@
-# career-assessment
+# Career assessment
 
-Pasted job descriptions and capability-gap assessment.
-
-Presentation feature placeholder only. Domain operations belong to its FastAPI service.
+Assessment is displayed in the starting-point panel beside Roadmap's adviser. `/career` redirects to `/roadmap`. The separate Assessment backend owns versioned comparison; this folder remains a compatibility feature location.

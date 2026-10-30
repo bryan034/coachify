@@ -11,7 +11,7 @@ pytestmark = pytest.mark.skipif(not os.getenv("MONGODB_TEST_URI"), reason="Set M
 
 def test_real_mongodb_roundtrip_concurrency_and_restart():
     client = MongoClient(os.environ["MONGODB_TEST_URI"], serverSelectionTimeoutMS=5000)
-    name = "coachify_test_" + uuid4().hex
+    name = "elo_test_" + uuid4().hex
     try:
         repo = ProfileRepository(client[name])
         patch = ProfilePatch(expected_version=0, occupational_status="student", school_category="university")
@@ -54,7 +54,7 @@ def test_real_planning_atomicity_replay_and_reconnect():
     from datetime import timedelta
     from app.domain.planning import today_in
     client=MongoClient(os.environ['MONGODB_TEST_URI'],serverSelectionTimeoutMS=5000)
-    name='coachify_test_'+uuid4().hex
+    name='elo_test_'+uuid4().hex
     try:
         repo=ProfileRepository(client[name])
         repo.update('alice',ProfilePatch(expected_version=0,occupational_status='employed'))
@@ -102,7 +102,7 @@ def test_real_planning_duplicate_submission_and_base_period_race():
     from datetime import timedelta
     from app.domain.planning import today_in, planning_inputs
     client=MongoClient(os.environ['MONGODB_TEST_URI'],serverSelectionTimeoutMS=5000)
-    name='coachify_test_'+uuid4().hex
+    name='elo_test_'+uuid4().hex
     try:
         repo=ProfileRepository(client[name])
         repo.update('alice',ProfilePatch(expected_version=0,occupational_status='employed'))
@@ -132,7 +132,7 @@ def test_real_planning_duplicate_submission_and_base_period_race():
 def test_real_reused_key_cannot_race_a_noop_and_changed_save():
     from app.repositories.profile import MutationConflict
     client=MongoClient(os.environ['MONGODB_TEST_URI'],serverSelectionTimeoutMS=5000)
-    name='coachify_test_'+uuid4().hex
+    name='elo_test_'+uuid4().hex
     try:
         repo=ProfileRepository(client[name])
         repo.update('alice',ProfilePatch(expected_version=0,occupational_status='employed'))

@@ -67,7 +67,7 @@ def database(request):
         if not os.getenv("MONGODB_TEST_URI"):
             pytest.skip("Set MONGODB_TEST_URI for real MongoDB C07 coverage")
         client = MongoClient(os.environ["MONGODB_TEST_URI"], serverSelectionTimeoutMS=5000)
-        database = client["coachify_capability_test_" + uuid4().hex]
+        database = client["elo_capability_test_" + uuid4().hex]
         try:
             yield database
         finally:
@@ -433,3 +433,12 @@ def test_attachment_history_limit_preserves_existing_source():
     original[0]["attachment_history"] = [{"synthetic": True}] * 100
     with pytest.raises(CapabilityLimit): revise_attachment(original, attachment(original[0]["id"]), source_item())
     assert original[0]["attached_to"] is None
+
+
+def test_public_manual_declaration_uses_same_canonical_identity_as_cv_and_goal():
+    from datetime import datetime,timezone
+    from app.schemas.capabilities import Declaration
+    value=Declaration(id='synthetic',name='SQL',description='I have used SQL.',skill_id='skill:sql',provenance='user_declared',
+        contributions=[],created_at=datetime.now(timezone.utc),updated_at=datetime.now(timezone.utc))
+    assert value.canonical_skill_id=='language.sql'
+    assert value.skill_id=='skill:sql'

@@ -13,8 +13,8 @@ async function workspace(page: Page) {
   cv.profile_version = 3;
   cv.clarifications = [{ id: 'contribution', item_id: cv.items[0].id, kind: 'project', question: 'Which Python work was yours?', uncertainty_key: 'contribution', status: 'unanswered', answer: null, career_target_id: confirmedTarget.id, career_target_version: confirmedTarget.version }];
   await page.addInitScript(() => {
-    localStorage.setItem('coachify.access-epoch', '1');
-    sessionStorage.setItem('coachify.session', JSON.stringify({ token: 'synthetic-session', epoch: '1' }));
+    localStorage.setItem('elo.access-epoch', '1');
+    sessionStorage.setItem('elo.session', JSON.stringify({ token: 'synthetic-session', epoch: '1' }));
   });
   await page.route('**/api/v1/profile**', async route => {
     const path = new URL(route.request().url()).pathname;
@@ -64,7 +64,7 @@ async function enterDrafts(page: Page) {
   await page.getByRole('button', { name: 'Edit or remove Team dashboard' }).click();
   await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Unsaved correction: I prepared the data.');
   await page.getByRole('textbox', { name: 'Your explanation' }).fill('Unsaved explanation: I wrote the Python cleanup script.');
-  await page.getByRole('textbox', { name: 'Message Coachify', exact: true }).fill('Unsaved chat: I also cleaned the reporting data.');
+  await page.getByRole('textbox', { name: 'Message elo', exact: true }).fill('Unsaved chat: I also cleaned the reporting data.');
   await page.getByLabel('Capability name', { exact: true }).fill('Public speaking');
   await page.getByLabel('Capability description', { exact: true }).fill('Unsaved capability: I presented our results.');
   await page.getByLabel('CV document', { exact: true }).setInputFiles({ name: 'draft-cv.pdf', mimeType: 'application/pdf', buffer: Buffer.from('Synthetic unsent upload; boundary APIs are mocked.') });
@@ -73,7 +73,7 @@ async function enterDrafts(page: Page) {
 async function expectDrafts(page: Page) {
   await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Unsaved correction: I prepared the data.');
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toHaveValue('Unsaved explanation: I wrote the Python cleanup script.');
-  await expect(page.getByRole('textbox', { name: 'Message Coachify', exact: true })).toHaveValue('Unsaved chat: I also cleaned the reporting data.');
+  await expect(page.getByRole('textbox', { name: 'Message elo', exact: true })).toHaveValue('Unsaved chat: I also cleaned the reporting data.');
   await expect(page.getByLabel('Capability name', { exact: true })).toHaveValue('Public speaking');
   await expect(page.getByLabel('Capability description', { exact: true })).toHaveValue('Unsaved capability: I presented our results.');
   expect(await page.getByLabel('CV document', { exact: true }).evaluate((input: HTMLInputElement) => input.files?.[0]?.name)).toBe('draft-cv.pdf');
@@ -138,7 +138,7 @@ test('confirmed session expiry clears private drafts and the selected upload', a
   await visibility(page, 'hidden');
   await visibility(page, 'visible');
   await expect(page.locator('.cv-workspace')).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('coachify.session'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('elo.session'))).toBeNull();
   expect(session.writes).toEqual([]);
 });
 
@@ -151,13 +151,13 @@ test('an old pending session check cannot restore drafts after another tab chang
   await expect(page.getByRole('heading', { name: 'Checking your session' })).toBeVisible();
   const oldRequestCancelled = page.waitForEvent('requestfailed', request => request.url().endsWith('/profile/auth/session'));
   await page.evaluate(() => {
-    localStorage.setItem('coachify.access-epoch', 'other-account');
-    window.dispatchEvent(new StorageEvent('storage', { key: 'coachify.access-epoch', newValue: 'other-account', storageArea: localStorage }));
+    localStorage.setItem('elo.access-epoch', 'other-account');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'elo.access-epoch', newValue: 'other-account', storageArea: localStorage }));
   });
   await expect(page.locator('.cv-workspace')).toHaveCount(0);
   await oldRequestCancelled;
   session.release();
   await expect(page.getByRole('heading', { name: 'Connection interrupted' })).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('coachify.session'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('elo.session'))).toBeNull();
   expect(session.writes).toEqual([]);
 });

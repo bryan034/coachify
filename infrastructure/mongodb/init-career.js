@@ -1,9 +1,9 @@
 // Safe for an existing volume: create missing service users; never reset passwords.
-const rootUri = 'mongodb://coachify_admin:' + encodeURIComponent(process.env.MONGO_ROOT_PASSWORD) + '@mongodb:27017/admin';
+const rootUri = 'mongodb://elo_admin:' + encodeURIComponent(process.env.MONGO_ROOT_PASSWORD) + '@mongodb:27017/admin';
 const adminConnection = new Mongo(rootUri);
 for (const item of [
-  { database: 'coachify_career', user: 'coachify_career', password: process.env.CAREER_DB_PASSWORD },
-  { database: 'coachify_ingestion', user: 'coachify_cv', password: process.env.CV_DB_PASSWORD },
+  { database: 'elo_career', user: 'elo_career', password: process.env.CAREER_DB_PASSWORD },
+  { database: 'elo_ingestion', user: 'elo_cv', password: process.env.CV_DB_PASSWORD },
 ]) {
   if (!item.password) throw new Error('Set the Career and CV database passwords before starting.');
   const scoped = adminConnection.getDB(item.database);

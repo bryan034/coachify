@@ -54,3 +54,12 @@ def test_cv_repository_roundtrip_idempotency_and_private_owner_isolation(harness
     with pytest.raises(Conflict): repo.insert(conflicting)
     assert len(repo.list('owner-a')) == 1
     assert repo.get('owner-a', cv['id']) == original
+
+
+def test_cv_skill_adds_shared_identity_without_rewriting_source_key():
+    from app.schemas.cv import CvSkill
+    value=CvSkill(skill_id='skill:structured query language',name='Structured Query Language',category='unspecified',
+        proficiency=None,experience_months=None,context=None,evidence=[],evidence_type='user_clarified',explicit=False,item_ids=[],sources=[])
+    assert value.canonical_skill_id=='language.sql'
+    assert value.skill_id=='skill:structured query language'
+    assert value.skill_registry_version=='skills-v2'

@@ -23,14 +23,14 @@ external website calls are required. JD checks cover paraphrased support, struct
 job metadata, labelled inferred skills, conversation context without raw sources,
 and approval boundaries for proposed changes. Set `MONGODB_TEST_URI` to disposable MongoDB
 to include real repository/index/ownership/idempotency tests; these create and
-drop only random `coachify_analysis_test_*` databases.
+drop only random `elo_analysis_test_*` databases.
 
 Frontend component/browser coverage lives under `apps/frontend`. The full-stack
 Career test uses real Profile authentication and TXT parsing, with synthetic
 accounts and Mailpit. It also verifies internal URLs are rejected and previews
 are absent from browser storage and lost after reload.
 
-J02–J04 integration tests create/drop `coachify_reviews_test_*` databases. They cover
+J02–J04 integration tests create/drop `elo_reviews_test_*` databases. They cover
 structured-only storage, owner isolation, source hashes, no-op/reset/correction
 behaviour, mixed AND/OR groups, duration ranges, mapping, reclassification,
 confirmation claims, lost-response retries and immutable goal edits. Unit tests

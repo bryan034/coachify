@@ -1,3 +1,4 @@
+from elo_shared.dates import JobDate
 """Small provider contracts, independent of persistence/API document metadata."""
 from app.schemas.analysis import EmploymentType
 
@@ -36,6 +37,7 @@ class ExtractedCondition(Contract):
 
 
 class ExtractedJD(Contract):
+    job_dates: list[JobDate] = Field(default_factory=list, max_length=8)
     role: Text | None
     field: Text | None
     employment_type: EmploymentType = 'unknown'

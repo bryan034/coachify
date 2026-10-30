@@ -202,7 +202,7 @@ extra proposal call within its original operation deadline. Prompt/schema output
 |---|---|
 | `AI_ENABLED` | Enabled when a Gemini key is supplied; explicit false disables model operations |
 | `CAREER_LLM_API_KEY` | Required server-only reasoning credential |
-| `GEMINI_REASONING_MODEL` | `gemini-3.5-flash-lite`; one explicit model override shared by every stage |
+| `CAREER_LLM_MODEL` | `gemini-3.5-flash-lite`; one explicit model override shared by every stage |
 | Endpoint | `https://generativelanguage.googleapis.com/v1beta/openai`; fixed server-side |
 | `AI_MAX_OUTPUT_TOKENS` | 4096; overall completion ceiling; chat uses at most 1024 and interview synthesis 2048 |
 | `AI_CONTEXT_TOKENS` | 65536; separate model context-window guard |
@@ -545,7 +545,7 @@ provider_schema/provider_parameter. Unknown bodies keep provider_configuration p
 safe HTTP metadata. These static rejections are not retried without their schema or
 silently sent to another provider. The JSON models and citation validators are unchanged.
 
-GEMINI_REASONING_MODEL is the sole optional model override for production; it defaults
+CAREER_LLM_MODEL is the sole optional model override for production; it defaults
 to the requested gemini-3.5-flash-lite identifier. Every role uses the same configured model,
 including Opportunity Intelligence and discovery. API keys are trimmed at their edges;
 old AI_MODEL/GEMINI_MODEL/OPPORTUNITY_GEMINI_MODEL settings remain ignored.
@@ -626,3 +626,9 @@ Deployment uses the service-scoped `CAREER_LLM_API_KEY` and
 `CAREER_RESEARCH_API_KEY` names. `GEMINI_API_KEY` / `BRAVE_API_KEY` are deprecated
 fallbacks only when the corresponding canonical variable is absent; an explicitly
 blank canonical variable wins. Provider/model selection and task budgets are unchanged.
+
+## Separate Assessment authority — 30 October 2026
+
+Per the user's revised architecture, new runtime comparison is owned by `services/assessment-service`, not Career. Career's analysis-v1 contracts/repository stay as compatibility code with no automatic historical migration. The producer route `/api/v1/career/assessment-input` exports the exact current goal/selection and current linked research. New comparisons use assessment-v1 and shared additive canonical skill identities/registry versions. Career preserves legacy registry IDs and pending-readiness semantics for existing clients; the new handoff permits valid requirements with unresolved mapping/importance to produce explicit uncertainty rather than blocking all comparison.
+
+JD extraction also accepts bounded `job_dates` with kind, exact text and exact source evidence. The adapter validates excerpts before raw JD disposal. Only recognized complete date wording normalizes to a calendar date; ranges/partial/relative wording remain text. These dates do not silently replace Profile's application date or the Roadmap user's preparation target. Existing stored goals are not backfilled from discarded raw sources.

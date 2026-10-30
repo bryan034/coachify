@@ -8,7 +8,7 @@ python3 -m venv .venv
 MONGODB_TEST_URI=mongodb://127.0.0.1:27028 .venv/bin/python -m pytest -q
 ```
 
-Use a disposable MongoDB instance. Each Mongo test creates a unique `coachify_cv_test_*` database and drops only that database. Without `MONGODB_TEST_URI`, Mongo cases are explicitly skipped; memory-only results do not prove Mongo behavior.
+Use a disposable MongoDB instance. Each Mongo test creates a unique `elo_cv_test_*` database and drops only that database. Without `MONGODB_TEST_URI`, Mongo cases are explicitly skipped; memory-only results do not prove Mongo behavior.
 
 Synthetic fixtures cover text PDF/DOCX sources, sparse CVs, exact/over size limits, corrupt/encrypted/image-only/unsafe archives, provider JSON structure, unsupported evidence and strict unknown numeric values. Both repositories exercise persisted status, owner isolation/revoked sessions, replay/conflicts, explicit selection, independent capability evidence, answer/skip/deferred context, same-source overrides, cleanup interruption, expired worker fencing, concurrent writers and changing declarations during input assembly.
 

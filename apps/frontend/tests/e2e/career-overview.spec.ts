@@ -12,7 +12,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
   if(path==='/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
   return route.fallback();
  });
- await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/capabilities'))return route.fallback();
@@ -52,7 +52,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await page.screenshot({path:test.info().outputPath('goal-overview-mobile.png'),fullPage:true});
  await page.getByRole('link',{name:'Refine goal',exact:true}).click();
  await expect(page.getByRole('log')).toContainText('What would you like to refine');
- await page.getByRole('textbox',{name:'Message Coachify'}).fill('Help me refine my goal');
+ await page.getByRole('textbox',{name:'Message elo'}).fill('Help me refine my goal');
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole('log')).toContainText('Which part would you like to change');
  await page.getByRole('button',{name:'← Career Goal'}).click();
@@ -75,7 +75,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
 });
 
 test('Opportunity Intelligence preserves partial categories, citations and targeted refresh on mobile',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(route.request().url(),{mode:'email',google_enabled:false})});

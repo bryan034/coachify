@@ -29,7 +29,7 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
             if not uri:
                 raise RuntimeError("Set MONGODB_URI before starting the profile service.")
             client = MongoClient(uri, serverSelectionTimeoutMS=5000)
-            database = client[os.getenv("MONGODB_DATABASE", "coachify_profile")]
+            database = client[os.getenv("MONGODB_DATABASE", "elo_profile")]
             app.state.repository = ProfileRepository(database)
             app.state.accounts = AccountRepository(database, mailer or SmtpMailer(mail_settings(app.state.auth_settings.environment)))
             app.state.capabilities = CapabilityRepository(database)
@@ -43,7 +43,7 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
             if client is not None:
                 client.close()
 
-    app = FastAPI(title="Coachify profile API", version="0.1.0", description="Verified email/password accounts, optional Google, and revocable owner-scoped sessions.", lifespan=lifespan)
+    app = FastAPI(title="elo profile API", version="0.1.0", description="Verified email/password accounts, optional Google, and revocable owner-scoped sessions.", lifespan=lifespan)
     app.include_router(router)
     app.include_router(account_router)
     app.include_router(capability_router)

@@ -1,3 +1,4 @@
+from elo_shared.skills import resolve, MAPPING_VERSION
 from typing import Annotated, Literal
 import calendar
 from datetime import date
@@ -213,6 +214,13 @@ class SkillSource(BaseModel):
 
 
 class CvSkill(BaseModel):
+    canonical_skill_id: str | None = None
+    skill_registry_version: str = MAPPING_VERSION
+    @model_validator(mode='after')
+    def canonical_identity(self):
+        self.canonical_skill_id = resolve(self.name, self.category)
+        self.skill_registry_version = MAPPING_VERSION
+        return self
     skill_id: str
     name: str
     category: str

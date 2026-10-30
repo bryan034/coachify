@@ -10,9 +10,9 @@ export type SeededGoal={id:string;version:number;selection_version:number};
 export async function seedCanonicalGoal(account:Account,input:SyntheticGoal):Promise<SeededGoal>{
  if(!input.role.startsWith('Synthetic '))throw new Error('Canonical goal fixtures must be clearly synthetic.');
  const who=await (await account.get('/api/v1/profile/auth/session')).json();
- const project=process.env.COACHIFY_TEST_COMPOSE_PROJECT||'ci-profile';
+ const project=process.env.ELO_TEST_COMPOSE_PROJECT||'ci-profile';
  const containers=execFileSync('docker',['ps','--filter',`label=com.docker.compose.project=${project}`,'--filter','label=com.docker.compose.service=career-service','--format','{{.ID}}'],{encoding:'utf8'}).trim().split(/\s+/).filter(Boolean);
- if(containers.length!==1)throw new Error('Choose exactly one disposable Career test service using COACHIFY_TEST_COMPOSE_PROJECT.');
+ if(containers.length!==1)throw new Error('Choose exactly one disposable Career test service using ELO_TEST_COMPOSE_PROJECT.');
  const result=JSON.parse(execFileSync('docker',['exec','-i',containers[0],'python','/fixture/seed-career.py'],{input:JSON.stringify({owner:who.id,...input}),encoding:'utf8'}));
  const value={id:result.id??result.goal?._id,version:result.version??result.goal?.version,selection_version:result.selection_version};
  if(typeof value.id!=='string'||!Number.isSafeInteger(value.version)||!Number.isSafeInteger(value.selection_version))throw new Error('The synthetic Career goal seed returned incomplete version metadata.');

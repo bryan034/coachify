@@ -17,7 +17,7 @@ from app.schemas.analysis import CareerGoal
 
 
 def main():
-    if os.getenv('COACHIFY_SYNTHETIC_TEST_FIXTURES') != '1':
+    if os.getenv('ELO_SYNTHETIC_TEST_FIXTURES') != '1':
         raise RuntimeError('Canonical seeding is available only in the disposable test override.')
     raw = sys.stdin.read(65537)
     if len(raw.encode()) > 65536:
@@ -26,11 +26,11 @@ def main():
     owner = str(UUID(body['owner']))
     if owner != body['owner'] or not body.get('role', '').startswith('Synthetic '):
         raise ValueError('Use a labelled synthetic owner and role.')
-    if os.environ.get('MONGODB_DATABASE') != 'coachify_career':
+    if os.environ.get('MONGODB_DATABASE') != 'elo_career':
         raise ValueError('Unexpected disposable database name.')
     client = MongoClient(os.environ['MONGODB_URI'], tz_aware=True, serverSelectionTimeoutMS=5000)
     try:
-        store = GoalStore(client['coachify_career'])
+        store = GoalStore(client['elo_career'])
         stamp = now()
         if body.get('goal_id'):
             goal = store.goals.find_one({'_id': ObjectId(body['goal_id']), 'user_id': owner})

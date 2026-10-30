@@ -130,7 +130,7 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  await expect(editor).not.toBeVisible();
  await expect(page.getByText('Linked evidence changed. Review how this declaration relates to it.', {exact: true})).toBeVisible();
  const beforeDetach = await (await account.get('/api/v1/profile/capabilities')).json();
- await chapter('9. Changed evidence prompts an explicit link decision', 'The source summary changed. Coachify retains the manual declaration, flags the old link, and lets you choose how it should relate to the evidence.', page.getByText('Linked evidence changed. Review how this declaration relates to it.', {exact: true}));
+ await chapter('9. Changed evidence prompts an explicit link decision', 'The source summary changed. elo retains the manual declaration, flags the old link, and lets you choose how it should relate to the evidence.', page.getByText('Linked evidence changed. Review how this declaration relates to it.', {exact: true}));
  await page.getByRole('button', { name: 'Review CV link', exact: true }).click();
  await page.getByRole('combobox', { name: 'How should this declaration be linked?', exact: true }).selectOption('standalone');
  await page.getByRole('button', { name: 'Save link choice', exact: true }).click();

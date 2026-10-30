@@ -16,7 +16,7 @@ def main():
     try:
         import fcntl
         # One renderer per service container, within the existing two-import admission.
-        with open('/tmp/coachify-browser-preview.lock','a') as lock:
+        with open('/tmp/elo-browser-preview.lock','a') as lock:
             try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError:raise ValueError('Another JavaScript preview is loading. Try again shortly, paste the description or upload a document.') from None
             from app.clients.job_browser import render_url

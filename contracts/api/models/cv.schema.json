@@ -380,6 +380,23 @@
     },
     "CvSkill": {
       "properties": {
+        "canonical_skill_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Skill Id"
+        },
+        "skill_registry_version": {
+          "default": "skills-v2",
+          "title": "Skill Registry Version",
+          "type": "string"
+        },
         "skill_id": {
           "title": "Skill Id",
           "type": "string"

@@ -1,0 +1,10 @@
+[project]
+name = "elo-shared"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["pydantic==2.14.1", "fastapi==0.162.0", "httpx==0.28.1", "pymongo==4.19.0"]
+[build-system]
+requires = ["setuptools>=75,<81"]
+build-backend = "setuptools.build_meta"
+[tool.setuptools.package-data]
+elo_shared = ["*.json"]

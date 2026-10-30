@@ -85,7 +85,7 @@ def test_api_exposes_status_and_known_fields_without_echoing_provider_prose(monk
 
 def test_explicit_model_override_is_shared_by_all_roles_and_legacy_settings_stay_ignored(monkeypatch):
     for name,value in {'AI_ENABLED':'true','GEMINI_API_KEY':' synthetic-gemini ',
-        'GEMINI_REASONING_MODEL':'gemini-3.6-flash','GEMINI_MODEL':'legacy-lite',
+        'CAREER_LLM_MODEL':'gemini-3.6-flash','GEMINI_MODEL':'legacy-lite',
         'AI_MODEL':'unused-model','AI_PROVIDER':'retired-provider'}.items():monkeypatch.setenv(name,value)
     settings=GeminiSettings.reasoning_from_env()
     assert settings.model=='gemini-3.6-flash' and settings.api_key.get_secret_value()=='synthetic-gemini'
@@ -108,8 +108,8 @@ def test_public_docker_example_contains_only_active_inputs_and_no_example_secret
     consumed=set(re.findall(r'\$\{([A-Z][A-Z0-9_]*)',compose))
     assert set(pairs)<=consumed
     from app.ai.config import REASONING_MODEL
-    assert pairs['GEMINI_REASONING_MODEL']==REASONING_MODEL=='gemini-3.5-flash-lite'
-    assert '${GEMINI_REASONING_MODEL:-'+REASONING_MODEL+'}' in compose
+    assert pairs['CAREER_LLM_MODEL']==REASONING_MODEL=='gemini-3.5-flash-lite'
+    assert '${CAREER_LLM_MODEL:-'+REASONING_MODEL+'}' in compose
     for name,value in pairs.items():
         if name.endswith(('_PASSWORD','_API_KEY','_SECRET')):assert value==''
 

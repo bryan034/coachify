@@ -121,7 +121,7 @@ def repository(request):
     uri = os.getenv('MONGODB_TEST_URI')
     if not uri: pytest.skip('Set MONGODB_TEST_URI to exercise real MongoDB CAS and recovery.')
     client = MongoClient(uri, serverSelectionTimeoutMS=3000)
-    name = 'coachify_cv_test_' + uuid4().hex
+    name = 'elo_cv_test_' + uuid4().hex
     try: yield CvRepository(client[name])
     finally:
         client.drop_database(name)

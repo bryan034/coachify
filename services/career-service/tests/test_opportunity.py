@@ -66,7 +66,7 @@ class Search:
 def opportunity_flow():
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
-    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['coachify_opportunity_test_'+uuid4().hex];primary=Primary();gemini=Gemini();search=Search()
+    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_opportunity_test_'+uuid4().hex];primary=Primary();gemini=Gemini();search=Search()
     def profile(req):return httpx.Response(200,json={'id':OTHER if req.headers.get('Authorization')=='Bearer other' else OWNER,'email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
     try:
         with TestClient(create_app(database=db,ai=ModelRouter(primary,gemini),research_client=search,profile_client=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile)))) as client:

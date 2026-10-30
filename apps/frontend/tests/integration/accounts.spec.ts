@@ -57,9 +57,9 @@ test('another tab signing out clears private UI and drafts', async ({ page, cont
  await createLocalAccount(page,'Synthetic multi-tab');
  const other = await context.newPage();
  // Simulate opening a same-account tab; access secrets stay in sessionStorage, never localStorage.
- const stored = await page.evaluate(() => sessionStorage.getItem('coachify.session'));
+ const stored = await page.evaluate(() => sessionStorage.getItem('elo.session'));
  await other.goto('/');
- await other.evaluate(value => sessionStorage.setItem('coachify.session',value!),stored);
+ await other.evaluate(value => sessionStorage.setItem('elo.session',value!),stored);
  await other.goto('/profile');
  await expect(other.getByRole('heading',{name:'Where are you right now?'})).toBeVisible();
  await other.getByRole('button',{name:'Employed',exact:true}).click();
@@ -82,16 +82,16 @@ test('P13/P14 partial setup stays guarded and another tab observes completion',a
  await page.getByRole('button',{name:'Employed',exact:true}).click();
  await fillCurrentEmployment(page);
  await page.getByRole('button',{name:'No applicable previous education'}).click();
- await expect(page.getByRole('button',{name:'Enter Coachify',exact:true})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'Enter elo',exact:true})).toBeEnabled();
  expect((await(await api.get('/api/v1/profile')).json()).onboarding_complete).toBe(false);
  expect((await page.request.post('/api/v1/career/imports/url',{headers:api.headers,data:{url:'https://example.test/job'}})).status()).toBe(403);
  await page.goto('/roadmap');await expect(page).toHaveURL(/\/onboarding$/);
- const stored=await page.evaluate(()=>sessionStorage.getItem('coachify.session'));
+ const stored=await page.evaluate(()=>sessionStorage.getItem('elo.session'));
  const other=await context.newPage();await other.goto('/');
- await other.evaluate(value=>sessionStorage.setItem('coachify.session',value!),stored);
- await other.goto('/onboarding');await expect(other.getByRole('button',{name:'Enter Coachify'})).toBeEnabled();
- await page.bringToFront();await expect(page.getByRole('button',{name:'Enter Coachify'})).toBeEnabled();
- await page.getByRole('button',{name:'Enter Coachify'}).click();await expect(page).toHaveURL(/\/dashboard$/);
+ await other.evaluate(value=>sessionStorage.setItem('elo.session',value!),stored);
+ await other.goto('/onboarding');await expect(other.getByRole('button',{name:'Enter elo'})).toBeEnabled();
+ await page.bringToFront();await expect(page.getByRole('button',{name:'Enter elo'})).toBeEnabled();
+ await page.getByRole('button',{name:'Enter elo'}).click();await expect(page).toHaveURL(/\/dashboard$/);
  await other.bringToFront();await expect(other).toHaveURL(/\/dashboard$/);
  await other.goto('/onboarding');await expect(other).toHaveURL(/\/dashboard$/);
  const saved=await(await api.get('/api/v1/profile')).json();expect(saved.onboarding_complete).toBe(true);

@@ -2,7 +2,7 @@
 # Dockerfile.example files contain comments only; these builds are not runnable.
 # Paths below are relative to this file in infrastructure/docker/.
 # Do not copy secrets into this file. Runtime/image versions are selected later.
-name: coachify
+name: elo
 
 services:
   gateway:

@@ -1,3 +1,4 @@
+from elo_shared.skills import resolve, MAPPING_VERSION
 """Account-level declarations; CV evidence remains in its originating service."""
 from datetime import datetime
 from typing import Annotated, Literal
@@ -69,6 +70,13 @@ class Contribution(BaseModel):
 
 
 class Declaration(BaseModel):
+    canonical_skill_id: str | None = None
+    skill_registry_version: str = MAPPING_VERSION
+    @model_validator(mode='after')
+    def canonical_identity(self):
+        self.canonical_skill_id = resolve(self.name)
+        self.skill_registry_version = MAPPING_VERSION
+        return self
     id: str
     name: str
     description: str

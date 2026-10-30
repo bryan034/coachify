@@ -1,0 +1,173 @@
+[
+  {
+    "id": "personal-use",
+    "requirements": [
+      {
+        "ref": "job:1",
+        "kind": "job_skill",
+        "name": "Python",
+        "priority": "required",
+        "origin": "employer",
+        "canonical_skill_id": "language.python"
+      }
+    ],
+    "evidence": {
+      "a": {
+        "ref": "a",
+        "kind": "skill",
+        "name": "Python",
+        "text": "I personally built a small Python API.",
+        "attribution": "personal",
+        "assistance": "unknown",
+        "support_uncertain": false,
+        "canonical_skill_id": "language.python"
+      }
+    },
+    "expected": {
+      "job:1": "supported"
+    }
+  },
+  {
+    "id": "missing-evidence",
+    "requirements": [
+      {
+        "ref": "job:1",
+        "kind": "job_skill",
+        "name": "SQL",
+        "priority": "required",
+        "origin": "employer",
+        "canonical_skill_id": "language.sql"
+      }
+    ],
+    "evidence": {
+      "a": {
+        "ref": "a",
+        "kind": "skill",
+        "name": "SQL",
+        "text": "I have not described whether I use SQL.",
+        "attribution": "personal",
+        "assistance": "unknown",
+        "support_uncertain": false,
+        "canonical_skill_id": "language.sql"
+      }
+    },
+    "expected": {
+      "job:1": "uncertain"
+    }
+  },
+  {
+    "id": "explicit-limitation",
+    "requirements": [
+      {
+        "ref": "job:1",
+        "kind": "job_skill",
+        "name": "SQL",
+        "priority": "required",
+        "origin": "employer",
+        "canonical_skill_id": "language.sql"
+      }
+    ],
+    "evidence": {
+      "a": {
+        "ref": "a",
+        "kind": "skill",
+        "name": "SQL",
+        "text": "I have never used SQL.",
+        "attribution": "personal",
+        "assistance": "unknown",
+        "support_uncertain": false,
+        "canonical_skill_id": "language.sql"
+      }
+    },
+    "expected": {
+      "job:1": "confirmed_shortfall"
+    }
+  },
+  {
+    "id": "basic-use-not-advanced-inability",
+    "requirements": [
+      {
+        "ref": "job:1",
+        "kind": "job_skill",
+        "name": "Python",
+        "priority": "required",
+        "origin": "employer",
+        "required_proficiency": "advanced",
+        "canonical_skill_id": "language.python"
+      }
+    ],
+    "evidence": {
+      "a": {
+        "ref": "a",
+        "kind": "skill",
+        "name": "Python",
+        "text": "I used basic Python in a project. I have not discussed advanced work.",
+        "attribution": "personal",
+        "assistance": "unknown",
+        "support_uncertain": false,
+        "canonical_skill_id": "language.python"
+      }
+    },
+    "expected": {
+      "job:1": "partial"
+    }
+  },
+  {
+    "id": "assisted-not-known-independent",
+    "requirements": [
+      {
+        "ref": "job:1",
+        "kind": "job_skill",
+        "name": "Python",
+        "priority": "required",
+        "origin": "employer",
+        "context": "Must deliver Python work independently.",
+        "canonical_skill_id": "language.python"
+      }
+    ],
+    "evidence": {
+      "a": {
+        "ref": "a",
+        "kind": "skill",
+        "name": "Python",
+        "text": "I wrote Python with close supervision. I have not tried independently.",
+        "attribution": "personal",
+        "assistance": "supervised",
+        "support_uncertain": false,
+        "canonical_skill_id": "language.python"
+      }
+    },
+    "expected": {
+      "job:1": "partial"
+    }
+  },
+  {
+    "id": "unknown-duration",
+    "requirements": [
+      {
+        "ref": "job:1",
+        "kind": "job_skill",
+        "name": "Python",
+        "priority": "required",
+        "origin": "employer",
+        "required_experience_months": 12,
+        "canonical_skill_id": "language.python"
+      }
+    ],
+    "evidence": {
+      "a": {
+        "ref": "a",
+        "kind": "skill",
+        "name": "Python",
+        "text": "I used Python in a project. I do not know how many months I used it.",
+        "attribution": "personal",
+        "assistance": "unknown",
+        "support_uncertain": false,
+        "canonical_skill_id": "language.python"
+      }
+    },
+    "expected": {
+      "job:1": "partial"
+    }
+  }
+]

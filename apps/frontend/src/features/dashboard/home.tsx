@@ -11,7 +11,7 @@ export function HomeDashboard() {
  const status = statuses.find(s => s.id === profile?.occupational_status)?.label;
  const year = profile?.current_study_year && profile.school_category ? studyYearLabel(profile.school_category, profile.current_study_year) : null;
  return <section className="page on">
-  <div className="ptitle"><div><p className="small">Your next chapter starts here</p><h1 className="home-heading">Welcome to Coachify</h1></div><span className="chip"><Icon name="brief"/>Your career copilot</span></div>
+  <div className="ptitle"><div><p className="small">Your next chapter starts here</p><h1 className="home-heading">Welcome to elo</h1></div><span className="chip"><Icon name="brief"/>Your career copilot</span></div>
   <AccountPanel/>
   <div className="grid hero">
    <div className="card hero-card row"><div className="grow"><p className="k">Your starting point</p><h2>A clearer path to your next role.</h2><p className="small">Start with your background. Your career roadmap, skills and next steps will live here as planning becomes available.</p><Link href="/profile" className="btn pri cond">{profile?.occupational_status ? 'Review your profile' : 'Set up your profile'} <span aria-hidden="true">↗</span></Link></div><JourneyVisual/></div>

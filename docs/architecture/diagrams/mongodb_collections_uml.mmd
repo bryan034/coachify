@@ -56,6 +56,7 @@ class career_goals {
     +String[] interests
     +String[] preferences
     +TargetSkill[] skills
+    +JobDate[] job_dates
     +NonSkillRequirement[] non_skill_requirements
     +String summary?
     +String[] responsibilities
@@ -91,23 +92,22 @@ class interview_research {
 }
 
 class skill_gap_analyses {
-    +Number version
-    +String schema_version
-    +String skill_mapping_version
-    +ObjectId _id [PK]
-    +String user_id [Profile_UUID]
-    +String cv_id [UUID_or_legacy_ObjectId]
-    +ObjectId career_goal_id [FK]
-    +ObjectId[] research_ids
-    +GapResult[] job_skill_gaps
-    +GapResult[] interview_prep_gaps
-    +String analysis_status
-    +String analysis_version
+    +String _id [UUID immutable result]
+    +String user_id [Profile UUID]
+    +String schema_version [assessment-v1]
     +InputVersions inputs
-    +Generation generation
-    +String summary
-    +Date created_at
-    +Date updated_at
+    +String input_hash
+    +Object source_snapshot
+    +Map evidence
+    +Object[] job_skill_gaps
+    +Object[] interview_prep_gaps
+    +Object[] constraints
+    +Object[] groups
+    +String[] priorities
+    +String analysis_status
+    +String research_coverage
+    +String created_at
+    +String request_hash
 }
 
 users "1" --> "0..*" cvs : owns
@@ -205,3 +205,40 @@ note for cvs "CV-owned structured evidence, overlays, interpretation and history
 note for cv_conversations "Nullable CV permits manual-only entry. Bounded messages/action receipts have separate transcript revisions; no automatic history expiry."
 note for career_state "Automatic goal saving is distinct from explicit CV confirmation. Stamp binds goal ID/version, selection revision and projection hash. Changes invalidate it without another goal record or deleting CV facts."
 note for career_goals "Older UUID reviewed-target documents remain retained history, excluded from canonical ObjectId reads. Canonical create_key metadata preserves the legacy uniqueness index; no destructive migration."
+
+class assessment_workspaces {
+    <<operational Assessment database>>
+    +String _id [owner UUID]
+    +Integer version
+    +Object pending [lease and batch checkpoints]
+    +Object result [current captured snapshot]
+    +Object[] receipts
+}
+class roadmaps {
+    +String _id [immutable plan revision UUID]
+    +String user_id
+    +String assessment_id
+    +String assessment_hash
+    +Object assessment
+    +Object preferences
+    +Object[] tasks
+    +Object schedule
+    +Object[] exclusions
+}
+class roadmap_workspaces {
+    <<operational Roadmap database>>
+    +String _id [owner UUID]
+    +Integer version
+    +Object[] messages
+    +Object draft
+    +Object active
+    +Object pending [leased operation]
+    +Object[] receipts
+}
+users --> assessment_workspaces : owner API
+assessment_workspaces --> skill_gap_analyses : current immutable result
+users --> roadmap_workspaces : owner API
+roadmap_workspaces --> roadmaps : reviewed activation and history
+roadmaps --> skill_gap_analyses : Assessment API snapshot
+note for skill_gap_analyses "New Assessment-owned database. UUID results use assessment-v1; old analysis-v1 Career contracts/records remain legacy with no automatic migration."
+note for roadmaps "Separate Roadmap-owned database; one database with owner-scoped records, not a database per user. Dates are daily workload dates without clock slots."

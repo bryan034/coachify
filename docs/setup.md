@@ -1,8 +1,39 @@
-# Run Coachify locally
+# Run elo locally
 
 Use Docker Desktop, Node.js 24 and Python 3.12. The active local stack contains
-NGINX, the Next.js frontend, Profile, saved CV ingestion/review, Career goal/research and MongoDB. Roadmap, Dashboard and Review remain placeholders. See the [API overview](api/README.md) and individual service
+NGINX, the Next.js frontend, Profile, saved CV ingestion/review, Career goal/research, Assessment, Roadmap and MongoDB. Dashboard and Review remain placeholders. See the [API overview](api/README.md) and individual service
 READMEs for feature details.
+
+## Renamed installations
+
+The application and its defaults are now named **elo**. Python services depend on
+`packages/elo-shared` (`elo_shared` imports), the frontend workspace is
+`@elo/frontend`, and Compose uses project `elo-profile`. The fresh-stack MongoDB
+administrator is `elo_admin`; databases are `elo_profile`, `elo_ingestion`,
+`elo_career`, `elo_assessment` and `elo_roadmap`, with correspondingly named service
+users (`elo_cv` for ingestion).
+
+A rebuild does not rename or migrate an existing Docker project, database, user,
+volume or saved record. Existing volumes remain intact, while the new project
+creates separate volumes. If you need existing data, finish or cancel pending
+operations and stop the previous stack first. Back up each service database and
+the private CV uploads volume outside this repository. Have the new stack
+initialize its scoped users, then restore domain collections into the matching
+new databases, preserving document IDs, indexes, original files, service passwords
+and `OTP_HASH_SECRET`. Do not restore old database users or replace the new admin
+credentials. Copy the uploads into the new `cv_uploads` volume before serving CV
+requests. Verify ownership, saved CV originals, goals and plans before retiring
+any old volume. This rename does not perform that migration automatically.
+
+Sign out before switching deployments and sign in again afterward: browser
+storage keys and cross-tab events now use the `elo` prefix. Persisted IDs remain
+unchanged on disk; newly created deterministic IDs use the new namespace. Do not
+resume an in-flight pre-rename mutation against a migrated deployment.
+
+Agents may maintain the public `infrastructure/docker/.env.example` template; private environment files remain untouched. Update any privately configured
+old database/URI, SMTP sender label, test project variable or file path yourself.
+Keep the actual Jira workspace URL unchanged; renaming the product does not move
+an external Atlassian workspace.
 
 ## Configure and start
 
@@ -33,8 +64,26 @@ exposes a loopback port; the API and MongoDB stay private.
 
 ## Local email/password sign-in and real Gmail delivery
 
+Registration and password reset accept 8–128-character passwords.
+Only the app's outgoing sender mailbox needs SMTP configuration. A newly created
+email address used to register as a user needs no SMTP setup; it just receives the
+verification code. If you created a new Gmail mailbox for the app to send from,
+complete the sender setup below before registration emails can be delivered.
+
+Sign-in includes **Forgot password?**. Enter the account email, then the emailed
+six-digit reset code and a new password. Codes expire in ten minutes. Resetting
+preserves saved data and signs out existing sessions. The email address is required.
+
+If email sending fails, verify your private `infrastructure/docker/.env` yourself:
+Gmail requires the full sender address as `SMTP_USERNAME`, the same `SMTP_FROM`,
+and a valid Google App Password as `SMTP_PASSWORD`. The literal username `elo`
+is not a Gmail login. Restart/recreate Profile after changing settings. SMTP
+authentication failures now report that the mail server rejected its credentials.
+Other errors distinguish connection, TLS, sender and recipient rejection without
+exposing provider responses or credentials. Form details remain available for retry.
+
 Google sign-in is disabled for the current local setup. Users register with their
-email address and a Coachify password, then verify the email with an OTP.
+email address and a elo password, then verify the email with an OTP.
 
 To use real accounts locally, edit the ignored `infrastructure/docker/.env`:
 
@@ -68,11 +117,11 @@ Each developer supplies their own credentials.
    docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
    ```
 
-Open `http://localhost:8080/register`. Enter any valid email address and a Coachify password.
+Open `http://localhost:8080/register`. Enter any valid email address and a elo password.
 Gmail is only the outgoing mail provider; recipients can use other providers.
 The OTP goes to that registered address, not necessarily `SMTP_USERNAME`. Check
 that inbox (and spam folder), verify the code, and complete initial setup. Sign in
-later with the same email and Coachify password; no Google account popup appears.
+later with the same email and elo password; no Google account popup appears.
 There is no development account chooser in email mode. Switching from local-test
 or Google mode invalidates sessions from that mode; existing provider-specific
 records are preserved and are not automatically merged by email. An account
@@ -121,7 +170,7 @@ Career accesses CV only through its owner-authenticated API. The internal projec
 ## Saved CV upload and review
 
 Open `/cv` after signing in and completing initial setup. CV records are stored
-in `coachify_ingestion`; manual capability declarations stay with the existing
+in `elo_ingestion`; manual capability declarations stay with the existing
 Profile account. Uploading a file never changes the selected CV. Choose a ready
 CV explicitly before using its versioned capability input.
 
@@ -177,11 +226,11 @@ See [testing](testing.md) for automated checks and disposable test stacks.
 
 All Career model stages default to `gemini-3.5-flash-lite` through Google's OpenAI-compatible
 endpoint: JD extraction, skills, discovery, research, summaries, chat and goal edits.
-Set these server-only values in your private configuration yourself:
+Set these server-only values in `infrastructure/docker/.env` yourself. Rename the previous model-variable entry to `CAREER_LLM_MODEL`, preserving your selected model value; only this new model-variable name is read:
 
 ```dotenv
 AI_ENABLED=true
-GEMINI_REASONING_MODEL=gemini-3.5-flash-lite
+CAREER_LLM_MODEL=gemini-3.5-flash-lite
 CAREER_LLM_API_KEY=YOUR_PRIVATE_GEMINI_KEY
 CAREER_RESEARCH_API_KEY=YOUR_PRIVATE_BRAVE_KEY
 ```
@@ -193,9 +242,9 @@ JSON Schema and backend citation,
 provenance and ownership validation preserve the current data models.
 The default is [Gemini 3.5 Flash Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),
 using the explicit `gemini-3.5-flash-lite` model ID for all stages. An existing
-`GEMINI_REASONING_MODEL` value overrides the default: change it to the Lite ID
+`CAREER_LLM_MODEL` value overrides the default: change it to the Lite ID
 and recreate the Career container when switching from another model.
-If Google reports model access/NOT_FOUND, set `GEMINI_REASONING_MODEL` to an accessible
+If Google reports model access/NOT_FOUND, set `CAREER_LLM_MODEL` to an accessible
 Gemini model ID. The same setting applies to every reasoning and coordination stage;
 legacy `GEMINI_MODEL` and `AI_MODEL` do not override it.
 
@@ -309,11 +358,50 @@ Career and frontend after source changes; production containers do not mount sou
 
 There is no new five-minute inactivity lock. Recoverable session checks preserve drafts; actual expiry/revocation, sign-out and account changes clear private state. Browser reload/discard and confirmed navigation can lose unsent React-memory drafts. CV history is saved on the server, separately from unsent text.
 
-Startup/configuration commands in this guide are for the user to run with private settings. Agents must not read environment files. Automated verification uses isolated resources and explicit synthetic settings; the approved public-template test exception applies only to that exact test against a clean tracked template. Existing recordings from before an integration demonstrate that earlier build, not the newly merged application.
+Startup/configuration commands in this guide are for the user to run with private settings. Agents may read/edit the public `infrastructure/docker/.env.example` template and validate it against Compose. Agents must not read or load private environment files. Automated verification uses isolated resources and explicit synthetic settings. Existing recordings from before an integration demonstrate that earlier build, not the newly merged application.
 
 Career key migration: rename `GEMINI_API_KEY` to `CAREER_LLM_API_KEY` and
 `BRAVE_API_KEY` to `CAREER_RESEARCH_API_KEY` yourself in private settings, preserving
 their values. Legacy names are fallback aliases only when new names are absent; an
 explicitly blank new key takes precedence. The key rename does not change providers
-or the existing `GEMINI_REASONING_MODEL` setting. CV uses its separate `CV_LLM_*`
+or the existing `CAREER_LLM_MODEL` setting. CV uses its separate `CV_LLM_*`
 settings from the same infrastructure configuration.
+
+## Assessment and Roadmap adviser
+
+All user-configurable deployment inputs belong in the single ignored `infrastructure/docker/.env` file. The public [`infrastructure/docker/.env.example`](../infrastructure/docker/.env.example) documents them, including the new Assessment and Roadmap settings below. If you already have a private `.env`, add only the missing entries yourself; do not overwrite it by copying the template again. No additional environment file is needed in either service folder.
+
+| Variable | Purpose |
+|---|---|
+| `ASSESSMENT_DB_PASSWORD` | New scoped `elo_assessment` MongoDB user/database |
+| `ROADMAP_DB_PASSWORD` | New scoped `elo_roadmap` MongoDB user/database |
+| `ASSESSMENT_LLM_API_KEY` | Server-only Gemini credential for evidence comparison |
+| `ROADMAP_LLM_API_KEY` | Server-only Gemini credential for adviser recommendations |
+| `ASSESSMENT_LLM_MODEL`, `ROADMAP_LLM_MODEL` | Optional independent model identifiers; both default to `gemini-3.5-flash-lite` |
+
+Generate only the new database passwords locally, then paste the printed lines into `infrastructure/docker/.env`:
+
+```sh
+for setting in ASSESSMENT_DB_PASSWORD ROADMAP_DB_PASSWORD; do
+  printf '%s=%s\n' "$setting" "$(openssl rand -hex 24)"
+done
+```
+
+Keep passwords already associated with existing database users. The LLM keys come from your Gemini provider account. Add them and the model settings to the same private file:
+
+```dotenv
+ASSESSMENT_LLM_API_KEY=YOUR_GEMINI_API_KEY
+ASSESSMENT_LLM_MODEL=gemini-3.5-flash-lite
+ROADMAP_LLM_API_KEY=YOUR_GEMINI_API_KEY
+ROADMAP_LLM_MODEL=gemini-3.5-flash-lite
+```
+
+For a completely fresh installation only, generate each of `MONGO_ROOT_PASSWORD`, `PROFILE_DB_PASSWORD`, `CAREER_DB_PASSWORD` and `CV_DB_PASSWORD` separately with `openssl rand -hex 24`, and generate `OTP_HASH_SECRET` once with `openssl rand -hex 32`. Never regenerate these merely to rebuild an existing stack.
+
+The model credential may be the same provider key applied explicitly to both service settings. Neither service borrows Career's credential implicitly. Empty model settings leave saved data readable with a clear unavailable-adviser state. Use strong distinct database passwords compatible with the existing Compose Mongo URI interpolation (URI-safe characters). The planning initializer creates missing users and checks existing credentials without resetting them. Preserve credentials for existing database users.
+
+Rebuild using the existing Compose workflow after applying configuration. Profile/CV/Career Docker build contexts now use the repository root so all install the same `packages/elo-shared` registry package. New services expose no host ports and access foreign data only through owner-authenticated APIs. Do not rebuild the user's running stack as part of a test. Shared package or dependency changes require image rebuilds.
+
+For direct Python development, install `packages/elo-shared` before installing a service. Assessment and Roadmap each use their own `MONGODB_URI`/`MONGODB_DATABASE`; defaults are `elo_assessment` and `elo_roadmap`. Internal URLs are `PROFILE_SERVICE_URL`, `CV_SERVICE_URL`, `CAREER_SERVICE_URL` and `ASSESSMENT_SERVICE_URL`. The gateway exposes `/api/v1/assessments` and `/api/v1/roadmaps`; the UI stays at `/roadmap`.
+
+Older extracted goals will not gain job dates automatically because their raw JDs are not retained. The adviser can discuss a user-selected preparation target; a new JD extraction can capture sourced application/interview/start wording. Existing CV skill keys and manual attachments are preserved. A null new canonical ID means unresolved mapping, not missing capability.

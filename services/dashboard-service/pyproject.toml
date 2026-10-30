@@ -1,6 +1,6 @@
 # Structure-only project metadata. Select and pin dependencies before implementation.
 [project]
-name = "coachify-dashboard-service"
+name = "elo-dashboard-service"
 version = "0.0.0"
 description = "Structure-only progress dashboard service; planned FastAPI application."
 requires-python = ">=3.12"

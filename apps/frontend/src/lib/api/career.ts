@@ -7,7 +7,7 @@ export async function importCareer(path: 'url' | 'document', body: string | Form
  });
  const result = await response.json().catch(() => ({}));
  if (!response.ok) {
-  if (response.status === 401) window.dispatchEvent(new CustomEvent('coachify:expired', { detail: token }));
+  if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired', { detail: token }));
   throw new ApiError(typeof result.detail === 'string' ? result.detail : response.status === 413 ? 'Choose a file up to 10 MiB.' : 'The preview service is unavailable. Retry or paste the description.', response.status);
  }
  if (!result.text || typeof result.text !== 'string' || Array.from(result.text).length > 20_000 || !['url','document'].includes(result.kind) || !Array.isArray(result.notices))
@@ -44,7 +44,7 @@ export async function careerApi<T>(path:string,token:string, options:RequestInit
  });
  const body=await response.json().catch(()=>({}));
  if(!response.ok){
-  if(response.status===401)window.dispatchEvent(new CustomEvent('coachify:expired',{detail:token}));
+  if(response.status===401)window.dispatchEvent(new CustomEvent('elo:expired',{detail:token}));
   throw new CareerApiError(typeof body.detail==='string'?body.detail:'Career Goal is unavailable. Please retry.',response.status,body.code,body.retry_after,typeof body.operation_id==='string'?body.operation_id:undefined);
  }
  return body as T;
@@ -54,16 +54,17 @@ export async function importExplorationCV(file:File,token:string,signal:AbortSig
  return careerApi<CareerPreview>('/explorations/cv/document',token,{method:'POST',body,signal});
 }
 
-export type ReviewSkill={item_id?:string|null;skill_id?:string|null;group_id?:string|null;group_operator?:'all'|'any';correction?:'extracted'|'user';source_urls?:string[];name:string;category:string;priority:'required'|'preferred'|'unspecified'|'conflicting'|'suggested';priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|'market_research'|null;required_proficiency?:string|null;required_experience_months?:number|null;context?:string|null;evidence?:string|null;origin:'employer'|'generated_guidance'|'user_declaration'|'market_research'};
+export type ReviewSkill={canonical_skill_id?:string|null;skill_registry_version?:string;item_id?:string|null;skill_id?:string|null;group_id?:string|null;group_operator?:'all'|'any';correction?:'extracted'|'user';source_urls?:string[];name:string;category:string;priority:'required'|'preferred'|'unspecified'|'conflicting'|'suggested';priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|'market_research'|null;required_proficiency?:string|null;required_experience_months?:number|null;context?:string|null;evidence?:string|null;origin:'employer'|'generated_guidance'|'user_declaration'|'market_research'};
 export type ReviewCondition={requirement_id:string;category:string;description:string;priority:string;priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|'market_research'|null;evidence:string;group_id:string|null;group_operator:'all'|'any';origin?:'employer'|'generated_guidance'|'user_declaration'|'market_research';correction?:'extracted'|'user';source_urls?:string[];minimum_months?:number|null;maximum_months?:number|null;completion_status?:'completed'|'in_progress'|'unspecified'};
-export type JDExtraction={role:string|null;field:string|null;employment_type?:'internship'|'full_time'|'part_time'|'contract'|'unknown';company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
+export type JobDate={kind:'application_deadline'|'interview'|'job_start';text:string;evidence:string;date:string|null};
+export type JDExtraction={job_dates?:JobDate[];role:string|null;field:string|null;employment_type?:'internship'|'full_time'|'part_time'|'contract'|'unknown';company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
  summary:string|null;responsibilities:string[];non_skill_requirements:ReviewCondition[];skills:ReviewSkill[]};
 export type SavedReview={current:{goal:SavedGoal}};
 export type JDReview=SavedReview&{turns:{message:string;reply:string}[];proposals:ReviewSkill[]|null};
 
 export type ResearchSource={source_id:string;platform:string;url:string;title:string|null;evidence?:string|null;retrieved_at?:string|null;published_date:string|null;reported_date:string|null;role_match:string;reliability:string;report_group:string|null};
 export type InterviewSummary={summary_id:string;provider:string;text:string;source_ids:string[];claims:{text:string;source_ids:string[]}[]};
-export type InterviewTopic={evidence_origin?:'source_excerpt'|'brave_summary';summary_id?:string|null;skill_id:string|null;name:string;category:string;interview_stage:string|null;assessment_type:string|null;difficulty:string;question_patterns:string[];independent_report_count:number;source_ids:string[]};
+export type InterviewTopic={canonical_skill_id?:string|null;skill_registry_version?:string;evidence_origin?:'source_excerpt'|'brave_summary';summary_id?:string|null;skill_id:string|null;name:string;category:string;interview_stage:string|null;assessment_type:string|null;difficulty:string;question_patterns:string[];independent_report_count:number;source_ids:string[]};
 export type InterviewEvidence={source_ids:string[];text:string};
 export type InterviewProcess={round_count:number|null;round_count_evidence?:InterviewEvidence|null;stages:{name:string;assessment_type:string|null;evidence?:InterviewEvidence}[]};
 export type ResearchCoverage={platform:string;status:string;round?:number;useful_sources?:number|null;target_sources?:number|null;limit_reached?:boolean};

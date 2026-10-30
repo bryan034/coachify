@@ -34,5 +34,17 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/service/app", "--reload-delay", "0.5", "--no-access-log"]
     volumes:
       - ../../services/cv-service/app:/service/app:ro
+  assessment-service:
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/service/app", "--reload-delay", "0.5", "--no-access-log"]
+    volumes:
+      - ../../services/assessment-service/app:/service/app:ro
+  roadmap-service:
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/service/app", "--reload-delay", "0.5", "--no-access-log"]
+    volumes:
+      - ../../services/roadmap-service/app:/service/app:ro
 volumes:
   frontend_dev_cache: {}

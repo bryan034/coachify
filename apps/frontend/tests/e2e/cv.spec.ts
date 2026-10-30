@@ -4,7 +4,7 @@ import {policy,savedCv,emptyDeclarations,clarificationState,confirmedTarget} fro
 import type {CvDetail,Declarations} from '../../src/features/cv-ingestion/types';
 async function workspace(page:Page){
  await mockEmptyConversation(page);
- await page.addInitScript(()=>{localStorage.setItem('coachify.access-epoch','1');sessionStorage.setItem('coachify.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/auth-config'))return route.fulfill({json:{mode:'email',google_enabled:false}});

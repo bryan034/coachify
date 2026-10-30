@@ -9,6 +9,7 @@ from app.core.mail import normalize_email
 from app.core.passwords import hasher, password_matches
 from app.core.security import digest, keyed, now
 from app.repositories.verification import VerificationRepository
+from app.repositories.password_reset import PasswordResetRepository
 
 
 class AccountRepository:
@@ -16,6 +17,7 @@ class AccountRepository:
         self.accounts, self.flows, self.sessions = database.accounts, database.auth_flows, database.auth_sessions
         self.mailer = mailer
         self.verification = VerificationRepository(database)
+        self.password_reset = PasswordResetRepository(database, self.verification)
         self.accounts.create_index('identity', unique=True)
         self.accounts.create_index('owner', unique=True, partialFilterExpression={'owner': {'$type': 'string'}})
         self.sessions.create_index('expires_at', expireAfterSeconds=0)
@@ -65,6 +67,8 @@ class AccountRepository:
         else:
             account, registration, replaces = self.authenticate(data, flow, settings, verify)
             changes = {'fingerprint': fingerprint, 'account_id': account['id'], 'session_hash': digest(data.session_token)}
+            if account.get('password_hash'):
+                changes['credential_hash'] = account['password_hash']
             if registration:
                 changes.update(registration_candidate=account, registration_replaces=replaces)
             claim = self.flows.update_one({'_id': flow['_id'], 'attempt': flow['attempt'], 'status': 'pending', 'fingerprint': {'$exists': False}},
@@ -118,13 +122,15 @@ class AccountRepository:
                 if not account:
                     raise HTTPException(404, 'Account not found. Choose Create account first.')
             elif not password_matches((account or {}).get('password_hash'), data.password):
+                if not account:
+                    raise HTTPException(404, 'No account was found for this email address. Create a new account to get started.')
                 raise HTTPException(401, 'Email or password is incorrect.')
             return account, False, None
         if account:
             if google and not account.get('email_verified') and account.get('created_by') == digest(data.attempt_id):
                 return account, False, None
             if google or not self.reclaimable_reservation(account):
-                raise HTTPException(409, 'An account already exists. Choose Sign in to continue verification if needed.')
+                raise HTTPException(409, 'An account already exists for this email address. Sign in or use Forgot password.')
         identifier = str(uuid4())
         candidate = {'id': identifier, 'identity': identity, 'provider': provider, 'email': email,
                      'name': name, 'owner': identity if google else provider + ':' + identifier,
@@ -137,6 +143,9 @@ class AccountRepository:
         account = flow.get('registration_candidate') or self.accounts.find_one({'id': flow.get('account_id')})
         if not account:
             raise HTTPException(409, 'This account access changed. Start again.')
+        if (flow.get('credential_hash') != account.get('password_hash')
+            and ('credential_hash' in flow or account.get('password_changed_at'))):
+            raise HTTPException(409, 'Your password changed. Start a new sign-in attempt.')
         return account
 
     def reclaimable_reservation(self, account):
@@ -168,7 +177,7 @@ class AccountRepository:
             activated = current
         elif current:
             if current.get('id') != flow.get('registration_replaces') or not self.reclaimable_reservation(current):
-                raise HTTPException(409, 'An account already exists. Choose Sign in.')
+                raise HTTPException(409, 'An account already exists for this email address. Sign in or use Forgot password.')
             # Compare the complete previously inspected reservation. A concurrent
             # verification, migration or newly attached data must defeat replacement.
             activated = self.accounts.find_one_and_replace(
@@ -183,7 +192,7 @@ class AccountRepository:
                 activated = self.accounts.find_one({'identity': candidate['identity']})
         if (not activated or activated.get('id') != candidate['id']
             or activated.get('registration_attempt') != marker):
-            raise HTTPException(409, 'An account already exists. Choose Sign in.')
+            raise HTTPException(409, 'An account already exists for this email address. Sign in or use Forgot password.')
         if flow.get('registration_replaces'):
             # The fresh ID/owner already fences old proofs. Explicit cancellation
             # also makes retries clear, and is safe to repeat after a lost response.
@@ -198,6 +207,7 @@ class AccountRepository:
             raise HTTPException(409, 'The verification session changed. Start again.')
         self.sessions.update_one({'_id': session_hash}, {'$setOnInsert': {
             'account_id': account['id'], 'flow': flow['_id'], 'auth_mode': settings.mode,
+            'credential_hash': account.get('password_hash'),
             'expires_at': now() + timedelta(hours=24), 'revoked': False}}, upsert=True)
         updated = self.flows.update_one({'_id': flow['_id'], 'attempt': flow['attempt'], 'status': 'pending',
                                         'fingerprint': flow['fingerprint']},
@@ -239,6 +249,11 @@ class AccountRepository:
         account = self.accounts.find_one({'id': session['account_id'], 'email_verified': True, 'migration_pending': {'$ne': True}})
         if not account:
             raise HTTPException(401, 'Verify your email and sign in again.')
+        if session.get('credential_hash') != account.get('password_hash'):
+            # Keep pre-upgrade sessions only until the first password reset.
+            legacy = 'credential_hash' not in session and not account.get('password_changed_at')
+            if not legacy:
+                raise HTTPException(401, 'Your password changed. Please sign in again.')
         return {**account, 'expires_at': session['expires_at'].replace(tzinfo=now().tzinfo)}
 
     def logout(self, token):

@@ -127,6 +127,51 @@
       "title": "Generation",
       "type": "object"
     },
+    "JobDate": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "application_deadline",
+            "interview",
+            "job_start"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "evidence": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "evidence"
+      ],
+      "title": "JobDate",
+      "type": "object"
+    },
     "NonSkillRequirement": {
       "additionalProperties": false,
       "properties": {
@@ -306,6 +351,23 @@
     "TargetSkill": {
       "additionalProperties": false,
       "properties": {
+        "canonical_skill_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Skill Id"
+        },
+        "skill_registry_version": {
+          "default": "skills-v2",
+          "title": "Skill Registry Version",
+          "type": "string"
+        },
         "skill_id": {
           "anyOf": [
             {
@@ -542,6 +604,14 @@
       "format": "date-time",
       "title": "Updated At",
       "type": "string"
+    },
+    "job_dates": {
+      "items": {
+        "$ref": "#/$defs/JobDate"
+      },
+      "maxItems": 8,
+      "title": "Job Dates",
+      "type": "array"
     },
     "discovery": {
       "anyOf": [

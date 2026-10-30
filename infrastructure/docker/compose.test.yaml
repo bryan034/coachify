@@ -3,7 +3,7 @@
 services:
   career-service:
     environment:
-      COACHIFY_SYNTHETIC_TEST_FIXTURES: '1'
+      ELO_SYNTHETIC_TEST_FIXTURES: '1'
     volumes: [../testing/seed-career.py:/fixture/seed-career.py:ro]
   cv-service:
     environment:

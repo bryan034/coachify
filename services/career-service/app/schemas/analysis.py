@@ -5,6 +5,9 @@ ObjectIds represented as hex strings at the API boundary.
 """
 from __future__ import annotations
 
+from elo_shared.skills import resolve, MAPPING_VERSION
+from elo_shared.dates import JobDate
+
 import hashlib
 import json
 import re
@@ -115,6 +118,13 @@ class CvSkillSource(Contract):
 
 
 class CvSkill(Contract):
+    canonical_skill_id: str | None = None
+    skill_registry_version: str = MAPPING_VERSION
+    @model_validator(mode='after')
+    def canonical_identity(self):
+        object.__setattr__(self, 'canonical_skill_id', resolve(self.name, self.category))
+        object.__setattr__(self, 'skill_registry_version', MAPPING_VERSION)
+        return self
     skill_id: CvSkillId
     name: CvText
     category: Text
@@ -134,6 +144,13 @@ class CvSkill(Contract):
 
 
 class TargetSkill(Contract):
+    canonical_skill_id: str | None = None
+    skill_registry_version: str = MAPPING_VERSION
+    @model_validator(mode='after')
+    def canonical_identity(self):
+        object.__setattr__(self, 'canonical_skill_id', resolve(self.name, self.category))
+        object.__setattr__(self, 'skill_registry_version', MAPPING_VERSION)
+        return self
     skill_id: SkillId | None = None
     item_id: Text | None = None
     group_id: Text | None = None
@@ -218,6 +235,13 @@ class BraveAnswer(Contract):
 
 
 class InterviewSkill(Contract):
+    canonical_skill_id: str | None = None
+    skill_registry_version: str = MAPPING_VERSION
+    @model_validator(mode='after')
+    def canonical_identity(self):
+        object.__setattr__(self, 'canonical_skill_id', resolve(self.name, self.category))
+        object.__setattr__(self, 'skill_registry_version', MAPPING_VERSION)
+        return self
     evidence_origin: Literal['source_excerpt','brave_summary'] = 'source_excerpt'
     summary_id: Text | None = None
     skill_id: SkillId | None = None
@@ -311,6 +335,7 @@ class DiscoveryEvidence(Contract):
 
 
 class CareerGoal(Document):
+    job_dates: list[JobDate] = Field(default_factory=list, max_length=8)
     discovery: DiscoveryEvidence | None = None
     user_id: AccountId
     target_type: Literal['specific_job', 'career_exploration']

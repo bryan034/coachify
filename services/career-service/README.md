@@ -204,3 +204,7 @@ is a successful “not found” result, not a category failure. See [the contrac
 Category outcomes distinguish irrelevant results, absent facts, validation failures
 and provider failures. Category refresh preserves cached findings and retained source
 links. See [coverage outcomes](OPPORTUNITY_INTELLIGENCE.md#coverage-outcomes-and-follow-ups).
+
+## Assessment producer handoff — G01 integration
+
+`GET /api/v1/career/assessment-input` is an authenticated read-only current goal/selection and owner-linked research snapshot. It includes additive canonical skill IDs/registry versions and source-grounded job dates; it never starts a comparison or acknowledges a goal for CV clarification. The separate [Assessment service](../assessment-service/README.md) owns new analyses. Original analysis-v1 schemas remain compatibility contracts.
