@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from '@/components/ui/brand-logo';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ApiError, profileApi } from '@/lib/api/profile';
@@ -179,7 +180,7 @@ export function OnboardingFlow({ preview = false }: { preview?: boolean }) {
   const yearCount = category === 'secondary' ? 5 : category === 'junior_college' ? 3 : category === 'university' ? 5 : 3;
   return <div className="onboarding">
     <header className="onboarding-header">
-      <div className="brand"><div className="mark">C</div><div><b>COACHIFY</b><span>Your career copilot</span></div></div>
+      <div className="brand"><BrandLogo/></div>
       <span className="onboarding-header-note"><span className="onboarding-dot"/> A path that starts with you</span>
       <button type="button" className="onboarding-exit" onClick={exit} aria-label={preview ? "Exit preview" : "Exit setup and sign out"} title={preview ? "Return to profile" : "Exit setup and sign out"}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     </header>

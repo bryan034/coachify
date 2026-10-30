@@ -100,3 +100,19 @@ it('automatically reads a selected document and allows explicit retry after fail
  expect(importCareer).toHaveBeenCalledTimes(2);
  expect(screen.queryByRole('button',{name:'Read document'})).not.toBeInTheDocument();
 });
+
+it('offers immediate paste and upload alternatives after a blocked URL without discarding drafts',async()=>{
+ vi.mocked(importCareer).mockRejectedValueOnce(new Error('This website blocked automated access.'));
+ renderPage(<CareerGoal/>);
+ fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:'My pasted draft'}});
+ fireEvent.click(screen.getByRole('tab',{name:'Job URL'}));
+ fireEvent.change(screen.getByLabelText('Job description URL'),{target:{value:preview.source_url}});
+ fireEvent.click(screen.getByRole('button',{name:'Import job page'}));
+ await screen.findByRole('alert');
+ expect(screen.getByRole('button',{name:'Upload document'})).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Paste description'}));
+ expect(screen.getByRole('tab',{name:'Paste description'})).toHaveAttribute('aria-selected','true');
+ expect(screen.getByRole('textbox',{name:'Job description'})).toHaveValue('My pasted draft');
+ fireEvent.click(screen.getByRole('tab',{name:'Job URL'}));
+ expect(screen.getByLabelText('Job description URL')).toHaveValue(preview.source_url);
+});

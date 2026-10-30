@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from '@/components/ui/brand-logo';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -22,7 +23,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
  return <div className="app">
   <a href="#main-content" className="skip-link">Skip to content</a>
   <aside className="side">
-   <Link href="/dashboard" className="brand" aria-label="Coachify home"><div className="mark">C</div><div><b>COACHIFY</b><span>Your career copilot</span></div></Link>
+   <Link href="/dashboard" className="brand" aria-label="Coachify home"><BrandLogo/></Link>
    <nav className="nav" aria-label="Main navigation">{nav.map(n => <Link key={n.href} href={n.href} className={pathname === n.href ? 'on' : ''} aria-current={pathname === n.href ? 'page' : undefined}><Icon name={n.icon}/>{n.label}</Link>)}</nav>
    <div className="side-bottom"><Link href="/profile" className={`profile-link ${pathname === '/profile' ? 'on' : ''}`} aria-current={pathname === '/profile' ? 'page' : undefined}><Icon name="user"/>My profile<span>↗</span></Link>
     <div className="me"><div className="avatar"><Icon name="user"/></div><div><strong>{account?.name || 'Your workspace'}</strong><div className="small">{detail}</div></div></div>

@@ -70,7 +70,7 @@ def test_async_summary_repairs_only_presentation_and_rechecks_the_goal(caplog,re
         calls=[];feedback=[]
         async def generate(payload,operation,**kwargs):
             calls.append(payload);feedback.append(validation_feedback.get())
-            output=GoalSummary(blocks=[{'text':'PRIVATE_DISCARDED_VALUE' if len(calls)==1 else 'Reported interview.',
+            output=GoalSummary(blocks=[{'label':'Interview expectations','text':'PRIVATE_DISCARDED_VALUE' if len(calls)==1 else 'Reported interview.',
                                        'references':refs if len(calls)==1 else ['research_0']}])
             kwargs['validate_output'](output)
             return NS(data=output)
@@ -201,16 +201,19 @@ def test_structured_summary_places_each_points_citations_next_to_its_text():
         async def generate(payload,operation,**kwargs):
             payloads.append(payload)
             output=GoalSummary(blocks=[
-                {'text':'An Analyst internship.','references':['goal']},
-                {'text':'SQL [required] for this role.','references':['skill_0']},
-                {'text':'Reported interview experience.','references':['research_0','research_0']},
+                {'label':'Role','text':'An Analyst internship.','references':['goal']},
+                {'label':'Required skills','text':'SQL [required] for this role.','references':['skill_0']},
+                {'label':'Interview expectations','text':'Reported interview experience.','references':['research_0','research_0']},
             ])
             kwargs['validate_output'](output)
             return NS(data=output)
         request.app.state.ai=NS(generate=generate)
         reply=(await summarize(request,'owner',body))['reply']
-        assert reply.startswith('## Your career goal\n\n- An Analyst internship.')
-        assert len([line for line in reply.splitlines() if line.startswith('- ')])==3
+        assert reply.startswith('## Your career goal\n\n**Role:** An Analyst internship.')
+        assert len([line for line in reply.splitlines() if line.startswith('**')])==3
+        assert not any(line.startswith('- ') for line in reply.splitlines())
+        assert '**Required skills:** SQL' in reply
+        assert '**Interview expectations:** Reported interview experience.' in reply
         assert 'An Analyst internship. [Source](<https://example.test/jobs_(internship)>)' in reply
         assert 'SQL \\[required\\] for this role. [Source](<https://example.test/qualifications_(SQL)>)' in reply
         assert 'Reported interview experience. [Source](<https://example.test/job>)' in reply
@@ -239,9 +242,9 @@ def test_model_prose_cannot_create_links_outside_structured_references():
 def test_research_blocks_always_require_a_known_fact_reference():
     from pydantic import ValidationError
     with pytest.raises(ValidationError):
-        GoalSummary(blocks=[{'text':'Unreferenced research','references':[]}])
+        GoalSummary(blocks=[{'label':'Interview expectations','text':'Unreferenced research','references':[]}])
     with pytest.raises(ValidationError):
-        GoalSummary(blocks=[{'text':'Forged source','references':['research_0'],'url':'https://unapproved.test'}])
+        GoalSummary(blocks=[{'label':'Interview expectations','text':'Forged source','references':['research_0'],'url':'https://unapproved.test'}])
 
 
 def test_real_adapter_accepts_structured_summary_points_and_supplies_json_context():
@@ -258,7 +261,10 @@ def test_real_adapter_accepts_structured_summary_points_and_supplies_json_contex
             assert 'source_ids' not in incoming['context']['categories']['interviews']['findings'][0]
             schema=payload['response_format']['json_schema']['schema']
             assert 'blocks' in schema['properties'] and 'reply' not in schema['properties']
-            output={'blocks':[{'text':'Reported interview experience.','references':['research_0']}]}
+            block_schema=schema['properties']['blocks']['items']
+            assert 'label' in block_schema['required']
+            assert 'Field' in block_schema['properties']['label']['enum']
+            output={'blocks':[{'label':'Interview expectations','text':'Reported interview experience.','references':['research_0']}]}
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(provider)) as client:
             request.app.state.ai=AIAdapter(AISettings(enabled=True,model='synthetic',api_key='synthetic'),client)

@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from '@/components/ui/brand-logo';
 import {useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
@@ -76,7 +77,7 @@ export function CareerDiscovery(){
  return <section className="page on career-agent-page career-discovery-page">
   <header className="agent-page-header"><div><p className="small">A career direction, grounded in real jobs</p><h1>Career discovery</h1></div><div className="agent-compose-meta"><button type="button" className="btn ghost sm" disabled={busy} onClick={newChat}>New chat</button><Link className="btn ghost sm" href="/career-goal">← Career Goal</Link></div></header>
   <div className="agent-workspace">
-   <div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true">C</span><div><strong>Coachify agent</strong><p className="small">{session?.scope?.area||'Career discovery'}</p></div></div><button className="btn ghost sm" onClick={()=>setDetails(v=>!v)}>{details?'Hide details':'Conversation details'}</button></div>
+   <div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true"><BrandLogo compact decorative/></span><div><strong>Coachify agent</strong><p className="small">{session?.scope?.area||'Career discovery'}</p></div></div><button className="btn ghost sm" onClick={()=>setDetails(v=>!v)}>{details?'Hide details':'Conversation details'}</button></div>
    {details&&<aside className="agent-details"><p>{session?.scope?`${session.scope.area} · ${session.scope.career_stage.replaceAll('_',' ')} · ${session.scope.location||'Location unspecified'}`:'Your direction is taking shape.'}</p><p>No CV or skills assessment is required. Research uses representative listings across employers. You choose when to confirm and save.</p>{!!session?.related_roles.length&&<p>Roles considered: {session.related_roles.join(' · ')}</p>}</aside>}
    <div className="agent-transcript" ref={transcript} {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">
     {introduction&&<div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentMarkdown>{introduction}</AgentMarkdown></div>}

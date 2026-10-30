@@ -102,5 +102,5 @@ async def summarize(request, account, body):
         ids=list(dict.fromkeys(identifier for ref in block.references for identifier in references[ref]))
         citations=source_links(ids,sources)
         point=text+(' '+citations if citations else '')
-        points.append('- '+point)
+        points.append('**'+block.label+':** '+point)
     return {'reply':'## Your career goal\n\n'+'\n\n'.join(points)+'\n\n'+SUMMARY_CLOSING}

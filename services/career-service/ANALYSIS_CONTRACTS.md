@@ -78,7 +78,9 @@ owner/version-checked goal fields and finished linked research, including partia
 expected_version and research_id plus the existing UUID idempotency header; async clients
 use `Prefer: respond-async` and the existing operations polling endpoint. The result is
 `{reply: Markdown}`; the public API shape is unchanged. Gemini's internal output is
-`{blocks: [{text, references}]}`. Each plain-text point references saved facts by their
+`{blocks: [{label, text, references}]}`. Labels are required and restricted to the
+summary schema's topic names, including Role, Field, Required skills and Research limitations.
+Each plain-text point references saved facts by their
 backend-assigned `reference`: goal, skill_N, condition_N, research_N or coverage_CATEGORY.
 Python resolves each point's references to source links and renders those links directly
 after that point. Research references resolve through the linked report; job-description
@@ -89,9 +91,11 @@ unknown_fact_reference or missing_research_reference under blocks/references. Ev
 needs a reference. Bracketed ordinary terms and paraphrases are permitted; no exact-word
 comparison is applied to summary prose. Original source IDs/URLs are omitted from the
 summary snapshot's reference catalogue, preventing the model from writing destinations.
-Gemini selects roughly 120-180 words in 6-8 short, single-idea bullet points when enough
-evidence exists; the first role overview is also a bullet. Omitted findings do not require
-references. Python appends exactly one closing line:
+Gemini selects roughly 120-180 words in 6-8 short, single-idea blocks when enough
+evidence exists. Python renders each as a separate `**Label:** text` paragraph, including
+the first role overview. Unsupported topics are omitted; the supplied career field uses
+the Field label. This presentation applies only to the initial overview, not follow-up answers.
+Omitted findings do not require references. Python appends exactly one closing line:
 `Ask me anything about this goal set!`
 Async summary presentation uses bounded repair (up to six corrections), with owner/version
 checks before each generation and publication. Only presentation is retried; saved research

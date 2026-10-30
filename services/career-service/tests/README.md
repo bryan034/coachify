@@ -115,3 +115,22 @@ other-interest personalisation without unrelated searches, and display-only intr
 alias precedence, explicit blank overrides, service-scoped Compose injection and full
 coverage of active Compose inputs in the public `.env.example`. No private env file
 is read; provider and configuration tests use synthetic keys.
+
+`test_job_url_timeouts.py` checks the five-second network cap, one timeout retry,
+shared import deadline, redirect retry limits, safe error distinctions and separate
+URL/document worker limits using mocked public sources; no live website is required.
+
+`test_public_job_api.py` verifies Roblox, standard Greenhouse and global/EU Lever
+adapters, board/job identity, complete requirements sections, source/API provenance,
+spoofed origins, invalid responses and existing HTML/robots behaviour.
+`test_job_browser.py` covers JavaScript eligibility, HTTP/challenge errors, renderer
+handoff/deadlines, secret-free process launch, process-group cleanup, pinned resource
+acquisition, robots/private-address rejection and download/request caps. Frontend
+checks verify direct paste/upload fallbacks preserve existing drafts. These tests
+use only synthetic sources and do not require installed browser binaries.
+
+For an explicit real-browser smoke check (synthetic HTML/JS, no external requests),
+run `python tests/browser_preview_smoke.py` with Playwright Chromium installed. It
+also checks the real renderer worker's resource limits and output. In Docker, use
+the Career image with the documented seccomp/tmp/PID settings and `--network none`,
+mounting this one test file read-only if it is not included in the image.

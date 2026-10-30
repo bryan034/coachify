@@ -39,3 +39,5 @@ conflicts refresh the authoritative state without silently overwriting it.
 See the [Career service](../../../../../services/career-service/README.md) and
 [contract](../../../../../contracts/api/career.yaml). Unit tests cover exact source
 excerpts, separate confirmation/selection, failures, conflicts and account changes.
+
+Failed URL previews offer direct paste/upload actions that switch input methods without discarding existing drafts.

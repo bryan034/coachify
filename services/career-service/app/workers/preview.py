@@ -13,8 +13,12 @@ def main():
         resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
     try:
         if sys.argv[1] == 'url':
-            from app.clients.job_url import import_url
-            result = import_url(sys.stdin.buffer.read(8193).decode('utf-8'))
+            from app.clients.job_url import import_url,RenderRequired
+            try:
+                result = import_url(sys.stdin.buffer.read(8193).decode('utf-8'))
+            except RenderRequired as exc:
+                sys.stdout.write(json.dumps({'render_url':exc.url}))
+                return
         else:
             from app.domain.documents import document_text
             from app.schemas.preview import MAX_FILE

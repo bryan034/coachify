@@ -42,20 +42,64 @@ disabled for imports; request bodies/URL fields/documents are not logged.
   Imported over-limit previews are rejected with a paste-one-description fallback.
 - URL input: at most 2,048 characters; request at most 16 KiB.
 - Website response: at most 2 MiB, standard HTTP/HTTPS ports, identity encoding,
-  at most three followed redirects, bounded network operations and robots checks.
+  at most three followed redirects, five-second network operations and robots checks.
+  A timed-out request gets one retry within the shared 25-second import deadline;
+  redirect robots checks do not multiply that retry. Access restrictions and TLS
+  certificate failures are not retried. Timeout messages identify robots.txt versus
+  webpage reads; certificate, TLS and other connection failures have distinct safe
+  messages. Robots access checks must complete before fetching HTML job pages.
   Pin connections to validated globally routable DNS addresses; reject mixed
   private/public results and private/loopback/link-local/metadata destinations.
   HTTPS verifies the original hostname using TLS and never follows unchecked DNS.
   Redirect destinations are validated and their robots rules checked before the
-  job page is requested. Never use supplied credentials, cookies or page scripts.
+  job page is requested. Never use supplied credentials or browser-session cookies. Ordinary HTML parsing does not execute scripts.
+- Public job API adapters: HTTPS `careers.roblox.com/jobs/{numeric_id}` links,
+  `boards.greenhouse.io/{board}/jobs/{id}` and
+  `job-boards.greenhouse.io/{board}/jobs/{id}` use Greenhouse's public Job Board API.
+  `jobs.lever.co/{site}/{uuid}` and `jobs.eu.lever.co/{site}/{uuid}` use the matching
+  global/EU Lever Postings API. No extra keys are needed. API origins and path
+  grammars are allowlisted; input cannot choose an arbitrary API host or path.
+  Existing IP pinning, verified TLS, size/time limits and one timeout retry apply.
+  Reject API redirects, malformed/mismatched jobs and unreadable/over-limit descriptions.
+  Greenhouse identity is bound to the board and numeric ID; returned hosted URLs
+  must match the board/job path, while provider-published custom employer URLs must
+  be public HTTPS destinations and are never followed. Roblox retains its exact
+  employer-host/path check. Lever requires the exact job ID and hosted URL host/path.
+  Keep title and available metadata, Greenhouse description or Lever description,
+  requirements/benefits lists, closing and salary-description sections. Application
+  forms/questions are excluded. Preserve the input job URL and API provenance notice.
+  No application submissions, paid research or LLM calls are made by these previews.
+  Sources: [Greenhouse](https://docs.greenhouse.io/job-board.html),
+  [Lever](https://github.com/lever/postings-api).
+- HTTP errors distinguish authentication (401), rejected automated access (403),
+  missing/expired links (404/410), request throttling (429) and upstream failures.
+  A 403 does not claim sign-in is required. Recognisable HTML access verification,
+  CAPTCHA and sign-in pages are rejected even with status 200. URL import errors
+  offer direct paste/document actions while retaining existing drafts.
+- JavaScript fallback: a successful, robots-permitted HTML page with a short script
+  shell or a JavaScript-required message may request one isolated Playwright Chromium
+  render. Existing JobPosting data and ordinary static pages avoid the browser.
+  Access restrictions, challenges, authentication and HTTP failures do not trigger
+  rendering. The renderer revalidates destinations and robots rules, including
+  redirects, and fulfils all supported browser GET requests through the existing
+  public-IP-pinned fetcher. No browser cookies, Authorization or Set-Cookie headers
+  are forwarded. Original CORS and content-security headers are retained.
+  Service workers, WebSockets, submissions, frames and binary assets
+  are blocked. A closed proxy and disabled browser DNS prevent direct HTTP egress.
+  Limits: 24 resource/robots reads (each with at most one timeout retry), 8 MiB total
+  fetched data, 2 MiB per response/rendered HTML, at most three redirects per chain,
+  one renderer per container and the original shared 25-second import budget.
+  Missing browser binaries, unsupported dynamic requests or incomplete rendering
+  return paste/upload fallback. Availability is best effort, including for Indeed.
+  No model calls or persistent preview storage are added.
 - HTML extraction prefers one JobPosting JSON-LD description, otherwise a
   description/main/article/body text preview with navigation/scripts excluded.
   Available JobPosting company, job location, work arrangement, employment type,
   industry, qualifications, skills and responsibilities are preserved as labelled text.
   This is best-effort text preparation, not semantic job/skill interpretation;
   users review completeness and remove unrelated content. A URL cannot guarantee
-  a real job listing. Blocked/login/paywall/CAPTCHA/JS-only or inaccessible content
-  gets fallback, not circumvention.
+  a real job listing. Blocked/login/paywall/CAPTCHA or inaccessible content gets paste/upload fallback.
+  JavaScript pages may use the bounded renderer above; access checks are preserved.
 - Document: one file, 10 MiB; multipart total at most 10 MiB + 64 KiB. Limit fields,
   files, formats and actual content. The gateway permits 11 MiB only on the upload
   route. PDF: unencrypted, at most 100 pages; scanned/empty/partial pages are
@@ -63,14 +107,24 @@ disabled for imports; request bodies/URL fields/documents are not logged.
   reject encrypted/macro documents, never extract archive members to disk or
   follow external relationships. TXT: UTF-8 (optional BOM), no binary controls.
 - Two imports process concurrently per API process; excess work gets 429. Parsing
-  and URL work run in disposable child processes with a 20-second timeout, Linux
-  256 MiB address-space and 12 CPU-second limits. This also bounds DNS/parser
-  stalls. Processes are killed on timeout and no background operations persist.
+  runs in disposable child processes with a 20-second timeout; URL imports have a
+  30-second worker timeout and a 35-second gateway read timeout to accommodate the
+  bounded retry. Static/document workers retain Linux 256 MiB address-space and 12 CPU-second
+  limits. The separate renderer uses a 12 CPU-second and 8 MiB per-file limit;
+  Chromium's virtual address reservations preclude the static worker's address-space
+  limit. The container bounds total memory at 768 MiB, processes/threads at 256 and
+  temporary storage at 128 MiB. A container init reaps orphaned descendants. The renderer receives only PATH, private HOME/TMPDIR
+  and the browser installation path; provider keys/session tokens are not inherited.
+  Parent-owned temporary profiles are removed after the renderer process group and detached browser descendants
+  are killed/reaped, including on timeout. Chromium runs as the existing non-root user
+  with its sandbox enabled, all capabilities dropped and no-new-privileges retained.
+  The version-pinned Playwright Docker seccomp profile permits namespace creation
+  and namespace-local chroot. See [deployment notes](../../infrastructure/docker/README.md#career-url-preview-browser).
 
 ## Storage and Docker
 
 The Career container is non-root, read-only, on the backend network only and has
-backend-only AI settings and a scoped MongoDB connection for J08/J09. Private `/tmp` is a bounded 32 MiB tmpfs with
+backend-only AI settings and a scoped MongoDB connection for J08/J09. Private `/tmp` is a bounded 128 MiB tmpfs with
 0700 access for the service user. Multipart files use generated spool names and
 are always closed by the form context on success/failure. No named upload volume
 or original-file retention is introduced. Request/child buffers expire with the

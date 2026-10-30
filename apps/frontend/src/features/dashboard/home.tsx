@@ -1,5 +1,6 @@
 "use client";
 import Link from 'next/link';
+import { JourneyVisual } from '@/components/ui/journey-visual';
 import { Icon } from '@/components/ui/icon';
 import { EmptyState, SectionTitle } from '@/components/ui/workspace-ui';
 import { AccountPanel } from '@/features/profile/account-panel';
@@ -13,7 +14,7 @@ export function HomeDashboard() {
   <div className="ptitle"><div><p className="small">Your next chapter starts here</p><h1 className="home-heading">Welcome to Coachify</h1></div><span className="chip"><Icon name="brief"/>Your career copilot</span></div>
   <AccountPanel/>
   <div className="grid hero">
-   <div className="card hero-card row"><div className="ring empty-ring" aria-hidden="true"><svg width="132" height="132" viewBox="0 0 132 132"><circle cx="66" cy="66" r="56" fill="none" stroke="var(--soft2)" strokeWidth="12"/></svg><div className="lab"><Icon name="road"/><span className="small">Your journey</span></div></div><div className="grow"><p className="k">Your starting point</p><h2>A clearer path to your next role.</h2><p className="small">Start with your background. Your career roadmap, skills and next steps will live here as Coachify grows.</p><Link href="/profile" className="btn pri cond">{profile?.occupational_status ? 'Review your profile' : 'Set up your profile'} <span aria-hidden="true">↗</span></Link></div></div>
+   <div className="card hero-card row"><div className="grow"><p className="k">Your starting point</p><h2>A clearer path to your next role.</h2><p className="small">Start with your background. Your career roadmap, skills and next steps will live here as planning becomes available.</p><Link href="/profile" className="btn pri cond">{profile?.occupational_status ? 'Review your profile' : 'Set up your profile'} <span aria-hidden="true">↗</span></Link></div><JourneyVisual/></div>
    <div><SectionTitle title="Your background"><Link className="small text-link" href="/profile/edit">Edit profile ↗</Link></SectionTitle><div className="card pad background-card" aria-label="Saved background">
     <div className="tag tone-user"><Icon name="user"/></div><h3>{loading ? 'Loading your profile…' : status || 'Make it yours'}</h3>
     {(profile?.education.institution || profile?.education.course || year) ? <>{profile?.education.institution && <p className="institution-name">{profile.education.institution.name}</p>}<p className="small">{[profile?.education.course, year].filter(Boolean).join(' · ') || 'No course added'}</p></> : <p className="small">Your education and current status help establish where you are today.</p>}

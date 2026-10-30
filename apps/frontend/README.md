@@ -2,12 +2,11 @@
 
 Next.js App Router, React, TypeScript, and a Node.js runtime.
 
-The first workspace UI adapts `docs/design/coachify-web-v1.html` into reusable
-React components, shared navigation and responsive styles. Fonts are bundled in
-`public/fonts/` with the Inter OFL licence; no runtime font request is needed.
-Typography uses Inter throughout, with medium-weight headings and tighter spacing
-inspired by Revolut. Revolut’s exact Aeonik Pro heading face requires licensed
-webfont files and is not bundled.
+The UI uses the supplied Elo logo and ink/mint palette, with a broad public hero
+inspired by the Ebury reference. Shared navigation, forms, chat and saved-goal
+briefings use the same visual system. Fonts are bundled in `public/fonts/` with
+the Inter OFL licence; no runtime font request is needed. See the
+[design guide](../../docs/design/README.md) for tokens and asset provenance.
 
 ## Screens and data
 
