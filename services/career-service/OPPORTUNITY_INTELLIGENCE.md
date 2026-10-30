@@ -36,7 +36,7 @@ Employment type is extracted into saved JD metadata only when established; other
 it remains `unknown`. Related employment/location/role reports remain qualified.
 
 All stages use the existing HTTPS OpenAI-compatible adapter with the server-only
-`GEMINI_API_KEY` and requested `gemini-3.5-flash-lite` identifier. Planning, structuring,
+`CAREER_LLM_API_KEY` and requested `gemini-3.5-flash-lite` identifier. Planning, structuring,
 summaries, discovery and chat share the same enabled Gemini client. `AI_ENABLED`
 is the master switch; `OPPORTUNITY_ENABLED` (true by default) enables public research.
 Every stage uses the same configured Gemini model. The explicit Flash Lite model ID is used; see [setup](../../docs/setup.md#gemini-reasoning-configuration).
@@ -178,7 +178,7 @@ and recreate the service yourself; no credentials go into the frontend.
 | `OPPORTUNITY_INCOMPLETE_HOURS` | 1 | Missing/error coverage freshness |
 | `OPPORTUNITY_RUN_SECONDS` | 300 | Execution deadline per durable worker attempt |
 
-Also requires enabled `AI_*`, the separate `GEMINI_API_KEY`, `BRAVE_API_KEY`
+Also requires enabled `AI_*`, the separate `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_API_KEY`
 with LLM Context access, and Career MongoDB configuration. Legacy `GEMINI_ENABLED`
 is ignored; `AI_ENABLED` controls all model operations. Legacy Search/Answers
 mode likewise does not disable the dedicated LLM Context client. All stages request the configured application model constant; model-not-found/auth

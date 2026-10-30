@@ -258,3 +258,17 @@ The CV workspace starts with a text conversation. **CV files** provides uploads 
 History is stored by CV and resumes after reload, including manual-only conversations with no uploaded CV. Messages are paginated in retained bounded segments. The client does not store CV text in browser storage. Message receipt, interpretation progress and factual save are distinct. Retry retains the original request after an unknown network outcome, and delayed responses cannot update a different displayed CV/account. Older loaded action pages refresh their statuses; full segments expose outstanding work before continuation.
 
 Career remains the single goal authority. The saved goal overview shows whether the current goal/version/selection has been confirmed for CV review. Confirmation is explicit and independent of Career's automatic saving. A changed or replaced goal requires a fresh confirmation; earlier source-bound CV answers remain saved. CV context preserves requirement provenance and alternatives rather than treating unknown eligibility or location as a qualification fact. No second active target editor is required.
+
+Career Discovery opens with only the fixed Python-supplied introduction. **New chat**
+clears the visible history, scope, suggestions and draft; the first sent message
+creates a new private session. Opening the page performs no LLM or Brave calls.
+Reload saved progress within an active chat reads its session ID; reopening the page
+starts a clean view. Earlier sessions and confirmed goals remain saved.
+
+The Discovery introduction is fetched only on fresh opening and kept separately from
+the transcript. Subsequent session responses omit it, and it never enters model history.
+
+Career Discovery collects its six research-readiness topics in a numbered bundle,
+omitting topics already answered. Role scope offers “keep it broad”; other questions
+end with “You can say unsure.” There is no repeated clarification preface. Explicit unsure/skip answers count, missing answers do not. The Career
+backend gates automatic research; final goal confirmation is unchanged.

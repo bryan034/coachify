@@ -12,6 +12,7 @@ def test_hostile_inherited_settings_are_cleared_but_disposable_opt_in_remains(mo
     unsafe = {'MONGODB_URI': 'mongodb://unintended.invalid/private',
               'MONGODB_DATABASE': 'private', 'GEMINI_API_KEY': 'synthetic-hostile',
               'BRAVE_API_KEY': 'synthetic-hostile', 'AI_ENABLED': 'true',
+              'CAREER_LLM_API_KEY': 'synthetic-hostile', 'CAREER_RESEARCH_API_KEY': 'synthetic-hostile',
               'OPPORTUNITY_LIVE_TEST': '1', 'PROFILE_SERVICE_URL': 'https://unintended.invalid',
               'CV_SERVICE_URL': 'https://unintended.invalid', 'LANGSMITH_API_KEY': 'synthetic-hostile'}
     for key, value in unsafe.items(): monkeypatch.setenv(key, value)

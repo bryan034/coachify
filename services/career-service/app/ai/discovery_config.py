@@ -2,6 +2,11 @@
 import os
 from pydantic import BaseModel,ConfigDict,Field
 
+# Fixed Discovery-only request ceilings, not desired response lengths.
+MAX_URLS_PER_QUERY = 5
+BRAVE_CONTEXT_TOKENS = 16384
+EXTRACTION_OUTPUT_TOKENS = 8192
+
 class DiscoverySettings(BaseModel):
     model_config=ConfigDict(extra='forbid',frozen=True)
     target_listings:int=Field(default=10,ge=1,le=20)

@@ -29,7 +29,20 @@
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "fresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Fresh"
+            }
+          }
+        ],
+        "description": "Read the latest owned discovery. With fresh=true, return only the fixed introduction and capability status, without restoring history or invoking AI."
       }
     },
     "/api/v1/career/discoveries": {
@@ -86,7 +99,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Create a clean private discovery for each new Idempotency-Key; replaying the same key returns the same session. No introduction is stored or returned. No AI or research starts until a message is sent."
       }
     },
     "/api/v1/career/discoveries/{session_id}": {
@@ -199,7 +213,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Interpret a user message and update evidence-backed understanding. Python bundles unanswered clarification topics in the six-topic order, then automatically starts research once readiness passes. Explicit unsure/skip answers and keep-it-broad role scope are supported; no separate breadth/industry question or scope confirmation."
       }
     },
     "/api/v1/career/discoveries/{session_id}/research": {
@@ -265,7 +280,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Compatibility retry or refresh for an owned discovery. Requires matching scope and complete research readiness; missing context returns 422 and must be addressed in chat."
       }
     },
     "/api/v1/career/goals/{goal_id}/opportunity-research/progress": {
@@ -3091,6 +3107,9 @@
           "memory": {
             "$ref": "#/components/schemas/ConversationMemory"
           },
+          "understanding": {
+            "$ref": "#/components/schemas/DiscoveryUnderstanding"
+          },
           "source_ids": {
             "items": {
               "type": "string",
@@ -3345,7 +3364,7 @@
           },
           "sources": {
             "items": {
-              "$ref": "#/components/schemas/ResearchSource"
+              "$ref": "#/components/schemas/DiscoverySource"
             },
             "type": "array",
             "maxItems": 30,
@@ -3500,6 +3519,19 @@
                 "type": "null"
               }
             ]
+          },
+          "introduction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Introduction"
           }
         },
         "additionalProperties": false,
@@ -7023,6 +7055,514 @@
           "exploration_id"
         ],
         "title": "WorkspaceView"
+      },
+      "SummaryRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Session Id"
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "research_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Research Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "expected_version",
+          "research_id"
+        ],
+        "title": "SummaryRequest"
+      },
+      "SummaryReply": {
+        "properties": {
+          "reply": {
+            "type": "string",
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Reply"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reply"
+        ],
+        "title": "SummaryReply"
+      },
+      "OperationError": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Operation Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "diagnostic": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diagnostic"
+          },
+          "provider_error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Error"
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          },
+          "limit_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "provider",
+                  "user"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Scope"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operation_id",
+          "code",
+          "detail"
+        ],
+        "title": "OperationError"
+      },
+      "ConversationMemory": {
+        "properties": {
+          "interests": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Interests"
+          },
+          "preferences": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Preferences"
+          },
+          "rejected_directions": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Rejected Directions"
+          },
+          "open_questions": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Open Questions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ConversationMemory"
+      },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 12000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage"
+      },
+      "MarketSummary": {
+        "properties": {
+          "responsibility_refs": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Responsibility Refs"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendedSkill"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Skills"
+          },
+          "specialisations": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Specialisations"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "responsibility_refs"
+        ],
+        "title": "MarketSummary"
+      },
+      "RecommendedSkill": {
+        "properties": {
+          "skill_refs": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Skill Refs"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "requirement_type": {
+            "type": "string",
+            "enum": [
+              "core",
+              "specialisation",
+              "optional"
+            ],
+            "title": "Requirement Type"
+          },
+          "relevance": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Relevance"
+          },
+          "learning_priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Learning Priority"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "requirement_type",
+          "relevance",
+          "learning_priority"
+        ],
+        "title": "RecommendedSkill"
+      },
+      "DiscoverySource": {
+        "properties": {
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "employer",
+              "reddit",
+              "glassdoor",
+              "other"
+            ],
+            "title": "Platform"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "reported_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Date"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "role_match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "related",
+              "unknown"
+            ],
+            "title": "Role Match",
+            "default": "unknown"
+          },
+          "reliability": {
+            "type": "string",
+            "enum": [
+              "official",
+              "anecdotal",
+              "unverified"
+            ],
+            "title": "Reliability",
+            "default": "unverified"
+          },
+          "report_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Group"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "platform",
+          "url"
+        ],
+        "title": "DiscoverySource"
+      },
+      "DiscoveryAnswer": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unanswered",
+              "known",
+              "unsure",
+              "skipped"
+            ],
+            "title": "Status",
+            "default": "unanswered"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DiscoveryAnswer"
+      },
+      "DiscoveryUnderstanding": {
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "role_family_or_work": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "interest": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "other_interests": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "career_stage": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "location": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "avoided_activities": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "work_preferences": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "skill_ambiguity": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DiscoveryUnderstanding"
       }
     },
     "securitySchemes": {

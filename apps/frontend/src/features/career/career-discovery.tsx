@@ -8,23 +8,26 @@ import {AgentActivity,AgentMarkdown} from './agent-message';
 import {ChatScrollControl,useChatScroll} from './use-chat-scroll';
 
 type Scope={field:string;area:string;specificity:'field'|'role_area'|'specialisation';career_stage:'internship'|'entry_level'|'experienced'|'unspecified';location:string|null};
-type Decision={action:string;scope:Scope|null;question:string|null;reply:string;recommendations:{area:string;explanation:string;typical_work:string;difference:string}[]};
+type DiscoveryAnswer={status:'unanswered'|'known'|'unsure'|'skipped';value:string|null;evidence:string|null};
+type Understanding=Record<'field'|'role_family_or_work'|'interest'|'other_interests'|'career_stage'|'location'|'avoided_activities'|'work_preferences'|'skill_ambiguity',DiscoveryAnswer>;
+type Decision={understanding?:Understanding;action:string;scope:Scope|null;question:string|null;reply:string;recommendations:{area:string;explanation:string;typical_work:string;difference:string}[]};
 function goalContent(goal:import('@/lib/api/career').SavedGoal):JDExtraction{return {role:goal.role,field:goal.field,company:goal.company,location:goal.location,seniority_level:goal.seniority_level,job_url:goal.job_url,employment_type:goal.employment_type,summary:goal.summary||null,responsibilities:goal.responsibilities||[],skills:goal.skills,non_skill_requirements:goal.non_skill_requirements||[]};}
 type Summary={skills:{name:string;requirement_type:string;learning_priority:string;relevance:string;skill_refs:number[]}[];specialisations:string[];question:string|null};
 type Session={messages?:{role:'user'|'assistant';content:string}[];summary?:Summary|null;id:string;version:number;status:string;stage:string|null;decision:Decision|null;scope:Scope|null;related_roles:string[];sources:ResearchSource[];stats:{name:string;requirement_type:string;mention_count:number;sample_size:number;source_ids:string[]}[];warnings:string[];listings_analysed:number;employers_analysed:number;coverage:string|null;error_code:string|null;limit_scope:string|null;provider:string|null;retry_after:number|null;review:SavedReview|null};
-type View={available:boolean;session:Session|null};
-const phases:Record<string,string>={plan_research:'Planning job-listing searches',search_job_listings:'Finding relevant job listings',extract_requirements:'Extracting supported requirements',aggregate_requirements:'Comparing requirements across listings',generate_career_target:'Preparing your target for review'};
+type View={available:boolean;session:Session|null;introduction?:string};
+const phases:Record<string,string>={plan_research:'Planning job-listing searches',search_job_listings:'Finding relevant job listings',assess_job_listings:'Checking listing relevance and employer coverage',extract_requirements:'Extracting supported requirements',aggregate_requirements:'Comparing requirements across listings',generate_career_target:'Preparing your target for review'};
 export function CareerDiscovery(){
  const {token}=useProfile(),router=useRouter();
+ const [introduction,setIntroduction]=useState('');
  const [view,setView]=useState<View>(),[message,setMessage]=useState(''),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[reload,setReload]=useState(0);
  const [pending,setPending]=useState(''),[failedMessage,setFailedMessage]=useState(''),[details,setDetails]=useState(false);
  const {transcript,showJump,jumpToLatest,scrollProps}=useChatScroll();
  const sending=useRef(false),currentView=useRef<View|undefined>(undefined);
  const [content,setContent]=useState<JDExtraction>(),[seconds,setSeconds]=useState(0),[acknowledge,setAcknowledge]=useState(false);
  const receipt=useRef<{signature:string;key:string}|null>(null);const active=useRef(true);const revision=useRef('');const session=view?.session;
- function receive(value:View){if(value.session&&currentView.current?.session?.id===value.session.id&&value.session.version<currentView.current.session.version)return;currentView.current=value;setSeconds(value.session?.retry_after||0);setView(value);const key=value.session?.review?`${value.session.review.current.goal._id}:${value.session.review.current.goal.version}`:'';if(key!==revision.current){revision.current=key;setContent(value.session?.review?goalContent(value.session.review.current.goal):undefined);setAcknowledge(false);}}
+ function receive(value:View){if(value.introduction)setIntroduction(value.introduction);if(value.session&&currentView.current?.session?.id===value.session.id&&value.session.version<currentView.current.session.version)return;currentView.current=value;setSeconds(value.session?.retry_after||0);setView(value);const key=value.session?.review?`${value.session.review.current.goal._id}:${value.session.review.current.goal.version}`:'';if(key!==revision.current){revision.current=key;setContent(value.session?.review?goalContent(value.session.review.current.goal):undefined);setAcknowledge(false);}}
  useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
- useEffect(()=>{if(!token)return;const abort=new AbortController();void careerApi<View>('/discoveries/current',token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted){receive(v);setError('');}}).catch(()=>{if(!abort.signal.aborted)setError('Could not load your discovery. Retry to recover saved progress.');});return()=>abort.abort();},[token,reload]);
+ useEffect(()=>{if(!token)return;const abort=new AbortController();const id=currentView.current?.session?.id;void careerApi<View>(id?`/discoveries/${id}`:'/discoveries/current?fresh=true',token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted){receive(id?v:{...v,session:null});setError('');}}).catch(()=>{if(!abort.signal.aborted)setError('Could not load your discovery. Retry to recover saved progress.');});return()=>abort.abort();},[token,reload]);
  useEffect(()=>{if(!token||!session||busy||!['researching','waiting'].includes(session.status))return;const abort=new AbortController();const timer=setTimeout(()=>{void careerApi<View>(`/discoveries/${session.id}`,token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted)receive(v);}).catch(()=>{if(!abort.signal.aborted)setError('Connection interrupted. Saved research can resume when you reload.');});},2000);return()=>{clearTimeout(timer);abort.abort();};},[token,session,busy]);
  useEffect(()=>{setSeconds(session?.retry_after||0);const timer=setInterval(()=>setSeconds(v=>Math.max(0,v-1)),1000);return()=>clearInterval(timer);},[session?.retry_after]);
  async function post<T>(path:string,body:unknown,method='POST'){
@@ -43,6 +46,12 @@ export function CareerDiscovery(){
    if(active.current){receive(result);receipt.current=null;}
   }catch(c){if(active.current){setFailedMessage(input);setError(c instanceof Error?c.message:'Your message could not be completed. Retry.');}}
   finally{sending.current=false;if(active.current){setBusy(false);setPending('');}}
+ }
+ function newChat(){
+  if(busy||sending.current)return;
+  currentView.current=undefined;revision.current='';receipt.current=null;
+  setIntroduction('');setView(undefined);setContent(undefined);setMessage('');setPending('');setFailedMessage('');
+  setError('');setDetails(false);setConsent(false);setAcknowledge(false);setSeconds(0);setReload(v=>v+1);
  }
  async function research(refresh=false){
   if(!session?.decision?.scope||!token||busy)return;setBusy(true);setError('');
@@ -65,13 +74,13 @@ export function CareerDiscovery(){
  const working=!!session&&['researching','waiting'].includes(session.status);
  const review=session?.review;
  return <section className="page on career-agent-page career-discovery-page">
-  <header className="agent-page-header"><div><p className="small">A career direction, grounded in real jobs</p><h1>Career discovery</h1></div><Link className="btn ghost sm" href="/career-goal">← Career Goal</Link></header>
+  <header className="agent-page-header"><div><p className="small">A career direction, grounded in real jobs</p><h1>Career discovery</h1></div><div className="agent-compose-meta"><button type="button" className="btn ghost sm" disabled={busy} onClick={newChat}>New chat</button><Link className="btn ghost sm" href="/career-goal">← Career Goal</Link></div></header>
   <div className="agent-workspace">
    <div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true">C</span><div><strong>Coachify agent</strong><p className="small">{session?.scope?.area||'Career discovery'}</p></div></div><button className="btn ghost sm" onClick={()=>setDetails(v=>!v)}>{details?'Hide details':'Conversation details'}</button></div>
    {details&&<aside className="agent-details"><p>{session?.scope?`${session.scope.area} · ${session.scope.career_stage.replaceAll('_',' ')} · ${session.scope.location||'Location unspecified'}`:'Your direction is taking shape.'}</p><p>No CV or skills assessment is required. Research uses representative listings across employers. You choose when to confirm and save.</p>{!!session?.related_roles.length&&<p>Roles considered: {session.related_roles.join(' · ')}</p>}</aside>}
    <div className="agent-transcript" ref={transcript} {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">
-    <div className="agent-message assistant"><span className="agent-message-label">Coachify</span><p>What kind of work interests you, or is there a career direction you already have in mind? You can keep it broad. No CV is needed.</p></div>
-    {!view&&<p role="status">Opening your saved discovery…</p>}
+    {introduction&&<div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentMarkdown>{introduction}</AgentMarkdown></div>}
+    {!view&&<p role="status">Opening career discovery…</p>}
     {view&&!view.available&&<p role="alert">Discovery needs the configured Gemini and Brave services. Saved progress remains available.</p>}
     {session?.messages?.map((turn,index)=><div className={`agent-message ${turn.role==='user'?'user':'assistant'}`} key={`${session.id}-${index}`}><span className="agent-message-label">{turn.role==='user'?'You':'Coachify'}</span>{turn.role==='user'?<p>{turn.content}</p>:<AgentMarkdown>{turn.content}</AgentMarkdown>}</div>)}
     {!session?.messages?.length&&session?.decision&&<div className="agent-message assistant"><span className="agent-message-label">Coachify</span><AgentMarkdown>{session.decision.reply}</AgentMarkdown>{session.decision.question&&<p>{session.decision.question}</p>}</div>}

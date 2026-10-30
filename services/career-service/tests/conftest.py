@@ -16,7 +16,7 @@ def isolate_application_settings():
     for name in tuple(os.environ):
         if name == 'MONGODB_TEST_URI':
             continue
-        if name.startswith(('MONGODB_', 'AI_', 'GEMINI_', 'BRAVE_', 'OPPORTUNITY_', 'DISCOVERY_', 'LANGSMITH_', 'LANGCHAIN_')) or name in ('PROFILE_SERVICE_URL', 'CV_SERVICE_URL'):
+        if name.startswith(('MONGODB_', 'AI_', 'GEMINI_', 'BRAVE_', 'CAREER_LLM_', 'CAREER_RESEARCH_', 'OPPORTUNITY_', 'DISCOVERY_', 'LANGSMITH_', 'LANGCHAIN_')) or name in ('PROFILE_SERVICE_URL', 'CV_SERVICE_URL'):
             os.environ.pop(name, None)
 
 

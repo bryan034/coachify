@@ -12,7 +12,22 @@ The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV
 
 ## Configuration
 
-Configure private values yourself, preserving existing database passwords. Agents must not inspect environment files. Career uses `AI_ENABLED`, `GEMINI_API_KEY`, `GEMINI_REASONING_MODEL` and `BRAVE_API_KEY`; its default reasoning model is `gemini-3.5-flash-lite`. CV has a separate configurable OpenAI-compatible adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
+The public [`.env.example`](.env.example) lists all active deployment inputs, grouped by service: gateway/auth/email, scoped database passwords, Career LLM/research and limits, and CV model/storage/usage settings. Configure private values yourself, preserving existing database passwords. Agents must not inspect private environment files. Career uses `AI_ENABLED`, `CAREER_LLM_API_KEY`, `GEMINI_REASONING_MODEL` and `CAREER_RESEARCH_API_KEY`; its default reasoning model is `gemini-3.5-flash-lite`. CV has a separate configurable OpenAI-compatible adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
+
+Career credentials are now named `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY`.
+Rename the previous `GEMINI_API_KEY` / `BRAVE_API_KEY` entries yourself, preserving
+values; the providers remain Gemini / Brave. Deprecated names are read only when
+the corresponding new variable is absent. An explicitly blank new variable overrides
+the legacy key. Each credential is injected into Career only, never the frontend or CV.
+CV keeps its independent `CV_LLM_API_KEY`; no service-specific `.env` file is needed
+for Compose. Fixed internal API URLs/database wiring and the CV volume path remain
+in Compose. Code-level constants and scaffold services do not gain unused variables.
+
+After applying private setting changes, recreate the affected containers with
+`up -d --force-recreate` using both development Compose files. `restart` alone does
+not apply changed environment values. Rebuild only when the application image also
+needs updated source/dependencies or build-time values (such as the production frontend
+Google client ID); hot-reload mounts pick up these Python readers.
 
 The three implemented services communicate through authenticated APIs. CV receives `CAREER_SERVICE_URL`; Profile receives `CV_SERVICE_URL` for explicit source attachment; Career receives its CV API URL. No service reads another service's database. Tests use `compose.test.yaml` and deterministic synthetic model responses, with explicit synthetic settings and `--env-file /dev/null` in isolated projects.
 

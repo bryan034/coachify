@@ -163,13 +163,13 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     @app.exception_handler(AIError)
     async def ai_error(request, error):
         status=429 if error.code=='rate_limited' else 422 if error.code=='input_limit' else 409 if error.code=='stale_input' else 503
-        messages={'not_configured':'AI is disabled. Configure AI_ENABLED and GEMINI_API_KEY on the Career service.',
-                  'provider_auth':'Check GEMINI_API_KEY and its API/application restrictions on the Google project.',
+        messages={'not_configured':'AI is disabled. Configure AI_ENABLED and CAREER_LLM_API_KEY on the Career service.',
+                  'provider_auth':'Check CAREER_LLM_API_KEY and its API/application restrictions on the Google project.',
                   'provider_configuration':'The AI provider rejected the request configuration. Check provider_error for the safe status and rejected field names.',
                   'provider_schema':'Gemini rejected the structured-output schema. Check provider_error.fields; your saved goal is unchanged.',
                   'provider_parameter':'Gemini rejected a model request parameter. Check provider_error.fields; your saved goal is unchanged.',
                   'provider_access':'Google project access, API enablement, billing or regional availability needs checking. Your saved goal is unchanged.',
-                  'model_unavailable':'The configured AI model is not available to this provider account. Check GEMINI_REASONING_MODEL access for GEMINI_API_KEY and recreate the Career service.',
+                  'model_unavailable':'The configured AI model is not available to this provider account. Check GEMINI_REASONING_MODEL access for CAREER_LLM_API_KEY and recreate the Career service.',
                   'invalid_output':'The AI returned an invalid structured response. Your saved progress is unchanged; retry your message.',
                   'timeout':'The AI did not finish within the time limit. Your inputs and saved progress are unchanged; retry the request.',
                   'incomplete_output':'The AI response ended before it was complete, possibly at its output limit. No incomplete result was saved; retry the request.',
