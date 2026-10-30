@@ -19,7 +19,8 @@ class ConversationRouter(Extractor):
             raise ValueError('Chat interpretation is not configured. Your message is saved; retry after configuration. You can still use review controls and the CV summary.')
         payload = {'model': self.model, 'temperature': 0, 'response_format': {'type': 'json_object'},
             'messages': [{'role': 'system', 'content': SYSTEM + '\nSchema: ' + json.dumps(ConversationRoute.model_json_schema())},
-                         {'role': 'user', 'content': json.dumps(context)}], 'max_tokens': 5000}
+                         {'role': 'user', 'content': json.dumps(context)}], 'max_tokens': 5000,
+            **self._provider_options()}
         try:
             deadline = time.monotonic() + 25
             with httpx.Client(timeout=httpx.Timeout(20, connect=5), follow_redirects=False, trust_env=False) as client:

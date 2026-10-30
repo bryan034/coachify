@@ -27,7 +27,8 @@ class Interpreter(Extractor):
             'messages': [{'role': 'system', 'content': SYSTEM + '\nSchema: ' + json.dumps(InterpretationOutput.model_json_schema())},
                          {'role': 'user', 'content': json.dumps({'source_item': source,
                             'question': {'id': question['id'], 'uncertainty': question['uncertainty'], 'question': question['question']},
-                            'answer': answer, 'answer_revision': answer_revision})}], 'max_tokens': 5000}
+                            'answer': answer, 'answer_revision': answer_revision})}], 'max_tokens': 5000,
+            **self._provider_options()}
         try:
             deadline = time.monotonic() + 25
             with httpx.Client(timeout=httpx.Timeout(20, connect=5), follow_redirects=False, trust_env=False) as client:
