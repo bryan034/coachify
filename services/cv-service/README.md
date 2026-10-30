@@ -21,6 +21,4 @@ The running service uses MongoDB and private originals. Configure `CV_LLM_BASE_U
 
 CV model requests share configurable daily attempt budgets and per-account/global concurrency across service instances. Admission failures preserve saved inputs and explain when to retry. Original storage quotas and model budgets are separate; the specification documents their limits, private-volume assumptions and recovery.
 
-## Assessment producer handoff — C09 / G01 integration
-
-`GET /api/v1/cv/{id}/assessment-input` provides the selected effective source snapshot, preserving revisions, manual declarations, attribution and evidence. It rejects pending factual interpretations and comparison candidates. The separate Assessment consumer binds/revalidates the full goal. This source-only read creates no Career confirmation stamp. Public skill responses also include shared `canonical_skill_id` and `skill_registry_version`; legacy skill/source IDs remain intact.
+For DeepSeek, set `CV_LLM_BASE_URL=https://api.deepseek.com`, `CV_LLM_MODEL=deepseek-flash` and your private `CV_LLM_API_KEY`. Requests to the exact `api.deepseek.com` host automatically disable thinking for extraction, chat routing and clarification interpretation; other provider hosts keep their existing options. No additional environment flag is needed. See [DeepSeek's request format](https://api-docs.deepseek.com/api/create-chat-completion/).

@@ -188,6 +188,16 @@ never a synthetic successful extraction. No provider calls are needed for
 automated tests. See [Groq compatibility](https://console.groq.com/docs/openai)
 and [structured output modes](https://console.groq.com/docs/structured-outputs).
 
+For DeepSeek, use `CV_LLM_BASE_URL=https://api.deepseek.com`,
+`CV_LLM_MODEL=deepseek-flash` and your private `CV_LLM_API_KEY`.
+The CV adapter automatically sends `thinking: {type: disabled}` to the exact
+`api.deepseek.com` host for extraction, chat routing and answer interpretation.
+Other provider hosts do not receive this option; no extra environment flag is
+required. See [DeepSeek's API reference](https://api-docs.deepseek.com/api/create-chat-completion/).
+After changing private configuration, recreate the CV container with
+`docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up -d --build --no-deps --force-recreate cv-service`
+from the repository root with the supporting stack already running.
+
 CV obtains the current canonical goal projection through Career using the same owner session, after explicit confirmation of its exact goal/version/selection revision. Compose supplies `CAREER_SERVICE_URL=http://career-service:8000`; set it
 explicitly for direct service runs. On the CV screen, start a guided chat review, answer naturally or skip; detailed evidence and direct review controls remain in the summary. The raw answer is saved before interpretation.
 Supported changes appear against the relevant source, including personal/team
