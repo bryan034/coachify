@@ -215,7 +215,6 @@
           }
         },
         "description": "Interpret a user message and update evidence-backed understanding. Python bundles unanswered clarification topics in the six-topic order, then automatically starts research once readiness passes. Explicit unsure/skip answers and keep-it-broad role scope are supported; no separate breadth/industry question or scope confirmation."
-        }
       }
     },
     "/api/v1/career/discoveries/{session_id}/research": {
@@ -283,7 +282,6 @@
           }
         },
         "description": "Compatibility retry or refresh for an owned discovery. Requires matching scope and complete research readiness; missing context returns 422 and must be addressed in chat."
-        }
       }
     },
     "/api/v1/career/goals/{goal_id}/opportunity-research/progress": {
