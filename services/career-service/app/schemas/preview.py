@@ -5,6 +5,10 @@ MAX_TEXT = 20_000  # Temporary CV previews keep their existing limit.
 MAX_JD_TEXT = 8_000
 MAX_FILE = 10 * 1024 * 1024
 MAX_BODY = MAX_FILE + 64 * 1024
+URL_NETWORK_TIMEOUT = 5
+URL_IMPORT_TIMEOUT = 25
+URL_WORKER_TIMEOUT = 30
+DOCUMENT_WORKER_TIMEOUT = 20
 
 
 class UrlInput(BaseModel):

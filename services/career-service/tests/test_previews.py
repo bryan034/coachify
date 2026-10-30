@@ -223,6 +223,7 @@ def test_tls_request_uses_validated_address_and_original_hostname():
         status=200
         def getheaders(self):return [('Content-Type','text/html')]
         def read1(self,n):return b''
+        def close(self):pass
     with patch('socket.getaddrinfo',public_dns),patch('socket.create_connection') as connect,patch('ssl.create_default_context') as context,patch('http.client.HTTPConnection') as connection:
         connection.return_value.getresponse.return_value=Response()
         job_url.request_page('https://example.test/job',__import__('time').monotonic()+10)

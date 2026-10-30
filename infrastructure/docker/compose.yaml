@@ -34,6 +34,7 @@ services:
         condition: service_healthy
     networks: [backend, database]
   career-service:
+    init: true
     build: ../../services/career-service
     environment:
       PROFILE_SERVICE_URL: http://profile-service:8000
@@ -73,11 +74,11 @@ services:
     networks: [backend, database]
     read_only: true
     tmpfs:
-      - /tmp:size=32m,mode=0700,uid=10001,gid=10001
+      - /tmp:size=128m,mode=0700,uid=10001,gid=10001
     mem_limit: 768m
-    pids_limit: 64
+    pids_limit: 256
     cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
+    security_opt: [no-new-privileges:true, "seccomp=./career-browser-seccomp.json"]
   cv-service:
     build: ../../services/cv-service
     environment:

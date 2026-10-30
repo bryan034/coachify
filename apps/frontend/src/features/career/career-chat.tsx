@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from '@/components/ui/brand-logo';
 
 import {ChatScrollControl,useChatScroll} from './use-chat-scroll';
 import {useEffect,useRef,useState} from 'react';
@@ -99,7 +100,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
  const initial='Hi, I’m your career agent. Tell me what you’d like to achieve, or what you’re unsure about. We’ll work through it together, one question at a time.';
  return <section className="page on career-agent-page">
   <header className="agent-page-header"><div><p className="small">Your direction, one conversation at a time</p><h1>Career Goal</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>navigate('/career-goal')}>← Career Goal</button></header>
-  <div className="agent-workspace"><div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true">C</span><div><strong>Coachify agent</strong><p className="small">Career exploration</p></div></div><button className="btn ghost sm" disabled={busy} onClick={()=>setShowDetails(v=>!v)}>{showDetails?'Hide details':'Conversation details'}</button></div>
+  <div className="agent-workspace"><div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true"><BrandLogo compact decorative/></span><div><strong>Coachify agent</strong><p className="small">Career exploration</p></div></div><button className="btn ghost sm" disabled={busy} onClick={()=>setShowDetails(v=>!v)}>{showDetails?'Hide details':'Conversation details'}</button></div>
   {showDetails&&<aside className="agent-details">
     <strong>{current?.goal?`Latest career goal: ${current.goal.role}`:'Your career direction is taking shape'}</strong>
     {draft&&<dl>{Object.entries(draft.answers).map(([topic,answer])=><div key={topic}><dt>{topic}</dt><dd>{answer.status==='skipped'?'Unknown / skipped':answer.value}{answer.status==='partial'?' — still clarifying':''}</dd></div>)}</dl>}

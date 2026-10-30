@@ -80,7 +80,7 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
      {(method==='url'||!!error)&&<button className="btn pri" disabled={busy||(method==='url'?!url:!file)}>{busy?'Preparing preview…':method==='url'?'Import job page':'Retry reading document'}<span aria-hidden="true">↗</span></button>}
     </form>}
     {busy&&<p role="status" className="goal-status">Preparing a temporary preview. You can switch methods to cancel.</p>}
-    {error&&<div role="alert" className="goal-error"><p>{error}</p><p className="small">Your current input is still here. Retry, paste the description or choose another source.</p></div>}
+    {error&&<div role="alert" className="goal-error"><p>{error}</p><p className="small">Your current input is still here. Retry, paste the description or choose another source.</p>{method==='url'&&<div className="row"><button type="button" className="btn ghost sm" onClick={()=>changeMethod('text')}>Paste description</button><button type="button" className="btn ghost sm" onClick={()=>changeMethod('document')}>Upload document</button></div>}</div>}
     {(method==='text'||draft.text)&&<div className="goal-preview">
 
      <div className="row between"><label htmlFor="job-description">{method==='text'?'Job description':'Review and edit the preview'}</label><span id="goal-count" className={`small ${tooLong?'error':''}`}>{count.toLocaleString()} / 8,000 characters</span></div>

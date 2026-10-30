@@ -62,3 +62,34 @@ runtime settings yourself. Restart the affected API for JSON/data snapshot chang
 (Uvicorn's default watcher tracks Python); restart the gateway for NGINX changes.
 Continue using both `-f` options for development commands. Omit `compose.dev.yaml`
 and rebuild/recreate to return to the production-style configuration.
+
+## Career URL preview browser
+
+Career installs the pinned Playwright package and Chromium headless shell in its
+image. Rebuild/recreate Career after this dependency change, even with hot reload:
+
+```sh
+docker compose --env-file infrastructure/docker/.env \
+  -f infrastructure/docker/compose.yaml \
+  -f infrastructure/docker/compose.dev.yaml up --build -d career-service
+docker compose --env-file infrastructure/docker/.env \
+  -f infrastructure/docker/compose.yaml \
+  -f infrastructure/docker/compose.dev.yaml restart gateway
+```
+
+No new API keys are required for supported public Greenhouse/Lever GET endpoints.
+The browser runs as the existing non-root service user with its Chromium sandbox
+on. Career retains its read-only filesystem, 768 MiB memory cap, dropped capabilities
+and no-new-privileges; its private tmpfs is 128 MiB and PID/thread limit is 256.
+One browser render may run at a time; a container init reaps terminated descendants. Hosts must support unprivileged user namespaces;
+if startup is unavailable, URL imports offer paste/upload rather than disabling the
+sandbox. Direct Python runs need `playwright install chromium --only-shell` and
+`PLAYWRIGHT_BROWSERS_PATH` pointing to that installation.
+
+[career-browser-seccomp.json](career-browser-seccomp.json) is based on Microsoft's
+[Playwright v1.64.1 profile](https://github.com/microsoft/playwright/blob/v1.64.1/utils/docker/seccomp_profile.json)
+([Apache-2.0 license](career-browser-seccomp.LICENSE)), with `chroot` allowed for Chromium's namespace-local sandbox while
+container capabilities remain dropped. It is applied only to Career. See
+[Playwright's Docker guidance](https://playwright.dev/python/docs/docker).
+Browser profiles are temporary, receive no service secrets and are removed on exit.
+This improves JavaScript-page support; it does not guarantee access to blocked sites.

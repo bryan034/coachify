@@ -91,12 +91,16 @@ it('explains career-only scope without exposing provider diagnostics',()=>{
  expect(screen.queryByText(/PRIVATE/)).toBeNull();
 });
 
-it('renders each summary citation beside its own point, preserving saved URL parentheses',()=>{
- const {container}=render(<AgentMarkdown>{'## Your career goal\n\n- An Analyst internship. [Source](<https://example.test/jobs_(internship)>)\n\n- SQL \\[required\\]. [Source](<https://skills.test/SQL_(required)>)\n\n- An interview is reported. [Source](<https://interviews.test/report>)\n\nAsk me anything about this goal set!'}</AgentMarkdown>);
- const intro=screen.getByText(/An Analyst internship/).closest('li')!;
+it('renders bold summary labels with each citation beside its own paragraph',()=>{
+ const {container}=render(<AgentMarkdown>{'## Your career goal\n\n**Role:** An Analyst internship. [Source](<https://example.test/jobs_(internship)>)\n\n**Required skills:** SQL \\[required\\]. [Source](<https://skills.test/SQL_(required)>)\n\n**Interview expectations:** An interview is reported. [Source](<https://interviews.test/report>)\n\nAsk me anything about this goal set!'}</AgentMarkdown>);
+ const intro=screen.getByText(/An Analyst internship/).closest('p')!;
  expect(intro.querySelector('a')).toHaveAttribute('href','https://example.test/jobs_(internship)');
- const points=screen.getAllByRole('listitem');
+ const points=container.querySelectorAll('p:has(strong)');
  expect(points).toHaveLength(3);
+ expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+ expect(points[0].querySelector('strong')).toHaveTextContent('Role:');
+ expect(points[1].querySelector('strong')).toHaveTextContent('Required skills:');
+ expect(points[2].querySelector('strong')).toHaveTextContent('Interview expectations:');
  expect(points[1]).toHaveTextContent('SQL [required].');
  expect(points[1].querySelector('a')).toHaveAttribute('href','https://skills.test/SQL_(required)');
  expect(points[2]).toHaveTextContent('An interview is reported.');

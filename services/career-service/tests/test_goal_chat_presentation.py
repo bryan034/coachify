@@ -26,7 +26,7 @@ def environment(reply='An interview is reported.',references=('research_0',)):
     calls=[]
     async def generate(request,operation,**kwargs):
         calls.append(request)
-        output=GoalSummary(blocks=[{'text':reply,'references':list(references)}])
+        output=GoalSummary(blocks=[{'label':'Interview expectations','text':reply,'references':list(references)}])
         kwargs['validate_output'](output)
         return NS(data=output)
     repo=NS(check=check,goals=NS(current=lambda owner:{'goal':goal}),reviews=NS(version=lambda *args:goal.version))
@@ -38,11 +38,36 @@ def test_overview_uses_structured_data_and_restores_verified_links():
     async def run():
         request,body,checks,calls,_=environment()
         result=await summarize(request,'owner',body)
-        assert '[Source](<https://example.test/job>)' in result['reply']
+        assert '**Interview expectations:** An interview is reported. [Source](<https://example.test/job>)' in result['reply']
         assert len(checks)==3 and calls[0].stage=='goal_summary'
         context=json.loads(calls[0].context)
         assert context['goal']['role']=='Analyst' and context['categories']['interviews']['findings'][0]['reference']=='research_0'
         assert 'owner' not in context and 'Singapore' not in calls[0].context
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('label',[None,'','**Field:**','[Role](https://untrusted.test)','Invented topic'])
+def test_summary_rejects_missing_or_unapproved_labels(label):
+    from pydantic import ValidationError
+    block={'text':'Data analytics.','references':['goal']}
+    if label is not None:block['label']=label
+    with pytest.raises(ValidationError):GoalSummary(blocks=[block])
+
+
+def test_summary_renders_career_field_with_a_bold_label():
+    async def run():
+        request,body,*_=environment()
+        async def generate(*args,**kwargs):
+            output=GoalSummary(blocks=[
+                {'label':'Field','text':'Data.','references':['goal']},
+                {'label':'Interview expectations','text':'An interview is reported.','references':['research_0']},
+            ])
+            kwargs['validate_output'](output)
+            return NS(data=output)
+        request.app.state.ai=NS(generate=generate)
+        reply=(await summarize(request,'owner',body))['reply']
+        assert '**Field:** Data.\n\n**Interview expectations:**' in reply
+        assert reply.count('Ask me anything about this goal set!')==1
     asyncio.run(run())
 
 

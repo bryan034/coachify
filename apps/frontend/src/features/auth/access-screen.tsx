@@ -1,13 +1,23 @@
 "use client";
 import Link from 'next/link';
+import { BrandLogo } from '@/components/ui/brand-logo';
+import { JourneyVisual } from '@/components/ui/journey-visual';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useProfile } from '@/features/profile/profile-provider';
 import { profileApi } from '@/lib/api/profile';
 import { GoogleSignIn } from '@/lib/auth/google-sign-in';
-export function AccessFrame({ children }: { children: ReactNode }) {
- return <div className="access-page"><header className="access-header"><Link href="/" className="brand"><div className="mark">C</div><div><b>COACHIFY</b><span>Your career copilot</span></div></Link><Link href="/login" className="btn ghost">Sign in</Link></header>
-  <main className="access-main"><section className="access-intro"><span className="chip">Your next chapter starts here</span><h1>A clearer path.<br/><span>Your next career move.</span></h1><p>Start with where you are today. Build towards where you want to be.</p><div className="access-preview card"><span className="pill" style={{ background: 'var(--gbg)', color: 'var(--green)' }}>Made for your journey</span><h2>One step closer.</h2><p className="small">Your background. Your ambitions. A place to bring them together.</p><div className="access-steps"><span>01 · Your starting point</span><span>02 · Your career goals</span><span>03 · Your next steps</span></div></div></section><section className="access-card card">{children}</section></main></div>;
+export function AccessFrame({ children, entry = false }: { children: ReactNode; entry?: boolean }) {
+ return <div className={`access-page${entry ? ' access-entry' : ''}`}>
+  <a href="#access-content" className="skip-link">Skip to content</a>
+  <header className="access-header"><Link href="/" className="brand" aria-label="Elo home"><BrandLogo/></Link><span className="access-header-note">Your career, moving forward.</span><Link href="/login" className="btn ghost">Sign in</Link></header>
+  <main id="access-content" className="access-main" tabIndex={-1}>
+   <section className="access-intro"><h1>A clearer path<br/>to your next<br/>career move.</h1><p>Bring your experience and ambitions together. Find a direction that feels like you.</p>{entry && <div className="entry-content">{children}</div>}</section>
+   {entry ? <JourneyVisual/> : <section className="access-card card">{children}</section>}
+  </main>
+  {entry && <section className="access-foundations" aria-label="Your career workspace"><div><span className="foundation-dot"/><div><h2>Start with you</h2><p>Your background, in one place.</p></div></div><div><span className="foundation-dot"/><div><h2>Find your direction</h2><p>Explore roles and set your career goal.</p></div></div><div><span className="foundation-dot"/><div><h2>Tell your story</h2><p>Upload and work through your CV.</p></div></div></section>}
+  <footer className="access-footer"><span>Your next chapter starts here.</span><span>Built around your ambition.</span></footer>
+ </div>;
 }
 function AccessStatus() {
  const { logoutError, retryLogout, configError, reload } = useProfile();
@@ -16,7 +26,7 @@ function AccessStatus() {
 export function EntryPage() {
  const session = useProfile(); const router = useRouter(); const pathname=usePathname();
  useEffect(() => { if (pathname==='/' && session.account && session.profile && !session.loading) router.replace(session.profile.onboarding_complete ? '/dashboard' : '/onboarding'); }, [session.account, session.profile, session.loading, pathname, router]);
- return <AccessFrame><p className="k">WELCOME TO COACHIFY</p><h2>Make room for what’s next.</h2><p className="muted">Create an account to get started, or pick up where you left off.</p><AccessStatus/>{session.loading ? <p role="status">Checking account access…</p> : session.account ? <><p role="status">{session.loadError || 'Opening your workspace…'}</p>{session.loadError && <button className="btn ghost" onClick={session.reload}>Retry profile</button>}<button className="btn ghost" onClick={session.signOut}>Sign out</button></> : <div className="access-actions"><Link href="/register" className="btn pri">Create account <span aria-hidden="true">↗</span></Link><Link href="/login" className="btn ghost">Sign in to your account</Link></div>}</AccessFrame>;
+ return <AccessFrame entry><AccessStatus/>{session.loading ? <p role="status">Checking account access…</p> : session.account ? <><p role="status">{session.loadError || 'Opening your workspace…'}</p>{session.loadError && <button className="btn ghost" onClick={session.reload}>Retry profile</button>}<button className="btn ghost" onClick={session.signOut}>Sign out</button></> : <div className="access-actions"><Link href="/register" className="btn pri">Create account <span aria-hidden="true">↗</span></Link><Link href="/login" className="btn ghost">Sign in to your account</Link></div>}</AccessFrame>;
 }
 export function AccessScreen({ intent }: { intent: 'login' | 'register' }) {
  const { mode, googleEnabled, verification, account, profile, loading, configError, loadError, beginAccess, completeAccess, cancelAccess, reload, signOut } = useProfile();
@@ -37,7 +47,7 @@ export function AccessScreen({ intent }: { intent: 'login' | 'register' }) {
   finally { locked.current = false; setBusy(false); }
  }, [intent, name, email, password, completeAccess]);
  function submit(event: FormEvent) { event.preventDefault(); void finish(); }
- return <AccessFrame><p className="k">{verification ? 'CHECK YOUR INBOX' : intent === 'register' ? 'YOUR FIRST STEP' : 'WELCOME BACK'}</p><h2>{verification ? 'Verify your email.' : intent === 'register' ? 'Create your account.' : 'Good to see you again.'}</h2><p className="muted">{verification ? 'One small step to make this account yours.' : intent === 'register' ? 'A fresh start for your next career move.' : 'Your next chapter is right where you left it.'}</p><AccessStatus/>
+ return <AccessFrame><p className="k">{verification ? 'Check your inbox' : intent === 'register' ? 'Your first step' : 'Welcome back'}</p><h2>{verification ? 'Verify your email.' : intent === 'register' ? 'Create your account.' : 'Good to see you again.'}</h2><p className="muted">{verification ? 'One small step to make this account yours.' : intent === 'register' ? 'A fresh start for your next career move.' : 'Your next chapter is right where you left it.'}</p><AccessStatus/>
  {account ? <><p role="status">{loadError || 'Opening your workspace…'}</p>{loadError && <button className="btn ghost" onClick={reload}>Retry profile</button>}<button className="btn ghost" onClick={signOut}>Sign out</button></> : verification ? <VerificationForm/> : loading || !mode ? <p role="status">Checking account access…</p> : !configError && <>
  {mode === 'local_test' && <p className="access-note">Development mode · use a test email and password. Verification messages appear in your local test inbox.</p>}
  {!nonce && !error && <p role="status">Preparing secure access…</p>}

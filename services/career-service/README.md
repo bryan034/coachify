@@ -16,7 +16,7 @@ Pasted text stays in browser memory until explicitly submitted for extraction. `
 
 Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
 
-After extraction and research finish, chat automatically loads the saved report and presents a concise overview as short, single-idea bullets, ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Saved goal cards are available immediately after extraction, while the composer waits for the combined response.
+After extraction and research finish, chat automatically loads the saved report and presents a concise overview as short, single-idea paragraphs with bold topic labels (for example, **Field:** and **Required skills:**), ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Saved goal cards are available immediately after extraction, while the composer waits for the combined response.
 
 Goal summaries use bounded corrections for invalid model output, with at most six
 repairs. Gemini returns plain-text blocks with backend-assigned fact references; Python
@@ -62,6 +62,18 @@ Saved-goal Q&A uses backend topic routing and allowlisted projected facts. Expli
 Every endpoint requires a verified account and completed canonical onboarding. Owner checks and no-store responses apply to private data. Services use authenticated APIs rather than foreign MongoDB collections. Environment files remain private and must be configured by the user; agents use synthetic settings. See [application setup](../../docs/setup.md), [OpenAPI](../../contracts/api/career.yaml) and [tests](tests/README.md).
 
 Canonical writes retain namespaced `create_key` metadata to coexist with the legacy unique index. History filters record shape explicitly. No index drop, destructive data migration or automatic conversion of older target snapshots occurs. Gap analysis and roadmap generation remain planned.
+URL previews allow five seconds per network operation and one timeout retry within
+a 25-second import budget (30-second worker, 35-second gateway). Timeouts, certificate
+failures and other connection errors have distinct messages. Robots checks, validated
+public-IP pinning and hostname verification remain enforced; inaccessible sites offer
+paste/document actions. Roblox and standard Greenhouse/Lever job links use public,
+key-free APIs with validated identity and original-link/API provenance. Other sites
+keep HTML/robots extraction; accessible JavaScript shells may use one bounded,
+sandboxed Chromium render. Blocked/authentication/challenge pages keep paste/upload
+fallback. No preview invokes an LLM. Browser dependencies and container sandbox
+settings require a Career rebuild/recreate; see [deployment notes](../../infrastructure/docker/README.md#career-url-preview-browser)
+and [preview safeguards](SPECIFICATION.md).
+
 ## CV assessment handoff — J09 / CV dependency
 
 - `GET /api/v1/career/context/assessment` — Read whether the owner has a saved CV and nonempty successfully extracted skills, through CV APIs only.
