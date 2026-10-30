@@ -24,6 +24,12 @@ class Extractor:
     @property
     def configured(self): return bool(self.api_key and self.model)
 
+    def _provider_options(self):
+        # DeepSeek defaults to thinking; CV requests need bounded JSON answers.
+        if urlparse(self.base_url).hostname == 'api.deepseek.com':
+            return {'thinking': {'type': 'disabled'}}
+        return {}
+
     def extract(self, blocks):
         if not self.configured:
             raise ValueError('CV extraction is not configured. Ask the administrator to configure the CV model, then retry this saved upload.')
@@ -31,7 +37,7 @@ class Extractor:
                    'response_format': {'type': 'json_object'},
                    'messages': [{'role': 'system', 'content': SYSTEM + '\nSchema: ' + json.dumps(Extraction.model_json_schema())},
                                 {'role': 'user', 'content': json.dumps({'source_blocks': blocks})}],
-                   'max_tokens': 12000}
+                   'max_tokens': 12000, **self._provider_options()}
         try:
             deadline = time.monotonic() + 65
             with httpx.Client(timeout=httpx.Timeout(60, connect=10), follow_redirects=False, trust_env=False) as client:
