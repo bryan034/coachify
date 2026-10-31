@@ -464,3 +464,8 @@ Each run retains a uniquely named JSON attempt report and browser artifacts;
 `--repeat 3` records three fixed attempts per mode without discarding failures.
 Current exact-model limitations are recorded in the
 [local-model verification](../services/career-service/tests/LOCAL_MODEL_VERIFICATION.md).
+
+Chat display browser tests distinguish safe terminal failure explanations from raw
+provider diagnostics: invalid answers show an actionable Retry alert while private
+provider text stays hidden. Synthetic research sources include their required
+platform metadata so response validation succeeds before scroll/citation checks.
