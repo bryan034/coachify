@@ -67,7 +67,7 @@ test('chat hides validation diagnostics and replaces repair activity with a Mark
  await page.getByRole('button',{name:'Send message'}).click();
  expect((await (await diagnostic).json()).code).toBe('invalid_output');
  await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeVisible();
- await expect(log.getByRole('alert')).toHaveCount(0);
+ await expect(log.getByRole('alert')).toContainText('The AI returned an answer that could not be validated');
  await expect(page.getByText('PRIVATE provider JSON diagnostic')).toHaveCount(0);
  await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveValue('Explain the assessment');
  failureMode='rate_limited';
@@ -138,7 +138,7 @@ test('typing preserves scroll position and research citations sit beside support
   return route.fulfill({json:careerFixture(route.request().url(),{version:1,onboarding_complete:true,occupational_status:'employed',education:{}})});
  });
  const extraction={role:'Data Analyst',field:'Data',company:null,location:'Singapore',skills:[],non_skill_requirements:[],responsibilities:[],summary:Array.from({length:80},(_,i)=>`Preparation paragraph ${i}: understand the role and practise explaining your decisions.`).join('\n\n')};
- await page.route('**/api/v1/career/**',route=>route.fulfill({json:careerFixture(route.request().url(),{session_id:'synthetic',revision:1,kind:'jd',phase:'ready',review:{review_id:'review',version:1,extraction},research:{skills:[{name:'SQL joins',interview_stage:'Technical interview',assessment_type:'SQL exercise',source_ids:['s1']}],process:{round_count:2,round_count_evidence:{source_ids:['s1'],text:'Two rounds'},stages:[]},sources:[{source_id:'s1',url:'https://www.example.test/interview#rounds'}]},current:{selection_version:1,goal:null},coverage:[],error:null,retry_after:null})}));
+ await page.route('**/api/v1/career/**',route=>route.fulfill({json:careerFixture(route.request().url(),{session_id:'synthetic',revision:1,kind:'jd',phase:'ready',review:{review_id:'review',version:1,extraction},research:{skills:[{name:'SQL joins',interview_stage:'Technical interview',assessment_type:'SQL exercise',source_ids:['s1']}],process:{round_count:2,round_count_evidence:{source_ids:['s1'],text:'Two rounds'},stages:[]},sources:[{source_id:'s1',platform:'brave',url:'https://www.example.test/interview#rounds'}]},current:{selection_version:1,goal:null},coverage:[],error:null,retry_after:null})}));
  await page.goto('/career-goal/chat?source=jd');
  const log=page.getByRole('log'),reply=log.locator('.agent-reply').first();
  await expect.poll(()=>log.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeGreaterThan(400);

@@ -136,6 +136,7 @@ def aggregate(scope,listings,settings=None):
 class DiscoveryEngine:
     def __init__(self,app,db,ai,source):
         self.app,self.ai,self.source=app,ai,source
+        self.policy=POLICY if getattr(source,'provider','brave')=='brave' else POLICY+':'+source.cache_policy
         self.settings=DiscoverySettings.from_env()
         self.rows=app.state.goal_store.db.research_contexts
         self.tasks={};self.stopping=False
@@ -282,13 +283,13 @@ class DiscoveryEngine:
         context=research_context(understanding)
         scope_key=fingerprint({'scope':{k:normal(v) if isinstance(v,str) else v for k,v in scope.items()},'context':context})
         cached=None if refresh else self.rows.find_one({'kind':'career_discovery','owner':row['owner'],'scope_key':scope_key,
-            'research_policy':POLICY,'aggregate':{'$ne':None},'researched_at':{'$gt':now()-timedelta(hours=self.settings.freshness_hours)}},sort=[('researched_at',-1)])
-        if not refresh and row.get('scope_key')==scope_key and row.get('research_policy')==POLICY and row['status'] in ('failed','researching','waiting'):cached=row
+            'research_policy':self.policy,'aggregate':{'$ne':None},'researched_at':{'$gt':now()-timedelta(hours=self.settings.freshness_hours)}},sort=[('researched_at',-1)])
+        if not refresh and row.get('scope_key')==scope_key and row.get('research_policy')==self.policy and row['status'] in ('failed','researching','waiting'):cached=row
         values={'run':uuid4().hex,'scope':scope,'scope_key':scope_key,'status':'researching','stage':'plan_research',
-            'research_policy':POLICY,'next_attempt_at':now(),'lease':None,'lease_until':now(),'error_code':None,'limit_scope':None,'provider':None,'updated_at':now()}
+            'research_policy':self.policy,'next_attempt_at':now(),'lease':None,'lease_until':now(),'error_code':None,'limit_scope':None,'provider':None,'updated_at':now()}
         for field in ('plan','sources','searched','listings','evaluated','aggregate','generation','researched_at','search_failures','candidates','assessments','split_batches','narrowed_sources','extraction_failures','followup_requested','rejected_source_ids','replacement_searches','replacement_query','replacement_shortfall'):
             values[field]=cached.get(field) if cached else None
-        if cached and cached.get('research_policy')!=POLICY:values.update(aggregate=None,assessments=None)
+        if cached and cached.get('research_policy')!=self.policy:values.update(aggregate=None,assessments=None)
         values.update(summary=None,summary_version=None,review_id=None,attempts={},research_question=None)
         return values
 
@@ -601,7 +602,7 @@ class DiscoveryEngine:
                 lines.append('- '+labels[skill.requirement_type]+': **'+plain_reply(skill.name)+'** · '+skill.learning_priority+' learning priority. '+plain_reply(skill.relevance)+' '+
                     (citations(ids[:1],row.get('sources') or []) if ids else '(user-requested addition; no listing evidence)'))
             for item in result['qualifications'][:2]:lines.append('- Sample condition (varies by listing): '+plain_reply(item['name'])+' '+citations(item['source_ids'][:1],row.get('sources') or []))
-            if summary.specialisations:lines.append('Possible specialisations (Gemini interpretation): '+', '.join(plain_reply(v) for v in summary.specialisations)+'. '+citations(evidence.source_ids[:1],row.get('sources') or []))
+            if summary.specialisations:lines.append('Possible specialisations (AI interpretation): '+', '.join(plain_reply(v) for v in summary.specialisations)+'. '+citations(evidence.source_ids[:1],row.get('sources') or []))
             lines.extend(result['warnings'])
             if summary.question:lines.append(plain_reply(summary.question))
             lines.append('Ask a question or describe a change. Review and confirm when you are ready to save this goal.')
@@ -614,7 +615,7 @@ class DiscoveryEngine:
                     'stage':'review_career_target','researched_at':evidence.researched_at,'error_code':None,'lease_until':now(),'updated_at':now()},
                  '$push':{'messages':{'role':'assistant','content':message}}})
             if changed.matched_count:return state
-        raise AIError('rate_limited',retry_after=1,provider='gemini')
+        raise AIError('rate_limited',retry_after=1,provider=getattr(self.ai.settings,'provider',None))
 
     def launch(self,identifier):
         if identifier in self.tasks or self.stopping:return
@@ -622,10 +623,11 @@ class DiscoveryEngine:
         task.add_done_callback(lambda _:self.tasks.pop(identifier,None))
 
     async def run(self,identifier):
-        row=await thread(self.rows.find_one_and_update,{'_id':identifier,'kind':'career_discovery','status':{'$in':['researching','waiting']},'next_attempt_at':{'$lte':now()},'lease_until':{'$lte':now()}},{'$set':{'lease':uuid4().hex,'lease_until':now()+timedelta(seconds=330),'status':'researching'}},return_document=ReturnDocument.AFTER)
+        seconds=600 if getattr(getattr(self.ai,'settings',None),'provider',None)=='local' else 300
+        row=await thread(self.rows.find_one_and_update,{'_id':identifier,'kind':'career_discovery','status':{'$in':['researching','waiting']},'next_attempt_at':{'$lte':now()},'lease_until':{'$lte':now()}},{'$set':{'lease':uuid4().hex,'lease_until':now()+timedelta(seconds=seconds+30),'status':'researching'}},return_document=ReturnDocument.AFTER)
         if not row:return
         try:
-            async with asyncio.timeout(300):
+            async with asyncio.timeout(seconds):
                 with tracing_context(enabled=False):await self.graph.ainvoke({'id':identifier,'run':row['run'],'lease':row['lease']},config={'configurable':{'thread_id':'discovery:'+identifier+':'+row['run']}})
         except asyncio.CancelledError:
             await thread(self.update,row,lease_until=now());raise
@@ -634,7 +636,7 @@ class DiscoveryEngine:
             code=error.code if isinstance(error,AIError) else 'source_rate_limited' if isinstance(error,SourceRateLimit) else 'research_timeout' if isinstance(error,TimeoutError) else 'research_validation_failed'
             delay=max(1,getattr(error,'retry_after',None) or 60)
             log.warning('error_code=%s limit_scope=%s',code,getattr(error,'limit_scope',None))
-            try:await thread(self.update,row,status='waiting' if wait else 'failed',error_code=code,limit_scope=getattr(error,'limit_scope',None),provider='brave' if isinstance(error,SourceRateLimit) else getattr(error,'provider',None),next_attempt_at=now()+timedelta(seconds=delay),lease_until=now())
+            try:await thread(self.update,row,status='waiting' if wait else 'failed',error_code=code,limit_scope=getattr(error,'limit_scope',None),provider=getattr(error,'provider',None),next_attempt_at=now()+timedelta(seconds=delay),lease_until=now())
             except GoalError:pass
         except GoalError:
             return

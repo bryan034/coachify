@@ -1,4 +1,3 @@
-from elo_shared.dates import JobDate
 """Small provider contracts, independent of persistence/API document metadata."""
 from app.schemas.analysis import EmploymentType
 
@@ -6,6 +5,15 @@ from typing import Literal
 from pydantic import Field
 from app.schemas.analysis import Contract, Text, Evidence, Proficiency, Count, Priority
 from app.schemas.jd import ChatText, JDExtraction, ReviewSkill
+
+
+class ExtractedJobDate(Contract):
+    kind: Literal['application_deadline', 'interview', 'job_start'] = Field(
+        description='The explicitly stated kind of job-related date.')
+    text: str = Field(min_length=1, max_length=120,
+        description='The exact date wording from the source; do not normalize or infer missing parts.')
+    evidence: str = Field(min_length=1, max_length=600,
+        description='An exact source excerpt that contains text verbatim, including its date wording.')
 
 
 class ExtractedSkill(Contract):
@@ -37,7 +45,7 @@ class ExtractedCondition(Contract):
 
 
 class ExtractedJD(Contract):
-    job_dates: list[JobDate] = Field(default_factory=list, max_length=8)
+    job_dates: list[ExtractedJobDate] = Field(default_factory=list, max_length=8)
     role: Text | None
     field: Text | None
     employment_type: EmploymentType = 'unknown'
@@ -51,6 +59,7 @@ class ExtractedJD(Contract):
 
     def to_domain(self):
         data = self.model_dump()
+        data['job_dates'] = [item.model_dump() for item in self.job_dates]
         # Transient condition keys are allocated here; review preparation assigns
         # persistent identities. Group labels continue to span both item types.
         for index, condition in enumerate(data['non_skill_requirements']):

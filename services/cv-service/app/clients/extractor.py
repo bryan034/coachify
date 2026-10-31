@@ -18,11 +18,19 @@ class Extractor:
         self.base_url = os.getenv('CV_LLM_BASE_URL', 'https://api.groq.com/openai/v1').rstrip('/')
         parsed = urlparse(self.base_url)
         development_http = os.getenv('APP_ENV') == 'development' and os.getenv('CV_LLM_ALLOW_HTTP') == 'true' and parsed.scheme == 'http'
+        self.local=development_http and parsed.hostname in ('localhost','127.0.0.1','::1','host.docker.internal')
         if (parsed.scheme != 'https' and not development_http) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise RuntimeError('CV_LLM_BASE_URL must be an HTTPS provider URL without credentials, query or fragment.')
 
     @property
-    def configured(self): return bool(self.api_key and self.model)
+    def configured(self): return bool(self.model and (self.api_key or self.local))
+
+    def _provider_headers(self):
+        return {} if self.local else {'Authorization':'Bearer '+self.api_key}
+
+    def _request_timeout(self,cloud_seconds):
+        # Stay below ingestion's 180s and clarification/chat's 90s leases.
+        return (120 if cloud_seconds==60 else 60) if self.local else cloud_seconds
 
     def _provider_options(self):
         # DeepSeek defaults to thinking; CV requests need bounded JSON answers.
@@ -39,10 +47,11 @@ class Extractor:
                                 {'role': 'user', 'content': json.dumps({'source_blocks': blocks})}],
                    'max_tokens': 12000, **self._provider_options()}
         try:
-            deadline = time.monotonic() + 65
-            with httpx.Client(timeout=httpx.Timeout(60, connect=10), follow_redirects=False, trust_env=False) as client:
+            timeout=self._request_timeout(60)
+            deadline = time.monotonic() + timeout + 5
+            with httpx.Client(timeout=httpx.Timeout(timeout, connect=10), follow_redirects=False, trust_env=False) as client:
                 with client.stream('POST', self.base_url + '/chat/completions', json=payload,
-                                   headers={'Authorization': 'Bearer ' + self.api_key}) as response:
+                                   headers=self._provider_headers()) as response:
                     response.raise_for_status()
                     data = bytearray()
                     for part in response.iter_bytes():

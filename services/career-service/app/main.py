@@ -12,7 +12,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from app.core.auth import bearer, current_account
 from app.ai.adapter import AIAdapter
-from app.ai.config import GeminiSettings
+from app.ai.config import AISettings
 from app.ai.routing import ModelRouter,opportunity_models
 from app.ai.adapter import AIError
 from app.ai.jd_scope import CareerScopeError
@@ -93,8 +93,8 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 if mongo is not None: mongo.close()
                 raise RuntimeError('Career storage could not connect. Check database setup.') from None
         async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as ai_client:
-            # One Gemini client serves every reasoning/extraction/chat stage.
-            gemini=GeminiSettings.reasoning_from_env() if ai is None else None
+            # One configured model serves every reasoning/extraction/chat stage.
+            gemini=AISettings.from_env() if ai is None else None
             primary=ai or AIAdapter(gemini,ai_client)
             context=primary if ai is None else context_ai
             app.state.ai=ModelRouter(primary,context) if context is not None else primary
@@ -107,7 +107,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
             opportunity_ai=opportunity_models(primary,context,gemini,opportunity_settings,ai_client)
             app.state.opportunities=OpportunityEngine(app,db,opportunity_settings,opportunity_ai) if db is not None else None
             app.state.discovery=DiscoveryEngine(app,db,opportunity_ai,app.state.opportunities.source) if db is not None else None
-            # Chat and research share Gemini; provider retry delays remain resumable.
+            # Chat and research share the model; provider waits remain resumable.
             app.state.chat_ai=opportunity_ai if getattr(opportunity_ai,'context_enabled',False) else app.state.ai
             async with httpx.AsyncClient(base_url=os.getenv('CV_SERVICE_URL','http://cv-service:8000'),
                     timeout=5, trust_env=False, follow_redirects=False) as cv_http:
@@ -166,11 +166,11 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     async def ai_error(request, error):
         status=429 if error.code=='rate_limited' else 422 if error.code=='input_limit' else 409 if error.code=='stale_input' else 503
         messages={'not_configured':'AI is disabled. Configure AI_ENABLED and CAREER_LLM_API_KEY on the Career service.',
-                  'provider_auth':'Check CAREER_LLM_API_KEY and its API/application restrictions on the Google project.',
+                  'provider_auth':'Check CAREER_LLM_API_KEY and access to CAREER_LLM_BASE_URL for the configured model provider.',
                   'provider_configuration':'The AI provider rejected the request configuration. Check provider_error for the safe status and rejected field names.',
-                  'provider_schema':'Gemini rejected the structured-output schema. Check provider_error.fields; your saved goal is unchanged.',
-                  'provider_parameter':'Gemini rejected a model request parameter. Check provider_error.fields; your saved goal is unchanged.',
-                  'provider_access':'Google project access, API enablement, billing or regional availability needs checking. Your saved goal is unchanged.',
+                  'provider_schema':'The model provider rejected the structured-output schema. Check CAREER_LLM_RESPONSE_MODE and provider_error.fields; your saved goal is unchanged.',
+                  'provider_parameter':'The model provider rejected a request parameter. Check provider_error.fields; your saved goal is unchanged.',
+                  'provider_access':'Model provider access, API enablement, billing or regional availability needs checking. Your saved goal is unchanged.',
                   'model_unavailable':'The configured AI model is not available to this provider account. Check CAREER_LLM_MODEL access for CAREER_LLM_API_KEY and recreate the Career service.',
                   'invalid_output':'The AI returned an invalid structured response. Your saved progress is unchanged; retry your message.',
                   'timeout':'The AI did not finish within the time limit. Your inputs and saved progress are unchanged; retry the request.',

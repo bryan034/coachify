@@ -69,7 +69,9 @@ updates retained names/counts without re-certifying headquarters. Missing Englis
 invalid counts and duplicate display names are excluded. The selection query and
 ranking rules are embedded in the snapshot for inspection.
 
-Suggestions sort by latest dated non-deprecated headcount; undated observations
+Default company suggestions sort alphabetically by case/accent-normalised name
+before applying the result limit. Typed searches retain snapshot ordering by
+latest dated non-deprecated headcount; undated observations
 are used only when no dated observation exists. Future dates are ignored. Ties
 prefer preferred-rank statements, then higher count. Counts above five million,
 more than tenfold a preceding dated observation, or manually flagged outliers are

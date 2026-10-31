@@ -63,7 +63,7 @@ class OpportunityStore:
         if waits and pending:
             active_waits={category:until for category,until in waits.items() if category in pending and until>now()}
             if active_waits:
-                row.update(next_attempt_at=max(active_waits.values()),error_code='source_rate_limited',provider='brave',limit_scope='provider')
+                row.update(next_attempt_at=max(active_waits.values()),error_code='source_rate_limited',provider=(seed or {}).get('source_provider','brave'),limit_scope='provider')
                 for category in active_waits:row['categories'][category]['error_code']='source_rate_limited'
         try:self.rows.insert_one(row)
         except DuplicateKeyError:

@@ -366,7 +366,9 @@ Real delivery uses authenticated encrypted Gmail SMTP; Mailpit is capture-only.
   can clear it; a changed school marks retained graduation information for review.
   The profile summary/editor use the same versioned Profile API and MongoDB history.
 - Company suggestions use the bundled employee-ranked Wikidata snapshot; name
-  search preserves that ordering and returns a bounded list, not the entire file.
+  search preserves that ordering for typed queries. Empty or whitespace-only queries
+  sort the full directory alphabetically by normalised name before applying the
+  result limit. Responses return a bounded list, not the entire file.
   Latest dated non-deprecated counts take priority over older/undated observations.
   Dates, country codes and provenance stay in the snapshot. Identical names are
   deduplicated; flagged outliers remain searchable without a ranking count. These

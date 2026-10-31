@@ -44,7 +44,7 @@ def test_gemini_provider_quota_is_still_enforced_without_immediate_retry():
             return httpx.Response(429,headers={'Retry-After':'3'})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture'),client)
-            with pytest.raises(AIError) as error:await adapter._complete({'messages':[]},owner='alice')
+            with pytest.raises(AIError) as error:await adapter._complete({'model':'fixture','messages':[]},owner='alice')
             assert error.value.limit_scope=='provider' and error.value.provider=='gemini'
             assert error.value.retry_after==3 and len(calls)==1
     asyncio.run(run())

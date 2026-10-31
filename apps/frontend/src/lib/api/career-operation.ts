@@ -1,4 +1,5 @@
-import {careerApi} from './career';
+import {careerApi,assertCareerResponse} from './career';
+import {retryCareerRead} from './career-polling';
 
 export type CareerOperation={activities?:string[];operation_id:string;status:'running'|'repairing'|'waiting_quota'|'succeeded';limit_scope?:'user'|'provider'|null;provider?:string|null;retry_after:number|null;result:unknown;validation_feedback?:{reason:string;fields:string[];violations:{field:string;issue:string}[]}|null};
 
@@ -23,7 +24,8 @@ export async function careerOperation<T>(path:string,token:string,options:Reques
  while(job.status!=='succeeded'){
   onProgress(job);
   await pause(job.status==='waiting_quota'?Math.min(60,Math.max(1,job.retry_after||1))*1000:1000,options.signal);
-  job=await careerApi<CareerOperation>(`/workspace/operations/${job.operation_id}`,token,{signal:options.signal});
+  job=await retryCareerRead(()=>careerApi<CareerOperation>(`/workspace/operations/${job.operation_id}`,token,{signal:options.signal}),options.signal);
  }
+ assertCareerResponse(path,job.result);
  return job.result as T;
 }

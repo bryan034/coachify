@@ -22,3 +22,10 @@ The running service uses MongoDB and private originals. Configure `CV_LLM_BASE_U
 CV model requests share configurable daily attempt budgets and per-account/global concurrency across service instances. Admission failures preserve saved inputs and explain when to retry. Original storage quotas and model budgets are separate; the specification documents their limits, private-volume assumptions and recovery.
 
 For DeepSeek, set `CV_LLM_BASE_URL=https://api.deepseek.com`, `CV_LLM_MODEL=deepseek-flash` and your private `CV_LLM_API_KEY`. Requests to the exact `api.deepseek.com` host automatically disable thinking for extraction, chat routing and clarification interpretation; other provider hosts keep their existing options. No additional environment flag is needed. See [DeepSeek's request format](https://api-docs.deepseek.com/api/create-chat-completion/).
+
+For local testing, the public template selects `elo-deepseek-r1:1.5b` at
+`http://host.docker.internal:11434/v1`. `APP_ENV=development` and
+`CV_LLM_ALLOW_HTTP=true` are required. This known local endpoint supports keyless
+requests and never receives stored cloud API keys. Local extraction gets a 120-second
+HTTP timeout; chat/interpretation get 60 seconds, retaining their existing leases.
+Cloud authentication/timeouts and output/domain validation are unchanged.

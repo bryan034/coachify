@@ -15,6 +15,8 @@ const availabilityMessages:Record<OpportunityAvailabilityIssue,string>={
  reasoning_disabled:'The research reasoning provider is disabled on the server.',
  gemini_not_configured:'Gemini is not connected to the Career service.',
  brave_not_configured:'Brave is not connected to the Career service.',
+ model_not_configured:'The configured model is not connected to the Career service.',
+ search_not_configured:'The configured search provider is not connected to the Career service.',
  brave_llm_context_required:'The Brave connection needs LLM Context mode for opportunity research.'
 };
 function outcomeMessage(result:{outcome?:string|null;error_code:string|null}){

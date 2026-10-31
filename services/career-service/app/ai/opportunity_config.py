@@ -19,5 +19,7 @@ class OpportunitySettings(BaseModel):
     run_seconds:int=Field(default=300,ge=60,le=600)
     @classmethod
     def from_env(cls):
-        try:return cls(**{key:os.environ['OPPORTUNITY_'+key.upper()] for key in cls.model_fields if key!='gemini_model' and 'OPPORTUNITY_'+key.upper() in os.environ})
+        values={key:os.environ['OPPORTUNITY_'+key.upper()] for key in cls.model_fields if key!='gemini_model' and 'OPPORTUNITY_'+key.upper() in os.environ}
+        if os.getenv('CAREER_LLM_PROVIDER','').strip()=='local':values.setdefault('run_seconds',600)
+        try:return cls(**values)
         except ValueError:raise ValueError('Invalid Opportunity Intelligence settings. Check OPPORTUNITY_* server configuration.') from None

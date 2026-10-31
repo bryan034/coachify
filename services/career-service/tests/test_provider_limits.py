@@ -16,9 +16,9 @@ def test_provider_429_has_no_automatic_retry_or_subsequent_local_block():
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{}'}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),client)
-            with pytest.raises(AIError) as error:await adapter._complete({'messages':[]},owner='alice')
+            with pytest.raises(AIError) as error:await adapter._complete({'model':'fixture','messages':[]},owner='alice')
             assert len(calls)==1 and error.value.limit_scope=='provider' and error.value.retry_after==17
-            assert await adapter._complete({'messages':[]},owner='alice')=='{}'
+            assert await adapter._complete({'model':'fixture','messages':[]},owner='alice')=='{}'
             assert len(calls)==2
     asyncio.run(invoke())
 
@@ -33,7 +33,7 @@ def test_provider_5xx_retry_is_not_blocked_by_local_token_allowances():
         async def no_sleep(_):pass
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             adapter=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),client,sleep=no_sleep)
-            assert await adapter._complete({'messages':[],'max_completion_tokens':4096},owner='alice')=='{}'
+            assert await adapter._complete({'model':'fixture','messages':[],'max_completion_tokens':4096},owner='alice')=='{}'
             assert len(calls)==2
     asyncio.run(invoke())
 

@@ -136,7 +136,7 @@ The Roadmap adviser now supports reviewed plan generation and daily workloads th
 
 ## Career research and discovery
 
-LangGraph runs inside Career. Public retrieval uses only permitted public role/employer context, with owner-linked reports and typed citations. Private CV evidence, manual declarations and CV conversation messages do not enter shared research. Discovery and JD intake publish through the same goal persistence path. Current goals use owner/version-checked edits; research revisions remain immutable and compact progress/evidence reads avoid repeating full source payloads.
+LangGraph runs inside Career. Career model inference supports local OpenAI-compatible, DeepSeek cloud and Gemini adapters; search independently selects Brave LLM Context or DeepSeek Search. Public retrieval uses only permitted public role/employer context, with owner-linked reports and typed citations. Private CV evidence, manual declarations and CV conversation messages do not enter shared research. Discovery and JD intake publish through the same goal persistence path. Current goals use owner/version-checked edits; research revisions remain immutable and compact progress/evidence reads avoid repeating full source payloads.
 
 Career's 512 KiB CV transport/projection admission limit is separate from CV's 12 MiB stored-record boundary and conversation limits. An over-limit response is actionable failure, not an empty CV or permission to truncate sources. Model-specific context selection remains separately bounded. Synthetic provider tests do not measure live-provider quality, cost or comparative usability.
 

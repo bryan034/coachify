@@ -194,9 +194,9 @@ def test_oversized_context_trims_without_truncating_the_jd():
             sent.append(json.loads(req.content))
             return response({'role':'Analyst','field':'Data','company':None,'skills':[]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(settings(context_tokens=50000,provider='compatible'),client)
+            adapter=AIAdapter(settings(context_tokens=8000,provider='compatible'),client)
             await adapter.generate(
-                AIInput(stage='jd_extraction',source_text=jd,context=json.dumps({'summary':'x'*39000})),
+                AIInput(stage='jd_extraction',source_text=jd,context=json.dumps({'summary':' '.join(f'context-{i}' for i in range(3000))})),
                 Operation('owner','1','jd_extraction'),current_revision=lambda:'1')
         sent_input=json.loads(sent[0]['messages'][1]['content'])
         assert sent_input['source_text']==jd
@@ -474,3 +474,19 @@ def test_focused_qa_uses_small_stage_specific_prompts_schemas_and_caps(stage,cap
     assert 'SkillEdits' not in str(payload['response_format'])
     assert 'Transient jd_extraction' not in payload['messages'][0]['content']
     assert len(payload['messages'])==2
+
+
+@pytest.mark.parametrize('stage',['focused_answer','context_answer'])
+@pytest.mark.parametrize('refs',[
+    [f'f{i}' for i in range(1,6)],
+    [f'f{i}' for i in range(1,13)],
+    [f'web{i}' for i in range(6)],
+])
+def test_qa_preserves_all_fact_references_in_one_provider_response(stage,refs):
+    facts=[{'ref':ref,'data':{'name':f'Skill {index}'}} for index,ref in enumerate(refs)]
+    reply='\n'.join(f'Skill {index} [{ref}].' for index,ref in enumerate(refs))
+    request=AIInput(stage=stage,context=json.dumps({'facts':facts}),
+        conversation=[{'role':'user','content':'Explain the saved facts.'}])
+    result,seen,_=run(request,{'status':'answered','reply':reply,'references':refs})
+    assert result.data.references==refs and result.data.reply==reply
+    assert len(seen)==1

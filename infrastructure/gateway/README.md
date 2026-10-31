@@ -14,3 +14,9 @@ Only the gateway needs a public application port in the proposed deployment. Nex
 The active config forwards `/_next/hmr` and `/_next/webpack-hmr` WebSocket upgrades to Next.js for
 the opt-in [Docker development setup](../docker/README.md#hot-reload-during-development).
 Reload/restart NGINX after config edits. Production Next.js does not expose an HMR server.
+
+Model-backed Career routes allow 610 seconds of upstream inactivity to accommodate
+local inference and sequential model calls. The UI uses asynchronous operation polling;
+synchronous clients may still exceed this limit when queued. Career preview/import,
+Profile, CV, Assessment and Roadmap timeouts retain their existing limits. Restart or
+reload the gateway after changing its mounted `nginx.conf`.

@@ -24,14 +24,16 @@ def matches(identity,goal):
 
 async def prefetch(engine,identity,owner,revision):
     context=ResearchContext(**{k:(identity.field or identity.role) if k=='field' else getattr(identity,k) for k in IDENTITY if k!='employment_type'})
-    result={'queries':{category:[] for category in CATEGORIES},'history':{},'evidence':{},'waits':{}}
+    result={'queries':{category:[] for category in CATEGORIES},'history':{},'evidence':{},'waits':{},'source_provider':getattr(engine.source,'provider','brave')}
     # Plan before retrieval while full JD extraction proceeds independently.
     # If planning fails, the durable job retries; never substitute template queries.
     recovery=recover_responses.set(False)
     waiting=quota_progress.set(None)
     activity('planning_research')
     try:
-        async with asyncio.timeout(engine.settings.timeout_seconds):
+        model_settings=getattr(engine.ai,'settings',None)
+        seconds=model_settings.timeout_seconds if getattr(model_settings,'provider',None)=='local' else engine.settings.timeout_seconds
+        async with asyncio.timeout(seconds):
             plan=await engine.ai.generate(AIInput(stage='opportunity_plan',context=json.dumps({
                 'opportunity':{k:getattr(identity,k) for k in IDENTITY},'recruitment_year':now().year})),
                 Operation(owner,revision,'opportunity_plan'),current_revision=lambda:revision)

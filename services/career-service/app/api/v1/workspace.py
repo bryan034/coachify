@@ -45,7 +45,7 @@ async def state(request,account):
     return jsonable_encoder({'session_id':w.get('session_id'),'revision':w.get('revision',0),'kind':w.get('kind'),
         'activities':activities,'phase':'expired' if expired else 'waiting_quota' if waiting_job else w.get('phase','empty'),
         'current':current,'research_id':str(research['_id']) if research else None,'research_version':research['version'] if research else None,'coverage':w.get('coverage',[]),'error':w.get('error'),'error_code':w.get('error_code'),
-        'edit_question':(w.get('edit_draft') or {}).get('question'),'limit_scope':'provider' if waiting_job else w.get('limit_scope'),'provider':'brave' if waiting_job else w.get('provider'),'retry_after':max(1,int((waiting_job['next_attempt_at']-now()).total_seconds())) if waiting_job else w.get('retry_after'),'expires_at':w.get('expires_at'),'exploration_id':w.get('exploration_id')},by_alias=True)
+        'edit_question':(w.get('edit_draft') or {}).get('question'),'limit_scope':'provider' if waiting_job else w.get('limit_scope'),'provider':waiting_job.get('provider','brave') if waiting_job else w.get('provider'),'retry_after':max(1,int((waiting_job['next_attempt_at']-now()).total_seconds())) if waiting_job else w.get('retry_after'),'expires_at':w.get('expires_at'),'exploration_id':w.get('exploration_id')},by_alias=True)
 
 @router.get('/progress',response_model=WorkspaceProgress)
 async def progress(request:Request,account=Depends(owner)):

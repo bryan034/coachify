@@ -47,11 +47,16 @@ services:
       MONGODB_DATABASE: elo_career
       AI_ENABLED: ${AI_ENABLED:-false}
       AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-45}
+      CAREER_LOCAL_TIMEOUT_SECONDS: ${CAREER_LOCAL_TIMEOUT_SECONDS:-45}
       AI_RETRIES: ${AI_RETRIES:-1}
-      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-4096}
-      AI_CONTEXT_TOKENS: ${AI_CONTEXT_TOKENS:-65536}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-8192}
+      AI_CONTEXT_TOKENS: ${AI_CONTEXT_TOKENS:-}
+      CAREER_LLM_PROVIDER: ${CAREER_LLM_PROVIDER:-gemini}
+      CAREER_LLM_BASE_URL: ${CAREER_LLM_BASE_URL:-}
+      CAREER_LLM_RESPONSE_MODE: ${CAREER_LLM_RESPONSE_MODE:-}
+      CAREER_LLM_TOKEN_PARAMETER: ${CAREER_LLM_TOKEN_PARAMETER:-max_tokens}
       CAREER_LLM_MODEL: ${CAREER_LLM_MODEL:-gemini-3.5-flash-lite}
-      CAREER_LLM_API_KEY: ${CAREER_LLM_API_KEY-${GEMINI_API_KEY:-}}
+      CAREER_LLM_API_KEY: ${CAREER_LLM_API_KEY:-}
       DISCOVERY_TARGET_LISTINGS: ${DISCOVERY_TARGET_LISTINGS:-10}
       DISCOVERY_MAX_LISTINGS: ${DISCOVERY_MAX_LISTINGS:-20}
       DISCOVERY_TARGET_EMPLOYERS: ${DISCOVERY_TARGET_EMPLOYERS:-5}
@@ -68,7 +73,8 @@ services:
       OPPORTUNITY_FRESHNESS_HOURS: ${OPPORTUNITY_FRESHNESS_HOURS:-168}
       OPPORTUNITY_INCOMPLETE_HOURS: ${OPPORTUNITY_INCOMPLETE_HOURS:-1}
       OPPORTUNITY_RUN_SECONDS: ${OPPORTUNITY_RUN_SECONDS:-300}
-      CAREER_RESEARCH_API_KEY: ${CAREER_RESEARCH_API_KEY-${BRAVE_API_KEY:-}}
+      CAREER_RESEARCH_API_KEY: ${CAREER_RESEARCH_API_KEY:-}
+      CAREER_RESEARCH_PROVIDER: ${CAREER_RESEARCH_PROVIDER:-brave}
       TMPDIR: /tmp
     depends_on:
       profile-service:
@@ -141,6 +147,7 @@ services:
       context: ../..
       dockerfile: services/assessment-service/Dockerfile
     environment:
+      APP_ENV: ${APP_ENV:-production}
       PROFILE_SERVICE_URL: http://profile-service:8000
       CV_SERVICE_URL: http://cv-service:8000
       CAREER_SERVICE_URL: http://career-service:8000
@@ -149,6 +156,8 @@ services:
       MONGODB_DATABASE: elo_assessment
       ASSESSMENT_LLM_API_KEY: ${ASSESSMENT_LLM_API_KEY:-}
       ASSESSMENT_LLM_MODEL: ${ASSESSMENT_LLM_MODEL:-gemini-3.5-flash-lite}
+      ASSESSMENT_LLM_BASE_URL: ${ASSESSMENT_LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      ASSESSMENT_LLM_ALLOW_HTTP: ${ASSESSMENT_LLM_ALLOW_HTTP:-false}
     depends_on:
       mongodb-planning-init:
         condition: service_completed_successfully
@@ -164,6 +173,7 @@ services:
       context: ../..
       dockerfile: services/roadmap-service/Dockerfile
     environment:
+      APP_ENV: ${APP_ENV:-production}
       PROFILE_SERVICE_URL: http://profile-service:8000
       CV_SERVICE_URL: http://cv-service:8000
       CAREER_SERVICE_URL: http://career-service:8000
@@ -172,6 +182,8 @@ services:
       MONGODB_DATABASE: elo_roadmap
       ROADMAP_LLM_API_KEY: ${ROADMAP_LLM_API_KEY:-}
       ROADMAP_LLM_MODEL: ${ROADMAP_LLM_MODEL:-gemini-3.5-flash-lite}
+      ROADMAP_LLM_BASE_URL: ${ROADMAP_LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      ROADMAP_LLM_ALLOW_HTTP: ${ROADMAP_LLM_ALLOW_HTTP:-false}
     depends_on:
       mongodb-planning-init:
         condition: service_completed_successfully

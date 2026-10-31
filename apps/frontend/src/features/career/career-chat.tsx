@@ -13,9 +13,11 @@ import {AgentMarkdown,AgentActivity,AgentReply,AgentRecovery,errorCode} from './
 import {JobReviewChat} from './job-review-chat';
 export function CareerChat(){
  const params=useSearchParams(),session=useCareerSession(),{token}=useProfile();
+ // Clearing the temporary JD after saving must not replace the active chat.
+ const [startedWithJD]=useState(()=>!!session.jd||params.get('source')==='jd');
  const [workspace,setWorkspace]=useState<CareerWorkspace>(),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[code,setCode]=useState(''),[loadAttempt,setLoadAttempt]=useState(0);
  useEffect(()=>{if(!token)return;const abort=new AbortController();void careerApi<CareerWorkspace>('/workspace',token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted){setWorkspace(v);setLoaded(true);}}).catch(c=>{if(!abort.signal.aborted){setError(c.message);setCode(errorCode(c));setLoaded(true);}});return()=>abort.abort();},[token,loadAttempt]);
- if(session.jd||params.get('source')==='jd'||workspace?.current.goal)return <JobReviewChat/>;
+ if(startedWithJD||session.jd||params.get('source')==='jd'||workspace?.current.goal)return <JobReviewChat/>;
  if(!loaded)return <p role="status">Opening your career conversation…</p>;
  if(error)return <AgentRecovery message={error} code={code} onRetry={()=>{setError('');setCode('');setLoaded(false);setLoadAttempt(v=>v+1);}}/>;
  return <ExplorationChat initialDraftId={workspace?.exploration_id||null}/>;

@@ -22,7 +22,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  });
  let currentRole='Backend Software Engineer',researching=true,edits=0,extractions=0;
  const state=()=>{
-  const extraction={role:currentRole,field:'Software Engineering',company:'Example Technologies',location:'Singapore',seniority_level:'Entry level',job_url:null,summary:'Build and maintain backend services, APIs and reliable data systems.',responsibilities:['Build APIs and services','Collaborate with product teams'],skills:[{item_id:'python',name:'Python',category:'Technical',priority:'required',origin:'employer',evidence:'Python is required.'},{item_id:'team',name:'Teamwork',category:'Transferable',priority:'preferred',origin:'employer'}],non_skill_requirements:[{requirement_id:'degree',category:'Qualifications',description:'Degree in a related discipline',priority:'preferred',group_id:null,group_operator:'all',origin:'employer'}]};
+  const extraction={role:currentRole,field:'Software Engineering',company:'Example Technologies',location:'Singapore',seniority_level:'Entry level',job_url:null,summary:'Build and maintain backend services, APIs and reliable data systems.',responsibilities:['Build APIs and services','Collaborate with product teams'],skills:[{item_id:'python',name:'Python',category:'Technical',priority:'required',origin:'employer',evidence:'Python is required.'},{item_id:'team',name:'Teamwork',category:'Transferable',priority:'preferred',origin:'employer'}],non_skill_requirements:[{requirement_id:'degree',category:'qualification',description:'Degree in a related discipline',priority:'preferred',evidence:'Degree in a related discipline',group_id:null,group_operator:'all',origin:'employer'}]};
   return {session_id:'000000000000000000000001',revision:edits+1,kind:'jd',phase:researching?'researching':'ready',review:{review_id:'000000000000000000000002',version:edits+1,target_type:'specific_job',extraction,requirements_need_review:false},research:researching?null:{_id:'000000000000000000000003',version:1,last_researched_at:'2026-10-26T00:00:00Z',research_status:'succeeded',process:{round_count:null,stages:[{name:'Technical interview',assessment_type:'Coding exercise'}]},skills:[{name:'SQL joins',interview_stage:'Technical interview',assessment_type:'SQL exercise',source_ids:['s1'],question_patterns:[]}],sources:[{source_id:'s1',platform:'brave',title:'Public interview report',url:'https://example.test/report',evidence:'Candidates report an SQL assessment.',reliability:'anecdotal',role_match:'related'}]},current:{selection_version:edits+1,goal:null},coverage:[{platform:'brave',status:'succeeded',useful_sources:1,target_sources:3,limit_reached:true}],error:null,retry_after:null};
  };
  await page.route('**/api/v1/career/**',route=>{
@@ -39,7 +39,8 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await page.getByText('Teamwork',{exact:true}).click();
  await expect(page.getByText('No further detail was saved for this skill.',{exact:false})).toBeVisible();
  await page.getByText('Eligibility & commitment',{exact:false}).click();
- await expect(page.getByText('Degree in a related discipline',{exact:true})).toBeVisible();
+ await expect(page.locator('.briefing-conditions p').filter({hasText:'Degree in a related discipline'})).toBeVisible();
+ await expect(page.locator('.briefing-conditions blockquote')).toHaveText('Degree in a related discipline');
  await expect(page.getByRole('status').filter({hasText:'Researching opportunity information'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
  await expect(page.getByRole('link',{name:/Upload my CV/})).toHaveAttribute('href','/cv');
@@ -69,7 +70,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await page.reload();await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
  await page.getByRole('link',{name:/Upload my CV/}).click();
  await expect(page).toHaveURL(/\/cv$/);
- await expect(page.getByRole('heading',{name:'Resume & Tracker'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Skills Profile'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
  await expect(page.getByLabel('CV document',{exact:true})).toBeEnabled();
 });

@@ -55,6 +55,9 @@ def test_public_example_covers_every_active_compose_input_without_real_secrets()
     career=compose.split('  career-service:\n',1)[1].split('  cv-service:\n',1)[0]
     assert '      CAREER_LLM_API_KEY:' in career and '      CAREER_RESEARCH_API_KEY:' in career
     assert '      GEMINI_API_KEY:' not in career and '      BRAVE_API_KEY:' not in career
+    # A provider switch must not relabel a legacy key as the new provider's key.
+    assert 'CAREER_LLM_API_KEY: ${CAREER_LLM_API_KEY:-}' in career
+    assert 'CAREER_RESEARCH_API_KEY: ${CAREER_RESEARCH_API_KEY:-}' in career
     other_services=compose.replace(career,'')
     assert '      CAREER_LLM_API_KEY:' not in other_services
     assert '      CAREER_RESEARCH_API_KEY:' not in other_services

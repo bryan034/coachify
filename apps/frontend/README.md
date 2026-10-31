@@ -23,7 +23,8 @@ the Inter OFL licence; no runtime font request is needed. The browser tab icon u
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
 | `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
 | `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
-| `/cv` | Saved CV upload/selection, resumable text review, interpreted clarification, correction/reconciliation and Profile-owned manual capabilities |
+| `/cv` | **Skills Profile**: CV upload/selection, skill extraction, resumable text review, interpreted clarification, correction/reconciliation and manual capabilities |
+| `/jobs` | **Search Jobs**: manual keyword/location search links to LinkedIn and Indeed; results and applications open on the external job sites |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
 | `/calendar` | Current week/month views; events and task actions unavailable |
 | `/career`, `/reviews` | Matching placeholders for existing reserved routes |
@@ -41,6 +42,11 @@ counts; unknown counts stay unknown. Chat sends one recent exchange for follow-u
 resolution, with backend topic routing and focused retrieval. The completed answer
 replaces the activity indicator, and failures keep the composer
 draft available for retry. Existing JSON APIs and research polling are unchanged.
+
+The JD chat automatically retries interrupted progress/research reads and temporary
+gateway failures with bounded backoff, without resubmitting model tasks. Saved
+results and the completion summary update in place when connectivity recovers;
+terminal model or authentication errors still require the existing recovery flow.
 
 ## Profile and authentication
 
@@ -62,7 +68,8 @@ save never completes setup; errors remain recoverable. Cross-tab completion hint
 trigger server readback rather than trusting a browser flag.
 
 Setup shows status, education path, school, optional course, student year and review
-one screen at a time in a clean full-screen layout. A persistent bottom progress
+one screen at a time in a clean full-screen layout. The student education-path screen
+asks “Where are you studying?” with the caption “Choose your path. Then we’ll help you find your school” before school selection. A persistent bottom progress
 bar shows the current step; there is no setup sidebar. Forward/back transitions
 use a short fade and vertical slide, with reduced-motion support. Long questions
 scroll above the progress footer. X signs out. Student status
@@ -70,7 +77,8 @@ and path save together; other new answers save at step boundaries. Changes to
 retained education needing context review wait for final confirmation. Saved
 answers resume after reload; unsaved typing is discarded, and an empty optional
 course may be offered again. Only **Enter elo** completes setup. Employed users also answer separate
-workplace and role questions; both are required for new setup completion.
+workplace and role questions; both are required for new setup completion. The default
+workplace dropdown lists company names alphabetically; typing searches the directory.
 
 University search starts with a name and an editable country suggestion from
 browser locale/time zone, not verified location. Matching schools are grouped

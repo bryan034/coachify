@@ -10,7 +10,8 @@ const nav = [
  { href: '/dashboard', label: 'Home', icon: 'home' },
  { href: '/career-goal', label: 'Career Goal', icon: 'brief' },
  { href: '/roadmap', label: 'Roadmap', icon: 'road' },
- { href: '/cv', label: 'Resume & Tracker', icon: 'doc' },
+ { href: '/cv', label: 'Skills Profile', icon: 'doc' },
+ { href: '/jobs', label: 'Search Jobs', icon: 'search' },
  { href: '/chats', label: 'Chats & Socials', icon: 'chat' },
  { href: '/calendar', label: 'Calendar & Events', icon: 'cal' },
 ];

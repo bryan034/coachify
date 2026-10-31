@@ -1,4 +1,4 @@
-"""Stage router; production uses one Gemini 3.5 Flash Lite adapter for both roles."""
+"""Stage router; production uses one configured model adapter for both roles."""
 
 
 
@@ -17,10 +17,10 @@ class ModelRouter:
 
 
 def opportunity_models(primary,context,gemini,settings,client):
-    """Use the same Gemini model for planning, evaluation and summaries.
+    """Use the same configured model for planning, evaluation and summaries.
 
     Injected test/custom adapters retain the existing router interface. Production
-    supplies Gemini settings and never falls back to a legacy provider or key.
+    supplies model settings and never falls back to another provider or key.
     """
     if gemini is not None:
         return ModelRouter(primary,primary)

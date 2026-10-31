@@ -1,5 +1,13 @@
 # Opportunity Intelligence
 
+Current provider configuration (31 October 2026): all model stages use the selected
+Career model, including local OpenAI-compatible or DeepSeek cloud inference. Retrieval
+uses Brave LLM Context for testing or DeepSeek Search for production. Earlier Gemini/Brave
+names below describe the original path. DeepSeek retrieval accepts original page content
+only, leaves missing employer metadata unknown and uses a distinct cache policy. See
+[model/search setup](../../docs/setup.md#career-model-and-search-configuration).
+
+
 Career expands saved goal requirements with five independently researched categories:
 Interview Intelligence, Internship Insights, Career Progression, Historical Conversion
 Rates and Company and Team Culture. The saved goal
@@ -39,7 +47,7 @@ All stages use the existing HTTPS OpenAI-compatible adapter with the server-only
 `CAREER_LLM_API_KEY` and requested `gemini-3.5-flash-lite` identifier. Planning, structuring,
 summaries, discovery and chat share the same enabled Gemini client. `AI_ENABLED`
 is the master switch; `OPPORTUNITY_ENABLED` (true by default) enables public research.
-Every stage uses the same configured Gemini model. The explicit Flash Lite model ID is used; see [setup](../../docs/setup.md#gemini-reasoning-configuration).
+Every stage uses the same configured Career model; see [setup](../../docs/setup.md#career-model-and-search-configuration).
 The Brave client always uses LLM Context with the existing key.
 Every research workflow uses this endpoint; legacy modes are ignored.
 Opportunity requests consider 30 results and return at most three URLs per query.

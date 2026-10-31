@@ -12,3 +12,8 @@ Compares the owner's effective CV/declarations and Career goal with relevant int
 The UI lives beside the adviser on **Roadmap**. `job_skill_gaps` and `interview_prep_gaps` contain supported/partial/uncertain outcomes as well as explicit shortfalls. Non-learning conditions and priorities remain separate. This is not a readiness guarantee.
 
 See [SPEC.md](SPEC.md), [contract](../../contracts/api/assessment.yaml) and [service setup](../../docs/setup.md#assessment-and-roadmap-adviser). All tests use synthetic data/provider outputs; live semantic accuracy remains to be evaluated.
+
+Local testing can use the shared 1.5B Ollama alias through this service's own
+`*_LLM_BASE_URL`, `*_LLM_MODEL` and explicit development `*_LLM_ALLOW_HTTP` flag.
+Local requests omit stored cloud credentials; cloud requests retain authentication.
+JSON/domain validation stays mandatory. See [all-service local setup](../../docs/setup.md#career-model-and-search-configuration).

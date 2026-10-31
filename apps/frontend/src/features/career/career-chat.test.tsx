@@ -3,11 +3,12 @@ import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {CareerChat} from './career-chat';
 import {CareerSessionProvider,useCareerSession} from './career-session';
+import {ApiError} from '@/lib/api/profile';
 import {careerApi,refreshWorkspace,importExplorationCV,type CareerWorkspace,type GoalDraft,type OpportunityView} from '@/lib/api/career';
 const push=vi.fn(),replace=vi.fn(),search=new URLSearchParams();
 vi.mock('next/navigation',()=>({useRouter:()=>({push,replace}),useSearchParams:()=>search}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-session'})}));
-vi.mock('@/lib/api/career',()=>({careerApi:vi.fn(),importExplorationCV:vi.fn(),refreshWorkspace:vi.fn(async()=>active)}));
+vi.mock('@/lib/api/career',async importOriginal=>({...await importOriginal<typeof import('@/lib/api/career')>(),careerApi:vi.fn(),importExplorationCV:vi.fn(),refreshWorkspace:vi.fn(async()=>active)}));
 const draft:GoalDraft={_id:'000000000000000000000001',version:1,answers:{},turns:[],interests:[],preferences:[],suggestions:[],next_question:'aspirations',question_text:'What would you like to achieve?',context_complete:false,cv:{mode:'none',filename:null,cv_id:null,version:null,extraction_version:null}};
 const goal={_id:'000000000000000000000081',version:1,target_type:'specific_job' as const,role:'Engineer',field:'Software',company:null,location:'Singapore',seniority_level:'Junior',job_url:null,summary:'Build backend services.',responsibilities:['Build APIs'],non_skill_requirements:[],skills:[{item_id:'python',name:'Python',category:'Technical',priority:'required' as const,origin:'employer' as const,evidence:'Python required.'}],interests:[],preferences:[],readiness:'pending' as const,exploration_draft_id:null,exploration_draft_version:null};
 function initial():CareerWorkspace{return {session_id:'000000000000000000000071',revision:1,kind:'jd',phase:'ready',current:{selection_version:1,goal:{...goal},dependent_results_need_review:false},research_id:'000000000000000000000091',research_version:1,coverage:[],error:null,retry_after:null,expires_at:null,exploration_id:null};}
@@ -46,6 +47,55 @@ beforeEach(()=>{
 });
 function Import(){const session=useCareerSession(),[show,setShow]=useState(false);return show?<CareerChat/>:<button onClick={()=>{session.chooseJD({text:'Private synthetic Python JD',kind:'text',name:'Pasted description'});setShow(true);}}>Import test JD</button>;}
 function mount(){return render(<CareerSessionProvider><CareerChat/></CareerSessionProvider>);}
+it('shows live summary steps and automatically replaces them with the completed answer',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;let polls=0;
+  api.mockImplementation(async(path,token,options)=>{
+   if(path==='/workspace/summary')return {operation_id:'a'.repeat(32),status:'running',activities:['preparing_summary'],result:null} as never;
+   if(path.startsWith('/workspace/operations/'))return ++polls===1?
+    {operation_id:'a'.repeat(32),status:'repairing',activities:['preparing_summary'],result:null} as never:
+    {operation_id:'a'.repeat(32),status:'succeeded',result:{reply:'Your automatic career summary.'}} as never;
+   return original(path,token,options);
+  });
+  await act(async()=>{view=mount();});
+  expect(screen.getByRole('log')).toHaveTextContent('Current step');
+  expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Preparing your career-goal summary');
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Refining the response');
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Your automatic career summary.');
+  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+  expect(screen.queryByText('Current step')).toBeNull();
+  expect(api.mock.calls.filter(([path])=>path==='/workspace/summary')).toHaveLength(1);
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+it('reloads an early research snapshot when the workspace completes with the same research ID',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  active={...initial(),phase:'researching'};
+  research={...report(),finished:true,status:'partial',categories:{interview_intelligence:{...report().categories.interview_intelligence!,status:'pending',findings:[]}}};
+  await act(async()=>{view=mount();});
+  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
+  active=initial();research=report();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Ask me anything about this goal set!');
+  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+  expect(vi.mocked(careerApi).mock.calls.filter(([path])=>path==='/workspace/summary')).toHaveLength(1);
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+
+it('keeps the imported JD chat mounted when an older workspace read returns empty',async()=>{
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ let finishRead!:(value:never)=>void;
+ api.mockImplementation((path,token,options)=>path==='/workspace'?new Promise(resolve=>{finishRead=resolve;}):original(path,token,options));
+ render(<CareerSessionProvider><Import/></CareerSessionProvider>);
+ fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));
+ await screen.findByText('Ask me anything about this goal set!');
+ await act(async()=>finishRead(empty as never));
+ expect(screen.getByRole('log')).toHaveTextContent('Ask me anything about this goal set!');
+ expect(screen.queryByText(/Hi, I’m your career agent/)).toBeNull();
+});
 async function chat(){mount();await screen.findByText(/Let’s look at Engineer/);}
 describe('single career conversation',()=>{
  it('extracts a new JD into the only workspace and opens research-backed explanation',async()=>{
@@ -103,7 +153,7 @@ describe('single career conversation',()=>{
   fireEvent.change(box,{target:{value:'Change my company to Example'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   await screen.findByRole('button',{name:'Retry'});
   expect(box).toHaveValue('Change my company to Example');
-  expect(screen.queryByRole('alert')).toBeNull();expect(screen.queryByText('Provider unavailable')).toBeNull();
+  expect(screen.getByRole('alert')).toHaveTextContent('connection or service problem');expect(screen.queryByText('Provider unavailable')).toBeNull();
   const first=vi.mocked(careerApi).mock.calls.filter(c=>c[0]==='/workspace/messages')[0][2]?.headers;
   failChat=false;fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('Practise Python for the reported coding exercise.');
   expect(vi.mocked(careerApi).mock.calls.filter(c=>c[0]==='/workspace/messages')[1][2]?.headers).toEqual(first);
@@ -207,7 +257,12 @@ it('shows initial research activity in the chat and replaces it when research is
   expect(log).not.toHaveTextContent('Let’s look at Engineer');
   expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
   expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
-  expect(screen.getByRole('button',{name:'Role and research details'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'Role and research details'})).toBeEnabled();
+  fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
+  expect(screen.getByRole('heading',{name:'Engineer'})).toBeVisible();
+  expect(screen.getByText('Python · required')).toBeVisible();
+  expect(screen.getByText('Research is incomplete. Your saved goal details remain available.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'Hide details'}));
   active=initial();
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
   expect(log).toHaveTextContent('Let’s look at Engineer');
@@ -596,7 +651,8 @@ it('retries a failed extracted-goal message without replacing the next draft',as
  fireEvent.change(box,{target:{value:'My next question'}});
  await act(async()=>reject(new Error('Synthetic connection failure')));
  expect(box).toHaveValue('My next question');
- expect(screen.getByText('Message awaiting retry: Explain SQL')).toBeInTheDocument();
+ expect(screen.getByRole('log')).toHaveTextContent('Explain SQL');
+ expect(screen.getAllByText('Explain SQL')).toHaveLength(1);
  api.mockImplementation(original);
  fireEvent.click(screen.getByRole('button',{name:'Retry'}));
  await screen.findByText('Practise Python for the reported coding exercise.');
@@ -605,4 +661,92 @@ it('retries a failed extracted-goal message without replacing the next draft',as
  expect(calls).toHaveLength(2);
  expect(calls[1][2]?.body).toEqual(calls[0][2]?.body);
  expect(calls[1][2]?.headers).toEqual(calls[0][2]?.headers);
+ expect(screen.getAllByText('Explain SQL')).toHaveLength(1);
+});
+
+it('retains the summary, earlier replies and failed questions through errors and new messages',async()=>{
+ await chat();
+ const box=screen.getByRole('textbox',{name:'Message elo'});
+ fireEvent.change(box,{target:{value:'My first question'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+ await screen.findByText('Practise Python for the reported coding exercise.');
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation(async(path,token,options)=>{
+  if(path==='/workspace/messages')throw Object.assign(new Error('PRIVATE schema diagnostic'),{code:'invalid_output'});
+  return original(path,token,options);
+ });
+ fireEvent.change(box,{target:{value:'My failed question'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+ expect(await screen.findByRole('alert')).toHaveTextContent('answer that could not be validated');
+ const log=screen.getByRole('log');
+ expect(log).toHaveTextContent('Let’s look at Engineer');expect(log).toHaveTextContent('My first question');
+ expect(log).toHaveTextContent('Practise Python for the reported coding exercise.');expect(log).toHaveTextContent('My failed question');
+ expect(screen.queryByText(/PRIVATE/)).toBeNull();expect(screen.getByRole('button',{name:'Retry'})).toBeEnabled();
+ api.mockImplementation(original);
+ fireEvent.change(box,{target:{value:'My next question'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+ await waitFor(()=>expect(screen.getAllByText('Practise Python for the reported coding exercise.')).toHaveLength(2));
+ expect(log).toHaveTextContent('My failed question');expect(log).toHaveTextContent('My next question');
+ const calls=api.mock.calls.filter(([path])=>path==='/workspace/messages');
+ expect(JSON.parse(calls[2][2]!.body as string).conversation).toEqual([
+  {role:'user',content:'My first question'},{role:'assistant',content:'Practise Python for the reported coding exercise.'},
+ ]);
+});
+
+it('recovers interrupted JD progress polling and shows completion without a refresh or another submission',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  active={...initial(),phase:'researching',research_id:null};
+  const working={...active,activities:['extracting_requirements','checking_sources']};
+  vi.mocked(refreshWorkspace).mockRejectedValueOnce(new ApiError('Gateway unavailable',502)).mockResolvedValueOnce(working).mockImplementation(async()=>active);
+  await act(async()=>{view=render(<CareerSessionProvider><Import/></CareerSessionProvider>);});
+  await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));});
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Reconnecting to task updates');
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Checking sources against this career goal');
+  expect(screen.queryByText(/Reconnecting to task updates/)).toBeNull();
+  active=initial();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Let’s look at Engineer');
+  expect(vi.mocked(careerApi).mock.calls.filter(call=>call[0]==='/workspace/jd')).toHaveLength(1);
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+
+it('automatically reloads finished research after an interrupted read and displays the summary',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;let interrupted=false;
+  api.mockImplementation(async(path,token,options)=>{
+   if(path.includes('/opportunity-research')&&!interrupted){interrupted=true;throw new TypeError('Failed to fetch');}
+   return original(path,token,options);
+  });
+  await act(async()=>{view=mount();});
+  expect(screen.getByRole('log')).toHaveTextContent('Reconnecting to task updates');
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Let’s look at Engineer');
+  expect(screen.queryByText(/Reconnecting to task updates/)).toBeNull();
+  expect(screen.queryByRole('alert')).toBeNull();
+ }finally{view?.unmount();vi.useRealTimers();}
+});
+
+it('reconnects to an existing answer operation after a gateway error without submitting the question twice',async()=>{
+ vi.useFakeTimers();let view:ReturnType<typeof render>|undefined;
+ try{
+  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;let polls=0;
+  api.mockImplementation(async(path,token,options)=>{
+   if(path==='/workspace/messages')return {operation_id:'f'.repeat(32),status:'running',activities:['understanding_question'],result:null} as never;
+   if(path.startsWith('/workspace/operations/')){
+    if(++polls===1)throw new ApiError('Gateway unavailable',502);
+    return {operation_id:'f'.repeat(32),status:'succeeded',result:{reply:'Recovered task answer'}} as never;
+   }
+   return original(path,token,options);
+  });
+  await act(async()=>{view=mount();});
+  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'What skills should I practise?'}});
+  await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Send message'}));});
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Understanding your question');
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
+  expect(screen.getByRole('log')).toHaveTextContent('Recovered task answer');
+  expect(api.mock.calls.filter(call=>call[0]==='/workspace/messages')).toHaveLength(1);
+  expect(screen.queryByRole('alert')).toBeNull();
+ }finally{view?.unmount();vi.useRealTimers();}
 });

@@ -3,7 +3,7 @@ import { mockEmptyConversation } from '../fixtures/cv-ui';
 import { policy, emptyDeclarations } from '../fixtures/cv';
 
 const categories = [{ id: 'university', label: 'University' }, { id: 'secondary', label: 'Secondary School' }];
-test('workspace uses saved profile data, preserves navigation and leaves missing services disconnected', async ({ page }) => {
+test('workspace uses saved profile data, preserves navigation and leaves missing services disconnected', async ({ page },testInfo) => {
  await mockEmptyConversation(page);
  await page.addInitScript(() => { localStorage.setItem('elo.access-epoch','1'); sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-token',epoch:'1'})); });
  const apiCalls: string[] = [];
@@ -49,12 +49,21 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.locator('[aria-label="Saved background"]')).toContainText('Design & Computing · Year 3');
  await page.reload();
  await expect(page.locator('[aria-label="Saved background"]')).toContainText('Synthetic College');
- for (const [label,heading] of [['Roadmap','Roadmap'],['Resume & Tracker','Resume & Tracker'],['Chats & Socials','Chats & Socials'],['Calendar & Events','Calendar & Events']]) {
+ for (const [label,heading] of [['Roadmap','Roadmap'],['Skills Profile','Skills Profile'],['Search Jobs','Search Jobs'],['Chats & Socials','Chats & Socials'],['Calendar & Events','Calendar & Events']]) {
   const link=page.getByRole('navigation').getByRole('link',{name:label,exact:true});
   await link.click();
   await expect(link).toHaveAttribute('aria-current','page');
   await expect(page.getByRole('heading',{level:1,name:heading})).toBeVisible();
-  if(label==='Resume & Tracker')await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
+  if(label==='Skills Profile')await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
+  else if(label==='Search Jobs'){
+   await expect(page.getByRole('textbox',{name:'Job title or keywords'})).toBeVisible();
+   await page.getByRole('textbox',{name:'Job title or keywords'}).fill('Data analyst');
+   await page.getByRole('button',{name:'Find jobs'}).click();
+   await expect(page.getByRole('link',{name:/LinkedIn/})).toHaveAttribute('href',/keywords=Data\+analyst/);
+   await expect(page.getByRole('link',{name:/LinkedIn/})).toHaveAttribute('target','_blank');
+   await expect(page.getByRole('link',{name:'Skills Profile',exact:true})).toHaveAttribute('href','/cv');
+   await page.screenshot({path:testInfo.outputPath('jobs-desktop.png'),fullPage:true});
+  }
   else if(label==='Roadmap') {
    await expect(page.getByRole('heading',{name:'Bring your starting point and direction'})).toBeVisible();
    await expect(page.getByRole('textbox',{name:'Talk through your plan'})).toBeDisabled();
@@ -65,7 +74,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.getByRole('button',{name:'Month',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('[aria-label="Month calendar"] .dh')).toHaveCount(7);
  await expect(page.getByRole('button',{name:'+ Add',exact:true})).toBeDisabled();
- await page.getByRole('navigation').getByRole('link',{name:'Resume & Tracker'}).click();
+ await page.getByRole('navigation').getByRole('link',{name:'Skills Profile'}).click();
  await expect(page.getByRole('button',{name:'Upload CV'})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Room for your next steps'})).toBeVisible();
@@ -77,10 +86,16 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  expect(apiCalls).toContain('/api/v1/cv/policy');
  // Mobile navigation and calendar scrolling stay inside their containers.
  await page.setViewportSize({width:390,height:844});
- for(const label of ['Home','Resume & Tracker','Chats & Socials','Calendar & Events']) {
+ for(const label of ['Home','Skills Profile','Search Jobs','Chats & Socials','Calendar & Events']) {
   await page.getByRole('navigation').getByRole('link',{name:label,exact:true}).click();
   await expect(page.getByRole('navigation').getByRole('link',{name:label,exact:true})).toHaveAttribute('aria-current','page');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  if(label==='Search Jobs'){
+   await page.getByRole('textbox',{name:'Job title or keywords'}).fill('Data analyst');
+   await page.getByRole('button',{name:'Find jobs'}).click();
+   await expect(page.getByRole('link',{name:/Indeed/})).toBeVisible();
+   await page.screenshot({path:testInfo.outputPath('jobs-mobile.png'),fullPage:true});
+  }
  }
 });
 

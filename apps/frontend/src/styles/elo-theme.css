@@ -1,4 +1,19 @@
 /* Elo visual system. Loaded after feature styles so shared brand tokens win. */
+.skills-profile-description{margin:-12px 0 24px;max-width:72ch}
+.job-search-intro{max-width:65ch;color:var(--slate);line-height:1.7;margin-bottom:24px}
+.job-search-panel{max-width:880px;background:var(--side);border:1px solid var(--line);border-radius:16px;padding:28px}
+.job-search-form{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) auto;gap:18px;align-items:end;margin-bottom:18px}
+.job-search-form label{display:grid;gap:9px;font-size:13px;font-weight:500;min-width:0}
+.job-search-form input{width:100%;min-width:0;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--snow);color:var(--ink);font:inherit}
+.job-search-form input:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+.job-search-form .btn{min-height:44px;justify-content:center}
+.job-search-links{border-top:1px solid var(--line);margin-top:26px;padding-top:24px}
+.job-search-links h2{font-size:20px;font-weight:500;margin-bottom:12px}
+.job-search-links p{line-height:1.7;overflow-wrap:anywhere}
+.job-search-destinations{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0}
+.job-search-destinations a{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.job-search-handoff{max-width:75ch;line-height:1.8;margin-top:24px}
+@media(max-width:700px){.job-search-panel{padding:20px}.job-search-form{grid-template-columns:minmax(0,1fr)}.job-search-destinations{flex-direction:column}.job-search-destinations a{justify-content:space-between}}
 :root {
   --ink: #111827;
   --mint: #34d399;

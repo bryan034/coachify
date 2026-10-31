@@ -1,5 +1,13 @@
 # Saved CV processing and effective evidence
 
+Local model testing: with `APP_ENV=development`, `CV_LLM_ALLOW_HTTP=true` and a
+known localhost/Docker-host endpoint, model/key configuration supports keyless
+Ollama requests and omits stored cloud keys. Local extraction uses 120-second
+HTTP timeouts; interpretation and conversation use 60 seconds, below their
+existing operation leases. Cloud authentication/timeouts, record ownership,
+model admission and source-grounded validation remain unchanged.
+
+
 ## Ownership and versions
 
 CV owns `cvs` documents and operational `cv_selections`, `cv_conversations`, `cv_upload_capacity` and `cv_model_usage`. Profile owns sessions, onboarding/planning inputs and account-level manual capability declarations. Only the session-derived UUID identifies the owner; every source, operation and mutation query includes it. No service reads another service's database. No binary, filesystem path, source hash or provider credential is returned.

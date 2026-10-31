@@ -14,3 +14,8 @@ Works with the user on a personalised preparation plan through saved chat, propo
 The frontend opens chat with the plan beside it on `/roadmap`; daily/weekly/monthly workload views use the same saved allocations. Plan changes are proposals until explicitly applied. Direct task edits preserve timing and show review issues.
 
 [Specification](SPEC.md) · [API contract](../../contracts/api/roadmap.yaml) · [Setup](../../docs/setup.md#assessment-and-roadmap-adviser). Exact clock-time scheduling, external calendars, automatic adaptation and direct allocation editing (E05) remain unimplemented.
+
+Local testing can use the shared 1.5B Ollama alias through this service's own
+`*_LLM_BASE_URL`, `*_LLM_MODEL` and explicit development `*_LLM_ALLOW_HTTP` flag.
+Local requests omit stored cloud credentials; cloud requests retain authentication.
+JSON/domain validation stays mandatory. See [all-service local setup](../../docs/setup.md#career-model-and-search-configuration).

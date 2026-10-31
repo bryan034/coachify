@@ -453,3 +453,19 @@ Generated OpenAPI and result schemas must match the owning service models. Tests
 Assessment's `evaluate.py` is a separate paid-provider opt-in (`RUN_LIVE_ASSESSMENT_EVAL=1` plus an explicitly configured service key). It reports observed versus labelled outcomes for synthetic fixtures under `tests/fixtures/labelled-comparisons.json`; it does not read environment files. The small diagnostic set is not a representative accuracy benchmark. It has not been run as part of synthetic verification.
 
 Compact progress polling is checked separately from full workspace reads. Provider cooldowns persist across retries; a new message key cannot bypass the saved delay. Reconciled task editors retain their original definition and apply only changed fields after reload, preserving concurrent edits to other fields while rejecting same-field conflicts.
+
+## Career extraction with a local model
+
+The isolated fixture/live-model browser runner and its prerequisites are documented
+in [Career tests](../services/career-service/tests/README.md#reproduce-the-complete-career-extraction-journey).
+It never loads private environment files. Live inference uses `deepseek-r1:1.5b`;
+public retrieval is controlled, so the run does not establish live-search quality.
+Each run retains a uniquely named JSON attempt report and browser artifacts;
+`--repeat 3` records three fixed attempts per mode without discarding failures.
+Current exact-model limitations are recorded in the
+[local-model verification](../services/career-service/tests/LOCAL_MODEL_VERIFICATION.md).
+
+Chat display browser tests distinguish safe terminal failure explanations from raw
+provider diagnostics: invalid answers show an actionable Retry alert while private
+provider text stays hidden. Synthetic research sources include their required
+platform metadata so response validation succeeds before scroll/citation checks.

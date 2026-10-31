@@ -217,14 +217,14 @@ def test_optional_live_provider_contract_smoke():
     from app.ai.opportunity_config import OpportunitySettings
     from app.clients.search_sources import SourceAPIs
     async def run():
-        settings=OpportunitySettings.from_env();primary=GeminiSettings.reasoning_from_env();gemini=primary
-        assert settings.enabled and primary.enabled and gemini.api_key.get_secret_value().strip(),'Configure the research providers before opting into live checks.'
+        settings=OpportunitySettings.from_env();primary=AISettings.from_env();gemini=primary
+        assert settings.enabled and primary.enabled and (primary.provider=='local' or primary.api_key.get_secret_value().strip()),'Configure the research providers before opting into live checks.'
         async with httpx.AsyncClient(trust_env=False) as client:
             router=opportunity_models(AIAdapter(primary,client),None,gemini,settings,client)
             public={'company':None,'role':'Software engineering intern','field':'Software','location':'Singapore','employment_type':'internship','recruitment_year':now().year}
             plan=await router.generate(AIInput(stage='opportunity_plan',context=json.dumps(public)),Operation('live-public-smoke','public','opportunity_plan'),current_revision=lambda:'public')
             source=SourceAPIs.from_environment(client).for_opportunity()
-            assert source.brave_mode=='llm_context'
+            assert source.configured and source.provider in ('brave','deepseek')
             results=await source.collect_opportunity_query(ResearchContext(role=public['role'],field='Software',location='Singapore'),plan.data.interview_intelligence[0] if plan.data.interview_intelligence else 'software engineering internship Singapore interview process')
             assert isinstance(results,list)
             if results:

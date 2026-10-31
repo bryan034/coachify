@@ -203,10 +203,10 @@ class CareerWorkflow:
                 return {'sources':[s.model_dump(mode='json') for s in sources],
                         'query_history':[*state.get('query_history',[]),query],
                         'latest_source_ids':[s.source_id for s in sources], 'source_error':None}
-            return {'sources':[s.model_dump(mode='json') for s in sources], 'summaries':[v.model_dump(mode='json') for v in batch.summaries], 'source_error':None, 'coverage':[{'platform':platform,'status':'succeeded' if sources else 'no_findings','round':state.get('round',0)}]}
+            return {'sources':[s.model_dump(mode='json') for s in sources], 'summaries':[v.model_dump(mode='json') for v in batch.summaries], 'source_error':None, 'coverage':[{'platform':getattr(provider,'provider',platform),'status':'succeeded' if sources else 'no_findings','round':state.get('round',0)}]}
         except (GoalError,TimeoutError,ValueError) as error:
-            message=error.message if isinstance(error,GoalError) else ('Brave research timed out. Retry shortly.' if isinstance(error,TimeoutError) else 'Brave returned research data that could not be validated. Retry interview research.')
-            return {'source_error':message,'coverage':[{'platform':platform,'status':'unavailable','round':state.get('round',0)}]}
+            message=error.message if isinstance(error,GoalError) else ('Public research timed out. Retry shortly.' if isinstance(error,TimeoutError) else 'The search provider returned research data that could not be validated. Retry interview research.')
+            return {'source_error':message,'coverage':[{'platform':getattr(provider,'provider',platform),'status':'unavailable','round':state.get('round',0)}]}
 
     async def brave(self,state):return await self.platform(state,'brave')
 
@@ -292,9 +292,11 @@ class CareerWorkflow:
                 if not job['finished']:opportunity.launch(job['_id'])
                 return  # The durable worker owns its wait/status; polling must not restart the legacy graph.
         config=self.config(owner,w);session=w['session_id'];run=w['run_id']
+        local=getattr(getattr(self.app.state.ai,'settings',None),'provider',None)=='local'
+        lease_seconds=660 if local else 180
         # A database lease prevents duplicate graph execution by API replicas.
         leased=await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run,'$or':[{'workspace.worker_until':{'$exists':False}},{'workspace.worker_until':{'$lt':now()}}]},
-            {'$set':{'workspace.worker_until':now()+timedelta(seconds=180)}})
+            {'$set':{'workspace.worker_until':now()+timedelta(seconds=lease_seconds)}})
         if not leased.matched_count:return
         try:
             await thread(self.workspaces.phase,owner,session,run,'researching',error=None)
@@ -314,15 +316,15 @@ class CareerWorkflow:
                 if latest['workspace']['run_id']!=run:raise GoalError('A newer goal replaced this work.')
                 if latest['workspace'].get('expires_at',now())<=now():raise GoalError('Temporary workflow expired.')
                 await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},
-                    {'$set':{'workspace.worker_until':now()+timedelta(seconds=180)}})
+                    {'$set':{'workspace.worker_until':now()+timedelta(seconds=lease_seconds)}})
                 snapshot=await self.graph.aget_state(config)
                 token=(snapshot.values.get('cache') or {}).get('token')
                 if token:await thread(self.db.research_contexts.update_one,{'lease.token':token},
-                    {'$set':{'lease.expires_at':now()+timedelta(seconds=180)}})
+                    {'$set':{'lease.expires_at':now()+timedelta(seconds=lease_seconds)}})
             recovery=recover_responses.set(True);observer=validation_progress.set(repairing)
             try:
                 with tracing_context(enabled=False):
-                    seconds=180 if research_search.enabled(self) or state.values.get('smart_search') else 60
+                    seconds=600 if local else 180 if research_search.enabled(self) or state.values.get('smart_search') else 60
                     async with asyncio.timeout(seconds) as budget:
                         timer=validation_budget.set(budget)
                         try:await self.graph.ainvoke(value,config=config,durability='sync')
@@ -344,7 +346,7 @@ class CareerWorkflow:
                 message=f'The AI provider quota was reached. Resuming automatically in {retry} seconds.' if quota else error.message if isinstance(error,GoalError) else f'The input leaves insufficient output room in the configured model context ({error.input_count} estimated). Shorten the saved career context before retrying.' if isinstance(error,AIError) and error.code=='input_limit' else 'Research could not finish. Your latest career goal is saved; retry research.'
                 await thread(self.workspaces.phase,owner,session,run,'waiting_quota' if quota else 'research_failed',error=message,error_code=error.code if isinstance(error,AIError) else 'research_unavailable',retry_after=retry)
                 if quota:
-                    await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$set':{'workspace.worker_until':now()+timedelta(seconds=retry+180)}})
+                    await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$set':{'workspace.worker_until':now()+timedelta(seconds=retry+lease_seconds)}})
                     await asyncio.sleep(retry)
                     # Release lease before resuming the saved failed node.
                     await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run},{'$unset':{'workspace.worker_until':''}})

@@ -8,3 +8,10 @@ The shared API factory explicitly names error responses, keeping Assessment and
 Roadmap OpenAPI descriptions stable across Python 3.12 and newer interpreters.
 
 Examples: Python → `language.python`; SQL / Structured Query Language → `language.sql`. Preserve legacy `skill_id`, source item IDs and original wording; compare `canonical_skill_id`, never bare names or incompatible old mapping-version labels. Matching identity does not establish matching proficiency, duration or scope.
+
+Assessment/Roadmap model endpoints are independently configured using each service's
+`*_LLM_BASE_URL`, `*_LLM_MODEL`, `*_LLM_API_KEY` and explicit development
+`*_LLM_ALLOW_HTTP` flag. Local requests omit credentials and serialize per Model
+instance. Gemini retains native JSON Schema; compatible local/DeepSeek providers
+receive JSON Output with authoritative schema/domain checks after generation.
+Synthetic endpoint/credential/concurrency tests live in `tests/test_model.py`.

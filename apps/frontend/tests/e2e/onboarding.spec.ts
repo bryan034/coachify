@@ -71,7 +71,7 @@ test('full-screen setup uses bottom progress and animates forward/back without a
  await page.locator('.onboarding-question').evaluate(async element=>{await Promise.all(element.getAnimations().map(a=>a.finished));});
  await page.screenshot({path:testInfo.outputPath('onboarding-fullscreen-desktop.png')});
  await page.getByRole('button',{name:'Student',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Choose your education path.'})).toBeFocused();
+ await expect(page.getByRole('heading',{name:'Where are you studying?'})).toBeFocused();
  await expect(progress).toHaveAttribute('aria-valuenow','2');
  await page.getByRole('button',{name:'Back',exact:false}).click();
  await expect(page.getByRole('heading',{name:'Where are you right now?'})).toBeFocused();
@@ -98,7 +98,7 @@ test('reduced-motion setup changes questions without page animations',async({pag
  await page.emulateMedia({reducedMotion:'reduce'});
  await previewSetup(page);
  await page.getByRole('button',{name:'Student',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Choose your education path.'})).toBeFocused();
+ await expect(page.getByRole('heading',{name:'Where are you studying?'})).toBeFocused();
  expect(await page.locator('.onboarding-question').evaluate(element=>element.getAnimations().length)).toBe(0);
  await page.getByRole('button',{name:'Back',exact:false}).click();
  await expect(page.getByRole('heading',{name:'Where are you right now?'})).toBeFocused();

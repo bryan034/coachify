@@ -40,7 +40,7 @@ async def research_question(request, title, focus, check):
             observer = quota_progress.get()
             if observer is None or attempt == 3:
                 raise
-            token = quota_reason.set({'provider': 'brave', 'limit_scope': 'provider'})
+            token = quota_reason.set({'provider': error.provider, 'limit_scope': 'provider'})
             try:
                 observer(error.retry_after)
                 waiting = error.retry_after
