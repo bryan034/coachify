@@ -258,8 +258,8 @@ def test_context_access_failure_preserves_goal_and_explains_the_required_access(
 
 @pytest.mark.parametrize('failure,expected',[
     ('http','Brave API rate limit reached (HTTP 429). Wait before retrying interview research.'),
-    ('timeout','Brave research timed out.'),
-    ('validation','Brave returned research data that could not be validated.')])
+    ('timeout','Public research timed out.'),
+    ('validation','The search provider returned research data that could not be validated.')])
 def test_research_failure_category_survives_workflow_without_exposing_details(flow,failure,expected):
     from app.repositories.goals import GoalError
     client,db,ai,sources=flow

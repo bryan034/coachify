@@ -16,7 +16,7 @@ async function workspace(page:Page){
 test('Career Goal supports three temporary inputs, recovery and responsive navigation',async({page})=>{
  await workspace(page);const calls:string[]=[];
  await page.route('**/api/v1/career/**',route=>{
-  const path=new URL(route.request().url()).pathname;if(route.request().method()==='GET')return route.fulfill({json:careerFixture(route.request().url(),{goals:[],reviews:[]})});calls.push(path);
+  const path=new URL(route.request().url()).pathname;if(route.request().method()==='GET')return route.fulfill({json:careerFixture(route.request().url(),path.endsWith('/workspace')?{phase:'empty',current:{goal:null}}:{goals:[],reviews:[]})});calls.push(path);
   expect(route.request().headers().authorization).toBe('Bearer synthetic-session');
   if(path.endsWith('/url')){
    const {url}=route.request().postDataJSON();
@@ -200,4 +200,28 @@ test('JD extraction stays in chat with observed progress, typed summaries and sa
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.getByRole('button',{name:'← Career Goal',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Analyst',exact:true})).toBeVisible();
+});
+
+test('malformed extraction JSON keeps the draft and retries without crashing or changing the request key',async({page})=>{
+ await workspace(page);let submissions=0;const keys:string[]=[];const pageErrors:string[]=[];
+ page.on('pageerror',error=>pageErrors.push(error.message));
+ await page.route('**/api/v1/career/**',route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/workspace/jd')){
+   submissions++;keys.push(route.request().headers()['idempotency-key']);
+   return route.fulfill({status:202,json:{operation_id:'d'.repeat(32),status:'running',result:null,retry_after:null}});
+  }
+  if(path.includes('/workspace/operations/'))return route.fulfill({json:{operation_id:'d'.repeat(32),status:'succeeded',result:submissions===1?{current:{goal:{skills:{name:'PRIVATE malformed result'}}}}:careerFixture('http://fixture.test/api/v1/career/workspace',prepared())}});
+  return route.fulfill({json:careerFixture(route.request().url(),submissions>1?prepared():{phase:'empty',current:{goal:null}})});
+ });
+ await page.goto('/career-goal');
+ await page.getByRole('textbox',{name:'Job description',exact:true}).fill('Synthetic analyst position. SQL is required.');
+ await page.getByRole('button',{name:'Extract career goal'}).click();
+ await expect(page.getByRole('log').getByRole('alert')).toContainText('Career returned an invalid response');
+ await expect(page.getByRole('log')).not.toContainText('PRIVATE');
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
+ await page.getByRole('button',{name:'Retry',exact:true}).click();
+ await expect(page.getByRole('log')).toContainText('Ask me anything about this goal set!');
+ expect(submissions).toBe(2);expect(keys[1]).toBe(keys[0]);expect(pageErrors).toEqual([]);
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
 });

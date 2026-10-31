@@ -1,0 +1,21 @@
+# Only with run-career-flow.py: an isolated project, empty env-file and synthetic settings.
+# Retrieval returns no sources in both modes, making coverage limits reproducible.
+services:
+  frontend:
+    image: elo-career-flow-frontend:verify
+  profile-service:
+    image: elo-career-flow-profile:verify
+  cv-service:
+    image: elo-career-flow-cv:verify
+  assessment-service:
+    image: elo-career-flow-assessment:verify
+  roadmap-service:
+    image: elo-career-flow-roadmap:verify
+  career-service:
+    image: elo-career-flow-service:verify
+    command: [uvicorn, 'career_fixture:create_app_for_test', --factory, --host, '0.0.0.0', --port, '8000', --no-access-log]
+    environment:
+      APP_ENV: development
+      ELO_SYNTHETIC_TEST_FIXTURES: '1'
+      PYTHONPATH: /fixture:/service
+    volumes: [../testing/career_fixture.py:/fixture/career_fixture.py:ro]

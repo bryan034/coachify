@@ -108,7 +108,14 @@ def test_public_docker_example_contains_only_active_inputs_and_no_example_secret
     consumed=set(re.findall(r'\$\{([A-Z][A-Z0-9_]*)',compose))
     assert set(pairs)<=consumed
     from app.ai.config import REASONING_MODEL
-    assert pairs['CAREER_LLM_MODEL']==REASONING_MODEL=='gemini-3.5-flash-lite'
+    assert pairs['CAREER_LLM_PROVIDER']=='local'
+    assert pairs['CAREER_LLM_MODEL']=='deepseek-r1:1.5b'
+    assert pairs['CAREER_LLM_BASE_URL']=='http://host.docker.internal:11434/v1'
+    assert pairs['CAREER_LLM_RESPONSE_MODE']=='json_schema_strict'
+    assert pairs['CAREER_LLM_TOKEN_PARAMETER']=='max_tokens'
+    assert pairs['CAREER_RESEARCH_PROVIDER']=='brave'
+    # Existing private deployments without new settings retain the old model.
+    assert REASONING_MODEL=='gemini-3.5-flash-lite'
     assert '${CAREER_LLM_MODEL:-'+REASONING_MODEL+'}' in compose
     for name,value in pairs.items():
         if name.endswith(('_PASSWORD','_API_KEY','_SECRET')):assert value==''

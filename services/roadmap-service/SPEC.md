@@ -1,5 +1,15 @@
 # Personal career adviser — Roadmap
 
+Provider configuration: the service now reads its own `*_LLM_BASE_URL`,
+`*_LLM_MODEL`, `*_LLM_API_KEY` and `*_LLM_ALLOW_HTTP`. HTTPS is required outside
+explicit development HTTP mode. Local testing can share the 16K-context
+`elo-deepseek-r1:1.5b` Ollama alias, without sending preserved cloud keys.
+Non-Gemini providers receive JSON Output plus the schema in the prompt;
+all responses still undergo the existing Pydantic and domain checks. Local calls
+serialize per service instance and use a 180-second HTTP timeout; operations use
+600-second budgets and 630-second leases. Cloud limits remain unchanged.
+
+
 ## Product direction — 30 October 2026
 
 The user's revised flow supersedes mandatory application-date-only planning, equal-seven-day capacity, automatic exhaustive learning plans and a separate assessment screen. One persistent adviser conversation and its plan share `/roadmap`. The user chooses the pace, priorities, scope and learning approach. The LLM offers direction/recommendations based on declared skills and availability; it does not enforce a prescribed career path. Dated preparation targets and explicitly chosen ongoing horizons are supported. Assessment is a separate service feeding this page.
@@ -41,7 +51,7 @@ Frontend data/drafts stay in account-keyed React memory; logout/account switch c
 
 ## Configuration and limits
 
-See setup for required service-scoped credentials. The fixed Gemini compatible endpoint uses bounded JSON Schema, 55-second HTTP calls, safe provider errors and schema repairs; no live-provider fallback. A 210-second worker execution and renewable 240-second lease bound processing. Three process-local worker slots and one operation per owner bound concurrency. Requests are at most 64 KiB, upstream responses 1 MiB and model contexts 120,000 UTF-8 bytes. Overflow is explicit, not silent evidence truncation.
+See setup for required service-scoped credentials. The Gemini cloud default uses bounded JSON Schema, 55-second HTTP calls, safe provider errors and schema repairs; no live-provider fallback. Cloud processing uses a 210-second worker execution and renewable 240-second lease; local limits are listed above. Three process-local worker slots and one operation per owner bound concurrency. Requests are at most 64 KiB, upstream responses 1 MiB and model contexts 120,000 UTF-8 bytes. Overflow is explicit, not silent evidence truncation.
 
 ## Remaining scope
 

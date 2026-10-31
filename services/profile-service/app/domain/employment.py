@@ -12,4 +12,7 @@ def snapshot():
 
 def search(kind: str, query: str, limit: int):
     words = normalise(query).split()
-    return [row for row in snapshot()[kind] if all(word in normalise(row["name"]) for word in words)][:limit]
+    rows = snapshot()[kind]
+    if kind == "companies" and not words:
+        rows = sorted(rows, key=lambda row: normalise(row["name"]))
+    return [row for row in rows if all(word in normalise(row["name"]) for word in words)][:limit]

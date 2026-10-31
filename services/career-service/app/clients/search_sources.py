@@ -132,11 +132,13 @@ def discovery_employer(snippets):
 
 
 class SourceRateLimit(GoalError):
-    def __init__(self,retry_after):
+    def __init__(self,retry_after,provider='brave'):
+        self.provider=provider
+        self.limit_scope='provider'
         try:delay=float(retry_after)
         except (TypeError,ValueError):delay=30
         self.retry_after=max(1,min(3600,int(delay))) if math.isfinite(delay) else 30
-        super().__init__('Brave API rate limit reached (HTTP 429). Wait before retrying interview research.',503)
+        super().__init__('Research API rate limit reached (HTTP 429). Wait before retrying interview research.',503)
 
 # Only fixed codes/field names leave this boundary; provider prose can echo secrets or queries.
 BRAVE_CODES={
@@ -199,6 +201,7 @@ async def body(client,method,url,**kwargs):
     except ValueError:raise GoalError('Brave returned an unreadable response. Retry interview research.',503) from None
 
 class SourceAPIs:
+    provider='brave'
     def __init__(self,client,*,brave_key='',brave_mode='llm_context'):
         # Accept the legacy argument so existing callers migrate without an outage.
         # Every retrieval now uses LLM Context, irrespective of old mode settings.
@@ -206,6 +209,11 @@ class SourceAPIs:
 
     @classmethod
     def from_environment(cls,client):
+        provider=os.getenv('CAREER_RESEARCH_PROVIDER','brave').strip()
+        if provider=='deepseek':
+            from app.clients.deepseek_search import DeepSeekSearch
+            return DeepSeekSearch(client,api_key=os.getenv('CAREER_RESEARCH_API_KEY','').strip())
+        if provider!='brave':raise ValueError('Invalid CAREER_RESEARCH_PROVIDER. Use brave or deepseek.')
         return cls(client,brave_key=os.getenv('CAREER_RESEARCH_API_KEY',os.getenv('BRAVE_API_KEY','')).strip())
 
     @property
@@ -215,8 +223,11 @@ class SourceAPIs:
     def configured(self):return bool(self.brave_key.strip())
 
     def for_opportunity(self):
-        # All research workflows share the same LLM Context adapter.
-        return SourceAPIs(self.client,brave_key=self.brave_key,brave_mode='llm_context')
+        # All research workflows share the selected provider and its limits.
+        return self
+
+    async def search(self,query,**kwargs):
+        return await self.brave(query,**kwargs)
 
     def query(self,context,round):
         fields=[context.company,context.role,context.location,context.field] if round else [context.company,context.role,context.location,context.seniority_level]
@@ -224,7 +235,7 @@ class SourceAPIs:
 
     async def collect_platform(self,context,platform,round=0):
         query=self.query(context,round)
-        if platform=='brave':return await self.brave(query,country=search_country(context.location))
+        if platform in ('brave',self.provider):return await self.search(query,country=search_country(context.location))
         raise GoalError('Unsupported research platform.',422)
 
     async def collect(self,context):
@@ -232,16 +243,15 @@ class SourceAPIs:
 
     async def collect_query(self,context,query):
         # The model supplies text only; endpoint, credentials and result budget stay fixed.
-        return await self.brave(query,country=search_country(context.location))
+        return await self.search(query,country=search_country(context.location))
 
     async def collect_opportunity_query(self,context,query):
-        if self.brave_mode!='llm_context':raise GoalError('Opportunity Intelligence requires Brave LLM Context mode.',503)
-        return await self.brave(query,country=search_country(context.location),focus=query,max_sources=OPPORTUNITY_SOURCE_LIMIT,evidence_chars=OPPORTUNITY_EXCERPT_LIMIT)
+        return await self.search(query,country=search_country(context.location),focus=query,max_sources=OPPORTUNITY_SOURCE_LIMIT,evidence_chars=OPPORTUNITY_EXCERPT_LIMIT)
 
     async def collect_discovery_query(self,context,query):
         # Brave ranks up to 50 results before returning at most five contexts.
         # Discovery then validates relevance; rejection may leave fewer than five.
-        return await self.brave(query,country=search_country(context.location),focus=query,
+        return await self.search(query,country=search_country(context.location),focus=query,
             max_sources=MAX_URLS_PER_QUERY,evidence_chars=8000,context_tokens=BRAVE_CONTEXT_TOKENS,search_count=50,threshold='strict',discovery=True)
 
     async def brave(self,query,*,country='ALL',focus=None,max_sources=6,evidence_chars=2400,

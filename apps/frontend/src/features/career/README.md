@@ -41,3 +41,33 @@ See the [Career service](../../../../../services/career-service/README.md) and
 excerpts, separate confirmation/selection, failures, conflicts and account changes.
 
 Failed URL previews offer direct paste/upload actions that switch input methods without discarding existing drafts.
+
+The saved-goal chat keeps submitted questions and earlier replies visible after a
+failed answer. Retry fills the original question's reply without adding a duplicate
+question or replacing a newer composer draft. Errors explain validation failures,
+incomplete responses, timeouts or service problems in plain language and keep the
+retry control; raw provider diagnostics stay out of the transcript. This history
+remains in page memory and is not restored after leaving or reloading the page.
+
+JD chat retries interrupted operation-status, workspace-progress and saved-research
+reads with bounded backoff (up to five attempts). A lost connection or temporary
+gateway error no longer ends polling immediately while backend tasks keep running.
+Workspace/research read retries show a reconnecting notice and retain observed
+progress; successful reads resume the normal updates and completion summary without
+refreshing the page. Only reads are retried: questions/JDs are not resubmitted.
+Authentication failures and terminal model/validation errors retain the existing
+recovery controls. Leaving the chat aborts outstanding reads and retry timers.
+
+The JD chat stays mounted after its temporary input is cleared, including when an
+older workspace read is still pending. Research reads continue for pending/running
+categories even in a finished historical snapshot, and reload when the workspace
+phase changes. Completion automatically starts the summary operation and displays
+its reply without a page refresh. The chat shows a Current step label with observed
+server activity, repair or quota status and a separate list of observed stages;
+these describe workflow progress, not private model reasoning. Temporary progress
+disappears once the summary arrives.
+
+The JD chat exposes saved role/skill/date details immediately after extraction,
+including while public research is running. API-boundary checks reject malformed
+nested responses before rendering; summaries and chat still wait for the linked
+research snapshot. `SavedGoal.job_dates` retains the canonical sourced-date shape.

@@ -1,5 +1,15 @@
 # Assessment — G01–G07
 
+Provider configuration: the service now reads its own `*_LLM_BASE_URL`,
+`*_LLM_MODEL`, `*_LLM_API_KEY` and `*_LLM_ALLOW_HTTP`. HTTPS is required outside
+explicit development HTTP mode. Local testing can share the 16K-context
+`elo-deepseek-r1:1.5b` Ollama alias, without sending preserved cloud keys.
+Non-Gemini providers receive JSON Output plus the schema in the prompt;
+all responses still undergo the existing Pydantic and domain checks. Local calls
+serialize per service instance and use a 180-second HTTP timeout; operations use
+600-second budgets and 630-second leases. Cloud limits remain unchanged.
+
+
 ## Scope and authority
 
 Implements Epic G's shared comparison as a separately deployed FastAPI service, per the user's 30 October 2026 architecture decision. This supersedes earlier Career-owned future assessment boundaries. Career continues to own goals, JD dates and public research; CV owns evidence/corrections; Profile owns manual declarations. Assessment owns its MongoDB `skill_gap_analyses` and operational `workspaces`. Stored evidence is an immutable captured input, never a second editable capability authority.
@@ -28,7 +38,7 @@ Current Opportunity reports are read from their interview category; archived `In
 
 ## Durability and limits
 
-Each accepted command has UUID mutation identity and expected workspace revision. Persist before model work; a per-owner leased CAS workspace fences replicas. Completed batch outputs and their captured inputs checkpoint durably, so quota/provider retries retain completed comparisons. Model requests use a fixed Gemini HTTPS endpoint, service-scoped key/model, schema validation and up to two schema repairs. Provider quota errors expose safe retry delay; invalid output/failure cannot become successful uncertainty.
+Each accepted command has UUID mutation identity and expected workspace revision. Persist before model work; a per-owner leased CAS workspace fences replicas. Completed batch outputs and their captured inputs checkpoint durably, so quota/provider retries retain completed comparisons. Model requests use a configured OpenAI-compatible endpoint (Gemini HTTPS by default), service-scoped model/key settings, schema validation and up to two schema repairs. Provider quota errors expose safe retry delay; invalid output/failure cannot become successful uncertainty.
 
 A worker runs at most 210 seconds per execution, renewing its 240-second lease at checkpoints. Retry resumes completed batches. Restart recovery occurs when an authenticated GET reconnects after a lease expires; no bearer is persisted. Revocable sessions and exact source revisions are checked before publishing. Immutable result insertion precedes pointer CAS; an interrupted pointer update recovers the same request-bound result, and older writers cannot replace newer pointers.
 

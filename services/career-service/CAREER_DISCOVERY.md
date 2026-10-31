@@ -1,5 +1,13 @@
 # Conversational Career Discovery
 
+Current provider configuration (31 October 2026): all model stages use the selected
+Career model, including local OpenAI-compatible or DeepSeek cloud inference. Retrieval
+uses Brave LLM Context for testing or DeepSeek Search for production. Earlier Gemini/Brave
+names below describe the original path. DeepSeek retrieval accepts original page content
+only, leaves missing employer metadata unknown and uses a distinct cache policy. See
+[model/search setup](../../docs/setup.md#career-model-and-search-configuration).
+
+
 Career discovery creates a researched career target without a specific JD. It sets
 a goal, not an assessment of the user's current abilities. Existing legacy
 exploration sessions remain readable; the selector's **Explore careers** action
@@ -262,7 +270,7 @@ feature does not implement them.
 ## Configuration
 
 Use `AI_ENABLED=true`, server-only `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_API_KEY`, and Career
-MongoDB. All discovery/research/chat/extraction stages use `gemini-3.5-flash-lite` through
+MongoDB. All discovery/research/chat/extraction stages use the configured Career model through
 the same adapter; legacy provider/model/chat switches no longer alter routing.
 No new API key, dependency or service is needed. Existing research context creation
 is governed by `OPPORTUNITY_ENABLED`. Optional tuning values are passed by Compose:

@@ -11,7 +11,9 @@ function publicReport(goalId:string,record:Json={},researchId='00000000000000000
  const categories=record.intelligence?.categories||Object.fromEntries(['interview_intelligence','internship_insights','career_progression','conversion_outcomes','company_intelligence'].map(key=>[key,{...category(),findings:key==='interview_intelligence'?findings.map((f,i)=>({...f,finding_id:'f'+String(i+1).padStart(16,'0'),confidence:'medium',evidence_type:'candidate_reported',scope:'exact',conflict_group:null,last_verified_at:'2026-10-28T00:00:00Z',quotes:[record.sources?.[0]?.evidence||f.value]})):[]} ]));
  return {available:true,job_id:'synthetic-job',career_target_id:goalId,research_id:researchId,status:'completed',finished:true,categories,sources:record.sources||[],summary:record.intelligence?.summary||{},error_code:null,updated_at:'2026-10-28T00:00:00Z'};
 }
-function goalResponse(review:Json){return {current:{goal:{...review.extraction,_id:review.review_id,version:review.version,target_type:review.target_type||'specific_job',requirements_need_review:review.requirements_need_review||false}}};}
+function savedGoal(goal:Json):Json{return {company:null,location:null,seniority_level:null,job_url:null,interests:[],preferences:[],readiness:'pending',exploration_draft_id:null,exploration_draft_version:null,...goal};}
+function workspaceResponse(value:Json):Json{return {session_id:null,revision:0,kind:null,research_id:null,research_version:null,coverage:[],activities:[],error:null,retry_after:null,expires_at:null,exploration_id:null,...value,current:{selection_version:0,dependent_results_need_review:false,...value.current,goal:value.current?.goal?savedGoal(value.current.goal):null}};}
+function goalResponse(review:Json){return {current:{goal:savedGoal({...review.extraction,_id:review.review_id,version:review.version,target_type:review.target_type||'specific_job',requirements_need_review:review.requirements_need_review||false})}};}
 function canonical(value:Json):Json{
  if(value.review?.extraction){
   const goal=goalResponse(value.review).current.goal;
@@ -20,13 +22,13 @@ function canonical(value:Json):Json{
   report.updated_at=value.phase+':'+value.revision;
   reports.set(goal._id,report);
   const {review,research,...rest}=value;
-  const workspace={...rest,current:{...value.current,goal},research_id:value.phase==='ready'?report.research_id:null,research_version:value.phase==='ready'?1:null};
+  const workspace=workspaceResponse({...rest,current:{...value.current,goal},research_id:value.phase==='ready'?report.research_id:null,research_version:value.phase==='ready'?1:null});
   latest=workspace;return workspace;
  }
- if(value.current?.goal&&value.phase){latest=value;return value;}
+ if(value.current?.goal&&value.phase){latest=workspaceResponse(value);return latest;}
  if(value.current?.goal)return value;
  if(value.review_id&&value.extraction)return goalResponse(value);
- if(value.phase==='empty'){const {review,research,...rest}=value;return {...rest,current:{goal:null,selection_version:0}};}
+ if(value.phase==='empty'){const {review,research,...rest}=value;return workspaceResponse({...rest,current:{goal:null,selection_version:0}});}
  if(value.session)return {...value,session:{...value.session,review:value.session.review?goalResponse(value.session.review):null}};
  if(value.workspace)return {...value,workspace:canonical(value.workspace)};
  if(value.result)return {...value,result:canonical(value.result)};
@@ -36,6 +38,7 @@ export function careerFixture(url:string,input:Json):Json{
  const parsed=new URL(url),path=parsed.pathname;
  if(!path.includes('/career/'))return input;
  const value=canonical(input),goalId=path.match(/\/goals\/([^/]+)/)?.[1]||latest?.current?.goal?._id;
+ if(path.endsWith('/goals/current'))return {dependent_results_need_review:false,...value};
  if(path.endsWith('/goals/current/cv-confirmation')){
   const current=value.current?.goal?value.current:latest?.current,goal=current?.goal;
   return {goal_id:goal?._id||null,goal_version:goal?.version||null,selection_version:current?.selection_version||0,confirmed:false,context:null,reason:goal?null:'Save a career goal before confirming it for CV review.'};
@@ -68,11 +71,11 @@ export function careerFixture(url:string,input:Json):Json{
   if(path.endsWith('/progress'))return {status:report.status,finished:report.finished??true,result_version:report.updated_at||'fixture-v1',categories:Object.fromEntries(Object.entries(report.categories).map(([k,v])=>[k,{status:(v as Json).status,error_code:(v as Json).error_code}]))};
   report={...report,research_id:parsed.searchParams.get('research_id')||report.research_id,career_target_id:goalId};
   const {research,...rest}=report;
-  return {...rest,sources:(report.sources||[]).map(({evidence,...s}:Json)=>s),categories:Object.fromEntries(Object.entries(report.categories).map(([k,v])=>[k,{...(v as Json),findings:((v as Json).findings||[]).map(({quotes,...f}:Json)=>f)}]))};
+  return {error_code:null,...rest,summary:{overview_refs:[],key_takeaway_refs:[],consideration_refs:[],...report.summary},sources:(report.sources||[]).map(({evidence,...s}:Json)=>({title:null,...s})),categories:Object.fromEntries(Object.entries(report.categories).map(([k,v])=>[k,{...(v as Json),findings:((v as Json).findings||[]).map(({quotes,...f}:Json)=>f)}]))};
  }
  if(path.endsWith('/workspace/progress')){
   const state=value.phase?value:latest;
-  return {session_id:state?.session_id,revision:state?.revision,goal_id:state?.current?.goal?._id,selection_version:state?.current?.selection_version,phase:state?.phase,activities:state?.activities||[],research_id:state?.research_id,error:state?.error,error_code:state?.error_code,retry_after:state?.retry_after};
+  return {session_id:state?.session_id??null,revision:state?.revision??0,goal_id:state?.current?.goal?._id??null,selection_version:state?.current?.selection_version??0,phase:state?.phase,activities:state?.activities||[],research_id:state?.research_id??null,result_version:state?.result_version??null,error:state?.error??null,error_code:state?.error_code??null,retry_after:state?.retry_after??null};
  }
  return value;
 }

@@ -57,11 +57,30 @@ it('respects reduced motion and shows older replies without animation',()=>{
  expect(view.container).toHaveTextContent('Older complete response');
 });
 
-it('hides technical errors but keeps recovery available',()=>{
+it('explains invalid AI answers without exposing diagnostics and keeps recovery available',()=>{
  render(<AgentRecovery message="PRIVATE provider_json diagnostic" code="invalid_output" onRetry={()=>{}}/>);
- expect(screen.queryByRole('alert')).toBeNull();
+ expect(screen.getByRole('alert')).toHaveTextContent('The AI returned an answer that could not be validated');
  expect(screen.queryByText(/PRIVATE/)).toBeNull();
  expect(screen.getByRole('button',{name:'Retry'})).toBeEnabled();
+});
+
+it.each([
+ ['invalid_response','Career returned an invalid response'],
+ ['provider_schema','rejected the JSON schema'],
+ ['provider_parameter','rejected a request setting'],
+ ['provider_configuration','connection settings were rejected'],
+ ['output_limit','exceeded the allowed size'],
+ ['incomplete_output','ended before the answer was complete'],
+ ['timeout','took too long to respond'],
+ ['context_limit','too much information'],
+ ['stale_input','career goal changed'],
+ ['','connection or service problem'],
+])('explains %s failures with a retry button', (code,explanation)=>{
+ const retry=vi.fn();
+ render(<AgentRecovery message="PRIVATE provider diagnostic" code={code} onRetry={retry}/>);
+ expect(screen.getByRole('alert')).toHaveTextContent(explanation);
+ expect(screen.queryByText(/PRIVATE|Your inputs are kept/)).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'Retry'}));expect(retry).toHaveBeenCalledOnce();
 });
 
 it('keeps token errors and the countdown visible',()=>{

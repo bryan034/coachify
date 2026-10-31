@@ -1,15 +1,46 @@
 # Career service
 
-Career owns transient job inputs, the account's canonical goal and guided chat, conversational discovery and cited public research. JD intake and discovery share the same structured goal persistence path. Configured Gemini/Brave access is required for live interpretation and research; previews make no model calls. Synthetic tests do not establish live quality or provider cost.
+Career owns transient job inputs, the account's canonical goal and guided chat, conversational discovery and cited public research. JD intake and discovery share the same structured goal persistence path. Configured model/search access is required for live interpretation and research; previews make no model calls. Synthetic tests do not establish live quality or provider cost.
+
+## Model and search providers
+
+All Career stages share the configured model. The public template uses a local
+OpenAI-compatible DeepSeek model plus Brave LLM Context; production can select
+DeepSeek cloud plus its Search API. Existing Gemini deployments remain supported.
+Follow-up questions automatically retrieve public evidence when saved facts are
+missing or the answering model returns `not_found`, with at most one scoped search
+per turn and reuse during answer repairs. Ambiguous/off-topic/edit requests do not
+search. See [exact local/cloud settings](../../docs/setup.md#career-model-and-search-configuration).
+Older Gemini/Brave names below describe the original provider path; the same domain
+validation and workflow apply to the selected providers. No live local/cloud quality
+or deployment verification is claimed by synthetic tests.
+
+Local testing defaults to the exact `deepseek-r1:1.5b` Ollama model, a single
+in-flight model call per Career worker and `CAREER_LOCAL_TIMEOUT_SECONDS=45`
+(1–300 seconds per admitted call). Queuing happens before the inference deadline;
+versions/cancellation are rechecked after waiting. Local job identification and
+extraction allow up to 8,192 output tokens each, bounded by `AI_MAX_OUTPUT_TOKENS`
+and context admission. Incomplete output still fails validation; a larger allowance
+does not guarantee model quality or completion. Local workflow runs allow up to
+600 seconds, with matching leases. Cloud inference remains concurrent and keeps
+its existing 45-second default / 60-second maximum. See the setup link above for
+private settings, the optional fixed-context alias and gateway reload instructions.
 
 ## JD inputs — J01 / J06 / J07
 
 Pasted text stays in browser memory until explicitly submitted for extraction. `POST /api/v1/career/imports/url` and `/imports/document` return bounded temporary previews; `/explorations/cv/document` supplies optional temporary CV context. Inputs and originals are not retained as raw JD/CV text. URL/document safeguards are detailed in [SPECIFICATION.md](SPECIFICATION.md).
 
+JD inputs retain an 8,000-character cap. Local job identification and extraction
+allow up to 8,192 output tokens each; cloud identification allows up to 4,096. `AI_MAX_OUTPUT_TOKENS` bounds both and now
+defaults to 8,192. JD context admission accounts for the full instructions, source,
+schema and repair feedback in estimated tokens, plus output space and a safety
+margin. Over-limit requests fail without truncating the JD. Existing private
+completion settings can still lower these budgets; agents never read/change them.
+
 ## Canonical goal and chat — J02–J05 / J09
 
 - `GET /api/v1/career/workspace` returns one owner-scoped saved workspace; `/workspace/progress` supports lightweight polling.
-- `POST /api/v1/career/workspace/jd` starts or reconnects to versioned JD intake. A validated identity overlaps full extraction with public-only retrieval. Successful extraction saves the goal; combined chat output waits for extraction and research to complete.
+- `POST /api/v1/career/workspace/jd` starts or reconnects to versioned JD intake. A validated cloud identity overlaps full extraction with public-only retrieval; local R1 defers metadata and retrieval until full extraction. Successful extraction saves the goal; combined chat output waits for extraction and research to complete.
 - `POST /api/v1/career/workspace/summary` generates a concise Gemini overview from the saved goal and finished revision-linked research, including partial reports with explicit limitations. It supports the same owner-scoped background operations and snapshot retries.
 - `POST /api/v1/career/workspace/messages` asks scoped questions or refines the current goal. Ambiguous edits retain a private pending question; valid edits save with owner/version checks and retry receipts.
 - `/api/v1/career/goals` and `/goals/current` expose canonical structured history/current state. Goals edit in place with versions. A replacement becomes current only after validated saving.
@@ -18,11 +49,30 @@ Observed progress describes completed/running stages, never hidden model reasoni
 
 After extraction and research finish, chat automatically loads the saved report and presents a concise overview as short, single-idea paragraphs with bold topic labels (for example, **Field:** and **Required skills:**), ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Saved goal cards are available immediately after extraction, while the composer waits for the combined response.
 
+Inference uses the OpenAI Python SDK with Pydantic-derived JSON schemas.
+`CAREER_LLM_TOKEN_PARAMETER` selects `max_tokens` or `max_completion_tokens` when
+switching models. The local default is `json_schema_strict` for every stage,
+including routing, research planning, questions and edits. SDK retries are disabled;
+existing workflow deadlines, bounded retries and response-size limits remain in force.
+
 Goal summaries use bounded corrections for invalid model output, with at most six
-repairs. Gemini returns plain-text blocks with backend-assigned fact references; Python
+repairs. Local job identification, full JD extraction and summaries upgrade JSON Object
+mode to native strict JSON Schema decoding. Local extraction constrains the complete
+nested job/skill/condition response at temperature zero and excludes user-declared
+origins from the decoding schema; backend validation remains mandatory. Local identification uses a small `document_type`
+and mandatory verbatim `evidence` contract at temperature zero; detailed role,
+employer and location extraction stays in the full JD stage. Local public research
+therefore starts after full extraction supplies that metadata. Cloud identity and
+its early research path remain unchanged. Summaries use the `blocks` structure
+with the complete schema also supplied in their prompt;
+prompt/schema input, reserved output and safety margin are budgeted in estimated
+tokens. Cloud JSON Object mode remains supported without assuming native schema
+support. The model returns plain-text blocks with backend-assigned fact references; Python
 escapes model text and attaches only saved source links beside each point. Unknown fact
 references fail validation. Follow-up answers resolve inline fact references to saved
 links beside their claims; unapproved URLs fail validation.
+Follow-up answers can cite every supplied fact, including lists exceeding four
+references; each reference must still resolve to the retrieved snapshot.
 Rejected model text is not retained. Failed AI operation responses include
 `operation_id` and fixed issue codes under `diagnostic.violations`; the ID also
 appears in the initial 202 response, polling URL and content-free failure logs.
@@ -117,8 +167,7 @@ Legacy interview endpoints remain readable/compatible:
 
 Legacy Search/Answers mode values are ignored. Opportunity Intelligence
 uses the existing `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY` when `OPPORTUNITY_ENABLED=true`
-(default), independently of the Gemini chat switch and legacy Brave mode. It always
-calls LLM Context; no silent provider substitution occurs. Availability responses
+(default), independently of the Gemini chat switch and legacy Brave mode. It calls the selected Brave LLM Context or DeepSeek Search adapter; no silent provider substitution occurs. Availability responses
 name the specific disabled/missing capability without exposing configuration values.
 Quota pauses retain successful evaluations and resume only unfinished calls; response
 repair budgets survive pauses. Workspace errors preserve the actual category/quota
@@ -128,23 +177,23 @@ shared research, and no personal capability gaps or roadmap are generated.
 
 ## Saved-goal questions — J13
 
-Gemini 3.5 Flash Lite interprets every saved-goal chat turn using a compact catalogue
+The configured Career model interprets every saved-goal chat turn using a compact catalogue
 (up to 1,800 estimated tokens) and six recent messages (400 characters each).
 Python retrieves allowlisted owner-linked records, preserving AND/OR alternatives;
-answers receive up to 1,600 fact tokens. The same Gemini model handles comparisons,
+answers receive up to 1,600 fact tokens. The same configured model handles comparisons,
 goal edits, JD extraction and interview synthesis. Citation and ownership checks
-remain mandatory. Ordinary chat performs no new searches; unknown details stay unknown.
+remain mandatory. Follow-up chat can search for missing/current public details; unknown details stay unknown when no usable evidence is returned.
 `AI_ENABLED` is the master switch; unused provider/model/chat settings are ignored.
-No provider fallback exists. All stages default to the explicit Flash Lite model ID
-as described in [setup](../../docs/setup.md#gemini-reasoning-configuration).
+No provider fallback exists. Model and search providers are independently selected
+as described in [setup](../../docs/setup.md#career-model-and-search-configuration).
 
 Ordinary Q&A sends only relevant projected fields and matching facts, without full
 research summaries or the edit schema. Location/round-count lookups, missing facts and
 clear unrelated requests need no answering call. Ambiguous scope uses a 256-output-token
 router; grounded answers use at most 768 output tokens, subject to the existing caps.
 Independent questions omit chat history; follow-ups include only two short recent
-messages. Unrelated tasks are refused. Q&A never performs another Brave search or
-silently edits the goal. JD chat history remains temporary browser memory.
+messages. Unrelated tasks are refused. Q&A may perform one scoped retrieval for missing/current public information and
+never silently edits the goal. JD chat history remains temporary browser memory.
 
 Provider rejections include safe `provider_error` metadata: HTTP status, known
 Google code and rejected field names. This distinguishes invalid keys, unavailable
@@ -208,3 +257,22 @@ links. See [coverage outcomes](OPPORTUNITY_INTELLIGENCE.md#coverage-outcomes-and
 ## Assessment producer handoff — G01 integration
 
 `GET /api/v1/career/assessment-input` is an authenticated read-only current goal/selection and owner-linked research snapshot. It includes additive canonical skill IDs/registry versions and source-grounded job dates; it never starts a comparison or acknowledges a goal for CV clarification. The separate [Assessment service](../assessment-service/README.md) owns new analyses. Original analysis-v1 schemas remain compatibility contracts.
+
+Job-identity grounding checks retain safe field/issue metadata for automatic
+repairs: missing evidence, a quote absent from the source, an identity value absent
+from the source, or an invalid public identity field. Model/source values remain
+private. Valid JSON alone never bypasses these checks.
+
+Clear standalone assistant tasks and instruction-override requests are rejected
+before model inference. Genuine job requirements still pass the model scope gate,
+and positive local classifications require exact source evidence. The opt-in
+`tests/local_model_probe.py --suite --repeat 3` exercises this production preflight
+on eight synthetic advert/resume/question/task/override cases without application
+credentials, environment files, paid research or database writes.
+
+Local extraction uses its full `ExtractedJD` schema rather than accepting any
+syntactically valid JSON object. Unknown top-level fields, flattened skill objects
+and echoed request envelopes remain validation failures. Schema enforcement does
+not establish semantic completeness: live R1 trials have also omitted named skills
+and misassigned priorities, so the verified scope classifier must not be treated
+as verification of the full extraction/research/chat journey.

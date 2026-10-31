@@ -5,13 +5,17 @@ import {useEffect,useRef,useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {useProfile} from '@/features/profile/profile-provider';
 import {useCareerSession} from './career-session';
-import {AgentMarkdown,AgentActivity,AgentProgress,AgentReply,AgentRecovery,errorCode,isTokenLimit} from './agent-message';
+import {AgentMarkdown,AgentActivity,AgentProgress,AgentReply,AgentRecovery,errorCode,isTokenLimit,observedActivity} from './agent-message';
 import {sourceCitations} from './source-links';
 import {careerOperation,type CareerOperation} from '@/lib/api/career-operation';
+import {retryCareerRead} from '@/lib/api/career-polling';
 import {careerApi,refreshWorkspace,type OpportunityView,type CareerWorkspace} from '@/lib/api/career';
 
 function researchPending(workspace:CareerWorkspace){
  return ['research_pending','researching','waiting_quota'].includes(workspace.phase);
+}
+function reportPending(research:OpportunityView){
+ return research.finished===false||['pending','running'].includes(research.status)||Object.values(research.categories).some(category=>category&&['pending','running'].includes(category.status));
 }
 function responseReady(workspace:CareerWorkspace,research?:OpportunityView){
  return !!workspace.current.goal&&['ready','research_failed'].includes(workspace.phase)&&!!research&&research.career_target_id===workspace.current.goal._id&&research.research_id===workspace.research_id&&research.finished!==false&&['completed','partial'].includes(research.status)&&Object.values(research.categories).every(category=>category&&!['pending','running'].includes(category.status));
@@ -44,6 +48,7 @@ export function JobReviewChat(){
  const {transcript,followReply,showJump,jumpToLatest,scrollProps}=useChatScroll();
  const [operation,setOperation]=useState<CareerOperation|null>(null);
  const [extractionSteps,setExtractionSteps]=useState<string[]>([]);
+ const [connectionIssue,setConnectionIssue]=useState(false);
  const [retryAt,setRetryAt]=useState<number|null>(null),[secondsLeft,setSecondsLeft]=useState(0);
  function operationProgress(job:CareerOperation){
   if(source.current)setExtractionSteps(previous=>[...new Set([...previous,...(job.activities||[])])]);
@@ -57,7 +62,9 @@ export function JobReviewChat(){
   const update=()=>setSecondsLeft(retryAt?Math.max(0,Math.ceil((retryAt-Date.now())/1000)):0);
   update();if(!retryAt)return;const timer=setInterval(update,1000);return()=>clearInterval(timer);
  },[retryAt]);
- const [message,setMessage]=useState(''),[turns,setTurns]=useState<{message:string;reply:string}[]>([]),[details,setDetails]=useState(false);
+ const [message,setMessage]=useState(''),[turns,setTurns]=useState<{id:string;message:string;reply:string|null}[]>([]),[details,setDetails]=useState(false);
+ const failedTurn=useRef<string|null>(null);
+ const [pendingTurn,setPendingTurn]=useState<string|null>(null);
  const messageReceipt=useRef<{body:string;key:string}|null>(null);
  const sending=useRef(false);
  const [failedMessage,setFailedMessage]=useState('');
@@ -67,7 +74,7 @@ export function JobReviewChat(){
  const waitLabel=(operation?.limit_scope||workspace?.limit_scope)==='user'?'Waiting for the AI service to resume':'Waiting for the research service to resume';
  const goal=workspace?.current.goal;const researchReady=!!workspace&&responseReady(workspace,research);
  const matchingResearch=!!research&&research.career_target_id===goal?._id&&research.research_id===workspace?.research_id;
- const loadingResearch=!!goal&&!!workspace?.research_id&&(!matchingResearch||research?.finished===false);
+ const loadingResearch=!!goal&&!!workspace?.research_id&&(!matchingResearch||!!research&&reportPending(research));
  const summaryKey=JSON.stringify([workspace?.session_id,goal?.version,workspace?.research_id]);
  const ready=researchReady&&summary?.key===summaryKey;
  useEffect(()=>{
@@ -81,19 +88,21 @@ export function JobReviewChat(){
    .finally(()=>{if(!abort.signal.aborted)setOperation(null);});
   return()=>abort.abort();
  },[token,researchReady,summaryKey,summaryRetry]);
- const detailsReady=!!goal&&(researchReady||workspace?.phase==='research_failed'||workspace?.phase==='expired');
+ const detailsReady=!!goal;
  useEffect(()=>{
   if(!token||!goal||!workspace?.research_id)return;const abort=new AbortController();
   let timer:ReturnType<typeof setTimeout>;setError('');setCode('');
   async function load(){try{
-   const value=await careerApi<OpportunityView>(`/goals/${goal!._id}/opportunity-research?research_id=${workspace!.research_id}`,token!,{signal:abort.signal});
-   if(abort.signal.aborted)return;setResearch(value);
-   if(value.finished===false)timer=setTimeout(()=>void load(),2000);
-  }catch(c){if(!abort.signal.aborted)reportError(c,'Could not load research.');}}
+   const value=await retryCareerRead(()=>careerApi<OpportunityView>(`/goals/${goal!._id}/opportunity-research?research_id=${workspace!.research_id}`,token!,{signal:abort.signal}),abort.signal,()=>setConnectionIssue(true));
+   if(abort.signal.aborted)return;setConnectionIssue(false);setResearch(value);
+   // A versioned report can be an early snapshot with pending categories even
+   // when that snapshot itself is marked finished. Keep reading until usable.
+   if(reportPending(value))timer=setTimeout(()=>void load(),2000);
+  }catch(c){if(!abort.signal.aborted){setConnectionIssue(false);reportError(c,'Could not load research.');}}}
   void load();return()=>{abort.abort();clearTimeout(timer);};
- },[token,goal?._id,workspace?.research_id,researchRetry]);
+ },[token,goal?._id,workspace?.research_id,workspace?.phase,researchRetry]);
  function receive(value:CareerWorkspace,preserveDraft=false){
-  if(revision.current!==value.session_id){setTurns([]);if(!preserveDraft)setMessage('');setFailedMessage('');messageReceipt.current=null;revision.current=value.session_id||'';}
+  if(revision.current!==value.session_id){setTurns([]);if(!preserveDraft)setMessage('');setFailedMessage('');failedTurn.current=null;messageReceipt.current=null;revision.current=value.session_id||'';}
   setRetryAt(value.phase==='waiting_quota'?Date.now()+(value.retry_after||60)*1000:null);
   setWorkspace(value);
  }
@@ -109,7 +118,7 @@ export function JobReviewChat(){
  },[token,reload]);
  useEffect(()=>{
   if(!token||!workspace||!researchPending(workspace))return;
-  const abort=new AbortController(),timer=setTimeout(()=>{void refreshWorkspace(workspace,token,abort.signal).then(v=>{if(!abort.signal.aborted)receive(v);}).catch(c=>{if(!abort.signal.aborted)reportError(c,'Could not refresh your career goal.');});},workspace.phase==='waiting_quota'?Math.max(2000,Math.min(workspace.retry_after||60,3600)*1000):2000);
+  const abort=new AbortController(),timer=setTimeout(()=>{void retryCareerRead(()=>refreshWorkspace(workspace,token,abort.signal),abort.signal,()=>setConnectionIssue(true)).then(v=>{if(!abort.signal.aborted){setConnectionIssue(false);receive(v);}}).catch(c=>{if(!abort.signal.aborted){setConnectionIssue(false);reportError(c,'Could not refresh your career goal.');}});},workspace.phase==='waiting_quota'?Math.max(2000,Math.min(workspace.retry_after||60,3600)*1000):2000);
   return()=>{clearTimeout(timer);abort.abort();};
  },[token,workspace]);
  useEffect(()=>()=>controller.current?.abort(),[]);
@@ -118,14 +127,17 @@ export function JobReviewChat(){
  async function retry(){if(!token||busy||secondsLeft>0)return;setBusy(true);setError('');setCode('');try{receive(await careerApi<CareerWorkspace>('/workspace/retry',token,{method:'POST'}));}catch(c){reportError(c,'Retry failed.');}finally{setBusy(false);}}
  async function send(text=message){
   if(!workspace?.session_id||!goal||!ready||!token||busy||sending.current||!text.trim()||chatCooldown)return;
+  const turnId=failedMessage===text.trim()&&failedTurn.current?failedTurn.current:crypto.randomUUID();
+  setPendingTurn(turnId);
+  setTurns(previous=>previous.some(turn=>turn.id===turnId)?previous:[...previous,{id:turnId,message:text.trim(),reply:null}].slice(-30));
   const input=text.trim(),abort=new AbortController();sending.current=true;controller.current=abort;setPendingMessage(input);setBusy(true);setError('');setCode('');setFailedMessage('');
   // Clear the submitted text immediately; a retry must preserve any newer draft.
   setMessage(current=>current.trim()===input?'':current);
-  const body=JSON.stringify({session_id:workspace.session_id,expected_version:goal.version,message:input,mode:refining.current?'refine':'question',conversation:turns.slice(-1).flatMap(t=>[{role:'user',content:t.message},{role:'assistant',content:t.reply}])});
+  const body=JSON.stringify({session_id:workspace.session_id,expected_version:goal.version,message:input,mode:refining.current?'refine':'question',conversation:turns.filter(t=>t.reply!==null).slice(-1).flatMap(t=>[{role:'user',content:t.message},{role:'assistant',content:t.reply}])});
   if(messageReceipt.current?.body!==body)messageReceipt.current={body,key:crypto.randomUUID()};
   try{const result=await careerOperation<{reply:string;workspace?:CareerWorkspace;edit_status?:string}>('/workspace/messages',token,{method:'POST',signal:abort.signal,headers:{'Idempotency-Key':messageReceipt.current.key},body},operationProgress);
-   if(!abort.signal.aborted){if(result.workspace)receive(result.workspace,true);setTurns(p=>[...p,{message:input,reply:result.reply}].slice(-30));setRetryAt(null);messageReceipt.current=null;}}
-  catch(c){if(!abort.signal.aborted){setFailedMessage(input);setMessage(current=>current||input);reportError(c,'Could not answer. Your message is retained.');}}finally{sending.current=false;if(!abort.signal.aborted){setBusy(false);setPendingMessage(null);setOperation(null);}}
+   if(!abort.signal.aborted){if(result.workspace)receive(result.workspace,true);setTurns(p=>p.map(turn=>turn.id===turnId?{...turn,reply:result.reply}:turn));setRetryAt(null);failedTurn.current=null;messageReceipt.current=null;}}
+  catch(c){if(!abort.signal.aborted){failedTurn.current=turnId;setFailedMessage(input);setMessage(current=>current||input);reportError(c,'Could not answer. Your message is retained.');}}finally{sending.current=false;if(!abort.signal.aborted){setBusy(false);setPendingMessage(null);setPendingTurn(null);setOperation(null);}}
  }
  return <section className="page on career-agent-page">
   <header className="agent-page-header"><div><p className="small">Your direction, one conversation</p><h1>Career Goal</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>{if(!dirty.current||window.confirm('Leave and discard unsent edits? Your saved goal stays current.'))router.push('/career-goal');}}>← Career Goal</button></header>
@@ -133,24 +145,24 @@ export function JobReviewChat(){
    {workspace?.phase==='empty'&&<p role="status">No job description is available. Import a JD from Career Goal or explore a direction.</p>}
    {details&&detailsReady&&goal&&<aside className="agent-details"><h2>{goal.role}</h2><p>{goal.company||'General career direction'} · v{goal.version} · Saved automatically</p>
     <h3>Main job skills</h3><ul>{goal.skills.map((s,i)=><li key={s.item_id||i}>{s.name} · {s.priority}</li>)}</ul>
+    {!!goal.job_dates?.length&&<><h3>Job dates</h3><ul>{goal.job_dates.map((date,index)=><li key={index}>{date.kind.replaceAll('_',' ')}: {date.text}</li>)}</ul></>}
     {researchReady?<AgentMarkdown>{researchSummary(research,workspace?.coverage)}</AgentMarkdown>:<p className="small">Research is incomplete. Your saved goal details remain available.</p>}
    </aside>}
 
    <div ref={transcript} className="agent-transcript" {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">
+    {connectionIssue&&<p role="status" className="small">Connection interrupted. Reconnecting to task updates…</p>}
     {!ready&&<AgentProgress steps={[...extractionSteps,...(operation?.activities||[]),...(workspace?.activities||[])]}/>}
     <div className="agent-message assistant" key="initial-answer"><span className="agent-message-label">elo</span>
      {ready&&<AgentReply onProgress={followReply}>{refining.current?'What would you like to refine in your career goal? We can work through your role, location, skills, qualifications or responsibilities. Tell me what feels different, and I’ll ask for any details needed before saving the update.':summary!.reply}</AgentReply>}{<>
-      {(!workspace||researchPending(workspace)||loadingResearch||researchReady&&!ready)&&!error&&<AgentActivity
-       label={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':loadingResearch?'Loading your saved research…':researchReady&&!ready?'Preparing your career-goal summary…':workspace?.phase==='researching'||workspace?.phase==='research_pending'?'Researching interview expectations…':source.current?'Extracting your career goal…':'Opening your career goal…'}
-       detail={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?(secondsLeft>0?`Resuming in ${secondsLeft} seconds.`:'Retrying research…'):workspace?.current.goal?'Your goal is saved. I’m finishing the research so I can present both results together.':undefined}/>}
+      {(!workspace||researchPending(workspace)||loadingResearch||researchReady&&!ready)&&!error&&<AgentActivity step
+       label={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':operation?observedActivity(operation.activities)||(source.current?'Extracting your career goal…':'Preparing your career-goal summary…'):researchReady&&!ready?'Preparing your career-goal summary…':workspace&&researchPending(workspace)?observedActivity(workspace?.activities)||'Researching interview expectations…':loadingResearch?'Loading your saved research…':source.current?'Extracting your career goal…':'Opening your career goal…'}
+       detail={operation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?(secondsLeft>0?`Resuming in ${secondsLeft} seconds.`:'Retrying research…'):researchReady?'Your goal and research are saved. I’m preparing your summary.':workspace?.current.goal?'Your goal is saved. I’m finishing the research so I can present both results together.':undefined}/>}
       {!researchReady&&workspace?.error&&(workspace.phase==='waiting_quota'||isTokenLimit(workspace.error_code))&&<p role="alert" className="small">{workspace.phase==='waiting_quota'?'Research is waiting for the service quota to reset. Your career goal remains saved.':workspace.error}</p>}
       {workspace&&!researchReady&&!loadingResearch&&(['research_failed','expired'].includes(workspace.phase)||workspace.phase==='ready'&&(!workspace.research_id||matchingResearch&&research?.finished!==false&&research?.status==='failed'))&&<button className="btn pri" disabled={busy} onClick={()=>void retry()}>Resume research</button>}
      </>}
     </div>
     {ready&&workspace?.edit_question&&!turns.length&&!pendingMessage&&<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply onProgress={followReply}>{workspace.edit_question}</AgentReply></div>}
-    {turns.map((turn,i)=><div className="agent-exchange" key={i}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.message}</p></div><div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply animate={i===turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div></div>)}
-    {pendingMessage&&<div className="agent-exchange"><div className="agent-message user"><span className="agent-message-label">You</span><p>{pendingMessage}</p></div><div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentProgress steps={operation?.activities||[]}/><AgentActivity label={operation?.status==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':'Preparing your answer…'} detail={operation?.status==='waiting_quota'?`Resuming automatically in ${secondsLeft} seconds.`:'Using your career goal and saved interview research.'}/></div></div>}
-    {error&&failedMessage&&message!==failedMessage&&<p className="small">Message awaiting retry: {failedMessage}</p>}
+    {turns.map((turn,i)=><div className="agent-exchange" key={turn.id}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.message}</p></div>{turn.reply!==null?<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply animate={i===turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div>:turn.id===pendingTurn?<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentProgress steps={operation?.activities||[]}/><AgentActivity step label={operation?.status==='waiting_quota'?waitLabel:operation?.status==='repairing'?'Refining the response…':observedActivity(operation?.activities)||'Preparing your answer…'} detail={operation?.status==='waiting_quota'?`Resuming automatically in ${secondsLeft} seconds.`:'Using your career goal and saved interview research.'}/></div>:<p className="small">No answer received.</p>}</div>)}
     {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||chatCooldown} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(ready&&failedMessage)void send(failedMessage);else if(ready&&message.trim())void send();else if(researchReady&&!ready)setSummaryRetry(v=>v+1);else if(loadingResearch)setResearchRetry(v=>v+1);else void retry();}}/>}
    </div>
    <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>

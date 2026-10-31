@@ -222,31 +222,199 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 MongoDB 8 requires a compatible kernel. Do not treat a local startup compatibility failure as an application test pass or silently bypass the server's guard. CI's MongoDB jobs use the compatible pinned runner; local MongoDB 7 functional checks are reported separately.
 See [testing](testing.md) for automated checks and disposable test stacks.
 
-## Gemini reasoning configuration
+## Career model and search configuration
 
-All Career model stages default to `gemini-3.5-flash-lite` through Google's OpenAI-compatible
-endpoint: JD extraction, skills, discovery, research, summaries, chat and goal edits.
-Set these server-only values in `infrastructure/docker/.env` yourself. Rename the previous model-variable entry to `CAREER_LLM_MODEL`, preserving your selected model value; only this new model-variable name is read:
+Career uses one OpenAI-compatible model for extraction, discovery, research planning,
+chat, summaries and edits. Model inference and public search are configured independently.
+Apply the following settings yourself in the existing private `infrastructure/docker/.env`,
+preserving other settings and credentials. Agents do not read or edit that file.
+
+For local testing, the public template selects an Ollama-compatible server on the Docker
+host and keeps Brave LLM Context for search:
 
 ```dotenv
 AI_ENABLED=true
-CAREER_LLM_MODEL=gemini-3.5-flash-lite
-CAREER_LLM_API_KEY=YOUR_PRIVATE_GEMINI_KEY
+CAREER_LLM_PROVIDER=local
+CAREER_LLM_BASE_URL=http://host.docker.internal:11434/v1
+CAREER_LLM_MODEL=deepseek-r1:1.5b
+CAREER_LLM_RESPONSE_MODE=json_schema_strict
+CAREER_LLM_TOKEN_PARAMETER=max_tokens
+CAREER_LLM_API_KEY=
+CAREER_LOCAL_TIMEOUT_SECONDS=45
+AI_MAX_OUTPUT_TOKENS=8192
+AI_CONTEXT_TOKENS=32768
+OPPORTUNITY_RUN_SECONDS=600
+CAREER_RESEARCH_PROVIDER=brave
 CAREER_RESEARCH_API_KEY=YOUR_PRIVATE_BRAVE_KEY
 ```
 
+Career uses the OpenAI Python SDK for Chat Completions. All local stages default
+to strict JSON Schema, generated from the existing Pydantic output models. Backend
+validation still checks evidence, provenance and allowed references. To swap models,
+set provider, base URL, model, response mode and token parameter together. HTTPS
+OpenAI-compatible services use `CAREER_LLM_PROVIDER=compatible`; providers without
+native schema support can select `json_object`, which requires validation/repair.
+The legacy local JSON Object setting still upgrades identification, JD extraction
+and summary to native schema. Select `CAREER_LLM_TOKEN_PARAMETER=max_completion_tokens`
+for models requiring that parameter. SDK retries are disabled; the existing workflow
+owns retries, deadlines and cooldowns. No model credentials reach the frontend.
+
+Install and serve the chosen local model yourself; this stack does not download or launch
+one. The model name must match your server's installed model. For a directly run Career
+process, use `http://127.0.0.1:11434/v1`; inside Docker, localhost refers to the Career
+container. Docker Desktop provides `host.docker.internal`; Linux Docker users must map
+that hostname to the host gateway in their deployment. Keep the local server private.
+HTTP and an empty model key are accepted only with the explicit `local` provider.
+Local inference is serialized across Career chat, extraction, discovery and research
+within the single Career worker. `CAREER_LOCAL_TIMEOUT_SECONDS=45` gives each admitted
+model call 45 seconds; supported values are 1–300 seconds. Waiting for the model
+slot does not consume that call's inference budget. Cancellation and goal/version
+changes are checked before a queued request reaches the model. Cloud requests remain
+concurrent and use `AI_TIMEOUT_SECONDS=45` (maximum 60); the local setting is ignored.
+The Opportunity pipeline defaults to a 600-second local run budget unless explicitly
+configured otherwise. Local discovery and legacy research also have 600-second run
+budgets with leases lasting longer than the run; search HTTP deadlines remain unchanged.
+Work can still fail if it exceeds a workflow deadline or cannot fit the model context.
+Use one Career worker/replica for local testing; the model slot is process-local.
+
+Career now defaults to the exact `deepseek-r1:1.5b` model. Verify that the server's
+actual context is at least `AI_CONTEXT_TOKENS`; this application setting does not
+configure Ollama. If a fixed smaller profile is preferred, the optional
+`elo-deepseek-r1:1.5b` alias fixes Ollama's context at 16,384 tokens while reusing the
+installed `deepseek-r1:1.5b` weights. It leaves the original model unchanged. To recreate
+this preset on another machine after installing the base model:
+
+```sh
+cat > /tmp/elo-career.Modelfile <<'EOF'
+FROM deepseek-r1:1.5b
+PARAMETER num_ctx 16384
+EOF
+ollama create elo-deepseek-r1:1.5b -f /tmp/elo-career.Modelfile
+ollama show elo-deepseek-r1:1.5b --parameters
+```
+
+When using this optional alias, select it with `CAREER_LLM_MODEL` and set
+`AI_CONTEXT_TOKENS=16384` to match its smaller context. The app's token count is
+an estimate, and setting it does not configure Ollama by itself. Ollama's OpenAI-compatible
+endpoint requires a model preset to change context; see [its documentation](https://docs.ollama.com/api/openai-compatibility).
+JD input allows 8,000 characters. Local identification and extraction each have an 8,192-output-token ceiling,
+both subject to `AI_MAX_OUTPUT_TOKENS`. Cloud identification retains its 4,096-token
+ceiling. A `length` finish means the output ceiling was reached; increasing the HTTP
+timeout alone does not increase that ceiling.
+Use `AI_MAX_OUTPUT_TOKENS=8192` in your private configuration yourself to enable
+the full extraction budget; an existing lower value still takes precedence.
+The code measures the full provider prompt, including instructions/schema/repair
+feedback, in estimated tokens and reserves output plus a 10% context margin
+(minimum 1,024). Typical full-length English JDs fit the 16K profile; dense Unicode
+or larger overhead may not. Such requests fail rather than silently losing source
+text. Raising output limits does not establish a small model's schema/semantic accuracy.
+
+The base model's thinking behavior remains unchanged. No model inference is required
+for alias creation/verification. Existing private settings override the public template;
+apply the values above yourself before rebuilding/recreating Career.
+
+The gateway permits 610 seconds of upstream inactivity for model-backed Career routes.
+For model work, prefer `Prefer: respond-async` and operation polling (as the application
+UI does), especially when requests queue. Preview/import timeouts remain unchanged.
+Recreate Career to apply environment changes; reload/restart the gateway to apply its
+updated mounted NGINX config. Do not recreate databases or delete volumes.
+
+The local test profile can use this same 1.5B alias across all four AI services.
+Set these additional values in the same private environment file, preserving existing
+API keys and database credentials:
+
+```dotenv
+APP_ENV=development
+CV_LLM_BASE_URL=http://host.docker.internal:11434/v1
+CV_LLM_MODEL=elo-deepseek-r1:1.5b
+CV_LLM_ALLOW_HTTP=true
+CV_MODEL_CONCURRENT_PER_OWNER=1
+CV_MODEL_CONCURRENT_GLOBAL=3
+ASSESSMENT_LLM_BASE_URL=http://host.docker.internal:11434/v1
+ASSESSMENT_LLM_MODEL=elo-deepseek-r1:1.5b
+ASSESSMENT_LLM_ALLOW_HTTP=true
+ROADMAP_LLM_BASE_URL=http://host.docker.internal:11434/v1
+ROADMAP_LLM_MODEL=elo-deepseek-r1:1.5b
+ROADMAP_LLM_ALLOW_HTTP=true
+```
+
+CV requires `CV_MODEL_CONCURRENT_PER_OWNER < CV_MODEL_CONCURRENT_GLOBAL`, including
+local testing. Setting both to `1` prevents CV from starting. These admission limits
+do not serialize requests across the separate AI services.
+
+Local model requests omit Authorization headers even when cloud keys remain configured;
+those values can be preserved for a later switch. Assessment/Roadmap now support independent
+OpenAI-compatible endpoints: Gemini retains native JSON Schema/minimal reasoning, and other
+providers use JSON Output with the schema in the prompt. Every response still passes the
+existing domain/schema validation. Their local calls use a 180-second HTTP timeout and
+serialize per service worker; durable operations retain a 600-second local execution
+budget with a longer lease. CV keeps its quota/ownership boundaries and uses 120-second
+local extraction and 60-second local chat/interpretation timeouts, below its existing
+leases. These fixed local defaults do not change cloud timeouts. Career, Assessment and
+Roadmap serialization is per process, not a global lock across services; run one test
+workflow at a time if you want to avoid simultaneous GPU work from different services.
+
+Profile, Dashboard and Review do not currently call an LLM. Brave remains the search
+provider. The smaller model is a testing configuration, not a claim of reliable extraction,
+assessment or planning quality. No live personal CV or private chat is used for verification.
+Rebuild/recreate `career-service`, `cv-service`, `assessment-service` and `roadmap-service`
+after changing these values; keep the original provider keys private and unchanged.
+For cloud use, restore the appropriate HTTPS endpoints/models, disable HTTP flags and
+provide each service's own API key. HTTP requires development mode and must not be used
+as a production shortcut.
+
+For production DeepSeek cloud inference and search, replace these settings:
+
+```dotenv
+AI_ENABLED=true
+CAREER_LLM_PROVIDER=deepseek
+CAREER_LLM_BASE_URL=https://api.deepseek.com/v1
+CAREER_LLM_MODEL=deepseek-flash
+CAREER_LLM_RESPONSE_MODE=json_object
+AI_TIMEOUT_SECONDS=45
+AI_CONTEXT_TOKENS=65536
+OPPORTUNITY_RUN_SECONDS=300
+CAREER_LLM_API_KEY=YOUR_PRIVATE_DEEPSEEK_KEY
+CAREER_RESEARCH_PROVIDER=deepseek
+CAREER_RESEARCH_API_KEY=YOUR_PRIVATE_DEEPSEEK_KEY
+```
+
+The keys are separate settings even when the same DeepSeek account/key is used.
+DeepSeek requests use JSON Output with a schema in the prompt and thinking disabled
+so existing small output budgets apply to final JSON. Local requests receive no
+DeepSeek-specific thinking parameter. Every output still passes backend schema,
+provenance, ownership and version validation; provider/model changes never bypass it.
+See [DeepSeek JSON Output](https://api-docs.deepseek.com/guides/json_mode/) and
+[Search & Fetch](https://api-docs.deepseek.com/guides/search/).
+
+`CAREER_RESEARCH_PROVIDER=brave` uses the existing `GET /res/v1/llm/context` API.
+`deepseek` uses `POST https://api.deepseek.com/v1/tools/search` with `need_content=true`.
+Only original returned page content is accepted as evidence; missing content stays
+missing, and generated search summaries are not treated as source quotes. Queries
+are bounded to the API's 128-character limit while retaining their public context/focus.
+Response size, source counts, URL validation, retries and citation checks remain bounded.
+Search results are untrusted. No raw JD, private CV or chat message is sent to search.
+Search provider changes use distinct research cache policies; historical evidence remains readable.
+
+Existing Gemini deployments remain supported: select `CAREER_LLM_PROVIDER=gemini`,
+`CAREER_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`,
+`CAREER_LLM_MODEL=gemini-3.5-flash-lite`, `CAREER_LLM_RESPONSE_MODE=json_schema`
+and the corresponding key. When the new provider setting is absent, code/Compose
+retain Gemini defaults for compatibility. Explicit nonblank model values override
+provider defaults, so update the model as well when switching providers.
+Direct non-Compose processes may use deprecated `GEMINI_API_KEY` and `BRAVE_API_KEY`
+aliases only for their own provider when the canonical key is absent. Compose requires
+the canonical `CAREER_*` keys; rename old private entries yourself before recreating
+Career. This prevents a provider switch from forwarding another provider's key.
 The old `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`,
-`AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL` and
-`OPPORTUNITY_GEMINI_MODEL` values are no longer used by production reasoning.
-JSON Schema and backend citation,
-provenance and ownership validation preserve the current data models.
-The default is [Gemini 3.5 Flash Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),
-using the explicit `gemini-3.5-flash-lite` model ID for all stages. An existing
-`CAREER_LLM_MODEL` value overrides the default: change it to the Lite ID
-and recreate the Career container when switching from another model.
-If Google reports model access/NOT_FOUND, set `CAREER_LLM_MODEL` to an accessible
-Gemini model ID. The same setting applies to every reasoning and coordination stage;
-legacy `GEMINI_MODEL` and `AI_MODEL` do not override it.
+`AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL` and `OPPORTUNITY_GEMINI_MODEL`
+settings remain unused. Assessment, Roadmap and CV retain their independent model settings.
+
+Saved-goal follow-up questions may research automatically when public information is
+missing or needs current verification. A model `not_found` answer triggers at most
+one scoped retrieval and one additional answering call; empty results remain unknown.
+Retries of invalid answer formatting reuse the retrieved evidence. Unrelated tasks,
+ambiguous questions and goal edits never trigger this automatic search path.
 
 A `provider_configuration` response previously hid Google's numeric error/status/details.
 The adapter now returns safe `provider_error` metadata (provider, HTTP status, known
@@ -375,9 +543,11 @@ All user-configurable deployment inputs belong in the single ignored `infrastruc
 |---|---|
 | `ASSESSMENT_DB_PASSWORD` | New scoped `elo_assessment` MongoDB user/database |
 | `ROADMAP_DB_PASSWORD` | New scoped `elo_roadmap` MongoDB user/database |
-| `ASSESSMENT_LLM_API_KEY` | Server-only Gemini credential for evidence comparison |
-| `ROADMAP_LLM_API_KEY` | Server-only Gemini credential for adviser recommendations |
-| `ASSESSMENT_LLM_MODEL`, `ROADMAP_LLM_MODEL` | Optional independent model identifiers; both default to `gemini-3.5-flash-lite` |
+| `ASSESSMENT_LLM_API_KEY` | Server-only cloud credential for evidence comparison; optional for explicit local HTTP |
+| `ROADMAP_LLM_API_KEY` | Server-only cloud credential for adviser recommendations; optional for explicit local HTTP |
+| `ASSESSMENT_LLM_MODEL`, `ROADMAP_LLM_MODEL` | Independent model identifiers; the public local profile uses `elo-deepseek-r1:1.5b`; absent settings retain Gemini compatibility defaults |
+| `ASSESSMENT_LLM_BASE_URL`, `ROADMAP_LLM_BASE_URL` | Independent OpenAI-compatible endpoints; local profile uses the Docker-host Ollama `/v1` URL |
+| `ASSESSMENT_LLM_ALLOW_HTTP`, `ROADMAP_LLM_ALLOW_HTTP` | Explicit local HTTP permission; also requires `APP_ENV=development` |
 
 Generate only the new database passwords locally, then paste the printed lines into `infrastructure/docker/.env`:
 
@@ -387,7 +557,7 @@ for setting in ASSESSMENT_DB_PASSWORD ROADMAP_DB_PASSWORD; do
 done
 ```
 
-Keep passwords already associated with existing database users. The LLM keys come from your Gemini provider account. Add them and the model settings to the same private file:
+Keep passwords already associated with existing database users. For local testing, use the all-service profile above. For a Gemini cloud deployment, restore the HTTPS base URLs, disable the HTTP flags, and add keys from your provider account to the same private file:
 
 ```dotenv
 ASSESSMENT_LLM_API_KEY=YOUR_GEMINI_API_KEY

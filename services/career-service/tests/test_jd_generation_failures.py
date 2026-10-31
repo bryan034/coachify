@@ -23,7 +23,7 @@ def test_gemini_tasks_use_minimal_reasoning_and_bounded_output(stage):
     payload=adapter._payload(request)
     assert payload['reasoning_effort']=='minimal'
     assert payload['model']=='gemini-3.5-flash-lite'
-    assert payload['max_tokens']==(1024 if stage=='jd_chat' else 4096)
+    assert payload['max_tokens']==(1024 if stage=='jd_chat' else 8192)
 
 
 @pytest.mark.parametrize('timeout,expected_calls',[(20,1),(45,2)])

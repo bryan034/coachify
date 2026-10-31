@@ -55,20 +55,24 @@ def test_expanded_links_respect_the_reply_limit_without_truncating_citations():
     assert caught.value.violations==({'field':'reply','issue':'citation_output_too_long'},)
 
 
-def test_semantic_question_returns_links_in_the_interview_list(monkeypatch):
+@pytest.mark.parametrize('count',[2,6])
+def test_semantic_question_returns_links_in_the_interview_list(monkeypatch,count):
     async def run():
         request,body,*_=environment();body.message='What is the interview process?';body.conversation=[]
         class Store:
             def __init__(self,*args):pass
             def fetch(self,*args):return {'role':'Analyst','field':'Data'},{}
         monkeypatch.setattr('app.workflows.context_chat.QuestionStore',Store)
+        names=['Online test','Supervisor interview',*[f'Interview stage {i}' for i in range(3,count+1)]]
+        refs=[f'f{i}' for i in range(1,count+1)]
+        links={ref:[A if i==0 else B] for i,ref in enumerate(refs)}
         monkeypatch.setattr('app.workflows.context_chat.selected_facts',lambda *args:([
-            {'ref':'f1','kind':'interview_finding','data':{'value':'An online test is reported.'}},
-            {'ref':'f2','kind':'interview_finding','data':{'value':'A supervisor interview is reported.'}},
-        ],{'f1':[A],'f2':[B]},False))
+            {'ref':ref,'kind':'interview_finding','data':{'value':name}}
+            for ref,name in zip(refs,names)
+        ],links,False))
         async def generate(payload,operation,**kwargs):
             result=ContextPlan(topic='interview_process',resolved_question=body.message) if payload.stage=='context_route' else FocusedAnswer(
-                reply='1. Online test [f1].\n2. Supervisor interview [f2].',references=['f1','f2'])
+                reply='\n'.join(f'{i}. {name} [{ref}].' for i,(ref,name) in enumerate(zip(refs,names),1)),references=refs)
             if kwargs.get('validate_output'):kwargs['validate_output'](result)
             return NS(data=result)
         request.app.state.ai=NS(generate=generate)
@@ -76,4 +80,12 @@ def test_semantic_question_returns_links_in_the_interview_list(monkeypatch):
         assert 'Online test [Source](<https://reports.test/interview_(online)>).' in result.reply
         assert 'Supervisor interview [Source](<https://candidates.test/report>).' in result.reply
         assert 'Sources:' not in result.reply and '[f1]' not in result.reply
+        assert all(name in result.reply for name in names)
     asyncio.run(run())
+
+
+def test_many_references_still_reject_an_unknown_declared_fact():
+    refs=[f'f{i}' for i in range(1,7)]
+    with pytest.raises(AIError) as caught:
+        fact_citations('Reported interviews [f1].',refs,{ref:[A] for ref in refs[:-1]})
+    assert caught.value.violations==({'field':'references','issue':'unknown_fact_reference'},)

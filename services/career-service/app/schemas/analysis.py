@@ -403,8 +403,8 @@ class ResearchContext(Contract):
 
 
 class ResearchCoverage(Contract):
-    # Keep historical mixed-provider records readable; new acquisition uses Brave only.
-    platform: Literal['brave','reddit']
+    # Keep historical mixed-provider records readable beside configured search.
+    platform: Literal['brave','reddit','deepseek']
     status: Literal['succeeded','no_findings','unavailable','not_connected']
     round: int = Field(default=0,ge=0,le=5)
     useful_sources:int|None=Field(default=None,ge=0,le=6)

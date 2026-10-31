@@ -29,6 +29,20 @@ def test_http_requires_explicit_development_setting(monkeypatch):
     assert Extractor().base_url.startswith('http://fixture')
 
 
+@pytest.mark.parametrize('provider_class',[Extractor,ConversationRouter,Interpreter])
+@pytest.mark.parametrize('key',['','preserved-cloud-key'])
+def test_local_ollama_is_keyless_and_never_forwards_cloud_credentials(monkeypatch,provider_class,key):
+    monkeypatch.setenv('APP_ENV','development')
+    monkeypatch.setenv('CV_LLM_BASE_URL','http://host.docker.internal:11434/v1')
+    monkeypatch.setenv('CV_LLM_ALLOW_HTTP','true')
+    monkeypatch.setenv('CV_LLM_MODEL','elo-deepseek-r1:1.5b')
+    monkeypatch.setenv('CV_LLM_API_KEY',key)
+    provider=provider_class()
+    assert provider.configured and provider._provider_headers()=={}
+    assert provider._provider_options()=={}
+    assert provider._request_timeout(60)==120 and provider._request_timeout(20)==60
+
+
 @pytest.mark.parametrize('finish,content,expected', [('stop', '{"items":[]}', True), ('length', '{"items":[]}', False), ('stop', 'not json', False)])
 def test_compatible_provider_contract_and_incomplete_output(monkeypatch, finish, content, expected):
     configure(monkeypatch)

@@ -32,7 +32,7 @@ class ResearchProgress(Model):
 
 class OpportunityView(Model):
     available:bool
-    availability_issues:list[Literal['research_disabled','reasoning_disabled','gemini_not_configured','brave_not_configured','brave_llm_context_required']]=Field(default_factory=list,max_length=5)
+    availability_issues:list[Literal['research_disabled','reasoning_disabled','gemini_not_configured','brave_not_configured','model_not_configured','search_not_configured','brave_llm_context_required']]=Field(default_factory=list,max_length=5)
     job_id:str|None
     career_target_id:DomainId
     status:Literal['pending','running','partial','completed','failed']

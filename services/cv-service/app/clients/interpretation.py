@@ -30,10 +30,11 @@ class Interpreter(Extractor):
                             'answer': answer, 'answer_revision': answer_revision})}], 'max_tokens': 5000,
             **self._provider_options()}
         try:
-            deadline = time.monotonic() + 25
-            with httpx.Client(timeout=httpx.Timeout(20, connect=5), follow_redirects=False, trust_env=False) as client:
+            timeout=self._request_timeout(20)
+            deadline = time.monotonic() + timeout + 5
+            with httpx.Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=False) as client:
                 with client.stream('POST', self.base_url + '/chat/completions', json=payload,
-                        headers={'Authorization': 'Bearer ' + self.api_key}) as response:
+                        headers=self._provider_headers()) as response:
                     response.raise_for_status()
                     data = bytearray()
                     for chunk in response.iter_bytes():

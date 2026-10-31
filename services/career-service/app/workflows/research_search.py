@@ -47,7 +47,8 @@ def next_query(state,context):
 
 async def renew(workflow,state):
     await workflow.valid(state)
-    expires=now()+timedelta(seconds=240)
+    local=getattr(getattr(workflow.app.state.ai,'settings',None),'provider',None)=='local'
+    expires=now()+timedelta(seconds=660 if local else 240)
     await thread(workflow.db.career_state.update_one,{'_id':state['owner'],'workspace.run_id':state['run']},
                  {'$set':{'workspace.worker_until':expires}})
     token=state.get('cache',{}).get('token')
@@ -105,7 +106,7 @@ async def assess(workflow,state):
     reserve=40+getattr(context,'timeout_seconds',45)+primary+5
     out_of_time=budget is not None and budget.when() is not None and budget.when()-asyncio.get_running_loop().time()<reserve
     exhausted=round>=MAX_SEARCHES or stalled>=2 or out_of_time
-    coverage={'platform':'brave','status':'succeeded' if useful else 'no_findings','round':round-1,
+    coverage={'platform':getattr(getattr(workflow.app.state,'research_client',None),'provider','brave'),'status':'succeeded' if useful else 'no_findings','round':round-1,
               'useful_sources':len(useful),'target_sources':TARGET_SOURCES,
               'limit_reached':exhausted and len(useful)<TARGET_SOURCES}
     await thread(workflow.workspaces.phase,state['owner'],state['session'],state['run'],'researching',

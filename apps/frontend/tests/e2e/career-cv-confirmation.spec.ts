@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {careerFixture} from './career-fixture';
 
 test('canonical goal confirmation is explicit, survives reload and must follow the current revision',async({page})=>{
  await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
@@ -18,8 +19,8 @@ test('canonical goal confirmation is explicit, survives reload and must follow t
    return route.fulfill({json:status()});
   }
   if(path.endsWith('/context/assessment'))return route.fulfill({json:{status:'no_cv',cv_uploaded:false,skills_evaluated:false}});
-  if(path.includes('/opportunity-research'))return route.fulfill({json:{available:false,availability_issues:['research_disabled'],status:'pending',categories:{},error_code:null,retry_after:null}});
-  return route.fulfill({json:{session_id:null,revision:version,kind:'jd',phase:'ready',current:{goal:goal(),selection_version:selection,dependent_results_need_review:false},research_id:null,coverage:[],error:null,retry_after:null}});
+  if(path.includes('/opportunity-research'))return route.fulfill({json:{available:false,job_id:null,career_target_id:id,availability_issues:['research_disabled'],status:'pending',categories:{},error_code:null,retry_after:null}});
+  return route.fulfill({json:careerFixture(route.request().url(),{session_id:null,revision:version,kind:'jd',phase:'ready',current:{goal:goal(),selection_version:selection,dependent_results_need_review:false},research_id:null,coverage:[],error:null,retry_after:null})});
  });
  await page.goto('/career-goal');const panel=page.getByRole('region',{name:'Goal confirmation for CV review'});
  await expect(panel.getByRole('button',{name:'Confirm this goal for CV review'})).toBeEnabled();expect(writes).toBe(0);await expect(page.getByText('Saved automatically',{exact:true})).toBeVisible();

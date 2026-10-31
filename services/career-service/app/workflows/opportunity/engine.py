@@ -63,9 +63,9 @@ def availability_issues(settings,ai,source):
     if not settings.enabled:return ['research_disabled']
     issues=[]
     if not getattr(getattr(ai,'settings',None),'enabled',False):issues.append('reasoning_disabled')
-    if not getattr(ai,'context_enabled',False):issues.append('gemini_not_configured')
-    if not callable(getattr(source,'collect_opportunity_query',None)) or not getattr(source,'configured',True):issues.append('brave_not_configured')
-    if getattr(source,'brave_mode','')!='llm_context':issues.append('brave_llm_context_required')
+    if not getattr(ai,'context_enabled',False):issues.append('gemini_not_configured' if getattr(getattr(ai,'settings',None),'provider','gemini')=='gemini' else 'model_not_configured')
+    if not callable(getattr(source,'collect_opportunity_query',None)) or not getattr(source,'configured',True):issues.append('brave_not_configured' if getattr(source,'provider','brave')=='brave' else 'search_not_configured')
+    if getattr(source,'provider','brave')=='brave' and getattr(source,'brave_mode','')!='llm_context':issues.append('brave_llm_context_required')
     return issues
 
 def merge(left,right):return {**left,**right}
@@ -82,6 +82,8 @@ class OpportunityEngine:
         self.tasks={};self.stopping=False;self.slots=asyncio.Semaphore(settings.concurrency)
         source=app.state.research_client
         self.source=source.for_opportunity() if callable(getattr(source,'for_opportunity',None)) else source
+        if getattr(self.source,'provider','brave')!='brave':
+            self.store.research.policy+=':'+self.source.cache_policy
         self.availability_issues=availability_issues(settings,ai,self.source)
         self.available=not self.availability_issues
         graph=StateGraph(State)
@@ -236,7 +238,7 @@ class OpportunityEngine:
             waits=job.get('source_waits',{}).get(category,0)
             if waits<self.settings.retries:
                 pending=True
-                await thread(self.store.update,job['_id'],job['worker_token'],next_attempt_at=now()+timedelta(seconds=error.retry_after),**{f'source_waits.{category}':waits+1})
+                await thread(self.store.update,job['_id'],job['worker_token'],next_attempt_at=now()+timedelta(seconds=error.retry_after),provider=error.provider,limit_scope='provider',**{f'source_waits.{category}':waits+1})
         except (GoalError,TimeoutError,ValueError) as error:
             error_code='source_timeout' if isinstance(error,TimeoutError) else 'source_unavailable'
             logger.warning('category=%s error_code=%s exception_type=%s',category,error_code,type(error).__name__)
@@ -397,7 +399,7 @@ class OpportunityEngine:
             phase=('waiting_quota' if cooling else 'researching') if pending else 'research_failed' if failed else 'ready'
             waiting=phase=='waiting_quota'
             retry=max(1,int((job['next_attempt_at']-now()).total_seconds())) if waiting else None
-            message=('The previous AI service wait will resume automatically.' if job.get('limit_scope')=='user' else 'The model provider requested a cooldown. Research will resume automatically.') if waiting and code=='rate_limited' else 'Brave is rate limited; research will resume automatically.' if waiting and code=='source_rate_limited' else 'Interview research is still pending.' if waiting else 'Some research categories could not finish. Available findings remain readable.'
+            message=('The previous AI service wait will resume automatically.' if job.get('limit_scope')=='user' else 'The model provider requested a cooldown. Research will resume automatically.') if waiting and code=='rate_limited' else 'The search provider is rate limited; research will resume automatically.' if waiting and code=='source_rate_limited' else 'Interview research is still pending.' if waiting else 'Some research categories could not finish. Available findings remain readable.'
             await thread(self.app.state.workspace_store.phase,job['owner'],job['session'],job['run'],phase,research_id=record.id,
                 error=None if phase in ('ready','researching') else message,error_code=None if phase in ('ready','researching') else code or 'research_unavailable',retry_after=retry,limit_scope=job.get('limit_scope'),provider=job.get('provider'))
         except GoalError:pass  # A replacement goal cannot be overwritten by this historical run.

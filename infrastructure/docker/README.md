@@ -12,13 +12,22 @@ The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV
 
 ## Configuration
 
-The public [`.env.example`](.env.example) lists all active deployment inputs, grouped by service: gateway/auth/email, scoped database passwords, Career LLM/research and limits, CV model/storage/usage settings, and separate Assessment/Roadmap database passwords and Gemini model keys. Keep every user-configurable deployment value in the single ignored `infrastructure/docker/.env`; do not add per-service environment files. Agents may maintain the public template. Configure private values yourself, preserving existing database passwords. Agents must not inspect private environment files. Career uses `AI_ENABLED`, `CAREER_LLM_API_KEY`, `CAREER_LLM_MODEL` and `CAREER_RESEARCH_API_KEY`; its default reasoning model is `gemini-3.5-flash-lite`. CV has a separate configurable OpenAI-compatible adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
+The public [`.env.example`](.env.example) lists all active deployment inputs, grouped by service: gateway/auth/email, scoped database passwords, Career LLM/research and limits, CV model/storage/usage settings, and separate Assessment/Roadmap database passwords and Gemini model keys. Keep every user-configurable deployment value in the single ignored `infrastructure/docker/.env`; do not add per-service environment files. Agents may maintain the public template. Configure private values yourself, preserving existing database passwords. Agents must not inspect private environment files. Career uses `AI_ENABLED`, `CAREER_LLM_PROVIDER`, `CAREER_LLM_BASE_URL`, `CAREER_LLM_RESPONSE_MODE`, `CAREER_LLM_MODEL`, `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_PROVIDER` and `CAREER_RESEARCH_API_KEY`. The public template selects local DeepSeek-compatible inference plus Brave; production can select DeepSeek cloud plus DeepSeek Search. See [model/search setup](../../docs/setup.md#career-model-and-search-configuration). CV has a separate configurable OpenAI-compatible adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
+
+The local profile uses `elo-deepseek-r1:1.5b` (an Ollama alias with 16,384 context
+tokens), `AI_CONTEXT_TOKENS=16384`, `CAREER_LOCAL_TIMEOUT_SECONDS=45` and
+`OPPORTUNITY_RUN_SECONDS=600`. Model calls are serialized per Career worker;
+cloud providers ignore the local deadline setting. Create the alias and apply private
+values using the setup guide above, then rebuild/recreate Career and restart the
+gateway for its 610-second Career model-route read timeout. Alias creation reuses
+existing weights and does not run inference.
 
 Career credentials are now named `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY`.
 Rename the previous `GEMINI_API_KEY` / `BRAVE_API_KEY` entries yourself, preserving
-values; the providers remain Gemini / Brave. Deprecated names are read only when
-the corresponding new variable is absent. An explicitly blank new variable overrides
-the legacy key. Each credential is injected into Career only, never the frontend or CV.
+values when retaining Gemini / Brave. Compose requires these canonical names; it no
+longer relabels a legacy credential when providers change. Direct non-Compose
+processes still support each legacy alias only for its own provider and only when
+the canonical key is absent. An explicitly blank canonical key disables that credential. Each credential is injected into Career only, never the frontend or CV.
 CV keeps its independent `CV_LLM_API_KEY`; no service-specific `.env` file is needed
 for Compose. Fixed internal API URLs/database wiring and the CV volume path remain
 in Compose. Code-level constants and scaffold services do not gain unused variables.
@@ -28,6 +37,13 @@ After applying private setting changes, recreate the affected containers with
 not apply changed environment values. Rebuild only when the application image also
 needs updated source/dependencies or build-time values (such as the production frontend
 Google client ID); hot-reload mounts pick up these Python readers.
+
+After recreating backend containers, restart the gateway once every upstream service
+is running. NGINX resolves the configured service names on startup/reload; an unchanged
+gateway can keep old container addresses and return 502 for Profile account access.
+If a service has exited, fix its startup error first: a missing upstream DNS record
+can prevent the gateway from reloading. CV requires its per-owner model concurrency
+limit to be strictly lower than its global limit (defaults `1` and `3`).
 
 The implemented services communicate through authenticated APIs. CV receives `CAREER_SERVICE_URL`; Profile receives `CV_SERVICE_URL` for explicit source attachment; Career receives its CV API URL. No service reads another service's database. Tests use `compose.test.yaml` and deterministic synthetic model responses, with explicit synthetic settings and `--env-file /dev/null` in isolated projects.
 
@@ -99,3 +115,18 @@ This improves JavaScript-page support; it does not guarantee access to blocked s
 ## Assessment and Roadmap adviser services
 
 The active stack now includes separately scoped Assessment and Roadmap services/databases. Apply the [new required settings](../../docs/setup.md#assessment-and-roadmap-adviser) yourself before rebuilding. Their gateway routes stay on `/api/v1`; no additional service host ports are opened. `init-planning.js` creates missing scoped users without resetting existing credentials. Profile/CV/Career images now build from repository root to install the shared skill registry package. Runtime app source mounts remain `/service/app`; shared-package changes require rebuilding the images. No environment files need to be mounted in an image or test.
+
+The all-service local profile points Career, CV, Assessment and Roadmap at the same
+1.5B Ollama alias. Assessment/Roadmap receive only their own model endpoint and
+HTTP-permission settings plus APP_ENV; keys remain service-scoped. HTTP is explicitly
+development-only and local requests omit cloud credentials. Profile, Dashboard and
+Review have no active model calls. See the setup guide for switching back to HTTPS.
+
+## Disposable Career flow verification
+
+Use `python infrastructure/testing/run-career-flow.py --mode both` from repository
+root. It applies `compose.career-test.yaml` only to its own disposable project, uses
+`--env-file /dev/null` and synthetic settings, and cleans up its volumes. The test-only
+factory provides controlled empty public retrieval; fixture mode additionally serves
+finite labelled SDK responses, while local mode calls `deepseek-r1:1.5b`. Never apply
+this override to a normal deployment. See [Career test instructions](../../services/career-service/tests/README.md#reproduce-the-complete-career-extraction-journey).

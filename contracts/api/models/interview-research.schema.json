@@ -761,7 +761,8 @@
         "platform": {
           "enum": [
             "brave",
-            "reddit"
+            "reddit",
+            "deepseek"
           ],
           "title": "Platform",
           "type": "string"

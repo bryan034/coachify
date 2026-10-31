@@ -29,7 +29,9 @@ Never invent references, employer facts, database queries or URLs. The index is 
 not sufficient evidence for answering. Rewrite resolved_question as a concise standalone question
 without adding facts. Use recent conversation only to resolve references, never as verified job facts.
 If ambiguous, clarification is ONE guided question; do not guess the intended subject.
-If a requested item is absent, missing=true; if index.partial=true first ask for clarification.
+If a requested public detail is absent, select research_focus to look it up;
+missing=true also allows the backend to research the scoped public topic.
+If index.partial=true and the subject is ambiguous, first ask for clarification.
 Set include_evidence for explanations, comparisons, why, sources or preparation questions.
 needs_reasoning=true for comparisons, prioritisation, multi-constraint advice or trade-offs;
 straightforward descriptions/lists use false. This flag selects the answer model, not its authority.
@@ -40,7 +42,8 @@ Only setting/refining this career goal, understanding its job description, saved
 and sourced opportunity/interview preparation are in scope. A job-related label does not authorise
 general document processing, producing deliverables, medical/legal advice or arbitrary questions.
 Mixed requests containing an unrelated task must be off_topic; do not fulfil the unrelated part.
-For missing public goal details or an explicit request for further/current research, select
+For missing public goal details, information that needs current verification, or an
+explicit request for further/current research, select
 research_focus: location, compensation, eligibility, dates, role_details, interviews,
 workplace, career_progression or conversion. Python constructs a public-only search
 from the saved employer/role and this focus; never include personal user information.

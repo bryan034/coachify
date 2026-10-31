@@ -1,4 +1,5 @@
 import { ApiError } from './profile';
+import {careerPreview,record,validCareerResponse} from './career-response';
 export type CareerPreview = { kind: 'url' | 'document'; text: string; source_name: string; source_url?: string | null; notices: string[] };
 export async function importCareer(path: 'url' | 'document', body: string | FormData, token: string, signal: AbortSignal): Promise<CareerPreview> {
  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/career/imports/${path}`, {
@@ -8,9 +9,9 @@ export async function importCareer(path: 'url' | 'document', body: string | Form
  const result = await response.json().catch(() => ({}));
  if (!response.ok) {
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired', { detail: token }));
-  throw new ApiError(typeof result.detail === 'string' ? result.detail : response.status === 413 ? 'Choose a file up to 10 MiB.' : 'The preview service is unavailable. Retry or paste the description.', response.status);
+  throw new ApiError(record(result)&&typeof result.detail === 'string' ? result.detail : response.status === 413 ? 'Choose a file up to 10 MiB.' : 'The preview service is unavailable. Retry or paste the description.', response.status);
  }
- if (!result.text || typeof result.text !== 'string' || Array.from(result.text).length > 20_000 || !['url','document'].includes(result.kind) || !Array.isArray(result.notices))
+ if (!careerPreview(result))
   throw new Error('The source returned an invalid preview. Retry or paste the description.');
  return result;
 }
@@ -25,7 +26,7 @@ export type GoalDraft = {
  cv: {mode:'none'|'temporary'|'saved';filename:string|null;cv_id:string|null;version:number|null;extraction_version:string|null};
 };
 export type DiscoveryEvidence={research_id:string;selected_area:string;related_roles:string[];specificity:'field'|'role_area'|'specialisation';listings_analysed:number;employers_analysed:number;coverage:'good'|'limited'|'insufficient';source_ids:string[];researched_at:string};
-export type SavedGoal = {discovery?:DiscoveryEvidence|null; _id:string; version:number; target_type:'specific_job'|'career_exploration';role:string;field:string;
+export type SavedGoal = {job_dates?:JobDate[];discovery?:DiscoveryEvidence|null; _id:string; version:number; target_type:'specific_job'|'career_exploration';role:string;field:string;
  employment_type?:'internship'|'full_time'|'part_time'|'contract'|'unknown';company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
  summary?:string|null;responsibilities?:string[];non_skill_requirements?:ReviewCondition[];
  skills:ReviewSkill[];interests:string[];preferences:string[];readiness:'pending'|'ready';
@@ -42,12 +43,17 @@ export async function careerApi<T>(path:string,token:string, options:RequestInit
  const response=await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/career${path}`,{
   ...options,cache:'no-store',headers:{Authorization:`Bearer ${token}`,...(typeof options.body==='string'?{'Content-Type':'application/json'}:{}),...options.headers},
  });
- const body=await response.json().catch(()=>({}));
+ const body:unknown=await response.json().catch(()=>null);
  if(!response.ok){
   if(response.status===401)window.dispatchEvent(new CustomEvent('elo:expired',{detail:token}));
-  throw new CareerApiError(typeof body.detail==='string'?body.detail:'Career Goal is unavailable. Please retry.',response.status,body.code,body.retry_after,typeof body.operation_id==='string'?body.operation_id:undefined);
+  const error=record(body)?body:{};
+  throw new CareerApiError(typeof error.detail==='string'?error.detail:'Career Goal is unavailable. Please retry.',response.status,typeof error.code==='string'?error.code:undefined,typeof error.retry_after==='number'?error.retry_after:undefined,typeof error.operation_id==='string'?error.operation_id:undefined);
  }
+ assertCareerResponse(path,body);
  return body as T;
+}
+export function assertCareerResponse(path:string,body:unknown):void{
+ if(!validCareerResponse(path,body))throw new CareerApiError('Career returned an invalid response. Retry loading your saved goal.',502,'invalid_response');
 }
 export async function importExplorationCV(file:File,token:string,signal:AbortSignal):Promise<CareerPreview>{
  const body=new FormData();body.set('file',file);
@@ -79,13 +85,13 @@ export type IntelligenceFinding={finding_id:string;field:string;value:string;con
 export type ResearchOutcome='findings_found'|'no_relevant_sources'|'information_not_found'|'validation_failed'|'provider_failed';
 export type IntelligenceResult={source_ids?:string[];outcome?:ResearchOutcome|null;status:'pending'|'running'|'completed'|'partial'|'failed'|'not_applicable';findings:IntelligenceFinding[];missing_fields:string[];warnings:string[];error_code:string|null;researched_at:string|null;expires_at:string|null;searches:number;model_calls:number;latency_ms:number;estimated_cost_usd:number|null};
 export type IntelligenceSummary={overview_refs:string[];key_takeaway_refs:string[];consideration_refs:string[]};
-export type OpportunityAvailabilityIssue='research_disabled'|'reasoning_disabled'|'gemini_not_configured'|'brave_not_configured'|'brave_llm_context_required';
+export type OpportunityAvailabilityIssue='research_disabled'|'reasoning_disabled'|'gemini_not_configured'|'brave_not_configured'|'brave_llm_context_required'|'model_not_configured'|'search_not_configured';
 export type OpportunityView={available:boolean;availability_issues?:OpportunityAvailabilityIssue[];job_id:string|null;career_target_id:string;status:'pending'|'running'|'partial'|'completed'|'failed';finished?:boolean;categories:Partial<Record<IntelligenceCategory,IntelligenceResult>>;sources?:ResearchSource[];summary?:IntelligenceSummary;research_id?:string|null;research_version?:number|null;updated_at?:string|null;error_code:string|null;retry_after?:number|null};
 
-export type WorkspaceProgress=Pick<CareerWorkspace,'session_id'|'phase'|'revision'|'activities'|'error'|'error_code'|'retry_after'|'limit_scope'|'provider'|'research_id'>&{goal_id:string|null;selection_version:number;result_version:string|null};
+export type WorkspaceProgress=Pick<CareerWorkspace,'session_id'|'phase'|'revision'|'activities'|'error'|'error_code'|'retry_after'|'limit_scope'|'provider'|'research_id'|'edit_question'>&{goal_id:string|null;selection_version:number;result_version:string|null;categories?:Partial<Record<IntelligenceCategory,{status:IntelligenceResult['status'];error_code:string|null}>>};
 export async function refreshWorkspace(previous:CareerWorkspace,token:string,signal:AbortSignal):Promise<CareerWorkspace>{
  const progress=await careerApi<WorkspaceProgress>('/workspace/progress',token,{signal});
- if(progress.session_id!==previous.session_id||progress.goal_id!==previous.current.goal?._id||progress.revision!==previous.current.goal?.version||progress.selection_version!==previous.current.selection_version||progress.research_id!==previous.research_id)
+ if(progress.session_id!==previous.session_id||progress.goal_id!==(previous.current.goal?._id??null)||progress.revision!==(previous.current.goal?.version??0)||progress.selection_version!==previous.current.selection_version||progress.research_id!==previous.research_id)
   return careerApi<CareerWorkspace>('/workspace',token,{signal});
  return {...previous,...progress};
 }

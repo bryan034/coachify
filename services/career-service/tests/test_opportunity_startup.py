@@ -44,8 +44,7 @@ def test_startup_enables_research_with_keys_independently_of_legacy_modes(monkey
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
     mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_startup_test_'+uuid4().hex]
-    monkeypatch.setattr(AISettings,'from_env',classmethod(lambda cls:pytest.fail('Unused provider settings must not be loaded')))
-    monkeypatch.setattr(GeminiSettings,'reasoning_from_env',classmethod(lambda cls:GeminiSettings(enabled=True,api_key='synthetic-gemini')))
+    monkeypatch.setattr(AISettings,'from_env',classmethod(lambda cls:AISettings(enabled=True,api_key='synthetic-gemini')))
     monkeypatch.setattr(OpportunitySettings,'from_env',classmethod(lambda cls:OpportunitySettings()))
     monkeypatch.setattr(SourceAPIs,'from_environment',classmethod(lambda cls,client:SourceAPIs(client,brave_key='synthetic-brave',brave_mode=mode)))
     profile=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(lambda _:httpx.Response(200,json={})))

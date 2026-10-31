@@ -47,7 +47,7 @@ other occupational statuses use their last education.
 
 | Endpoint | What it does |
 |---|---|
-| `GET /api/v1/profile/companies?q=...&limit=20` | Search 7,120 international/Singapore employers (including a 713-entry Singapore supplement), prioritised by reported employee count. |
+| `GET /api/v1/profile/companies?q=...&limit=20` | Search 7,120 international/Singapore employers (including a 713-entry Singapore supplement), alphabetical by name for an empty query; typed searches prioritise reported employee count. |
 | `GET /api/v1/profile/industries?q=...&limit=20` | Search common industry suggestions. |
 
 Both fields also accept manual names. Reference lists stay in JSON, outside MongoDB;
