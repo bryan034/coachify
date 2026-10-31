@@ -460,3 +460,7 @@ The isolated fixture/live-model browser runner and its prerequisites are documen
 in [Career tests](../services/career-service/tests/README.md#reproduce-the-complete-career-extraction-journey).
 It never loads private environment files. Live inference uses `deepseek-r1:1.5b`;
 public retrieval is controlled, so the run does not establish live-search quality.
+Each run retains a uniquely named JSON attempt report and browser artifacts;
+`--repeat 3` records three fixed attempts per mode without discarding failures.
+Current exact-model limitations are recorded in the
+[local-model verification](../services/career-service/tests/LOCAL_MODEL_VERIFICATION.md).

@@ -5,9 +5,11 @@ Never loads deployment env files. The disposable project is always removed unles
 controlled empty public retrieval in both modes. This is not a live-search test.
 """
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import time
@@ -21,6 +23,11 @@ ROOT=Path(__file__).resolve().parents[2]
 
 def run(args):
     project='elo-career-flow-'+uuid4().hex[:8]
+    report_path=ROOT/'apps/frontend/test-results/career-flow/reports'/f'{project}.json'
+    report={'project':project,'public_retrieval':'synthetic-empty','attempts':[]}
+    def save_report():
+        report_path.parent.mkdir(parents=True,exist_ok=True)
+        report_path.write_text(json.dumps(report,indent=2)+'\n')
     env={name:os.environ[name] for name in ('PATH','TMPDIR') if name in os.environ}
     env.update({
         'APP_ENV':'development','AUTH_MODE':'local_test','COMPOSE_PROFILES':'development',
@@ -79,13 +86,32 @@ def run(args):
                         'use':{'baseURL':env['PROFILE_E2E_BASE_URL'],'trace':'retain-on-failure','screenshot':'only-on-failure'},
                     })+');\n')
                     execute(['npx','--no-install','playwright','test','--config',str(config)],cwd=ROOT/'apps/frontend')
-            print(json.dumps({'testing':mode,'model':env['CAREER_LLM_MODEL']}),flush=True)
-            execute(['npx','--no-install','playwright','test','--config','playwright.integration.config.ts',
-                '--output','test-results/career-flow/'+mode,'career-extraction-flow.spec.ts'],cwd=ROOT/'apps/frontend')
-    except BaseException:
+            for attempt in range(1,args.repeat+1):
+                print(json.dumps({'testing':mode,'model':env['CAREER_LLM_MODEL'],'attempt':attempt}),flush=True)
+                started=time.monotonic()
+                since=datetime.now(timezone.utc).isoformat()
+                result=subprocess.run(['npx','--no-install','playwright','test','--config','playwright.integration.config.ts',
+                    '--output',f'test-results/career-flow/{project}/{mode}-{attempt}','career-extraction-flow.spec.ts'],
+                    cwd=ROOT/'apps/frontend',env=env,check=False)
+                logs=subprocess.run([*compose,'logs','--no-color','--since',since,'career-service'],cwd=ROOT,env=env,
+                    capture_output=True,text=True,check=False)
+                # Retain only content-free diagnostics. Never retain raw provider
+                # output, request bodies, account tokens or arbitrary service logs.
+                diagnostics=[line.split(' | ',1)[-1] for line in logs.stdout.splitlines()
+                    if re.search(r'\b(?:ai_usage stage=|structured_recovery node=|operation_failed operation_id=)',line)]
+                report['attempts'].append({'mode':mode,'model':env['CAREER_LLM_MODEL'],'attempt':attempt,
+                    'passed':result.returncode==0,'seconds':round(time.monotonic()-started,2),
+                    'diagnostics':diagnostics})
+                save_report()
+        if any(not attempt['passed'] for attempt in report['attempts']):
+            raise RuntimeError('Career journey failed; see '+str(report_path))
+    except BaseException as error:
+        report['error_type']=type(error).__name__
         subprocess.run([*compose,'logs','--tail=80','career-service'],cwd=ROOT,env=env,check=False)
         raise
     finally:
+        save_report()
+        print('Verification report: '+str(report_path),flush=True)
         if args.keep:print('Retained disposable project: '+project,flush=True)
         else:subprocess.run([*compose,'down','--volumes','--remove-orphans'],cwd=ROOT,env=env,check=False)
 
@@ -97,5 +123,6 @@ if __name__=='__main__':
     parser.add_argument('--mail-port',type=int,default=8036)
     parser.add_argument('--no-build',action='store_true',help='Use the previously built verification images.')
     parser.add_argument('--skip-boundary',action='store_true',help='Run only the real-service journey.')
+    parser.add_argument('--repeat',type=int,choices=range(1,6),default=1,help='Run every journey this many times; record failures without retry-until-success.')
     parser.add_argument('--keep',action='store_true',help='Retain this isolated project for diagnosis.')
     run(parser.parse_args())

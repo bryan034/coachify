@@ -314,11 +314,11 @@ def strict_schema(schema):
 
 
 def compact_schema(schema):
-    """Remove annotations, retaining validation and strict-provider constraints."""
+    """Remove titles/defaults while retaining field semantics and constraints."""
     if isinstance(schema, dict):
         return {key: ( {name: compact_schema(value) for name, value in item.items()}
                       if key in ('properties', '$defs') else compact_schema(item))
-                for key, item in schema.items() if key not in ('title', 'description', 'default')}
+                for key, item in schema.items() if key not in ('title', 'default')}
     if isinstance(schema, list):
         return [compact_schema(item) for item in schema]
     return schema

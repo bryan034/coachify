@@ -153,8 +153,8 @@ From `services/career-service`, run:
 PYTHONPATH=../../packages/elo-shared:. ../../.venv/bin/python tests/local_model_probe.py
 ```
 
-The probe makes one request to local Ollama using the explicit
-`elo-deepseek-r1:1.5b` model, the actual `jd_scope` prompt and a fixed 8,000-character synthetic JD.
+The probe makes one request to local Ollama using the exact
+`deepseek-r1:1.5b` model, the actual `jd_scope` prompt and a fixed 8,000-character synthetic JD.
 Add `--compare-legacy` to compare the old 768-token cap with the current 8,192-token local cap. Add `--max-output-tokens 4096` to reproduce the
 previous identification limit; `--max-output-tokens 8192` tests the larger allowance.
 Use `--timeout 45` for this comparison: a longer timeout alone does not change the
@@ -188,8 +188,8 @@ source text and output cap) without invoking Ollama. The second sends that reque
 to `http://127.0.0.1:11434/v1/chat/completions` and prints the raw HTTP response,
 including any reasoning returned by the provider. Full content is opt-in and printed
 only to the invoking terminal; use public adverts only, never private CV/chat data.
-Use `--model deepseek-r1:1.5b` if that is the installed model name instead of the
-documented alias. These explicit settings bypass application configuration, queue,
+Use `--model elo-deepseek-r1:1.5b` only for a separately reported alias comparison.
+These explicit settings bypass application configuration, queue,
 automatic repair and persistence: this is a reproducible first-attempt scope probe,
 not interception of the running application's requests. It does not run extraction
 or web research. `--timeout` changes this diagnostic's HTTP timeout only.
@@ -290,6 +290,16 @@ select unused local ports (defaults 8093 and 8036). `--skip-boundary` reruns onl
 real-service journey. Do not point these tests at a personal/production database.
 
 Browser traces/screenshots are written under `apps/frontend/test-results/`.
+Journey artifacts use a unique project directory so subsequent runs cannot erase
+earlier failures. Each run also writes
+`apps/frontend/test-results/career-flow/reports/<project>.json`, with every attempt's
+result, elapsed time, model usage, corrections and terminal diagnostic codes.
+Use `--repeat 3` for three fixed attempts per mode; all attempts run and any failure
+keeps the command unsuccessful. Counts are per attempt, not retry-until-success.
+Extraction errors fail the browser journey immediately instead of waiting for the
+success control's three-minute timeout. The runner regression verifies failure
+retention, isolated settings and cleanup without launching Docker or any model.
+
 The opt-in integration spec is `career-extraction-flow.spec.ts`. Default integration
 runs skip it because its labelled fixture and empty research require the dedicated
 test application; normal production endpoints never mount the synthetic model route.
@@ -299,3 +309,7 @@ for downstream stages, response/body limits, malformed envelopes, compressed err
 HTTP-client ownership and a browser fixture validated against the backend response
 model. Frontend response tests cover nested shape failures and completed operation
 validation. The existing provider tests retain bounded retries and safe diagnostics.
+
+See [the 1 November verification record](LOCAL_MODEL_VERIFICATION.md) for observed
+results and the unresolved exact-model extraction limit. A fixture journey or
+scope-preflight pass must not be reported as a successful live extraction journey.

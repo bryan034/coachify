@@ -20,7 +20,12 @@ test.describe('Career extraction through real services',()=>{
   await expect(page.getByRole('textbox',{name:'Review and edit the preview'})).toHaveValue(source);
   await page.getByRole('button',{name:'Extract career goal'}).click();
   await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
-  await expect(page.getByRole('button',{name:'Role and research details'})).toBeEnabled({timeout:180_000});
+  await Promise.race([
+   expect(page.getByRole('button',{name:'Role and research details'})).toBeEnabled({timeout:180_000}),
+   page.getByRole('log').getByRole('alert').waitFor({state:'visible',timeout:180_000}).then(async()=>{
+    throw new Error('Career extraction failed: '+await page.getByRole('log').getByRole('alert').innerText());
+   }),
+  ]);
   await page.getByRole('button',{name:'Role and research details'}).click();
   await expect(page.getByRole('heading',{name:/Software Engineer/})).toBeVisible();
   await expect(page.getByText('Python · required')).toBeVisible();

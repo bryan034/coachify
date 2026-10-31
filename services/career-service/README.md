@@ -50,6 +50,8 @@ Observed progress describes completed/running stages, never hidden model reasoni
 After extraction and research finish, chat automatically loads the saved report and presents a concise overview as short, single-idea paragraphs with bold topic labels (for example, **Field:** and **Required skills:**), ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Saved goal cards are available immediately after extraction, while the composer waits for the combined response.
 
 Inference uses the OpenAI Python SDK with Pydantic-derived JSON schemas.
+Schema compaction preserves field descriptions, including exact date wording and
+source-evidence instructions, while removing generated titles and defaults.
 `CAREER_LLM_TOKEN_PARAMETER` selects `max_tokens` or `max_completion_tokens` when
 switching models. The local default is `json_schema_strict` for every stage,
 including routing, research planning, questions and edits. SDK retries are disabled;
