@@ -367,3 +367,9 @@ success, irrelevant/empty evidence, citation-gated append, invalid-answer handli
 and stale-goal rejection. Existing saved-first tests verify reuse, JSON/evidence
 reads, immutable/concurrent merges and owner isolation (MongoDB cases require an
 explicit disposable test database). Providers use synthetic responses.
+
+`test_pending_edit_routing.py` verifies that pending goal-edit clarification answers
+reach validated editing before either question router, including location/salary
+shortcuts, while unrelated task execution is refused. The MongoDB-backed
+`test_goal_edit_chat.py` retains multi-turn clarification, version, provenance and
+idempotent replay coverage.

@@ -7,6 +7,14 @@ from app.ai.routing import chat_models
 
 async def focused_chat(request,account,row,body):
     """Route -> projected retrieval -> answer. Only ambiguous questions need routing AI."""
+    from app.domain.questions import direct_route,REFUSAL
+    from app.schemas.jd import JDReply
+    # Clarification answers belong to the active edit, even when they look like
+    # a standalone location/salary question. Keep the refusal guard first.
+    if row['workspace'].get('edit_draft'):
+        chosen=direct_route(body.message)
+        if chosen is not None and chosen.topic=='off_topic':return JDReply(reply=REFUSAL,proposed_skills=None)
+        return None
     from app.domain.question_memory import direct_public_plan
     if getattr(chat_models(request.app.state),'context_enabled',False) or direct_public_plan(body.message):
         from app.workflows.context_chat import semantic_chat
@@ -16,17 +24,12 @@ async def focused_chat(request,account,row,body):
     from app.ai.adapter import Operation,AIError
     from app.ai.contracts import AIInput,Message
     from app.ai.qa_contracts import QuestionRoute
-    from app.domain.questions import direct_route,facts_for,REFUSAL,MISSING
+    from app.domain.questions import facts_for,MISSING
     from app.repositories.questions import QuestionStore
-    from app.schemas.jd import JDReply
     from fastapi.encoders import jsonable_encoder
     from starlette.concurrency import run_in_threadpool as thread
     repo=request.app.state.workspace_store
     store=QuestionStore(repo,request.app.state.research_store)
-    if row['workspace'].get('edit_draft'):
-        chosen=direct_route(body.message)
-        if chosen is not None and chosen.topic=='off_topic':return JDReply(reply=REFUSAL,proposed_skills=None)
-        return None
     title=await thread(store.metadata,account,row['workspace']['review_id'])
     revision=str(body.expected_version)
     async def generate(stage,context,history=()):
