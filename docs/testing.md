@@ -469,3 +469,10 @@ Chat display browser tests distinguish safe terminal failure explanations from r
 provider diagnostics: invalid answers show an actionable Retry alert while private
 provider text stays hidden. Synthetic research sources include their required
 platform metadata so response validation succeeds before scroll/citation checks.
+
+Career summary recovery checks additionally constrain output references to the current
+request's saved-fact catalogue. After bounded invalid-summary repairs, a formatted
+saved-evidence fallback retains approved citations, coverage, scope/confidence and
+missing information while discarding rejected model prose. Stale-goal, provider-auth
+and quota errors do not become successful fallbacks. These checks use synthetic
+providers and establish recovery behaviour, not live-model answer quality.

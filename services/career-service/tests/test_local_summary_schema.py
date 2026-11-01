@@ -53,14 +53,17 @@ def test_real_local_adapter_summary_preserves_validation_and_attaches_only_saved
         if defect == 'wrong_shape': output = {'role': 'Analyst', 'references': ['research_0']}
         if defect == 'unknown_reference': output['blocks'][0]['references'] = ['invented_fact']
         if defect == 'no_research': output['blocks'][0]['references'] = ['goal']
+        if defect and defect!='wrong_shape':output['blocks'][0]['text']='UNAPPROVED_MODEL_CLAIM'
         def handler(http_request):
             calls.append(json.loads(http_request.content))
             return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(output)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             request.app.state.ai = AIAdapter(settings(), client)
             if defect:
-                with pytest.raises(AIError, match='invalid_output'):
-                    await summarize(request, 'owner', body)
+                result=await summarize(request, 'owner', body)
+                assert 'UNAPPROVED_MODEL_CLAIM' not in result['reply']
+                assert 'Showing saved facts' in result['reply']
+                assert 'An interview is reported. [Source](<https://example.test/job>)' in result['reply']
             else:
                 result = await summarize(request, 'owner', body)
                 assert '**Interview expectations:** An interview is reported.' in result['reply']
@@ -68,6 +71,7 @@ def test_real_local_adapter_summary_preserves_validation_and_attaches_only_saved
                 assert result['reply'].endswith('Ask me anything about this goal set!')
                 assert len(calls) == 1
         assert calls and all(item['response_format']['type'] == 'json_schema' for item in calls)
+        assert all(item['response_format']['json_schema']['schema']['$defs']['SummaryBlock']['properties']['references']['items']['enum']==['goal','coverage_interviews','research_0'] for item in calls)
         assert len(checks) >= 3
     asyncio.run(run())
 

@@ -34,6 +34,7 @@ def test_changed_workspace_releases_chat_during_long_quota_wait(monkeypatch,work
                 goals=NS(current=lambda owner:{'goal':goal}))
         class Questions:
             def __init__(self,*args):pass
+            def save_question(self,*args):pass
             def metadata(self,*args):return {'role':'Data Analyst','field':'Data'}
             def fetch(self,*args):return {'role':'Data Analyst','field':'Data'},{}
         monkeypatch.setattr('app.workflows.context_chat.QuestionStore',Questions)
@@ -90,6 +91,7 @@ def test_public_research_quota_rechecks_current_workspace(monkeypatch,outcome):
         repo=NS(check=check,reviews=NS(version=lambda *args:current['version']))
         class Questions:
             def __init__(self,*args):pass
+            def save_question(self,*args):pass
             def fetch(self,*args):return {'role':'Analyst','field':'Data','company':'Example'},{}
         monkeypatch.setattr('app.workflows.context_chat.QuestionStore',Questions)
         def model_response(request):

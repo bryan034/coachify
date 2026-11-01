@@ -1101,6 +1101,37 @@
       ],
       "default": null
     },
+    "question_focus": {
+      "anyOf": [
+        {
+          "enum": [
+            "location",
+            "compensation",
+            "eligibility",
+            "dates",
+            "role_details",
+            "interviews",
+            "workplace",
+            "career_progression",
+            "conversion"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Question Focus"
+    },
+    "question_findings": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "maxItems": 12,
+      "title": "Question Findings",
+      "type": "array"
+    },
     "process": {
       "$ref": "#/$defs/InterviewProcess"
     },

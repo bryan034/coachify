@@ -47,7 +47,7 @@ completion settings can still lower these budgets; agents never read/change them
 
 Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
 
-After extraction and research finish, chat automatically loads the saved report and presents a concise overview as short, single-idea paragraphs with bold topic labels (for example, **Field:** and **Required skills:**), ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Saved goal cards are available immediately after extraction, while the composer remains open during research, summary generation and failures.
+After extraction and research finish, chat automatically loads the saved report and presents a concise overview with section headings and bold topic labels (for example, **Field:** and **Required skills:**), ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Failed reports produce a local digest of category failures and any retained cited findings without another model call, with Resume research available. `finished` means processing stopped, not that research succeeded. Progress distinguishes completed, partial and failed runs. Saved goal cards are available immediately after extraction, while the composer remains open during research, summary generation and failures.
 
 Inference uses the OpenAI Python SDK with Pydantic-derived JSON schemas.
 Schema compaction preserves field descriptions, including exact date wording and
@@ -71,7 +71,7 @@ prompt/schema input, reserved output and safety margin are budgeted in estimated
 tokens. Cloud JSON Object mode remains supported without assuming native schema
 support. The model returns plain-text blocks with backend-assigned fact references; Python
 escapes model text and attaches only saved source links beside each point. Unknown fact
-references fail validation. Follow-up answers resolve inline fact references to saved
+references fail validation. Each summary request restricts reference strings to the exact saved-fact catalogue in its decoding schema. If the overview remains invalid after bounded repairs, or exceeds its context allowance, Python formats the saved goal and cited findings with explicit coverage limits. Rejected model prose is discarded; the fallback does not run more research or change its status. Follow-up answers resolve inline fact references to saved
 links beside their claims; unapproved URLs fail validation.
 Follow-up answers can cite every supplied fact, including lists exceeding four
 references; each reference must still resolve to the retrieved snapshot.

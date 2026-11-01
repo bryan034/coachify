@@ -28,6 +28,7 @@ const activities:Record<string,string>={
  understanding_question:'Understanding your question about this goal…',
  searching_question:'Searching public sources for your question…',
  answering_question:'Structuring an answer from the available evidence…',
+ saving_question_findings:'Saving the verified public findings for future questions…',
  identifying_job:'Identifying the job title, employer, location and position…',
  extracting_requirements:'Extracting skills, responsibilities and other requirements…',
  planning_research:'Planning research for this role…',
@@ -39,7 +40,9 @@ const activities:Record<string,string>={
  checking_sources:'Checking sources against this career goal…',
  saving_goal:'Saving your career goal and its category cards…',
  preparing_summary:'Preparing your career-goal summary…',
- research_complete:'Research is complete. Available findings have been saved.',
+ research_complete:'Research has finished. Preparing the saved results…',
+ research_partial:'Research finished with incomplete coverage. Available findings have been saved.',
+ research_failed:'Research could not be completed. Your career goal remains saved.',
 };
 export function observedActivity(steps:string[]=[]){
  return steps.map(step=>activities[step]).filter(Boolean).at(-1);

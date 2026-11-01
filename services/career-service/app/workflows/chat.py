@@ -7,7 +7,8 @@ from app.ai.routing import chat_models
 
 async def focused_chat(request,account,row,body):
     """Route -> projected retrieval -> answer. Only ambiguous questions need routing AI."""
-    if getattr(chat_models(request.app.state),'context_enabled',False):
+    from app.domain.question_memory import direct_public_plan
+    if getattr(chat_models(request.app.state),'context_enabled',False) or direct_public_plan(body.message):
         from app.workflows.context_chat import semantic_chat
         return await semantic_chat(request,account,row,body)
     import json

@@ -137,6 +137,13 @@ one-hour expiry. Cache reuse itself has no paid call. Research status is explici
 supports `not_applicable`. A successful empty search is completed with missing fields;
 a technical failure is failed/partial, never a fabricated empty success.
 
+Terminal progress distinguishes completed, partial and failed runs. `finished=true`
+means the run stopped, including when all categories failed. Chat automatically
+requests a digest for every finished report. Failed reports use a local, formatted
+explanation of each category error and any retained findings rather than another
+provider call; Resume research remains available. Completed/partial reports use the
+goal-summary model with inline citations, section headings and bold topic labels.
+
 The workspace preserves category errors such as `rate_limited` or
 `source_rate_limited` while waiting, with the actual retry delay; it does not label
 these waits `research_unavailable`. Global failures distinguish `research_timeout`,
