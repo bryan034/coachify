@@ -1,7 +1,8 @@
 """Persisted leased work; fenced publication and cleanup survive process restarts."""
 import asyncio
+import logging
 from copy import deepcopy
-from uuid import uuid4
+from uuid import UUID, uuid4
 from pydantic import ValidationError
 from app.domain.capabilities import validate_extraction, effective_fingerprint
 from app.domain.errors import Conflict, CvError
@@ -10,6 +11,52 @@ from app.domain.storage import UploadCapacity
 from app.domain.model_usage import ModelUsage
 from app.domain.reconciliation import candidate_for, affected_sources
 from app.parsing.process import isolated_parse
+
+logger = logging.getLogger(__name__)
+
+# Only schema-owned locations and known error types may reach logs. Model output,
+# including extra field names and Pydantic messages, is untrusted private data.
+_ITEM_FIELDS = frozenset({'kind', 'title', 'description', 'explicit', 'evidence', 'skill_names',
+    'category', 'proficiency', 'experience_months', 'start_date', 'end_date', 'ongoing',
+    'context', 'supporting_items', 'uncertainties'})
+_LIST_FIELDS = frozenset({'skill_names', 'supporting_items', 'uncertainties'})
+_ERROR_TYPES = frozenset({'missing', 'extra_forbidden', 'literal_error', 'model_type', 'dict_type',
+    'list_type', 'string_type', 'string_too_short', 'string_too_long', 'string_pattern_mismatch',
+    'bool_type', 'int_type', 'float_type', 'greater_than_equal', 'less_than_equal',
+    'finite_number', 'too_short', 'too_long', 'value_error'})
+_MAX_DIAGNOSTIC_ERRORS = 16
+
+
+def _diagnostic_path(location, error_type):
+    if error_type == 'extra_forbidden': return 'other'
+    parts = tuple('[]' if type(part) is int else part for part in location)
+    if parts == (): return '$'
+    if parts == ('items',): return 'items'
+    if parts == ('items', '[]'): return 'items[]'
+    if len(parts) == 3 and parts[:2] == ('items', '[]') and parts[2] in _ITEM_FIELDS:
+        return 'items[].' + parts[2]
+    if len(parts) == 4 and parts[:2] == ('items', '[]') and parts[2] in _LIST_FIELDS and parts[3] == '[]':
+        return 'items[].' + parts[2] + '[]'
+    if parts == ('items', '[]', 'evidence', '[]'): return 'items[].evidence[]'
+    if (len(parts) == 5 and parts[:4] == ('items', '[]', 'evidence', '[]')
+            and parts[4] in {'block_id', 'excerpt'}):
+        return 'items[].evidence[].' + parts[4]
+    return 'other'
+
+
+def _safe_uuid(value):
+    try: return str(UUID(str(value)))
+    except (ValueError, TypeError, AttributeError): return 'unknown'
+
+
+def _log_invalid_extraction(error, claimed):
+    errors = error.errors(include_input=False, include_context=False, include_url=False)
+    summary = [(_diagnostic_path(entry.get('loc', ()), entry.get('type')),
+                entry.get('type') if entry.get('type') in _ERROR_TYPES else 'other')
+               for entry in errors[:_MAX_DIAGNOSTIC_ERRORS]]
+    logger.warning('CV extraction schema invalid cv_id=%s operation_id=%s errors=%s truncated=%s',
+                   _safe_uuid(claimed.get('_id')), _safe_uuid(claimed['operation'].get('id')),
+                   summary, len(errors) > _MAX_DIAGNOSTIC_ERRORS)
 
 
 class IngestionWorker:
@@ -45,7 +92,11 @@ class IngestionWorker:
             parsed = self.parser(self.files.read(claimed['_id']), '.' + claimed['file_type'], self.settings.max_file_bytes)
             output, metadata = self.model_usage.run(claimed['user_id'], self.extractor.extract, parsed['blocks'],
                 configured=getattr(self.extractor, 'configured', True))
-            items = validate_extraction(output, parsed['blocks'], claimed['_id'])
+            try:
+                items = validate_extraction(output, parsed['blocks'], claimed['_id'])
+            except ValidationError as exc:
+                _log_invalid_extraction(exc, claimed)
+                raise
             error = None
         except ValidationError:
             items, metadata, parsed = None, None, {}
