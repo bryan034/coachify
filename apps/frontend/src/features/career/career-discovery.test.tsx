@@ -21,8 +21,6 @@ function configure(handler:(path:string,options?:RequestInit)=>unknown){
 }
 async function open(){render(<CareerDiscovery/>);await screen.findByText(introduction);}
 function send(message='Software engineering, keep it broad'){
- const consent=screen.getByRole('checkbox',{name:/Allow elo/});
- if(!(consent as HTMLInputElement).checked)fireEvent.click(consent);
  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:message}});
  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
 }
@@ -59,9 +57,14 @@ it('opens with only the Python-supplied introduction and makes no mutation reque
 
 it('starts a session and automatic research only after the user sends a message',async()=>{
  configure(()=>({available:true,session:{...base,status:'researching',stage:'plan_research',messages:[...empty.messages,{role:'user',content:'Software engineering, keep it broad'},{role:'assistant',content:'Researching Software Engineering.'}]}}));
- await open();send();
+ await open();
+ expect(screen.queryByRole('checkbox',{name:/Allow elo/})).toBeNull();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ send();
  expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('');
  await screen.findByText('Planning job-listing searches');
+ const start=vi.mocked(careerApi).mock.calls.find(([path])=>path==='/discoveries')!;
+ expect(JSON.parse(start[2]!.body as string)).toEqual({consent:true});
  expect(screen.getAllByText(introduction)).toHaveLength(1);
  expect(screen.queryByRole('button',{name:'Confirm area and research jobs'})).toBeNull();
  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path.endsWith('/research')||path==='/goals/confirm')).toBe(false);
@@ -144,7 +147,8 @@ it('New chat clears history, recommendations, scope and the draft without postin
  expect(screen.getByRole('log').querySelectorAll('.agent-message')).toHaveLength(1);
  expect(screen.queryByText('Earlier advice')).toBeNull();expect(screen.queryByText('My old direction')).toBeNull();
  expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('');
- expect(screen.getByRole('checkbox',{name:/Allow elo/})).not.toBeChecked();
+ expect(screen.queryByRole('checkbox',{name:/Allow elo/})).toBeNull();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  expect(vi.mocked(careerApi).mock.calls.filter(([, ,options])=>options?.method==='POST')).toHaveLength(posts);
 });
 

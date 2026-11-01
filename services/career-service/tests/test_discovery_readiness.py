@@ -77,7 +77,8 @@ def test_removed_dictionaries_are_not_in_schema_and_legacy_broad_choice_is_prese
 
 def test_introduction_copy_and_legacy_opening_are_display_only():
     from app.domain.discovery_conversation import INTRODUCTION,LEGACY_INTRODUCTION,conversation_messages
-    assert 'I will ask questions to understand your interests and personalise your goal for you' in INTRODUCTION
+    assert 'career guidance assistant' in INTRODUCTION
+    assert 'ask questions to understand your interests and preferences' in INTRODUCTION
     assert 'one focused question' not in INTRODUCTION
     assert conversation_messages([{'role':'assistant','content':LEGACY_INTRODUCTION},
         {'role':'assistant','content':INTRODUCTION},{'role':'user','content':'Finance'}])==[{'role':'user','content':'Finance'}]

@@ -16,7 +16,7 @@ from app.ai.adapter import AIAdapter,AIError,Operation
 from app.ai.config import AISettings,GeminiSettings
 from app.ai.contracts import AIInput
 from app.ai.routing import ModelRouter,opportunity_models
-from app.ai.opportunity_contracts import QueryPlan,StructuredFindings
+from app.ai.opportunity_contracts import QueryPlan,StructuredFindings,structure_input
 from app.schemas.opportunity import CATEGORIES,Summary,OpportunityReport,CategoryResult
 from app.schemas.analysis import ResearchSource,ResearchContext
 from app.repositories.goals import GoalError,now
@@ -30,7 +30,7 @@ class Primary(AI):
             self.calls.append(request);data=json.loads(request.context)
             while self.wait:await asyncio.sleep(.02)
             if self.quota:self.quota=False;raise AIError('rate_limited',limit_scope='provider',retry_after=1)
-            text=data['sources'][0]['excerpt']
+            text=data['evidence'][0]['text']
             output=StructuredFindings(findings=[{'field':data['allowed_fields'][0],'value':'invented' if self.invalid else text,'refs':[0],'quotes':['fabricated excerpt' if self.invalid else text],'confidence':'medium','evidence_type':'candidate_reported','scope':'exact','conflict_group':None}])
             if kwargs.get('validate_output'):kwargs['validate_output'](output)
             return SimpleNamespace(data=output)
@@ -156,7 +156,7 @@ def test_quota_resume_does_not_repeat_paid_retrieval(opportunity_flow):
 
 
 def test_reasoning_and_planning_use_gemini_native_json_schema():
-    context={'category':'internship_insights','sources':[{'ref':0,'excerpt':'Example interns report SGD 1500 per month.'}],'allowed_fields':['compensation']}
+    context=structure_input({},'internship_insights',[ResearchSource(source_id='synthetic',platform='other',url='https://example.test/intern',evidence='Example interns report SGD 1500 per month.')])
     adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture',max_output_tokens=4096),None)
     for stage in ('opportunity_structure','opportunity_plan'):
         payload=adapter._payload(AIInput(stage=stage,context=json.dumps(context)))
@@ -228,8 +228,7 @@ def test_optional_live_provider_contract_smoke():
             results=await source.collect_opportunity_query(ResearchContext(role=public['role'],field='Software',location='Singapore'),plan.data.interview_intelligence[0] if plan.data.interview_intelligence else 'software engineering internship Singapore interview process')
             assert isinstance(results,list)
             if results:
-                context={'opportunity':public,'category':'interview_intelligence','allowed_fields':['recruitment_stages','preparation_topics'],
-                    'sources':[{'ref':0,'title':results[0].title,'excerpt':results[0].evidence}]}
+                context=structure_input(public,'interview_intelligence',results[:1])
                 def validate(output):validate_claims(output,'interview_intelligence',results[:1],public)
                 await router.generate(AIInput(stage='opportunity_structure',context=json.dumps(context)),Operation('live-public-smoke','public','opportunity_structure'),current_revision=lambda:'public',validate_output=validate)
     asyncio.run(run())
@@ -269,7 +268,7 @@ def test_follow_up_evidence_reaches_reasoner_without_discarding_previous_finding
         return values
     async def generate(request,operation,**kwargs):
         if request.stage!='opportunity_structure':return await original_generate(request,operation,**kwargs)
-        primary.calls.append(request);data=json.loads(request.context);text=data['sources'][0]['excerpt']
+        primary.calls.append(request);data=json.loads(request.context);text=data['evidence'][0]['text']
         if quota_followup and 'followup' in text and data['category'] not in paused:
             paused.add(data['category'])
             raise AIError('rate_limited',limit_scope='user',retry_after=1)
@@ -281,7 +280,7 @@ def test_follow_up_evidence_reaches_reasoner_without_discarding_previous_finding
     assert len(search.calls)==10
     evaluations=[json.loads(call.context) for call in primary.calls if call.stage=='opportunity_structure']
     assert len(evaluations)==(15 if quota_followup else 10)
-    assert len([data for data in evaluations if 'followup' not in data['sources'][0]['excerpt']])==5
+    assert len([data for data in evaluations if 'followup' not in data['evidence'][0]['text']])==5
     for category in result['categories'].values():
         assert len(category['findings'])==2
         assert any('followup' in f['value'] for f in category['findings'])

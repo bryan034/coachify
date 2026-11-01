@@ -24,7 +24,7 @@ from pydantic import ValidationError
 from app.ai.waiting import quota_progress,quota_reason
 from app.ai.metrics import usage_observer
 from app.ai.recovery import recover_responses,validation_feedback,issues_for,schema_fields
-from app.ai.goal_summary import GoalSummary,SUMMARY_PROMPT
+from app.ai.goal_summary import GoalSummary,SUMMARY_PROMPT,summary_schema
 from app.ai.context_contracts import ContextPlan,CONTEXT_PROMPT
 from app.ai.research_planning import ResearchPlan,ResearchAssessment,PLAN_PROMPT,ASSESS_PROMPT,planning_input
 from app.ai.config import AISettings
@@ -41,13 +41,13 @@ from app.ai.interview_contracts import InterviewFindings,interview_input
 from app.ai.qa_contracts import QuestionRoute,FocusedAnswer
 from app.ai.goal_edit_contracts import GoalEditDecision
 
-from app.ai.opportunity_contracts import QueryPlan,StructuredFindings,PROMPTS as OPPORTUNITY_PROMPTS
+from app.ai.opportunity_contracts import QueryPlan,StructuredFindings,ReferencedFindings,FindingReferenceError,findings_schema,PROMPTS as OPPORTUNITY_PROMPTS
 from app.ai.discovery_contracts import OUTPUTS as DISCOVERY_OUTPUTS, PROMPTS as DISCOVERY_PROMPTS
 
 usage_logger = logging.getLogger('uvicorn.error.ai_usage')
-MODEL_OUTPUTS = {'goal_summary':GoalSummary,'jd_scope':JobIdentity,**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_structure':StructuredFindings,'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
+MODEL_OUTPUTS = {'goal_summary':GoalSummary,'jd_scope':JobIdentity,**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_structure':ReferencedFindings,'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
 
-PROMPT_VERSION = 'career-ai-v21'
+PROMPT_VERSION = 'career-ai-v23'
 JD_OUTPUT_TOKENS={'jd_scope':4096,'jd_extraction':8192}
 LOCAL_JD_OUTPUT_TOKENS={**JD_OUTPUT_TOKENS,'jd_scope':8192}
 SYSTEM_PROMPT = '''You are elo's career assistant. Return only JSON matching the supplied schema.
@@ -169,7 +169,9 @@ Do not perform coding, homework, writing or other unrelated tasks. Do not invent
 job facts, interview rounds or requirements. If the requested answer is absent, use
 not_found. If unrelated, use off_topic. Explain only what the retrieved information
 supports; distinguish reported interview guidance from employer JD requirements.
-For opportunity findings retain confidence and related-role/location/employment qualifiers.
+Fresh public excerpts are candidates, not proof of relevance. Cite only passages that
+address the specific question; a broad category match is insufficient. Use not_found
+when none address it. For opportunity findings retain confidence and related-role/location/employment qualifiers.
 Do not promise compensation, interview outcomes or return offers from public reports.
 If partial=true, explain that this is a limited selection, not a complete list.
 Use concise Markdown. Put fact references beside the specific claim, e.g. [f1, f3],
@@ -243,7 +245,7 @@ Keep reply plus follow_up concise (at most 600 characters combined). Never quote
 """
 
 
-VALIDATION_FIELDS = set().union(*(schema_fields(model.model_json_schema()) for model in [*MODEL_OUTPUTS.values(),LocalJobScope]))
+VALIDATION_FIELDS = set().union(*(schema_fields(model.model_json_schema()) for model in [*MODEL_OUTPUTS.values(),LocalJobScope,StructuredFindings]))
 
 
 class AIError(Exception):
@@ -290,6 +292,7 @@ class Generated:
     data: object
     generation: Generation
     operation_id: str
+    failed_sections: tuple[str,...] = ()
 
 
 def strict_object(pairs):
@@ -327,7 +330,7 @@ def compact_schema(schema):
 def provider_input(request):
     if request.stage.startswith('opportunity_'):return request.context
     data = planning_input(request) if request.stage in ('research_plan','research_assess') else interview_input(request) if request.stage=='interview_synthesis' else request.model_dump(mode='json', exclude_defaults=True)
-    if request.stage in ('goal_summary', 'jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer') and request.context:
+    if request.stage in ('goal_summary', 'jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'discovery_turn') and request.context:
         try:
             data['context'] = json.loads(request.context)
         except ValueError:
@@ -374,6 +377,9 @@ def record_usage(raw, stage, attempt, provider_attempt):
         return
     if not isinstance(usage, dict):
         return
+    if data.get('object')=='response':
+        usage={**usage,'prompt_tokens':usage.get('input_tokens'),'completion_tokens':usage.get('output_tokens'),
+            'prompt_tokens_details':usage.get('input_tokens_details',{}),'completion_tokens_details':usage.get('output_tokens_details',{})}
     counts = {key: value for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')
               if type(value := usage.get(key)) is int and value >= 0}
     observer=usage_observer.get()
@@ -467,6 +473,7 @@ class AIAdapter:
             operation.error_code = error.code
             raise
         operation.status = 'running'
+        section_state=None
         try:
             deadline = self.clock() + self.settings.timeout_seconds
             async with asyncio.timeout(self.settings.timeout_seconds) as budget:
@@ -507,10 +514,39 @@ class AIAdapter:
                 attempts = 2 if request.stage == 'jd_extraction' and not recover_responses.get() else 1
                 for attempt in range(attempts):
                     try:
-                        raw = await complete(payload, stage=request.stage, attempt=attempt + 1, owner=operation.owner)
+                        if request.stage in DISCOVERY_OUTPUTS:
+                            from app.ai.discovery_sections import DiscoverySections,MAX_SECTION_RETRIES
+                            section_state=DiscoverySections(self.output_model(request.stage),request.stage,json.loads(request.context or '{}'))
+                            for correction in range(MAX_SECTION_RETRIES+1):
+                                if correction:
+                                    try:self._require_followup_time(deadline)
+                                    except AIError:break
+                                try:
+                                    raw=await complete(payload,stage=request.stage,attempt=correction+1,owner=operation.owner)
+                                    parsed=json.loads(raw)
+                                except AIError as error:
+                                    if (error.code=='invalid_output' and error.reason in ('json_syntax','response_envelope')) or (correction and error.code=='incomplete_output'):
+                                        parsed={}
+                                    elif section_state.values and error.code in ('timeout','unavailable','rate_limited'):
+                                        break
+                                    else:raise
+                                if correction:section_state.repair(parsed)
+                                else:section_state.initial(parsed)
+                                if not section_state.pending:break
+                                if request.stage=='discovery_turn' and section_state.values.get(('action',))=='REJECT_OUT_OF_SCOPE':break
+                                if correction<MAX_SECTION_RETRIES:
+                                    try:payload=self._payload(request,output_schema=section_state.repair_schema(),repair_fields=section_state.failures)
+                                    except AIError as error:
+                                        if error.code=='context_limit':break
+                                        raise
+                            output=section_state.finish()
+                            usage_logger.info('ai_sections stage=%s schema_version=%s attempts=%s failed_section_count=%s',
+                                request.stage,PROMPT_VERSION,correction+1,len(section_state.failures))
+                        else:
+                            raw = await complete(payload, stage=request.stage, attempt=attempt + 1, owner=operation.owner)
                         await self._current(operation, request, current_revision, current_versions)
                         try:
-                            output = self.output_model(request.stage).model_validate_json(raw)
+                            if request.stage not in DISCOVERY_OUTPUTS:output = self.output_model(request.stage).model_validate_json(raw)
                             if isinstance(output,LocalJobScope):output=output.to_domain()
                             if isinstance(output, ExtractedJD):
                                 if any(d.evidence not in (request.source_text or '') for d in output.job_dates):
@@ -521,6 +557,11 @@ class AIAdapter:
                                       for part in issue['loc'] if isinstance(part, str)]
                             raise AIError('invalid_output', True, reason='schema_validation', fields=fields,
                                           violations=issues_for(error,self.output_model(request.stage))) from None
+                        if isinstance(output, ReferencedFindings):
+                            try:output=output.to_domain(json.loads(request.context))
+                            except FindingReferenceError as error:
+                                raise AIError('invalid_output',True,reason='provenance',
+                                    fields=('relevant_refs',),violations=error.violations) from None
                         if isinstance(output, InterviewFindings):
                             try:
                                 output=output.to_domain(request)
@@ -576,11 +617,20 @@ class AIAdapter:
             await self._current(operation, request, current_revision, current_versions)
             operation.status = 'succeeded'
             return Generated(output, Generation(provider=self.settings.provider, model=self.settings.model,
-                prompt_version=PROMPT_VERSION, generated_at=datetime.now(timezone.utc)), operation.id)
+                prompt_version=PROMPT_VERSION, generated_at=datetime.now(timezone.utc)), operation.id,
+                section_state.failures if section_state else ())
         except asyncio.CancelledError:
             operation.cancel()
             raise
         except (TimeoutError, httpx.TimeoutException):
+            if section_state and section_state.values:
+                await self._current(operation,request,current_revision,current_versions)
+                output=section_state.finish()
+                self._provenance(request,output)
+                if validate_output is not None:validate_output(output)
+                operation.status='succeeded'
+                return Generated(output,Generation(provider=self.settings.provider,model=self.settings.model,
+                    prompt_version=PROMPT_VERSION,generated_at=datetime.now(timezone.utc)),operation.id,section_state.failures)
             operation.status, operation.error_code = 'failed', 'timeout'
             raise AIError('timeout', True) from None
         except httpx.HTTPError:
@@ -595,15 +645,26 @@ class AIAdapter:
     def output_model(self,stage):
         return LocalJobScope if self.settings.provider=='local' and stage=='jd_scope' else MODEL_OUTPUTS[stage]
 
-    def _payload(self, request):
-        schema = compact_schema(self.output_model(request.stage).model_json_schema())
+    def _payload(self, request, *, output_schema=None, repair_fields=()):
+        if request.stage=='goal_summary' and output_schema is None:
+            try:output_schema=summary_schema(json.loads(request.context or '{}'))
+            except (ValueError,TypeError,KeyError,AttributeError):raise AIError('invalid_operation') from None
+        if request.stage=='opportunity_structure':
+            try:output_schema=findings_schema(json.loads(request.context or '{}'))
+            except (ValueError,TypeError,KeyError,AttributeError):raise AIError('invalid_operation') from None
+        schema = compact_schema(output_schema if output_schema is not None else self.output_model(request.stage).model_json_schema())
+        if request.stage in DISCOVERY_OUTPUTS:schema=strict_schema(schema)
         if self.settings.provider=='local' and request.stage=='jd_extraction':
             # Job-ad extraction cannot create user-declared facts. Shared edit
             # contracts retain that origin for explicitly requested chat edits.
             for item in ('ExtractedSkill','ExtractedCondition'):
                 schema['$defs'][item]['properties']['origin']['enum']=['employer','generated_guidance']
         mode = self.settings.response_mode
-        local_structured = self.settings.provider == 'local' and request.stage in ('goal_summary', 'jd_scope', 'jd_extraction')
+        if request.stage in DISCOVERY_OUTPUTS:
+            if self.settings.provider in ('local','deepseek'):mode='json_schema_strict'
+            elif self.settings.provider=='gemini':mode='json_schema'
+            elif mode!='json_schema_strict':raise AIError('unsupported_structured_output')
+        local_structured = self.settings.provider == 'local' and request.stage in ('goal_summary', 'jd_scope', 'jd_extraction', 'discovery_turn', 'opportunity_plan', 'opportunity_structure')
         if local_structured and mode == 'json_object':
             # JSON Object mode does not constrain the required fields.
             # Constrain decoding as well as validating the result below.
@@ -618,7 +679,7 @@ class AIAdapter:
             strict = mode == 'json_schema_strict'
             response_format = {'type': 'json_schema', 'json_schema': {'name': request.stage,
                 'strict': strict, 'schema': strict_schema(schema) if strict else schema}}
-        # Native output carries the schema. Local identity/summary prompts also
+        # Native output carries the schema. Local chat/summary prompts also
         # include it to ground small models in the required field semantics.
         if request.stage=='goal_summary':
             instructions=SUMMARY_PROMPT
@@ -640,16 +701,18 @@ class AIAdapter:
                 'workspace_chat':WORKSPACE_CHAT_PROMPT}[request.stage]
         else:
             instructions=SYSTEM_PROMPT+(EXPLORATION_PROMPT if request.stage=='exploration' else '')
+        if repair_fields:
+            instructions+='\nSECTION CORRECTION: Return only the literal keys in the supplied repair schema: '+json.dumps(list(repair_fields))+'. Each key names one failed section. Generate corrected values from the original input. Do not return a full response or change accepted sections. Do not invent facts.'
         if validation_feedback.get() is not None:
             instructions += ('\nYour previous response failed validation. Return a complete corrected JSON object for this same task. '
                 'Follow the response schema; correct the listed fields and types. Use supplied facts only; '
                 'do not invent values to satisfy validation. Latest validation issues: '
                 +json.dumps(validation_feedback.get(),separators=(',',':')))
-        if mode == 'json_object' or self.settings.provider=='local' and request.stage=='goal_summary':
+        if mode == 'json_object' or self.settings.provider=='local' and request.stage in ('goal_summary','discovery_turn','opportunity_plan','opportunity_structure'):
             instructions += '\nJSON schema: ' + json.dumps(schema, separators=(',', ':'))
         schema_bytes = len(json.dumps(response_format, separators=(',', ':')).encode())
         jd_output_tokens=LOCAL_JD_OUTPUT_TOKENS if self.settings.provider=='local' else JD_OUTPUT_TOKENS
-        output_tokens = min(self.settings.max_output_tokens, {**jd_output_tokens,'goal_summary':8192,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'discovery_turn':4096,'discovery_plan':512,'discovery_assess':2048,'discovery_extract':8192,'discovery_summary':8192,'opportunity_plan':768,'opportunity_structure':2048}.get(request.stage,self.settings.max_output_tokens))
+        output_tokens = min(self.settings.max_output_tokens, {**jd_output_tokens,'goal_summary':8192,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'discovery_turn':4096,'discovery_plan':512,'discovery_assess':2048,'discovery_extract':8192,'discovery_summary':8192,'opportunity_plan':4096,'opportunity_structure':4096}.get(request.stage,self.settings.max_output_tokens))
         if request.stage=='discovery_extract':
             output_tokens=EXTRACTION_OUTPUT_TOKENS
         safety_margin = max(1024, self.settings.context_tokens // 10)
@@ -684,15 +747,27 @@ class AIAdapter:
             # JD admission counts the full provider prompt and grammar, including
             # schema-in-prompt JSON mode and any repair feedback. Bytes are not
             # tokens; the unchanged source must fit alongside reserved output.
-            size = input_tokens({'messages':messages,'response_format':response_format}) if request.stage in DISCOVERY_PROMPTS or request.stage in JD_OUTPUT_TOKENS or request.stage == 'goal_summary' else sum(len(message['content'].encode()) for message in messages) + schema_bytes
+            size = input_tokens({'messages':messages,'response_format':response_format}) if request.stage in DISCOVERY_PROMPTS or request.stage in JD_OUTPUT_TOKENS or request.stage in ('goal_summary','opportunity_structure') else sum(len(message['content'].encode()) for message in messages) + schema_bytes
             return size <= input_budget, size
 
         current = request
+        if request.stage == 'discovery_turn':
+            # History has its own 8K allowance within the full request budget.
+            # Never trim current input, saved understanding, memory or facts.
+            _, base_size = fits(request.model_copy(update={'conversation': request.conversation[-1:]}))
+            input_budget = min(input_budget, base_size + 8192)
         while True:
             fits_budget, size = fits(current)
             if fits_budget:
                 return current
-            if current.stage in ('goal_edit','goal_summary') or current.stage in DISCOVERY_PROMPTS:raise AIError('context_limit')
+            # Passage refs must identify exactly what the model saw. Never
+            # silently shorten text after constructing its evidence catalogue.
+            if current.stage == 'discovery_turn' and len(current.conversation) > 1:
+                # Prefer complete exchanges and keep the newest user input intact.
+                remove_count = 2 if len(current.conversation) > 2 and current.conversation[0].role == 'user' and current.conversation[1].role == 'assistant' else 1
+                current = current.model_copy(update={'conversation': current.conversation[remove_count:]})
+                continue
+            if current.stage in ('goal_edit','goal_summary','opportunity_structure') or current.stage in DISCOVERY_PROMPTS:raise AIError('context_limit')
             if len(current.conversation) > 1:
                 # The last message is the current user input; keep it intact.
                 remove_count = 2 if len(current.conversation) > 2 else 1
@@ -778,8 +853,14 @@ class AIAdapter:
             provider=self.settings.provider,provider_error=diagnostic)
 
     async def _complete(self, payload, *, stage='chat', attempt=1, owner):
+        responses=self.settings.provider=='deepseek' and stage in DISCOVERY_OUTPUTS
+        if responses:
+            schema=payload['response_format']['json_schema']
+            payload={'model':payload['model'],'input':payload['messages'],
+                'text':{'format':{'type':'json_schema','name':schema['name'],'schema':schema['schema']}},
+                'max_output_tokens':payload[self.settings.token_parameter],'reasoning':{'effort':'none'}}
         for provider_attempt in range(self.settings.retries + 1):
-            async with completion_response(self.sdk, payload, local=self.settings.provider == 'local') as response:
+            async with completion_response(self.sdk, payload, local=self.settings.provider == 'local',responses=responses) as response:
                 status = response.status_code
                 if status in (400,401,403,404,422):
                     error=await self._rejection(response)
@@ -817,6 +898,16 @@ class AIAdapter:
     def _content(self, raw):
         try:
             data = json.loads(raw, object_pairs_hook=strict_object)
+            if data.get('object')=='response':
+                if data.get('status')!='completed':raise AIError('incomplete_output',True)
+                texts=[]
+                for item in data.get('output',[]):
+                    if item.get('type')=='reasoning':continue
+                    if item.get('type')!='message' or item.get('role')!='assistant':raise AIError('invalid_output',True,reason='response_envelope')
+                    for part in item.get('content',[]):
+                        if part.get('type')!='output_text' or not isinstance(part.get('text'),str):raise AIError('invalid_output',True,reason='response_envelope')
+                        texts.append(part['text'])
+                data={'choices':[{'finish_reason':'stop','message':{'content':''.join(texts)}}]}
             choices = data['choices']
             if len(choices) != 1 or choices[0]['finish_reason'] != 'stop':
                 raise AIError('incomplete_output', True)

@@ -1,5 +1,6 @@
 """Focused, public-only Brave retrieval for a Gemini-selected goal question."""
 import asyncio
+import re
 from app.schemas.analysis import ResearchContext
 from app.clients.research import normalize_sources
 from app.repositories.goals import GoalError
@@ -20,16 +21,31 @@ FOCUSES = {
 }
 
 
-async def research_question(request, title, focus, check):
+MAX_QUESTION_SEARCHES = 3
+
+
+def question_queries(title, focus, terms=None):
+    # Only a bounded public subject produced by the router crosses the search boundary.
+    # Raw messages, history and resolved_question never become search queries.
+    from app.domain.questions import blocked_task
+    if terms:
+        if not re.fullmatch(r'[A-Za-z][A-Za-z -]{2,99}', terms) or blocked_task(terms) or re.search(
+                r'\b(?:my|email|phone|password|secret|passport|address|resume|cv)\b', terms, re.I):
+            terms=None
+    subject=terms or FOCUSES[focus]
+    identity=' '.join(str(title.get(key) or '') for key in ('company','role','location')).strip()[:240]
+    suffixes=('', 'official employer information', 'candidate reports experiences')
+    return list(dict.fromkeys(' '.join((identity,subject,suffix)).strip() for suffix in suffixes))[:MAX_QUESTION_SEARCHES]
+
+
+async def research_question(request, title, focus, check, *, query=None):
     provider = request.app.state.research_client
     collect = getattr(provider, 'collect_query', None)
     if not callable(collect):
         raise GoalError('Public research is unavailable. Your saved goal remains available.', 503)
     context = ResearchContext(**{key: title.get(key) for key in
         ('role', 'field', 'company', 'location', 'seniority_level')})
-    # Only saved public identity + a fixed Gemini-selected focus reach Brave.
-    # User messages, conversation and CV data never enter the query.
-    query = ' '.join(filter(None, (context.company, context.role, context.location, FOCUSES[focus])))[:400]
+    query = query or question_queries(title,focus)[0]
     await check()
     activity('searching_question')
     for attempt in range(4):

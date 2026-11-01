@@ -3,6 +3,8 @@ import json
 import time
 from urllib.parse import urlparse
 import httpx
+from httpx import Client
+from elo_shared.model_sdk import sync_model_response
 from app.clients.extractor import Extractor
 from app.schemas.cv import InterpretationOutput
 
@@ -32,9 +34,9 @@ class Interpreter(Extractor):
         try:
             timeout=self._request_timeout(20)
             deadline = time.monotonic() + timeout + 5
-            with httpx.Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=False) as client:
-                with client.stream('POST', self.base_url + '/chat/completions', json=payload,
-                        headers=self._provider_headers()) as response:
+            with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=False) as client:
+                with sync_model_response(client, self.base_url, self.api_key,
+                                         httpx.Timeout(timeout, connect=5), payload, local=self.local) as response:
                     response.raise_for_status()
                     data = bytearray()
                     for chunk in response.iter_bytes():

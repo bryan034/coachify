@@ -17,13 +17,13 @@ The saved-CV list uses the exact path `GET /api/v1/cv` with no trailing slash. I
 
 See [SPEC.md](SPEC.md) for semantics, [OpenAPI](../../contracts/api/cv.yaml) for fields, and [setup](../../docs/setup.md) for Compose. `GET /health` is process health. All CV routes require an authenticated owner with completed onboarding and return `Cache-Control: no-store`.
 
-The running service uses MongoDB and private originals. Configure `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY` for extraction, clarification interpretation and conversational routing. Missing configuration preserves the upload/answer/message and offers retry; runtime never substitutes synthetic output. Chat responses distinguish durable messages, pending work, proposed changes and saved facts. History is owner-scoped, bounded and retained for resume. `CAREER_SERVICE_URL` supplies confirmed skill and qualification/date context. Assessment admission, stale-result tracking and gap/roadmap generation remain outside this service. Tests use synthetic responses and do not establish live-model accuracy.
+The running service uses MongoDB and private originals. Model calls use the OpenAI Python SDK; the public deployment template selects Gemini through its OpenAI-compatible endpoint. SDK retries are disabled and response/time limits remain enforced. Configure `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY` for extraction, clarification interpretation and conversational routing. Missing configuration preserves the upload/answer/message and offers retry; runtime never substitutes synthetic output. Chat responses distinguish durable messages, pending work, proposed changes and saved facts. History is owner-scoped, bounded and retained for resume. `CAREER_SERVICE_URL` supplies confirmed skill and qualification/date context. Assessment admission, stale-result tracking and gap/roadmap generation remain outside this service. Tests use synthetic responses and do not establish live-model accuracy.
 
 CV model requests share configurable daily attempt budgets and per-account/global concurrency across service instances. Admission failures preserve saved inputs and explain when to retry. Original storage quotas and model budgets are separate; the specification documents their limits, private-volume assumptions and recovery.
 
 For DeepSeek, set `CV_LLM_BASE_URL=https://api.deepseek.com`, `CV_LLM_MODEL=deepseek-flash` and your private `CV_LLM_API_KEY`. Requests to the exact `api.deepseek.com` host automatically disable thinking for extraction, chat routing and clarification interpretation; other provider hosts keep their existing options. No additional environment flag is needed. See [DeepSeek's request format](https://api-docs.deepseek.com/api/create-chat-completion/).
 
-For local testing, the public template selects `elo-deepseek-r1:1.5b` at
+For optional local testing, select `elo-deepseek-r1:1.5b` at
 `http://host.docker.internal:11434/v1`. `APP_ENV=development` and
 `CV_LLM_ALLOW_HTTP=true` are required. This known local endpoint supports keyless
 requests and never receives stored cloud API keys. Local extraction gets a 120-second

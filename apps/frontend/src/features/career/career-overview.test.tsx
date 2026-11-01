@@ -1,8 +1,10 @@
 import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {beforeEach,expect,it,vi} from 'vitest';
-import {CareerGoalHome,CareerGoalOverview} from './career-overview';
+import {CareerGoalHome,CareerGoalOverview,LearningFocus} from './career-overview';
 import {CareerSessionProvider} from './career-session';
+import {getCvGoalConfirmation,confirmCvGoal} from '@/lib/api/career-cv-confirmation';
 import {careerApi,type CareerWorkspace} from '@/lib/api/career';
+vi.mock('@/lib/api/career-cv-confirmation',()=>({getCvGoalConfirmation:vi.fn(),confirmCvGoal:vi.fn()}));
 const push=vi.fn(),params=new URLSearchParams();
 vi.mock('next/navigation',()=>({useRouter:()=>({push,replace:vi.fn()}),useSearchParams:()=>params}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-token'})}));
@@ -11,18 +13,20 @@ const extraction={role:'Backend Software Engineer',field:'Software Engineering',
 const workspace:CareerWorkspace={session_id:'session',revision:1,kind:'jd',phase:'ready',current:{selection_version:1,goal:{...extraction,_id:'goal',version:1,target_type:'specific_job',interests:[],preferences:[],readiness:'pending',exploration_draft_id:null,exploration_draft_version:null},dependent_results_need_review:false},research_id:'research',research_version:1,coverage:[],error:null,retry_after:null,expires_at:null,exploration_id:null};
 
 function overview(value=workspace){return render(<CareerSessionProvider><CareerGoalOverview workspace={value} onReload={vi.fn()}/></CareerSessionProvider>);}
-beforeEach(()=>{vi.resetAllMocks();params.forEach((_,key)=>params.delete(key));vi.mocked(careerApi).mockImplementation(async(path)=>path==='/workspace'?workspace as never:{status:'no_cv',cv_uploaded:false,skills_evaluated:false} as never);});
+beforeEach(()=>{vi.resetAllMocks();vi.mocked(getCvGoalConfirmation).mockResolvedValue({goal_id:'goal',goal_version:1,selection_version:1,confirmed:false,context:null,reason:null});params.forEach((_,key)=>params.delete(key));vi.mocked(careerApi).mockImplementation(async(path)=>path==='/workspace'?workspace as never:{status:'no_cv',cv_uploaded:false,skills_evaluated:false} as never);});
 it('shows saved skills in briefing accordions and keeps refinement and replacement',async()=>{
  overview();expect(screen.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
  expect(screen.getByRole('heading',{name:'Your learning focus'})).toBeVisible();
- expect(screen.getByText('SQL').closest('details')).toHaveAttribute('open');
- expect(screen.getByText('Teamwork').closest('details')).not.toHaveAttribute('open');
+ expect(screen.getByRole('button',{name:'SQL'})).toHaveAttribute('aria-expanded','false');
+ fireEvent.click(screen.getByRole('button',{name:'SQL'}));
+ expect(screen.getByRole('button',{name:'SQL'})).toHaveAttribute('aria-expanded','true');
+ expect(screen.getByRole('button',{name:'Teamwork'})).toHaveAttribute('aria-expanded','false');
  fireEvent.click(screen.getByText('Eligibility & commitment'));
  expect(screen.getByText('A relevant degree')).toBeVisible();
  expect(screen.getByText('A relevant degree is preferred.')).toBeVisible();
  expect(screen.getByText('2 saved skills')).toBeVisible();
- expect(screen.getByText('Required by role')).toBeVisible();
- expect(screen.getByText('Preferred by role')).toBeVisible();
+ expect(screen.getByRole('heading',{name:'Required · 1'})).toBeVisible();
+ expect(screen.getByRole('heading',{name:'Preferred · 1'})).toBeVisible();
  expect(screen.getByRole('link',{name:'Refine goal'})).toHaveAttribute('href','/career-goal/chat?refine=1');
  expect(await screen.findByRole('link',{name:/Upload my CV/})).toHaveAttribute('href','/cv');
  fireEvent.click(screen.getByRole('button',{name:/Set a new goal/}));expect(push).toHaveBeenCalledWith('/career-goal?new=1');
@@ -77,6 +81,7 @@ it('new-goal mode keeps the saved goal untouched and opens the input methods',()
 it('preserves AND/OR, provenance and safe sources without inventing learning guidance',async()=>{
  const goal={...workspace.current.goal!,skills:[{...extraction.skills[0],group_id:'alternatives',group_operator:'any' as const,context:'Maintain relational data.',evidence:'SQL or another query language.',source_urls:['https://example.test/job','javascript:alert(1)']},{...extraction.skills[1],origin:'generated_guidance' as const,priority:'suggested' as const}]};
  overview({...workspace,current:{...workspace.current,goal}});
+ fireEvent.click(screen.getByRole('button',{name:'SQL'}));
  expect(screen.getByText('Maintain relational data.')).toBeVisible();
  expect(screen.getByText('SQL or another query language.')).toBeVisible();
  expect(screen.getByText(/Alternative requirement/)).toBeVisible();
@@ -84,7 +89,7 @@ it('preserves AND/OR, provenance and safe sources without inventing learning gui
  expect(document.querySelector('a[href^="javascript:"]')).toBeNull();
  fireEvent.click(screen.getByText('Teamwork'));
  expect(screen.getByText('AI planning suggestion')).toBeVisible();
- expect(screen.getByText('Suggested guidance')).toBeVisible();
+ expect(screen.getByRole('heading',{name:'Suggested guidance · 1'})).toBeVisible();
  expect(screen.queryByText('A way to practise')).not.toBeInTheDocument();
  await screen.findByRole('link',{name:/Upload my CV/});
 });
@@ -110,4 +115,59 @@ it('retries a failed research job without replacing the saved goal',async()=>{
  await waitFor(()=>expect(careerApi).toHaveBeenCalledWith('/workspace/retry','synthetic-token',{method:'POST'}));
  await waitFor(()=>expect(reload).toHaveBeenCalledOnce());
  expect(screen.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
+});
+
+it('groups without relabelling advisory or unknown importance and hides missing groups',()=>{
+ render(<LearningFocus skills={[{...extraction.skills[0],priority:'suggested'},{...extraction.skills[1],priority:'conflicting'}]}/>);
+ expect(screen.getByRole('heading',{name:'Suggested guidance · 1'})).toBeVisible();
+ expect(screen.getByRole('heading',{name:'Conflicting requirements · 1'})).toBeVisible();
+ expect(screen.queryByRole('heading',{name:/Required ·/})).not.toBeInTheDocument();
+ expect(screen.queryByText(/Not assessed against/)).not.toBeInTheDocument();
+ expect(screen.queryByText(/Evidence in CV|No evidence yet|What to review in your CV/)).not.toBeInTheDocument();
+});
+it('handles empty and single-skill goals without category filters',()=>{
+ const {rerender}=render(<LearningFocus skills={[]}/>);
+ expect(screen.getByText(/No skills are listed/)).toBeVisible();
+ rerender(<LearningFocus skills={[extraction.skills[0]]}/>);
+ expect(screen.getByRole('heading',{name:'Required · 1'})).toBeVisible();
+ expect(screen.queryByRole('group',{name:'Filter skills by category'})).not.toBeInTheDocument();
+});
+it('filters a large goal and resets a hidden filter when its data changes',()=>{
+ const skills=Array.from({length:30},(_,i)=>({...extraction.skills[i%2],item_id:`skill-${i}`,name:`Skill ${i}`}));
+ const {rerender}=render(<LearningFocus skills={skills}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Technical'}));
+ expect(screen.getByRole('heading',{name:'Required · 15'})).toBeVisible();
+ expect(screen.queryByRole('heading',{name:/Preferred ·/})).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Technical'})).toHaveAttribute('aria-pressed','true');
+ fireEvent.click(screen.getByRole('button',{name:'All categories'}));
+ expect(screen.getByRole('heading',{name:'Preferred · 15'})).toBeVisible();
+ rerender(<LearningFocus skills={[extraction.skills[1]]}/>);
+ expect(screen.getByRole('button',{name:'Teamwork'})).toBeVisible();
+});
+it('retains the full title and saved content behind an independent accessible disclosure',()=>{
+ const name='Ability to learn quickly, investigate failure modes, and iterate based on evidence and user feedback';
+ render(<LearningFocus skills={[{...extraction.skills[0],name,context:'Investigate failed releases.',evidence:'Learn from user feedback.'},extraction.skills[1]]}/>);
+ const button=screen.getByRole('button',{name});
+ const panel=document.getElementById(button.getAttribute('aria-controls')!)!;
+ expect(panel).not.toBeVisible();fireEvent.click(button);
+ expect(panel).toBeVisible();expect(panel).toHaveTextContent('Investigate failed releases.');
+ expect(panel).toHaveTextContent('Learn from user feedback.');
+ expect(screen.getByRole('button',{name:'Teamwork'})).toHaveAttribute('aria-expanded','false');
+ fireEvent.click(button);expect(panel).not.toBeVisible();
+});
+it('uses the confirmed banner only for the exact current goal revision',async()=>{
+ const value={goal_id:'goal',goal_version:1,selection_version:1,confirmed:true,context:{id:'goal',version:1,selection_version:1,confirmed:true as const},reason:null};
+ vi.mocked(getCvGoalConfirmation).mockResolvedValue(value);
+ const {rerender}=overview();
+ await waitFor(()=>expect(screen.getByRole('complementary',{name:'Your starting point'})).toHaveClass('briefing-context-banner'));
+ expect(screen.getByRole('complementary',{name:'Your starting point'}).compareDocumentPosition(screen.getByRole('heading',{name:'Your learning focus'}))&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ rerender(<CareerSessionProvider><CareerGoalOverview workspace={{...workspace,current:{...workspace.current,goal:{...workspace.current.goal!,version:2}}}} onReload={vi.fn()}/></CareerSessionProvider>);
+ await waitFor(()=>expect(screen.getByRole('complementary',{name:'Your starting point'})).not.toHaveClass('briefing-context-banner'));
+});
+it('updates the layout after the existing explicit confirmation succeeds',async()=>{
+ vi.mocked(confirmCvGoal).mockResolvedValue({goal_id:'goal',goal_version:1,selection_version:1,confirmed:true,context:{id:'goal',version:1,selection_version:1,confirmed:true},reason:null});
+ overview();const button=screen.getByRole('button',{name:'Confirm this goal for CV review'});
+ await waitFor(()=>expect(button).toBeEnabled());fireEvent.click(button);
+ await waitFor(()=>expect(screen.getByRole('complementary',{name:'Your starting point'})).toHaveClass('briefing-context-banner'));
+ expect(confirmCvGoal).toHaveBeenCalledTimes(1);
 });

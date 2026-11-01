@@ -1,5 +1,10 @@
 # Career Goal
 
+Career Discovery opens with an editable composer and no provider-consent checkbox.
+Sending the first message creates its session with `consent=true`; configured model
+processing and automatic public-job research are enabled by default. New chat has
+the same behavior. Opening the page alone makes no model or research calls.
+
 `career-goal.tsx` keeps paste, URL and document previews in page memory. Its input
 methods and source-recovery controls remain independent from target persistence.
 The account/token key clears previews, target drafts and pending requests when the
@@ -69,5 +74,12 @@ disappears once the summary arrives.
 
 The JD chat exposes saved role/skill/date details immediately after extraction,
 including while public research is running. API-boundary checks reject malformed
-nested responses before rendering; summaries and chat still wait for the linked
-research snapshot. `SavedGoal.job_dates` retains the canonical sourced-date shape.
+nested responses before rendering; the combined summary waits for the linked
+research snapshot, while chat remains available. `SavedGoal.job_dates` retains the canonical sourced-date shape.
+
+The saved-goal composer accepts messages during extraction, research, summary
+generation and an outstanding reply. A page-memory queue sends one turn at a time
+after goal saving, incorporating preceding replies and the latest goal version.
+Failed turns retain their own retry receipt and do not block following messages.
+Retrying preserves any newer unsent draft. Queued turns and transcript are lost on
+reload/navigation; failed or incomplete research is never presented as completed.

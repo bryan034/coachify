@@ -233,7 +233,7 @@ def configure_http_router(monkeypatch, handler):
     monkeypatch.setenv('CV_LLM_MODEL', 'synthetic-test-model')
     monkeypatch.setenv('CV_LLM_BASE_URL', 'https://synthetic.invalid/v1')
     original_client = httpx.Client
-    monkeypatch.setattr('app.clients.conversation.httpx.Client',
+    monkeypatch.setattr('app.clients.conversation.Client',
                         lambda **kwargs: original_client(transport=httpx.MockTransport(handler), **kwargs))
     return ConversationRouter()
 

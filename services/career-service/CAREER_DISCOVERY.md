@@ -8,8 +8,12 @@ only, leaves missing employer metadata unknown and uses a distinct cache policy.
 [model/search setup](../../docs/setup.md#career-model-and-search-configuration).
 
 
-Career discovery creates a researched career target without a specific JD. It sets
-a goal, not an assessment of the user's current abilities. Existing legacy
+Career discovery is a career guidance conversation that can create a researched
+career target without a specific JD. It welcomes greetings, usage help and questions
+about careers, jobs, internships, applications, interviews and related learning.
+Users can start with partial information or no direction. The agent answers useful
+questions and gradually learns the user's interests and preferences; missing research
+fields never block conversation. It sets a goal without verifying current abilities. Existing legacy
 exploration sessions remain readable; the selector's **Explore careers** action
 opens `/career-goal/discovery`. No CV ingestion or skill-gap engine is introduced.
 
@@ -22,7 +26,10 @@ response. Failed messages have a separate retry action that preserves that draft
 Opening the page or choosing **New chat** shows only a fixed introduction authored
 in Python (`app/domain/discovery_conversation.py`). The frontend fetches it using
 `GET /discoveries/current?fresh=true`, which returns no previous session/history.
-No Gemini or Brave request is triggered by opening the page, consent changes or
+The composer is immediately editable without a consent checkbox. Sending the first
+message creates the session with `consent=true`; model processing and automatic
+public-job research are enabled by default when the configured services are available.
+No Gemini or Brave request is triggered by opening the page or
 New chat. Only sending the first message creates a new private session and starts
 conversation processing. The introduction is returned only on this fresh-open request and kept as display-only
 frontend state. It is not stored in new transcripts or sent to Gemini; legacy stored
@@ -36,10 +43,17 @@ Reopening/reloading the discovery page starts with a clean view; earlier session
 and evidence remain owner-scoped on the server, and saved goals are preserved.
 Other Career chat and JD workflows are unchanged.
 
-Gemini receives the saved structured understanding with user evidence, a compact memory (interests, preferences, rejected
-areas and open questions), the six latest messages clipped to 400 characters each,
+The configured model receives the saved structured understanding with user evidence, a compact memory (interests, preferences, rejected
+areas and open questions), recent whole conversation messages selected within a token budget,
 the current scope, and at most sixteen projected market facts. It does not receive
-the full transcript or source excerpts on each chat turn. Memory fields are bounded
+the full transcript or source excerpts on each chat turn. Up to fourteen recent exchanges
+(28 individual messages) are considered, with an 8,192 estimated-token history allowance.
+The adapter drops the oldest messages, preferring complete user/assistant exchanges,
+until both the history allowance and the effective full-request budget fit. It never
+clips individual messages or removes the newest user input, saved understanding,
+memory or research facts to fit. If those alone exceed the request budget, it reports
+`context_limit`. The 64k model context setting is request capacity, not persistent memory;
+the app continues to supply selected history and saved context on each turn. Memory fields are bounded
 and must describe user statements, not assumptions about their abilities. Interests,
 preferences and rejected directions each keep up to six entries; open questions keep
 up to three. User skill exclusions/additions keep up to 60/30 entries respectively.
@@ -55,8 +69,8 @@ Gemini is instructed to remove answered, declined, superseded or irrelevant ques
 while continuing research with unknown optional context. The backend validates this
 list's format, deduplication and capacity; semantic resolution relies on Gemini.
 
-Research readiness is explicit and enforced in Python after Gemini interpretation.
-Clarification is a numbered bundle of the remaining topics, in this order:
+Research readiness is explicit and enforced in Python after model interpretation.
+The agent naturally asks one useful missing topic at a time, using existing answers:
 
 1. Field and, if possible, a specific role or kind of work; offer **keep it broad**.
 2. What interests the user about that field.
@@ -65,8 +79,10 @@ Clarification is a numbered bundle of the remaining topics, in this order:
 5. Career stage.
 6. Work preferences or constraints.
 
-There is no repeated clarification preface. The field/role question ends with
-“You can keep it broad.”; the other questions end with “You can say unsure.”
+There is no full missing-fields questionnaire or repeated clarification preface. The agent
+offers a broad direction and accepts unsure/skip answers without repeating a scripted
+suffix each turn. Backend fallback questions explicitly offer “You can keep it broad.”
+or “You can say unsure.”
 Already answered topics are omitted. The first topic fills both `field` and
 `role_family_or_work`; the remaining required answers are `interest`,
 `other_interests`, `avoided_activities`, `career_stage` and `work_preferences`.
@@ -93,6 +109,68 @@ Saved answers survive the bounded recent-message window. A viable field must be
 identified before research; otherwise the conversation continues with options.
 The readiness gate also applies to the compatibility `/research` endpoint.
 
+Exact greetings, thanks and basic usage-help messages are answered in Python with
+career-focused copy and, on a first message only, one missing-topic follow-up. Later
+greetings continue the chat without another introduction or checklist question. These turns
+make no model call, retain understanding/memory/scope, and do not start research.
+Matching covers only the whole message; a greeting followed by a question or task
+still goes through the model. Other turns use `discovery_turn` to classify scope.
+The turn prompt builds on the previous question and all supported preferences rather
+than reintroducing the assistant or following a fixed question order. A stated kind
+of work can address role scope without a specific job title. Suggestions remain
+tentative until supported by the user's own statements. The response renderer
+appends a separate follow-up only when it is not already present in the reply,
+ignoring case, whitespace and punctuation differences.
+Career questions use `ANSWER` before research is ready. Contextual short
+answers and hobbies supplied during interest discovery are relevant without career
+keywords. Mixed requests receive only career-related guidance. Wholly unrelated tasks
+or instruction overrides use `REJECT_OUT_OF_SCOPE`: Python replaces the model reply
+with a fixed career redirect, ignores all proposed context/actions and retains the
+previous decision, memory, scope, review and research run. The user/redirect pair and
+idempotency receipt are saved. No new research is started for that request. Scope
+detection for model-routed turns requires this model call; it is not a keyword filter or a guarantee
+of perfect semantic classification. Existing research may continue independently.
+Discovery uses its own stage-specific system prompts; these scope instructions are
+sent in that prompt, rather than relying on the generic Career prompt.
+All five Discovery model stages request schema-constrained generation from their
+Pydantic contracts. Local inference uses native JSON Schema through the compatible
+Chat Completions transport; Gemini receives its supported schema projection.
+DeepSeek Discovery uses `/responses` with `text.format.type=json_schema`, independently
+of the JSON-only Chat Completions setting used by other Career workflows.
+DeepSeek's standard `/v1` base alias is normalized to its documented provider root
+for Responses calls; custom proxy paths are preserved. Generic
+compatible endpoints must explicitly use verified `json_schema_strict` support;
+Discovery never silently downgrades to JSON-only mode. Unsupported configurations
+return `unsupported_structured_output`. No additional credentials or dependencies
+are required. User-configurable values remain in the single private Docker environment
+file, which agents must not inspect.
+
+Chat requests a top-level `Decision` object including `action`, `scope`, `question`
+and `reply`. Required response keys do not require known user answers: scope/question
+can be null and understanding can remain unanswered. Context is supplied as a JSON
+object rather than an escaped JSON string. Backend evidence and ownership checks
+remain authoritative; decoder constraints cannot prove relevance or factual support.
+
+Validation failures are isolated to independent sections: top-level fields, each
+memory list, each understanding answer, and individual recommendations, assessments
+and extracted listings. Valid sections are retained unchanged. Only failed sections
+are requested again, using a reduced schema with literal keys such as `scope` or
+`skills.1`, for at most **two correction attempts after initial generation**. Accepted
+sections cannot be overwritten by a repair. Corrections share the original operation
+deadline; no extra correction starts without enough remaining time. Worker-level
+whole-response retries do not multiply this budget. No rejected model text is replayed.
+
+After exhaustion, failed memory/understanding updates retain prior values; unsupported
+research items are omitted, and missing assessments remain rejected. Failed control
+sections cannot launch research or change scope. Failed classification cannot publish
+potentially unrelated text, and unresolved citation references cannot publish the
+dependent answer. Other valid sections remain usable with a plain-language partial
+result notice. A missing reply uses an explicit incomplete-answer message rather than
+invented content. Valid search titles survive a failed query section, but no search
+queries are invented. Provider failures during correction preserve accepted sections;
+authentication/configuration errors, stale input and cancellation remain failures.
+Malformed/truncated JSON is never salvaged by guessing its missing contents.
+
 Changed fields clear obsolete field/role/field-interest answers and retire previous
 active research; other interests, stage, location and general work preferences are
 retained. Other interests inform personalisation during synthesis, and do not become
@@ -104,8 +182,11 @@ help understand interests and personalise the goal; it remains excluded from LLM
 Two existing LangGraph flows run inside Career:
 
 1. `understand_intent` → `evaluate_readiness` → `clarify_scope` or `scope_ready`:
-   Gemini extracts understanding once; Python conditionally routes without another
-   model call. A private checkpoint stores the structured decision and
+   Python handles exact social/help turns; otherwise the model interprets the message,
+   with at most two corrections for failed sections. Python then routes the result.
+   Guidance replies bypass missing-field clarification. Partial answers
+   retain the model's acknowledgement and follow-up; a premature research action
+   falls back to one missing-topic question. A private checkpoint stores the structured decision and
    payload digest for safe replay. Accepted user/assistant messages and compact
    memory persist in the owner-scoped discovery session. Sessions stop accepting new turns at
    996 transcript entries or 3.5 MB before requiring completion; existing sessions without
@@ -237,8 +318,8 @@ whitespace normalised) only under the current Discovery relevance policy, preser
 bypasses this cache. A worker has a 330-second lease and a 300-second active execution
 deadline; rate limits save the actual provider/local retry time and release the worker.
 A sweeper resumes due jobs. Quota resumes skip previously completed extractions.
-Planning/synthesis outputs retain their existing bounded repair. Assessment/extraction
-validation failures use the one replacement-search budget described above; ordinary
+Model schema/reference failures use section correction before publication. Unusable
+assessment/extraction evidence then uses the one replacement-search budget described above; ordinary
 failed search requests retain their existing single transport retry.
 Candidate assessments, split decisions and successful source extractions remain
 available for retry. Previously saved snapshots remain readable. New runs and retries reuse candidates

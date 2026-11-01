@@ -13,6 +13,8 @@ from app.ai.rejections import classify
 from app.ai.routing import opportunity_models
 from app.ai.opportunity_config import OpportunitySettings
 from app.main import create_app
+from app.schemas.analysis import ResearchSource
+from app.ai.opportunity_contracts import structure_input
 
 
 @pytest.mark.parametrize('wrapped',[False,True])
@@ -93,7 +95,8 @@ def test_explicit_model_override_is_shared_by_all_roles_and_legacy_settings_stay
     router=opportunity_models(adapter,None,settings,OpportunitySettings(),None)
     assert router.primary is router.context is adapter
     for stage in ('jd_scope','jd_extraction','opportunity_structure','opportunity_plan','discovery_extract'):
-        request=AIInput(stage=stage,source_text='Analyst. SQL required.') if stage in ('jd_scope','jd_extraction') else AIInput(stage=stage,context='{}')
+        context=structure_input({},'internship_insights',[ResearchSource(source_id='synthetic',platform='other',url='https://example.test/report',evidence='Example interns report mentorship.')]) if stage=='opportunity_structure' else {}
+        request=AIInput(stage=stage,source_text='Analyst. SQL required.') if stage in ('jd_scope','jd_extraction') else AIInput(stage=stage,context=json.dumps(context))
         assert adapter._payload(request)['model']=='gemini-3.6-flash'
 
 
@@ -108,12 +111,16 @@ def test_public_docker_example_contains_only_active_inputs_and_no_example_secret
     consumed=set(re.findall(r'\$\{([A-Z][A-Z0-9_]*)',compose))
     assert set(pairs)<=consumed
     from app.ai.config import REASONING_MODEL
-    assert pairs['CAREER_LLM_PROVIDER']=='local'
-    assert pairs['CAREER_LLM_MODEL']=='deepseek-r1:1.5b'
-    assert pairs['CAREER_LLM_BASE_URL']=='http://host.docker.internal:11434/v1'
-    assert pairs['CAREER_LLM_RESPONSE_MODE']=='json_schema_strict'
+    assert pairs['CAREER_LLM_PROVIDER']=='gemini'
+    assert pairs['CAREER_LLM_MODEL']==REASONING_MODEL
+    assert pairs['CAREER_LLM_BASE_URL']=='https://generativelanguage.googleapis.com/v1beta/openai'
+    assert pairs['CAREER_LLM_RESPONSE_MODE']=='json_schema'
     assert pairs['CAREER_LLM_TOKEN_PARAMETER']=='max_tokens'
     assert pairs['CAREER_RESEARCH_PROVIDER']=='brave'
+    for prefix in ('CV','ASSESSMENT','ROADMAP'):
+        assert pairs[prefix+'_LLM_MODEL']==REASONING_MODEL
+        assert pairs[prefix+'_LLM_BASE_URL']==pairs['CAREER_LLM_BASE_URL']
+        assert pairs[prefix+'_LLM_ALLOW_HTTP']=='false'
     # Existing private deployments without new settings retain the old model.
     assert REASONING_MODEL=='gemini-3.5-flash-lite'
     assert '${CAREER_LLM_MODEL:-'+REASONING_MODEL+'}' in compose

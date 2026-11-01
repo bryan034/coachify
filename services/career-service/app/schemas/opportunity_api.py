@@ -30,6 +30,14 @@ class ResearchProgress(Model):
     research_id:DomainId|None=None
     retry_after:int|None=None
 
+class QuestionResearchView(Model):
+    research_id:DomainId
+    research_version:int
+    focus:str
+    findings:list[PublicFinding]=Field(default_factory=list,max_length=12)
+    sources:list[PublicSource]=Field(default_factory=list,max_length=12)
+    updated_at:datetime
+
 class OpportunityView(Model):
     available:bool
     availability_issues:list[Literal['research_disabled','reasoning_disabled','gemini_not_configured','brave_not_configured','model_not_configured','search_not_configured','brave_llm_context_required']]=Field(default_factory=list,max_length=5)
@@ -38,6 +46,7 @@ class OpportunityView(Model):
     status:Literal['pending','running','partial','completed','failed']
     finished:bool=False
     historical:bool=False
+    question_research:list[QuestionResearchView]=Field(default_factory=list,max_length=9)
     research_id:DomainId|None=None
     research_version:int|None=None
     categories:dict[Category,PublicCategoryResult]=Field(default_factory=dict,max_length=5)

@@ -43,7 +43,8 @@ test('career discovery opens fresh without inference, researches sent messages a
  await expect(page.getByRole('log')).toContainText('This chat helps you choose a career direction');
  await expect(page.getByRole('log').locator('.agent-message')).toHaveCount(1);
  expect(starts).toBe(0);expect(messagesSent).toBe(0);expect(researches).toBe(0);
- await page.getByRole('checkbox',{name:/Allow elo/}).check();
+ await expect(page.getByRole('checkbox',{name:/Allow elo/})).toHaveCount(0);
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEditable();
  await page.getByRole('textbox',{name:'Message elo'}).fill('Software engineering');
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole('log').getByRole('listitem')).toHaveCount(6);
@@ -81,7 +82,8 @@ test('career discovery opens fresh without inference, researches sent messages a
  await expect(page.getByRole('log').locator('.agent-message')).toHaveCount(1);
  await expect(page.getByRole('log')).not.toContainText('Software engineering. Keep it broad');
  expect(starts).toBe(1);expect(messagesSent).toBe(2);
- await page.getByRole('checkbox',{name:/Allow elo/}).check();
+ await expect(page.getByRole('checkbox',{name:/Allow elo/})).toHaveCount(0);
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEditable();
  await page.getByRole('textbox',{name:'Message elo'}).fill(profileMessage);
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByRole('heading',{name:'Review your career target'})).toBeVisible();

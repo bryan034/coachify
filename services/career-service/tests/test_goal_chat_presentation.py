@@ -66,7 +66,7 @@ def test_summary_renders_career_field_with_a_bold_label():
             return NS(data=output)
         request.app.state.ai=NS(generate=generate)
         reply=(await summarize(request,'owner',body))['reply']
-        assert '**Field:** Data.\n\n**Interview expectations:**' in reply
+        assert '**Field:** Data.\n\n### Research findings\n\n**Interview expectations:**' in reply
         assert reply.count('Ask me anything about this goal set!')==1
     asyncio.run(run())
 
@@ -74,8 +74,11 @@ def test_summary_renders_career_field_with_a_bold_label():
 @pytest.mark.parametrize('ref',['missing_fact','https://untrusted.test','s999'])
 def test_overview_rejects_invented_sources(ref):
     async def run():
-        request,body,*_=environment(references=(ref,))
-        with pytest.raises(AIError):await summarize(request,'owner',body)
+        request,body,*_=environment('UNAPPROVED_MODEL_CLAIM',references=(ref,))
+        reply=(await summarize(request,'owner',body))['reply']
+        assert 'UNAPPROVED_MODEL_CLAIM' not in reply and ref not in reply
+        assert 'An interview is reported.' in reply and '[Source](<https://example.test/job>)' in reply
+        assert 'Showing saved facts' in reply
     asyncio.run(run())
 
 
@@ -91,7 +94,7 @@ def test_overview_rejects_a_result_for_a_replaced_goal():
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('status',['completed','partial'])
+@pytest.mark.parametrize('status',['completed','partial','failed'])
 def test_summary_requires_research_linked_to_the_current_goal_revision(status):
     async def run():
         request,body,_,calls,record=environment()
@@ -105,6 +108,49 @@ def test_summary_requires_research_linked_to_the_current_goal_revision(status):
         request.app.state.research_store.read=read
         with pytest.raises(GoalError):await summarize(request,'owner',body)
         assert reads==[('owner','goal','research',{'current':True,'goal_version':1})]
+        assert not calls
+    asyncio.run(run())
+
+
+def test_failed_report_explains_each_category_without_another_model_call():
+    async def run():
+        request,body,_,calls,record=environment()
+        record.intelligence.status='failed'
+        record.intelligence.categories={
+            'interview_intelligence':NS(status='failed',error_code='context_limit',findings=[]),
+            'career_progression':NS(status='failed',error_code='invalid_output',findings=[]),
+        }
+        reply=(await summarize(request,'owner',body))['reply']
+        assert reply.startswith('## Research could not be completed')
+        assert '**Findings:** No validated research findings were saved' in reply
+        assert '### Interview expectations' in reply and 'context or token allowance' in reply
+        assert '### Career progression' in reply and 'could not be validated' in reply
+        assert '**Resume research**' in reply and 'goal remains saved' in reply
+        assert not calls
+    asyncio.run(run())
+
+
+def test_failed_refresh_summary_preserves_cited_findings_and_scope():
+    async def run():
+        request,body,_,calls,record=environment()
+        record.intelligence.status='failed'
+        category=record.intelligence.categories['interviews']
+        category.status='failed';category.error_code='timeout'
+        category.findings[0].scope='general'
+        reply=(await summarize(request,'owner',body))['reply']
+        assert 'Previously validated findings are retained' in reply
+        assert 'An interview is reported. (related context) [Source](<https://example.test/job>)' in reply
+        assert 'took too long' in reply
+        assert not calls
+    asyncio.run(run())
+
+
+def test_failed_report_with_pending_category_cannot_publish_a_summary():
+    async def run():
+        request,body,_,calls,record=environment()
+        record.intelligence.status='failed'
+        record.intelligence.categories['interviews'].status='pending'
+        with pytest.raises(GoalError,match='still running'):await summarize(request,'owner',body)
         assert not calls
     asyncio.run(run())
 
@@ -125,6 +171,7 @@ def test_followup_is_scoped_cited_and_never_exports_conversation(monkeypatch,top
             return NS(data=output)
         class Store:
             def __init__(self,*args):pass
+            def save_question(self,*args):pass
             def fetch(self,*args):return {'role':'Analyst','field':'Data','company':'Example'},{}
         monkeypatch.setattr('app.workflows.context_chat.QuestionStore',Store)
         request.app.state.ai=NS(generate=generate)
@@ -139,7 +186,7 @@ def test_followup_is_scoped_cited_and_never_exports_conversation(monkeypatch,top
             assert 'Example Analyst' in searches[0] and 'location' in searches[0]
             assert 'private' not in searches[0] and '@' not in searches[0]
             assert 'https://example.test/job' in result.reply
-            assert events==['understanding_question','searching_question','answering_question']
+            assert events==['understanding_question','searching_question','answering_question','saving_question_findings']
             assert len(checks)>=3
     asyncio.run(run())
 
@@ -160,8 +207,10 @@ def test_summary_remount_reuses_the_same_operation():
 def test_overview_requires_citations_for_retained_findings():
     async def run():
         request,body,_,_,record=environment('A claim without its citation.',references=('goal',))
-        record.intelligence.categories={'interviews':NS(findings=[NS(source_ids=['s1'])])}
-        with pytest.raises(AIError):await summarize(request,'owner',body)
+        record.intelligence.categories={'interviews':NS(status='completed',findings=[NS(source_ids=['s1'],value='Saved cited finding.')])}
+        reply=(await summarize(request,'owner',body))['reply']
+        assert 'A claim without its citation.' not in reply
+        assert 'Saved cited finding. [Source](<https://example.test/job>)' in reply
     asyncio.run(run())
 
 

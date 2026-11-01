@@ -15,3 +15,9 @@ Assessment/Roadmap model endpoints are independently configured using each servi
 instance. Gemini retains native JSON Schema; compatible local/DeepSeek providers
 receive JSON Output with authoritative schema/domain checks after generation.
 Synthetic endpoint/credential/concurrency tests live in `tests/test_model.py`.
+
+`model_sdk.py` supplies bounded sync/async OpenAI SDK transport for all four AI
+services, including Career's existing adapter. It disables SDK retries, prevents
+redirects, bounds rejection bodies to 16 KiB and leaves injected HTTP clients open.
+Services retain their own successful-response limits, validation and retry policy.
+Vendor extensions use `extra_body`; local requests omit Authorization.

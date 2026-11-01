@@ -9,7 +9,7 @@ from app.ai.adapter import AIAdapter,AIError,MODEL_OUTPUTS,Operation
 from app.ai.config import GeminiSettings
 from app.ai.contracts import AIInput
 from app.ai.opportunity_config import OpportunitySettings
-from app.ai.opportunity_contracts import StructuredFindings,FIELD_GUIDANCE
+from app.ai.opportunity_contracts import StructuredFindings,FIELD_GUIDANCE,structure_input
 from app.ai.routing import ModelRouter
 from app.clients.search_sources import SourceAPIs
 from app.repositories.goals import now
@@ -83,17 +83,15 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
             assert schema['name']=='opportunity_structure'
             supplied=json.loads(payload['messages'][1]['content'])
             assert supplied['field_guidance']==FIELD_GUIDANCE[category]
-            excerpt=supplied['sources'][0]['excerpt']
-            assert all(text in excerpt for text in passages.values())
-            result={'findings':[{'field':field,'value':text,'refs':[0],'quotes':[text],
+            assert all(any(text in item['text'] for item in supplied['evidence']) for text in passages.values())
+            result={'findings':[{'field':field,'value':text,'evidence_ref':next(item['ref'] for item in supplied['evidence'] if text in item['text']),
                 'confidence':'medium','evidence_type':'candidate_reported','scope':'exact'} for field,text in passages.items()]}
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(result)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             sources=await SourceAPIs(client,brave_key='synthetic-brave').collect_opportunity_query(
                 ResearchContext(role='Analyst Intern',field='Data',company='Example'),f'Example internship {category}')
             selected=select_evidence(sources,OpportunitySettings().evidence_tokens)
-            context={'category':category,'allowed_fields':fields,'field_guidance':FIELD_GUIDANCE[category],
-                'sources':[{'ref':i,'title':s.title,'url':s.url,'excerpt':s.evidence} for i,s in enumerate(selected)]}
+            context=structure_input({},category,selected)
             public={'company':'Example','employment_type':'internship'}
             adapter=AIAdapter(GeminiSettings(enabled=True,api_key='synthetic-gemini',max_output_tokens=4096),client)
             result=await adapter.generate(AIInput(stage='opportunity_structure',context=json.dumps(context)),

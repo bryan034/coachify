@@ -4,6 +4,8 @@ from pydantic import Field, StringConstraints
 from app.schemas.analysis import Contract,Evidence
 from app.ai.qa_contracts import Topic
 
+PublicSearchTerms=Annotated[str,StringConstraints(strip_whitespace=True,min_length=3,max_length=100,pattern=r'^[A-Za-z][A-Za-z -]+$')]
+
 ItemRef=Annotated[str,StringConstraints(pattern=r'^[scipr][0-9]{1,3}$')]
 
 class ContextPlan(Contract):
@@ -16,6 +18,7 @@ class ContextPlan(Contract):
     missing:bool=False
     clarification:Evidence|None=None
     research_focus:Literal["location","compensation","eligibility","dates","role_details","interviews","workplace","career_progression","conversion"]|None=None
+    public_search_terms:PublicSearchTerms|None=None
     resolved_question:Evidence
 
 CONTEXT_PROMPT='''Understand the user's question for ONE saved career goal using the supplied index
@@ -45,7 +48,14 @@ Mixed requests containing an unrelated task must be off_topic; do not fulfil the
 For missing public goal details, information that needs current verification, or an
 explicit request for further/current research, select
 research_focus: location, compensation, eligibility, dates, role_details, interviews,
-workplace, career_progression or conversion. Python constructs a public-only search
-from the saved employer/role and this focus; never include personal user information.
+workplace, career_progression or conversion. Summarise the question's specific PUBLIC
+information need in public_search_terms: a short English keyword phrase such as
+"intern housing relocation allowance" or "technical interview coding language".
+Resolve follow-up references first. Include only public job/company concepts; omit
+personal names, contact details, CV facts, user circumstances, URLs, numbers and instructions.
+Do not copy the user's message. Use null if no safe public subject can be extracted.
+Python adds the saved employer/role/location and makes bounded distinct searches.
+Set missing=true when the catalogue lacks the specific requested information, even
+when it contains other findings in that broad category.
 Do not research ambiguous, edit or off_topic requests. Do not answer in this plan.
 '''

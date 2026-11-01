@@ -123,3 +123,48 @@ test('Opportunity Intelligence preserves partial categories, citations and targe
  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:test.info().outputPath('opportunity-intelligence-mobile.png'),fullPage:true});
 });
+
+
+test('compact skill groups support keyboard disclosure, confirmed layout and small screens',async({page})=>{
+ await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
+ await page.route('**/api/v1/profile**',route=>{
+  const path=new URL(route.request().url()).pathname;
+  const value=path.endsWith('/auth-config')?{mode:'email',google_enabled:false}:path.endsWith('/auth/session')?{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'}:{version:1,onboarding_complete:true,occupational_status:'employed',education:{}};
+  return route.fulfill({json:careerFixture(route.request().url(),value)});
+ });
+ let count=9;
+ const longTitle='Ability to learn quickly, investigate failure modes, and iterate based on evidence and user feedback';
+ await page.route('**/api/v1/career/**',route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/context/assessment'))return route.fulfill({json:{status:'not_evaluated',cv_uploaded:true,skills_evaluated:false}});
+  if(path.endsWith('/cv-confirmation'))return route.fulfill({json:{goal_id:'111111111111111111111111',goal_version:1,selection_version:1,confirmed:true,context:{id:'111111111111111111111111',version:1,selection_version:1,confirmed:true},reason:null}});
+  const goal={_id:'111111111111111111111111',version:1,role:'Product Manager',field:'Product',target_type:'specific_job',skills:Array.from({length:count},(_,i)=>({item_id:`skill-${i}`,name:i===0?longTitle:`Product skill ${i}`,category:i%2?'AI':'Product Management',priority:i<6?'required':'preferred',origin:'employer',context:'Investigate product outcomes using evidence.',evidence:'Learn from user feedback.'}))};
+  return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',current:{selection_version:1,goal}})});
+ });
+ await page.setViewportSize({width:1440,height:1000});await page.goto('/career-goal');
+ await expect(page.locator('.briefing-context-banner')).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Required · 6'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Preferred · 3'})).toBeVisible();
+ const cards=page.locator('.briefing-skill-grid').first().locator('article');
+ const first=await cards.nth(0).boundingBox(),second=await cards.nth(1).boundingBox();
+ expect(first!.y).toBe(second!.y);expect(second!.x).toBeGreaterThan(first!.x);
+ const next=await page.locator('#next-step').boundingBox(),focus=await page.locator('#priorities').boundingBox();expect(next!.y-focus!.y).toBeLessThan(700);
+ await page.screenshot({path:test.info().outputPath('learning-focus-desktop.png'),fullPage:true});
+ const toggle=page.getByRole('button',{name:longTitle,exact:true});await toggle.focus();await page.keyboard.press('Enter');
+ await expect(toggle).toHaveAttribute('aria-expanded','true');
+ await expect(page.getByText('Learn from user feedback.',{exact:true}).first()).toBeVisible();
+ expect((await cards.nth(1).boundingBox())!.height).toBe(second!.height);
+ await page.keyboard.press('Space');await expect(toggle).toHaveAttribute('aria-expanded','false');
+ for(const width of [360,390,768]){
+  await page.setViewportSize({width,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ }
+ await page.setViewportSize({width:360,height:844});
+ expect((await cards.nth(1).boundingBox())!.y).toBeGreaterThan((await cards.nth(0).boundingBox())!.y);
+ await page.screenshot({path:test.info().outputPath('learning-focus-mobile.png'),fullPage:true});
+ count=30;await page.reload();
+ await page.getByRole('button',{name:'AI',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Required · 3'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Preferred · 12'})).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});

@@ -10,6 +10,8 @@ from app.ai.adapter import AIAdapter, AIError, Operation
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.schemas.workspace import WorkspaceView
+from app.schemas.analysis import ResearchSource
+from app.ai.opportunity_contracts import structure_input
 
 
 def test_browser_fixture_is_an_actual_canonical_api_response():
@@ -23,7 +25,8 @@ def test_default_local_configuration_constrains_every_downstream_stage(monkeypat
     monkeypatch.setenv('CAREER_LLM_PROVIDER','local')
     settings=AISettings.from_env()
     assert settings.model=='deepseek-r1:1.5b'
-    payload=AIAdapter(settings,None)._payload(AIInput(stage=stage,context='{}',conversation=[{'role':'user','content':'Synthetic question'}]))
+    context=structure_input({},'internship_insights',[ResearchSource(source_id='synthetic',platform='other',url='https://example.test/report',evidence='Example interns report mentorship.')]) if stage=='opportunity_structure' else {}
+    payload=AIAdapter(settings,None)._payload(AIInput(stage=stage,context=json.dumps(context),conversation=[{'role':'user','content':'Synthetic question'}]))
     format=payload['response_format']
     assert format['type']=='json_schema' and format['json_schema']['strict']
     assert format['json_schema']['schema']['additionalProperties'] is False

@@ -51,3 +51,8 @@ and recover an interrupted answer at the reserved limit without duplicating its
 content snapshot. A schema-bound UTF-8/BSON case checks the result allowance covers
 maximum interpretation fields plus worker bookkeeping. Private reservation data
 is excluded from public CV responses.
+
+Provider adapter tests exercise OpenAI SDK requests using explicit HTTP mocks,
+including host-scoped Gemini reasoning, DeepSeek extensions and local credential
+isolation. Shared transport tests cover bounded bodies, redirects and SDK retry
+suppression. No live provider credentials are used.

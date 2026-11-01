@@ -76,7 +76,7 @@ def test_local_timeout_and_context_defaults_are_independent_of_cloud(monkeypatch
     monkeypatch.delenv('CAREER_LOCAL_TIMEOUT_SECONDS',raising=False)
     monkeypatch.setenv('AI_CONTEXT_TOKENS','')  # Compose delegates to provider defaults.
     local=AISettings.from_env()
-    assert local.timeout_seconds==45 and local.context_tokens==16384
+    assert local.timeout_seconds==60 and local.context_tokens==16384
     monkeypatch.setenv('CAREER_LOCAL_TIMEOUT_SECONDS','240')
     assert AISettings.from_env().timeout_seconds==240
     monkeypatch.setenv('CAREER_LOCAL_TIMEOUT_SECONDS','301')
@@ -204,6 +204,7 @@ def test_unrelated_edit_and_ambiguous_questions_never_search(monkeypatch,topic,c
         request,body,*_=environment();body.conversation=[];body.message='A synthetic question'
         class Store:
             def __init__(self,*args):pass
+            def save_question(self,*args):pass
             def fetch(self,*args):return {'role':'Analyst','field':'Data'},{}
         monkeypatch.setattr('app.workflows.context_chat.QuestionStore',Store)
         async def search(*args):pytest.fail('This route must not search.')
@@ -236,9 +237,10 @@ def test_saved_goal_questions_automatically_search_when_more_information_is_need
         request,body,*_=environment();body.message='PRIVATE question about this role';body.conversation=[]
         class Store:
             def __init__(self,*args):pass
+            def save_question(self,*args):pass
             def fetch(self,*args):return {'role':'Analyst','field':'Data','company':'Public Example','location':'Singapore'},{}
         monkeypatch.setattr('app.workflows.context_chat.QuestionStore',Store)
-        monkeypatch.setattr('app.workflows.context_chat.selected_facts',lambda *args:([{'ref':'f1','data':{'name':'SQL'}}],{'f1':[]},False))
+        monkeypatch.setattr('app.workflows.context_chat.selected_facts',lambda *args:([],{},False) if missing else ([{'ref':'f1','data':{'name':'SQL'}}],{'f1':[]},False))
         searches=[];answers=[];repaired=False
         async def collect(context,query):
             searches.append(query)

@@ -181,12 +181,12 @@ Only structured extraction and bounded evidence are saved in MongoDB.
 
 Configure `CV_LLM_MODEL` and `CV_LLM_API_KEY` yourself in private settings to enable structured extraction, text routing and clarification-answer interpretation.
 `CV_LLM_BASE_URL` defaults to
-`https://api.groq.com/openai/v1`. Choose a model supporting JSON object output;
+`https://generativelanguage.googleapis.com/v1beta/openai`. The public template
+selects `gemini-3.5-flash-lite` through the OpenAI SDK with JSON object output;
 the server validates the schema and cited evidence before publication. Keys
 stay on the server. Missing configuration is an actionable processing error,
 never a synthetic successful extraction. No provider calls are needed for
-automated tests. See [Groq compatibility](https://console.groq.com/docs/openai)
-and [structured output modes](https://console.groq.com/docs/structured-outputs).
+automated tests. See [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai).
 
 For DeepSeek, use `CV_LLM_BASE_URL=https://api.deepseek.com`,
 `CV_LLM_MODEL=deepseek-flash` and your private `CV_LLM_API_KEY`.
@@ -229,8 +229,44 @@ chat, summaries and edits. Model inference and public search are configured inde
 Apply the following settings yourself in the existing private `infrastructure/docker/.env`,
 preserving other settings and credentials. Agents do not read or edit that file.
 
-For local testing, the public template selects an Ollama-compatible server on the Docker
-host and keeps Brave LLM Context for search:
+The public template selects Gemini through the OpenAI Python SDK for Career, CV,
+Assessment and Roadmap. No Google/Gemini SDK is required. Model requests use
+[Gemini's OpenAI-compatible endpoint](https://ai.google.dev/gemini-api/docs/openai)
+and the SDK's streaming HTTP response interface so application response limits
+still apply. SDK retries are disabled; each service retains its existing retry,
+quota, timeout and validation policy. Profile, Dashboard and Review make no model calls.
+
+Apply these values yourself in `infrastructure/docker/.env`, preserving unrelated
+settings. Agents never read or edit that private file. Supply a Gemini API key to
+each service's separate `*_LLM_API_KEY` setting (you may explicitly use the same
+Gemini key for all four). A blank key keeps model-backed work unavailable.
+
+```dotenv
+CAREER_LLM_PROVIDER=gemini
+CAREER_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+CAREER_LLM_MODEL=gemini-3.5-flash-lite
+CAREER_LLM_RESPONSE_MODE=json_schema
+CAREER_LLM_TOKEN_PARAMETER=max_tokens
+CV_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+CV_LLM_MODEL=gemini-3.5-flash-lite
+CV_LLM_ALLOW_HTTP=false
+ASSESSMENT_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+ASSESSMENT_LLM_MODEL=gemini-3.5-flash-lite
+ASSESSMENT_LLM_ALLOW_HTTP=false
+ROADMAP_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+ROADMAP_LLM_MODEL=gemini-3.5-flash-lite
+ROADMAP_LLM_ALLOW_HTTP=false
+```
+
+Keep `AI_ENABLED=true` for Career inference. Brave remains independently configured
+for public search; switching inference to Gemini does not replace the search API.
+Existing private local/DeepSeek overrides take precedence until you change them.
+Rebuild/recreate `career-service`, `cv-service`, `assessment-service` and
+`roadmap-service` after configuring keys and models. Synthetic tests verify transport
+and contracts; live model availability and quality require configured provider access.
+
+For optional local testing, select an Ollama-compatible server on the Docker host
+and keep Brave LLM Context for search:
 
 ```dotenv
 AI_ENABLED=true
@@ -240,7 +276,7 @@ CAREER_LLM_MODEL=deepseek-r1:1.5b
 CAREER_LLM_RESPONSE_MODE=json_schema_strict
 CAREER_LLM_TOKEN_PARAMETER=max_tokens
 CAREER_LLM_API_KEY=
-CAREER_LOCAL_TIMEOUT_SECONDS=45
+CAREER_LOCAL_TIMEOUT_SECONDS=60
 AI_MAX_OUTPUT_TOKENS=8192
 AI_CONTEXT_TOKENS=32768
 OPPORTUNITY_RUN_SECONDS=600
@@ -255,7 +291,7 @@ set provider, base URL, model, response mode and token parameter together. HTTPS
 OpenAI-compatible services use `CAREER_LLM_PROVIDER=compatible`; providers without
 native schema support can select `json_object`, which requires validation/repair.
 The legacy local JSON Object setting still upgrades identification, JD extraction
-and summary to native schema. Select `CAREER_LLM_TOKEN_PARAMETER=max_completion_tokens`
+summary and public research to native schema. Select `CAREER_LLM_TOKEN_PARAMETER=max_completion_tokens`
 for models requiring that parameter. SDK retries are disabled; the existing workflow
 owns retries, deadlines and cooldowns. No model credentials reach the frontend.
 
@@ -266,18 +302,18 @@ container. Docker Desktop provides `host.docker.internal`; Linux Docker users mu
 that hostname to the host gateway in their deployment. Keep the local server private.
 HTTP and an empty model key are accepted only with the explicit `local` provider.
 Local inference is serialized across Career chat, extraction, discovery and research
-within the single Career worker. `CAREER_LOCAL_TIMEOUT_SECONDS=45` gives each admitted
-model call 45 seconds; supported values are 1–300 seconds. Waiting for the model
+within the single Career worker. `CAREER_LOCAL_TIMEOUT_SECONDS=60` gives each admitted
+model call 60 seconds; supported values are 1–300 seconds. Waiting for the model
 slot does not consume that call's inference budget. Cancellation and goal/version
 changes are checked before a queued request reaches the model. Cloud requests remain
-concurrent and use `AI_TIMEOUT_SECONDS=45` (maximum 60); the local setting is ignored.
+concurrent and use `AI_TIMEOUT_SECONDS=60` (maximum 60); the local setting is ignored.
 The Opportunity pipeline defaults to a 600-second local run budget unless explicitly
 configured otherwise. Local discovery and legacy research also have 600-second run
 budgets with leases lasting longer than the run; search HTTP deadlines remain unchanged.
 Work can still fail if it exceeds a workflow deadline or cannot fit the model context.
 Use one Career worker/replica for local testing; the model slot is process-local.
 
-Career now defaults to the exact `deepseek-r1:1.5b` model. Verify that the server's
+The local provider defaults to the exact `deepseek-r1:1.5b` model. Verify that the server's
 actual context is at least `AI_CONTEXT_TOKENS`; this application setting does not
 configure Ollama. If a fixed smaller profile is preferred, the optional
 `elo-deepseek-r1:1.5b` alias fixes Ollama's context at 16,384 tokens while reusing the
@@ -371,7 +407,7 @@ CAREER_LLM_PROVIDER=deepseek
 CAREER_LLM_BASE_URL=https://api.deepseek.com/v1
 CAREER_LLM_MODEL=deepseek-flash
 CAREER_LLM_RESPONSE_MODE=json_object
-AI_TIMEOUT_SECONDS=45
+AI_TIMEOUT_SECONDS=60
 AI_CONTEXT_TOKENS=65536
 OPPORTUNITY_RUN_SECONDS=300
 CAREER_LLM_API_KEY=YOUR_PRIVATE_DEEPSEEK_KEY
@@ -380,7 +416,9 @@ CAREER_RESEARCH_API_KEY=YOUR_PRIVATE_DEEPSEEK_KEY
 ```
 
 The keys are separate settings even when the same DeepSeek account/key is used.
-DeepSeek requests use JSON Output with a schema in the prompt and thinking disabled
+Career Discovery's five stages use DeepSeek Responses with a JSON Schema in
+`text.format`; this overrides JSON-only mode for those stages without another key
+or environment setting. Other DeepSeek requests use JSON Output with a schema in the prompt and thinking disabled
 so existing small output budgets apply to final JSON. Local requests receive no
 DeepSeek-specific thinking parameter. Every output still passes backend schema,
 provenance, ownership and version validation; provider/model changes never bypass it.
@@ -411,8 +449,12 @@ The old `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MOD
 settings remain unused. Assessment, Roadmap and CV retain their independent model settings.
 
 Saved-goal follow-up questions may research automatically when public information is
-missing or needs current verification. A model `not_found` answer triggers at most
-one scoped retrieval and one additional answering call; empty results remain unknown.
+missing or needs current verification. The router extracts a concise public search
+subject, combined with the saved employer/role/location. Empty/irrelevant results or
+a model `not_found` answer allow up to three distinct searches in the same turn,
+stopping after a supported answer. Cited exact passages append to the existing
+owner/version-linked `question_research` JSON; unrelated pages and generated answers
+are not saved as evidence. Empty results after this bounded search remain unknown.
 Retries of invalid answer formatting reuse the retrieved evidence. Unrelated tasks,
 ambiguous questions and goal edits never trigger this automatic search path.
 
@@ -575,3 +617,12 @@ Rebuild using the existing Compose workflow after applying configuration. Profil
 For direct Python development, install `packages/elo-shared` before installing a service. Assessment and Roadmap each use their own `MONGODB_URI`/`MONGODB_DATABASE`; defaults are `elo_assessment` and `elo_roadmap`. Internal URLs are `PROFILE_SERVICE_URL`, `CV_SERVICE_URL`, `CAREER_SERVICE_URL` and `ASSESSMENT_SERVICE_URL`. The gateway exposes `/api/v1/assessments` and `/api/v1/roadmaps`; the UI stays at `/roadmap`.
 
 Older extracted goals will not gain job dates automatically because their raw JDs are not retained. The adviser can discuss a user-selected preparation target; a new JD extraction can capture sourced application/interview/start wording. Existing CV skill keys and manual attachments are preserved. A null new canonical ID means unresolved mapping, not missing capability.
+
+Career research planning and category structuring each allow up to 4,096 output
+tokens, bounded by `AI_MAX_OUTPUT_TOKENS`. A 60-second model deadline does not
+prevent output-token truncation. Local research includes its JSON schema in the
+prompt as well as the native decoding format. Planning uses the model deadline
+in both early retrieval and durable research; search HTTP deadlines stay separate.
+Existing private settings override defaults: apply `CAREER_LOCAL_TIMEOUT_SECONDS=60`
+for local inference or `AI_TIMEOUT_SECONDS=60` for cloud inference in your private
+`infrastructure/docker/.env`, then recreate Career yourself.

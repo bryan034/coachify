@@ -26,7 +26,11 @@ test('Career previews validate real sessions, read a document and discard source
  const failedOperation=await failure;
  expect(await failedOperation.json()).toMatchObject({code:'not_configured'});
  await expect(page.getByRole('log').getByRole('alert')).toContainText('AI is disabled');
- await expect(page.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
+ const composer=page.getByRole('textbox',{name:'Message elo'});
+ await expect(composer).toBeEnabled();
+ await expect(page.getByRole('button',{name:'Send message'})).toBeDisabled();
+ await composer.fill('Question after provider setup');
+ await expect(composer).toHaveValue('Question after provider setup');
  await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeEnabled();
  const goals=await account.get('/api/v1/career/goals');
  expect(goals.ok()).toBe(true);

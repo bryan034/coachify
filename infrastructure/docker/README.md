@@ -12,7 +12,7 @@ The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV
 
 ## Configuration
 
-The public [`.env.example`](.env.example) lists all active deployment inputs, grouped by service: gateway/auth/email, scoped database passwords, Career LLM/research and limits, CV model/storage/usage settings, and separate Assessment/Roadmap database passwords and Gemini model keys. Keep every user-configurable deployment value in the single ignored `infrastructure/docker/.env`; do not add per-service environment files. Agents may maintain the public template. Configure private values yourself, preserving existing database passwords. Agents must not inspect private environment files. Career uses `AI_ENABLED`, `CAREER_LLM_PROVIDER`, `CAREER_LLM_BASE_URL`, `CAREER_LLM_RESPONSE_MODE`, `CAREER_LLM_MODEL`, `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_PROVIDER` and `CAREER_RESEARCH_API_KEY`. The public template selects local DeepSeek-compatible inference plus Brave; production can select DeepSeek cloud plus DeepSeek Search. See [model/search setup](../../docs/setup.md#career-model-and-search-configuration). CV has a separate configurable OpenAI-compatible adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
+The public [`.env.example`](.env.example) lists all active deployment inputs, grouped by service: gateway/auth/email, scoped database passwords, Career LLM/research and limits, CV model/storage/usage settings, and separate Assessment/Roadmap database passwords and Gemini model keys. Keep every user-configurable deployment value in the single ignored `infrastructure/docker/.env`; do not add per-service environment files. Agents may maintain the public template. Configure private values yourself, preserving existing database passwords. Agents must not inspect private environment files. Career uses `AI_ENABLED`, `CAREER_LLM_PROVIDER`, `CAREER_LLM_BASE_URL`, `CAREER_LLM_RESPONSE_MODE`, `CAREER_LLM_MODEL`, `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_PROVIDER` and `CAREER_RESEARCH_API_KEY`. The public template selects Gemini inference through the OpenAI Python SDK for all four AI services, plus Brave search. Local and DeepSeek configurations remain optional. See [model/search setup](../../docs/setup.md#career-model-and-search-configuration). CV has a separate configurable OpenAI SDK adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
 
 The local profile uses `elo-deepseek-r1:1.5b` (an Ollama alias with 16,384 context
 tokens), `AI_CONTEXT_TOKENS=16384`, `CAREER_LOCAL_TIMEOUT_SECONDS=45` and
@@ -69,6 +69,16 @@ Next.js Fast Refresh updates UI changes and Uvicorn reloads Python changes in
 Profile, Career and CV. NGINX forwards the HMR WebSocket. Webpack polling is enabled
 for Docker Desktop bind mounts. Some React edits trigger a full refresh and reset
 unsaved browser state; Python reloads interrupt in-flight requests.
+
+The development image gives the `node` user ownership of the frontend directory
+so Next.js can generate `next-env.d.ts` on first startup. If an older image reports
+`EACCES` for that file, rebuild the frontend image and recreate its container.
+
+The development image gives the `node` user ownership of the frontend directory so
+Next.js can create its generated `next-env.d.ts` on startup. If an older image fails
+with `EACCES` for that file, rebuild/recreate `frontend` using both Compose files,
+then restart `gateway`. Set `GATEWAY_PORT` in your private configuration to use a
+different host port (for example, `8081` means `http://localhost:8081`).
 
 Only source/public/config paths are mounted, read-only. Dependencies stay in the
 image; `.next` uses a separate development cache volume. No environment files are

@@ -15,7 +15,7 @@ Before CV clarification uses the current goal, the user explicitly confirms its 
 - Development infrastructure: Docker Compose; optional local MongoDB container.
 - Proposed production database: MongoDB Atlas, external to the application containers.
 - Account access: email/password accounts with OTP email verification, emailed-code password recovery, and revocable 24-hour sessions. Development supports either Mailpit capture or real delivery with Gmail SMTP; production uses authenticated encrypted SMTP.
-- AI: Career supports local OpenAI-compatible or DeepSeek/Gemini cloud inference, with independently selected Brave LLM Context or DeepSeek Search public research. CV uses a separately configured OpenAI-compatible API for extraction, conversation routing and clarification interpretation. Preview endpoints make no model calls. Application hosting is not selected.
+- AI: All model calls use the OpenAI Python SDK, with Gemini selected in the public deployment template. Career supports local OpenAI-compatible or DeepSeek/Gemini cloud inference, with independently selected Brave LLM Context or DeepSeek Search public research. CV uses a separately configured OpenAI-compatible API for extraction, conversation routing and clarification interpretation. Preview endpoints make no model calls. Application hosting is not selected.
 
 ## Repository layout
 

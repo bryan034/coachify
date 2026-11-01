@@ -51,7 +51,8 @@ def test_compatible_provider_contract_and_incomplete_output(monkeypatch, finish,
         requests.append(json.loads(request.content))
         return httpx.Response(200, json={'choices': [{'finish_reason': finish, 'message': {'content': content}}]})
     original = httpx.Client
-    monkeypatch.setattr(httpx, 'Client', lambda **kwargs: original(transport=httpx.MockTransport(transport), **kwargs))
+    for module in ('extractor', 'conversation', 'interpretation'):
+        monkeypatch.setattr('app.clients.' + module + '.Client', lambda **kwargs: original(transport=httpx.MockTransport(transport), **kwargs))
     extractor = Extractor()
     if expected:
         output, metadata = extractor.extract([{'id': 'b1', 'location': 'Page 1', 'text': 'Synthetic CV'}])
@@ -68,13 +69,15 @@ def test_compatible_provider_contract_and_incomplete_output(monkeypatch, finish,
     ('https://api.deepseek.com/v1/', True),
     ('https://API.DEEPSEEK.COM', True),
     ('https://api.groq.com/openai/v1', False),
+    ('https://generativelanguage.googleapis.com/v1beta/openai', False),
+    ('https://generativelanguage.googleapis.com.example/v1', False),
     ('https://api.openai.com/v1', False),
     ('https://api.deepseek.com.example/v1', False),
     ('https://proxy.example/api.deepseek.com', False),
     ('https://deepseek.com', False),
 ])
 @pytest.mark.parametrize('operation', ['extract', 'route', 'interpret'])
-def test_deepseek_thinking_option_is_host_scoped_for_all_cv_requests(monkeypatch, base_url, deepseek, operation):
+def test_vendor_options_are_host_scoped_for_all_cv_requests(monkeypatch, base_url, deepseek, operation):
     configure(monkeypatch)
     monkeypatch.setenv('CV_LLM_BASE_URL', base_url)
     # A model name alone must not send DeepSeek options to another provider.
@@ -91,7 +94,8 @@ def test_deepseek_thinking_option_is_host_scoped_for_all_cv_requests(monkeypatch
         return httpx.Response(200, json={'choices': [{'finish_reason': 'stop',
             'message': {'content': json.dumps(outputs[operation])}}]})
     original = httpx.Client
-    monkeypatch.setattr(httpx, 'Client', lambda **kwargs: original(transport=httpx.MockTransport(transport), **kwargs))
+    for module in ('extractor', 'conversation', 'interpretation'):
+        monkeypatch.setattr('app.clients.' + module + '.Client', lambda **kwargs: original(transport=httpx.MockTransport(transport), **kwargs))
     if operation == 'extract':
         output, metadata = Extractor().extract([{'id': 'b1', 'location': 'Page 1', 'text': 'Synthetic CV'}])
     elif operation == 'route':
@@ -116,4 +120,7 @@ def test_deepseek_thinking_option_is_host_scoped_for_all_cv_requests(monkeypatch
         assert payload['thinking'] == {'type': 'disabled'}
     else:
         assert 'thinking' not in payload
-    assert 'reasoning_effort' not in payload
+    if httpx.URL(base_url).host == 'generativelanguage.googleapis.com':
+        assert payload['reasoning_effort'] == 'minimal'
+    else:
+        assert 'reasoning_effort' not in payload

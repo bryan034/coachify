@@ -12,6 +12,85 @@ from app.workflows.structured import structured_node
 from app.workflows.current import workspace_revision
 from app.workflows.citations import summary_text, source_links
 
+CATEGORY_LABELS={
+    'interview_intelligence':'Interview expectations',
+    'internship_insights':'Internship insights',
+    'career_progression':'Career progression',
+    'conversion_outcomes':'Conversion rates',
+    'company_intelligence':'Company culture',
+}
+FAILURE_EXPLANATIONS={
+    'context_limit':'The research request exceeded the model context or token allowance.',
+    'invalid_output':'The model response could not be validated.',
+    'incomplete_output':'The model response ended before it was complete.',
+    'timeout':'The research provider took too long to respond.',
+}
+
+
+def failed_research_summary(goal,record):
+    """Explain saved failures without depending on the provider that just failed."""
+    sources={s.source_id:s.url for s in record.sources}
+    has_findings=any(c.findings for c in record.intelligence.categories.values())
+    points=['## Research could not be completed',
+            '**Saved goal:** '+summary_text(goal.role),
+            '**Findings:** '+('Previously validated findings are retained below.' if has_findings else 'No validated research findings were saved in this report.')]
+    for name,category in record.intelligence.categories.items():
+        points.append('### '+CATEGORY_LABELS.get(name,'Research category'))
+        if category.status=='not_applicable':
+            points.append('**Status:** This category does not apply to the saved goal.')
+            continue
+        for finding in category.findings:
+            citations=source_links(finding.source_ids,sources)
+            qualifier=' (related context)' if getattr(finding,'scope','exact')!='exact' else ''
+            points.append(summary_text(finding.value)+qualifier+(' '+citations if citations else ''))
+        explanation=FAILURE_EXPLANATIONS.get(getattr(category,'error_code',None),'The research provider could not complete this category.')
+        points.append('**Status:** '+explanation)
+    points.extend(['### Next steps','Your career goal remains saved. Use **Resume research** to try again. Context-limit failures may require a smaller research evidence budget or a larger model context allowance.',SUMMARY_CLOSING])
+    return {'reply':'\n\n'.join(points)}
+
+
+def saved_evidence_summary(goal,record):
+    """Present validated saved evidence; never reuse rejected model wording."""
+    def cited(text,urls):
+        links={str(index):url for index,url in enumerate(urls) if url}
+        citations=source_links(links,links)
+        return text+(' '+citations if citations else '')
+    goal_urls=[getattr(goal,'job_url',None)]
+    points=['## Your career goal',cited('**Role:** '+summary_text(goal.role),goal_urls),
+            '**Overview:** Showing saved facts because the AI-written overview could not be prepared.']
+    for field,label in (('company','Company'),('field','Field'),('location','Location')):
+        value=getattr(goal,field,None)
+        if value:points.append(cited('**'+label+':** '+summary_text(value),goal_urls))
+    for priority,label in (('required','Required skills'),('preferred','Preferred skills')):
+        skills=[skill for skill in getattr(goal,'skills',[]) or [] if skill.priority==priority]
+        if skills:
+            selected=skills[:10]
+            points.append(cited('**'+label+':** '+summary_text(', '.join(skill.name for skill in selected)),
+                [url for skill in selected for url in getattr(skill,'source_urls',[])]))
+            if len(skills)>10:points.append('More skills are available in **Role and research details**.')
+    if getattr(goal,'requirements_need_review',False):
+        points.append('**Requirements:** Your goal changed; review its saved requirements.')
+    sources={s.source_id:s.url for s in record.sources}
+    points.append('## Research findings')
+    for name,category in record.intelligence.categories.items():
+        points.append('### '+CATEGORY_LABELS.get(name,'Research category'))
+        findings=[finding for finding in category.findings if getattr(finding,'value',None)]
+        for finding in findings[:2]:
+            qualifiers=[]
+            if getattr(finding,'scope','exact')!='exact':qualifiers.append('related context')
+            if getattr(finding,'confidence',None):qualifiers.append(finding.confidence.replace('_',' ')+' confidence')
+            citations=source_links(finding.source_ids,sources)
+            points.append('- '+summary_text(finding.value)+(' ('+', '.join(qualifiers)+')' if qualifiers else '')+(' '+citations if citations else ''))
+        if len(findings)>2:points.append('More findings are available in **Role and research details**.')
+        if category.status in ('failed','partial'):
+            points.append('**Coverage:** '+FAILURE_EXPLANATIONS.get(getattr(category,'error_code',None),'Research coverage is incomplete for this category.'))
+        elif category.status=='not_applicable':points.append('**Coverage:** This category does not apply to the saved goal.')
+        elif not findings:points.append('**Coverage:** No supported findings were found in the retrieved sources.')
+        missing=getattr(category,'missing_fields',[])
+        if missing:points.append('**Missing information:** '+summary_text(', '.join(field.replace('_',' ') for field in missing))+'.')
+    points.append(SUMMARY_CLOSING)
+    return {'reply':'\n\n'.join(points)}
+
 
 async def summarize(request, account, body):
     repo = request.app.state.workspace_store
@@ -23,13 +102,17 @@ async def summarize(request, account, body):
             raise GoalError('Research changed or is incomplete. Reload your career goal.')
         goal = (await thread(repo.goals.current, account))['goal']
         record = await thread(request.app.state.research_store.read, account, goal.id, body.research_id, current=True, goal_version=goal.version)
-        if not record or not record.intelligence or record.intelligence.status not in ('completed','partial'):
+        if not record or not record.intelligence or record.intelligence.status not in ('completed','partial','failed'):
             raise GoalError('Complete opportunity research before preparing the summary.')
         if any(getattr(category,'status',None) in ('pending','running') for category in record.intelligence.categories.values()):
             raise GoalError('Research is still running. Wait before preparing the summary.')
         return goal, record
 
     goal, record = await snapshot()
+    if record.intelligence.status=='failed':
+        result=failed_research_summary(goal,record)
+        await snapshot()
+        return result
     sources = {s.source_id: s.url for s in record.sources}
     references = {}
     research_refs = set()
@@ -82,7 +165,8 @@ async def summarize(request, account, body):
     activity('preparing_summary')
     encoded = json.dumps(jsonable_encoder(context), separators=(',', ':'))
     if len(encoded) > 40000:
-        raise AIError('context_limit')
+        await snapshot()
+        return saved_evidence_summary(goal,record)
     @structured_node
     async def present(state):
         # Each repair rechecks ownership/version before another paid generation.
@@ -94,10 +178,19 @@ async def summarize(request, account, body):
         validate(result.data)
         return result.data
 
-    result = await present({})
+    try:
+        result = await present({})
+    except AIError as error:
+        if error.code not in ('invalid_output','incomplete_output','context_limit'):raise
+        await snapshot()
+        return saved_evidence_summary(goal,record)
     await snapshot()  # A replaced goal/research must never publish a stale overview.
     points=[]
+    research_heading=False
     for block in result.blocks:
+        if not research_heading and any(ref.startswith(('research_','coverage_')) for ref in block.references):
+            points.append('### Research findings')
+            research_heading=True
         text=summary_text(block.text.replace(SUMMARY_CLOSING,''))
         ids=list(dict.fromkeys(identifier for ref in block.references for identifier in references[ref]))
         citations=source_links(ids,sources)

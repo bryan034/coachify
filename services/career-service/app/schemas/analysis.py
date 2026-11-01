@@ -429,10 +429,14 @@ class InterviewProcess(Contract):
     stages: list[InterviewStage]=Field(default_factory=list,max_length=8)
 
 
-from app.schemas.opportunity import OpportunityReport
+from app.schemas.opportunity import OpportunityReport,Finding
+
+QuestionFocus=Literal['location','compensation','eligibility','dates','role_details','interviews','workplace','career_progression','conversion']
 
 class InterviewResearch(Document, ResearchContext):
     intelligence: OpportunityReport | None = None
+    question_focus: QuestionFocus | None = None
+    question_findings: list[Finding] = Field(default_factory=list,max_length=12)
     process: InterviewProcess=Field(default_factory=InterviewProcess)
     summaries: list[BraveAnswer] = Field(default_factory=list,max_length=2)
     coverage: list[ResearchCoverage] = Field(default_factory=list,max_length=6)
@@ -452,6 +456,13 @@ class InterviewResearch(Document, ResearchContext):
         sources = {s.source_id: s for s in self.sources}
         if len(sources) != len(self.sources) or len({canonical_url(s.url) for s in self.sources}) != len(self.sources):
             raise ValueError('Duplicate source ID or URL.')
+        if self.question_findings and (not self.question_focus or self.research_status!='succeeded'):
+            raise ValueError('Question findings require a focus and successful research.')
+        for finding in self.question_findings:
+            if finding.field!=self.question_focus or len(finding.source_ids)!=len(finding.quotes) or any(
+                s not in sources or quote not in (sources[s].evidence or '') or finding.value!=quote
+                for s,quote in zip(finding.source_ids,finding.quotes)):
+                raise ValueError('Question findings must preserve exact retrieved passages and source bindings.')
         if self.intelligence:
             for category in self.intelligence.categories.values():
                 for finding in category.findings:

@@ -5,7 +5,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {CareerApiError,type SavedGoal} from '@/lib/api/career';
 import {confirmCvGoal,getCvGoalConfirmation,type ConfirmCvGoal,type CvGoalConfirmation} from '@/lib/api/career-cv-confirmation';
 
-export function CvGoalConfirmationCard({goal,selectionVersion,token,onReload}:{goal:SavedGoal;selectionVersion:number;token:string|undefined;onReload:()=>void}){
+export function CvGoalConfirmationCard({goal,selectionVersion,token,onReload,onConfirmationChange}:{goal:SavedGoal;selectionVersion:number;token:string|undefined;onReload:()=>void;onConfirmationChange?:(confirmed:boolean)=>void}){
  const [state,setState]=useState<CvGoalConfirmation>(),[error,setError]=useState(''),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[stale,setStale]=useState(false);
  const lifetime=useRef(new AbortController()),attempt=useRef<ConfirmCvGoal|null>(null);
  const matches=useCallback((value:CvGoalConfirmation)=>value.goal_id===goal._id&&value.goal_version===goal.version&&value.selection_version===selectionVersion,[goal._id,goal.version,selectionVersion]);
@@ -26,6 +26,7 @@ export function CvGoalConfirmationCard({goal,selectionVersion,token,onReload}:{g
   finally{if(!lifetime.current.signal.aborted)setSaving(false);}
  }
  const confirmed=Boolean(state?.confirmed&&!stale),blocked=Boolean(!token||loading||saving||stale||!state||state.reason||goal.requirements_need_review);
+ useEffect(()=>{onConfirmationChange?.(confirmed);},[confirmed,onConfirmationChange]);
  return <section className="card pad" aria-label="Goal confirmation for CV review" aria-busy={loading||saving}>
   <h2>{confirmed?'Confirmed for CV review':'Review this goal before clarifying your CV'}</h2>
   <p className="small">Your goal is saved automatically. Confirm the displayed skills and requirements when you are ready to use them to focus CV questions. Changing this goal requires confirmation again.</p>

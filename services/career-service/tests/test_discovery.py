@@ -142,6 +142,19 @@ def test_unclear_interests_ask_one_question_without_research(flow):
     assert not flow[3].calls
 
 
+def test_hi_and_usage_help_work_even_when_model_would_fail(flow):
+    flow[2].fail=True
+    row=start(flow,'hi',profile=None)
+    assert row['status']=='conversation' and row['decision']['action']=='ANSWER'
+    assert row['messages'][-1]['content'].startswith('Hi!')
+    assert 'career paths' in row['messages'][-1]['content']
+    assert row['messages'][-1]['content'].count('?')==1
+    row=send(flow,row,'How do I use this?')
+    assert 'Start with a career question' in row['messages'][-1]['content']
+    assert row['scope'] is None and row['review'] is None
+    assert flow[2].calls==[] and flow[3].calls==[]
+
+
 def test_unknown_stage_and_location_do_not_block_research(flow):
     row=start(flow,'Broad direction',profile=UNSURE_PROFILE)
     assert row['status']=='researching' and row['scope']['location'] is None
@@ -208,7 +221,9 @@ def test_schema_errors_are_bounded_and_leave_session_recoverable(flow):
         return await original(request,*args,**kwargs)
     flow[2].generate=generate
     row=start(flow);row=wait(flow,row,'failed')
-    assert row['error_code']=='invalid_output' and flow[2].calls.count('discovery_plan')==2
+    # Section corrections belong to the adapter; the worker must not multiply
+    # its retry budget by regenerating the whole response again.
+    assert row['error_code']=='invalid_output' and flow[2].calls.count('discovery_plan')==1
     assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal'] is None
 
 
@@ -261,6 +276,7 @@ def send(flow,row,message,key=None):
 
 def test_memory_recent_context_and_transcript_survive_reload_without_research_for_questions(flow):
     row=wait(flow,start(flow,'I enjoy problem solving'));calls=len(flow[3].calls)
+    history=row['messages']
     row=wait(flow,send(flow,row,'Question: I dislike customer-facing work'))
     restored=flow[0].get(BASE+'/current',headers=headers()).json()['session']
     assert restored['messages']==row['messages']
@@ -269,8 +285,8 @@ def test_memory_recent_context_and_transcript_survive_reload_without_research_fo
     assert len(flow[3].calls)==calls and row['status']=='review'
     request,context=[v for v in flow[2].contexts if v[0].stage=='discovery_turn'][-1]
     assert context['memory']['interests']==['problem solving']
-    assert len(request.conversation)<=7 and request.conversation[-1].content=='Question: I dislike customer-facing work'
-    assert all(len(m.content)<=400 for m in request.conversation[:-1])
+    assert len(request.conversation)<=29 and request.conversation[-1].content=='Question: I dislike customer-facing work'
+    assert [m.model_dump() for m in request.conversation[:-1]]==history[-28:]
     assert 'sources' not in context and context['facts']
     assert flow[0].get(f"{BASE}/{row['id']}",headers=headers(other=True)).status_code==404
 
@@ -382,7 +398,7 @@ def test_forged_synthesis_references_fail_with_bounded_repair(flow):
     flow[2].result_override=override
     row=wait(flow,start(flow),'failed')
     assert row['review'] is None and row['error_code']=='invalid_output'
-    assert flow[2].calls.count('discovery_summary')==2
+    assert flow[2].calls.count('discovery_summary')==1  # No worker retry beyond adapter-owned section corrections.
 
 
 def test_chat_rejects_forged_citations_without_saving_messages(flow):
@@ -402,8 +418,9 @@ def test_chat_context_is_bounded_independently_of_transcript_length(flow):
     db.research_contexts.update_one({'_id':row['id']},{'$set':{'messages':stored}})
     send(flow,row,'Question: Tell me about SQL')
     request,context=[v for v in flow[2].contexts if v[0].stage=='discovery_turn'][-1]
-    assert len(request.conversation)==7
-    assert all(len(m.content)<=400 for m in request.conversation[:-1])
+    assert len(request.conversation)==29
+    assert [m.model_dump() for m in request.conversation[:-1]]==[
+        {**m,'content':m['content'].strip()} for m in stored[-28:]]
     assert len(context['facts'])<=16 and context['memory']['interests']==['problem solving']
     assert len(json.dumps(context))<6000
 
@@ -779,7 +796,7 @@ def test_finance_alone_asks_about_work_without_research_even_if_model_requests_i
     flow[2].result_override=override
     row=start(flow,'finance',profile=None)
     assert row['status']=='conversation' and row['decision']['action']=='ASK_CLARIFICATION'
-    assert row['messages'][-1]['content'].count('?')==6
+    assert row['messages'][-1]['content'].count('?')==1
     assert 'specific role or kind of work' in row['decision']['reply']
     assert 'keep it broad' in row['decision']['reply']
     assert 'Let’s clarify' not in row['messages'][-1]['content']
@@ -890,7 +907,7 @@ def test_incomplete_new_field_retires_active_research_without_publishing_old_res
     assert 'discovery_summary' not in flow[2].calls
 
 
-def test_only_unanswered_bundle_topics_are_reasked_and_broad_role_starts_research(flow):
+def test_only_unanswered_topic_is_reasked_and_broad_role_starts_research(flow):
     def override(request,result):
         if request.stage!='discovery_turn':return result
         if request.conversation[-1].content=='Keep it broad':
@@ -900,7 +917,7 @@ def test_only_unanswered_bundle_topics_are_reasked_and_broad_role_starts_researc
     flow[2].result_override=override
     row=start(flow)
     message=row['messages'][-1]['content']
-    assert message.startswith('1. ') and message.count('?')==1
+    assert not message.startswith('1. ') and message.count('?')==1
     assert message.endswith('You can keep it broad.') and 'unsure' not in message.lower()
     assert row['status']=='conversation' and flow[3].calls==[]
     row=send(flow,row,'Keep it broad')

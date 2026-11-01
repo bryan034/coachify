@@ -3101,7 +3101,8 @@
               "CONFIRM_AREA",
               "START_RESEARCH",
               "ANSWER",
-              "REFINE_SKILLS"
+              "REFINE_SKILLS",
+              "REJECT_OUT_OF_SCOPE"
             ],
             "title": "Action"
           },
@@ -4696,6 +4697,14 @@
             "type": "boolean",
             "title": "Historical",
             "default": false
+          },
+          "question_research": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionResearchView"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Question Research"
           },
           "research_id": {
             "anyOf": [
@@ -7406,6 +7415,53 @@
           "evidence"
         ],
         "title": "JobDate"
+      },
+      "QuestionResearchView": {
+        "properties": {
+          "research_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Research Id"
+          },
+          "research_version": {
+            "type": "integer",
+            "title": "Research Version"
+          },
+          "focus": {
+            "type": "string",
+            "title": "Focus"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/PublicFinding"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Findings"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/PublicSource"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Sources"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "research_id",
+          "research_version",
+          "focus",
+          "updated_at"
+        ],
+        "title": "QuestionResearchView"
       }
     },
     "securitySchemes": {

@@ -4,10 +4,10 @@ from app.repositories.goals import GoalError
 
 META=('role','field','company','location','seniority_level')
 GOAL_FIELDS={
- 'role':(*META,'summary','responsibilities'), 'skills':('skills',),
+ 'role':(*META,'summary','responsibilities','job_dates'), 'skills':('skills',),
  'requirements':('non_skill_requirements',), 'interview_process':(),
- 'opportunity':(), 'interview_skills':(), 'preparation':('skills',),
- 'overview':(*META,'summary','responsibilities','skills','non_skill_requirements'),
+ 'opportunity':('non_skill_requirements',), 'interview_skills':(), 'preparation':('skills',),
+ 'overview':(*META,'summary','responsibilities','skills','non_skill_requirements','job_dates'),
 }
 class QuestionStore:
     def __init__(self,workspace,research):self.workspace,self.research=workspace,research
@@ -23,16 +23,33 @@ class QuestionStore:
 
     def metadata(self,owner,review_id):return self.goal(owner,review_id,META)
 
+    def saved_questions(self,owner,row):
+        from app.repositories.question_memory import QuestionMemory
+        return QuestionMemory(self.workspace,self.research).entries(owner,row)
+
+    def save_question(self,owner,row,focus,findings,sources):
+        from app.repositories.question_memory import QuestionMemory
+        return QuestionMemory(self.workspace,self.research).save(owner,row,focus,findings,sources)
+
     def fetch(self,owner,row,topic,include_evidence=False):
         if topic not in GOAL_FIELDS:raise ValueError('Unsupported question topic')
         w=row['workspace'];goal=self.goal(owner,w['review_id'],GOAL_FIELDS[topic])
         identifier=w.get('research_id')
-        if not identifier:return goal,{}
+        supplements=self.saved_questions(owner,row)
+        def supplemented(research):
+            from app.domain.questions import opportunity_findings
+            research['opportunity_findings']=[*opportunity_findings(research),
+                *[{**finding.model_dump(mode='json'),'category':'question_research'} for record in supplements for finding in record.question_findings]]
+            sources={s['source_id']:s for s in research.get('sources',[])}
+            sources.update({s.source_id:s.model_dump(mode='json') for record in supplements for s in record.sources})
+            research['sources']=list(sources.values())
+            return goal,research
+        if not identifier:return supplemented({})
         linked=self.research.linked(owner,str(row['goal_id']),current=True)
         if identifier not in linked:
             # Old owned research must not hide current JD facts or leak into an
             # answer about the revised goal. Foreign references still fail.
-            if identifier in self.research.linked(owner,str(row['goal_id'])):return goal,{}
+            if identifier in self.research.linked(owner,str(row['goal_id'])):return supplemented({})
             raise GoalError('Research reference was not found for this goal.',404)
         fields={'research_status':1,'sources.source_id':1,'sources.url':1,'sources.title':1}
         fields['intelligence.categories']=1
@@ -44,7 +61,8 @@ class QuestionStore:
         if 'skills' in fields:
             fields={k:v for k,v in fields.items() if not k.startswith('skills.')}
         research=self.research.records.database.interview_research.find_one({'_id':ObjectId(identifier)},fields)
-        if not research or research.get('research_status') not in ('succeeded','no_findings'):raise GoalError('Interview research needs retry.')
+        if not research:return supplemented({})
+        if research.get('research_status') not in ('succeeded','no_findings','failed'):raise GoalError('Interview research is still running.')
         if research.get('intelligence'):
             from app.workflows.opportunity.domain import compatibility
             from app.schemas.opportunity import CategoryResult
@@ -52,4 +70,4 @@ class QuestionStore:
             skills,process=compatibility(categories)
             # In-memory question projection only; all citations still resolve through linked research.
             research.update(skills=[s.model_dump(mode='json') for s in skills],process=process.model_dump(mode='json'))
-        return goal,research
+        return supplemented(research)

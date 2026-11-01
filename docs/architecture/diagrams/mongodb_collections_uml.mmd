@@ -242,3 +242,7 @@ roadmap_workspaces --> roadmaps : reviewed activation and history
 roadmaps --> skill_gap_analyses : Assessment API snapshot
 note for skill_gap_analyses "New Assessment-owned database. UUID results use assessment-v1; old analysis-v1 Career contracts/records remain legacy with no automatic migration."
 note for roadmaps "Separate Roadmap-owned database; one database with owner-scoped records, not a database per user. Dates are daily workload dates without clock slots."
+
+%% Saved-goal question research reuses immutable interview_research.question_findings snapshots.
+%% Owner/goal-version/focus question_result pointers in research_contexts append public evidence
+%% after up to three distinct question searches; no new collection or raw question is stored.

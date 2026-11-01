@@ -134,7 +134,10 @@ def test_discovery_uses_larger_output_and_real_token_input_estimates():
             for shared_cap in (512,4096,8192):
                 configured=AIAdapter(AISettings(enabled=True,api_key='synthetic',max_output_tokens=shared_cap),client)
                 assert configured._payload(AIInput(stage='discovery_extract',context='{}'))['max_tokens']==8192
-                assert configured._payload(AIInput(stage='opportunity_structure',context='{}'))['max_tokens']==min(shared_cap,2048)
+                from app.ai.opportunity_contracts import structure_input
+                from app.schemas.analysis import ResearchSource
+                research=structure_input({},'company_intelligence',[ResearchSource(source_id='synthetic',platform='other',url='https://example.test/report',evidence='Example teams collaborate.')])
+                assert configured._payload(AIInput(stage='opportunity_structure',context=json.dumps(research)))['max_tokens']==min(shared_cap,4096)
     asyncio.run(run())
 
 
