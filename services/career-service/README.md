@@ -4,12 +4,12 @@ Career owns transient job inputs, the account's canonical goal and guided chat, 
 
 ## Model and search providers
 
-All Career stages share the configured model. The public template uses a local
-OpenAI-compatible DeepSeek model plus Brave LLM Context; production can select
-DeepSeek cloud plus its Search API. Existing Gemini deployments remain supported.
+All Career stages share the configured model through the OpenAI Python SDK. The
+public template selects Gemini plus Brave LLM Context. Optional configurations
+include local inference and DeepSeek cloud plus its Search API.
 Follow-up questions automatically retrieve public evidence when saved facts are
-missing or the answering model returns `not_found`, with at most one scoped search
-per turn and reuse during answer repairs. Ambiguous/off-topic/edit requests do not
+missing or the answering model returns `not_found`, with up to three distinct scoped searches
+per unanswered turn and reuse during answer repairs. Ambiguous/off-topic/edit requests do not
 search. See [exact local/cloud settings](../../docs/setup.md#career-model-and-search-configuration).
 Older Gemini/Brave names below describe the original provider path; the same domain
 validation and workflow apply to the selected providers. No live local/cloud quality
@@ -194,8 +194,15 @@ research summaries or the edit schema. Location/round-count lookups, missing fac
 clear unrelated requests need no answering call. Ambiguous scope uses a 256-output-token
 router; grounded answers use at most 768 output tokens, subject to the existing caps.
 Independent questions omit chat history; follow-ups include only two short recent
-messages. Unrelated tasks are refused. Q&A may perform one scoped retrieval for missing/current public information and
-never silently edits the goal. JD chat history remains temporary browser memory.
+messages. Unrelated tasks are refused. Q&A may perform up to three distinct searches for missing/current public information.
+The router summarises the specific public question into a bounded keyword phrase;
+Python adds the saved employer/role/location and tries public, official-employer and
+candidate-report searches. Empty results or an answering-model `not_found` permit
+the next search; a supported answer stops further searches. New complex-question
+findings are saved only when cited in a validated answer. Exact excerpts/sources
+append to the existing owner/version-linked `question_research` JSON and are reused
+on later turns. Existing research remains readable. Unanswered details stay unknown;
+this path never silently edits the goal. JD chat history remains temporary browser memory.
 
 Provider rejections include safe `provider_error` metadata: HTTP status, known
 Google code and rejected field names. This distinguishes invalid keys, unavailable

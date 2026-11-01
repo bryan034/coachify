@@ -476,3 +476,9 @@ saved-evidence fallback retains approved citations, coverage, scope/confidence a
 missing information while discarding rejected model prose. Stale-goal, provider-auth
 and quota errors do not become successful fallbacks. These checks use synthetic
 providers and establish recovery behaviour, not live-model answer quality.
+
+Shared model transport coverage runs in the Assessment CI job alongside API contract
+checks. Synthetic OpenAI SDK tests cover sync/async request shapes, host-scoped
+options, credential isolation, bounded/closed streams, compressed rejections, no
+redirects and disabled SDK retries. Provider or model accuracy is not inferred from
+these mocked responses.

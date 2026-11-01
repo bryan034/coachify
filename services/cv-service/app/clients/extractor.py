@@ -1,9 +1,11 @@
-"""Groq/OpenAI-compatible adapter; credentials and prompts never reach the browser."""
+"""OpenAI SDK adapter; credentials and prompts never reach the browser."""
 import json
 import os
 import time
 from urllib.parse import urlparse
 import httpx
+from httpx import Client
+from elo_shared.model_sdk import sync_model_response
 from app.schemas.cv import Extraction
 
 PROMPT_VERSION = 'cv-extraction-2'
@@ -15,7 +17,7 @@ class Extractor:
     def __init__(self):
         self.api_key = os.getenv('CV_LLM_API_KEY', '')
         self.model = os.getenv('CV_LLM_MODEL', '')
-        self.base_url = os.getenv('CV_LLM_BASE_URL', 'https://api.groq.com/openai/v1').rstrip('/')
+        self.base_url = os.getenv('CV_LLM_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/openai').rstrip('/')
         parsed = urlparse(self.base_url)
         development_http = os.getenv('APP_ENV') == 'development' and os.getenv('CV_LLM_ALLOW_HTTP') == 'true' and parsed.scheme == 'http'
         self.local=development_http and parsed.hostname in ('localhost','127.0.0.1','::1','host.docker.internal')
@@ -36,6 +38,8 @@ class Extractor:
         # DeepSeek defaults to thinking; CV requests need bounded JSON answers.
         if urlparse(self.base_url).hostname == 'api.deepseek.com':
             return {'thinking': {'type': 'disabled'}}
+        if urlparse(self.base_url).hostname == 'generativelanguage.googleapis.com':
+            return {'reasoning_effort': 'minimal'}
         return {}
 
     def extract(self, blocks):
@@ -49,9 +53,9 @@ class Extractor:
         try:
             timeout=self._request_timeout(60)
             deadline = time.monotonic() + timeout + 5
-            with httpx.Client(timeout=httpx.Timeout(timeout, connect=10), follow_redirects=False, trust_env=False) as client:
-                with client.stream('POST', self.base_url + '/chat/completions', json=payload,
-                                   headers=self._provider_headers()) as response:
+            with Client(timeout=httpx.Timeout(timeout, connect=10), follow_redirects=False, trust_env=False) as client:
+                with sync_model_response(client, self.base_url, self.api_key,
+                                         httpx.Timeout(timeout, connect=10), payload, local=self.local) as response:
                     response.raise_for_status()
                     data = bytearray()
                     for part in response.iter_bytes():

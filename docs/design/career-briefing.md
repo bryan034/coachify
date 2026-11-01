@@ -1,7 +1,7 @@
 # Saved career briefing
 
 The saved `/career-goal` screen follows the supplied career-briefing HTML reference:
-role banner, expandable learning focus, starting-point sidebar, next step and
+role banner, grouped learning-focus grid, starting-point panel, next step and
 collapsible opportunity context. It keeps the shared workspace navigation and
 new-goal/refinement flows. New accounts still see the existing goal intake.
 
@@ -14,18 +14,36 @@ this layout.
 | Briefing content | Existing saved source |
 | --- | --- |
 | Role, employer, location, employment type | `career_goals` identity fields |
-| Learning-focus rows | `career_goals.skills`: name, category, priority, context, proficiency/experience expectations, evidence, origin and source URLs |
+| Learning-focus cards | `career_goals.skills`: name, category, priority, context, proficiency/experience expectations, evidence, origin and source URLs |
 | Eligibility and commitment | `career_goals.non_skill_requirements`, including linked AND/OR alternatives |
 | Responsibilities and role summary | `career_goals.responsibilities` and `summary` |
 | Interviews and company research | Linked `interview_research` Opportunity Intelligence, retaining dates, uncertainty, conflicts and citations |
 | Starting-point panel | Existing owner-scoped CV assessment-status API; presence of extracted skills only |
 
-Rows retain saved order; numbers are a reading aid, not a skill-gap ranking or a
-recommended sequence. Requirements are not labelled as personal deficiencies.
+Skills are grouped under Required and Preferred headings with counts, retaining
+saved order within each group. Unspecified, conflicting and suggested priorities
+keep separate, accurately labelled groups; empty groups are hidden. Cards have no
+ranking numbers. Desktop uses up to two columns and mobile uses one. Each card's
+button supports keyboard disclosure, a two-line collapsed title, a category dot
+with a neutral fallback, and independently sized content. More than 12 skills
+exposes local category filters; no additional data requests are made.
+
+“Not yet compared with your CV” appears once beside the CV review link. Optional
+presentation slots for per-skill evidence status and CV review hints remain empty:
+the saved goal supplies neither. Expanded cards show only saved context, role
+expectations, evidence and provenance. Employer evidence is labelled as a source
+from the job description; other origins retain a neutral supporting-detail label.
+
+Before CV goal confirmation, the starting-point sidebar keeps its current layout.
+After the existing confirmation component reports the exact current goal and
+selection revision confirmed, it becomes a slim banner above the full-width grid.
+The page observes that result without adding confirmation reads or changing writes.
+The next-step card and its jump link remain available. Requirements are not labelled
+as personal deficiencies.
 An extracted CV does not establish a match against individual goal requirements.
 The CV link opens the saved upload/review and conversational clarification workflow.
 Clarification requires explicit confirmation of the current goal and selection revision;
-an automatically saved goal is not sufficient. Assessment computation remains planned.
+an automatically saved goal is not sufficient. This screen does not run an assessment.
 Research progress/retry remains available, with findings inside the research
 accordion. No mock DBS data or reference-draft self-check is copied into accounts.
 
@@ -48,7 +66,7 @@ accordion. No mock DBS data or reference-draft self-check is copied into account
    Career must read these through the authenticated Profile API. Do not put
    private self-checks in shared research or browser storage. Goal-specific
    references must not carry over blindly to a replaced goal.
-3. **Keep assessed gaps separate.** A CV comparison belongs to Career's planned
+3. **Keep assessed gaps separate.** A CV comparison belongs to the separate Assessment service's
    `skill_gap_analyses`, pinning the CV, profile and goal versions. Do not infer
    gaps from CV absence or self-check answers. A practice recommendation can use
    an explicit self-check and sequence, but must say so. Milestones, scheduling

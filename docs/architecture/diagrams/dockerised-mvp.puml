@@ -88,6 +88,8 @@ note bottom of Career
   Cards update on extraction; chat retains observed activity until both results succeed.
   The configured model writes one cited overview from JD details and completed research.
   Temporary observed activity disappears on completion; scoped follow-up chat can search the selected provider.
+  Missing goal answers allow three distinct public-subject searches; cited exact passages append to question research.
+  Owner/version-linked question snapshots retain evidence without rewriting the goal or existing reports.
   Persist structured output and bounded evidence, not full raw JD text.
   JD originals/previews use service-private temporary parsing storage.
 end note
@@ -118,7 +120,8 @@ legend bottom
   Opportunity Intelligence embeds typed categories/findings/summary in interview_research.
   Durable category jobs/receipts reuse research_contexts; no duplicate domain collections.
   The configured model plans, evaluates cited evidence and selects validated summaries using unchanged JSON models.
-  Career, CV, Assessment and Roadmap can share the local 1.5B Ollama server with independent endpoint settings.
+  Career, CV, Assessment and Roadmap use the OpenAI Python SDK with independent endpoint settings.
+  The deployment template selects Gemini; a local 1.5B Ollama server remains optional.
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend
 @enduml

@@ -15,6 +15,10 @@ The frontend opens chat with the plan beside it on `/roadmap`; daily/weekly/mont
 
 [Specification](SPEC.md) · [API contract](../../contracts/api/roadmap.yaml) · [Setup](../../docs/setup.md#assessment-and-roadmap-adviser). Exact clock-time scheduling, external calendars, automatic adaptation and direct allocation editing (E05) remain unimplemented.
 
+Model calls use the shared OpenAI Python SDK transport with Gemini as the cloud
+default. No Gemini SDK is required. SDK retries are disabled; existing response
+limits, provider quota handling and schema repair attempts remain enforced.
+
 Local testing can use the shared 1.5B Ollama alias through this service's own
 `*_LLM_BASE_URL`, `*_LLM_MODEL` and explicit development `*_LLM_ALLOW_HTTP` flag.
 Local requests omit stored cloud credentials; cloud requests retain authentication.

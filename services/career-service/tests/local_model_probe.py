@@ -11,6 +11,7 @@ import time
 
 import httpx
 from app.ai.adapter import AIAdapter, AIError
+from app.ai.sdk import completion_response
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.jd_scope import CareerScopeError, IdentityGroundingError, LocalJobScope, identify_job
@@ -112,7 +113,8 @@ async def main(args):
                 continue
             started = time.monotonic()
             try:
-                response = await client.post(settings.base_url + '/chat/completions', json=payload, timeout=args.timeout)
+                async with completion_response(adapter.sdk.with_options(timeout=args.timeout), payload, local=True) as response:
+                    await response.aread()
                 if args.show_content:
                     print(json.dumps({'http_status': response.status_code, 'raw_response': response.text}, ensure_ascii=False, indent=2), flush=True)
                 response.raise_for_status()

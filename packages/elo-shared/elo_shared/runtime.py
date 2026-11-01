@@ -11,6 +11,7 @@ from uuid import uuid4
 from urllib.parse import urlsplit
 
 import httpx
+from elo_shared.model_sdk import async_model_response
 from bson import BSON
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -105,13 +106,12 @@ class Model:
         response_format={'type':'json_schema','json_schema':{'name':schema.__name__,'strict':True,'schema':inline(original)}} if self.gemini else {'type':'json_object'}
         if not self.gemini:messages[0]['content']+='\nJSON schema: '+json.dumps(original,separators=(',',':'))
         options={'reasoning_effort':'minimal'} if self.gemini else {'thinking':{'type':'disabled'}} if self.deepseek else {}
-        headers={} if self.local else {'Authorization':'Bearer '+os.getenv(self.prefix+'_LLM_API_KEY','').strip()}
         for attempt in range(3):
             try:
-                async with self.client.stream('POST',self.base_url+'/chat/completions',
-                    headers=headers, follow_redirects=False,
-                    json={'model':os.getenv(self.prefix+'_LLM_MODEL','gemini-3.5-flash-lite'), 'messages':messages,
-                          'max_tokens':8192,**options,'response_format':response_format},timeout=self.timeout) as response:
+                payload={'model':os.getenv(self.prefix+'_LLM_MODEL','gemini-3.5-flash-lite'), 'messages':messages,
+                         'max_tokens':8192,**options,'response_format':response_format}
+                async with async_model_response(self.client,self.base_url,
+                    os.getenv(self.prefix+'_LLM_API_KEY','').strip(),self.timeout,payload,local=self.local) as response:
                     if response.status_code == 429:
                         delay=response.headers.get('retry-after','30')
                         delay=int(delay) if delay.isdigit() else 30

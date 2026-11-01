@@ -53,9 +53,8 @@ API permission, access and storage rights must cover the deployed use case.
 
 ## Model/search configuration — 31 October 2026
 
-The public template now selects local DeepSeek-compatible inference plus Brave search;
-production can select DeepSeek cloud inference and its documented Search API. Gemini
-remains a compatibility option. Earlier Gemini/Brave-specific descriptions below refer
+The public template selects Gemini inference through the OpenAI Python SDK plus
+Brave search. Local inference and DeepSeek cloud/Search remain optional. Earlier Gemini/Brave-specific descriptions below refer
 to that original provider path. Search summaries are never converted to original source
 quotes: DeepSeek findings use returned page content only. Search providers have distinct
 cache policies and independent keys; no provider fallback occurs. See
@@ -128,11 +127,24 @@ no raw conversation, additional domain records or persisted summaries are introd
 Configured-model context routing can select a public research focus for missing/current details or explicit
 further research: location, compensation, eligibility, dates, role details, interviews,
 workplace, career progression or conversion. Python searches the selected Brave LLM Context or DeepSeek Search API using
-saved public employer/role/location and the selected focus, never the raw user message,
-conversation or CV. Up to six normalized sources are transient evidence for the answer;
-references are validated and Python appends their source URLs. Goal edits remain separate.
-Missing projected facts or an answering-model `not_found` result also trigger at most one scoped retrieval. The latter gets one further answer call; empty results stay unknown. Ambiguous, off-topic and edit routes cannot trigger a search. Source quota waits resume
-within the same operation, with up to three waits; model repairs do not repeat retrieval.
+saved public employer/role/location and the selected focus. The router additionally extracts
+`public_search_terms`, a concise public keyword phrase (3–100 English letters/spaces/hyphens).
+Raw user messages, resolved questions, conversation and CV data are not passed to search.
+The phrase excludes contact information, identifiers, personal circumstances and instructions;
+unsafe/absent terms fall back to the fixed public focus. Each unanswered turn permits at
+most three distinct queries: subject, official-employer information, candidate experiences.
+Missing projected facts, explicit `missing=true` or an answering-model `not_found` can
+start/continue retrieval. A successful answer stops searches. Each query admits up to six
+normalized sources; at most twelve deduplicated exact-passage candidates reach the answer.
+Simple salary/location lookups retain their deterministic topical-excerpt path. Other
+questions save only passages cited by a validated `answered` result, never irrelevant
+uncited pages, generated prose or invalid-answer fallbacks. The existing immutable
+`interview_research.question_findings` snapshots and owner/goal-version pointers in
+`research_contexts` append these findings to `question_research` JSON. Per-focus current
+memory keeps twelve findings; immutable older snapshots remain. Goal edits stay separate.
+Empty/irrelevant evidence after the third query remains unknown. Ambiguous, off-topic
+and edit routes cannot search. Source quota waits resume the same unfinished query
+within the operation, with up to three waits per query; model repairs do not repeat retrieval.
 
 ## Storage and recovery
 
@@ -215,11 +227,11 @@ extra proposal call within its original operation deadline. Prompt/schema output
 | `AI_ENABLED` | Enabled when a model key is supplied; explicit true permits keyless local testing; false disables model operations |
 | `CAREER_LLM_API_KEY` | Server-only model credential; optional only for explicit local inference |
 | `CAREER_LLM_MODEL` | `gemini-3.5-flash-lite`; one explicit model override shared by every stage |
-| `CAREER_LLM_PROVIDER` | `gemini` compatibility default; public template selects `local`; production can select `deepseek` |
+| `CAREER_LLM_PROVIDER` | `gemini` code/Compose/public-template default; optional `local` or `deepseek` |
 | `CAREER_LLM_BASE_URL` | Provider default; HTTP permitted only for `local`; no credentials/query/fragment |
 | `CAREER_LLM_RESPONSE_MODE` | `json_schema` for Gemini, `json_schema_strict` for every local stage, `json_object` for DeepSeek; local job identification, JD extraction and goal summaries upgrade JSON Object mode to native strict JSON Schema; backend validation always applies |
 | `AI_MAX_OUTPUT_TOKENS` | 8192; overall completion ceiling; local JD identification/extraction use up to 8192 each; cloud identification up to 4096; existing smaller stage caps still apply |
-| `AI_CONTEXT_TOKENS` | 16384 for local / 65536 for cloud when unset; public local template is 16384; match the actual model preset |
+| `AI_CONTEXT_TOKENS` | 16384 for local / 65536 for cloud when unset; public template is 32768; match the actual model context |
 | `AI_TIMEOUT_SECONDS`, `AI_RETRIES` | Cloud: 60-second model-call deadline (maximum 60), one bounded 5xx retry |
 | `CAREER_LOCAL_TIMEOUT_SECONDS` | Local only: 60-second default model-call deadline after queue admission (range 1–300); cloud ignores it |
 | `CAREER_LLM_TOKEN_PARAMETER` | `max_tokens`; select `max_completion_tokens` for compatible models requiring it |

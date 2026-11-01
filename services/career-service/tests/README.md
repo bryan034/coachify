@@ -360,3 +360,10 @@ isolated-MongoDB test uses the real provider adapter with a mock HTTP transport 
 checks persistence, compact responses, historical reads and the unchanged evidence
 endpoint. Existing legacy quote validation tests remain in place. No live model or
 search calls are made.
+
+`test_question_search_expansion.py` covers up to three distinct question searches,
+public keyword summarisation without exporting raw chat/contact details, third-query
+success, irrelevant/empty evidence, citation-gated append, invalid-answer handling
+and stale-goal rejection. Existing saved-first tests verify reuse, JSON/evidence
+reads, immutable/concurrent merges and owner isolation (MongoDB cases require an
+explicit disposable test database). Providers use synthetic responses.

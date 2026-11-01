@@ -57,7 +57,7 @@ def focused_saved_facts(focus,goal,research):
         add('opportunity_finding',{key:item[key] for key in ('field','value','confidence','scope','evidence_type') if key in item},item.get('source_ids',[]))
     return facts[:6],{k:v for k,v in links.items() if k in {f['ref'] for f in facts[:6]}},len(facts)>6
 
-def exact_question_findings(focus,facts,links):
+def exact_question_findings(focus,facts,links,*,require_focus=True):
     """Keep only topical verbatim source passages; generated answers are never stored."""
     sources=[]
     for values in links.values():
@@ -69,7 +69,7 @@ def exact_question_findings(focus,facts,links):
     findings=[]
     for passage in evidence_passages(sources):
         text=passage['text'];source=sources[passage['source_ref']]
-        if not re.search(FOCUS_WORDS[focus],text,re.I):continue
+        if require_focus and not re.search(FOCUS_WORDS[focus],text,re.I):continue
         if sum(source.source_id in f.source_ids for f in findings)>=2:continue
         findings.append(Finding(finding_id='f'+fingerprint({'focus':focus,'quote':text,'url':source.url})[:16],
             field=focus,value=text,quotes=[text],source_ids=[source.source_id],confidence='low',
