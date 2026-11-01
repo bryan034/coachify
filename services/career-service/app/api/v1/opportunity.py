@@ -8,6 +8,7 @@ from app.repositories.goals import GoalError,now
 from app.schemas.opportunity import ResearchCommand
 from app.schemas.opportunity_api import OpportunityView,EvidenceView,ResearchProgress
 from app.workflows.opportunity.sources import pool
+from app.repositories.question_memory import QuestionMemory
 
 router=APIRouter(prefix='/api/v1/career/goals',tags=['J12/J13 Opportunity Intelligence'])
 
@@ -22,9 +23,20 @@ async def target(request,account,goal_id):
     if not goal:raise GoalError('This career goal was not found.',404)
     return goal
 
+async def question_records(request,account,goal):
+    repo=request.app.state.workspace_store
+    row=await thread(repo.row,account)
+    if str(row.get('goal_id'))!=goal.id or not row.get('workspace',{}).get('session_id'):return []
+    return await thread(QuestionMemory(repo,request.app.state.research_store).entries,account,row)
+
+def question_views(records):
+    return [{'research_id':record.id,'research_version':record.version,'focus':record.question_focus,
+             'findings':record.question_findings,'sources':record.sources,'updated_at':record.updated_at} for record in records]
+
 async def presentation(request,account,goal):
     service=engine(request);job=await thread(service.store.latest,account,goal.id,goal.version)
-    availability={'available':service.available,'availability_issues':service.availability_issues}
+    availability={'available':service.available,'availability_issues':service.availability_issues,
+                  'question_research':question_views(await question_records(request,account,goal))}
     if not job:return {**availability,'status':'pending','job_id':None,'career_target_id':goal.id,'research_id':None,'categories':{},'error_code':None}
     record=await thread(service.store.research.records.get_research,job['research_id']) if job.get('research_id') else None
     if not job['finished']:service.launch(job['_id'])
@@ -52,7 +64,13 @@ async def progress(goal_id:str,request:Request,account=Depends(owner)):
 async def evidence(goal_id:str,finding_id:str,research_id:str,request:Request,account=Depends(owner)):
     goal=await target(request,account,goal_id);service=engine(request)
     linked=await thread(service.store.research.linked,account,goal.id)
-    if research_id not in linked:raise GoalError('Research evidence was not found for this goal.',404)
+    if research_id not in linked:
+        records=await question_records(request,account,goal)
+        record=next((r for r in records if r.id==research_id),None)
+        finding=next((f for f in record.question_findings if f.finding_id==finding_id),None) if record else None
+        if not finding:raise GoalError('Research evidence was not found for this goal.',404)
+        return jsonable_encoder({'finding_id':finding.finding_id,'quotes':finding.quotes,
+            'sources':[s for s in record.sources if s.source_id in finding.source_ids]})
     record=await thread(service.store.research.records.get_research,identifier(research_id))
     finding=next((f for c in record.intelligence.categories.values() for f in c.findings if f.finding_id==finding_id),None) if record and record.intelligence else None
     if not finding:raise GoalError('Finding was not found in this research version.',404)
@@ -67,7 +85,9 @@ async def read(goal_id:str,request:Request,research_id:str|None=None,account=Dep
         if research_id not in linked:raise GoalError('This research version was not found for this goal.',404)
         record=await thread(service.store.research.records.get_research,identifier(research_id))
         if not record or not record.intelligence:raise GoalError('Opportunity report was not found.',404)
-        return OpportunityView(available=service.available,availability_issues=service.availability_issues,job_id=None,career_target_id=goal.id,status=record.intelligence.status,finished=True,historical=True,research_id=record.id,research_version=record.version,categories=record.intelligence.categories,sources=record.sources,summary=record.intelligence.summary,updated_at=record.updated_at)
+        current=await thread(request.app.state.workspace_store.row,account)
+        questions=question_views(await question_records(request,account,goal)) if current.get('workspace',{}).get('research_id')==record.id else []
+        return OpportunityView(available=service.available,availability_issues=service.availability_issues,job_id=None,career_target_id=goal.id,status=record.intelligence.status,finished=True,historical=True,research_id=record.id,research_version=record.version,categories=record.intelligence.categories,sources=record.sources,summary=record.intelligence.summary,updated_at=record.updated_at,question_research=questions)
     return await presentation(request,account,goal)
 
 @router.post('/{goal_id}/opportunity-research',status_code=202,response_model=OpportunityView,response_model_exclude={'sources':{'__all__':{'evidence'}},'categories':{'__all__':{'findings':{'__all__':{'quotes'}}}}})

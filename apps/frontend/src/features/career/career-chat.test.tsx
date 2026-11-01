@@ -97,6 +97,26 @@ it('keeps the imported JD chat mounted when an older workspace read returns empt
  expect(screen.queryByText(/Hi, I’m your career agent/)).toBeNull();
 });
 async function chat(){mount();await screen.findByText(/Let’s look at Engineer/);}
+
+it('reloads research JSON after an answer and shows saved follow-up findings in details',async()=>{
+ await chat();
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation(async(path,token,options)=>{
+  if(path==='/workspace/messages'){
+   research={...research,question_research:[{research_id:'b'.repeat(24),research_version:1,focus:'compensation',updated_at:'2026-11-01T00:00:00Z',
+    findings:[{...research.categories.interview_intelligence!.findings[0],field:'compensation',value:'Synthetic salary is SGD 1500 monthly.',scope:'general'}],sources:research.sources!}]};
+   return {reply:'Salary information has been saved.'} as never;
+  }
+  return original(path,token,options);
+ });
+ fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'What is the salary?'}});
+ fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+ await screen.findByText('Salary information has been saved.');
+ fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
+ expect(await screen.findByRole('heading',{name:'Saved follow-up: compensation'})).toBeVisible();
+ expect(screen.getByText(/Synthetic salary is SGD 1500 monthly/)).toBeVisible();
+ expect(api.mock.calls.filter(([path])=>path.includes('/opportunity-research')).length).toBeGreaterThanOrEqual(2);
+});
 describe('single career conversation',()=>{
  it('extracts a new JD into the only workspace and opens research-backed explanation',async()=>{
   render(<CareerSessionProvider><Import/></CareerSessionProvider>);fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));
@@ -467,11 +487,13 @@ it('also holds research text when the JD review is not ready yet',async()=>{
  }finally{view?.unmount();vi.useRealTimers();}
 });
 
-it('does not publish a failed historical research record even if an older workspace marked it ready',async()=>{
- research={...research,status:'failed'};active={...active,phase:'ready'};mount();
- await screen.findByRole('button',{name:'Resume research'});
+it('does not publish a failed research record belonging to a different goal',async()=>{
+ research={...research,status:'failed',career_target_id:'000000000000000000000082'};active={...active,phase:'ready'};mount();
+ await screen.findByRole('textbox',{name:'Message elo'});
+ await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.some(([path])=>path.includes('/opportunity-research'))).toBe(true));
  expect(screen.queryByRole('heading',{name:'Your career goal'})).toBeNull();
  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
+ expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
 });
 
@@ -620,6 +642,23 @@ it('keeps recovery available for a saved legacy goal without any research report
  active={...active,research_id:null};mount();
  await screen.findByRole('button',{name:'Resume research'});
  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
+});
+
+it.each(['ready','research_failed'] as const)('automatically displays a failed research digest with headings, bold labels and recovery: %s',async phase=>{
+ active={...active,phase,activities:['research_complete']};
+ research={...research,status:'failed',job_id:null,historical:true,categories:{interview_intelligence:{...research.categories.interview_intelligence!,status:'failed',findings:[],error_code:'context_limit'}}};
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
+ api.mockImplementation(async(path,token,options)=>path==='/workspace/summary'?{reply:'## Research could not be completed\n\n**Findings:** No validated research findings were saved in this report.\n\n### Interview expectations\n\n**Status:** The research request exceeded the model context or token allowance.\n\nYour career goal remains saved.'} as never:original(path,token,options));
+ mount();
+ expect(await screen.findByRole('heading',{name:'Research could not be completed'})).toBeVisible();
+ expect(screen.getByRole('heading',{name:'Interview expectations'})).toBeVisible();
+ expect(screen.getByText('Findings:',{selector:'strong'})).toBeVisible();
+ expect(screen.getByRole('log')).toHaveTextContent('context or token allowance');
+ expect(screen.getByRole('button',{name:'Resume research'})).toBeEnabled();
+ expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ expect(screen.queryByText('Research is complete. Available findings have been saved.')).toBeNull();
+ expect(api.mock.calls.filter(([path])=>path==='/workspace/summary')).toHaveLength(1);
+ expect(api.mock.calls.some(([path])=>path==='/workspace/retry')).toBe(false);
 });
 
 it('clears extracted-goal messages immediately and keeps the next draft after a reply',async()=>{

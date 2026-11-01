@@ -24,7 +24,7 @@ from pydantic import ValidationError
 from app.ai.waiting import quota_progress,quota_reason
 from app.ai.metrics import usage_observer
 from app.ai.recovery import recover_responses,validation_feedback,issues_for,schema_fields
-from app.ai.goal_summary import GoalSummary,SUMMARY_PROMPT
+from app.ai.goal_summary import GoalSummary,SUMMARY_PROMPT,summary_schema
 from app.ai.context_contracts import ContextPlan,CONTEXT_PROMPT
 from app.ai.research_planning import ResearchPlan,ResearchAssessment,PLAN_PROMPT,ASSESS_PROMPT,planning_input
 from app.ai.config import AISettings
@@ -644,6 +644,9 @@ class AIAdapter:
         return LocalJobScope if self.settings.provider=='local' and stage=='jd_scope' else MODEL_OUTPUTS[stage]
 
     def _payload(self, request, *, output_schema=None, repair_fields=()):
+        if request.stage=='goal_summary' and output_schema is None:
+            try:output_schema=summary_schema(json.loads(request.context or '{}'))
+            except (ValueError,TypeError,KeyError,AttributeError):raise AIError('invalid_operation') from None
         if request.stage=='opportunity_structure':
             try:output_schema=findings_schema(json.loads(request.context or '{}'))
             except (ValueError,TypeError,KeyError,AttributeError):raise AIError('invalid_operation') from None

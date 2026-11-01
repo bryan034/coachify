@@ -19,7 +19,7 @@ function reportPending(research:OpportunityView){
  return research.finished===false||['pending','running'].includes(research.status)||Object.values(research.categories).some(category=>category&&['pending','running'].includes(category.status));
 }
 function responseReady(workspace:CareerWorkspace,research?:OpportunityView){
- return !!workspace.current.goal&&['ready','research_failed'].includes(workspace.phase)&&!!research&&research.career_target_id===workspace.current.goal._id&&research.research_id===workspace.research_id&&research.finished!==false&&['completed','partial'].includes(research.status)&&Object.values(research.categories).every(category=>category&&!['pending','running'].includes(category.status));
+ return !!workspace.current.goal&&['ready','research_failed'].includes(workspace.phase)&&!!research&&research.career_target_id===workspace.current.goal._id&&research.research_id===workspace.research_id&&research.finished!==false&&['completed','partial','failed'].includes(research.status)&&Object.values(research.categories).every(category=>category&&!['pending','running'].includes(category.status));
 }
 function researchSummary(research?:OpportunityView,coverage:CareerWorkspace['coverage']=[]){
  if(!research)return '';
@@ -31,8 +31,12 @@ function researchSummary(research?:OpportunityView,coverage:CareerWorkspace['cov
   if(!category)continue;
   sections.push('### '+labels[key as keyof typeof labels]);
   const selected=[...category.findings].sort((a,b)=>(ranked.includes(a.finding_id)?ranked.indexOf(a.finding_id):ranked.length)-(ranked.includes(b.finding_id)?ranked.indexOf(b.finding_id):ranked.length));
-  sections.push(selected.map(f=>'- '+f.value+(f.scope!=='exact'?' (related context)':'')+' '+sourceCitations(f.source_ids,research.sources||[])).join('\n')||'Information pertaining to this category was not found in the retrieved sources.');
+  sections.push(selected.map(f=>'- '+f.value+(f.scope!=='exact'?' (related context)':'')+' '+sourceCitations(f.source_ids,research.sources||[])).join('\n')||(category.status==='failed'?'No validated findings are available for this category.':'Information pertaining to this category was not found in the retrieved sources.'));
   if(category.status==='failed')sections.push('This category could not finish. Your goal is saved; you can retry research.');
+ }
+ for(const saved of research.question_research||[]){
+  sections.push('### Saved follow-up: '+saved.focus.replaceAll('_',' '));
+  sections.push(saved.findings.map(f=>'- '+f.value+' (related or general context) '+sourceCitations(f.source_ids,saved.sources)).join('\n'));
  }
  sections.push('Your career goal and its category cards are saved. Ask about this role, its requirements or the findings, or tell me how you want to refine your goal.');
  return sections.join('\n\n');
@@ -157,7 +161,7 @@ export function JobReviewChat(){
   // Build queued turns only when dispatched, after any preceding edit/reply.
   job.body??=JSON.stringify({session_id:workspace.session_id,expected_version:goal.version,message:job.input,mode:refining.current?'refine':'question',conversation:turnsRef.current.filter(turn=>turn.reply!==null).slice(-1).flatMap(turn=>[{role:'user',content:turn.message},{role:'assistant',content:turn.reply}])});
   void careerOperation<{reply:string;workspace?:CareerWorkspace;edit_status?:string}>('/workspace/messages',token,{method:'POST',signal:abort.signal,headers:{'Idempotency-Key':job.key},body:job.body},operationProgress)
-   .then(result=>{if(!abort.signal.aborted){if(result.workspace)receive(result.workspace,true);setTurns(current=>current.map(turn=>turn.id===job.id?{...turn,reply:result.reply,failed:false}:turn));setRetryAt(null);failedJobs.current.delete(job.id);failedTurn.current=null;}})
+   .then(result=>{if(!abort.signal.aborted){if(result.workspace)receive(result.workspace,true);setResearchRetry(value=>value+1);setTurns(current=>current.map(turn=>turn.id===job.id?{...turn,reply:result.reply,failed:false}:turn));setRetryAt(null);failedJobs.current.delete(job.id);failedTurn.current=null;}})
    .catch(cause=>{if(!abort.signal.aborted){failedJobs.current.set(job.id,job);failedTurn.current=job.id;setFailedMessage(job.input);setTurns(current=>current.map(turn=>turn.id===job.id?{...turn,failed:true}:turn));setMessage(current=>current||job.input);reportError(cause,'Could not answer. Your message is retained.');}})
    .finally(()=>{sending.current=false;if(!abort.signal.aborted){setBusy(false);setPendingMessage(null);setPendingTurn(null);setOperation(null);setQueueRevision(value=>value+1);}});
  },[token,workspace,busy,queueRevision,chatCooldown]);
@@ -180,7 +184,7 @@ export function JobReviewChat(){
        label={activeOperation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?waitLabel:activeOperation?.status==='repairing'?'Refining the response…':activeOperation?observedActivity(activeOperation.activities)||(source.current?'Extracting your career goal…':'Preparing your career-goal summary…'):researchReady&&!ready?'Preparing your career-goal summary…':workspace&&researchPending(workspace)?observedActivity(workspace?.activities)||'Researching interview expectations…':loadingResearch?'Loading your saved research…':source.current?'Extracting your career goal…':'Opening your career goal…'}
        detail={activeOperation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?(secondsLeft>0?`Resuming in ${secondsLeft} seconds.`:'Retrying research…'):researchReady?'Your goal and research are saved. I’m preparing your summary.':workspace?.current.goal?'Your goal is saved. You can ask questions while research continues.':undefined}/>}
       {!researchReady&&workspace?.error&&(workspace.phase==='waiting_quota'||isTokenLimit(workspace.error_code))&&<p role="alert" className="small">{workspace.phase==='waiting_quota'?'Research is waiting for the service quota to reset. Your career goal remains saved.':workspace.error}</p>}
-      {workspace&&!researchReady&&!loadingResearch&&(['research_failed','expired'].includes(workspace.phase)||workspace.phase==='ready'&&(!workspace.research_id||matchingResearch&&research?.finished!==false&&research?.status==='failed'))&&<button className="btn pri" disabled={busy} onClick={()=>void retry()}>Resume research</button>}
+      {workspace&&!loadingResearch&&(matchingResearch&&research?.status==='failed'||!researchReady&&(['research_failed','expired'].includes(workspace.phase)||workspace.phase==='ready'&&!workspace.research_id))&&<button className="btn pri" disabled={busy} onClick={()=>void retry()}>Resume research</button>}
      </>}
     </div>
     {ready&&workspace?.edit_question&&!turns.length&&!pendingMessage&&<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply onProgress={followReply}>{workspace.edit_question}</AgentReply></div>}

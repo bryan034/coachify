@@ -88,15 +88,17 @@ def test_async_summary_repairs_only_presentation_and_rechecks_the_goal(caplog,re
     asyncio.run(run())
 
 
-def test_repeated_summary_failure_is_bounded_and_retains_safe_feedback():
+def test_repeated_summary_failure_is_bounded_and_displays_only_saved_evidence():
     async def run():
         request,body,_,calls,_=environment('PRIVATE_DISCARDED_VALUE',references=('missing_fact',))
         jobs=Operations();accepted=jobs.submit('owner','key','snapshot','summary',lambda:summarize(request,'owner',body))
         job=jobs.jobs[accepted['operation_id']];await job.task
-        assert job.status=='failed' and len(calls)==7
-        assert job.validation_feedback['violations']==[{'field':'blocks.0.references','issue':'unknown_fact_reference'}]
+        assert job.status=='succeeded' and len(calls)==7
+        assert job.validation_feedback is None
         assert 'PRIVATE_DISCARDED_VALUE' not in json.dumps(job.view())
-        with pytest.raises(AIError):jobs.read('owner',job.id)
+        reply=jobs.read('owner',job.id)['result']['reply']
+        assert 'Showing saved facts' in reply
+        assert 'An interview is reported. [Source](<https://example.test/job>)' in reply
         await jobs.close()
     asyncio.run(run())
 

@@ -304,7 +304,7 @@ class OpportunityEngine:
             research_status='failed' if failed else 'succeeded' if any(v.findings for v in categories.values()) else 'no_findings',last_researched_at=stamp,
             generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-structured-findings-v3',generated_at=stamp))
         record=await thread(self.store.research.finish,context,cache['token'],record)
-        if not pending:await thread(self.store.rows.update_one,{'_id':identifier,'worker_token':token},{'$addToSet':{'activities':'research_complete'}})
+        if not pending:await thread(self.store.rows.update_one,{'_id':identifier,'worker_token':token},{'$addToSet':{'activities':'research_failed' if failed else 'research_partial' if status=='partial' else 'research_complete'}})
         failure=next((v.error_code for v in categories.values() if v.error_code),None)
         await thread(self.store.update,identifier,token,research_id=record.id,status='pending' if pending else status,finished=not pending,summary=report.summary.model_dump(),error_code=failure,
             limit_scope=job.get('limit_scope') if pending else None,provider=job.get('provider') if pending else None)
