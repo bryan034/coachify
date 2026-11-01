@@ -1,8 +1,12 @@
 from copy import deepcopy
+import logging
 from uuid import uuid4
 import pytest
+from pydantic import BaseModel, ValidationError, field_validator
+from pydantic_core import PydanticCustomError
 from app.domain.service import detail, now
 from app.domain.errors import Conflict
+from app.workers.ingestion import _log_invalid_extraction
 from tests.conftest import ready, upload, mutation, docx
 
 
@@ -162,6 +166,72 @@ def test_model_failure_does_not_publish_partial_extraction(harness):
     result = client.get('/api/v1/cv/' + cv['id']).json()
     assert result['status'] == 'failed'
     assert result['items'] == [] and result['extraction_version'] == 0
+
+
+def test_invalid_extraction_diagnostic_is_bounded_and_private(harness, caplog):
+    client, app, extractor, *_ = harness
+    secret = 'PRIVATE_EXTRACTED_TEXT'
+    item = {'kind': 'skill', 'title': secret, 'description': secret, 'explicit': 'not-a-boolean',
+            'evidence': [{'block_id': 'b1', 'excerpt': secret}],
+            **{f'{secret}_{index}': secret for index in range(40)}}
+    extractor.payload = {'items': [item]}
+    cv = upload(client).json()
+    with caplog.at_level(logging.WARNING, logger='app.workers.ingestion'):
+        app.state.worker.run_once()
+    result = client.get('/api/v1/cv/' + cv['id']).json()
+    assert result['status'] == 'failed' and result['error']['code'] == 'invalid_extraction'
+    assert result['items'] == [] and result['extraction_version'] == result['effective_version'] == 0
+    assert result['source_available'] and result['error']['retryable']
+    records = [record for record in caplog.records if record.name == 'app.workers.ingestion']
+    assert len(records) == 1
+    diagnostic = records[0].getMessage()
+    assert cv['id'] in diagnostic and cv['operation_id'] in diagnostic
+    assert "('items[].explicit', 'bool_type')" in diagnostic
+    assert diagnostic.count("('other', 'extra_forbidden')") == 15
+    assert 'truncated=True' in diagnostic and len(diagnostic) < 1500
+    assert secret not in diagnostic and not records[0].exc_info
+
+
+def test_invalid_reextraction_preserves_saved_facts(harness, caplog):
+    client, app, extractor, *_ = harness
+    cv = ready(harness)
+    item = cv['items'][1]
+    edited = client.patch(f"/api/v1/cv/{cv['id']}/items/{item['id']}",
+                          json=mutation(cv['version'], action='update', description='Synthetic correction')).json()
+    before = deepcopy(app.state.repository.get('owner-a', cv['id']))
+    extractor.payload = {'items': [{'kind': 'skill'}]}
+    queued = upload(client, cv_id=cv['id'], expected_version=edited['version']).json()
+    with caplog.at_level(logging.WARNING, logger='app.workers.ingestion'):
+        app.state.worker.run_once()
+    failed = client.get('/api/v1/cv/' + cv['id']).json()
+    saved = app.state.repository.get('owner-a', cv['id'])
+    assert failed['status'] == 'failed' and failed['error']['code'] == 'invalid_extraction'
+    assert failed['version'] > queued['version']
+    for field in ('original_items', 'overlays', 'clarifications', 'history', 'extraction',
+                  'extraction_version', 'effective_version'):
+        assert saved[field] == before[field]
+    assert failed['items'] == edited['items']
+    assert queued['operation_id'] in caplog.text
+
+
+def test_diagnostic_redacts_unknown_error_types_and_locations(caplog):
+    class SyntheticModel(BaseModel):
+        value: str
+
+        @field_validator('value')
+        @classmethod
+        def reject(cls, value):
+            raise PydanticCustomError('PRIVATE_ERROR_CODE', 'PRIVATE_MESSAGE {secret}', {'secret': value})
+
+    with pytest.raises(ValidationError) as caught:
+        SyntheticModel(value='PRIVATE_VALUE')
+    claimed = {'_id': 'PRIVATE_IDENTIFIER', 'operation': {'id': 'PRIVATE_OPERATION'}}
+    with caplog.at_level(logging.WARNING, logger='app.workers.ingestion'):
+        _log_invalid_extraction(caught.value, claimed)
+    diagnostic = caplog.records[-1].getMessage()
+    assert "('other', 'other')" in diagnostic
+    assert 'cv_id=unknown operation_id=unknown' in diagnostic
+    assert 'PRIVATE' not in diagnostic and not caplog.records[-1].exc_info
 
 
 def test_explicit_skill_rename_preserves_claim_identity(harness):
