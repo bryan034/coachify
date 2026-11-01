@@ -14,7 +14,6 @@ from starlette.concurrency import run_in_threadpool as thread
 from app.ai.adapter import AIError,Operation
 from app.ai.discovery_config import DiscoverySettings
 from app.ai.contracts import AIInput,Message
-from app.ai.recovery import validation_feedback
 from app.workflows.model_waits import resume_obsolete_model_waits
 from app.ai.waiting import quota_progress
 from app.clients.search_sources import SourceRateLimit
@@ -24,8 +23,8 @@ from app.schemas.analysis import ResearchContext,DiscoveryEvidence,Generation
 from app.schemas.discovery import Scope,Decision,Plan,Listings,MarketSummary,SourceAssessments,DiscoverySource,DiscoveryUnderstanding
 from app.schemas.jd import JDExtraction,ReviewSkill
 from app.domain.discovery_sources import POLICY,excluded_kind,candidates,validate_assessments,ranked_sources
-from app.domain.discovery_conversation import conversation_messages
-from app.domain.discovery_readiness import clarification_bundle,grounded_understanding,ready_for_research,research_context
+from app.domain.discovery_conversation import conversation_messages,conversational_reply
+from app.domain.discovery_readiness import clarification_bundle,grounded_understanding,ready_for_research,research_context,missing_fields
 
 log=logging.getLogger('uvicorn.error.discovery')
 
@@ -174,21 +173,17 @@ class DiscoveryEngine:
         query={'_id':row['_id'],'run':row['run'],'lease':row['lease']}
         if not self.rows.update_one(query,{'$set':{**values,'updated_at':now()}}).matched_count:raise GoalError('This research scope changed; open the current discovery.')
 
-    async def model(self,row,stage,data,validate=None,*,split_incomplete=False,max_attempts=2):
-        step=stage+'_'+fingerprint(data)[:20];attempts=(row.get('attempts') or {}).get(step,0)
-        for attempt in range(attempts,max_attempts):
-            token=quota_progress.set(None)
-            feedback=validation_feedback.set({'reason':'schema_or_provenance','fields':[]} if attempt else None)
-            try:
-                result=await self.ai.generate(AIInput(stage=stage,context=json.dumps(data,separators=(',',':'),ensure_ascii=False)),Operation(row['owner'],row['run'],stage),current_revision=lambda:row['run'],validate_output=validate)
-                if validate:validate(result.data)
-                return result
-            except AIError as error:
-                if error.code not in ('invalid_output','incomplete_output') or split_incomplete and error.code=='incomplete_output':raise
-                await thread(self.update,row,**{'attempts.'+step:attempt+1})
-                if attempt+1==max_attempts:raise
-            finally:quota_progress.reset(token);validation_feedback.reset(feedback)
-        raise AIError('invalid_output',reason='repair_exhausted')
+    async def model(self,row,stage,data,validate=None):
+        # The adapter owns initial generation plus at most two section repairs.
+        # Worker replay must not add another whole-response correction loop.
+        token=quota_progress.set(None)
+        try:
+            result=await self.ai.generate(AIInput(stage=stage,context=json.dumps(data,separators=(',',':'),ensure_ascii=False)),
+                Operation(row['owner'],row['run'],stage),current_revision=lambda:row['run'],validate_output=validate)
+            if validate:validate(result.data)
+            if getattr(result,'failed_sections',()):await thread(self.update,row,partial_research=True)
+            return result
+        finally:quota_progress.reset(token)
 
     async def converse(self,identifier,owner,key,body):
         row=await thread(self.get,identifier,owner);digest=fingerprint(body.model_dump(mode='json'))
@@ -202,18 +197,36 @@ class DiscoveryEngine:
         allowed={source for fact in facts for source in fact['source_ids']}
         async def understand(state):
             previous=row.get('decision') or {}
+            social_reply=conversational_reply(body.message)
+            if social_reply:
+                question=None
+                if row['status'] in ('conversation','failed') and missing_fields(previous.get('understanding')):
+                    question=clarification_bundle(previous.get('understanding'))[0].split('. ',1)[1]
+                decision=Decision.model_validate({**previous,'action':'ANSWER',
+                    'scope':row.get('scope'),'reply':social_reply,'question':question,'source_ids':[]})
+                return {'decision':decision.model_dump(mode='json'),'digest':digest}
             direction={k:v for k,v in previous.items() if k in ('scope','excluded_skills','requested_skills')}
             history=[Message(role=m['role'],content=m['content'][:400]) for m in conversation_messages(row.get('messages',[]))[-6:]]
-            result=await self.ai.generate(AIInput(stage='discovery_turn',context=json.dumps({
+            request=AIInput(stage='discovery_turn',context=json.dumps({
                 'previous':direction,'memory':previous.get('memory',{}),'understanding':DiscoveryUnderstanding.model_validate(previous.get('understanding',{})).model_dump(mode='json'),'scope':row.get('scope'),
                 'research_status':row['status'],'research_question':row.get('research_question'),'facts':facts},separators=(',',':')),
-                conversation=[*history,Message(role='user',content=body.message)]),
+                conversation=[*history,Message(role='user',content=body.message)])
+            result=await self.ai.generate(request,
                 Operation(owner,str(row['version']),'discovery_turn'),current_revision=lambda:str(row['version']))
             decision=Decision.model_validate(result.data.model_dump())
-            if any(i not in allowed for i in decision.source_ids):raise AIError('invalid_output',reason='source_reference')
-            return {'decision':decision.model_dump(mode='json'),'digest':digest}
+            partial=bool(getattr(result,'failed_sections',()))
+            if partial and decision.action!='REJECT_OUT_OF_SCOPE':
+                decision.action='ANSWER'
+                decision.scope=Scope.model_validate(row['scope']) if row.get('scope') else None
+            if decision.action!='REJECT_OUT_OF_SCOPE' and any(i not in allowed for i in decision.source_ids):raise AIError('invalid_output',reason='source_reference')
+            return {'decision':decision.model_dump(mode='json'),'digest':digest,
+                'partial':partial}
         def evaluate(state):
             decision=Decision.model_validate(state['decision'])
+            if decision.action=='REJECT_OUT_OF_SCOPE':
+                return {**state,'research_ready':False}
+            if decision.action=='ANSWER':
+                decision.scope=Scope.model_validate(row['scope']) if row.get('scope') else None
             previous=row.get('decision') or {}
             changed_field=bool(row.get('scope') and decision.scope and normal(row['scope']['field'])!=normal(decision.scope.field))
             decision.understanding=grounded_understanding(decision.understanding,previous.get('understanding'),row.get('messages',[]),
@@ -227,10 +240,13 @@ class DiscoveryEngine:
             return {**state,'decision':decision.model_dump(mode='json'),'research_ready':ready_for_research(decision)}
         def clarify(state):
             decision=state['decision']
-            # Existing research questions remain answerable without starting a run.
-            if decision['action']=='ANSWER' and row['status'] not in ('conversation','failed') and decision.get('scope')==row.get('scope'):return state
+            # Guidance and redirects remain available before the research gate passes.
+            if decision['action'] in ('ANSWER','REJECT_OUT_OF_SCOPE'):return state
             questions=clarification_bundle(decision['understanding'])
-            decision.update(action='ASK_CLARIFICATION',reply=questions[0],question='\n'.join(questions[1:]) or None)
+            if decision['action'] not in ('ASK_CLARIFICATION','SUGGEST_ROLES'):
+                decision.update(action='ASK_CLARIFICATION',reply=questions[0].split('. ',1)[1],question=None)
+            if not decision.get('question') and '?' not in decision['reply']:
+                decision['question']=questions[0].split('. ',1)[1]
             return {**state,'decision':decision}
         def proceed(state):
             decision=state['decision']
@@ -248,14 +264,21 @@ class DiscoveryEngine:
             snapshot=await compiled.aget_state(config)
             if snapshot.values and snapshot.values.get('digest')!=digest:raise GoalError('This message key was used for another message.')
             value=await compiled.ainvoke(None if snapshot.next else {},config) if not snapshot.values or snapshot.next else snapshot.values
-        decision=value['decision'];proposed=decision.get('scope')
+        decision=value['decision']
+        rejected=decision['action']=='REJECT_OUT_OF_SCOPE'
+        if rejected:
+            # Never persist model-proposed context or execute actions for an unrelated request.
+            decision=Decision(action='REJECT_OUT_OF_SCOPE',scope=None,question=None,
+                reply='I can help with careers, jobs and internships. What kind of work or career question would you like to explore?').model_dump(mode='json')
+        proposed=decision.get('scope')
         # A question does not silently change the current research scope.
         if decision['action']=='ANSWER':proposed=row.get('scope') or proposed;decision['scope']=proposed
-        values={'decision':decision,'updated_at':now()}
+        values={'updated_at':now()}
+        if not rejected:values['decision']=decision
         previous_memory=(row.get('decision') or {}).get('memory',{})
         preference_changed=any(decision.get('memory',{}).get(k,[])!=previous_memory.get(k,[])
             for k in ('interests','preferences','rejected_directions')) or research_context(decision.get('understanding'))!=research_context((row.get('decision') or {}).get('understanding')) or (decision.get('understanding',{}).get('other_interests') or {}).get('value')!=((row.get('decision') or {}).get('understanding',{}).get('other_interests') or {}).get('value')
-        ready=ready_for_research(decision) and proposed and (decision['action'] in ('START_RESEARCH','CONFIRM_AREA','REFINE_SKILLS') or preference_changed and row['status']=='review')
+        ready=not value.get('partial') and ready_for_research(decision) and proposed and (decision['action'] in ('START_RESEARCH','CONFIRM_AREA','REFINE_SKILLS') or preference_changed and row['status']=='review')
         changed_scope=proposed and proposed!=row.get('scope')
         if ready and (changed_scope or row['status'] in ('conversation','failed') or decision['action']=='REFINE_SKILLS' or preference_changed and row['status']=='review'):
             values.update(await thread(self.research_values,row,proposed,False,decision['understanding']))
@@ -272,6 +295,8 @@ class DiscoveryEngine:
         links=citations(decision.get('source_ids',[])[:3],row.get('sources') or [])
         if links:reply+=' '+links
         if values.get('status')=='researching':reply+='\n\nResearching '+proposed['area']+'. You can keep chatting while I compare representative listings.'
+        if value.get('partial') and not rejected:
+            reply+='\n\nSome details could not be completed. I kept the parts I could verify; you can clarify the missing details in your next message.'
         changed=await thread(self.rows.update_one,{'_id':identifier,'owner':owner,'version':body.expected_version,'status':{'$ne':'confirmed'}},
             {'$set':values,'$inc':{'version':1},'$push':{
                 'messages':{'$each':[{'role':'user','content':body.message},{'role':'assistant','content':reply}]},
@@ -290,7 +315,7 @@ class DiscoveryEngine:
         for field in ('plan','sources','searched','listings','evaluated','aggregate','generation','researched_at','search_failures','candidates','assessments','split_batches','narrowed_sources','extraction_failures','followup_requested','rejected_source_ids','replacement_searches','replacement_query','replacement_shortfall'):
             values[field]=cached.get(field) if cached else None
         if cached and cached.get('research_policy')!=self.policy:values.update(aggregate=None,assessments=None)
-        values.update(summary=None,summary_version=None,review_id=None,attempts={},research_question=None)
+        values.update(summary=None,summary_version=None,review_id=None,attempts={},research_question=None,partial_research=False)
         return values
 
     def begin(self,identifier,owner,key,body):
@@ -312,7 +337,7 @@ class DiscoveryEngine:
 
     async def plan(self,state):
         row=await thread(self.research_row,state)
-        if row.get('plan'):return state
+        if row.get('plan') and row['plan'].get('queries'):return state
         result=await self.model(row,'discovery_plan',{'scope':row['scope'],'research_context':research_context((row.get('decision') or {}).get('understanding')),'year':now().year})
         plan=Plan.model_validate(result.data.model_dump())
         scope=Scope.model_validate(row['scope'])
@@ -381,7 +406,7 @@ class DiscoveryEngine:
             def validate(output):validate_assessments(SourceAssessments.model_validate(output.model_dump()),batch)
             try:
                 result=await self.model(row,'discovery_assess',{'scope':row['scope'],'research_context':research_context((row.get('decision') or {}).get('understanding')),
-                    'sources':[{'ref':i,'url':v.url,'title':v.title,'excerpt':v.evidence} for i,v in enumerate(batch)]},validate,max_attempts=1)
+                    'sources':[{'ref':i,'url':v.url,'title':v.title,'excerpt':v.evidence} for i,v in enumerate(batch)]},validate)
                 values=validate_assessments(result.data,batch)
                 assessments.update(values)
                 failed.extend(key for key,value in values.items() if not value['relevant'])
@@ -448,7 +473,7 @@ class DiscoveryEngine:
             try:
                 result=await self.model(row,'discovery_extract',{'scope':row['scope'],'memory':(row.get('decision') or {}).get('memory',{}),
                     'research_context':research_context((row.get('decision') or {}).get('understanding')),'previous_question':row.get('research_question'),'max_requirements':max_requirements,
-                    'sources':[{'ref':i,'title':v.title,'excerpt':v.evidence} for i,v in enumerate(batch)]},validate,split_incomplete=True,max_attempts=1)
+                    'sources':[{'ref':i,'title':v.title,'excerpt':v.evidence} for i,v in enumerate(batch)]},validate)
             except AIError as error:
                 if error.code not in ('incomplete_output','context_limit'):raise
                 if len(batch)>1:
@@ -543,6 +568,7 @@ class DiscoveryEngine:
         if row.get('replacement_shortfall'):result['warnings'].append('The single replacement search did not replace every rejected source. This target uses only the usable evidence retained; research coverage may be limited.')
         if row.get('narrowed_sources') or row.get('extraction_failures'):result['warnings'].append('Some source extractions were reduced or could not finish after output/context limits. Their coverage is incomplete; unsupported requirements were not included.')
         if row.get('search_failures'):result['warnings'].append('Some searches failed; the target includes only successfully retrieved evidence.')
+        if row.get('partial_research'):result['warnings'].append('Some research details could not be completed after correction attempts. Only verified sections are included.')
         supported={listing['source_id'] for listing in result['listings']}
         await thread(self.update,row,aggregate=result,sources=[source for source in row.get('sources') or [] if source['source_id'] in supported],stage='generate_career_target')
         return state
@@ -571,6 +597,9 @@ class DiscoveryEngine:
                     'skills':[{'name':v['name'],'context':v['context']} for v in result['content']['skills']],
                     'frequencies':result['stats'],'responsibilities':result['responsibilities']},validate)
                 summary=MarketSummary.model_validate(response.data.model_dump())
+                if getattr(response,'failed_sections',()):
+                    result['warnings']=list(dict.fromkeys([*result['warnings'],
+                        'Some recommendations could not be completed after correction attempts. Only verified sections are included.']))[:10]
             else:summary=MarketSummary.model_validate(row['summary']);validate(summary)
             content=JDExtraction.model_validate(result['content'])
             content.responsibilities=[result['responsibilities'][i]['name'] for i in dict.fromkeys(summary.responsibility_refs)]
@@ -612,6 +641,7 @@ class DiscoveryEngine:
                 if len(message)+len(line)+2<=12000:message+=('\n\n' if message else '')+line
             changed=await thread(self.rows.update_one,{'_id':row['_id'],'run':row['run'],'lease':row['lease'],'version':row['version']},
                 {'$set':{'summary':summary.model_dump(),'summary_version':row['version'],'review_id':review.id,'status':'review',
+                    'aggregate':result,
                     'stage':'review_career_target','researched_at':evidence.researched_at,'error_code':None,'lease_until':now(),'updated_at':now()},
                  '$push':{'messages':{'role':'assistant','content':message}}})
             if changed.matched_count:return state

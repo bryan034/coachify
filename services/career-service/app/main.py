@@ -166,6 +166,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     async def ai_error(request, error):
         status=429 if error.code=='rate_limited' else 422 if error.code=='input_limit' else 409 if error.code=='stale_input' else 503
         messages={'not_configured':'AI is disabled. Configure AI_ENABLED and CAREER_LLM_API_KEY on the Career service.',
+                  'unsupported_structured_output':'Career Discovery requires schema-constrained generation. Select a supported provider or configure verified json_schema_strict support for the compatible endpoint.',
                   'provider_auth':'Check CAREER_LLM_API_KEY and access to CAREER_LLM_BASE_URL for the configured model provider.',
                   'provider_configuration':'The AI provider rejected the request configuration. Check provider_error for the safe status and rejected field names.',
                   'provider_schema':'The model provider rejected the structured-output schema. Check CAREER_LLM_RESPONSE_MODE and provider_error.fields; your saved goal is unchanged.',

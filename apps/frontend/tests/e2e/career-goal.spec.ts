@@ -219,7 +219,7 @@ test('malformed extraction JSON keeps the draft and retries without crashing or 
  await page.getByRole('button',{name:'Extract career goal'}).click();
  await expect(page.getByRole('log').getByRole('alert')).toContainText('Career returned an invalid response');
  await expect(page.getByRole('log')).not.toContainText('PRIVATE');
- await expect(page.getByRole('textbox',{name:'Message elo'})).toBeDisabled();
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  await page.getByRole('button',{name:'Retry',exact:true}).click();
  await expect(page.getByRole('log')).toContainText('Ask me anything about this goal set!');
  expect(submissions).toBe(2);expect(keys[1]).toBe(keys[0]);expect(pageErrors).toEqual([]);

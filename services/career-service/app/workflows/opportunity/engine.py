@@ -18,7 +18,7 @@ from app.ai.contracts import AIInput
 from app.ai.recovery import recover_responses,validation_feedback
 from app.ai.waiting import quota_progress
 from app.ai.metrics import usage_observer
-from app.ai.opportunity_contracts import FIELD_GUIDANCE
+from app.ai.opportunity_contracts import structure_input
 from app.workflows.model_waits import resume_obsolete_model_waits
 from app.clients.search_sources import SourceRateLimit,OPPORTUNITY_SOURCE_LIMIT
 from app.repositories.goals import GoalError,now,fingerprint
@@ -130,10 +130,10 @@ class OpportunityEngine:
                     if validate:validate(result.data)
                     return result.data
                 except AIError as error:
-                    logger.warning('node=%s attempt=%s error_code=%s reason=%s limit_scope=%s',stage,attempt+1,error.code,error.reason,error.limit_scope)
+                    logger.warning('node=%s attempt=%s error_code=%s reason=%s limit_scope=%s violations=%s',stage,attempt+1,error.code,error.reason,error.limit_scope,json.dumps(list(error.violations),separators=(',',':')))
                     if error.code not in ('invalid_output','incomplete_output'):raise
                     invalids+=1
-                    correction={'reason':error.reason or 'schema_validation','fields':list(error.fields),'issues':list(error.violations)}
+                    correction={'reason':error.reason or ('incomplete_json' if error.code=='incomplete_output' else 'schema_validation'),'fields':list(error.fields),'issues':list(error.violations)}
                     await thread(self.store.update,job['_id'],job['worker_token'],**{
                         'model_recovery.'+step:{'invalid_responses':invalids,'feedback':correction}})
                     if invalids>self.settings.schema_repairs:raise
@@ -206,10 +206,10 @@ class OpportunityEngine:
                     if any(ref<0 or ref>=len(selected) for ref in output.relevant_refs):
                         raise AIError('invalid_output',True,reason='provenance',fields=('relevant_refs',),violations=[{'field':'relevant_refs','issue':'source_index_out_of_range'}])
                     return supported_claims(output,category,selected,job['public'])
+                context=structure_input(job['public'],category,selected,findings)
+                if not context['evidence']:break
                 model_calls+=1
-                output=await self.generate(job,'opportunity_structure',{'opportunity':job['public'],'category':category,'allowed_fields':FIELDS[category],'field_guidance':FIELD_GUIDANCE[category],
-                    'existing_findings':[{'field':f.field,'value':f.value[:120],'scope':f.scope} for f in findings[:8]],
-                    'sources':[{'ref':i,'source_id':s.source_id,'title':s.title,'url':s.url,'excerpt':s.evidence,'published_date':s.published_date.isoformat() if s.published_date else None,'reliability':s.reliability} for i,s in enumerate(selected)]},validate)
+                output=await self.generate(job,'opportunity_structure',context,validate)
                 relevant_ids.update(selected[ref].source_id for ref in output.relevant_refs)
                 current,discarded=supported_claims(output,category,selected,job['public']);rejected+=discarded
                 findings=dedupe_findings(category,[*findings,*current])

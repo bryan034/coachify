@@ -16,14 +16,14 @@ validation and workflow apply to the selected providers. No live local/cloud qua
 or deployment verification is claimed by synthetic tests.
 
 Local testing defaults to the exact `deepseek-r1:1.5b` Ollama model, a single
-in-flight model call per Career worker and `CAREER_LOCAL_TIMEOUT_SECONDS=45`
+in-flight model call per Career worker and `CAREER_LOCAL_TIMEOUT_SECONDS=60`
 (1–300 seconds per admitted call). Queuing happens before the inference deadline;
 versions/cancellation are rechecked after waiting. Local job identification and
 extraction allow up to 8,192 output tokens each, bounded by `AI_MAX_OUTPUT_TOKENS`
 and context admission. Incomplete output still fails validation; a larger allowance
 does not guarantee model quality or completion. Local workflow runs allow up to
 600 seconds, with matching leases. Cloud inference remains concurrent and keeps
-its existing 45-second default / 60-second maximum. See the setup link above for
+its existing 60-second default / 60-second maximum. See the setup link above for
 private settings, the optional fixed-context alias and gateway reload instructions.
 
 ## JD inputs — J01 / J06 / J07
@@ -47,7 +47,7 @@ completion settings can still lower these budgets; agents never read/change them
 
 Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
 
-After extraction and research finish, chat automatically loads the saved report and presents a concise overview as short, single-idea paragraphs with bold topic labels (for example, **Field:** and **Required skills:**), ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Saved goal cards are available immediately after extraction, while the composer waits for the combined response.
+After extraction and research finish, chat automatically loads the saved report and presents a concise overview as short, single-idea paragraphs with bold topic labels (for example, **Field:** and **Required skills:**), ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Saved goal cards are available immediately after extraction, while the composer remains open during research, summary generation and failures.
 
 Inference uses the OpenAI Python SDK with Pydantic-derived JSON schemas.
 Schema compaction preserves field descriptions, including exact date wording and
@@ -217,10 +217,19 @@ and [application setup](../../docs/setup.md). Gap analysis and roadmaps remain p
 ## Career discovery — conversational targets
 
 `POST /api/v1/career/discoveries`, `GET /api/v1/career/discoveries/current`, and owned
-`/discoveries/{id}` message/research routes implement a Gemini goal-setting conversation,
-automatic Brave job-listing research after a backend readiness gate, bounded memory
-and Gemini skill synthesis. The six clarification topics must be addressed; explicit
-unsure/skip answers are accepted, and missing topics are bundled. Role scope can
+`/discoveries/{id}` message/research routes implement a career guidance conversation,
+automatic job-listing research after a backend readiness gate, bounded memory
+and model skill synthesis using the configured Career providers. Greetings, usage
+help and career/job/internship questions are welcome before any fields are complete.
+Exact greetings and basic usage help work without a model call. Discovery's five
+model stages use schema-constrained generation. Valid sections survive an invalid
+section, with at most two targeted corrections after initial generation and an honest
+partial-result notice when some details remain unavailable. DeepSeek Discovery uses
+its schema-capable Responses transport; other Career workflows retain their existing transport.
+Partial answers guide one useful follow-up at a time. Wholly unrelated requests get
+a fixed redirect without changing context or starting research; the turn's model
+call performs scope classification. The six clarification topics must be addressed
+before research; explicit unsure/skip answers are accepted. Role scope can
 stay broad without a separate broad-exploration or industry question.
 Discovery opens fresh with a fixed Python introduction and no initial AI calls;
 the introduction is returned only on fresh opening and excluded from model history; a new
@@ -233,8 +242,7 @@ truncated extraction batches split without discarding completed source work.
 The final review uses the existing review/confirmation APIs and target persistence.
 No CV is needed. See [Career Discovery](CAREER_DISCOVERY.md) for exact routes, models,
 configuration, evidence rules, recovery and verification. Saved-goal question APIs remain
-available while research is waiting; the chat UI waits for combined completion before
-opening its composer.
+available while research is waiting; the chat UI keeps its composer open while the combined overview is being prepared.
 
 
 ### Compact goal/research responses
@@ -246,8 +254,9 @@ only when their versions change. Finding evidence is fetched on expansion throug
 `/goals/{id}/opportunity-research/findings/{finding_id}/evidence?research_id={id}`.
 Standard responses omit source excerpts, quotes and duplicate interview structures.
 Exact quotes allow whitespace-only normalization. Values may paraphrase cited excerpts
-from a single Gemini structuring pass. Source IDs match the cited records exactly, and every
-number must occur verbatim in a cited excerpt. Quotes stay separate from displayed text. The final finding wording is shown directly
+from a single structuring pass that selects numbered, backend-owned passages.
+Request-specific enums constrain fields and source/passage references. Python copies
+quotes/source IDs, and every number in a new finding must occur in its selected passage. Quotes stay separate from displayed text. The final finding wording is shown directly
 in chat; no second Gemini grading, rewrite or overview-selection call is made. Generation and storage share label/text rules,
 and rejected findings retain precise field-level repair feedback. Missing information
 is a successful “not found” result, not a category failure. See [the contract](ANALYSIS_CONTRACTS.md#canonical-goal-and-compact-reads--28-october-2026).
@@ -278,3 +287,14 @@ and echoed request envelopes remain validation failures. Schema enforcement does
 not establish semantic completeness: live R1 trials have also omitted named skills
 and misassigned priorities, so the verified scope classifier must not be treated
 as verification of the full extraction/research/chat journey.
+
+Saved-goal chat accepts additional messages while the agent is working. Messages
+queue in page memory and run in order after a goal is available, using the latest
+goal version and preceding completed reply. Each failed turn can be retried with
+its original receipt without replacing a newer draft or blocking other messages.
+Leaving/reloading discards this temporary queue. Research planning and structuring
+allow 4,096 output tokens each, bounded by the global ceiling. Safe research logs
+include schema field paths and issue codes, never rejected values. Employer adverts
+with duties/qualification sections get one scope recheck after a negative
+classification; application instructions, resume references and AI duties are job
+content. Source grounding and unrelated-task rejection still apply.

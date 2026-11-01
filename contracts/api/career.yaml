@@ -3101,7 +3101,8 @@
               "CONFIRM_AREA",
               "START_RESEARCH",
               "ANSWER",
-              "REFINE_SKILLS"
+              "REFINE_SKILLS",
+              "REJECT_OUT_OF_SCOPE"
             ],
             "title": "Action"
           },

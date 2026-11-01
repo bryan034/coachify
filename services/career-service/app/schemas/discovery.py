@@ -81,7 +81,7 @@ class DiscoveryUnderstanding(Contract):
         return value
 
 class Decision(Contract):
-    action: Literal['ASK_CLARIFICATION','SUGGEST_ROLES','CONFIRM_AREA','START_RESEARCH','ANSWER','REFINE_SKILLS']
+    action: Literal['ASK_CLARIFICATION','SUGGEST_ROLES','CONFIRM_AREA','START_RESEARCH','ANSWER','REFINE_SKILLS','REJECT_OUT_OF_SCOPE']
     scope: Scope | None
     question: Evidence | None
     recommendations: list[Suggestion]=Field(default_factory=list,max_length=5)
@@ -98,8 +98,8 @@ class Decision(Contract):
         return recent_texts(value, 60 if info.field_name == 'excluded_skills' else 30)
 
 class Plan(Contract):
-    related_roles: list[Text]=Field(min_length=1,max_length=4)
-    queries: list[Text]=Field(min_length=1,max_length=4)
+    related_roles: list[Text]=Field(max_length=4)
+    queries: list[Text]=Field(max_length=4)
 
 class SourceAssessment(Contract):
     ref: int = Field(ge=0, le=2)

@@ -13,6 +13,32 @@ runtime; tests do not download tokenizer assets or opt into live provider calls.
 The public Docker-template test must use the user-approved clean tracked template
 in an isolated copy when environment-file access is otherwise prohibited.
 
+`test_discovery_guidance.py` runs the real conversation graph with an in-memory
+checkpoint and synthetic model decisions. It covers greetings, usage help and career
+questions before readiness, partial-answer follow-ups, premature research, scope
+preservation, unrelated-request redirects and idempotent retries. It requires no
+MongoDB or live model. Scope-classifier quality still needs live-provider evaluation.
+Exact greetings and basic usage help are tested without model inference, including
+when the model would fail. Mixed greeting/task messages still reach scope detection.
+Mock HTTP transport also exercises the real model adapter on career questions:
+failed sections get at most two corrections, valid replies reach the transcript and
+unrecoverable dependent content uses a safe partial-result message. Malformed output
+is never accepted by unwrapping it.
+
+`test_discovery_sections.py` checks all five constrained Discovery stages, DeepSeek
+Responses transport, targeted repair schemas, preservation of valid sibling items,
+memory/understanding updates, unsupported citations and safe action dependencies.
+Generic JSON-only compatible endpoints are rejected instead of silently dropping
+constraints. Mock tests verify transport and recovery; they do not prove enforcement
+by a live inference server or the semantic quality of generated guidance.
+
+Run `python tests/local_discovery_probe.py --model elo-deepseek-r1:1.5b` explicitly
+to check native schema enforcement against local Ollama with synthetic adversarial
+inputs. It uses explicit local settings, no private environment file or database,
+and validates the first raw response with correction retries disabled. A populated
+tokenizer cache is required. Passing cases establish observed schema conformance,
+not semantic correctness or every possible constraint on every server version.
+
 Tests use synthetic text/files, fake Profile responses and mocked website
 transport/DNS. They cover PDF/DOCX/TXT parsing in real child processes,
 authentication, no-store responses, file cleanup, limits, invalid files, safe XML,
@@ -313,3 +339,19 @@ validation. The existing provider tests retain bounded retries and safe diagnost
 See [the 1 November verification record](LOCAL_MODEL_VERIFICATION.md) for observed
 results and the unresolved exact-model extraction limit. A fixture journey or
 scope-preflight pass must not be reported as a successful live extraction journey.
+
+`test_career_reliability.py` covers 60-second defaults, research output allowances,
+explicit local research schemas, bounded advert scope rechecks and content-free
+field-level research diagnostics. Frontend chat regressions cover ordered queued
+turns, initial extraction, research failures, current versions/history after edits,
+and failed-turn receipt reuse while preserving newer drafts. All use synthetic
+providers; these tests do not establish live model classification/research quality.
+
+`test_opportunity_evidence_refs.py` verifies category-specific decoding enums across
+local, Gemini and JSON Object providers; source/passages with different indexes;
+exact Unicode passage copying; forged/coerced references; partial preservation;
+selected-passage numeric support; bounded repairs and content-free diagnostics. Its
+isolated-MongoDB test uses the real provider adapter with a mock HTTP transport and
+checks persistence, compact responses, historical reads and the unchanged evidence
+endpoint. Existing legacy quote validation tests remain in place. No live model or
+search calls are made.

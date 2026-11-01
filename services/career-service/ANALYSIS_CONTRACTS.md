@@ -220,8 +220,8 @@ extra proposal call within its original operation deadline. Prompt/schema output
 | `CAREER_LLM_RESPONSE_MODE` | `json_schema` for Gemini, `json_schema_strict` for every local stage, `json_object` for DeepSeek; local job identification, JD extraction and goal summaries upgrade JSON Object mode to native strict JSON Schema; backend validation always applies |
 | `AI_MAX_OUTPUT_TOKENS` | 8192; overall completion ceiling; local JD identification/extraction use up to 8192 each; cloud identification up to 4096; existing smaller stage caps still apply |
 | `AI_CONTEXT_TOKENS` | 16384 for local / 65536 for cloud when unset; public local template is 16384; match the actual model preset |
-| `AI_TIMEOUT_SECONDS`, `AI_RETRIES` | Cloud: 45-second model-call deadline (maximum 60), one bounded 5xx retry |
-| `CAREER_LOCAL_TIMEOUT_SECONDS` | Local only: 45-second default model-call deadline after queue admission (range 1–300); cloud ignores it |
+| `AI_TIMEOUT_SECONDS`, `AI_RETRIES` | Cloud: 60-second model-call deadline (maximum 60), one bounded 5xx retry |
+| `CAREER_LOCAL_TIMEOUT_SECONDS` | Local only: 60-second default model-call deadline after queue admission (range 1–300); cloud ignores it |
 | `CAREER_LLM_TOKEN_PARAMETER` | `max_tokens`; select `max_completion_tokens` for compatible models requiring it |
 | Legacy provider/model switches | `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`, `AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL`, `OPPORTUNITY_GEMINI_MODEL` ignored by production reasoning |
 | `CAREER_RESEARCH_PROVIDER` | `brave` for testing (default), `deepseek` for production Search API |
@@ -514,7 +514,7 @@ See [Career Discovery](CAREER_DISCOVERY.md) for the implemented two-graph flow,
 shared `ReviewStore.goal` / `GoalStore.persist_target` path, owner-scoped durable
 sessions/evidence, explicit confirmation, provider routing and API contracts.
 Saved-goal APIs remain usable during research waits or failures; the initial chat
-response and composer wait for combined completion. Workspace polling
+response waits for combined completion; the composer accepts queued messages throughout. Workspace polling
 leaves an existing Opportunity worker in control of its status and retry deadline.
 
 
@@ -691,6 +691,42 @@ Reasoning content is never used as JSON or shown to the user.
 The JD browser flow validates consumed workspace, progress, operation-result, research,
 skill, condition and date structures before rendering. Invalid successful responses
 produce a safe `invalid_response` client error. Saved goal details, including sourced
-job dates, remain available during research; the combined summary/composer still waits
-for the finished linked research. Empty workspace progress compares null identities
+job dates, remain available during research; the combined summary still waits
+for the finished linked research, while the composer remains available. Empty workspace progress compares null identities
 and zero revisions without repeatedly downloading the full workspace.
+
+### Career reliability — 1 November 2026
+
+Model calls default to 60 seconds for local and cloud providers. Cloud retains its
+60-second maximum; search HTTP and full-workflow budgets are independent. Early
+research planning uses this model deadline too. Opportunity planning and structuring
+each reserve up to 4,096 output tokens under the existing global ceiling. Local
+research upgrades JSON Object mode to strict schema decoding and includes the schema
+in the prompt. All five plan categories, query bounds, source references and evidence
+checks remain authoritative. Research repair logs include only safe field paths and
+issue codes; truncation feedback is distinguished from schema failure.
+
+Employer adverts with clear duties/qualification sections get one negative scope
+recheck before `career_scope`; application/resume instructions and AI duties are
+explicitly valid advert content. This is not an automatic acceptance: positive
+classifications still require exact source evidence and full extraction validation.
+The saved-goal composer queues turns during research/summary/replies and failures,
+dispatches them in order with current goal versions and previous replies, and keeps
+per-turn retry identities. The queue is temporary page memory.
+
+### Opportunity evidence reference contract — 1 November 2026
+
+Provider output now selects `evidence_ref` for each finding instead of generating
+`refs`/`quotes`. Python supplies a numbered catalogue of exact source passages
+(up to 600 characters each) and restores the selected quote/source pair. A
+request-specific schema enumerates fields for the actual category and the actual
+source/passage indexes. Runtime validation remains authoritative for providers
+without native schema support. Model output cannot choose an arbitrary source ID
+or substitute its own quote. New numeric claims must be supported by the chosen
+passage; legacy internal claims retain full-cited-excerpt validation.
+
+The existing stored `Finding` / `CategoryResult` / `OpportunityReport` and public
+evidence contracts remain unchanged. Independently valid claims survive rejected
+references, and an entirely invalid batch uses the existing bounded repair budget
+and safe issue diagnostics. Input admission counts the full schema/prompt in tokens
+and refuses over-limit passage catalogues rather than silently cutting evidence.

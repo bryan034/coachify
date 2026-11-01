@@ -32,7 +32,9 @@ async def prefetch(engine,identity,owner,revision):
     activity('planning_research')
     try:
         model_settings=getattr(engine.ai,'settings',None)
-        seconds=model_settings.timeout_seconds if getattr(model_settings,'provider',None)=='local' else engine.settings.timeout_seconds
+        # Planning is inference, not a search-provider HTTP request. It needs
+        # the same per-call deadline as the durable planner (60s by default).
+        seconds=getattr(model_settings,'timeout_seconds',60)
         async with asyncio.timeout(seconds):
             plan=await engine.ai.generate(AIInput(stage='opportunity_plan',context=json.dumps({
                 'opportunity':{k:getattr(identity,k) for k in IDENTITY},'recruitment_year':now().year})),

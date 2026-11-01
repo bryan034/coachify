@@ -65,7 +65,9 @@ def validate_claims(output,category,sources,public=None):
             if ref<0 or ref>=len(sources):raise citation_error(index,'refs','source_index_out_of_range')
             if whitespace(quote) not in whitespace(sources[ref].evidence or ''):
                 raise citation_error(index,'quotes','quote_not_in_source')
-        evidence='\n'.join(sources[ref].evidence or '' for ref in item.refs)
+        # New provider claims select a complete passage. Legacy internal claims
+        # retain the existing full-excerpt numeric validation contract.
+        evidence='\n'.join(item.quotes if output._passage_bound else [sources[ref].evidence or '' for ref in item.refs])
         numeric_support(item.value,evidence,index)
         values=item.model_dump(exclude={'refs'})
         if public:
@@ -133,12 +135,14 @@ def dedupe_findings(category,findings):
 
 def supported_claims(output,category,sources,public=None):
     """A bad citation cannot erase other independently validated findings."""
-    valid=[];rejected=0;issues=[];reasons=[]
+    issues=list(output._reference_issues)
+    valid=[];rejected=len(issues);reasons=['provenance'] if issues else []
     for index,item in enumerate(output.findings):
+        original=output._reference_indexes[index] if output._reference_indexes else index
         try:valid.extend(validate_claims(output.model_copy(update={'findings':[item]}),category,sources,public))
         except AIError as error:
             rejected+=1;reasons.append(error.reason)
-            issues.extend({**v,'field':v['field'].replace('findings.0.',f'findings.{index}.',1)} for v in error.violations)
-    if output.findings and not valid:
+            issues.extend({**v,'field':v['field'].replace('findings.0.',f'findings.{original}.',1)} for v in error.violations)
+    if (output.findings or issues) and not valid:
         raise AIError('invalid_output',True,reason=reasons[0] if len(set(reasons))==1 else 'provenance',fields=('findings',),violations=issues)
     return valid,rejected

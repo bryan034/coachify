@@ -240,7 +240,7 @@ CAREER_LLM_MODEL=deepseek-r1:1.5b
 CAREER_LLM_RESPONSE_MODE=json_schema_strict
 CAREER_LLM_TOKEN_PARAMETER=max_tokens
 CAREER_LLM_API_KEY=
-CAREER_LOCAL_TIMEOUT_SECONDS=45
+CAREER_LOCAL_TIMEOUT_SECONDS=60
 AI_MAX_OUTPUT_TOKENS=8192
 AI_CONTEXT_TOKENS=32768
 OPPORTUNITY_RUN_SECONDS=600
@@ -255,7 +255,7 @@ set provider, base URL, model, response mode and token parameter together. HTTPS
 OpenAI-compatible services use `CAREER_LLM_PROVIDER=compatible`; providers without
 native schema support can select `json_object`, which requires validation/repair.
 The legacy local JSON Object setting still upgrades identification, JD extraction
-and summary to native schema. Select `CAREER_LLM_TOKEN_PARAMETER=max_completion_tokens`
+summary and public research to native schema. Select `CAREER_LLM_TOKEN_PARAMETER=max_completion_tokens`
 for models requiring that parameter. SDK retries are disabled; the existing workflow
 owns retries, deadlines and cooldowns. No model credentials reach the frontend.
 
@@ -266,11 +266,11 @@ container. Docker Desktop provides `host.docker.internal`; Linux Docker users mu
 that hostname to the host gateway in their deployment. Keep the local server private.
 HTTP and an empty model key are accepted only with the explicit `local` provider.
 Local inference is serialized across Career chat, extraction, discovery and research
-within the single Career worker. `CAREER_LOCAL_TIMEOUT_SECONDS=45` gives each admitted
-model call 45 seconds; supported values are 1–300 seconds. Waiting for the model
+within the single Career worker. `CAREER_LOCAL_TIMEOUT_SECONDS=60` gives each admitted
+model call 60 seconds; supported values are 1–300 seconds. Waiting for the model
 slot does not consume that call's inference budget. Cancellation and goal/version
 changes are checked before a queued request reaches the model. Cloud requests remain
-concurrent and use `AI_TIMEOUT_SECONDS=45` (maximum 60); the local setting is ignored.
+concurrent and use `AI_TIMEOUT_SECONDS=60` (maximum 60); the local setting is ignored.
 The Opportunity pipeline defaults to a 600-second local run budget unless explicitly
 configured otherwise. Local discovery and legacy research also have 600-second run
 budgets with leases lasting longer than the run; search HTTP deadlines remain unchanged.
@@ -371,7 +371,7 @@ CAREER_LLM_PROVIDER=deepseek
 CAREER_LLM_BASE_URL=https://api.deepseek.com/v1
 CAREER_LLM_MODEL=deepseek-flash
 CAREER_LLM_RESPONSE_MODE=json_object
-AI_TIMEOUT_SECONDS=45
+AI_TIMEOUT_SECONDS=60
 AI_CONTEXT_TOKENS=65536
 OPPORTUNITY_RUN_SECONDS=300
 CAREER_LLM_API_KEY=YOUR_PRIVATE_DEEPSEEK_KEY
@@ -380,7 +380,9 @@ CAREER_RESEARCH_API_KEY=YOUR_PRIVATE_DEEPSEEK_KEY
 ```
 
 The keys are separate settings even when the same DeepSeek account/key is used.
-DeepSeek requests use JSON Output with a schema in the prompt and thinking disabled
+Career Discovery's five stages use DeepSeek Responses with a JSON Schema in
+`text.format`; this overrides JSON-only mode for those stages without another key
+or environment setting. Other DeepSeek requests use JSON Output with a schema in the prompt and thinking disabled
 so existing small output budgets apply to final JSON. Local requests receive no
 DeepSeek-specific thinking parameter. Every output still passes backend schema,
 provenance, ownership and version validation; provider/model changes never bypass it.
@@ -575,3 +577,12 @@ Rebuild using the existing Compose workflow after applying configuration. Profil
 For direct Python development, install `packages/elo-shared` before installing a service. Assessment and Roadmap each use their own `MONGODB_URI`/`MONGODB_DATABASE`; defaults are `elo_assessment` and `elo_roadmap`. Internal URLs are `PROFILE_SERVICE_URL`, `CV_SERVICE_URL`, `CAREER_SERVICE_URL` and `ASSESSMENT_SERVICE_URL`. The gateway exposes `/api/v1/assessments` and `/api/v1/roadmaps`; the UI stays at `/roadmap`.
 
 Older extracted goals will not gain job dates automatically because their raw JDs are not retained. The adviser can discuss a user-selected preparation target; a new JD extraction can capture sourced application/interview/start wording. Existing CV skill keys and manual attachments are preserved. A null new canonical ID means unresolved mapping, not missing capability.
+
+Career research planning and category structuring each allow up to 4,096 output
+tokens, bounded by `AI_MAX_OUTPUT_TOKENS`. A 60-second model deadline does not
+prevent output-token truncation. Local research includes its JSON schema in the
+prompt as well as the native decoding format. Planning uses the model deadline
+in both early retrieval and durable research; search HTTP deadlines stay separate.
+Existing private settings override defaults: apply `CAREER_LOCAL_TIMEOUT_SECONDS=60`
+for local inference or `AI_TIMEOUT_SECONDS=60` for cloud inference in your private
+`infrastructure/docker/.env`, then recreate Career yourself.

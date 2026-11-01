@@ -76,7 +76,7 @@ def test_local_timeout_and_context_defaults_are_independent_of_cloud(monkeypatch
     monkeypatch.delenv('CAREER_LOCAL_TIMEOUT_SECONDS',raising=False)
     monkeypatch.setenv('AI_CONTEXT_TOKENS','')  # Compose delegates to provider defaults.
     local=AISettings.from_env()
-    assert local.timeout_seconds==45 and local.context_tokens==16384
+    assert local.timeout_seconds==60 and local.context_tokens==16384
     monkeypatch.setenv('CAREER_LOCAL_TIMEOUT_SECONDS','240')
     assert AISettings.from_env().timeout_seconds==240
     monkeypatch.setenv('CAREER_LOCAL_TIMEOUT_SECONDS','301')

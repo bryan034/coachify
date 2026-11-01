@@ -18,7 +18,7 @@ class AISettings(BaseModel):
     api_key: SecretStr = SecretStr('')
     response_mode: Literal['json_object', 'json_schema', 'json_schema_strict'] = 'json_schema'
     token_parameter: Literal['max_tokens', 'max_completion_tokens'] = 'max_tokens'
-    timeout_seconds: float = Field(default=45, ge=1, le=300)
+    timeout_seconds: float = Field(default=60, ge=1, le=300)
     retries: int = Field(default=1, ge=0, le=2)
     max_output_tokens: int = Field(default=8192, ge=128, le=8192)
     context_tokens: int = Field(default=65536, ge=2048, le=262144)
@@ -57,7 +57,7 @@ class AISettings(BaseModel):
             if setting in os.environ:
                 if field=='context_tokens' and not os.environ[setting].strip():continue
                 values[field]=os.environ[setting]
-        if provider=='local':values['timeout_seconds']=os.getenv('CAREER_LOCAL_TIMEOUT_SECONDS','45')
+        if provider=='local':values['timeout_seconds']=os.getenv('CAREER_LOCAL_TIMEOUT_SECONDS','60')
         try:return cls(**values)
         except ValueError:raise ValueError('Invalid Career model configuration. Check AI_ENABLED, CAREER_LLM_PROVIDER, CAREER_LLM_BASE_URL, CAREER_LLM_RESPONSE_MODE, CAREER_LLM_TOKEN_PARAMETER, CAREER_LLM_API_KEY, CAREER_LLM_MODEL, CAREER_LOCAL_TIMEOUT_SECONDS and AI task limits.') from None
 

@@ -49,14 +49,19 @@ def model_client(settings, http_client):
 
 
 @asynccontextmanager
-async def completion_response(client, payload, *, local=False):
+async def completion_response(client, payload, *, local=False, responses=False):
     parameters = dict(payload)
+    # DeepSeek documents Responses at the unversioned provider root. Preserve
+    # configured custom/proxy paths; normalize only its standard /v1 alias.
+    if responses and client.base_url.host=='api.deepseek.com' and client.base_url.path.rstrip('/')=='/v1':
+        client=client.with_options(base_url=str(client.base_url.copy_with(path='/')))
     # OpenAI-compatible vendor extensions travel through the SDK's explicit
     # extension field, rather than changing the shared Chat Completions shape.
     extra = {key: parameters.pop(key) for key in ('thinking',) if key in parameters}
     rejection=None
     try:
-        async with client.chat.completions.with_streaming_response.create(
+        create=client.responses.with_streaming_response.create if responses else client.chat.completions.with_streaming_response.create
+        async with create(
             **parameters, extra_body=extra or None,
             extra_headers={'Authorization': Omit()} if local else None,
         ) as response:

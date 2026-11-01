@@ -13,6 +13,8 @@ from app.ai.rejections import classify
 from app.ai.routing import opportunity_models
 from app.ai.opportunity_config import OpportunitySettings
 from app.main import create_app
+from app.schemas.analysis import ResearchSource
+from app.ai.opportunity_contracts import structure_input
 
 
 @pytest.mark.parametrize('wrapped',[False,True])
@@ -93,7 +95,8 @@ def test_explicit_model_override_is_shared_by_all_roles_and_legacy_settings_stay
     router=opportunity_models(adapter,None,settings,OpportunitySettings(),None)
     assert router.primary is router.context is adapter
     for stage in ('jd_scope','jd_extraction','opportunity_structure','opportunity_plan','discovery_extract'):
-        request=AIInput(stage=stage,source_text='Analyst. SQL required.') if stage in ('jd_scope','jd_extraction') else AIInput(stage=stage,context='{}')
+        context=structure_input({},'internship_insights',[ResearchSource(source_id='synthetic',platform='other',url='https://example.test/report',evidence='Example interns report mentorship.')]) if stage=='opportunity_structure' else {}
+        request=AIInput(stage=stage,source_text='Analyst. SQL required.') if stage in ('jd_scope','jd_extraction') else AIInput(stage=stage,context=json.dumps(context))
         assert adapter._payload(request)['model']=='gemini-3.6-flash'
 
 
