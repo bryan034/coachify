@@ -1,5 +1,10 @@
 # Career Goal
 
+Career Discovery opens with an editable composer and no provider-consent checkbox.
+Sending the first message creates its session with `consent=true`; configured model
+processing and automatic public-job research are enabled by default. New chat has
+the same behavior. Opening the page alone makes no model or research calls.
+
 `career-goal.tsx` keeps paste, URL and document previews in page memory. Its input
 methods and source-recovery controls remain independent from target persistence.
 The account/token key clears previews, target drafts and pending requests when the

@@ -20,7 +20,7 @@ const phases:Record<string,string>={plan_research:'Planning job-listing searches
 export function CareerDiscovery(){
  const {token}=useProfile(),router=useRouter();
  const [introduction,setIntroduction]=useState('');
- const [view,setView]=useState<View>(),[message,setMessage]=useState(''),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[reload,setReload]=useState(0);
+ const [view,setView]=useState<View>(),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[reload,setReload]=useState(0);
  const [pending,setPending]=useState(''),[failedMessage,setFailedMessage]=useState(''),[details,setDetails]=useState(false);
  const {transcript,showJump,jumpToLatest,scrollProps}=useChatScroll();
  const sending=useRef(false),currentView=useRef<View|undefined>(undefined);
@@ -37,7 +37,7 @@ export function CareerDiscovery(){
  }
  async function send(text=message,retry=false){
   const input=text.trim();
-  if(!token||!input||!consent||sending.current||busy)return;
+  if(!token||!input||sending.current||busy)return;
   sending.current=true;setBusy(true);setError('');setPending(input);setFailedMessage('');
   // Clear immediately; leave the composer editable while the response is pending.
   if(!retry)setMessage('');
@@ -52,7 +52,7 @@ export function CareerDiscovery(){
   if(busy||sending.current)return;
   currentView.current=undefined;revision.current='';receipt.current=null;
   setIntroduction('');setView(undefined);setContent(undefined);setMessage('');setPending('');setFailedMessage('');
-  setError('');setDetails(false);setConsent(false);setAcknowledge(false);setSeconds(0);setReload(v=>v+1);
+  setError('');setDetails(false);setAcknowledge(false);setSeconds(0);setReload(v=>v+1);
  }
  async function research(refresh=false){
   if(!session?.decision?.scope||!token||busy)return;setBusy(true);setError('');
@@ -87,15 +87,14 @@ export function CareerDiscovery(){
     {!session?.messages?.length&&session?.decision&&<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentMarkdown>{session.decision.reply}</AgentMarkdown>{session.decision.question&&<p>{session.decision.question}</p>}</div>}
     {pending&&<div className="agent-message user"><span className="agent-message-label">You</span><p>{pending}</p></div>}
     {busy&&pending&&<div className="agent-message assistant"><AgentActivity label="Considering your message…"/></div>}
-    {session?.decision?.recommendations.map(option=><article className="agent-message assistant" key={option.area}><h2>{option.area}</h2><p>{option.explanation}</p><p>{option.typical_work}</p><p className="small">{option.difference}</p><button className="btn ghost" disabled={busy||!consent} onClick={()=>void send(`I want to explore ${option.area}.`)}>Choose {option.area}</button></article>)}
+    {session?.decision?.recommendations.map(option=><article className="agent-message assistant" key={option.area}><h2>{option.area}</h2><p>{option.explanation}</p><p>{option.typical_work}</p><p className="small">{option.difference}</p><button className="btn ghost" disabled={busy} onClick={()=>void send(`I want to explore ${option.area}.`)}>Choose {option.area}</button></article>)}
     {working&&<AgentActivity label={session?.status==='waiting'?(session.limit_scope==='user'?'Waiting for the AI service to resume':`${session.provider||'Research provider'} is rate limiting requests`):phases[session!.stage||'']||'Researching your career area'} detail={session?.status==='waiting'?`Resuming in ${seconds} seconds. You can keep chatting.`:`${session?.sources.length||0} source excerpts retrieved. You can keep chatting, or leave and return.`}/>}
     {session?.status==='failed'&&<div role="alert"><p>Research could not finish. Completed evidence is retained.</p><button className="btn ghost" disabled={busy} onClick={()=>void research()}>Retry research</button></div>}
     {error&&<div role="alert" className="goal-error"><p>{error}</p>{failedMessage&&<><p>Message not sent: {failedMessage}</p><button className="btn ghost sm" disabled={busy} onClick={()=>void send(failedMessage,true)}>Retry message</button></>}<button className="btn ghost sm" disabled={busy} onClick={()=>setReload(v=>v+1)}>Reload saved progress</button></div>}
    </div>
    <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
    <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}>
-    <label className="agent-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>Allow elo to send this career conversation to the configured AI provider and automatically research public job listings.</label>
-    <div className="agent-compose-row"><textarea id="discovery-message" aria-label="Message elo" rows={2} maxLength={600} placeholder="Share your interests, ask a question or refine your direction…" value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||!consent||!message.trim()||!view?.available}>↑</button></div>
+    <div className="agent-compose-row"><textarea id="discovery-message" aria-label="Message elo" rows={2} maxLength={600} placeholder="Share your interests, ask a question or refine your direction…" value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||!message.trim()||!view?.available}>↑</button></div>
     <p className="small">Enter to send · Shift+Enter for a new line</p>
    </form>
   </div>

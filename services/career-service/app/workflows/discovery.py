@@ -13,7 +13,7 @@ from langsmith import tracing_context
 from starlette.concurrency import run_in_threadpool as thread
 from app.ai.adapter import AIError,Operation
 from app.ai.discovery_config import DiscoverySettings
-from app.ai.contracts import AIInput,Message
+from app.ai.contracts import AIInput,Message,DiscoveryHistoryMessage
 from app.workflows.model_waits import resume_obsolete_model_waits
 from app.ai.waiting import quota_progress
 from app.clients.search_sources import SourceRateLimit
@@ -197,16 +197,19 @@ class DiscoveryEngine:
         allowed={source for fact in facts for source in fact['source_ids']}
         async def understand(state):
             previous=row.get('decision') or {}
-            social_reply=conversational_reply(body.message)
+            messages=conversation_messages(row.get('messages',[]))
+            social_reply=conversational_reply(body.message,ongoing=bool(messages))
             if social_reply:
                 question=None
-                if row['status'] in ('conversation','failed') and missing_fields(previous.get('understanding')):
+                if not messages and row['status'] in ('conversation','failed') and missing_fields(previous.get('understanding')):
                     question=clarification_bundle(previous.get('understanding'))[0].split('. ',1)[1]
                 decision=Decision.model_validate({**previous,'action':'ANSWER',
                     'scope':row.get('scope'),'reply':social_reply,'question':question,'source_ids':[]})
                 return {'decision':decision.model_dump(mode='json'),'digest':digest}
             direction={k:v for k,v in previous.items() if k in ('scope','excluded_skills','requested_skills')}
-            history=[Message(role=m['role'],content=m['content'][:400]) for m in conversation_messages(row.get('messages',[]))[-6:]]
+            # Preserve whole recent exchanges; the adapter selects the newest ones
+            # that fit its token budget alongside current input and saved memory.
+            history=[DiscoveryHistoryMessage(**m) for m in messages[-28:]]
             request=AIInput(stage='discovery_turn',context=json.dumps({
                 'previous':direction,'memory':previous.get('memory',{}),'understanding':DiscoveryUnderstanding.model_validate(previous.get('understanding',{})).model_dump(mode='json'),'scope':row.get('scope'),
                 'research_status':row['status'],'research_question':row.get('research_question'),'facts':facts},separators=(',',':')),
@@ -291,7 +294,12 @@ class DiscoveryEngine:
             if row['status'] in ('researching','waiting') and not values.get('status'):reply+=' Research for this direction is continuing.'
             decision['reply']=reply
             if decision.get('question') and re.search(r'(?i)(?:start|begin|confirm|approve|proceed).*(?:research|area|scope)|(?:research).*(?:start|begin)',decision['question']):decision['question']=None
-        if decision.get('question'):reply+='\n\n'+plain_reply(decision['question'])
+        if decision.get('question'):
+            question=plain_reply(decision['question'])
+            normalize=lambda text:' '.join(re.findall(r'\w+',text.casefold()))
+            if ' '+normalize(question)+' ' in ' '+normalize(reply)+' ':
+                decision['question']=None
+            else:reply+='\n\n'+question
         links=citations(decision.get('source_ids',[])[:3],row.get('sources') or [])
         if links:reply+=' '+links
         if values.get('status')=='researching':reply+='\n\nResearching '+proposed['area']+'. You can keep chatting while I compare representative listings.'

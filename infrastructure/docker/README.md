@@ -70,6 +70,10 @@ Profile, Career and CV. NGINX forwards the HMR WebSocket. Webpack polling is ena
 for Docker Desktop bind mounts. Some React edits trigger a full refresh and reset
 unsaved browser state; Python reloads interrupt in-flight requests.
 
+The development image gives the `node` user ownership of the frontend directory
+so Next.js can generate `next-env.d.ts` on first startup. If an older image reports
+`EACCES` for that file, rebuild the frontend image and recreate its container.
+
 Only source/public/config paths are mounted, read-only. Dependencies stay in the
 image; `.next` uses a separate development cache volume. No environment files are
 mounted, and agents must not read them or run commands that load private values.

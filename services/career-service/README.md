@@ -226,7 +226,11 @@ model stages use schema-constrained generation. Valid sections survive an invali
 section, with at most two targeted corrections after initial generation and an honest
 partial-result notice when some details remain unavailable. DeepSeek Discovery uses
 its schema-capable Responses transport; other Career workflows retain their existing transport.
-Partial answers guide one useful follow-up at a time. Wholly unrelated requests get
+Partial answers guide one useful follow-up at a time, building on prior messages and
+saved preferences. Whole recent messages use an 8k-token history allowance within
+the request budget; repeated introductions and duplicate follow-ups are discouraged
+by the prompt, with duplicate reply/question text suppressed by the backend.
+Wholly unrelated requests get
 a fixed redirect without changing context or starting research; the turn's model
 call performs scope classification. The six clarification topics must be addressed
 before research; explicit unsure/skip answers are accepted. Role scope can

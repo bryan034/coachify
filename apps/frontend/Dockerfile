@@ -7,7 +7,9 @@ RUN npm ci
 FROM dependencies AS development
 ENV NODE_ENV=development NEXT_TELEMETRY_DISABLED=1
 COPY --chown=node:node apps/frontend apps/frontend
-RUN mkdir -p apps/frontend/.next && chown -R node:node apps/frontend/.next
+RUN mkdir -p apps/frontend/.next \
+    && chown node:node apps/frontend \
+    && chown -R node:node apps/frontend/.next
 USER node
 EXPOSE 3000
 CMD ["npm", "run", "dev", "--workspace", "apps/frontend", "--", "--hostname", "0.0.0.0", "--webpack"]

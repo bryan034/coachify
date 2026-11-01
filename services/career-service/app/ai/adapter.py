@@ -47,7 +47,7 @@ from app.ai.discovery_contracts import OUTPUTS as DISCOVERY_OUTPUTS, PROMPTS as 
 usage_logger = logging.getLogger('uvicorn.error.ai_usage')
 MODEL_OUTPUTS = {'goal_summary':GoalSummary,'jd_scope':JobIdentity,**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_structure':ReferencedFindings,'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
 
-PROMPT_VERSION = 'career-ai-v22'
+PROMPT_VERSION = 'career-ai-v23'
 JD_OUTPUT_TOKENS={'jd_scope':4096,'jd_extraction':8192}
 LOCAL_JD_OUTPUT_TOKENS={**JD_OUTPUT_TOKENS,'jd_scope':8192}
 SYSTEM_PROMPT = '''You are elo's career assistant. Return only JSON matching the supplied schema.
@@ -746,12 +746,22 @@ class AIAdapter:
             return size <= input_budget, size
 
         current = request
+        if request.stage == 'discovery_turn':
+            # History has its own 8K allowance within the full request budget.
+            # Never trim current input, saved understanding, memory or facts.
+            _, base_size = fits(request.model_copy(update={'conversation': request.conversation[-1:]}))
+            input_budget = min(input_budget, base_size + 8192)
         while True:
             fits_budget, size = fits(current)
             if fits_budget:
                 return current
             # Passage refs must identify exactly what the model saw. Never
             # silently shorten text after constructing its evidence catalogue.
+            if current.stage == 'discovery_turn' and len(current.conversation) > 1:
+                # Prefer complete exchanges and keep the newest user input intact.
+                remove_count = 2 if len(current.conversation) > 2 and current.conversation[0].role == 'user' and current.conversation[1].role == 'assistant' else 1
+                current = current.model_copy(update={'conversation': current.conversation[remove_count:]})
+                continue
             if current.stage in ('goal_edit','goal_summary','opportunity_structure') or current.stage in DISCOVERY_PROMPTS:raise AIError('context_limit')
             if len(current.conversation) > 1:
                 # The last message is the current user input; keep it intact.

@@ -34,10 +34,12 @@ def conversation_messages(messages):
             if not (message.get('role') == 'assistant' and message.get('content') in (INTRODUCTION,PREVIOUS_INTRODUCTION,LEGACY_INTRODUCTION))]
 
 
-def conversational_reply(message):
+def conversational_reply(message, *, ongoing=False):
     """Exact social/help turns need no inference; mixed requests still use the model."""
     text=re.sub(r'[.!?]+$', '', ' '.join(message.casefold().split())).strip()
     if text in ('hi','hello','hey','hi elo','hello elo','hey elo','good morning','good afternoon','good evening'):
+        if ongoing:
+            return 'Hi again! We can carry on exploring your career direction from where we left off.'
         return 'Hi! I can help you explore career paths, compare roles, and discuss jobs or internships.'
     if text in ('how do i use this','how to use this','how does this work','how do i use this chat','what can you do'):
         return ('Start with a career question, an interest, or a kind of work you enjoy. '

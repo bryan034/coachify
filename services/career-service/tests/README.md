@@ -18,6 +18,11 @@ checkpoint and synthetic model decisions. It covers greetings, usage help and ca
 questions before readiness, partial-answer follow-ups, premature research, scope
 preservation, unrelated-request redirects and idempotent retries. It requires no
 MongoDB or live model. Scope-classifier quality still needs live-provider evaluation.
+Conversation regressions cover whole prior replies (including saved research replies
+over 4,000 characters), references to the previous question, saved preferences,
+duplicate follow-up suppression and continued greetings. Real-adapter tests verify
+the 8,192-token history allowance under 16k/64k context settings, oldest-exchange
+eviction, and preservation of current input and structured context.
 Exact greetings and basic usage help are tested without model inference, including
 when the model would fail. Mixed greeting/task messages still reach scope detection.
 Mock HTTP transport also exercises the real model adapter on career questions:

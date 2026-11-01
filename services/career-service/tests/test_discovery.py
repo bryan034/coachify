@@ -276,6 +276,7 @@ def send(flow,row,message,key=None):
 
 def test_memory_recent_context_and_transcript_survive_reload_without_research_for_questions(flow):
     row=wait(flow,start(flow,'I enjoy problem solving'));calls=len(flow[3].calls)
+    history=row['messages']
     row=wait(flow,send(flow,row,'Question: I dislike customer-facing work'))
     restored=flow[0].get(BASE+'/current',headers=headers()).json()['session']
     assert restored['messages']==row['messages']
@@ -284,8 +285,8 @@ def test_memory_recent_context_and_transcript_survive_reload_without_research_fo
     assert len(flow[3].calls)==calls and row['status']=='review'
     request,context=[v for v in flow[2].contexts if v[0].stage=='discovery_turn'][-1]
     assert context['memory']['interests']==['problem solving']
-    assert len(request.conversation)<=7 and request.conversation[-1].content=='Question: I dislike customer-facing work'
-    assert all(len(m.content)<=400 for m in request.conversation[:-1])
+    assert len(request.conversation)<=29 and request.conversation[-1].content=='Question: I dislike customer-facing work'
+    assert [m.model_dump() for m in request.conversation[:-1]]==history[-28:]
     assert 'sources' not in context and context['facts']
     assert flow[0].get(f"{BASE}/{row['id']}",headers=headers(other=True)).status_code==404
 
@@ -417,8 +418,9 @@ def test_chat_context_is_bounded_independently_of_transcript_length(flow):
     db.research_contexts.update_one({'_id':row['id']},{'$set':{'messages':stored}})
     send(flow,row,'Question: Tell me about SQL')
     request,context=[v for v in flow[2].contexts if v[0].stage=='discovery_turn'][-1]
-    assert len(request.conversation)==7
-    assert all(len(m.content)<=400 for m in request.conversation[:-1])
+    assert len(request.conversation)==29
+    assert [m.model_dump() for m in request.conversation[:-1]]==[
+        {**m,'content':m['content'].strip()} for m in stored[-28:]]
     assert len(context['facts'])<=16 and context['memory']['interests']==['problem solving']
     assert len(json.dumps(context))<6000
 

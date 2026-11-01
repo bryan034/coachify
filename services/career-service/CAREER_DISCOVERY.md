@@ -26,7 +26,10 @@ response. Failed messages have a separate retry action that preserves that draft
 Opening the page or choosing **New chat** shows only a fixed introduction authored
 in Python (`app/domain/discovery_conversation.py`). The frontend fetches it using
 `GET /discoveries/current?fresh=true`, which returns no previous session/history.
-No Gemini or Brave request is triggered by opening the page, consent changes or
+The composer is immediately editable without a consent checkbox. Sending the first
+message creates the session with `consent=true`; model processing and automatic
+public-job research are enabled by default when the configured services are available.
+No Gemini or Brave request is triggered by opening the page or
 New chat. Only sending the first message creates a new private session and starts
 conversation processing. The introduction is returned only on this fresh-open request and kept as display-only
 frontend state. It is not stored in new transcripts or sent to Gemini; legacy stored
@@ -40,10 +43,17 @@ Reopening/reloading the discovery page starts with a clean view; earlier session
 and evidence remain owner-scoped on the server, and saved goals are preserved.
 Other Career chat and JD workflows are unchanged.
 
-Gemini receives the saved structured understanding with user evidence, a compact memory (interests, preferences, rejected
-areas and open questions), the six latest messages clipped to 400 characters each,
+The configured model receives the saved structured understanding with user evidence, a compact memory (interests, preferences, rejected
+areas and open questions), recent whole conversation messages selected within a token budget,
 the current scope, and at most sixteen projected market facts. It does not receive
-the full transcript or source excerpts on each chat turn. Memory fields are bounded
+the full transcript or source excerpts on each chat turn. Up to fourteen recent exchanges
+(28 individual messages) are considered, with an 8,192 estimated-token history allowance.
+The adapter drops the oldest messages, preferring complete user/assistant exchanges,
+until both the history allowance and the effective full-request budget fit. It never
+clips individual messages or removes the newest user input, saved understanding,
+memory or research facts to fit. If those alone exceed the request budget, it reports
+`context_limit`. The 64k model context setting is request capacity, not persistent memory;
+the app continues to supply selected history and saved context on each turn. Memory fields are bounded
 and must describe user statements, not assumptions about their abilities. Interests,
 preferences and rejected directions each keep up to six entries; open questions keep
 up to three. User skill exclusions/additions keep up to 60/30 entries respectively.
@@ -100,10 +110,17 @@ identified before research; otherwise the conversation continues with options.
 The readiness gate also applies to the compatibility `/research` endpoint.
 
 Exact greetings, thanks and basic usage-help messages are answered in Python with
-career-focused copy and, before research, one missing-topic follow-up. These turns
+career-focused copy and, on a first message only, one missing-topic follow-up. Later
+greetings continue the chat without another introduction or checklist question. These turns
 make no model call, retain understanding/memory/scope, and do not start research.
 Matching covers only the whole message; a greeting followed by a question or task
 still goes through the model. Other turns use `discovery_turn` to classify scope.
+The turn prompt builds on the previous question and all supported preferences rather
+than reintroducing the assistant or following a fixed question order. A stated kind
+of work can address role scope without a specific job title. Suggestions remain
+tentative until supported by the user's own statements. The response renderer
+appends a separate follow-up only when it is not already present in the reply,
+ignoring case, whitespace and punctuation differences.
 Career questions use `ANSWER` before research is ready. Contextual short
 answers and hobbies supplied during interest discovery are relevant without career
 keywords. Mixed requests receive only career-related guidance. Wholly unrelated tasks
