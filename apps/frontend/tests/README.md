@@ -134,3 +134,7 @@ research and response repair. It verifies that a draft survives the initial summ
 submitted text clears immediately, and a newer draft survives the completed reply.
 Validation diagnostics, Markdown rendering and retry behavior remain covered in
 the same journey.
+
+The real-service Career preview journey also keeps the composer editable after
+disabled-provider extraction fails, checks empty-message submission stays disabled,
+and retains retry, unsaved-goal and reload assertions.
