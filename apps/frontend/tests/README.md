@@ -128,3 +128,9 @@ The synthetic HTTP provider accepts only a finite labelled message set. These
 checks establish application behavior and validation, not live-model language
 understanding. The recording uses synthetic accounts and data with real local
 services; it does not demonstrate deployment, assessment generation or readiness.
+
+The chat-display browser journey checks that the JD composer stays editable during
+research and response repair. It verifies that a draft survives the initial summary,
+submitted text clears immediately, and a newer draft survives the completed reply.
+Validation diagnostics, Markdown rendering and retry behavior remain covered in
+the same journey.
