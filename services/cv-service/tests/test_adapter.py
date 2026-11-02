@@ -129,3 +129,41 @@ def test_vendor_options_are_host_scoped_for_all_cv_requests(monkeypatch, base_ur
         assert payload['reasoning_effort'] == 'minimal'
     else:
         assert 'reasoning_effort' not in payload
+
+
+@pytest.mark.parametrize('base_url,gemini', [
+    ('https://generativelanguage.googleapis.com/v1beta/openai', True),
+    ('https://GENERATIVELANGUAGE.GOOGLEAPIS.COM/v1beta/openai', True),
+    ('https://api.openai.com/v1', False),
+    ('https://generativelanguage.googleapis.com.example/v1', False),
+])
+@pytest.mark.parametrize('repair', [False, True])
+def test_gemini_uses_simple_decoding_schema_with_full_prompt_limits(monkeypatch, base_url, gemini, repair):
+    configure(monkeypatch)
+    monkeypatch.setenv('CV_LLM_BASE_URL', base_url)
+    captured = []
+    def handler(request):
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': '{"items":[]}'}}]})
+    original = httpx.Client
+    monkeypatch.setattr('app.clients.extractor.Client', lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs))
+    extractor = Extractor()
+    if repair:
+        extractor.repair([], {'items': []}, [{'field': 'items', 'issue': 'too_short'}])
+    else:
+        extractor.extract([])
+    request = captured[0]
+    grammar = request['response_format']['json_schema']
+    assert grammar['strict'] is True
+    schema = grammar['schema']
+    assert ('maxItems' not in schema['properties']['items']) is gemini
+    item = schema['properties']['items']['items']
+    assert ('maxItems' not in item['properties']['evidence']) is gemini
+    assert ('maximum' not in item['properties']['experience_months']['anyOf'][0]) is gemini
+    assert item['additionalProperties'] is False
+    assert set(item['required']) == set(item['properties'])
+    assert item['properties']['kind']['enum'] == ['education', 'experience', 'project', 'skill']
+    assert {'type': 'null'} in item['properties']['end_date']['anyOf']
+    assert 'other_information' in schema['required']
+    assert '"maxItems": 160' in request['messages'][0]['content']
+    assert '"maxLength": 500' in request['messages'][0]['content']

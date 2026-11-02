@@ -5,8 +5,8 @@ from app.schemas.cv import Extraction
 
 MAX_ISSUES = 16
 RULES = {
-    'source_excerpt': 'Use an existing block_id and an exact verbatim substring from that block, at most 500 characters.',
-    'literal_skill': 'Explicit skill labels must occur literally in this item\'s own evidence. Keep inferred skills separate and source-linked.',
+    'source_excerpt': 'Use an existing block_id and evidence supported by that block. Faithful paraphrases and formatting changes are accepted, but do not add or contradict facts; keep each summary at most 500 characters.',
+    'literal_skill': 'Explicit skill labels must occur in this item\'s cited original source blocks. Keep inferred skills separate and source-linked.',
     'date_precision': 'Dates must occur in the cited source with the same year/month/day precision. Never invent precision.',
     'ongoing_status': 'Set ongoing only if the cited source explicitly states it; ongoing items have no end_date.',
     'duplicate_claim': 'Separate same-kind claims need distinct truthful evidence; do not fabricate evidence for uniqueness.',
@@ -50,7 +50,15 @@ def feedback_for(error):
         kind = issue['type'] if issue['type'] in ERROR_TYPES else 'other'
         guidance = 'Match the supplied schema; do not invent facts to fill required fields.'
         if path.endswith('.excerpt'):
-            guidance = 'Use 1–500 characters of exact source text per excerpt; split into at most six short citations per item.'
+            guidance = 'Use a source-supported summary of 1–500 characters.'
+            if kind == 'string_too_long':
+                guidance = ('Replace this overlong quotation with a shorter faithful summary of the same source block. '
+                    'Target fewer than 400 characters; the hard limit is 500 characters including spaces, punctuation and line breaks, not tokens. '
+                    'Paraphrasing is allowed. Do not repeat the overlong text unchanged or add unsupported facts. '
+                    'Preserve names, numbers, negation, conditions and personal/team attribution. ')
+                guidance += ('Split remaining uncategorised content into separate other_information entries.'
+                             if path.startswith('other_information[')
+                             else 'Use separate short quotations for distinct supporting facts, with at most six evidence citations per item.')
         elif kind == 'value_error' and path.startswith('items['):
             guidance = 'Dates must be valid calendar values with supported precision; start cannot follow end; ongoing=true requires end_date=null.'
         issues.append({'field': path or '$', 'issue': kind, 'guidance': guidance})

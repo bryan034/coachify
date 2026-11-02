@@ -380,3 +380,43 @@ Its reviewed seed IDs and country/headquarters source queries live alongside the
 reference snapshot. Refresh preserves these names and their Singapore-source flag;
 unknown headcounts sort after known counts. The public search response remains
 `id`/`name`; reference metadata is not stored in user profiles or MongoDB.
+
+## Guided skills profile
+
+`GET /api/v1/profile/skills-profile` reads the authenticated account's structured
+manual profile. `PUT` accepts `expected_version`, a UUID `mutation_id`, `status`
+(`draft` or `saved`), `areas` and `entries`. The shared schema is
+`elo_shared.skills_profile`; the published API schema is in `contracts/api/profile.yaml`.
+
+The profile is embedded in the existing account, independently versioned from
+onboarding and ordinary declarations. It contains up to 40 work, project,
+education or interest entries. Entry fields and per-skill dimensions distinguish
+answered, unknown, skipped and not-applicable; an absent field has not yet been
+answered. Answered values retain bounded original statement quotes and conversation
+turn identifiers. Interests alone do not establish skills. Historical institutions
+and work entries do not silently overwrite onboarding's current/last background.
+
+The CV conversation harness chooses missing fields, asks model-written questions,
+interprets answers and separately checks semantic support. Equivalent wording is
+accepted; source identifiers, value shapes and bounds remain strict. Profile
+persists owner declarations rather than independently verified ability or job fit.
+Users can save partial profiles; unknowns never become zero proficiency.
+
+Draft writes preserve existing published capabilities. Explicitly saving publishes
+supported manual skills through the existing account `capability_declarations`,
+with stable `source_entry_id` identities. Per-experience dimensions remain in the
+structured profile; descriptions feed existing assessment inputs. No second skill
+collection or fake uploaded CV is created. Repeated saves do not advance the
+capability revision unless declarations actually change. Ordinary declarations,
+additional descriptions and explicit CV attachments survive subsequent saves.
+Removing a structured skill removes its generated support only on the next
+explicit save; independently attached user descriptions remain as a standalone
+declaration. Raw conversation history remains CV-owned.
+
+The complete write is capped at 384 KiB, descriptions are never silently truncated,
+and the existing 100-declaration limit applies on publication. Account CAS checks
+both profile and capability mutation markers/revisions so a concurrent declaration
+cannot be overwritten. Namespaced `skills-profile:` receipts reuse the existing
+`capability_mutations` operational ledger; publication acknowledgement loss replays
+the exact stored candidate. Stale revisions require reconciliation, never blind
+replacement. Unrelated account, authentication and planning fields are preserved.

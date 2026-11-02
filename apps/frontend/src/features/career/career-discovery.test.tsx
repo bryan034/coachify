@@ -42,6 +42,7 @@ it('renders bundled clarification as questions without the repeated preface',asy
  configure(()=>({available:true,session:{...base,decision:{...decision,action:'ASK_CLARIFICATION'},messages:[{role:'user',content:'Help me explore careers'},{role:'assistant',content:bundle}]}}));
  await open();send('Help me explore careers');
  await screen.findByRole('button',{name:'Show full response'});
+ await waitFor(()=>expect(screen.getByRole('log')).toHaveTextContent('Which field'));
  fireEvent.click(screen.getByRole('button',{name:'Show full response'}));
  expect(screen.getByText(questions[0])).toBeInTheDocument();
  expect(within(screen.getByRole('log')).getAllByRole('listitem')).toHaveLength(6);

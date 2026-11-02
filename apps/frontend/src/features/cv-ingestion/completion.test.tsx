@@ -93,3 +93,11 @@ describe('manual evidence links',()=>{
   expect(screen.getByText(/Your declaration is retained/)).toBeVisible();fireEvent.click(screen.getByRole('button',{name:'Review CV link'}));fireEvent.change(screen.getByRole('combobox'),{target:{value:'standalone'}});fireEvent.click(screen.getByRole('button',{name:'Save link choice'}));await waitFor(()=>expect(onSaved).toHaveBeenCalled());expect(vi.mocked(cvApi.updateAttachment).mock.calls[0][0]).toMatchObject({expected_version:4,declaration_id:declaration.id,cv_match:null});
  });
 });
+
+
+it('shows uncategorised information with its source location',()=>{
+ const detail=savedCv();detail.other_information=[{id:'b1',excerpt:'Additional synthetic CV content',location:'Page 2'}];
+ render(review(detail));const section=screen.getByRole('region',{name:'Other information'});
+ expect(within(section).getByText('Additional synthetic CV content')).toBeVisible();
+ expect(within(section).getByText('Page 2')).toBeVisible();
+});

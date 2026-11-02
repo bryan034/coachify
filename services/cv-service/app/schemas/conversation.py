@@ -8,6 +8,7 @@ from app.schemas.cv import StrictModel, Text, ConfirmedContext, ItemMutation
 class ConversationStart(StrictModel):
     cv_id: str | None = Field(default=None, max_length=100)
     mutation_id: UUID
+    purpose: Literal['skills_profile'] | None = None
 
 
 class ConversationMutation(StrictModel):
@@ -17,7 +18,7 @@ class ConversationMutation(StrictModel):
 
 class ConversationSend(ConversationMutation):
     text: Text
-    command: Literal['review', 'continue', 'skip'] | None = None
+    command: Literal['review', 'continue', 'skip', 'finish'] | None = None
     item_id: str | None = Field(default=None, max_length=100)
 
     @field_validator('text')
@@ -87,6 +88,8 @@ class ConversationView(StrictModel):
     id: str
     cv_id: str | None
     revision: int
+    purpose: Literal['skills_profile'] | None = None
+    reviewed_effective_version: int | None = None
     read_only: bool
     previous_conversation_id: str | None = None
     active_question: ActiveQuestion | None = None

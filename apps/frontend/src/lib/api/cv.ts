@@ -1,3 +1,4 @@
+import type { SkillsProfile, ProfileEntry, ProfileSkill, IntakeField } from '@/features/cv-ingestion/types';
 import { ApiError } from './profile';
 import type { CvDetail, CvList, CvPolicy, CvSummary, CvItem, CvSkill, Declaration, Declarations, DeclarationInput, Evidence, ItemInput, Clarification, ConfirmedTargetContext, PrepareQuestionsInput, Questions, Selection, SkillSource, Interpretation, InterpretationClaim, TargetCondition, Reconciliation, ReconciliationInput, DeclarationLinks, DeclarationLink, CvMatch, CvConversation, ConversationAction, ConversationMessage, ConversationInput, ConversationDecision, ConversationList } from '@/features/cv-ingestion/types';
 import { partialDateBounds } from '@/features/cv-ingestion/dates';
@@ -37,6 +38,13 @@ const conversationMessage: Guard<ConversationMessage> = (v): v is ConversationMe
 const conversation: Guard<CvConversation> = (v): v is CvConversation => record(v) && text(v.id) && nullableText(v.cv_id) && revision(v.revision) && typeof v.read_only === 'boolean' && nullableText(v.previous_conversation_id) && (v.context_error === undefined || nullableText(v.context_error)) && (v.context === null || targetContext(v.context)) && (v.active_question === null || (record(v.active_question) && ['id','item_id','title','question'].every(k=>text((v.active_question as Record<string,unknown>)[k])))) && list(v.messages,conversationMessage,500) && (v.next_before === null || revision(v.next_before)) && record(v.limits) && revision(v.limits.max_message_chars) && v.limits.max_message_chars > 0 && revision(v.limits.max_messages) && v.limits.max_messages > 0;
 const conversationList: Guard<ConversationList> = (v): v is ConversationList => record(v) && list(v.conversations,(c): c is ConversationList['conversations'][number]=>record(c)&&text(c.id)&&nullableText(c.cv_id)&&date(c.updated_at)&&typeof c.read_only==='boolean'&&revision(c.message_count));
 
+const intakeStatus = (v: unknown) => ['answered','unknown','skipped','not_applicable'].includes(String(v));
+const intakeEvidence = (v: unknown): v is {message_id:string;quote:string} => record(v) && text(v.message_id) && text(v.quote);
+const intakeField: Guard<IntakeField> = (v): v is IntakeField => record(v) && intakeStatus(v.status) && nullableText(v.value) && list(v.evidence,intakeEvidence,4);
+const profileSkill: Guard<ProfileSkill> = (v): v is ProfileSkill => record(v) && text(v.name) && text(v.description) && list(v.evidence,intakeEvidence,4) && record(v.dimensions) && Object.values(v.dimensions).every(intakeField);
+const profileEntry: Guard<ProfileEntry> = (v): v is ProfileEntry => record(v) && text(v.id) && ['work','project','education','interest'].includes(String(v.kind)) && text(v.title) && record(v.fields) && Object.values(v.fields).every(intakeField) && list(v.skills,profileSkill,12);
+const skillsProfile: Guard<SkillsProfile> = (v): v is SkillsProfile => record(v) && revision(v.version) && ['empty','draft','saved'].includes(String(v.status)) && nullableText(v.saved_at) && record(v.areas) && Object.keys(v.areas).every(k=>['work','project','education','interest'].includes(k)) && Object.values(v.areas).every(intakeStatus) && list(v.entries,profileEntry,40);
+
 export class CvApiError extends ApiError {
  constructor(message: string, status: number, public code?: string) { super(message,status); }
 }
@@ -55,14 +63,17 @@ async function request<T>(path: string, token: string, signal: AbortSignal, guar
 const cv = (id: string) => `/cv/${encodeURIComponent(id)}`;
 const json = (method: string, body: unknown) => ({method,body:JSON.stringify(body)});
 export const cvApi = {
+ skillsProfile: (token: string, signal: AbortSignal) => request('/profile/skills-profile',token,signal,skillsProfile),
+ saveSkillsProfile: (body: {expected_version:number;mutation_id:string;status:'draft'|'saved';areas:SkillsProfile['areas'];entries:ProfileEntry[]}, token:string, signal:AbortSignal) => request('/profile/skills-profile',token,signal,skillsProfile,json('PUT',body)),
  conversations: (cvId: string | null, token: string, signal: AbortSignal) => request(`/cv/conversations${cvId ? `?cv_id=${encodeURIComponent(cvId)}` : ''}`,token,signal,conversationList),
- openConversation: (body: {cv_id:string|null;mutation_id:string}, token: string, signal: AbortSignal) => request('/cv/conversations',token,signal,conversation,json('POST',body)),
+ openConversation: (body: {cv_id:string|null;mutation_id:string;purpose?:'skills_profile'}, token: string, signal: AbortSignal) => request('/cv/conversations',token,signal,conversation,json('POST',body)),
  conversation: (id: string, token: string, signal: AbortSignal, before?: number) => request(`/cv/conversations/${encodeURIComponent(id)}${before === undefined ? '' : `?before=${before}&limit=40`}`,token,signal,conversation),
  sendMessage: (id: string, body: ConversationInput, token: string, signal: AbortSignal) => request(`/cv/conversations/${encodeURIComponent(id)}/messages`,token,signal,conversation,json('POST',body)),
  conversationAction: (id: string, actionId: string, body: ConversationDecision, token: string, signal: AbortSignal) => request(`/cv/conversations/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}`,token,signal,conversation,json('POST',body)),
  policy: (token: string, signal: AbortSignal) => request('/cv/policy',token,signal,(v): v is CvPolicy => record(v) && revision(v.max_file_bytes) && v.max_file_bytes > 0 && list(v.formats,(x): x is 'pdf'|'docx'=>x==='pdf'||x==='docx',2) && revision(v.max_answer_chars) && revision(v.max_item_chars) && typeof v.extraction_configured === 'boolean' && optionalLimit(v.max_saved_cvs) && optionalLimit(v.max_stored_original_bytes)),
  list: (token: string, signal: AbortSignal, cursor?: string) => request(`/cv${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,token,signal,(v): v is CvList => record(v) && list(v.cvs,summary,v.next_cursor === undefined ? 1000 : 100) && selection(v.selection) && (v.next_cursor === undefined || v.next_cursor === null || (text(v.next_cursor) && v.next_cursor.length > 0 && v.next_cursor.length <= 512))),
  get: (id: string, token: string, signal: AbortSignal) => request(cv(id),token,signal,detail),
+ saveCvProfile: (id: string, body: {expected_version:number;mutation_id:string}, token:string, signal:AbortSignal) => request(`${cv(id)}/profile-review`,token,signal,detail,json('POST',body)),
  delete: (id: string, body: {expected_version:number;mutation_id:string}, token: string, signal: AbortSignal) => request(cv(id),token,signal,(v): v is CvDeletionResult => record(v) && v.cv_id === id && v.deleted === true && selection(v.selection),json('DELETE',body)),
  upload: (body: FormData, token: string, signal: AbortSignal) => request('/cv/uploads',token,signal,detail,{method:'POST',body}),
  retry: (id: string, body: {mutation_id:string;expected_version:number}, token: string, signal: AbortSignal) => request(`/cv/operations/${encodeURIComponent(id)}/retry`,token,signal,detail,json('POST',body)),

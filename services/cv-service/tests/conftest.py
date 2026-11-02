@@ -46,6 +46,10 @@ class FakeExtractor:
                 'skill_names': ['SQL'], 'uncertainties': ['proficiency']})
         return deepcopy(self.payload or {'items': items}), {'provider': 'synthetic-test', 'model': 'fixture', 'prompt_version': '1', 'schema_version': '1'}
 
+    def verify_evidence(self, blocks, refs, *, timeout_seconds=None):
+        # Synthetic negative default; semantic-positive tests provide explicit verdicts.
+        return frozenset()
+
     def repair(self, blocks, candidate, feedback, *, timeout_seconds=None):
         # Deliberately preserve configured invalid responses so recovery cannot
         # turn existing negative tests into synthetic successes.

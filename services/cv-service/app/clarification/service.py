@@ -1,8 +1,9 @@
 from copy import deepcopy
+from functools import partial
 import re
 from uuid import uuid4
 from pydantic import ValidationError
-from app.domain.capabilities import digest, effective_items, effective_fingerprint, normalized_name, validate_interpretation
+from app.domain.capabilities import digest, effective_items, effective_fingerprint, normalized_name, validate_interpretation, interpretation_semantic_checks
 from app.domain.errors import Conflict, Missing
 from app.domain.service import bump, now
 from app.schemas.cv import ConfirmedContext, SavedInterpretation
@@ -154,7 +155,16 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter):
         payload, metadata = service.model_usage.run(owner, interpreter.interpret,
             item, question, question['answer'], question['answer_revision'],
             configured=getattr(interpreter, 'configured', True))
-        result = validate_interpretation(payload, item, question)
+        semantic_support = frozenset()
+        if hasattr(interpreter, 'verify_evidence'):
+            blocks, refs, fields = interpretation_semantic_checks(payload, question, item)
+            if refs:
+                supported = service.model_usage.run(owner, partial(interpreter.verify_evidence, timeout_seconds=20), blocks, refs,
+                    configured=getattr(interpreter, 'configured', True))
+                if any((ref['block_id'], ref['excerpt']) not in supported for ref in refs):
+                    raise ValueError('Some interpreted skill details are not supported by your answer. Your answer is saved; clarify or retry interpretation.')
+                semantic_support = frozenset(fields)
+        result = validate_interpretation(payload, item, question, semantic_support)
         result.update(metadata=metadata, applied_sequence=question['answer_sequence'],
                       extraction_version=saved['extraction_version'])
         result = SavedInterpretation.model_validate(result).model_dump(mode='json')

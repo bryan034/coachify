@@ -8,6 +8,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await page.route('**/api/v1/profile/capabilities',route=>route.fulfill({json:emptyDeclarations}));
  await page.route('**/api/v1/cv{,/**}',route=>{
   const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/skills-profile'))return route.fulfill({json:{version:0,status:'empty',saved_at:null,areas:{},entries:[]}});
   if(path.endsWith('/policy'))return route.fulfill({json:policy});
   if(path==='/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
   return route.fallback();
@@ -70,7 +71,10 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await page.reload();await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
  await page.getByRole('link',{name:/Upload my CV/}).click();
  await expect(page).toHaveURL(/\/cv$/);
- await expect(page.getByRole('heading',{name:'Skills Profile'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Skills Profile',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveCount(0);
+ await page.getByRole('button',{name:/Upload your CV/}).click();
  await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
  await expect(page.getByLabel('CV document',{exact:true})).toBeEnabled();
 });

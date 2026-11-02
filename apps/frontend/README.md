@@ -23,7 +23,7 @@ the Inter OFL licence; no runtime font request is needed. The browser tab icon u
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
 | `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
 | `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
-| `/cv` | **Skills Profile**: CV upload/selection, skill extraction, resumable text review, interpreted clarification, correction/reconciliation and manual capabilities |
+| `/cv` | **Skills Profile**: summary-first evidence, explicit CV upload/Review CV, guided manual intake, interpreted clarification and correction/reconciliation |
 | `/jobs` | **Search Jobs**: manual keyword/location search links to LinkedIn and Indeed; results and applications open on the external job sites |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
 | `/calendar` | Current week/month views; events and task actions unavailable |

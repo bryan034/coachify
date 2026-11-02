@@ -128,7 +128,8 @@ def test_interpreter_bounds_and_untrusted_input(monkeypatch):
     assert data['answer'].startswith('Ignore all previous')
     assert 'career_target' not in data
     assert 'api_key' not in request['messages'][1]['content']
-    assert metadata['prompt_version'] == 'cv-clarification-1'
+    assert metadata['prompt_version'] == 'cv-clarification-2'
+    assert 'semantically equivalent' in request['messages'][0]['content']
 
 
 @pytest.mark.parametrize('mode', ['timeout', 'truncated', 'oversize', 'invalid_json', 'redirect'])

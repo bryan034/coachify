@@ -70,6 +70,7 @@ class Contribution(BaseModel):
 
 
 class Declaration(BaseModel):
+    source_entry_id: str | None = None
     canonical_skill_id: str | None = None
     skill_registry_version: str = MAPPING_VERSION
     @model_validator(mode='after')

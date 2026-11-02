@@ -482,3 +482,16 @@ checks. Synthetic OpenAI SDK tests cover sync/async request shapes, host-scoped
 options, credential isolation, bounded/closed streams, compressed rejections, no
 redirects and disabled SDK retries. Provider or model accuracy is not inferred from
 these mocked responses.
+
+## Skills Profile verification
+
+The summary-first page has component tests and a synthetic browser journey covering
+explicit upload/Review CV entry, processing gates, mobile layout and preserved draft
+recovery. Profile tests run structured draft/publication, declaration preservation,
+idempotent acknowledgement recovery and account CAS races against both memory and
+an explicitly supplied disposable MongoDB. CV tests cover target-independent basic
+review, manual field order, source/version changes, semantic positive/negative
+verdicts and safe legacy-conversation upgrades. Semantic tests use synthetic provider
+responses; no live-provider quality or job-fit accuracy is inferred. A local MongoDB
+7 result is functional persistence coverage, not MongoDB 8 compatibility when the
+host kernel prevents MongoDB 8 from starting.

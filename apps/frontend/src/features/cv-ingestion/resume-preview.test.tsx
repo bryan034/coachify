@@ -11,7 +11,7 @@ vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>session}));
 vi.mock('@/lib/api/cv',async importOriginal=>{const actual=await importOriginal<typeof import('@/lib/api/cv')>();return {...actual,cvApi:Object.fromEntries(Object.keys(actual.cvApi).map(key=>[key,vi.fn()]))};});
 const emptyConversation:CvConversation={id:'conversation',cv_id:null,revision:1,read_only:false,previous_conversation_id:null,active_question:null,context:null,messages:[],next_before:null,limits:{max_message_chars:4000,max_messages:500}};
 function renderWorkspace(){const view=render(<ResumePreview/>);fireEvent.click(screen.getByText('CV files',{selector:'summary span'}));fireEvent.click(screen.getByText('Your CV summary',{selector:'summary span'}));return view;}
-beforeEach(()=>{vi.clearAllMocks();vi.mocked(cvApi.openConversation).mockImplementation(async body=>({...emptyConversation,cv_id:body.cv_id}));session.token='synthetic-session';session.account={id:'owner-a'};vi.mocked(cvApi.policy).mockResolvedValue(policy);vi.mocked(cvApi.list).mockResolvedValue({cvs:[],selection:{cv_id:null,version:0}});vi.mocked(cvApi.declarations).mockResolvedValue(emptyDeclarations);vi.mocked(cvApi.questions).mockResolvedValue(clarificationState(savedCv()));vi.mocked(cvApi.get).mockImplementation(async id=>savedCv(id));});
+beforeEach(()=>{vi.clearAllMocks();vi.mocked(cvApi.skillsProfile).mockResolvedValue({version:0,status:'empty',saved_at:null,areas:{},entries:[]});vi.mocked(cvApi.openConversation).mockImplementation(async body=>({...emptyConversation,cv_id:body.cv_id}));vi.mocked(cvApi.sendMessage).mockImplementation(async(id)=>({...emptyConversation,id,revision:2,active_question:{id:'start',item_id:'work',title:'Work',question:'Tell me about your experience.'}}));session.token='synthetic-session';session.account={id:'owner-a'};vi.mocked(cvApi.policy).mockResolvedValue(policy);vi.mocked(cvApi.list).mockResolvedValue({cvs:[],selection:{cv_id:null,version:0}});vi.mocked(cvApi.declarations).mockResolvedValue(emptyDeclarations);vi.mocked(cvApi.questions).mockResolvedValue(clarificationState(savedCv()));vi.mocked(cvApi.get).mockImplementation(async id=>savedCv(id));});
 describe('saved CV workspace',()=>{
  it('deletes the confirmed selected CV and clears its review while retaining other files and manual capabilities',async()=>{
   const first=savedCv('cv-one'),second=savedCv('cv-two');let deleted=false;
@@ -26,7 +26,7 @@ describe('saved CV workspace',()=>{
    expect(cvApi.delete).toHaveBeenCalledWith(first.id,expect.objectContaining({expected_version:first.version,mutation_id:expect.any(String)}),'synthetic-session',expect.any(AbortSignal));
    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('CV cv-one'));
    expect(screen.getByRole('textbox',{name:'Capability name'})).toBeEnabled();expect(cvApi.select).not.toHaveBeenCalled();
-   await waitFor(()=>expect(cvApi.openConversation).toHaveBeenLastCalledWith(expect.objectContaining({cv_id:null}),expect.any(String),expect.any(AbortSignal)));
+   expect(cvApi.openConversation).not.toHaveBeenCalled();
   }finally{confirm.mockRestore();}
  });
  it('does not delete when confirmation is cancelled',async()=>{
@@ -59,7 +59,7 @@ describe('saved CV workspace',()=>{
   vi.mocked(cvApi.questions).mockImplementation(async()=>clarificationState(older));
   renderWorkspace();await waitFor(()=>expect(screen.getByLabelText('Selected CV')).toHaveTextContent('selected-older.pdf'));
   expect(screen.queryByLabelText('CV older-cv')).not.toBeInTheDocument();expect(cvApi.get).toHaveBeenCalledWith(older.id,'synthetic-session',expect.any(AbortSignal));
-  const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());fireEvent.change(input,{target:{value:'A draft while browsing.'}});
+  fireEvent.click(screen.getByRole('button',{name:/Build through chat/}));const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());fireEvent.change(input,{target:{value:'A draft while browsing.'}});
   fireEvent.click(screen.getByRole('button',{name:'Show more saved CVs'}));expect(await screen.findByRole('alert')).toHaveTextContent('Page connection interrupted.');expect(screen.getByLabelText('CV recent-cv')).toBeVisible();
   fireEvent.click(screen.getByRole('button',{name:'Show more saved CVs'}));await screen.findByLabelText('CV older-cv');expect(screen.getAllByLabelText('CV recent-cv')).toHaveLength(1);expect(screen.queryByRole('button',{name:'Show more saved CVs'})).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'Refresh saved status'}));await waitFor(()=>expect(cvApi.list).toHaveBeenCalledTimes(5));
@@ -132,16 +132,16 @@ describe('saved CV workspace',()=>{
  it('distinguishes identical filenames and preserves selection on a new upload',async()=>{const first=savedCv('cv-one'),second=savedCv('cv-two');vi.mocked(cvApi.list).mockResolvedValue({cvs:[first,second],selection:{cv_id:first.id,version:3}});vi.mocked(cvApi.upload).mockResolvedValue(second);renderWorkspace();await screen.findByLabelText('CV cv-one');expect(within(screen.getByLabelText('CV cv-one')).getByRole('button',{name:'Selected'})).toBeDisabled();expect(within(screen.getByLabelText('CV cv-two')).getByRole('button',{name:'Select for analysis'})).toBeEnabled();fireEvent.change(screen.getByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));await waitFor(()=>expect(cvApi.upload).toHaveBeenCalled());expect(cvApi.select).not.toHaveBeenCalled();expect(screen.getByLabelText('Selected CV')).toHaveTextContent('cv-one');});
  it('keeps an unsent chat draft and avoids upload when discard confirmation is cancelled',async()=>{
   const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
-  try{renderWorkspace();const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());fireEvent.change(input,{target:{value:'My unsent experience.'}});fireEvent.change(screen.getByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));expect(confirm).toHaveBeenCalledWith('Upload this CV and discard unsaved CV or capability drafts?');expect(cvApi.upload).not.toHaveBeenCalled();expect(input).toHaveValue('My unsent experience.');expect(cvApi.openConversation).toHaveBeenCalledTimes(1);}finally{confirm.mockRestore();}
+  try{renderWorkspace();fireEvent.click(screen.getByRole('button',{name:/Build through chat/}));const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());fireEvent.change(input,{target:{value:'My unsent experience.'}});fireEvent.change(screen.getByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));expect(confirm).toHaveBeenCalledWith('Upload this CV and discard unsaved CV or capability drafts?');expect(cvApi.upload).not.toHaveBeenCalled();expect(input).toHaveValue('My unsent experience.');expect(cvApi.openConversation).toHaveBeenCalledTimes(1);}finally{confirm.mockRestore();}
  });
  it('keeps draft discard protection while viewing chat history and restores the draft after cancelling navigation',async()=>{
-  const first=savedCv('cv-one'),second=savedCv('cv-two'),current={...emptyConversation,cv_id:first.id,previous_conversation_id:'older-chat'};
+  const first=savedCv('cv-one'),second=savedCv('cv-two'),current={...emptyConversation,cv_id:first.id,previous_conversation_id:'older-chat',active_question:{id:'existing',item_id:first.items[0].id,title:'Existing topic',question:'What did you do?'}};
   vi.mocked(cvApi.list).mockResolvedValue({cvs:[first,second],selection:{cv_id:first.id,version:1}});
   vi.mocked(cvApi.openConversation).mockResolvedValue(current);
   vi.mocked(cvApi.conversation).mockImplementation(async id=>id==='older-chat'?{...emptyConversation,id,cv_id:first.id,read_only:true}:current);
   const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
   try{
-   renderWorkspace();const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());
+   renderWorkspace();fireEvent.click(within(await screen.findByLabelText('CV cv-one')).getByRole('button',{name:'Review CV'}));const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());
    fireEvent.change(input,{target:{value:'My unsent experience.'}});fireEvent.click(screen.getByRole('button',{name:'Previous conversation'}));
    await screen.findByRole('button',{name:'Return to current conversation'});expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument();
    fireEvent.click(within(screen.getByLabelText('CV cv-two')).getByRole('button',{name:'Review CV'}));
@@ -151,9 +151,23 @@ describe('saved CV workspace',()=>{
    fireEvent.click(screen.getByRole('button',{name:'Return to current conversation'}));expect(await screen.findByRole('textbox',{name:'Message elo'})).toHaveValue('My unsent experience.');
   }finally{confirm.mockRestore();}
  });
- it('uploads and opens the new CV conversation only after draft discard is confirmed',async()=>{
+ it('uploads after draft discard is confirmed and waits for Review CV before opening its conversation',async()=>{
   const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);vi.mocked(cvApi.upload).mockResolvedValue(savedCv('new-cv'));
-  try{renderWorkspace();const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());fireEvent.change(input,{target:{value:'My old unsent experience.'}});fireEvent.change(screen.getByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));await waitFor(()=>expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:'new-cv'}),'synthetic-session',expect.any(AbortSignal)));expect(confirm).toHaveBeenCalledTimes(1);expect(cvApi.upload).toHaveBeenCalledTimes(1);expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('');}finally{confirm.mockRestore();}
+  try{
+   renderWorkspace();fireEvent.click(screen.getByRole('button',{name:/Build through chat/}));
+   const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());
+   fireEvent.change(input,{target:{value:'My old unsent experience.'}});
+   fireEvent.change(screen.getByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});
+   fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
+   await waitFor(()=>expect(cvApi.upload).toHaveBeenCalledTimes(1));
+   await screen.findByRole('button',{name:'Review CV'});
+   expect(cvApi.openConversation).toHaveBeenCalledTimes(1);
+   expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument();
+   fireEvent.click(screen.getByRole('button',{name:'Review CV'}));
+   await waitFor(()=>expect(cvApi.openConversation).toHaveBeenLastCalledWith(expect.objectContaining({cv_id:'new-cv',purpose:'skills_profile'}),'synthetic-session',expect.any(AbortSignal)));
+   expect(confirm).toHaveBeenCalledTimes(1);expect(cvApi.select).not.toHaveBeenCalled();
+   expect(await screen.findByRole('textbox',{name:'Message elo'})).toHaveValue('');
+  }finally{confirm.mockRestore();}
  });
  it('clears private drafts and ignores late results across accounts',async()=>{const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);try{let resolve!:(value:CvDetail)=>void;vi.mocked(cvApi.upload).mockImplementation(()=>new Promise(r=>resolve=r));const view=renderWorkspace();fireEvent.change(await screen.findByRole('textbox',{name:'Capability name'}),{target:{value:'Private owner A'}});fireEvent.change(await screen.findByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));session.account={id:'owner-b'};session.token='owner-b-token';view.rerender(<ResumePreview/>);fireEvent.click(screen.getByText('Your CV summary',{selector:'summary span'}));await act(async()=>resolve(savedCv('owner-a-cv')));expect(await screen.findByRole('textbox',{name:'Capability name'})).toHaveValue('');expect(screen.queryByText(/owner-a-cv/)).not.toBeInTheDocument();}finally{confirm.mockRestore();}});
  it('reuploads an expired source using its exact CV and version while retaining the previous result',async()=>{const failed={...savedCv(),status:'failed' as const,source_available:false,error:{code:'expired',message:'Original expired.',retryable:false}};vi.mocked(cvApi.list).mockResolvedValue({cvs:[failed],selection:{cv_id:failed.id,version:1}});vi.mocked(cvApi.get).mockResolvedValue(failed);vi.mocked(cvApi.upload).mockResolvedValue({...failed,status:'queued'});renderWorkspace();await screen.findByRole('heading',{name:'Previous saved extraction'});expect(screen.getByRole('button',{name:'Edit or remove Team dashboard'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'Re-upload this source'}));fireEvent.change(screen.getByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Re-upload same source'}));await waitFor(()=>expect(cvApi.upload).toHaveBeenCalled());const form=vi.mocked(cvApi.upload).mock.calls[0][0];expect(form.get('cv_id')).toBe(failed.id);expect(form.get('expected_version')).toBe(String(failed.version));expect(cvApi.select).not.toHaveBeenCalled();});

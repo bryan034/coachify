@@ -804,6 +804,47 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/profile/skills-profile:
+    get:
+      tags:
+      - Skills profile
+      summary: Read
+      operationId: read_api_v1_profile_skills_profile_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillsProfile'
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - Skills profile
+      summary: Save
+      operationId: save_api_v1_profile_skills_profile_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillsProfileWrite'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillsProfile'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
 components:
   schemas:
     ResetRequest:
@@ -1361,6 +1402,20 @@ components:
       title: CvMatch
     Declaration:
       properties:
+        source_entry_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Entry Id
+        canonical_skill_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Canonical Skill Id
+        skill_registry_version:
+          type: string
+          title: Skill Registry Version
+          default: skills-v2
         id:
           type: string
           title: Id
@@ -1415,15 +1470,6 @@ components:
           type: string
           format: date-time
           title: Updated At
-        canonical_skill_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Canonical Skill Id
-        skill_registry_version:
-          type: string
-          title: Skill Registry Version
-          default: skills-v2
       type: object
       required:
       - id
@@ -2142,6 +2188,250 @@ components:
       - challenge_id
       - code
       title: Verify
+    SkillsProfile:
+      properties:
+        version:
+          type: integer
+          minimum: 0.0
+          title: Version
+          default: 0
+        status:
+          type: string
+          enum:
+          - empty
+          - draft
+          - saved
+          title: Status
+          default: empty
+        saved_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Saved At
+        areas:
+          additionalProperties:
+            type: string
+            enum:
+            - answered
+            - unknown
+            - skipped
+            - not_applicable
+          propertyNames:
+            enum:
+            - work
+            - project
+            - education
+            - interest
+          type: object
+          maxProperties: 4
+          title: Areas
+        entries:
+          items:
+            $ref: '#/components/schemas/ProfileEntry'
+          type: array
+          maxItems: 40
+          title: Entries
+      additionalProperties: false
+      type: object
+      title: SkillsProfile
+    SkillsProfileWrite:
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+        mutation_id:
+          type: string
+          format: uuid
+          title: Mutation Id
+        status:
+          type: string
+          enum:
+          - draft
+          - saved
+          title: Status
+          default: draft
+        areas:
+          additionalProperties:
+            type: string
+            enum:
+            - answered
+            - unknown
+            - skipped
+            - not_applicable
+          propertyNames:
+            enum:
+            - work
+            - project
+            - education
+            - interest
+          type: object
+          maxProperties: 4
+          title: Areas
+        entries:
+          items:
+            $ref: '#/components/schemas/ProfileEntry'
+          type: array
+          maxItems: 40
+          title: Entries
+      additionalProperties: false
+      type: object
+      required:
+      - expected_version
+      - mutation_id
+      title: SkillsProfileWrite
+    ProfileEntry:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        kind:
+          type: string
+          enum:
+          - work
+          - project
+          - education
+          - interest
+          title: Kind
+        title:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Title
+        fields:
+          additionalProperties:
+            $ref: '#/components/schemas/IntakeField'
+          propertyNames:
+            enum:
+            - company
+            - location
+            - role
+            - description
+            - dates
+            - contribution
+            - tools
+            - complexity
+            - independence
+            - recency
+            - frequency
+            - outcome
+            - limitations
+            - institution
+            - qualification
+            - completion
+          type: object
+          maxProperties: 16
+          title: Fields
+        skills:
+          items:
+            $ref: '#/components/schemas/ProfileSkill'
+          type: array
+          maxItems: 12
+          title: Skills
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - kind
+      - title
+      title: ProfileEntry
+    ProfileSkill:
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Name
+        description:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Description
+        evidence:
+          items:
+            $ref: '#/components/schemas/ProfileEvidence'
+          type: array
+          maxItems: 4
+          minItems: 1
+          title: Evidence
+        dimensions:
+          additionalProperties:
+            $ref: '#/components/schemas/IntakeField'
+          propertyNames:
+            enum:
+            - company
+            - location
+            - role
+            - description
+            - dates
+            - contribution
+            - tools
+            - complexity
+            - independence
+            - recency
+            - frequency
+            - outcome
+            - limitations
+            - institution
+            - qualification
+            - completion
+          type: object
+          maxProperties: 8
+          title: Dimensions
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - description
+      - evidence
+      title: ProfileSkill
+    ProfileEvidence:
+      properties:
+        message_id:
+          type: string
+          maxLength: 150
+          minLength: 1
+          title: Message Id
+        quote:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Quote
+      additionalProperties: false
+      type: object
+      required:
+      - message_id
+      - quote
+      title: ProfileEvidence
+    IntakeField:
+      properties:
+        status:
+          type: string
+          enum:
+          - answered
+          - unknown
+          - skipped
+          - not_applicable
+          title: Status
+        value:
+          anyOf:
+          - type: string
+            maxLength: 2000
+            minLength: 1
+          - type: 'null'
+          title: Value
+        evidence:
+          items:
+            $ref: '#/components/schemas/ProfileEvidence'
+          type: array
+          maxItems: 4
+          title: Evidence
+      additionalProperties: false
+      type: object
+      required:
+      - status
+      title: IntakeField
   securitySchemes:
     HTTPBearer:
       type: http

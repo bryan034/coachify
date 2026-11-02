@@ -35,6 +35,7 @@ def candidates():
     valid = deepcopy(invalid)
     valid['items'][0]['evidence'][0]['excerpt'] = 'Synthetic University (2024 to 2025).'
     valid['items'][1]['end_date'] = None
+    invalid['items'][0]['description'] = 'D' * 4001
     return invalid, valid
 
 
@@ -92,7 +93,7 @@ def test_repair_recovers_overlong_quotes_and_conflicting_dates(harness, monkeypa
     with caplog.at_level(logging.WARNING): app.state.worker.run_once()
     result = read_result(client, queued)
     assert result['status'] == 'ready' and result['error'] is None
-    assert result['extraction']['workflow_version'] == 'cv-extraction-1'
+    assert result['extraction']['workflow_version'] == 'cv-extraction-3'
     assert result['extraction']['repair_attempts'] == 1
     assert result['extraction']['response_mode'] == 'json_schema'
     assert result['extraction_version'] == 1 and len(result['items']) == 2
@@ -104,8 +105,9 @@ def test_repair_recovers_overlong_quotes_and_conflicting_dates(harness, monkeypa
     repair = json.loads(calls[1]['messages'][1]['content'])
     assert repair['rejected_candidate'] == invalid
     assert [block['text'] for block in repair['source_blocks']] == SOURCES
-    assert any(issue['field'] == 'items[0].evidence[0].excerpt' for issue in repair['validation_feedback'])
-    assert any('ongoing=true requires end_date=null' in issue['guidance'] for issue in repair['validation_feedback'])
+    assert any(issue['field'] == 'items[0].description' and issue['issue'] == 'string_too_long'
+               for issue in repair['validation_feedback'])
+    assert not any(issue['field'].endswith(('start_date', 'end_date')) for issue in repair['validation_feedback'])
     saved = app.state.repository.get('owner-a', queued['id'])
     assert all(key not in saved for key in ('original', 'parsed', 'candidate', 'feedback', 'validation_error'))
     assert not any('Synthetic University' in record.message for record in caplog.records)
@@ -125,13 +127,13 @@ def test_failed_repair_is_bounded_and_cannot_publish(harness, monkeypatch, failu
     invalid, valid = candidates()
     second = invalid if failure == 'schema' else deepcopy(valid)
     if failure == 'evidence': second['items'][0]['evidence'][0]['excerpt'] = 'Invented quotation'
-    client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, second])
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, second] + ([{'supported': []}] if failure == 'evidence' else []))
     app.state.worker.run_once()
     result = read_result(client, queued)
     assert result['status'] == 'failed' and result['error']['repair_attempted']
     assert result['error']['failure_stage'] == 'extraction_validation'
     assert result['error']['failure_category'] == ('schema_validation' if failure == 'schema' else 'evidence_validation')
-    assert len(calls) == count(app.state.repository) == 2
+    assert len(calls) == count(app.state.repository) == (3 if failure == 'evidence' else 2)
     assert result['items'] == [] and result['extraction_version'] == 0
 
 
@@ -244,3 +246,111 @@ def test_explicit_json_mode_is_not_silently_selected(monkeypatch):
     assert metadata['response_mode'] == 'json_object'
     monkeypatch.setenv('CV_LLM_RESPONSE_MODE', 'invalid-mode')
     with pytest.raises(RuntimeError, match='CV_LLM_RESPONSE_MODE'): Extractor()
+
+
+def test_other_information_is_saved_with_source_and_returned_by_api(harness, monkeypatch):
+    _, valid = candidates()
+    valid['other_information'] = [{'block_id': 'b1', 'excerpt': 'A' * 500}]
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [valid])
+    app.state.worker.run_once()
+    result = read_result(client, queued)
+    assert result['status'] == 'ready'
+    assert result['other_information'] == [{'id': 'b1', 'location': 'Paragraph 1', 'excerpt': 'A' * 500}]
+    assert app.state.repository.get('owner-a', queued['id'])['other_information'] == result['other_information']
+    assert len(calls) == 1
+    assert 'other_information' in calls[0]['response_format']['json_schema']['schema']['required']
+
+
+def test_other_information_rejects_invented_source_text(harness, monkeypatch):
+    _, invalid = candidates()
+    invalid['other_information'] = [{'block_id': 'b1', 'excerpt': 'Invented uncategorised fact'}]
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, {'supported': []}, invalid, {'supported': []}])
+    app.state.worker.run_once()
+    result = read_result(client, queued)
+    assert result['status'] == 'failed' and result['other_information'] == []
+    assert len(calls) == 4
+
+
+def test_unclear_dates_need_no_repair(harness, monkeypatch):
+    _, valid = candidates()
+    valid['items'][0].update(start_date='Spring 2024', end_date='2025-99')
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [valid])
+    app.state.worker.run_once()
+    result = read_result(client, queued)
+    assert result['status'] == 'ready' and result['extraction']['repair_attempts'] == 0
+    assert result['items'][0]['start_date'] is None and result['items'][0]['end_date'] is None
+    assert len(calls) == 1
+
+
+def test_failed_reprocessing_preserves_other_information(harness, monkeypatch):
+    _, valid = candidates()
+    valid['other_information'] = [{'block_id': 'b1', 'excerpt': 'A' * 500}]
+    rejection = httpx.Response(400, json={'error': {'message': 'Invalid request'}})
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [valid, rejection])
+    app.state.worker.run_once()
+    saved = read_result(client, queued)
+    repeated = upload(client, docx(SOURCES), cv_id=saved['id'], expected_version=saved['version']).json()
+    app.state.worker.run_once()
+    failed = read_result(client, repeated)
+    assert failed['status'] == 'failed'
+    assert failed['other_information'] == saved['other_information']
+    assert failed['extraction_version'] == saved['extraction_version']
+
+
+@pytest.mark.parametrize('defect', ['items_count', 'citation_count', 'duration', 'other_count', 'extra', 'enum'])
+def test_gemini_simple_schema_keeps_all_backend_constraints(harness, monkeypatch, defect):
+    _, invalid = candidates()
+    if defect == 'items_count': invalid['items'] *= 81
+    elif defect == 'citation_count': invalid['items'][0]['evidence'] = [{'block_id': 'b1', 'excerpt': 'A' * 501}] * 4
+    elif defect == 'duration': invalid['items'][0]['experience_months'] = -1
+    elif defect == 'other_count': invalid['other_information'] = [{'block_id': 'b1', 'excerpt': 'A'}] * 161
+    elif defect == 'extra': invalid['items'][0]['invented_field'] = 'untrusted'
+    elif defect == 'enum': invalid['items'][0]['kind'] = 'invented'
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, invalid])
+    app.state.worker.extractor.base_url = 'https://generativelanguage.googleapis.com/v1beta/openai'
+    app.state.worker.run_once()
+    result = read_result(client, queued)
+    assert result['status'] == 'failed' and result['error']['failure_category'] == 'schema_validation'
+    assert result['items'] == [] and result['extraction_version'] == 0
+    assert len(calls) == 2
+    for request in calls:
+        assert 'maxItems' not in request['response_format']['json_schema']['schema']['properties']['items']
+
+
+@pytest.mark.parametrize('other', [False, True])
+def test_overlong_quote_feedback_is_source_scoped_and_keeps_content_private(other):
+    _, candidate = candidates()
+    private_quote = 'PRIVATE_SYNTHETIC_QUOTATION_' * 21
+    ref = {'block_id': 'b1', 'excerpt': private_quote}
+    if other:
+        candidate['other_information'] = [ref]
+        expected = 'other_information[0].excerpt'
+    else:
+        candidate['items'][0]['evidence'] = [ref]
+        expected = 'items[0].evidence[0].excerpt'
+    with pytest.raises(ValidationError) as caught:
+        Extraction.model_validate(candidate)
+    feedback = feedback_for(caught.value)
+    assert len(feedback) == 1 and feedback[0]['field'] == expected
+    guidance = feedback[0]['guidance']
+    assert 'same source block' in guidance and 'personal/team attribution' in guidance
+    assert 'fewer than 400' in guidance and 'hard limit is 500' in guidance
+    assert private_quote not in json.dumps(feedback)
+    if other:
+        assert 'separate other_information entries' in guidance
+        assert 'six evidence' not in guidance
+
+
+def test_source_verified_long_quotations_publish_without_model_repair(harness, monkeypatch):
+    _, valid = candidates()
+    valid['items'][0]['evidence'][0]['excerpt'] = SOURCES[0]
+    valid['other_information'] = [{'block_id': 'b1', 'excerpt': 'A' * 510}]
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [valid])
+    app.state.worker.run_once()
+    result = read_result(client, queued)
+    assert result['status'] == 'ready' and len(calls) == 1
+    assert result['extraction']['repair_attempts'] == 0
+    evidence = result['items'][0]['evidence']
+    assert len(evidence) == 2 and all(1 <= len(ref['excerpt']) <= 500 for ref in evidence)
+    assert ''.join(ref['excerpt'] for ref in evidence) == SOURCES[0]
+    assert ''.join(ref['excerpt'] for ref in result['other_information']) == 'A' * 510

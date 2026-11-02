@@ -30,6 +30,12 @@ async def authenticated(request: Request, credentials=Depends(bearer)):
 def service(request): return request.app.state.service
 
 
+@router.post('/{cv_id}/profile-review', response_model=CvDetail)
+async def save_profile_review(cv_id: str, mutation: Mutation, request: Request, account=Depends(authenticated)):
+    document = await run_in_threadpool(service(request).mark_profile_reviewed, account['id'], cv_id, mutation)
+    return detail(document)
+
+
 @router.get('/policy', response_model=Policy)
 async def policy(request: Request, account=Depends(authenticated)):
     return {**request.app.state.settings.policy(), 'max_item_chars': 4000,

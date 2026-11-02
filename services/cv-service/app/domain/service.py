@@ -41,6 +41,7 @@ def summary(document):
         'status': operation['status'], 'operation_id': operation['id'], 'version': document['version'],
         'extraction_version': document['extraction_version'], 'effective_version': document['effective_version'],
         'profile_version': document['profile_version'],
+        'profile_reviewed_effective_version': document.get('profile_reviewed_effective_version'),
         'created_at': iso(document['created_at']), 'updated_at': iso(document['updated_at']),
         'error': operation.get('error'), 'source_available': document['original_available']}
 
@@ -49,6 +50,7 @@ def detail(document):
     items = effective_items(document)
     for item in items: item['source_fingerprint'] = source_fingerprint(item)
     return {**summary(document),
+        'other_information': document.get('other_information', []),
         'items': items, 'skills': skills_for(items), 'original_items': document['original_items'],
         'clarifications': document['clarifications'], 'extraction': document['extraction'],
         'notices': document.get('notices', []), 'reconciliation': document.get('reconciliation', []),
@@ -71,6 +73,16 @@ class CvService:
         document = self.repository.get(owner, identifier)
         if not document: raise Missing()
         return document
+
+    def mark_profile_reviewed(self, owner, identifier, mutation):
+        def transform(document):
+            if document['operation']['status'] != 'ready' or document.get('candidate'):
+                raise Conflict('Finish processing or source reconciliation before saving this reviewed profile.')
+            if any(q.get('interpretation_status') in {'pending', 'failed'} and not q.get('reconciliation_required')
+                   for q in document['clarifications']):
+                raise Conflict('Finish or retry saved interpretations before saving this reviewed profile.')
+            document['profile_reviewed_effective_version'] = document['effective_version']
+        return self.mutate(owner, identifier, mutation, 'profile-review', transform)
 
     def operation(self, owner, identifier):
         document = self.repository.by_operation(owner, identifier)

@@ -28,7 +28,7 @@ def test_failure_diagnostics_openapi_matches_runtime(harness):
     _, app, *_ = harness
     artifact = Path(__file__).resolve().parents[3] / 'contracts/api/cv.yaml'
     contract = json.loads(artifact.read_text())['components']['schemas']
-    for name in ('ErrorInfo', 'ExtractionMetadata'):
+    for name in ('ErrorInfo', 'ExtractionMetadata', 'CvDetail', 'ReconciliationView'):
         assert app.openapi()['components']['schemas'][name] == contract[name]
 
 

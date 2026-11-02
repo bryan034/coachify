@@ -12,7 +12,7 @@ skinparam componentBackgroundColor white
 skinparam databaseBackgroundColor #EFF6FA
 
 actor "User browser" as Browser
-component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nAccount-owned manual capability declarations" as Profile
+component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nAccount-owned manual skills intake + capability declarations" as Profile
 cloud "Configured CV model API\nOpenAI-compatible extraction, routing and interpretation" as CVLLM
 cloud "Career model router\nLocal OpenAI-compatible / DeepSeek cloud / Gemini\nShared adapter: extraction, chat, research coordination" as LLM
 cloud "Public search API\nBrave LLM Context (testing) / DeepSeek Search (production)" as Sources
@@ -23,7 +23,7 @@ node "Docker Compose — focused design" {
 
   package "Private backend network" {
     node "CV analyser\nservices/cv-service" as CV <<Docker container>> {
-      artifact "Saved upload/review/deletion and resumable text chat\nSource-linked clarification, correction and selection\nTransient LangGraph extraction + one validated repair\n/api/v1/cv" as CVAPI
+      artifact "Summary-first upload/review/deletion and explicit resumable chat\nSource-linked clarification, correction and selection\nTransient LangGraph extraction + one validated repair\n/api/v1/cv" as CVAPI
     }
     node "Career goal and public research\nservices/career-service" as Career <<Docker container>> {
       artifact "Specific JD or conversational discovery\nOne canonical CareerGoal + explicit CV confirmation\nStructured skills and five-category Opportunity Intelligence\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
