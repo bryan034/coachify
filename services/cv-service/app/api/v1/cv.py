@@ -16,7 +16,11 @@ from app.schemas.reconciliation import ReconcileMutation, ReconciliationView, Co
 from app.schemas.handoff import AnalysisInput, SourceSnapshot, DeclarationLinks
 from app.domain.attachments import assess_links
 
-router = APIRouter(prefix='/api/v1/cv', responses={code: {'model': ApiError} for code in (401,403,404,409,413,415,422,503)})
+# Keep the published contract independent of Python 3.12/3.14 HTTPStatus phrases.
+ERROR_DESCRIPTIONS = {401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict',
+    413: 'Content Too Large', 415: 'Unsupported Media Type', 422: 'Unprocessable Content', 503: 'Service Unavailable'}
+router = APIRouter(prefix='/api/v1/cv', responses={code: {'model': ApiError, 'description': description}
+    for code, description in ERROR_DESCRIPTIONS.items()})
 
 
 async def authenticated(request: Request, credentials=Depends(bearer)):

@@ -41,6 +41,17 @@ def test_deletion_contract_matches_runtime(harness):
     assert contract['components']['schemas']['CvDeletionResult'] == runtime['components']['schemas']['CvDeletionResult']
 
 
+def test_deletion_error_descriptions_are_stable_on_python_312(monkeypatch, harness):
+    from http import HTTPStatus
+    from app.main import create_app
+    monkeypatch.setattr(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, 'phrase', 'Request Entity Too Large')
+    monkeypatch.setattr(HTTPStatus.UNPROCESSABLE_ENTITY, 'phrase', 'Unprocessable Entity')
+    app = create_app(settings=harness[1].state.settings)
+    responses = app.openapi()['paths']['/api/v1/cv/{cv_id}']['delete']['responses']
+    assert responses['413']['description'] == 'Content Too Large'
+    assert responses['422']['description'] == 'Unprocessable Content'
+
+
 @pytest.mark.parametrize('changes', [
     {'user_id': 'not-uuid'}, {'file_url': 'https://public.test/cv.pdf'},
     {'source_text': 'private raw CV'}, {'extraction_status': 'failed'},

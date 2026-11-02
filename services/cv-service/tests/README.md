@@ -81,3 +81,5 @@ filesystem failure, lost tombstone acknowledgements, quota recovery, bootstrap a
 old-upload replay prevention on both repositories. UI/API tests verify explicit
 confirmation, review/selection reset, cancellation, interrupted-request identity,
 stale-version refresh and strict deletion acknowledgements.
+Deletion OpenAPI checks also simulate Python 3.12's older HTTP status phrases;
+the published 413/422 descriptions remain stable across supported runtimes.
