@@ -169,3 +169,14 @@ may misattribute team contributions if the CV does not identify the user's role,
 and asks whether to continue. Cancel preserves the baseline; a saved review of the
 current effective version avoids the warning. Later evidence changes require review
 again. This is guidance, not a new backend restriction on source selection.
+
+## Agent-led uploaded-CV interview
+
+Uploaded-CV review resumes persistent interview progress from the CV service. Paused
+or completed interviews do not automatically restart on refresh; Continue review
+or a new message resumes interaction. Agent questions, evidence updates and stopping
+decisions are backend-owned. Chat displays source-specific skill estimates as
+conversation-based judgments, while the summary exposes structured roles,
+responsibilities, skill evidence and unresolved/partial details with their quotes.
+Manual-only intake retains its existing Profile-owned flow. See the
+[CV interview harness](../../../../../services/cv-service/INTERVIEW.md).

@@ -1,4 +1,5 @@
 from elo_shared.skills import resolve, MAPPING_VERSION
+from app.schemas.interview_evidence import ReviewFact
 from app.domain.extraction_errors import FailureStage, FailureCategory, ProviderReason, ProviderParameter
 from typing import Annotated, Literal
 import calendar
@@ -128,6 +129,7 @@ class ExtractedItem(StrictModel):
     context: str | None = Field(default=None, max_length=500)
     supporting_items: list[Annotated[int, Field(strict=True)]] = Field(default_factory=list, max_length=15)
     uncertainties: list[Uncertainty] = Field(default_factory=list, max_length=7)
+    review_evidence: list[ReviewFact] = Field(default_factory=list, max_length=12)
 
     @model_validator(mode='after')
     def valid_dates(self):
@@ -226,6 +228,7 @@ class CvItem(BaseModel):
     support_uncertain: bool = False
     uncertainties: list[str] = []
     skill_claims: list[SkillClaim] = []
+    review_evidence: list[ReviewFact] = Field(default_factory=list, max_length=240)
 
 
 class SkillSource(BaseModel):
@@ -293,6 +296,7 @@ class InterpretationOutput(StrictModel):
     claims: list[InterpretedClaim] = Field(default_factory=list, max_length=20)
     dates: InterpretedDates | None = None
     statement_excerpt: Annotated[str, StringConstraints(min_length=1, max_length=500)] | None = None
+    review_evidence: list[ReviewFact] = Field(default_factory=list, max_length=12)
     resolved_uncertainties: list[Uncertainty] = Field(default_factory=list, max_length=7)
     remaining_uncertainties: list[Uncertainty] = Field(default_factory=list, max_length=7)
 

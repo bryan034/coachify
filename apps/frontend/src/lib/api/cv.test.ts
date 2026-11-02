@@ -6,6 +6,13 @@ const signal=()=>new AbortController().signal;
 afterEach(()=>vi.unstubAllGlobals());
 function response(value:unknown,status=200){vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}})));}
 describe('CV service boundary',()=>{
+ it('retains grounded interview fields and rejects malformed evidence at the API boundary',async()=>{
+  const cv=savedCv();const field={field:'responsibilities',skill_name:null,attribution:'personal',status:'partial',value:'Built API handlers',evidence:[{source_id:'answer:one',quote:'I built the handlers.'}]};
+  const value={...cv,items:cv.items.map((item,index)=>index?item:{...item,review_evidence:[field]})};
+  response(value);expect((await cvApi.get(cv.id,'token',signal())).items[0].review_evidence).toEqual([field]);
+  response({...value,items:[{...value.items[0],review_evidence:[{...field,status:'verified_mastery'}]}]});
+  await expect(cvApi.get(cv.id,'token',signal())).rejects.toThrow('incomplete response');
+ });
  it('deletes only the identified CV using authenticated versioned input and validates the acknowledgement',async()=>{
   const body={expected_version:3,mutation_id:'synthetic-deletion'};const result={cv_id:'cv/id',deleted:true,selection:{cv_id:null,version:2}};
   response(result);expect(await cvApi.delete('cv/id',body,'token',signal())).toEqual(result);

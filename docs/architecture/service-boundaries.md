@@ -169,3 +169,15 @@ Basic source review has no Career dependency; confirmed target-specific preparat
 and Assessment comparison remain separate. A CV-owned effective-version review
 stamp records summary review without asserting mastery. Both diagrams and API
 contracts describe these additive fields.
+
+## Agent-led CV interview
+
+Uploaded-CV skills review keeps its durable transcript and bounded interview memory
+in CV-owned `cv_conversations`; original and clarified `review_evidence` stays in
+`cvs`. Provider context is transient and assembled from committed evidence, recent
+turns, exact preference quotes and retrievable source answers. The agent chooses
+interview structure; the harness validates ownership, evidence, coverage, repeated
+questions and source-specific skill estimates before publication. User stop preserves
+paused partial progress. No new service/collection, cross-database access or
+automatic practical assessment is introduced. Manual-only intake remains Profile-owned.
+See the [harness](../../services/cv-service/INTERVIEW.md).

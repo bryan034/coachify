@@ -376,6 +376,7 @@ class CvItem {
     +String end_date? [year/month/day precision]
     +Boolean ongoing
     +SkillClaim[] skill_claims
+    +ReviewFact[] review_evidence [extraction_and_clarification]
     +Boolean removed
 }
 
@@ -413,6 +414,8 @@ class cv_conversations {
     +Integer revision
     +ChatMessage[] messages
     +Object active_question?
+    +InterviewMemory interview_memory?
+    +Object[] interview_targets
     +Object receipts
 }
 
@@ -595,3 +598,30 @@ users *-- SkillsProfile : manual intake
 SkillsProfile *-- ProfileEntry
 ProfileEntry *-- ProfileSkill
 note for SkillsProfile "Profile owns manual facts; CV owns transcripts and semantic intake coordination. Explicit save publishes existing declarations with source_entry_id; missing dimensions remain unknown."
+
+class ReviewFact {
+    +String field [role/responsibilities/contribution/assistance/scope/complexity/problem_solving/outcome/skill_use/recency/frequency/limitations]
+    +String skill_name?
+    +String attribution? [personal/shared/team/observed/denied/unknown]
+    +String status [supported/partial/unknown/conflicting/skipped/not_applicable]
+    +String value?
+    +Object[] evidence [source_id_and_exact_quote]
+}
+class InterviewMemory {
+    +Integer schema_version
+    +Integer extraction_version
+    +Integer evidence_version
+    +Map sources
+    +Map input_sources
+    +String focus_item_id?
+    +String status [reviewing/reviewed/reviewed_with_gaps/paused]
+    +Map coverage
+    +Map attempts
+    +Object[] questions
+    +Object[] notes [exact_user_preference_quotes]
+    +Object[] summary [rebuildable_coverage_refs]
+    +Object[] estimates [source_specific_derived_judgments]
+}
+CvItem *-- ReviewFact : grounded_review_fields
+cv_conversations *-- InterviewMemory : durable_navigation_not_factual_authority
+note for InterviewMemory "Mongo-persistent. Provider context is transient. Source/evidence changes invalidate affected coverage and estimates; no automatic mastery claim."

@@ -176,6 +176,40 @@ def review_question_fixture(value):
     return {'reply': f"What can you share about {target['field']} in {target['source_title']}? Unknown is fine.", 'actions': []}
 
 
+def interview_fixture(value):
+    """Finite labelled cases for the new interview protocol, not an agent fallback."""
+    source = value.get('focused_source') or {}
+    known = {'Team dashboard', 'Synthetic reporting internship', 'Python', 'SQL', 'Synthetic University'}
+    if source.get('title') not in known:
+        raise ValueError('Unknown synthetic interview source')
+    if value['task'] == 'cv_interview_plan':
+        fields = {f['field']: f['status'] for f in source.get('review_evidence', [])}
+        for field in ('personal_contribution', 'responsibilities', 'task_scope'):
+            attempt = value['memory']['attempts'].get(source['id'] + ':' + field + ':', {})
+            if fields.get(field) in {'supported', 'unknown', 'skipped', 'not_applicable'} or attempt.get('declined') or attempt.get('count', 0) >= 2:
+                continue
+            return {'action': 'ask', 'reply': f"What can you share about {field.replace('_', ' ')} in {source['title']}? Unknown is fine.",
+                    'item_id': source['id'], 'targets': [{'field': field}]}
+        return {'action': 'pause', 'reply': 'The synthetic interview can pause here with remaining details uncertain.'}
+    if value['message'] in {'Stop here.', 'I want to stop now.'}:
+        return {'intent': 'stop', 'reply': 'Paused.', 'actions': [], 'interpretations': []}
+    active = value.get('active_question')
+    uncertainty = 'personal_contribution' if active and 'personal contribution' in active['question'] else 'responsibility' if active and 'responsibilities' in active['question'] else 'claim'
+    routed = conversation_fixture({'message': value['message'], 'items': value['sources'],
+        'questions': [{**active, 'uncertainty': uncertainty}] if active else [], 'active_question': active})
+    interpretations = []
+    for action in routed['actions']:
+        if action['kind'] not in {'clarify', 'correct'} or action.get('fields'): continue
+        if action.get('item_id') != source['id']:
+            raise ValueError('The synthetic interview must focus the referenced source first')
+        output = interpret_fixture({'source_item': source, 'question': {'uncertainty': uncertainty},
+            'answer': value['message'], 'answer_revision': 1})
+        output.pop('answer_revision')
+        interpretations.append(output)
+    return {'intent': 'answer' if interpretations else 'change' if routed['actions'] else 'side_question',
+            **routed, 'interpretations': interpretations}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass
@@ -199,6 +233,9 @@ class Handler(BaseHTTPRequestHandler):
             if request.get('model') != 'synthetic-integration-fixture':
                 return self.send_json(422, {'error': 'Only the synthetic fixture model is accepted'})
             value = json.loads(request['messages'][-1]['content'])
+            if value.get('task') in {'cv_interview_interpret', 'cv_interview_plan'}:
+                result = interview_fixture(value)
+                return self.send_json(200, {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(result)}}]})
             if value.get('task') in {'skills_intake', 'skills_question'}:
                 try:
                     result = intake_fixture(value) if value['task'] == 'skills_intake' else {

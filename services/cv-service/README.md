@@ -45,7 +45,9 @@ the review screen opens immediately after upload, waits for extraction and then 
 background and per-experience skill evidence. Basic CV review works without a
 Career target; target-specific questions retain their existing confirmation rules.
 `POST /api/v1/cv/{cv_id}/profile-review` saves a version-bound review stamp from
-the summary. Unknowns remain uncertain. See the
+the summary. Unknowns remain uncertain. Uploaded-CV review is agent-led, with persistent interview memory, grounded role/skill
+evidence, targeted partial-answer follow-ups and validated completion. See the
+[interview harness](INTERVIEW.md) and
 [guided intake specification](SPEC.md#skills-profile-entry-and-guided-intake).
 
 ## Saved CV titles (C01/C09)

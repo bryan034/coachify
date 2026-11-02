@@ -155,3 +155,9 @@ root. It applies `compose.career-test.yaml` only to its own disposable project, 
 factory provides controlled empty public retrieval; fixture mode additionally serves
 finite labelled SDK responses, while local mode calls `deepseek-r1:1.5b`. Never apply
 this override to a normal deployment. See [Career test instructions](../../services/career-service/tests/README.md#reproduce-the-complete-career-extraction-journey).
+
+CV interview probing uses `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` (default 2, range 1–5),
+injected only into CV. It limits unproductive questions for an unchanged
+experience/field/skill target; it does not force completion or cap the entire review.
+The public `.env.example` documents it. Apply private values yourself in the central
+deployment environment; no service-specific environment file is needed.

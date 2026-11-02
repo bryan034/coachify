@@ -6,6 +6,8 @@ import re
 import unicodedata
 from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates, date_bounds, MAX_EVIDENCE_EXCERPT_CHARACTERS
 from app.domain.extraction_errors import EvidenceValidationError
+from app.schemas.interview_evidence import ReviewFact, fact_key, fact_statement
+from pydantic import ValidationError
 
 
 def normalized_name(name):
@@ -32,7 +34,18 @@ def evidence_requiring_semantic_check(payload, blocks):
     items = payload.get('items', [])
     if isinstance(items, list):
         for item in items:
-            if isinstance(item, dict) and isinstance(item.get('evidence'), list): refs.extend(item['evidence'])
+            if isinstance(item, dict) and isinstance(item.get('evidence'), list):
+                refs.extend(item['evidence'])
+                for fact in item.get('review_evidence', []):
+                    try:
+                        fact = ReviewFact.model_validate(fact).model_dump(mode='json')
+                    except ValidationError:
+                        continue  # Ordinary schema validation/repair handles malformed facts.
+                    for ref in fact.get('evidence', []):
+                        if isinstance(ref, dict): refs.append({'block_id': ref.get('source_id'), 'excerpt': ref.get('quote')})
+                    if fact.get('evidence'):
+                        # Check the factual interpretation as well as the quoted anchor.
+                        refs.append({'block_id': fact['evidence'][0].get('source_id'), 'excerpt': fact_statement(fact)})
     if isinstance(payload.get('other_information'), list): refs.extend(payload['other_information'])
     pending = []
     for ref in refs:
@@ -134,7 +147,19 @@ def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
                 r'\b(present|ongoing|currently|still|continuing)\b', normalized_name(ref['excerpt']))
                 for ref in evidence):
             item.ongoing = False
-        items.append({'id': identity, 'kind': item.kind, 'title': item.title, 'description': item.description,
+        review_facts = [fact.model_dump(mode='json') for fact in item.review_evidence]
+        for fact in review_facts:
+            if fact.get('skill_name') and skill_id(fact['skill_name']) not in names_by_id:
+                raise ValueError('Skill evidence must refer to a skill on that exact source.')
+            for ref in fact['evidence']:
+                if ref['source_id'] not in source or not evidence_matches(ref['quote'], source[ref['source_id']]['text']):
+                    raise EvidenceValidationError('Interview evidence cited an unavailable CV passage.', 'source_excerpt', index)
+            first = fact['evidence'][0]['source_id']
+            if (first, fact_statement(fact)) not in semantic_support and not evidence_matches(fact_statement(fact), source[first]['text']):
+                raise EvidenceValidationError('Interview evidence is not supported by the CV.', 'source_excerpt', index)
+        if len({fact_key(f) for f in review_facts}) != len(review_facts):
+            raise ValueError('Duplicate interview evidence fields.')
+        items.append({'review_evidence': review_facts, 'id': identity, 'kind': item.kind, 'title': item.title, 'description': item.description,
                       'provenance': 'explicit' if item.explicit else 'inferred', 'evidence': evidence,
                       'skill_ids': [skill_id(name) for name in names], 'skill_names': names,
                       'category': item.category or 'unspecified', 'proficiency': item.proficiency,
@@ -246,6 +271,7 @@ def effective_items(document):
         # Old literal-answer overlays remain readable, without automatic backfill.
         overlay = document.get('overlays', {}).get(item['id'], {})
         if overlay.get('provenance') == 'user_clarified': item.update(deepcopy(overlay))
+        item.setdefault('review_evidence', [])
         item['_claims'] = _base_claims(item)
     events = [(q['interpretation'].get('applied_sequence', 0), 0, q['item_id'], q)
               for q in document.get('clarifications', [])
@@ -274,6 +300,11 @@ def effective_items(document):
             if patch.get('evidence_excerpt'):
                 claim['evidence'] = [{'id': 'answer:' + question['id'], 'location': 'Your clarification',
                                      'excerpt': patch['evidence_excerpt']}]
+        for fact in result.get('review_evidence', []):
+            retained = [f for f in item['review_evidence'] if fact_key(f) != fact_key(fact)]
+            grounded = deepcopy(fact)
+            for ref in grounded['evidence']: ref['source_id'] = 'answer:' + question['id']
+            item['review_evidence'] = retained + [grounded]
         if result.get('dates'):
             for field in result['dates']['changed_fields']: item[field] = result['dates'][field]
         resolved = set(result['resolved_uncertainties'])
@@ -380,6 +411,7 @@ def effective_fingerprint(document):
         value['claims'] = [{key: claim[key] for key in ('skill_id', 'attribution', 'assistance',
             'proficiency', 'experience_months', 'support_uncertain')} for claim in item['skill_claims']]
         value['claims'].sort(key=lambda claim: claim['skill_id'])
+        value['review_evidence'] = sorted([{k: f.get(k) for k in ('field', 'skill_name', 'status', 'value', 'attribution')} for f in item.get('review_evidence', [])], key=lambda f: fact_key(f))
         value['uncertainties'] = sorted(item.get('uncertainties', []))
         facts.append(value)
     return digest(facts)
@@ -441,6 +473,24 @@ def interpretation_semantic_checks(payload, question, item=None):
                     'question': question.get('question')}})
             refs.append({'block_id': block_id, 'excerpt': statement})
             fields.append((claim.skill_id, field))
+    for fact in result.review_evidence:
+        data = fact.model_dump(mode='json')
+        if any(ref.source_id != 'answer' or ref.quote not in question['answer'] for ref in fact.evidence):
+            raise ValueError('Interview evidence must quote this answer exactly.')
+        block_id = str(len(blocks))
+        blocks.append({'id': block_id, 'text': '\n'.join(ref.quote for ref in fact.evidence),
+            'reference_context': {'source_title': (item or {}).get('title'), 'question': question.get('question')}})
+        refs.append({'block_id': block_id, 'excerpt': fact_statement(data)})
+        fields.append(('review', fact_key(data)))
+        previous = next((f for f in (item or {}).get('review_evidence', []) if fact_key(f) == fact_key(data)), None)
+        if previous and previous['status'] == 'supported' and fact.status == 'supported' and previous.get('value') != fact.value:
+            # A quotation proving the new claim is not permission to silently
+            # erase an incompatible earlier claim. Check their relationship too.
+            block_id = str(len(blocks))
+            blocks.append({'id': block_id, 'text': 'Earlier supported account: ' + str(previous.get('value')) +
+                '\nLatest user statement: ' + '\n'.join(ref.quote for ref in fact.evidence)})
+            refs.append({'block_id': block_id, 'excerpt': 'The latest statement refines the earlier account without contradiction, or explicitly corrects that earlier account.'})
+            fields.append(('review-consistency', fact_key(data)))
     return blocks, refs, fields
 
 
@@ -484,6 +534,23 @@ def validate_interpretation(payload, item, question, semantic_support=frozenset(
             if not excerpt or (not re.search(indicators[claim.assistance], normalized_name(excerpt))
                                and (claim.skill_id, 'assistance') not in semantic_support):
                 raise ValueError('Assistance or independence must be stated, not inferred.')
+    if len({fact_key(f) for f in item.get('review_evidence', [])} | {fact_key(f.model_dump(mode='json')) for f in result.review_evidence}) > 240:
+        raise ValueError('This experience has reached its review evidence limit. Existing answers are retained; use a new saved source for more evidence.')
+    seen = set()
+    for fact in result.review_evidence:
+        data = fact.model_dump(mode='json')
+        identity = fact_key(data)
+        if fact.skill_name and skill_id(fact.skill_name) not in existing | set(claimed):
+            raise ValueError('Skill evidence must refer to an existing or personally supported new skill.')
+        if identity in seen: raise ValueError('Interview evidence duplicated a field.')
+        seen.add(identity)
+        if any(ref.source_id != 'answer' or ref.quote not in answer for ref in fact.evidence):
+            raise ValueError('Interview evidence cited a different answer.')
+        if ('review', identity) not in semantic_support:
+            raise ValueError('Interview evidence requires semantic support.')
+        previous = next((f for f in item.get('review_evidence', []) if fact_key(f) == identity), None)
+        if previous and previous['status'] == 'supported' and fact.status == 'supported' and previous.get('value') != fact.value and ('review-consistency', identity) not in semantic_support:
+            raise ValueError('A conflicting earlier account must be retained or explicitly corrected.')
     resolved, remaining = set(result.resolved_uncertainties), set(result.remaining_uncertainties)
     if resolved & remaining or len(resolved) != len(result.resolved_uncertainties) or len(remaining) != len(result.remaining_uncertainties):
         raise ValueError('Interpretation returned conflicting uncertainty states.')
@@ -527,13 +594,14 @@ def validate_interpretation(payload, item, question, semantic_support=frozenset(
             raise ValueError('An ongoing date must be explicitly stated.')
     if result.statement_excerpt is not None and result.statement_excerpt not in answer:
         raise ValueError('The clarified statement is not present in the answer.')
-    if not result.claims and not result.dates and not result.statement_excerpt and resolved:
+    if not result.claims and not result.dates and not result.statement_excerpt and not result.review_evidence and resolved:
         raise ValueError('Resolving a factual claim requires a supported interpretation.')
     data = result.model_dump()
     labels = {'personal': 'personal contribution', 'team': 'team contribution only',
               'observed': 'observation only', 'denied': 'not personally performed', 'unknown': 'personal contribution remains unknown'}
     summaries = [f"{claim.name}: {labels[claim.attribution]}" if 'attribution' in claim.changed_fields
         else f"{claim.name}: clarified {', '.join(claim.changed_fields).replace('_', ' ')}" for claim in result.claims]
+    if result.review_evidence: summaries.append('Retained your role and skill evidence')
     if result.dates: summaries.append('Updated explicitly stated dates')
     if result.statement_excerpt: summaries.append('Retained your clarified statement')
     data['summary'] = '; '.join(summaries)[:2000] or 'The relevant facts remain unknown.'
