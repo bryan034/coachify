@@ -2,7 +2,7 @@
 import { BrandLogo } from '@/components/ui/brand-logo';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type Dispatch, type SetStateAction } from 'react';
 import { cvApi, CvApiError } from '@/lib/api/cv';
 import type { ConversationAction, ConversationDecision, ConversationInput, ConversationMessage, CvConversation, CvDetail } from './types';
 
@@ -44,11 +44,13 @@ function ActionCard({action, busy, readOnly, decide}: {action: ConversationActio
  </article>;
 }
 
-export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSummary, unavailable = false, purpose, autoReview = false, onActivityChanged}: {
- cvId: string | null; detail: CvDetail | null; token: string; onChanged: () => Promise<void>; onOpenSummary: () => void; unavailable?: boolean; purpose?: 'skills_profile'; autoReview?: boolean; onActivityChanged?: (active: boolean) => void;
+export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSummary, unavailable = false, purpose, autoReview = false, onActivityChanged, draft: persistedDraft, onDraftChange}: {
+ cvId: string | null; detail: CvDetail | null; token: string; onChanged: () => Promise<void>; onOpenSummary: () => void; unavailable?: boolean; purpose?: 'skills_profile'; autoReview?: boolean; onActivityChanged?: (active: boolean) => void; draft?: string; onDraftChange?: Dispatch<SetStateAction<string>>;
 }) {
  const [conversation, setConversation] = useState<CvConversation | null>(null);
- const [draft, setDraft] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(''), [loading, setLoading] = useState(true), [historyLoading, setHistoryLoading] = useState(false), [announcement, setAnnouncement] = useState('');
+ const [localDraft, setLocalDraft] = useState('');
+ const draft = persistedDraft ?? localDraft, setDraft = onDraftChange ?? setLocalDraft;
+ const [error, setError] = useState(''), [busy, setBusy] = useState(''), [loading, setLoading] = useState(true), [historyLoading, setHistoryLoading] = useState(false), [announcement, setAnnouncement] = useState('');
  const lifetime = useRef(new AbortController()), openKey = useRef(crypto.randomUUID()), newestId = useRef<string | null>(null), scrollArea = useRef<HTMLDivElement>(null), chatPanel = useRef<HTMLElement>(null), composer = useRef<HTMLTextAreaElement>(null), nearBottom = useRef(true);
  const current = useRef(conversation); current.current = conversation;
  const onChangedRef = useRef(onChanged); onChangedRef.current = onChanged;

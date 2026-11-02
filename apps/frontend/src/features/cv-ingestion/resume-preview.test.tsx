@@ -248,3 +248,16 @@ it('does not start an interview in a hidden review after processing finishes',as
  fireEvent.click(within(screen.getByRole('article',{name:`CV ${source.id}`})).getByRole('button',{name:'Review CV'}));
  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('conversation',expect.objectContaining({command:'review'}),'synthetic-session',expect.any(AbortSignal)));
 });
+
+it('keeps an unsent chat draft through a temporary processing-panel remount',async()=>{
+ const source=savedCv('remounted-chat');let processing=false;
+ vi.mocked(cvApi.list).mockResolvedValue({cvs:[source],selection:{cv_id:source.id,version:1}});
+ vi.mocked(cvApi.get).mockImplementation(async()=>({...source,status:processing?'processing':'ready'}));
+ renderWorkspace();fireEvent.click(within(await screen.findByRole('article',{name:`CV ${source.id}`})).getByRole('button',{name:'Review CV'}));
+ const input=await screen.findByRole('textbox',{name:'Message elo'});await waitFor(()=>expect(input).toBeEnabled());
+ fireEvent.change(input,{target:{value:'Keep this unsent context.'}});
+ processing=true;fireEvent(window,new Event('focus'));
+ await screen.findByRole('heading',{name:'Preparing your CV for review'});
+ processing=false;fireEvent.click(screen.getByRole('button',{name:'Refresh saved status'}));
+ await waitFor(()=>expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('Keep this unsent context.'));
+});
