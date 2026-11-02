@@ -31,6 +31,7 @@ export async function setupChatScenario(page: Page) {
 
 export async function sendChat(page: Page, text: string) {
   const composer = page.getByRole('textbox', {name: 'Message elo', exact: true});
+  await expect(page.locator('.cv-chat-action-pending')).toHaveCount(0, {timeout: 35_000});
   await expect(composer).toBeEnabled(); await composer.fill(text);
   await page.getByRole('button', {name: 'Send message', exact: true}).click();
   await expect(composer).toBeEnabled(); await expect(composer).toHaveValue('');
