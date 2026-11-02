@@ -237,3 +237,63 @@ def test_cv_interpretation_accepts_semantic_proficiency_and_independence_only_wi
     if approved:
         claim = saved['interpretation']['claims'][0]
         assert claim['proficiency'] == 'Basic joins' and claim['assistance'] == 'independent'
+
+
+def test_old_refresh_cannot_clear_a_concurrently_published_review_question(harness, monkeypatch):
+    import asyncio
+    client, app, *_ = harness
+    cv = ready(harness)
+    chat, _, _ = open_profile(harness, cv['id'])
+    service = app.state.conversations
+    before_chat = service.get('owner-a', chat['id'])
+    before_cv = service.cv.get('owner-a', cv['id'])
+    chat = send(client, chat, 'Review my CV', command='review')
+    active = chat['active_question']
+    assert active
+    original_get, original_cv_get = service.get, service.cv.get
+    stale_chat, stale_cv = [before_chat], [before_cv]
+
+    def read_chat(*args):
+        return stale_chat.pop() if stale_chat else original_get(*args)
+
+    def read_cv(*args):
+        return stale_cv.pop() if stale_cv else original_cv_get(*args)
+
+    monkeypatch.setattr(service, 'get', read_chat)
+    monkeypatch.setattr(service.cv, 'get', read_cv)
+    account = {'id': 'owner-a', 'authorization': 'Bearer owner-a'}
+    refreshed = asyncio.run(service.refresh(app, account, chat['id']))
+    assert refreshed['active_question'] == active
+    assert refreshed['revision'] == chat['revision']
+    # A fresh read still clears a question whose source really changed.
+    document = original_cv_get('owner-a', cv['id'])
+    from app.schemas.cv import AnswerMutation
+    from app.clarification.service import answer
+    answer(service.cv, 'owner-a', cv['id'], active['id'],
+           AnswerMutation(expected_version=document['version'], mutation_id=uuid4(), action='skip'))
+    refreshed = asyncio.run(service.refresh(app, account, chat['id']))
+    assert refreshed['active_question'] is None
+
+
+def test_old_profile_refresh_preserves_a_newer_intake_question(harness, monkeypatch):
+    import asyncio
+    import app.conversation.intake as intake
+    client, app, *_ = harness
+    chat, provider, profiles = open_profile(harness)
+    service = app.state.conversations
+    before_chat = service.get('owner-a', chat['id'])
+    before_profile = SkillsProfile().model_dump(mode='json')
+    provider.evaluation = evaluated
+    chat = send(client, chat, 'I used pandas for Weekly reports.')
+    assert chat['active_question']
+    original_get = service.get
+    stale = [before_chat]
+    monkeypatch.setattr(service, 'get', lambda *args: stale.pop() if stale else original_get(*args))
+
+    async def old_profile(*args): return before_profile
+
+    monkeypatch.setattr(intake, 'read_profile', old_profile)
+    refreshed = asyncio.run(service.refresh(app, {'id': 'owner-a'}, chat['id']))
+    assert refreshed['active_question'] == chat['active_question']
+    assert refreshed['intake_profile_version'] == profiles.records['Bearer owner-a']['version']
+    assert refreshed['revision'] == chat['revision']

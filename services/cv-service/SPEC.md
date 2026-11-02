@@ -205,6 +205,10 @@ write bodies and mutation IDs recover interrupted cross-service responses withou
 duplicating entries. A new turn cannot overtake pending interpretation. Source
 corrections/removals still require the existing explicit action decisions.
 
+Status refresh reconciles external Profile/CV snapshots only against the captured
+conversation revision. If an action publishes meanwhile, the refresh preserves its
+new question and state; a subsequent fresh poll can invalidate changed sources.
+
 In skills-profile mode, basic CV review is independent of Career availability and
 confirmation. The harness selects unresolved source uncertainties and additional
 personal-skill scope/independence/recency/frequency/outcome/limitation questions;

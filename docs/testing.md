@@ -26,6 +26,9 @@ the Skills Profile summary. The synthetic provider serves guided questions, manu
 intake and a finite set of labelled semantic-evidence verdicts; unsupported claims
 and unrelated source blocks are rejected. Manual intake stays a draft until Save
 profile publishes it, and outage/retry checks retain the original saved turn.
+Deterministic refresh races cover both manual intake and CV review: an older source
+snapshot cannot erase a concurrently published question, while fresh reads still
+invalidate questions after their source changes.
 
 ## Local commands
 

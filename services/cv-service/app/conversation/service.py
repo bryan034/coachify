@@ -184,6 +184,7 @@ class ConversationService:
             from app.conversation.intake import read_profile
             profile = await read_profile(app, account)
             def reconcile(current):
+                if current['revision'] != previous['revision']: return
                 if current.get('intake_profile_version') != profile['version']:
                     current['active_question'] = None
                     current['intake_target'] = None
@@ -197,6 +198,9 @@ class ConversationService:
                 error = 'Career context is unavailable. Your conversation is saved; retry to prepare relevant questions.'
         document = self.cv.get(account['id'], previous['cv_id']) if previous['cv_id'] else None
         def transform(current):
+            # Source reads precede this CAS. A completed action may have published
+            # a question since those reads; only reconcile the captured revision.
+            if current['revision'] != previous['revision']: return
             active = current.get('active_question')
             if current.get('purpose') == 'skills_profile':
                 if not document: return
