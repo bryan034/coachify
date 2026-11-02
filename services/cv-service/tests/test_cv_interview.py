@@ -307,3 +307,16 @@ def test_malformed_review_fields_reach_schema_validation_instead_of_crashing_the
     blocks = [{'id': 'b1', 'text': 'Synthetic source.', 'location': 'Paragraph 1'}]
     assert evidence_requiring_semantic_check(payload, blocks) == []
     with pytest.raises(ValueError): validate_extraction(payload, blocks, 'cv')
+
+
+def test_ambiguous_source_is_a_choice_without_guessing_or_prepared_facts(harness):
+    client, _, *_ = harness
+    cv, chat, provider = start(harness)
+    provider.evaluation = {'intent': 'answer', 'reply': 'Which experience do you mean?',
+        'actions': [{'kind': 'clarify', 'excerpt': 'I helped with that project.',
+                     'candidate_item_ids': [i['id'] for i in cv['items'] if i['kind'] in {'project', 'education'}]}]}
+    before = client.get('/api/v1/cv/'+cv['id']).json()
+    chat = send(client, chat, 'I helped with that project.')
+    choice = next(a for a in chat['messages'][-1]['actions'] if a['kind'] == 'clarify')
+    assert choice['status'] == 'needs_source' and len(choice['choices']) == 2
+    assert client.get('/api/v1/cv/'+cv['id']).json() == before

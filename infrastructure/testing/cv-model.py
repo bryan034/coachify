@@ -130,6 +130,8 @@ def interpret_fixture(value):
 
 def semantic_fixture(value):
     """Approve only reviewed text/claim pairs, never arbitrary model output."""
+    if any('SYNTHETIC_SECOND_ACTION_FAILURE' in block['text'] and 'I cannot clarify my internship yet.' in block['text'] for block in value['source_blocks']):
+        raise RuntimeError('Deliberate synthetic second-action evidence outage')
     labelled_answers = [CHAT_MIXED_ANSWER, CHAT_EXTRA_CONTEXT,
         "I wrote the SQL queries. A teammate built the Python application, with guidance from our tutor.",
         "I wrote the Python loader for six months with my tutor's help. My teammate wrote SQL."]
@@ -200,8 +202,17 @@ def interview_fixture(value):
     interpretations = []
     for action in routed['actions']:
         if action['kind'] not in {'clarify', 'correct'} or action.get('fields'): continue
+        if not action.get('item_id') or action.get('item_id') not in {s['id'] for s in value['sources']}:
+            continue
         if action.get('item_id') != source['id']:
-            raise ValueError('The synthetic interview must focus the referenced source first')
+            other = next(s for s in value['sources'] if s['id'] == action['item_id'])
+            if value['message'] != CHAT_PARTIAL_FAILURE or other['title'] != 'Synthetic reporting internship':
+                raise ValueError('Unknown synthetic cross-source answer')
+            interpretations.append({'item_id': other['id'], 'resolution': 'unanswerable', 'claims': [],
+                'resolved_uncertainties': [], 'remaining_uncertainties': ['claim'],
+                'review_evidence': [{'field': 'responsibilities', 'status': 'unknown', 'value': None,
+                    'evidence': [{'source_id': 'answer', 'quote': action['excerpt']}]}]})
+            continue
         output = interpret_fixture({'source_item': source, 'question': {'uncertainty': uncertainty},
             'answer': value['message'], 'answer_revision': 1})
         output.pop('answer_revision')
@@ -244,7 +255,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(503, {'error': 'Deliberate synthetic outage'})
                 return self.send_json(200, {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(result)}}]})
             if 'summaries' in value or value.get('task') == 'cv_review_question':
-                result = semantic_fixture(value) if 'summaries' in value else review_question_fixture(value)
+                try: result = semantic_fixture(value) if 'summaries' in value else review_question_fixture(value)
+                except RuntimeError:
+                    return self.send_json(503, {'error': 'Deliberate synthetic evidence outage'})
                 return self.send_json(200, {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(result)}}]})
             if value.get('task') == 'cv_conversation' or 'source_item' in value:
                 try: result = conversation_fixture(value) if value.get('task') == 'cv_conversation' else interpret_fixture(value)

@@ -129,7 +129,7 @@ class InterviewHarness:
                         if ('answer', statement) not in supported:
                             raise ValueError('That capability is not supported by your stated personal work. Your message is saved.')
                     action = service.proposal(conversation, route, proposal, index, items, questions)
-                    if proposal.kind == 'clarify':
+                    if proposal.kind == 'clarify' and action['status'] != 'needs_source':
                         interpretation = interpretations.get(action.get('item_id'))
                         if interpretation is None: raise ValueError('A factual answer needs a matching source interpretation.')
                         action['_prepared_interpretation'] = (interpretation, evaluated['metadata'])
