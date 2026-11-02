@@ -16,6 +16,11 @@ workspace response and adviser opening, then returns through Profile to edit the
 
 Preserve checks for distinct behavior and boundaries, including cross-service contracts. If a UI journey is replaced, retain its useful ownership, draft, retry and validation assertions against the new flow. Do not weaken or remove valid failures to obtain a pass. Historical discovery totals and earlier passing logs are not evidence for the current merged tree; report exact current results separately.
 
+Profile's test extra includes PyYAML for the published YAML contract comparisons.
+The goal-confirmation browser journey holds the concurrent workspace refresh while
+checking the stale-revision guard, then releases it after the explicit reload.
+This preserves the guard assertions without racing the normal focus refresh.
+
 ## Local commands
 
 Use Node.js 24 and Python 3.12. From the root:
