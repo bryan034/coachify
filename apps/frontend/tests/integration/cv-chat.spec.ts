@@ -80,7 +80,7 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   await expect.poll(async () => (await readChat(account, cvId)).messages.flatMap(message => message.actions).some(action => action.status === 'pending')).toBe(false);
   expect((await readChat(account, cvId)).messages.filter(message => message.role === 'user' && message.text === body.text)).toHaveLength(1);
   expect(await cv()).toEqual(before);
-  await page.reload(); await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click(); await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
+  await page.reload(); await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
 
   await sendChat(page, 'SYNTHETIC_CHAT_INVALID_SOURCE');
   expect(await cv()).toEqual(before);

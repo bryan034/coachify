@@ -83,9 +83,11 @@ def build_context(conversation, document, memory, *, focus_id=None, recall_ids=(
                 'resolution': q.get('resolution'), 'interpretation_status': q.get('interpretation_status')}
                for q in document['clarifications'] if focus and q['item_id'] == focus['id']
                and not q.get('reconciliation_required')]
+    active = conversation.get('active_question')
+    active_record = next((q for q in document['clarifications'] if active and q['id'] == active['id']), None)
     context = {'goal': 'Establish personal ownership and evidence-supported skill depth, accepting uncertainty.',
         'cv_version': document['version'], 'evidence_version': document['effective_version'],
-        'active_question': conversation.get('active_question'),
+        'active_question': {**active, 'uncertainty': active_record['uncertainty']} if active and active_record else active,
         'sources': [{'id': i['id'], 'kind': i['kind'], 'title': i['title'],
             'fields': [{'field': f['field'], 'skill_name': f.get('skill_name'), 'status': f['status']}
                        for f in evidence_for(i)], 'coverage': memory['coverage'].get(i['id'])} for i in items],

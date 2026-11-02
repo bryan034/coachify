@@ -39,13 +39,12 @@ def evaluate(context):
         'actions': [{'kind': 'clarify', 'item_id': active['item_id'], 'question_id': active['id'], 'excerpt': text}],
         'interpretations': [{'item_id': active['item_id'], 'resolution': 'partial',
             'claims': [{'skill_id': 'skill:python', 'name': 'Python', 'attribution': 'personal',
-                        'assistance': 'assisted', 'changed_fields': ['attribution', 'assistance'], 'evidence_excerpt': text},
-                       {'skill_id': 'skill:sql', 'name': 'SQL', 'attribution': 'unknown', 'changed_fields': ['attribution']}],
+                        'assistance': 'assisted', 'changed_fields': ['attribution', 'assistance'], 'evidence_excerpt': text}],
             'review_evidence': [fact('personal_contribution', text, 'Built the Python API', attribution='personal'),
                                 fact('responsibilities', text, 'Implemented the API'),
                                 fact('task_scope', text, 'A reporting API', status='partial'),
                                 fact('skill_use', text, 'Implemented API handlers', skill_name='Python', attribution='personal')],
-            'resolved_uncertainties': [], 'remaining_uncertainties': ['personal_contribution']}]}
+            'resolved_uncertainties': [], 'remaining_uncertainties': [active.get('uncertainty', 'claim')]}]}
 
 
 def test_resume_memory_and_accept_rich_answer_without_another_interpretation_call(harness):
@@ -111,7 +110,9 @@ def test_failed_semantic_support_keeps_literal_answer_and_prevents_next_question
     assert any(q['answer'] == 'I built the Python API with guidance.' and q['interpretation_status'] == 'failed' for q in saved['clarifications'])
     assert not any(i['review_evidence'] for i in saved['items'])
     assert len([c for c in provider.calls if c['task'] == 'cv_interview_plan']) == 1
-    assert any(a['status'] == 'failed' for m in chat['messages'] for a in m['actions'])
+    failures = [a for m in chat['messages'] for a in m['actions'] if a['status'] == 'failed']
+    assert len(failures) == 1 and failures[0]['kind'] == 'clarify'
+    assert chat['messages'][-1]['actions'][0]['status'] == 'saved'
 
 
 def context_for(harness):
@@ -320,3 +321,28 @@ def test_ambiguous_source_is_a_choice_without_guessing_or_prepared_facts(harness
     choice = next(a for a in chat['messages'][-1]['actions'] if a['kind'] == 'clarify')
     assert choice['status'] == 'needs_source' and len(choice['choices']) == 2
     assert client.get('/api/v1/cv/'+cv['id']).json() == before
+
+
+def test_followup_updates_only_addressed_fields_and_preserves_known_ownership(harness):
+    client, _, *_ = harness
+    cv, chat, provider = start(harness)
+    provider.evaluation = evaluate
+    chat = send(client, chat, 'I built the Python API with guidance.')
+    before = client.get('/api/v1/cv/'+cv['id']).json()
+    def outcome(context):
+        active = context['active_question']
+        assert active['uncertainty'] == 'claim'
+        return {'intent': 'answer', 'reply': 'Captured the result.',
+            'actions': [{'kind': 'clarify', 'item_id': active['item_id'], 'question_id': active['id'], 'excerpt': context['message']}],
+            'interpretations': [{'item_id': active['item_id'], 'resolution': 'resolved', 'claims': [],
+                'review_evidence': [fact('outcome', context['message'], 'Released the reporting API')],
+                'resolved_uncertainties': ['claim'], 'remaining_uncertainties': []}]}
+    provider.evaluation = outcome
+    chat = send(client, chat, 'We released the reporting API.')
+    after = client.get('/api/v1/cv/'+cv['id']).json()
+    source = chat['active_question']['item_id']
+    previous = next(i for i in before['items'] if i['id'] == source)
+    current = next(i for i in after['items'] if i['id'] == source)
+    assert current['skill_claims'] == previous['skill_claims']
+    assert next(f for f in current['review_evidence'] if f['field'] == 'personal_contribution')['value'] == 'Built the Python API'
+    assert next(f for f in current['review_evidence'] if f['field'] == 'outcome')['value'] == 'Released the reporting API'

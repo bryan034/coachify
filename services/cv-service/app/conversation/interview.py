@@ -151,13 +151,17 @@ class InterviewHarness:
             latest = service.get(owner, identifier)
             remaining = [action_in(latest, a) for a in ids if action_in(latest, a)['status'] != 'saved']
             if remaining:
-                if any(a['status'] in {'failed', 'stale'} for a in remaining):
-                    raise ValueError('Your answer is saved. Finish or retry the evidence action before continuing the interview.')
+                # Interpretation succeeded. Recovery belongs to each evidence
+                # action, not a duplicate failed routing card for the same turn.
+                notes = memory['notes']
+                memory = reconcile_memory(latest, service.cv.get(owner, latest['cv_id']))
+                memory['notes'] = notes
                 def waiting(current):
                     action_in(current, route['id'])['_interview_waiting'] = True
                 await run_in_threadpool(service.update, owner, identifier, waiting)
+                reply = 'Your answer is saved. Finish or retry the evidence action below before continuing.' if any(a['status'] in {'failed', 'stale'} for a in remaining) else result.reply
                 return await self.publish(account, identifier, route['id'], token, memory,
-                    result.reply, latest.get('active_question'), latest.get('interview_targets', []))
+                    reply, latest.get('active_question'), latest.get('interview_targets', []))
             conversation = latest
             document = service.cv.get(owner, conversation['cv_id'])
             notes = memory['notes']
@@ -228,7 +232,9 @@ class InterviewHarness:
             active, targets = conversation.get('active_question'), conversation.get('interview_targets', [])
         if active:
             from app.conversation.service import action_in
-            uncertainty = 'personal_contribution' if any(t['field'] == 'personal_contribution' for t in targets) else 'responsibility' if any(t['field'] == 'responsibilities' for t in targets) else 'claim'
+            # Interview targets carry field scope. Legacy attribution-wide questions
+            # would require reinterpreting every skill on an unrelated follow-up.
+            uncertainty = 'claim'
             question = {'id': active['id'], 'item_id': active['item_id'],
                 'kind': 'project' if context['focused_source']['kind'] == 'project' else 'work' if context['focused_source']['kind'] == 'experience' else 'other',
                 'question': active['question'], 'uncertainty': uncertainty,

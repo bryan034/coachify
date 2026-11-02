@@ -95,7 +95,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
 
   const beforeReload = await readChat(account, cvId);
   await page.reload();
-  await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
+  // The full-page review URL restores the mounted chat directly.
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   const resumed = await readChat(account, cvId);
   expect(resumed.id).toBe(beforeReload.id); expect(resumed.messages).toEqual(beforeReload.messages);

@@ -196,7 +196,7 @@ def interview_fixture(value):
     if value['message'] in {'Stop here.', 'I want to stop now.'}:
         return {'intent': 'stop', 'reply': 'Paused.', 'actions': [], 'interpretations': []}
     active = value.get('active_question')
-    uncertainty = 'personal_contribution' if active and 'personal contribution' in active['question'] else 'responsibility' if active and 'responsibilities' in active['question'] else 'claim'
+    uncertainty = (active or {}).get('uncertainty', 'claim')
     routed = conversation_fixture({'message': value['message'], 'items': value['sources'],
         'questions': [{**active, 'uncertainty': uncertainty}] if active else [], 'active_question': active})
     interpretations = []
