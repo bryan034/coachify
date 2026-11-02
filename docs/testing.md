@@ -21,6 +21,12 @@ The goal-confirmation browser journey holds the concurrent workspace refresh whi
 checking the stale-revision guard, then releases it after the explicit reload.
 This preserves the guard assertions without racing the normal focus refresh.
 
+Full-stack CV chat journeys explicitly enter Review CV or Build through chat from
+the Skills Profile summary. The synthetic provider serves guided questions, manual
+intake and a finite set of labelled semantic-evidence verdicts; unsupported claims
+and unrelated source blocks are rejected. Manual intake stays a draft until Save
+profile publishes it, and outage/retry checks retain the original saved turn.
+
 ## Local commands
 
 Use Node.js 24 and Python 3.12. From the root:

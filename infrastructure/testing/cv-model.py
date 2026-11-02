@@ -28,10 +28,10 @@ def conversation_fixture(value):
         return {'reply': 'I will update the explanation for Team dashboard.', 'actions': [action]}
     if message == CHAT_PARTIAL_FAILURE:
         work = next(item for item in items if item.get('kind') == 'experience')
-        work_question = next(question for question in value.get('questions', []) if question.get('item_id') == work['id'])
+        work_question = next((question for question in value.get('questions', []) if question.get('item_id') == work['id']), None)
         return {'reply': 'These statements concern the project and the internship separately.', 'actions': [
             {**action, 'excerpt': CHAT_MIXED_ANSWER},
-            {'kind': 'clarify', 'item_id': work['id'], 'question_id': work_question['id'],
+            {'kind': 'clarify', 'item_id': work['id'], 'question_id': work_question['id'] if work_question else None,
              'excerpt': 'I cannot clarify my internship yet. SYNTHETIC_SECOND_ACTION_FAILURE'}]}
     if message == CHAT_CORRECTION:
         if not project or not question: raise ValueError('The synthetic project question must exist')
@@ -128,6 +128,54 @@ def interpret_fixture(value):
             'resolved_uncertainties': resolved, 'remaining_uncertainties': remaining}
 
 
+def semantic_fixture(value):
+    """Approve only reviewed text/claim pairs, never arbitrary model output."""
+    labelled_answers = [CHAT_MIXED_ANSWER, CHAT_EXTRA_CONTEXT,
+        "I wrote the SQL queries. A teammate built the Python application, with guidance from our tutor.",
+        "I wrote the Python loader for six months with my tutor's help. My teammate wrote SQL."]
+    approved = set()
+    for answer in labelled_answers:
+        result = interpret_fixture({'source_item': {'id': 'fixture', 'title': 'Team dashboard',
+            'skill_ids': ['skill:python', 'skill:sql']}, 'question': {'uncertainty': 'claim'},
+            'answer': answer, 'answer_revision': 1})
+        for claim in result['claims']:
+            if not claim['evidence_excerpt']: continue
+            for field in claim['changed_fields']:
+                item = claim.get(field)
+                if field == 'experience_months' or item in (None, 'unknown'): continue
+                statement = (f"For {claim['name']}, attribution is {item}. Personal means the user actually performed it; team means teammates only; observed means watching only; denied means explicitly not personally performed."
+                    if field == 'attribution' else f"For the user's {claim['name']} work, {field} is {item}.")
+                approved.add((claim['evidence_excerpt'], statement))
+    for name, text in [('Figma', 'I use Figma to make posters for my student society.'),
+                       ('Python', 'I also practise Python in weekly synthetic exercises.')]:
+        approved.add((text, f'The user personally performed {name}: {text}'))
+    manual = 'I use Figma to make posters for my student society.'
+    approved.add((manual, 'Experience title: Student society posters'))
+    approved.add((manual, 'In experience Student society posters, the user personally performed Figma: ' + manual))
+    blocks = {block['id']: block['text'] for block in value['source_blocks']}
+    return {'supported': [ref['index'] for ref in value['summaries']
+        if (blocks.get(ref['block_id']), ref['excerpt']) in approved]}
+
+
+def intake_fixture(value):
+    message = value['message']
+    if message == 'SYNTHETIC_CHAT_PROVIDER_FAILURE':
+        raise RuntimeError('Deliberate synthetic chat outage')
+    if message != 'I use Figma to make posters for my student society.':
+        raise ValueError('Unknown synthetic intake message')
+    return {'reply': 'Your poster experience is ready to review.', 'entries': [{
+        'id': None, 'kind': 'project', 'title': 'Student society posters', 'title_evidence': message,
+        'skills': [{'name': 'Figma', 'description': message,
+                    'evidence': [{'message_id': value['message_id'], 'quote': message}]}]}]}
+
+
+def review_question_fixture(value):
+    target = value['target']
+    if target.get('source_title') not in {'Team dashboard', 'Synthetic reporting internship', 'Python', 'SQL', 'Synthetic University'}:
+        raise ValueError('Unknown synthetic review source')
+    return {'reply': f"What can you share about {target['field']} in {target['source_title']}? Unknown is fine.", 'actions': []}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass
@@ -151,6 +199,16 @@ class Handler(BaseHTTPRequestHandler):
             if request.get('model') != 'synthetic-integration-fixture':
                 return self.send_json(422, {'error': 'Only the synthetic fixture model is accepted'})
             value = json.loads(request['messages'][-1]['content'])
+            if value.get('task') in {'skills_intake', 'skills_question'}:
+                try:
+                    result = intake_fixture(value) if value['task'] == 'skills_intake' else {
+                        'reply': 'What can you share about your ' + (value['target'].get('field') or value['target']['area']) + '? Unknown is fine.', 'actions': []}
+                except RuntimeError:
+                    return self.send_json(503, {'error': 'Deliberate synthetic outage'})
+                return self.send_json(200, {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(result)}}]})
+            if 'summaries' in value or value.get('task') == 'cv_review_question':
+                result = semantic_fixture(value) if 'summaries' in value else review_question_fixture(value)
+                return self.send_json(200, {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(result)}}]})
             if value.get('task') == 'cv_conversation' or 'source_item' in value:
                 try: result = conversation_fixture(value) if value.get('task') == 'cv_conversation' else interpret_fixture(value)
                 except RuntimeError:
