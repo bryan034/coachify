@@ -13,6 +13,41 @@ const emptyConversation:CvConversation={id:'conversation',cv_id:null,revision:1,
 function renderWorkspace(){const view=render(<ResumePreview/>);fireEvent.click(screen.getByText('CV files',{selector:'summary span'}));fireEvent.click(screen.getByText('Your CV summary',{selector:'summary span'}));return view;}
 beforeEach(()=>{vi.clearAllMocks();vi.mocked(cvApi.openConversation).mockImplementation(async body=>({...emptyConversation,cv_id:body.cv_id}));session.token='synthetic-session';session.account={id:'owner-a'};vi.mocked(cvApi.policy).mockResolvedValue(policy);vi.mocked(cvApi.list).mockResolvedValue({cvs:[],selection:{cv_id:null,version:0}});vi.mocked(cvApi.declarations).mockResolvedValue(emptyDeclarations);vi.mocked(cvApi.questions).mockResolvedValue(clarificationState(savedCv()));vi.mocked(cvApi.get).mockImplementation(async id=>savedCv(id));});
 describe('saved CV workspace',()=>{
+ it('deletes the confirmed selected CV and clears its review while retaining other files and manual capabilities',async()=>{
+  const first=savedCv('cv-one'),second=savedCv('cv-two');let deleted=false;
+  vi.mocked(cvApi.list).mockImplementation(async()=>({cvs:deleted?[second]:[first,second],selection:{cv_id:deleted?null:first.id,version:deleted?2:1}}));
+  vi.mocked(cvApi.delete).mockImplementation(async()=>{deleted=true;return {cv_id:first.id,deleted:true,selection:{cv_id:null,version:2}};});
+  const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);
+  try{
+   renderWorkspace();const row=await screen.findByLabelText('CV cv-one');await screen.findByRole('heading',{name:'Team dashboard'});
+   fireEvent.click(within(row).getByRole('button',{name:'Delete CV'}));
+   await waitFor(()=>expect(screen.queryByLabelText('CV cv-one')).not.toBeInTheDocument());
+   expect(screen.getByLabelText('CV cv-two')).toBeVisible();expect(screen.getByLabelText('Selected CV')).toHaveTextContent('No CV selected');
+   expect(cvApi.delete).toHaveBeenCalledWith(first.id,expect.objectContaining({expected_version:first.version,mutation_id:expect.any(String)}),'synthetic-session',expect.any(AbortSignal));
+   expect(confirm).toHaveBeenCalledWith(expect.stringContaining('CV cv-one'));
+   expect(screen.getByRole('textbox',{name:'Capability name'})).toBeEnabled();expect(cvApi.select).not.toHaveBeenCalled();
+   await waitFor(()=>expect(cvApi.openConversation).toHaveBeenLastCalledWith(expect.objectContaining({cv_id:null}),expect.any(String),expect.any(AbortSignal)));
+  }finally{confirm.mockRestore();}
+ });
+ it('does not delete when confirmation is cancelled',async()=>{
+  const cv=savedCv();vi.mocked(cvApi.list).mockResolvedValue({cvs:[cv],selection:{cv_id:null,version:0}});
+  const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+  try{renderWorkspace();fireEvent.click(within(await screen.findByLabelText(`CV ${cv.id}`)).getByRole('button',{name:'Delete CV'}));expect(cvApi.delete).not.toHaveBeenCalled();expect(screen.getByLabelText(`CV ${cv.id}`)).toBeVisible();}finally{confirm.mockRestore();}
+ });
+ it('retains a deletion request identity after an interrupted response',async()=>{
+  const cv=savedCv();let deleted=false;
+  vi.mocked(cvApi.list).mockImplementation(async()=>({cvs:deleted?[]:[cv],selection:{cv_id:null,version:0}}));
+  vi.mocked(cvApi.delete).mockRejectedValueOnce(new Error('Deletion response interrupted.')).mockImplementationOnce(async()=>{deleted=true;return {cv_id:cv.id,deleted:true,selection:{cv_id:null,version:0}};});
+  const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);
+  try{renderWorkspace();fireEvent.click(within(await screen.findByLabelText(`CV ${cv.id}`)).getByRole('button',{name:'Delete CV'}));await screen.findByRole('alert');fireEvent.click(within(screen.getByLabelText(`CV ${cv.id}`)).getByRole('button',{name:'Delete CV'}));await waitFor(()=>expect(cvApi.delete).toHaveBeenCalledTimes(2));expect(vi.mocked(cvApi.delete).mock.calls[0][1]).toEqual(vi.mocked(cvApi.delete).mock.calls[1][1]);await screen.findByRole('heading',{name:'No saved CV yet'});}finally{confirm.mockRestore();}
+ });
+ it('refreshes a stale CV before another confirmed deletion attempt',async()=>{
+  const cv=savedCv();let changed=false;
+  vi.mocked(cvApi.list).mockImplementation(async()=>({cvs:[{...cv,version:changed?cv.version+1:cv.version}],selection:{cv_id:null,version:0}}));
+  vi.mocked(cvApi.delete).mockImplementation(async()=>{changed=true;throw new CvApiError('This CV changed; review it again.',409);});
+  const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);
+  try{renderWorkspace();fireEvent.click(within(await screen.findByLabelText(`CV ${cv.id}`)).getByRole('button',{name:'Delete CV'}));await screen.findByRole('alert');await waitFor(()=>expect(within(screen.getByLabelText(`CV ${cv.id}`)).getByRole('button',{name:'Delete CV'})).toBeEnabled());fireEvent.click(within(screen.getByLabelText(`CV ${cv.id}`)).getByRole('button',{name:'Delete CV'}));await waitFor(()=>expect(cvApi.delete).toHaveBeenCalledTimes(2));expect(vi.mocked(cvApi.delete).mock.calls[1][1].expected_version).toBe(cv.version+1);}finally{confirm.mockRestore();}
+ });
  it('opens a selected CV outside page one and keeps loaded pages and drafts through retry and refresh',async()=>{
   const recent=savedCv('recent-cv'),older=savedCv('older-cv');recent.file_name='recent.pdf';older.file_name='selected-older.pdf';let fail=true;
   vi.mocked(cvApi.list).mockImplementation(async(_token,_signal,cursor)=>{

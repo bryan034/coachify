@@ -6,6 +6,29 @@ const signal=()=>new AbortController().signal;
 afterEach(()=>vi.unstubAllGlobals());
 function response(value:unknown,status=200){vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}})));}
 describe('CV service boundary',()=>{
+ it('deletes only the identified CV using authenticated versioned input and validates the acknowledgement',async()=>{
+  const body={expected_version:3,mutation_id:'synthetic-deletion'};const result={cv_id:'cv/id',deleted:true,selection:{cv_id:null,version:2}};
+  response(result);expect(await cvApi.delete('cv/id',body,'token',signal())).toEqual(result);
+  expect(fetch).toHaveBeenCalledWith('/api/v1/cv/cv%2Fid',expect.objectContaining({method:'DELETE',body:JSON.stringify(body),headers:{Authorization:'Bearer token','Content-Type':'application/json'},cache:'no-store'}));
+  response({...result,cv_id:'another-cv'});await expect(cvApi.delete('cv/id',body,'token',signal())).rejects.toThrow('incomplete response');
+  response({...result,deleted:false});await expect(cvApi.delete('cv/id',body,'token',signal())).rejects.toThrow('incomplete response');
+ });
+ it('preserves extraction diagnostics and accepts errors saved before diagnostics existed',async()=>{
+  const cv=savedCv();
+  const error={code:'extraction_failed',message:'Retry this saved upload.',retryable:true,failure_stage:'model_request',failure_category:'provider_http_error',provider_status_code:401,provider_reason:'authentication_failed',provider_parameter:null};
+  response({...cv,status:'failed',error});expect((await cvApi.get(cv.id,'token',signal())).error).toEqual(error);
+  response({...cv,status:'failed',error:{code:error.code,message:error.message,retryable:true}});expect((await cvApi.get(cv.id,'token',signal())).error?.failure_stage).toBeUndefined();
+  response({...cv,status:'failed',error:{...error,provider_status_code:999}});await expect(cvApi.get(cv.id,'token',signal())).rejects.toThrow('incomplete response');
+  response({...cv,status:'failed',error:{...error,failure_category:{unsafe:'value'}}});await expect(cvApi.get(cv.id,'token',signal())).rejects.toThrow('incomplete response');
+  response({...cv,status:'failed',error:{...error,repair_attempted:true}});expect((await cvApi.get(cv.id,'token',signal())).error?.repair_attempted).toBe(true);
+  response({...cv,status:'failed',error:{...error,repair_attempted:'yes'}});await expect(cvApi.get(cv.id,'token',signal())).rejects.toThrow('incomplete response');
+  response({...cv,status:'failed',error:{...error,provider_reason:{unsafe:'value'}}});await expect(cvApi.get(cv.id,'token',signal())).rejects.toThrow('incomplete response');
+ });
+ it('preserves extraction harness metadata and rejects impossible repair counts',async()=>{
+  const cv=savedCv();const extraction={provider:'synthetic',model:'fixture',prompt_version:'cv-extraction-4',schema_version:'2',response_mode:'json_schema',workflow_version:'cv-extraction-1',repair_attempts:1};
+  response({...cv,extraction});expect((await cvApi.get(cv.id,'token',signal())).extraction).toEqual(extraction);
+  response({...cv,extraction:{...extraction,repair_attempts:2}});await expect(cvApi.get(cv.id,'token',signal())).rejects.toThrow('incomplete response');
+ });
  it('encodes saved-CV cursors, bounds page size and accepts older unpaged responses',async()=>{
   const page={cvs:[savedCv()],selection:{cv_id:null,version:0},next_cursor:'next-page'};
   response(page);expect((await cvApi.list('token',signal(),'opaque+/=')).next_cursor).toBe('next-page');expect(fetch).toHaveBeenCalledWith('/api/v1/cv?cursor=opaque%2B%2F%3D',expect.any(Object));

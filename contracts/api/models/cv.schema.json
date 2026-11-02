@@ -509,6 +509,131 @@
         "retryable": {
           "title": "Retryable",
           "type": "boolean"
+        },
+        "failure_stage": {
+          "anyOf": [
+            {
+              "enum": [
+                "source_read",
+                "document_parse",
+                "model_request",
+                "model_repair",
+                "response_decode",
+                "content_decode",
+                "extraction_validation",
+                "publication"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Stage"
+        },
+        "failure_category": {
+          "anyOf": [
+            {
+              "enum": [
+                "source_unavailable",
+                "invalid_document",
+                "not_configured",
+                "model_admission",
+                "provider_http_error",
+                "timeout",
+                "connection_error",
+                "transport_error",
+                "response_too_large",
+                "invalid_json",
+                "invalid_response",
+                "incomplete_output",
+                "schema_validation",
+                "evidence_validation",
+                "unexpected_error",
+                "history_capacity",
+                "source_changed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Category"
+        },
+        "provider_status_code": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Status Code"
+        },
+        "repair_attempted": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repair Attempted"
+        },
+        "provider_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "schema_too_complex",
+                "schema_rejected",
+                "structured_output_unsupported",
+                "unsupported_parameter",
+                "invalid_request",
+                "authentication_failed",
+                "permission_denied",
+                "not_found",
+                "rate_limit_or_quota",
+                "provider_unavailable",
+                "http_error"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Reason"
+        },
+        "provider_parameter": {
+          "anyOf": [
+            {
+              "enum": [
+                "response_format",
+                "schema",
+                "model",
+                "reasoning_effort",
+                "temperature",
+                "max_tokens",
+                "messages"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Parameter"
         }
       },
       "required": [
@@ -559,6 +684,48 @@
         "schema_version": {
           "title": "Schema Version",
           "type": "string"
+        },
+        "response_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "json_schema",
+                "json_object"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Mode"
+        },
+        "workflow_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Version"
+        },
+        "repair_attempts": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repair Attempts"
         }
       },
       "required": [

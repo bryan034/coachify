@@ -12,7 +12,8 @@ from app.repositories.model_usage import ModelUsageStore, MemoryModelUsageStore
 SUMMARY_FIELDS = {'_id': 1, 'file_name': 1, 'file_type': 1, 'operation': 1,
     'version': 1, 'extraction_version': 1, 'effective_version': 1, 'profile_version': 1,
     'created_at': 1, 'updated_at': 1, 'original_available': 1}
-CAPACITY_FIELDS = {'_id': 1, 'user_id': 1, 'original_available': 1, 'storage_generation': 1}
+CAPACITY_FIELDS = {'_id': 1, 'user_id': 1, 'original_available': 1, 'storage_generation': 1, 'deletion': 1}
+VISIBLE = {'deletion': {'$exists': False}}
 
 
 class CvRepository:
@@ -34,30 +35,34 @@ class CvRepository:
             return deepcopy(document)
         except DuplicateKeyError:
             previous = self.by_upload_key(document['user_id'], document['upload_key'])
+            if previous and previous.get('deletion'): raise Conflict('This upload was deleted. Start a new upload with a new request identity.')
             if previous and previous['upload_fingerprint'] == document['upload_fingerprint']: return previous
             raise Conflict('This upload key was already used for a different file.')
 
     def get(self, owner, identifier):
+        return self.collection.find_one({'_id': identifier, 'user_id': owner, **VISIBLE})
+
+    def get_for_deletion(self, owner, identifier):
         return self.collection.find_one({'_id': identifier, 'user_id': owner})
 
     def by_upload_key(self, owner, key):
         return self.collection.find_one({'user_id': owner, 'upload_key': key})
 
     def by_operation(self, owner, identifier):
-        return self.collection.find_one({'user_id': owner, 'operation.id': identifier})
+        return self.collection.find_one({'user_id': owner, 'operation.id': identifier, **VISIBLE})
 
     def list(self, owner):
-        return list(self.collection.find({'user_id': owner}).sort('created_at', -1))
+        return list(self.collection.find({'user_id': owner, **VISIBLE}).sort('created_at', -1))
 
     def page(self, owner, limit, after=None):
-        query = {'user_id': owner}
+        query = {'user_id': owner, **VISIBLE}
         if after:
             timestamp, identifier = after
             query['$or'] = [{'created_at': {'$lt': timestamp}}, {'created_at': timestamp, '_id': {'$lt': identifier}}]
         return list(self.collection.find(query, SUMMARY_FIELDS).sort([('created_at', -1), ('_id', -1)]).limit(limit + 1))
 
     def capacity_records(self, limit):
-        return self.collection.find({}, CAPACITY_FIELDS).limit(limit)
+        return self.collection.find({'deletion.state': {'$ne': 'complete'}}, CAPACITY_FIELDS).limit(limit)
 
     def capacity_record(self, identifier):
         return self.collection.find_one({'_id': identifier}, CAPACITY_FIELDS)
@@ -82,6 +87,15 @@ class CvRepository:
 
     def tracked_paths(self):
         return {doc['_id'] for doc in self.collection.find({'original_available': True}, {'_id': 1})}
+
+    def deletions(self, after=None):
+        query = {'deletion.state': 'pending'}
+        if after is not None: query['_id'] = {'$gt': after}
+        return list(self.collection.find(query, {'_id': 1, 'user_id': 1}).sort('_id', 1).limit(10))
+
+    def clear_selection(self, owner, identifier):
+        self.selections.update_one({'_id': owner, 'selected_cv_id': identifier},
+            {'$set': {'selected_cv_id': None}, '$inc': {'version': 1, 'revision': 1}})
 
     def selection(self, owner):
         return self.selections.find_one({'_id': owner}) or {'_id': owner, 'selected_cv_id': None, 'version': 0, 'revision': 0, 'receipts': {}}
@@ -108,6 +122,7 @@ class MemoryCvRepository:
         with self.lock:
             previous = self.by_upload_key(document['user_id'], document['upload_key'])
             if previous:
+                if previous.get('deletion'): raise Conflict('This upload was deleted. Start a new upload with a new request identity.')
                 if previous['upload_fingerprint'] != document['upload_fingerprint']:
                     raise Conflict('This upload key was already used for a different file.')
                 return previous
@@ -117,22 +132,29 @@ class MemoryCvRepository:
     def get(self, owner, identifier):
         with self.lock:
             doc = self.documents.get(identifier)
+            return deepcopy(doc) if doc and doc['user_id'] == owner and not doc.get('deletion') else None
+
+    def get_for_deletion(self, owner, identifier):
+        with self.lock:
+            doc = self.documents.get(identifier)
             return deepcopy(doc) if doc and doc['user_id'] == owner else None
 
     def by_upload_key(self, owner, key):
-        return next((doc for doc in self.list(owner) if doc['upload_key'] == key), None)
+        with self.lock:
+            return next((deepcopy(doc) for doc in self.documents.values()
+                if doc['user_id'] == owner and doc['upload_key'] == key), None)
 
     def by_operation(self, owner, identifier):
         return next((doc for doc in self.list(owner) if doc['operation']['id'] == identifier), None)
 
     def list(self, owner):
         with self.lock:
-            return sorted([deepcopy(doc) for doc in self.documents.values() if doc['user_id'] == owner],
+            return sorted([deepcopy(doc) for doc in self.documents.values() if doc['user_id'] == owner and not doc.get('deletion')],
                           key=lambda doc: doc['created_at'], reverse=True)
 
     def page(self, owner, limit, after=None):
         with self.lock:
-            records = [doc for doc in self.documents.values() if doc['user_id'] == owner
+            records = [doc for doc in self.documents.values() if doc['user_id'] == owner and not doc.get('deletion')
                 and (after is None or (doc['created_at'], doc['_id']) < after)]
             records.sort(key=lambda doc: (doc['created_at'], doc['_id']), reverse=True)
             return [{key: deepcopy(doc[key]) for key in SUMMARY_FIELDS if key in doc} for doc in records[:limit + 1]]
@@ -140,7 +162,7 @@ class MemoryCvRepository:
     def capacity_records(self, limit):
         with self.lock:
             return [{key: deepcopy(doc[key]) for key in CAPACITY_FIELDS if key in doc}
-                for doc in list(self.documents.values())[:limit]]
+                for doc in self.documents.values() if doc.get('deletion', {}).get('state') != 'complete'][:limit]
 
     def capacity_record(self, identifier):
         with self.lock:
@@ -149,7 +171,7 @@ class MemoryCvRepository:
 
     def replace(self, previous, document):
         with self.lock:
-            current = self.get(previous['user_id'], previous['_id'])
+            current = self.get_for_deletion(previous['user_id'], previous['_id'])
             if not current or current['revision'] != previous['revision']: raise Conflict()
             self.documents[document['_id']] = deepcopy(document)
             return deepcopy(document)
@@ -169,6 +191,19 @@ class MemoryCvRepository:
 
     def tracked_paths(self):
         with self.lock: return {doc['_id'] for doc in self.documents.values() if doc['original_available']}
+
+    def deletions(self, after=None):
+        with self.lock:
+            return [{'_id': doc['_id'], 'user_id': doc['user_id']} for doc in sorted(self.documents.values(), key=lambda doc: doc['_id'])
+                if doc.get('deletion', {}).get('state') == 'pending' and (after is None or doc['_id'] > after)][:10]
+
+    def clear_selection(self, owner, identifier):
+        with self.lock:
+            previous = self.selections.get(owner)
+            if previous and previous['selected_cv_id'] == identifier:
+                previous['selected_cv_id'] = None
+                previous['version'] += 1
+                previous['revision'] = previous.get('revision', 0) + 1
 
     def selection(self, owner):
         with self.lock:

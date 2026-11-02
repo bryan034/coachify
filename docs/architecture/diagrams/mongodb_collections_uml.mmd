@@ -22,6 +22,8 @@ class cvs {
     +CvSkill[] skills
     +String processing_status [derived]
     +Integer extraction_version
+    +CvExtractionMetadata extraction?
+    +CvDeletionReceipt deletion? [content_free_tombstone]
     +Integer version
     +Integer effective_version
     +CvItem[] items
@@ -180,6 +182,7 @@ class cv_conversations {
 }
 
 class career_state {
+    +String active_discovery? [null when superseded by JD]
     <<operational>>
     +String _id [Profile_UUID]
     +ObjectId goal_id?
@@ -201,7 +204,7 @@ users "1" --> "0..*" cv_conversations : owns private retained history
 cv_conversations --> cvs : optional source reference
 users "1" --> "0..1" career_state : owns current goal metadata
 career_state --> career_goals : exact current goal reference
-note for cvs "CV-owned structured evidence, overlays, interpretation and history. UUID IDs and private temporary originals; public reads expose no path or owner metadata."
+note for cvs "CV-owned structured evidence, overlays, interpretation and history. UUID IDs and private temporary originals; public reads expose no path or owner metadata. Transient extraction/repair graph state is not checkpointed; only validated evidence and generation metadata persist. Deleted sources retain content-free receipts, excluded from reads and saved-record quota."
 note for cv_conversations "Nullable CV permits manual-only entry. Bounded messages/action receipts have separate transcript revisions; no automatic history expiry."
 note for career_state "Automatic goal saving is distinct from explicit CV confirmation. Stamp binds goal ID/version, selection revision and projection hash. Changes invalidate it without another goal record or deleting CV facts."
 note for career_goals "Older UUID reviewed-target documents remain retained history, excluded from canonical ObjectId reads. Canonical create_key metadata preserves the legacy uniqueness index; no destructive migration."

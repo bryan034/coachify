@@ -182,15 +182,22 @@ Only structured extraction and bounded evidence are saved in MongoDB.
 Configure `CV_LLM_MODEL` and `CV_LLM_API_KEY` yourself in private settings to enable structured extraction, text routing and clarification-answer interpretation.
 `CV_LLM_BASE_URL` defaults to
 `https://generativelanguage.googleapis.com/v1beta/openai`. The public template
-selects `gemini-3.5-flash-lite` through the OpenAI SDK with JSON object output;
-the server validates the schema and cited evidence before publication. Keys
-stay on the server. Missing configuration is an actionable processing error,
+selects `gemini-3.5-flash-lite` through the OpenAI SDK with schema-constrained
+extraction/repair (`CV_LLM_RESPONSE_MODE=json_schema`, the default). A transient
+LangGraph validates output and allows one repair before reporting failure.
+Chat and clarification interpretation retain JSON-object output. The server
+validates schema, string lengths, dates and cited evidence before publication;
+constrained decoding does not guarantee semantic correctness or provider-enforced
+string lengths. See the [CV harness](../services/cv-service/SPEC.md#extraction-runtime-harness).
+Keys stay on the server. Missing configuration is an actionable processing error,
 never a synthetic successful extraction. No provider calls are needed for
 automated tests. See [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai).
 
 For DeepSeek, use `CV_LLM_BASE_URL=https://api.deepseek.com`,
-`CV_LLM_MODEL=deepseek-flash` and your private `CV_LLM_API_KEY`.
-The CV adapter automatically sends `thinking: {type: disabled}` to the exact
+`CV_LLM_MODEL=deepseek-flash`, `CV_LLM_RESPONSE_MODE=json_object` and your private
+`CV_LLM_API_KEY`. This explicitly opts out of schema-constrained decoding for
+DeepSeek Chat Completions, which documents only JSON-object output. The CV adapter
+automatically sends `thinking: {type: disabled}` to the exact
 `api.deepseek.com` host for extraction, chat routing and answer interpretation.
 Other provider hosts do not receive this option; no extra environment flag is
 required. See [DeepSeek's API reference](https://api-docs.deepseek.com/api/create-chat-completion/).

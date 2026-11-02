@@ -23,7 +23,7 @@ node "Docker Compose — focused design" {
 
   package "Private backend network" {
     node "CV analyser\nservices/cv-service" as CV <<Docker container>> {
-      artifact "Saved upload/review and resumable text chat\nSource-linked clarification, correction and selection\n/api/v1/cv" as CVAPI
+      artifact "Saved upload/review/deletion and resumable text chat\nSource-linked clarification, correction and selection\nTransient LangGraph extraction + one validated repair\n/api/v1/cv" as CVAPI
     }
     node "Career goal and public research\nservices/career-service" as Career <<Docker container>> {
       artifact "Specific JD or conversational discovery\nOne canonical CareerGoal + explicit CV confirmation\nStructured skills and five-category Opportunity Intelligence\nScoped Q&A with projected MongoDB retrieval\n/api/v1/career" as CareerAPI
@@ -70,7 +70,7 @@ Career --> CareerDB : Own records only
 Assessment --> AssessmentDB : Own records only
 Roadmap --> RoadmapDB : Own records only
 CV --> Uploads : Temporary original access
-CV --> CVLLM : Bounded extraction, routing and interpretation
+CV --> CVLLM : Schema-constrained extraction/repair, bounded routing and interpretation
 Career --> LLM : Goal interpretation / scoped chat / cited research synthesis
 Career --> Sources : LangGraph parallel public research branches
 Assessment --> LLM : Service-scoped evidence interpretation
@@ -78,6 +78,7 @@ Roadmap --> LLM : Service-scoped adviser recommendations
 
 note bottom of Career
   One career_goals model: specific_job or career_exploration.
+  Discovery synthesis/refinements publish automatically with selection/conversation guards; no chat save action.
   CV acknowledgement binds the exact current goal/version/selection.
   Automatic goal saves do not silently confirm CV context.
   company may be null. Interview research is reusable public context;

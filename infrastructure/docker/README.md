@@ -28,6 +28,8 @@ values when retaining Gemini / Brave. Compose requires these canonical names; it
 longer relabels a legacy credential when providers change. Direct non-Compose
 processes still support each legacy alias only for its own provider and only when
 the canonical key is absent. An explicitly blank canonical key disables that credential. Each credential is injected into Career only, never the frontend or CV.
+CV extraction/repair defaults to schema-constrained decoding with `CV_LLM_RESPONSE_MODE=json_schema`. Rebuild the CV image to install its LangGraph runtime, then retry saved uploads. Only providers that support schema output should use this mode; DeepSeek Chat Completions requires explicitly setting `CV_LLM_RESPONSE_MODE=json_object` yourself, which opts out of constrained decoding. The runtime allows one validated repair within the existing worker lease and shared model budgets.
+
 CV keeps its independent `CV_LLM_API_KEY`; no service-specific `.env` file is needed
 for Compose. Fixed internal API URLs/database wiring and the CV volume path remain
 in Compose. Code-level constants and scaffold services do not gain unused variables.

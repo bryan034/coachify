@@ -1,4 +1,5 @@
 from elo_shared.skills import resolve, MAPPING_VERSION
+from app.domain.extraction_errors import FailureStage, FailureCategory, ProviderReason, ProviderParameter
 from typing import Annotated, Literal
 import calendar
 from datetime import date
@@ -312,6 +313,12 @@ class ErrorInfo(BaseModel):
     code: str
     message: str
     retryable: bool
+    failure_stage: FailureStage | None = None
+    failure_category: FailureCategory | None = None
+    provider_status_code: int | None = Field(default=None, ge=100, le=599)
+    repair_attempted: bool | None = None
+    provider_reason: ProviderReason | None = None
+    provider_parameter: ProviderParameter | None = None
 
 
 class ExtractionMetadata(BaseModel):
@@ -319,6 +326,9 @@ class ExtractionMetadata(BaseModel):
     model: str
     prompt_version: str
     schema_version: str
+    response_mode: Literal['json_schema', 'json_object'] | None = None
+    workflow_version: str | None = None
+    repair_attempts: int | None = Field(default=None, ge=0, le=1)
 
 
 class CvSummary(BaseModel):
@@ -352,6 +362,12 @@ class CvDetail(CvSummary):
 class Selection(BaseModel):
     cv_id: str | None
     version: int
+
+
+class CvDeletionResult(BaseModel):
+    cv_id: str
+    deleted: Literal[True]
+    selection: Selection
 
 
 class CvList(BaseModel):

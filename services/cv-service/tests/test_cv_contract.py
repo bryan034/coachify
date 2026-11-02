@@ -20,7 +20,36 @@ def test_authoritative_cv_schema_describes_the_public_saved_cv_response():
     value = CvDetail.model_validate(fixture())
     assert value.status == 'ready'
     assert value.skills[0].proficiency is None
+    assert value.extraction.repair_attempts is None and value.extraction.response_mode is None
     assert 'file_url' not in value.model_dump() and 'user_id' not in value.model_dump()
+
+
+def test_failure_diagnostics_openapi_matches_runtime(harness):
+    _, app, *_ = harness
+    artifact = Path(__file__).resolve().parents[3] / 'contracts/api/cv.yaml'
+    contract = json.loads(artifact.read_text())['components']['schemas']
+    for name in ('ErrorInfo', 'ExtractionMetadata'):
+        assert app.openapi()['components']['schemas'][name] == contract[name]
+
+
+def test_deletion_contract_matches_runtime(harness):
+    _, app, *_ = harness
+    artifact = Path(__file__).resolve().parents[3] / 'contracts/api/cv.yaml'
+    contract = json.loads(artifact.read_text())
+    runtime = app.openapi()
+    assert contract['paths']['/api/v1/cv/{cv_id}']['delete'] == runtime['paths']['/api/v1/cv/{cv_id}']['delete']
+    assert contract['components']['schemas']['CvDeletionResult'] == runtime['components']['schemas']['CvDeletionResult']
+
+
+def test_deletion_error_descriptions_are_stable_on_python_312(monkeypatch, harness):
+    from http import HTTPStatus
+    from app.main import create_app
+    monkeypatch.setattr(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, 'phrase', 'Request Entity Too Large')
+    monkeypatch.setattr(HTTPStatus.UNPROCESSABLE_ENTITY, 'phrase', 'Unprocessable Entity')
+    app = create_app(settings=harness[1].state.settings)
+    responses = app.openapi()['paths']['/api/v1/cv/{cv_id}']['delete']['responses']
+    assert responses['413']['description'] == 'Content Too Large'
+    assert responses['422']['description'] == 'Unprocessable Content'
 
 
 @pytest.mark.parametrize('changes', [

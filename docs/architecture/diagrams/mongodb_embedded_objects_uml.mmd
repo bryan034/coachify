@@ -150,6 +150,18 @@ class Generation {
     +Date generated_at
 }
 
+class CvExtractionMetadata {
+    +String provider
+    +String model
+    +String prompt_version
+    +String schema_version
+    +String response_mode? [json_schema|json_object]
+    +String workflow_version?
+    +Integer repair_attempts? [0|1]
+}
+
+cvs *-- CvExtractionMetadata : validated extraction provenance
+
 class InputVersions {
     +String cv_id [UUID_or_legacy_ObjectId]
     +Number cv_version
@@ -545,3 +557,11 @@ roadmaps *-- DailyAllocation
 %% Question research uses existing Finding/ResearchSource objects: exact public excerpt as value/quote,
 %% validated source IDs and low-confidence/general scope. Complex questions persist only cited
 %% passages from validated answers; public search subjects remain transient, outside these records.
+
+class CvDeletionReceipt {
+    +String state [pending|complete]
+    +String mutation_id
+    +Date at
+}
+cvs *-- CvDeletionReceipt : deletion control only
+note for CvDeletionReceipt "Pending/complete records contain no filename, CV facts, source hash or chat. Original upload key and identifiers remain on a minimal tombstone to fence replay."

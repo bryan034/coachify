@@ -56,3 +56,30 @@ Provider adapter tests exercise OpenAI SDK requests using explicit HTTP mocks,
 including host-scoped Gemini reasoning, DeepSeek extensions and local credential
 isolation. Shared transport tests cover bounded bodies, redirects and SDK retry
 suppression. No live provider credentials are used.
+
+Extraction-failure tests cover provider HTTP status, SDK connection/timeouts,
+stream transfer failures, response limits, invalid envelope/content JSON and
+incomplete output. Worker cases verify parsing, source, admission and validation
+categories, persisted polling/list diagnostics, private log boundaries and error
+clearing after a successful retry. All responses and documents are synthetic.
+Provider-rejection cases additionally cover fixed HTTP 400 schema/format/parameter
+reasons, quota/authentication recovery messages, malformed/oversized rejection
+bodies and exclusion of provider prose/arbitrary parameter names from saved API
+responses and logs. Requests are not automatically retried or downgraded.
+
+The real LangGraph harness is exercised with synthetic HTTP responses: first-pass
+success, overlong evidence/conflicting dates repaired once, schema/evidence failure
+after repair, repair-provider rejection, budget denial, short/expired/replaced
+leases and late publication fencing. Tests inspect strict schema requests and the
+explicit JSON-mode opt-out, bounded private feedback, tracing suppression, saved
+metadata and frontend compatibility. These validate runtime behavior, not a live
+provider's constrained-decoding implementation or extraction accuracy.
+
+Saved-source deletion tests exercise ready/queued/failed/expired CVs, ownership and
+stale versions, selected/other sources, late workers/edits, conversation removal,
+filesystem failure, lost tombstone acknowledgements, quota recovery, bootstrap and
+old-upload replay prevention on both repositories. UI/API tests verify explicit
+confirmation, review/selection reset, cancellation, interrupted-request identity,
+stale-version refresh and strict deletion acknowledgements.
+Deletion OpenAPI checks also simulate Python 3.12's older HTTP status phrases;
+the published 413/422 descriptions remain stable across supported runtimes.

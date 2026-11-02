@@ -32,7 +32,7 @@ class FakeExtractor:
     failure = None
     payload = None
 
-    def extract(self, blocks):
+    def extract(self, blocks, *, timeout_seconds=None):
         if self.failure: raise ValueError(self.failure)
         items = [{'kind': 'education', 'title': 'Example University', 'description': blocks[0]['text'],
                   'explicit': True, 'evidence': [{'block_id': blocks[0]['id'], 'excerpt': blocks[0]['text']}]}]
@@ -45,6 +45,11 @@ class FakeExtractor:
                 'evidence': [{'block_id': blocks[2]['id'], 'excerpt': blocks[2]['text']}],
                 'skill_names': ['SQL'], 'uncertainties': ['proficiency']})
         return deepcopy(self.payload or {'items': items}), {'provider': 'synthetic-test', 'model': 'fixture', 'prompt_version': '1', 'schema_version': '1'}
+
+    def repair(self, blocks, candidate, feedback, *, timeout_seconds=None):
+        # Deliberately preserve configured invalid responses so recovery cannot
+        # turn existing negative tests into synthetic successes.
+        return self.extract(blocks, timeout_seconds=timeout_seconds)
 
 
 class FakeTargets:

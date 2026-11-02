@@ -9,14 +9,18 @@ from app.domain.errors import Conflict, CvError
 from app.domain.service import detail, summary, selection_view
 from app.domain.pagination import decode_cursor, encode_cursor
 from app.schemas.cv import Mutation, SelectionMutation, ItemMutation, AnswerMutation, PrepareMutation
-from app.schemas.cv import CvDetail, CvList, Selection, QuestionEnvelope, CapabilityInput, Policy, ApiError, ConfirmedContext
+from app.schemas.cv import CvDetail, CvList, Selection, QuestionEnvelope, CapabilityInput, Policy, ApiError, ConfirmedContext, CvDeletionResult
 from app.clarification.service import answer, prepare, envelope, context_identity, retry_interpretation
 from app.domain import reconciliation
 from app.schemas.reconciliation import ReconcileMutation, ReconciliationView, CompareSourceMutation
 from app.schemas.handoff import AnalysisInput, SourceSnapshot, DeclarationLinks
 from app.domain.attachments import assess_links
 
-router = APIRouter(prefix='/api/v1/cv', responses={code: {'model': ApiError} for code in (401,403,404,409,413,415,422,503)})
+# Keep the published contract independent of Python 3.12/3.14 HTTPStatus phrases.
+ERROR_DESCRIPTIONS = {401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict',
+    413: 'Content Too Large', 415: 'Unsupported Media Type', 422: 'Unprocessable Content', 503: 'Service Unavailable'}
+router = APIRouter(prefix='/api/v1/cv', responses={code: {'model': ApiError, 'description': description}
+    for code, description in ERROR_DESCRIPTIONS.items()})
 
 
 async def authenticated(request: Request, credentials=Depends(bearer)):
@@ -107,6 +111,15 @@ async def select(mutation: SelectionMutation, request: Request, account=Depends(
 @router.get('/{cv_id}', response_model=CvDetail)
 async def read(cv_id: str, request: Request, account=Depends(authenticated)):
     return detail(await run_in_threadpool(service(request).get, account['id'], cv_id))
+
+
+@router.delete('/{cv_id}', response_model=CvDeletionResult)
+async def delete(cv_id: UUID, mutation: Mutation, request: Request, account=Depends(authenticated)):
+    try:
+        result = await run_in_threadpool(service(request).deletion.delete, account['id'], str(cv_id), mutation)
+    except OSError:
+        raise CvError('CV deletion cleanup is temporarily unavailable. Retry deletion; the source cannot be used once deletion starts.', 503) from None
+    return {**result, 'selection': selection_view(result['selection'])}
 
 
 @router.patch('/{cv_id}/items/{item_id}', response_model=CvDetail)

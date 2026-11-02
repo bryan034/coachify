@@ -1,16 +1,20 @@
 """Persisted leased work; fenced publication and cleanup survive process restarts."""
 import asyncio
 import logging
+import time
 from copy import deepcopy
 from uuid import UUID, uuid4
 from pydantic import ValidationError
-from app.domain.capabilities import validate_extraction, effective_fingerprint
+from app.domain.capabilities import effective_fingerprint
 from app.domain.errors import Conflict, CvError
 from app.domain.service import bump, now
 from app.domain.storage import UploadCapacity
-from app.domain.model_usage import ModelUsage
+from app.domain.model_usage import ModelUsage, ModelAdmissionError
+from app.domain.extraction_errors import ExtractionFailure, StaleExtraction
 from app.domain.reconciliation import candidate_for, affected_sources
 from app.parsing.process import isolated_parse
+from app.workflows.extraction import ExtractionHarness
+from app.domain.deletion import CvDeletion
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +53,14 @@ def _safe_uuid(value):
     except (ValueError, TypeError, AttributeError): return 'unknown'
 
 
-def _log_invalid_extraction(error, claimed):
+def _log_invalid_extraction(error, claimed, repair_attempted=False):
     errors = error.errors(include_input=False, include_context=False, include_url=False)
     summary = [(_diagnostic_path(entry.get('loc', ()), entry.get('type')),
                 entry.get('type') if entry.get('type') in _ERROR_TYPES else 'other')
                for entry in errors[:_MAX_DIAGNOSTIC_ERRORS]]
-    logger.warning('CV extraction schema invalid cv_id=%s operation_id=%s errors=%s truncated=%s',
+    logger.warning('CV extraction schema invalid cv_id=%s operation_id=%s errors=%s truncated=%s stage=extraction_validation category=schema_validation provider_status_code=None repair_attempted=%s',
                    _safe_uuid(claimed.get('_id')), _safe_uuid(claimed['operation'].get('id')),
-                   summary, len(errors) > _MAX_DIAGNOSTIC_ERRORS)
+                   summary, len(errors) > _MAX_DIAGNOSTIC_ERRORS, repair_attempted)
 
 
 class IngestionWorker:
@@ -65,6 +69,7 @@ class IngestionWorker:
         self.extractor, self.parser = extractor, parser
         self.capacity = capacity or UploadCapacity(repository, files, settings)
         self.model_usage = model_usage or ModelUsage(repository.model_usage, files.root, settings)
+        self.deletion = CvDeletion(repository, files, self.capacity)
         self.processing_cursor = None
         self.cleanup_cursor = None
 
@@ -86,28 +91,78 @@ class IngestionWorker:
 
     def process(self, claimed):
         token = claimed['operation']['lease_token']
+        stage = 'source_read'
+        harness = None
+        deadline = time.monotonic() + max(0, claimed['operation']['lease_until'] - now())
+
+        def observe(value):
+            nonlocal stage
+            stage = value
+
+        def remaining_time():
+            current = self.repository.get(claimed['user_id'], claimed['_id'])
+            if (not current or current['operation']['lease_token'] != token
+                    or current['operation']['status'] != 'processing'
+                    or current['operation']['lease_until'] <= now()):
+                raise StaleExtraction()
+            remaining = min(deadline - time.monotonic(), current['operation']['lease_until'] - now())
+            if remaining <= 10:
+                raise ExtractionFailure('CV extraction has insufficient processing time remaining. Your upload is saved; retry later.',
+                                        stage, 'timeout')
+            return remaining - 10  # Leave time for validation and fenced publication.
+
+        def call_model(blocks, candidate, feedback):
+            remaining_time()  # Deny stale work before reserving a provider attempt.
+            def invoke():
+                timeout = remaining_time()  # Revalidate after admission/concurrency I/O.
+                if feedback is not None:
+                    return self.extractor.repair(blocks, candidate, feedback, timeout_seconds=timeout)
+                return self.extractor.extract(blocks, timeout_seconds=timeout)
+            return self.model_usage.run(claimed['user_id'], invoke,
+                configured=getattr(self.extractor, 'configured', True))
+
         try:
+            remaining_time()
             if not claimed['original_available'] or not self.files.exists(claimed['_id']):
                 raise ValueError('The private original has expired. Reupload the same file to preserve its corrections.')
-            parsed = self.parser(self.files.read(claimed['_id']), '.' + claimed['file_type'], self.settings.max_file_bytes)
-            output, metadata = self.model_usage.run(claimed['user_id'], self.extractor.extract, parsed['blocks'],
-                configured=getattr(self.extractor, 'configured', True))
-            try:
-                items = validate_extraction(output, parsed['blocks'], claimed['_id'])
-            except ValidationError as exc:
-                _log_invalid_extraction(exc, claimed)
-                raise
+            original = self.files.read(claimed['_id'])
+            harness = ExtractionHarness(claimed['_id'],
+                lambda data: self.parser(data, '.' + claimed['file_type'], self.settings.max_file_bytes),
+                call_model, observe)
+            result = harness.run(original)
+            parsed, items, metadata = result['parsed'], result['items'], result['metadata']
             error = None
-        except ValidationError:
+        except StaleExtraction:
+            return False
+        except ValidationError as exc:
+            _log_invalid_extraction(exc, claimed, bool(harness and harness.repair_attempted))
             items, metadata, parsed = None, None, {}
-            error = {'code': 'invalid_extraction', 'message': 'The model returned an invalid extraction. Retry this saved upload.', 'retryable': True}
+            error = {'code': 'invalid_extraction', 'message': 'The model returned an invalid extraction. Retry this saved upload.', 'retryable': True,
+                     'failure_stage': stage, 'failure_category': 'schema_validation'}
+        except ExtractionFailure as exc:
+            items, metadata, parsed = None, None, {}
+            error = {'code': 'extraction_failed', 'message': str(exc), 'retryable': True,
+                     'failure_stage': 'model_repair' if stage == 'model_repair' and exc.stage == 'model_request' else exc.stage,
+                     'failure_category': exc.category,
+                     'provider_status_code': exc.provider_status_code,
+                     'provider_reason': exc.provider_reason, 'provider_parameter': exc.provider_parameter}
+        except ModelAdmissionError as exc:
+            items, metadata, parsed = None, None, {}
+            error = {'code': 'extraction_failed', 'message': str(exc), 'retryable': True,
+                     'failure_stage': stage, 'failure_category': 'model_admission'}
         except ValueError as exc:
             items, metadata, parsed = None, None, {}
             message = str(exc)
-            error = {'code': 'extraction_failed', 'message': message if len(message) <= 500 else 'CV extraction failed. Retry this saved upload.', 'retryable': True}
+            category = {'source_read': 'source_unavailable', 'document_parse': 'invalid_document',
+                        'extraction_validation': 'evidence_validation'}.get(stage, 'unexpected_error')
+            error = {'code': 'extraction_failed', 'message': message if len(message) <= 500 else 'CV extraction failed. Retry this saved upload.', 'retryable': True,
+                     'failure_stage': stage, 'failure_category': category}
         except Exception:
             items, metadata, parsed = None, None, {}
-            error = {'code': 'processing_failed', 'message': 'CV processing failed. Saved inputs are safe; retry this upload.', 'retryable': True}
+            error = {'code': 'processing_failed', 'message': 'CV processing failed. Saved inputs are safe; retry this upload.', 'retryable': True,
+                     'failure_stage': stage, 'failure_category': 'unexpected_error'}
+        repair_attempted = bool(harness and harness.repair_attempted)
+        if error: error['repair_attempted'] = repair_attempted
         # Re-read to apply retained overlays; only the currently live lease can publish.
         current = self.repository.get(claimed['user_id'], claimed['_id'])
         if not current or current['operation']['lease_token'] != token or current['operation']['status'] != 'processing' or current['operation']['lease_until'] <= now():
@@ -122,7 +177,8 @@ class IngestionWorker:
                 document['candidate'] = candidate_for(document, items, metadata, parsed.get('notices', []))
                 document['reconciliation'] = [{'item_id': identifier, 'reason': 'Source interpretation changed. Compare the preserved result and candidate before accepting it.'}
                     for identifier in affected]
-                error = {'code': 'reconciliation_required', 'message': 'Reprocessing changed source identities. Your previous result is preserved. Review the saved comparison to continue.', 'retryable': False}
+                error = {'code': 'reconciliation_required', 'message': 'Reprocessing changed source identities. Your previous result is preserved. Review the saved comparison to continue.', 'retryable': False,
+                         'failure_stage': 'publication', 'failure_category': 'source_changed', 'repair_attempted': repair_attempted}
             else:
                 before = effective_fingerprint(document)
                 if document['original_items']:
@@ -143,8 +199,16 @@ class IngestionWorker:
         except CvError:
             document = deepcopy(current)
             document['operation'].update(status='failed', lease_token=None, lease_until=0,
-                error={'code': 'history_capacity', 'message': 'The extracted result exceeds this CV’s saved history capacity. Previous evidence is safe; keep this source for history and upload a new CV.', 'retryable': False})
+                error={'code': 'history_capacity', 'message': 'The extracted result exceeds this CV’s saved history capacity. Previous evidence is safe; keep this source for history and upload a new CV.', 'retryable': False,
+                       'failure_stage': 'publication', 'failure_category': 'history_capacity', 'repair_attempted': repair_attempted})
             bump(document, operational=True)
+        failure = document['operation'].get('error')
+        if failure and failure.get('failure_category') != 'schema_validation':
+            # Never log exception strings, prompts, provider bodies, URLs or CV text.
+            logger.warning('CV extraction failed cv_id=%s operation_id=%s stage=%s category=%s provider_status_code=%s repair_attempted=%s provider_reason=%s provider_parameter=%s',
+                _safe_uuid(claimed.get('_id')), _safe_uuid(claimed['operation'].get('id')),
+                failure.get('failure_stage'), failure.get('failure_category'), failure.get('provider_status_code'), repair_attempted,
+                failure.get('provider_reason'), failure.get('provider_parameter'))
         try:
             self.repository.replace(current, document)
             return True
@@ -189,6 +253,7 @@ class IngestionWorker:
         self.capacity.cleanup_orphans(timestamp - 3600)
 
     def run_once(self):
+        self.deletion.recover()
         self.capacity.recover()
         candidates = self.repository.candidates(now(), after=self.processing_cursor)
         if not candidates and self.processing_cursor is not None:

@@ -110,6 +110,7 @@ class ConversationService:
     def get(self, owner, identifier):
         document = self.repository.get(owner, identifier)
         if document is None: raise Missing()
+        if document['cv_id']: self.cv.get(owner, document['cv_id'])
         return document
 
     def update(self, owner, identifier, transform):
@@ -129,6 +130,12 @@ class ConversationService:
         raise Conflict('The conversation is receiving another update. Refresh and retry your saved draft.')
 
     def start(self, owner, mutation):
+        if not mutation.cv_id: return self._start(owner, mutation)
+        self.cv.get(owner, mutation.cv_id)
+        with self.cv.files.lock(mutation.cv_id):
+            return self._start(owner, mutation)
+
+    def _start(self, owner, mutation):
         if mutation.cv_id: self.cv.get(owner, mutation.cv_id)
         previous = self.repository.latest(owner, mutation.cv_id)
         if previous and not at_capacity(previous): return previous
