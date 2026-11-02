@@ -233,3 +233,18 @@ it('warns again when a saved review belongs to an older effective CV version',as
  const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
  try{renderWorkspace();fireEvent.click(within(await screen.findByLabelText(`CV ${source.id}`)).getByRole('button',{name:'Set as active baseline'}));expect(confirm).toHaveBeenCalledTimes(1);expect(cvApi.select).not.toHaveBeenCalled();}finally{confirm.mockRestore();}
 });
+
+it('does not start an interview in a hidden review after processing finishes',async()=>{
+ const source={...savedCv('hidden-review'),status:'processing' as const};let accepted=false,complete=false;
+ vi.mocked(cvApi.list).mockImplementation(async()=>({cvs:accepted?[{...source,status:complete?'ready':'processing'}]:[],selection:{cv_id:null,version:0}}));
+ vi.mocked(cvApi.upload).mockImplementation(async()=>{accepted=true;return source;});
+ vi.mocked(cvApi.get).mockImplementation(async()=>({...source,status:complete?'ready':'processing'}));
+ renderWorkspace();fireEvent.change(await screen.findByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
+ await screen.findByRole('heading',{name:'Preparing your CV for review'});
+ fireEvent.click(screen.getByRole('button',{name:'Back to Skills Profile'}));
+ complete=true;fireEvent.click(screen.getByRole('button',{name:'Refresh saved status'}));
+ await waitFor(()=>expect(cvApi.openConversation).toHaveBeenCalled());
+ expect(cvApi.sendMessage).not.toHaveBeenCalled();
+ fireEvent.click(within(screen.getByRole('article',{name:`CV ${source.id}`})).getByRole('button',{name:'Review CV'}));
+ await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('conversation',expect.objectContaining({command:'review'}),'synthetic-session',expect.any(AbortSignal)));
+});
