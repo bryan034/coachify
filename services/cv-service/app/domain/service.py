@@ -11,6 +11,7 @@ from app.domain.attachments import source_fingerprint
 from app.domain.storage import UploadCapacity
 from app.domain.answer_capacity import reserved_bytes, release as release_answer_capacity, CAPACITY_MESSAGE
 from app.domain.model_usage import ModelUsage
+from app.domain.deletion import CvDeletion
 
 
 HISTORY_LIMIT_BYTES = 12 * 1024 * 1024
@@ -62,6 +63,7 @@ class CvService:
     def __init__(self, repository, files, settings):
         self.repository, self.files, self.settings = repository, files, settings
         self.capacity = UploadCapacity(repository, files, settings)
+        self.deletion = CvDeletion(repository, files, self.capacity)
         self.model_usage = ModelUsage(repository.model_usage, files.root, settings)
         self.interpretation_slots = BoundedSemaphore(2)
 
@@ -80,6 +82,8 @@ class CvService:
         fingerprint = digest({'name': name, 'file_type': file_type, 'hash': source_hash,
                               'cv_id': cv_id, 'expected_version': expected_version})
         previous = None if cv_id else self.repository.by_upload_key(owner, mutation_id)
+        if previous and previous.get('deletion'):
+            raise Conflict('This upload was deleted. Start a new upload with a new request identity.')
         identifier = cv_id or (previous['_id'] if previous else str(uuid5(NAMESPACE_URL, 'elo:cv:' + owner + ':' + mutation_id)))
         with self.files.lock(identifier):
             self.capacity.recover_one(identifier)
@@ -121,6 +125,8 @@ class CvService:
             return saved
         previous = self.repository.by_upload_key(owner, mutation_id)
         if previous:
+            if previous.get('deletion'):
+                raise Conflict('This upload was deleted. Start a new upload with a new request identity.')
             if previous['upload_fingerprint'] != fingerprint: raise Conflict('This upload key was already used for a different file.')
             return previous
         generation = self.capacity.reserve(owner, identifier, len(data), mutation_id, fingerprint)
@@ -241,6 +247,11 @@ class CvService:
         return self.repository.replace(previous, document)
 
     def select(self, owner, mutation):
+        self.get(owner, mutation.cv_id)
+        with self.files.lock(mutation.cv_id):
+            return self._select(owner, mutation)
+
+    def _select(self, owner, mutation):
         previous = self.repository.selection(owner)
         key = str(mutation.mutation_id)
         fingerprint = digest(mutation.model_dump(mode='json'))

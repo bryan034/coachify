@@ -117,4 +117,18 @@ test('saved CVs retain corrections, require explicit selection and compose manua
   expect((await (await other.get('/api/v1/cv')).json()).cvs).toEqual([]);
  } finally { await otherContext.close(); }
  expect((await page.request.get('/api/v1/cv')).status()).toBe(401);
+
+ // Delete through the browser against the real gateway/API/MongoDB. Historical
+ // Profile declarations remain, while the selected source and its chat disappear.
+ const conversationList = await (await account.get(`/api/v1/cv/conversations?cv_id=${cvId}`)).json();
+ page.once('dialog', dialog => dialog.accept());
+ await page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Delete CV',exact:true}).click();
+ await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true})).toHaveCount(0);
+ await expect(page.getByRole('complementary', {name:'Selected CV'})).toContainText('No CV selected');
+ expect((await account.get(`/api/v1/cv/${cvId}`)).status()).toBe(404);
+ for (const chat of conversationList.conversations) expect((await account.get(`/api/v1/cv/conversations/${chat.id}`)).status()).toBe(404);
+ expect((await (await account.get('/api/v1/profile/capabilities')).json()).declarations).toHaveLength(2);
+ await page.reload();await openCvReviewTools(page);
+ await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true})).toHaveCount(0);
+ await expect(page.getByRole('textbox', {name:'Capability name',exact:true})).toBeEnabled();
 });

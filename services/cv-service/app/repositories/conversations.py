@@ -28,6 +28,9 @@ class ConversationRepository:
     def get(self, owner, identifier):
         return self.collection.find_one({'user_id': owner, '_id': identifier})
 
+    def delete_for_cv(self, owner, cv_id):
+        self.collection.delete_many({'user_id': owner, 'cv_id': cv_id})
+
     def insert(self, document):
         try: self.collection.insert_one(deepcopy(document))
         except DuplicateKeyError:
@@ -69,6 +72,11 @@ class MemoryConversationRepository:
         with self.lock:
             document = self.records.get(identifier)
             return deepcopy(document) if document and document['user_id'] == owner else None
+
+    def delete_for_cv(self, owner, cv_id):
+        with self.lock:
+            self.records = {identifier: doc for identifier, doc in self.records.items()
+                if doc['user_id'] != owner or doc['cv_id'] != cv_id}
 
     def insert(self, document):
         with self.lock:

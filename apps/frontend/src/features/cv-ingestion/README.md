@@ -14,7 +14,15 @@ reconciliation and manual declarations when needed. Uploading never changes sele
 selected analysis source is identified separately from the CV currently being
 reviewed, including when filenames repeat. Same-source re-upload sends the original
 CV ID/version and preserves backend corrections; changed bytes require a separate
-new upload. Failed or expired originals offer source resupply.
+new upload. Failed or expired originals offer source resupply. **Delete CV** is
+available for each loaded saved file, including failed/processing uploads. It asks
+for explicit confirmation identifying the source and retained historical copies.
+Deletion removes that source's original/evidence/history and CV chat, clears its
+selection without a fallback, and releases quota after backend cleanup. Manual
+capabilities and existing analysis/roadmap snapshots remain. Failed/ambiguous
+responses preserve the mutation identity; conflicts refresh versions for review.
+Deleting the viewed source clears its private review/chat/resupply drafts and
+invalidates in-flight reads so an old response cannot restore it.
 
 ## Saved conversation
 

@@ -5,6 +5,7 @@ import json
 import re
 import unicodedata
 from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates, date_bounds
+from app.domain.extraction_errors import EvidenceValidationError
 
 
 def normalized_name(name):
@@ -24,12 +25,12 @@ def validate_extraction(payload, blocks, cv_id):
     items = []
     # Item IDs depend on source evidence and section, never display names or model order.
     # Exact duplicated evidence is rejected; repeated titles on distinct evidence remain separate.
-    for item in extraction.items:
+    for index, item in enumerate(extraction.items):
         evidence = []
         for ref in item.evidence:
             block = source.get(ref.block_id)
             if not block or ref.excerpt not in block['text']:
-                raise ValueError('The model returned unsupported source evidence. Retry this upload.')
+                raise EvidenceValidationError('The model returned unsupported source evidence. Retry this upload.', 'source_excerpt', index)
             evidence.append({'id': ref.block_id, 'location': block['location'], 'excerpt': ref.excerpt})
         identity = digest({'cv': cv_id, 'kind': item.kind, 'evidence': sorted(evidence, key=lambda e: (e['id'], e['excerpt']))})[:32]
         names_by_id = {}
@@ -41,16 +42,16 @@ def validate_extraction(payload, blocks, cv_id):
         if item.explicit:
             text = normalized_name(' '.join(e['excerpt'] for e in evidence))
             if any(normalized_name(name) not in text for name in names):
-                raise ValueError('The model labelled an unsupported skill as explicit. Retry this upload.')
+                raise EvidenceValidationError('The model labelled an unsupported skill as explicit. Retry this upload.', 'literal_skill', index)
         # A valid calendar value is not evidence that the source stated it. Keep
         # each excerpt separate so components cannot be combined across citations.
         for value in (item.start_date, item.end_date):
             if value and not any(_stated_date(ref['excerpt'], value) for ref in evidence):
-                raise ValueError('The model returned an unsupported date or invented date precision. Retry this upload.')
+                raise EvidenceValidationError('The model returned an unsupported date or invented date precision. Retry this upload.', 'date_precision', index)
         if item.ongoing and not any(re.search(
                 r'\b(present|ongoing|currently|still|continuing)\b', normalized_name(ref['excerpt']))
                 for ref in evidence):
-            raise ValueError('The model returned an ongoing date not stated in the source. Retry this upload.')
+            raise EvidenceValidationError('The model returned an ongoing date not stated in the source. Retry this upload.', 'ongoing_status', index)
         items.append({'id': identity, 'kind': item.kind, 'title': item.title, 'description': item.description,
                       'provenance': 'explicit' if item.explicit else 'inferred', 'evidence': evidence,
                       'skill_ids': [skill_id(name) for name in names], 'skill_names': names,
@@ -59,16 +60,17 @@ def validate_extraction(payload, blocks, cv_id):
                       'start_date': item.start_date, 'end_date': item.end_date, 'ongoing': item.ongoing,
                       'removed': False, 'supporting_item_ids': [], 'uncertainties': item.uncertainties})
     if len({item['id'] for item in items}) != len(items):
-        raise ValueError('The model duplicated a source claim. Retry this upload.')
+        raise EvidenceValidationError('The model duplicated a source claim. Retry this upload.', 'duplicate_claim')
     for index, parsed in enumerate(extraction.items):
         if any(ref < 0 or ref >= len(items) or ref == index for ref in parsed.supporting_items):
-            raise ValueError('The model returned an invalid source relationship. Retry this upload.')
+            raise EvidenceValidationError('The model returned an invalid source relationship. Retry this upload.', 'source_relationship', index)
         items[index]['supporting_item_ids'] = [items[ref]['id'] for ref in parsed.supporting_items]
     by_id = {item['id']: item for item in items}
     completed, active = set(), set()
     def visit(identifier):
         if identifier in completed: return
-        if identifier in active: raise ValueError('The model returned circular source relationships. Retry this upload.')
+        if identifier in active:
+            raise EvidenceValidationError('The model returned circular source relationships. Retry this upload.', 'circular_relationship')
         active.add(identifier)
         for parent in by_id[identifier]['supporting_item_ids']: visit(parent)
         active.remove(identifier)

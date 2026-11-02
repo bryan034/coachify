@@ -58,7 +58,8 @@ def test_compatible_provider_contract_and_incomplete_output(monkeypatch, finish,
         output, metadata = extractor.extract([{'id': 'b1', 'location': 'Page 1', 'text': 'Synthetic CV'}])
         assert output == {'items': []}
         assert metadata['model'] == 'synthetic-test-model'
-        assert requests[0]['response_format'] == {'type': 'json_object'}
+        assert requests[0]['response_format']['type'] == 'json_schema'
+        assert requests[0]['response_format']['json_schema']['strict'] is True
         assert json.loads(requests[0]['messages'][-1]['content'])['source_blocks'][0]['id'] == 'b1'
     else:
         with pytest.raises(ValueError): extractor.extract([])
@@ -114,7 +115,11 @@ def test_vendor_options_are_host_scoped_for_all_cv_requests(monkeypatch, base_ur
     assert request.headers['Authorization'] == 'Bearer synthetic-test-key'
     assert payload['model'] == 'deepseek-flash'
     assert payload['temperature'] == 0
-    assert payload['response_format'] == {'type': 'json_object'}
+    if operation == 'extract':
+        assert payload['response_format']['type'] == 'json_schema'
+        assert payload['response_format']['json_schema']['strict'] is True
+    else:
+        assert payload['response_format'] == {'type': 'json_object'}
     assert payload['max_tokens'] == (12000 if operation == 'extract' else 5000)
     if deepseek:
         assert payload['thinking'] == {'type': 'disabled'}

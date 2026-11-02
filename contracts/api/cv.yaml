@@ -1543,6 +1543,129 @@
             "description": "Service Unavailable"
           }
         }
+      },
+      "delete": {
+        "summary": "Delete",
+        "operationId": "delete_api_v1_cv__cv_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cv_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cv Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Mutation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvDeletionResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
       }
     },
     "/api/v1/cv/{cv_id}/items/{item_id}": {
@@ -4653,6 +4776,125 @@
           "retryable": {
             "type": "boolean",
             "title": "Retryable"
+          },
+          "failure_stage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "source_read",
+                  "document_parse",
+                  "model_request",
+                  "model_repair",
+                  "response_decode",
+                  "content_decode",
+                  "extraction_validation",
+                  "publication"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Stage"
+          },
+          "failure_category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "source_unavailable",
+                  "invalid_document",
+                  "not_configured",
+                  "model_admission",
+                  "provider_http_error",
+                  "timeout",
+                  "connection_error",
+                  "transport_error",
+                  "response_too_large",
+                  "invalid_json",
+                  "invalid_response",
+                  "incomplete_output",
+                  "schema_validation",
+                  "evidence_validation",
+                  "unexpected_error",
+                  "history_capacity",
+                  "source_changed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Category"
+          },
+          "provider_status_code": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 599.0,
+                "minimum": 100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Status Code"
+          },
+          "repair_attempted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Attempted"
+          },
+          "provider_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "schema_too_complex",
+                  "schema_rejected",
+                  "structured_output_unsupported",
+                  "unsupported_parameter",
+                  "invalid_request",
+                  "authentication_failed",
+                  "permission_denied",
+                  "not_found",
+                  "rate_limit_or_quota",
+                  "provider_unavailable",
+                  "http_error"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Reason"
+          },
+          "provider_parameter": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "response_format",
+                  "schema",
+                  "model",
+                  "reasoning_effort",
+                  "temperature",
+                  "max_tokens",
+                  "messages"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Parameter"
           }
         },
         "type": "object",
@@ -4703,6 +4945,45 @@
           "schema_version": {
             "type": "string",
             "title": "Schema Version"
+          },
+          "response_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "json_schema",
+                  "json_object"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Mode"
+          },
+          "workflow_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Version"
+          },
+          "repair_attempts": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Attempts"
           }
         },
         "type": "object",
@@ -5956,6 +6237,29 @@
           "origin"
         ],
         "title": "TargetCondition"
+      },
+      "CvDeletionResult": {
+        "properties": {
+          "cv_id": {
+            "type": "string",
+            "title": "Cv Id"
+          },
+          "deleted": {
+            "type": "boolean",
+            "const": true,
+            "title": "Deleted"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/Selection"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cv_id",
+          "deleted",
+          "selection"
+        ],
+        "title": "CvDeletionResult"
       }
     },
     "securitySchemes": {

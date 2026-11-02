@@ -20,7 +20,25 @@ def test_authoritative_cv_schema_describes_the_public_saved_cv_response():
     value = CvDetail.model_validate(fixture())
     assert value.status == 'ready'
     assert value.skills[0].proficiency is None
+    assert value.extraction.repair_attempts is None and value.extraction.response_mode is None
     assert 'file_url' not in value.model_dump() and 'user_id' not in value.model_dump()
+
+
+def test_failure_diagnostics_openapi_matches_runtime(harness):
+    _, app, *_ = harness
+    artifact = Path(__file__).resolve().parents[3] / 'contracts/api/cv.yaml'
+    contract = json.loads(artifact.read_text())['components']['schemas']
+    for name in ('ErrorInfo', 'ExtractionMetadata'):
+        assert app.openapi()['components']['schemas'][name] == contract[name]
+
+
+def test_deletion_contract_matches_runtime(harness):
+    _, app, *_ = harness
+    artifact = Path(__file__).resolve().parents[3] / 'contracts/api/cv.yaml'
+    contract = json.loads(artifact.read_text())
+    runtime = app.openapi()
+    assert contract['paths']['/api/v1/cv/{cv_id}']['delete'] == runtime['paths']['/api/v1/cv/{cv_id}']['delete']
+    assert contract['components']['schemas']['CvDeletionResult'] == runtime['components']['schemas']['CvDeletionResult']
 
 
 @pytest.mark.parametrize('changes', [

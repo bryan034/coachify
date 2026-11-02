@@ -148,12 +148,38 @@ class UploadCapacity:
             else: raise CapacityUnavailable()
         self._change(change)
 
+    def mark_deleting(self, owner, identifier):
+        def change(document):
+            entry = document['entries'].get(identifier)
+            if entry is None: return
+            if entry['owner'] != owner: raise CapacityUnavailable()
+            entry.update(state='deleting', key='', fingerprint='')
+        self._change(change)
+
+    def release_deleted_record(self, owner, identifier):
+        """The complete tombstone and removed bytes precede quota credit."""
+        record = self.repository.capacity_record(identifier)
+        if not record or record.get('user_id') != owner or record.get('deletion', {}).get('state') != 'complete':
+            raise CapacityUnavailable()
+        if self.files.size(identifier): raise CapacityUnavailable()
+        def change(document):
+            entry = document['entries'].get(identifier)
+            if entry is None: return
+            if entry['owner'] != owner or entry['state'] != 'deleting': raise CapacityUnavailable()
+            del document['entries'][identifier]
+        self._change(change)
+
     def recover_one(self, identifier):
         """A lock, never an elapsed lease, proves a writer is no longer active."""
         with self.files.lock(identifier, blocking=False) as acquired:
             if not acquired: return
             entry = self.entry(identifier)
-            if entry is None or entry['state'] not in {'pending', 'orphan'}: return
+            if entry is None or entry['state'] not in {'pending', 'orphan', 'deleting'}: return
+            if entry['state'] == 'deleting':
+                record = self.repository.capacity_record(identifier)
+                if record and record.get('deletion', {}).get('state') == 'complete':
+                    self.release_deleted_record(entry['owner'], identifier)
+                return
             if entry['state'] == 'orphan' and entry['at'] > time() - 3600: return
             record = self.repository.capacity_record(identifier)
             if entry['state'] == 'orphan':
@@ -175,7 +201,7 @@ class UploadCapacity:
         document = self.ledger.read()
         if document is None: raise CapacityUnavailable()
         pending = nsmallest(10, (identifier for identifier, entry in document['entries'].items()
-            if (entry['state'] == 'pending' or entry['state'] == 'orphan' and entry['at'] <= time() - 3600)
+            if (entry['state'] in {'pending', 'deleting'} or entry['state'] == 'orphan' and entry['at'] <= time() - 3600)
             and (self.recovery_cursor is None or identifier > self.recovery_cursor)))
         if not pending:
             self.recovery_cursor = None

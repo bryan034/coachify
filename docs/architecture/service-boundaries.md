@@ -31,6 +31,14 @@ keep both services private; public IDs do not confer access. A future autonomous
 service caller needs an explicit authenticated service identity plus validated
 owner context. This slice does not introduce that separate credential protocol.
 
+## CV extraction runtime
+
+CV runs a transient LangGraph for parse/extract/validate and at most one source-grounded repair. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Both calls request schema-constrained output by default; backend evidence/date/length checks remain authoritative. Graph state has no checkpointer, external tracing or new collection. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
+
+## Saved CV deletion
+
+CV owns source deletion and recoverable cleanup of private originals, extraction/history and CV-linked conversations. A content-free deletion receipt fences workers/stale upload replay; the existing upload ledger credits capacity only after cleanup. Conditional selection clearing preserves a concurrently selected different CV. Profile manual declarations, other CVs and immutable Assessment/Roadmap snapshots are retained; consumers revalidate unavailable source references through APIs. See [deletion semantics](../../services/cv-service/SPEC.md#delete-a-saved-cv).
+
 ## C-facing ownership and compatibility
 
 The supplied logical `users` collection is the existing physical `accounts`
