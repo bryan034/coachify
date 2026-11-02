@@ -22,11 +22,10 @@ export async function mockEmptyConversation(page: Page) {
 
 /** Existing review tools now live behind explicit disclosures in the chat workspace. */
 export async function openCvReviewTools(page: Page) {
-  await expect(page.locator('summary').filter({hasText: 'CV files'})).toHaveCount(1);
-  // The initial empty-list response opens CV files automatically. Wait for that
-  // transition before clicking, otherwise a click can close the newly opened panel.
+  if (new URL(page.url()).searchParams.has('review')) await page.getByRole('button', {name:'Back to Skills Profile', exact:true}).click();
+  await expect(page.getByRole('heading', {name:'Your CVs', exact:true})).toBeVisible();
   await expect(page.getByText('Loading saved CVs…', {exact: true})).toHaveCount(0);
-  for (const label of ['CV files', 'Your CV summary']) {
+  for (const label of ['Your CV summary']) {
     const summary = page.locator('summary').filter({hasText: label});
     await expect(summary).toHaveCount(1);
     const details = summary.locator('..');

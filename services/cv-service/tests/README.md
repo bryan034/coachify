@@ -93,3 +93,5 @@ manual field order/skips, semantically equivalent values, unsupported/foreign
 answer rejection, persisted partial drafts and exact-write recovery after lost
 cross-service acknowledgements. Semantic proficiency/independence acceptance uses
 explicit synthetic verdicts; it does not establish live model quality.
+
+Saved-title tests cover validation, owner isolation, persistence/list projections, stale/replayed writes, queued-source renaming and unchanged source/evidence/history. Mongo cases require the disposable test database described above.

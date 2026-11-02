@@ -37,7 +37,7 @@ def bump(document, visible=True, *, operational=False):
 
 def summary(document):
     operation = document['operation']
-    return {'id': document['_id'], 'file_name': document['file_name'], 'file_type': document['file_type'],
+    return {'id': document['_id'], 'file_name': document['file_name'], 'display_name': document.get('display_name'), 'file_type': document['file_type'],
         'status': operation['status'], 'operation_id': operation['id'], 'version': document['version'],
         'extraction_version': document['extraction_version'], 'effective_version': document['effective_version'],
         'profile_version': document['profile_version'],
@@ -73,6 +73,11 @@ class CvService:
         document = self.repository.get(owner, identifier)
         if not document: raise Missing()
         return document
+
+    def rename(self, owner, identifier, mutation):
+        def transform(document):
+            document['display_name'] = mutation.display_name
+        return self.mutate(owner, identifier, mutation, 'rename', transform, record_history=False, metadata=True)
 
     def mark_profile_reviewed(self, owner, identifier, mutation):
         def transform(document):
@@ -165,7 +170,7 @@ class CvService:
         return {'id': str(uuid4()), 'status': 'queued', 'attempt': 0, 'lease_token': None,
                 'lease_until': 0, 'error': None}
 
-    def mutate(self, owner, identifier, mutation, operation, transform, *, record_history=True):
+    def mutate(self, owner, identifier, mutation, operation, transform, *, record_history=True, metadata=False):
         previous = self.get(owner, identifier)
         key = str(mutation.mutation_id)
         fingerprint = digest({'operation': operation, 'data': mutation.model_dump(mode='json', exclude_unset=True)})
@@ -173,9 +178,9 @@ class CvService:
             if previous['receipts'][key] != fingerprint: raise Conflict('This mutation key was used for another request.')
             return previous
         if previous['version'] != mutation.expected_version: raise Conflict()
-        if previous['operation']['status'] != 'ready':
+        if not metadata and previous['operation']['status'] != 'ready':
             raise Conflict('Wait for this CV to finish processing before editing or clarifying it.')
-        if previous.get('candidate'):
+        if not metadata and previous.get('candidate'):
             raise Conflict('Resolve the saved source comparison before changing this CV.')
         document = deepcopy(previous)
         before = effective_fingerprint(document)

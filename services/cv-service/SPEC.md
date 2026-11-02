@@ -83,7 +83,7 @@ On first use, a bounded metadata bootstrap accounts for existing records, actual
 
 Same-source reprocessing keeps corrections, removals and answers when stable source identities and interpreted attributes match. If a model changes a retained source identity, skill relationship or structured attribute, the previous result and a bounded structured candidate are saved for comparison. The user can keep the previous extraction or accept the candidate after explicitly archiving or mapping every affected statement to a same-kind item. No mapping is selected by name. Corrections/removals may be reapplied only by this explicit choice; explanations retain their original origin/history and require fresh interpretation against the new evidence. A newly uploaded replacement can explicitly compare a previous ready CV before acquiring its own edits or answers. Discarding a comparison remains possible if the old CV changes. Neither comparison nor acceptance changes the selected CV automatically. Pending comparisons, processing and failed sources cannot supply new capability inputs.
 
-History and idempotency receipts remain embedded with full source ownership. Before user content, extraction or retained history exceeds 12 MiB, the API rejects it with guidance to retain the historical source and upload a new copy; it never silently truncates history. Worker lease, bounded failure and original-deletion bookkeeping have an explicit additional 8 KiB allowance so a full source cannot block cleanup. Oversized extraction publishes a bounded failure against the prior record without replacing its evidence/history. Saved CVs can be deleted through the owner/version-checked API and CV files controls. There is no archive UI or unlimited lifetime edit storage.
+History and idempotency receipts remain embedded with full source ownership. Before user content, extraction or retained history exceeds 12 MiB, the API rejects it with guidance to retain the historical source and upload a new copy; it never silently truncates history. Worker lease, bounded failure and original-deletion bookkeeping have an explicit additional 8 KiB allowance so a full source cannot block cleanup. Oversized extraction publishes a bounded failure against the prior record without replacing its evidence/history. Saved CVs can be deleted through the owner/version-checked API and Your CVs card controls. There is no archive UI or unlimited lifetime edit storage.
 
 ## Delete a saved CV
 
@@ -173,9 +173,10 @@ The additive `/{id}/assessment-input` export applies the selected-source/version
 
 The `/cv` page opens on an evidence summary with Upload your CV and Build through
 chat actions. It does not open/create a conversation on page entry. Uploading
-preserves source selection and stays on the summary. Review CV explicitly opens
-guided review after usable extraction; processing/failed files instead offer status
-and recovery. The existing detailed correction, reconciliation and declaration
+preserves source selection and immediately opens the full-page CV review screen.
+Processing/failed files show status and recovery there; usable extraction automatically
+opens the saved conversation and begins guided clarification. Existing ready CVs
+can also be reopened through Review CV. The existing detailed correction, reconciliation and declaration
 controls remain available under disclosures.
 
 Conversation start accepts optional `purpose: skills_profile`. Existing histories
@@ -227,3 +228,22 @@ becomes out of date when effective evidence changes; review alone does not advan
 the effective evidence version. The summary shows the stamp, actual source skills,
 source-specific support and retained clarification answers. It never assigns a
 universal mastery score. Job-specific comparison remains Assessment-owned.
+
+## Saved CV title metadata
+
+The original upload `file_name` is immutable. Optional `display_name` is a user-facing
+title, initially absent. The authenticated owner may rename any visible saved CV
+through `PATCH /api/v1/cv/{cv_id}/title` with the current `expected_version` and a
+UUID `mutation_id`. Trim surrounding whitespace, require 1–200 characters and reject
+embedded control characters. The service stores the title using whole-document CAS
+and idempotent receipts. Stale versions/conflicting request identities return 409;
+foreign or deleted sources return 404. Only metadata/version/update time changes;
+renaming does not change extraction/effective versions, baseline selection, source
+hashes, review stamps or evidence history. Listing projections include this field.
+No data migration is needed; missing titles retain the original filename fallback.
+
+Baseline selection uses the label **Set as active baseline**. Before selecting a CV
+without a saved review for its current effective version, the UI warns that AI
+interpretation may be inaccurate and may attribute team skills to the user when
+project roles are unclear. The user may cancel or continue; this does not change
+the authenticated, explicit selection API or automatically regenerate analysis.

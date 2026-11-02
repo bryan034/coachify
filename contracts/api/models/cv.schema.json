@@ -1250,6 +1250,18 @@
       "title": "File Name",
       "type": "string"
     },
+    "display_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Name"
+    },
     "file_type": {
       "enum": [
         "pdf",

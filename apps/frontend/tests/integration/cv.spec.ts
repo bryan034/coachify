@@ -27,10 +27,12 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  }, { timeout: 30_000 }).toBe('ready');
  const initialList = await (await account.get('/api/v1/cv')).json();
  expect(initialList.selection.cv_id).toBeNull();
+ await openCvReviewTools(page);
  await page.getByRole('button', { name: 'Refresh saved status', exact: true }).click();
  const saved = page.getByRole('article', { name: `CV ${cvId}`, exact: true });
- await saved.getByRole('button', { name: 'Select for analysis', exact: true }).click();
- await expect(saved.getByRole('button', { name: 'Selected', exact: true })).toBeVisible();
+ page.once('dialog', dialog => dialog.accept());
+ await saved.getByRole('button', { name: 'Set as active baseline', exact: true }).click();
+ await expect(saved.getByRole('button', { name: 'Active baseline', exact: true })).toBeVisible();
  await page.getByRole('button', { name: 'Edit or remove Team dashboard', exact: true }).click();
  const editor = page.getByRole('form', { name: 'Edit Team dashboard', exact: true });
  await editor.getByLabel('Description', { exact: true }).fill('I wrote SQL queries; another teammate implemented the Python application.');

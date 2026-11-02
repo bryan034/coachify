@@ -122,7 +122,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   await expect.poll(async () => (await (await account.get('/api/v1/profile/capabilities')).json()).declarations.length).toBe(1);
   await chapter('10. Add an omitted capability', 'A manual Figma statement is saved only after Save capability. Profile owns the declaration; it is not presented as text extracted from the CV.', chat);
 
-  await chat.getByRole('button', {name: 'View skills profile', exact: true}).click();
+  await chat.getByRole('button', {name: 'Back to Skills Profile', exact: true}).click();
   await openCvReviewTools(page);
   await expect(page.getByRole('region', {name: 'Potential skills', exact: true})).toContainText('3 months');
   await expect(page.getByRole('heading', {name: 'Figma', exact: true})).toBeVisible();

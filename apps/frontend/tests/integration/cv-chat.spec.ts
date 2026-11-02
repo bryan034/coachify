@@ -24,7 +24,7 @@ test('manual-only chat persists without a fake CV and recovers saved failed mess
   expect(draft.status).toBe('draft');
   expect(draft.entries[0].skills[0]).toMatchObject({name: 'Figma', description: manualMessage});
   expect((await (await account.get('/api/v1/profile/capabilities')).json()).declarations).toHaveLength(0);
-  await page.getByRole('button', {name: 'View skills profile', exact: true}).click();
+  await page.getByRole('button', {name: 'Back to Skills Profile', exact: true}).click();
   await page.getByRole('button', {name: 'Save profile', exact: true}).click();
   await expect.poll(async () => (await (await account.get('/api/v1/profile/capabilities')).json()).declarations.length).toBe(1);
   expect((await (await account.get('/api/v1/cv')).json()).cvs).toHaveLength(0);

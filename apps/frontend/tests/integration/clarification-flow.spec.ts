@@ -33,8 +33,10 @@ test('confirmed Career targets drive saved project, work and skill clarification
   cvId = value.cvs[0]?.id ?? '';
   return value.cvs[0]?.status;
  }, { timeout: 30_000 }).toBe('ready');
+ await openCvReviewTools(page);
  await page.getByRole('button', { name: 'Refresh saved status', exact: true }).click();
- await page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByRole('button', { name: 'Select for analysis', exact: true }).click();
+ page.once('dialog', dialog => dialog.accept());
+ await page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByRole('button', { name: 'Set as active baseline', exact: true }).click();
  await expect(page.getByLabel('Confirmed clarification target', { exact: true })).toContainText('Synthetic data analyst');
  await page.getByRole('button', { name: 'Prepare relevant questions', exact: true }).click();
  const project = page.locator('.cv-question').filter({ has: page.getByRole('heading', { name: 'What did you personally contribute, and what did teammates or guidance cover?', exact: true }) });

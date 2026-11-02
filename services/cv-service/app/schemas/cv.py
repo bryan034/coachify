@@ -47,6 +47,17 @@ class Mutation(StrictModel):
     mutation_id: UUID
 
 
+class RenameMutation(Mutation):
+    display_name: Title
+
+    @field_validator('display_name')
+    @classmethod
+    def readable_name(cls, value):
+        if any(ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ValueError('Use a readable CV title without control characters.')
+        return value
+
+
 class SelectionMutation(Mutation):
     cv_id: str = Field(min_length=1, max_length=100)
 
@@ -350,6 +361,7 @@ class CvSummary(BaseModel):
     profile_reviewed_effective_version: int | None = None
     id: str
     file_name: str
+    display_name: str | None = None
     file_type: Literal['pdf', 'docx']
     status: Literal['queued', 'processing', 'ready', 'failed']
     operation_id: str

@@ -8,7 +8,7 @@ from app.core.auth import bearer, current_account
 from app.domain.errors import Conflict, CvError
 from app.domain.service import detail, summary, selection_view
 from app.domain.pagination import decode_cursor, encode_cursor
-from app.schemas.cv import Mutation, SelectionMutation, ItemMutation, AnswerMutation, PrepareMutation
+from app.schemas.cv import Mutation, RenameMutation, SelectionMutation, ItemMutation, AnswerMutation, PrepareMutation
 from app.schemas.cv import CvDetail, CvList, Selection, QuestionEnvelope, CapabilityInput, Policy, ApiError, ConfirmedContext, CvDeletionResult
 from app.clarification.service import answer, prepare, envelope, context_identity, retry_interpretation
 from app.domain import reconciliation
@@ -117,6 +117,11 @@ async def select(mutation: SelectionMutation, request: Request, account=Depends(
 @router.get('/{cv_id}', response_model=CvDetail)
 async def read(cv_id: str, request: Request, account=Depends(authenticated)):
     return detail(await run_in_threadpool(service(request).get, account['id'], cv_id))
+
+
+@router.patch('/{cv_id}/title', response_model=CvDetail)
+async def rename(cv_id: UUID, mutation: RenameMutation, request: Request, account=Depends(authenticated)):
+    return detail(await run_in_threadpool(service(request).rename, account['id'], str(cv_id), mutation))
 
 
 @router.delete('/{cv_id}', response_model=CvDeletionResult)

@@ -138,3 +138,10 @@ the same journey.
 The real-service Career preview journey also keeps the composer editable after
 disabled-provider extraction fails, checks empty-message submission stays disabled,
 and retains retry, unsaved-goal and reload assertions.
+
+CV library tests cover inline rename persistence/retry/conflicts, active baseline controls, internal scrolling with 14 saved sources and full-viewport desktop/mobile review with a visible composer. API browser fixtures use synthetic data.
+
+Upload-to-review checks cover immediate navigation, waiting for processing before
+opening chat, and automatic clarification without a second review click. Baseline
+checks cover warning cancellation/acceptance, current reviewed versions and stale
+review stamps. Browser checks measure equal desktop upload/library heights.

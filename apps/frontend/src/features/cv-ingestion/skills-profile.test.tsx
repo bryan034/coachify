@@ -9,7 +9,7 @@ vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synt
 vi.mock('@/lib/api/cv',async original=>{const actual=await original<typeof import('@/lib/api/cv')>();return {...actual,cvApi:Object.fromEntries(Object.keys(actual.cvApi).map(key=>[key,vi.fn()]))};});
 const empty:SkillsProfile={version:0,status:'empty',saved_at:null,areas:{},entries:[]};
 const chat:CvConversation={id:'chat',cv_id:null,revision:1,read_only:false,previous_conversation_id:null,active_question:null,context:null,messages:[],next_before:null,limits:{max_message_chars:4000,max_messages:500}};
-beforeEach(()=>{
+beforeEach(()=>{window.history.replaceState(null,'','/cv');
  vi.clearAllMocks();
  vi.mocked(cvApi.policy).mockResolvedValue(policy);
  vi.mocked(cvApi.list).mockResolvedValue({cvs:[],selection:{cv_id:null,version:0}});
@@ -39,23 +39,19 @@ it('opens manual intake explicitly and preserves the unsent draft when returning
  expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:null,purpose:'skills_profile'}),'synthetic-token',expect.any(AbortSignal));
  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat',expect.objectContaining({command:'review'}),'synthetic-token',expect.any(AbortSignal)));
  fireEvent.change(input,{target:{value:'A contribution I have not sent yet.'}});
- fireEvent.click(screen.getByRole('button',{name:'Back to skills profile'}));
+ fireEvent.click(screen.getByRole('button',{name:'Back to Skills Profile'}));
  expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:/Build through chat/}));
  expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('A contribution I have not sent yet.');
  expect(cvApi.openConversation).toHaveBeenCalledTimes(1);
 });
 
-it('accepts a dropped CV and waits for Review CV before starting guided review',async()=>{
+it('accepts a dropped CV and immediately starts guided review',async()=>{
  const cv=savedCv('uploaded');vi.mocked(cvApi.upload).mockResolvedValue(cv);
  render(<ResumePreview/>);fireEvent.click(await screen.findByRole('button',{name:/Upload your CV/}));
  await screen.findByLabelText('CV document');
  fireEvent.drop(screen.getByText('Drop your CV here, or choose a file below.').parentElement!,{dataTransfer:{files:[new File(['synthetic CV'],'profile.pdf')]}});
  fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
- const review=await screen.findByRole('button',{name:'Review CV'});
- expect(cvApi.openConversation).not.toHaveBeenCalled();
- expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument();
- fireEvent.click(review);
  await waitFor(()=>expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:cv.id,purpose:'skills_profile'}),'synthetic-token',expect.any(AbortSignal)));
  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat',expect.objectContaining({command:'review'}),'synthetic-token',expect.any(AbortSignal)));
  expect(cvApi.select).not.toHaveBeenCalled();
@@ -94,7 +90,7 @@ it('withholds final saving while a conversation update needs attention',async()=
  render(<ResumePreview/>);
  fireEvent.click(await screen.findByRole('button',{name:/Continue building your profile/}));
  await screen.findByRole('button',{name:'Retry this action'});
- fireEvent.click(screen.getByRole('button',{name:'Back to skills profile'}));
+ fireEvent.click(screen.getByRole('button',{name:'Back to Skills Profile'}));
  expect(screen.getByRole('button',{name:'Save profile'})).toBeDisabled();
  expect(screen.getByText(/Finish or cancel the pending conversation updates/)).toBeVisible();
  expect(cvApi.saveSkillsProfile).not.toHaveBeenCalled();
