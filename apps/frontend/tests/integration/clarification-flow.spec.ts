@@ -35,7 +35,6 @@ test('confirmed Career targets drive saved project, work and skill clarification
  }, { timeout: 30_000 }).toBe('ready');
  await openCvReviewTools(page);
  await page.getByRole('button', { name: 'Refresh saved status', exact: true }).click();
- page.once('dialog', dialog => dialog.accept());
  await page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByRole('button', { name: 'Set as active baseline', exact: true }).click();
  await expect(page.getByLabel('Confirmed clarification target', { exact: true })).toContainText('Synthetic data analyst');
  await page.getByRole('button', { name: 'Prepare relevant questions', exact: true }).click();

@@ -44,7 +44,6 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  await chapter('3. Upload a CV, then select it', 'Upload, parsing, saved records and service calls are real. The document and model are synthetic test fixtures. Uploading alone does not change the selected CV.', page.getByLabel('CV document', { exact: true }));
  const cvId = await upload();
  expect((await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBeNull();
- page.once('dialog', dialog => dialog.accept());
  await page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByRole('button', { name: 'Set as active baseline', exact: true }).click();
  await expect(page.getByLabel('Confirmed clarification target', { exact: true })).toContainText('Synthetic data analyst internship');
  await page.getByRole('button', { name: 'Prepare relevant questions', exact: true }).click();
@@ -163,7 +162,6 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  expect(replacement.items.find(item => item.kind === 'education')?.end_date).toBeNull();
  expect(replacement.clarifications[0]).toMatchObject({answer: mixedAnswer, interpretation_status: 'failed', reconciled_from: {cv_id: cvId, item_id: projectId}});
  expect(await readCv(cvId)).toEqual(originalBeforeReplacement);
- page.once('dialog', dialog => dialog.accept());
  await page.getByRole('article', {name: `CV ${replacementId}`, exact: true}).getByRole('button', {name: 'Set as active baseline', exact: true}).click();
  await projectQuestion().getByRole('button', {name: 'Retry interpretation', exact: true}).click();
  await expect(projectQuestion().getByRole('heading', {name: 'What your explanation changes', exact: true})).toBeVisible();
