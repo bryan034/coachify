@@ -651,6 +651,7 @@
           "type": "string"
         },
         "excerpt": {
+          "description": "Source-linked evidence; CV extraction may contain a faithful summary rather than an exact quotation.",
           "title": "Excerpt",
           "type": "string"
         },
@@ -1229,6 +1230,18 @@
     }
   },
   "properties": {
+    "profile_reviewed_effective_version": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Profile Reviewed Effective Version"
+    },
     "id": {
       "title": "Id",
       "type": "string"
@@ -1296,6 +1309,14 @@
     "source_available": {
       "title": "Source Available",
       "type": "boolean"
+    },
+    "other_information": {
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "maxItems": 160,
+      "title": "Other Information",
+      "type": "array"
     },
     "items": {
       "items": {

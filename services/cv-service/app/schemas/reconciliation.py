@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.cv import CvItem, Clarification, ExtractionMetadata
+from app.schemas.cv import CvItem, Clarification, ExtractionMetadata, Evidence
 
 
 class ResolutionChoice(BaseModel):
@@ -35,6 +35,7 @@ class ReconciliationView(BaseModel):
     candidate_id: str
     source_cv_id: str
     previous_items: list[CvItem]
+    candidate_other_information: list[Evidence] = Field(default_factory=list, max_length=160)
     candidate_items: list[CvItem]
     affected_item_ids: list[str]
     previous_answers: list[Clarification]

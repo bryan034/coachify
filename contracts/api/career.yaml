@@ -51,7 +51,8 @@
               "title": "Fresh"
             }
           }
-        ]
+        ],
+        "description": "Restore the owner's latest saved chat; empty chats include display-only copy.\n\nThe legacy fresh flag returns display-only copy without changing the saved chat.\nNo model or research calls are made by this read."
       }
     },
     "/api/v1/career/discoveries": {
@@ -108,7 +109,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Persist a distinct empty chat immediately; retries with the same key reuse it."
       }
     },
     "/api/v1/career/discoveries/{session_id}": {
@@ -221,7 +223,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Converse/refine; completed validated synthesis automatically updates the current goal."
       }
     },
     "/api/v1/career/discoveries/{session_id}/research": {

@@ -33,24 +33,37 @@ async def view(service,row):
 
 @router.get('/current',response_model=DiscoveryView,response_model_exclude_unset=True)
 async def current(request:Request,fresh:bool=False,account=Depends(owner)):
-    # A fresh opening returns static copy/capabilities, not an older conversation.
-    # Neither this read nor session creation launches research or invokes Gemini.
+    """Restore the owner's latest saved chat; empty chats include display-only copy.
+
+    The legacy fresh flag returns display-only copy without changing the saved chat.
+    No model or research calls are made by this read.
+    """
     service=engine(request)
     if fresh:return {'available':(await view(service,None))['available'],'session':None,'introduction':INTRODUCTION}
-    return await view(service,await thread(service.current,account))
+    row=await thread(service.current,account)
+    result=await view(service,row)
+    if row is None or not conversation_messages(row.get('messages',[])):result['introduction']=INTRODUCTION
+    return result
 
 @router.post('',response_model=DiscoveryView,response_model_exclude_unset=True)
 async def start(body:StartDiscovery,request:Request,account=Depends(owner),key=Depends(request_key)):
-    service=engine(request);return await view(service,await thread(service.start,account,key))
+    """Persist a distinct empty chat immediately; retries with the same key reuse it."""
+    service=engine(request)
+    result=await view(service,await thread(service.start,account,key))
+    if not result['session']['messages']:result['introduction']=INTRODUCTION
+    return result
 
 @router.get('/{session_id}',response_model=DiscoveryView,response_model_exclude_unset=True)
 async def get(session_id:str,request:Request,account=Depends(owner)):
     service=engine(request);row=await thread(service.get,identifier(session_id),account)
     if row['status'] in ('researching','waiting'):service.launch(row['_id'])
-    return await view(service,row)
+    result=await view(service,row)
+    if not result['session']['messages']:result['introduction']=INTRODUCTION
+    return result
 
 @router.post('/{session_id}/messages',response_model=DiscoveryView,response_model_exclude_unset=True)
 async def message(session_id:str,body:DiscoveryMessage,request:Request,account=Depends(owner),key=Depends(request_key)):
+    """Converse/refine; completed validated synthesis automatically updates the current goal."""
     service=engine(request);row=await service.converse(identifier(session_id),account,key,body)
     if row['status'] in ('researching','waiting'):service.launch(row['_id'])
     return await view(service,row)

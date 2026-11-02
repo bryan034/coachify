@@ -48,7 +48,7 @@ def conversation():
     ('What does a data analyst do?','Data analysts interpret data to help people make decisions.'),
     ('How can I prepare for an internship interview?','Start by discussing the role and preparing examples.'),
 ])
-@pytest.mark.parametrize('status',['conversation','researching','waiting','review'])
+@pytest.mark.parametrize('status',['conversation','researching','waiting','review','confirmed'])
 def test_guidance_is_answered_before_fields_are_complete(conversation,message,reply,status):
     engine,row,send=conversation
     row['status']=status
@@ -105,7 +105,7 @@ def test_premature_research_is_replaced_with_one_question(conversation):
     engine.research_values.assert_not_called()
 
 
-@pytest.mark.parametrize('status',['conversation','researching','waiting','review'])
+@pytest.mark.parametrize('status',['conversation','researching','waiting','review','confirmed'])
 def test_rejected_turn_cannot_change_context_or_research(conversation,status):
     engine,row,send=conversation
     previous=Decision(action='ASK_CLARIFICATION',scope=Scope(field='Finance',area='Finance'),
@@ -244,7 +244,7 @@ def test_real_adapter_repairs_failed_sections_or_returns_safe_partial_chat(conve
 
 
 @pytest.mark.parametrize('message',['hi',' HI! ','Hello elo','How do I use this?','How does this work?','Thanks'])
-@pytest.mark.parametrize('status',['conversation','researching','waiting','review'])
+@pytest.mark.parametrize('status',['conversation','researching','waiting','review','confirmed'])
 def test_social_turns_work_without_model_and_leave_context_intact(conversation,message,status):
     engine,row,send=conversation
     previous=Decision(action='ASK_CLARIFICATION',scope=Scope(field='Finance',area='Finance'),

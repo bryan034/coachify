@@ -121,6 +121,13 @@ class IngestionWorker:
             return self.model_usage.run(claimed['user_id'], invoke,
                 configured=getattr(self.extractor, 'configured', True))
 
+        def verify_evidence(blocks, refs):
+            remaining_time()
+            def invoke():
+                return self.extractor.verify_evidence(blocks, refs, timeout_seconds=remaining_time())
+            return self.model_usage.run(claimed['user_id'], invoke,
+                configured=getattr(self.extractor, 'configured', True))
+
         try:
             remaining_time()
             if not claimed['original_available'] or not self.files.exists(claimed['_id']):
@@ -128,7 +135,7 @@ class IngestionWorker:
             original = self.files.read(claimed['_id'])
             harness = ExtractionHarness(claimed['_id'],
                 lambda data: self.parser(data, '.' + claimed['file_type'], self.settings.max_file_bytes),
-                call_model, observe)
+                call_model, observe, verify_evidence=verify_evidence)
             result = harness.run(original)
             parsed, items, metadata = result['parsed'], result['items'], result['metadata']
             error = None
@@ -174,7 +181,7 @@ class IngestionWorker:
             if affected:
                 # No fuzzy/name reassignment of user statements. Keep the usable prior
                 # extraction and retain the candidate for an explicit new-source review.
-                document['candidate'] = candidate_for(document, items, metadata, parsed.get('notices', []))
+                document['candidate'] = candidate_for(document, items, metadata, parsed.get('notices', []), other_information=result['other_information'])
                 document['reconciliation'] = [{'item_id': identifier, 'reason': 'Source interpretation changed. Compare the preserved result and candidate before accepting it.'}
                     for identifier in affected]
                 error = {'code': 'reconciliation_required', 'message': 'Reprocessing changed source identities. Your previous result is preserved. Review the saved comparison to continue.', 'retryable': False,
@@ -183,8 +190,9 @@ class IngestionWorker:
                 before = effective_fingerprint(document)
                 if document['original_items']:
                     document['history'].append({'extraction_version': document['extraction_version'],
-                                                'original_items': document['original_items'], 'at': now()})
+                                                'original_items': document['original_items'], 'other_information': document.get('other_information', []), 'at': now()})
                 document['original_items'] = items
+                document['other_information'] = result['other_information']
                 document['extraction_version'] += 1
                 document['extraction'] = metadata
                 document['notices'] = parsed.get('notices', [])

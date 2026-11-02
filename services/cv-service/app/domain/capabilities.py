@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 import unicodedata
-from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates, date_bounds
+from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates, date_bounds, MAX_EVIDENCE_EXCERPT_CHARACTERS
 from app.domain.extraction_errors import EvidenceValidationError
 
 
@@ -19,9 +19,90 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()).hexdigest()
 
 
-def validate_extraction(payload, blocks, cv_id):
-    extraction = Extraction.model_validate(payload)
+def evidence_matches(excerpt, source):
+    # Preserve words and meaningful punctuation (e.g. C++ versus C#), while
+    # tolerating PDF line wraps, spacing, case and Unicode presentation forms.
+    return excerpt in source or normalized_name(excerpt) in normalized_name(source)
+
+
+def evidence_requiring_semantic_check(payload, blocks):
+    if not isinstance(payload, dict): return []
+    source = {block['id']: block['text'] for block in blocks}
+    refs = []
+    items = payload.get('items', [])
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict) and isinstance(item.get('evidence'), list): refs.extend(item['evidence'])
+    if isinstance(payload.get('other_information'), list): refs.extend(payload['other_information'])
+    pending = []
+    for ref in refs:
+        if not isinstance(ref, dict): continue
+        block_id, excerpt = ref.get('block_id'), ref.get('excerpt')
+        if not isinstance(block_id, str) or not isinstance(excerpt, str): continue
+        if block_id not in source:
+            raise EvidenceValidationError('The model cited an unknown source block. Retry this upload.', 'source_excerpt')
+        if not evidence_matches(excerpt, source[block_id]):
+            value = {'block_id': block_id, 'excerpt': excerpt}
+            if value not in pending: pending.append(value)
+    if len(pending) > 1120:
+        raise ValueError('The extraction exceeds the evidence verification limit. Retry this upload.')
+    return pending
+
+
+def normalize_extraction_evidence(payload, blocks, semantic_support=frozenset()):
+    """Split source-supported evidence; preserve every character of each quotation or summary.
+
+    Count/shape limits still belong to Extraction. A split that needs too many
+    citations is rejected for model repair rather than silently losing evidence.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    limit = MAX_EVIDENCE_EXCERPT_CHARACTERS
+    result = deepcopy(payload)
+    source = {block['id']: block['text'] for block in blocks}
+
+    def split(refs):
+        if not isinstance(refs, list):
+            return refs
+        output = []
+        for ref in refs:
+            if not isinstance(ref, dict):
+                output.append(ref)
+                continue
+            text, block_id = ref.get('excerpt'), ref.get('block_id')
+            if (not isinstance(text, str) or len(text) <= limit
+                    or not isinstance(block_id, str) or block_id not in source):
+                output.append(ref)
+                continue
+            if not evidence_matches(text, source[block_id]) and (block_id, text) not in semantic_support:
+                # Require support for the ENTIRE text before splitting; a valid
+                # prefix cannot hide an unsupported suffix.
+                raise EvidenceValidationError('The model returned unsupported source evidence. Retry this upload.', 'source_excerpt')
+            while len(text) > limit:
+                # Prefer a word/line boundary near the end, retaining whitespace
+                # so concatenating the parts reconstructs the exact original.
+                boundaries = list(re.finditer(r'\s', text[limit // 2:limit]))
+                end = limit // 2 + boundaries[-1].end() if boundaries else limit
+                output.append({**ref, 'excerpt': text[:end]})
+                text = text[end:]
+            if text:
+                output.append({**ref, 'excerpt': text})
+        return output
+
+    items = result.get('items')
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict) and 'evidence' in item:
+                item['evidence'] = split(item['evidence'])
+    if 'other_information' in result:
+        result['other_information'] = split(result['other_information'])
+    return result
+
+
+def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
+    extraction = Extraction.model_validate(normalize_extraction_evidence(payload, blocks, semantic_support))
     source = {block['id']: block for block in blocks}
+    validate_other_information(extraction.other_information, blocks, semantic_support)
     items = []
     # Item IDs depend on source evidence and section, never display names or model order.
     # Exact duplicated evidence is rejected; repeated titles on distinct evidence remain separate.
@@ -29,7 +110,7 @@ def validate_extraction(payload, blocks, cv_id):
         evidence = []
         for ref in item.evidence:
             block = source.get(ref.block_id)
-            if not block or ref.excerpt not in block['text']:
+            if not block or (not evidence_matches(ref.excerpt, block['text']) and (ref.block_id, ref.excerpt) not in semantic_support):
                 raise EvidenceValidationError('The model returned unsupported source evidence. Retry this upload.', 'source_excerpt', index)
             evidence.append({'id': ref.block_id, 'location': block['location'], 'excerpt': ref.excerpt})
         identity = digest({'cv': cv_id, 'kind': item.kind, 'evidence': sorted(evidence, key=lambda e: (e['id'], e['excerpt']))})[:32]
@@ -40,18 +121,19 @@ def validate_extraction(payload, blocks, cv_id):
         # A purported explicit skill needs that exact name in its evidence; inferred
         # skills remain distinctly labelled and can be narrowed by the user.
         if item.explicit:
-            text = normalized_name(' '.join(e['excerpt'] for e in evidence))
+            text = normalized_name(' '.join(source[e['id']]['text'] for e in evidence))
             if any(normalized_name(name) not in text for name in names):
                 raise EvidenceValidationError('The model labelled an unsupported skill as explicit. Retry this upload.', 'literal_skill', index)
         # A valid calendar value is not evidence that the source stated it. Keep
         # each excerpt separate so components cannot be combined across citations.
-        for value in (item.start_date, item.end_date):
+        for field in ('start_date', 'end_date'):
+            value = getattr(item, field)
             if value and not any(_stated_date(ref['excerpt'], value) for ref in evidence):
-                raise EvidenceValidationError('The model returned an unsupported date or invented date precision. Retry this upload.', 'date_precision', index)
+                setattr(item, field, None)
         if item.ongoing and not any(re.search(
                 r'\b(present|ongoing|currently|still|continuing)\b', normalized_name(ref['excerpt']))
                 for ref in evidence):
-            raise EvidenceValidationError('The model returned an ongoing date not stated in the source. Retry this upload.', 'ongoing_status', index)
+            item.ongoing = False
         items.append({'id': identity, 'kind': item.kind, 'title': item.title, 'description': item.description,
                       'provenance': 'explicit' if item.explicit else 'inferred', 'evidence': evidence,
                       'skill_ids': [skill_id(name) for name in names], 'skill_names': names,
@@ -77,6 +159,19 @@ def validate_extraction(payload, blocks, cv_id):
         completed.add(identifier)
     for item in items: visit(item['id'])
     return items
+
+
+def validate_other_information(refs, blocks, semantic_support=frozenset()):
+    source = {block['id']: block for block in blocks}
+    result = []
+    for ref in refs:
+        block = source.get(ref.block_id)
+        if not block or (not evidence_matches(ref.excerpt, block['text']) and (ref.block_id, ref.excerpt) not in semantic_support):
+            raise EvidenceValidationError('The model returned unsupported source evidence. Retry this upload.', 'source_excerpt')
+        value = {'id': ref.block_id, 'location': block['location'], 'excerpt': ref.excerpt}
+        if value not in result:
+            result.append(value)
+    return result
 
 
 def _base_claims(item):
@@ -326,7 +421,30 @@ def _stated_date(excerpt, value):
     return any(re.search(r'(?<!\w)' + expression + r'(?!\w)', text) for expression in expressions)
 
 
-def validate_interpretation(payload, item, question):
+def interpretation_semantic_checks(payload, question, item=None):
+    """Separate semantic claims from exact evidence anchors and numeric validation."""
+    result = InterpretationOutput.model_validate(payload)
+    blocks, refs, fields = [], [], []
+    for claim in result.claims:
+        if not claim.evidence_excerpt: continue
+        if claim.evidence_excerpt not in question['answer']:
+            raise ValueError('Interpretation cited text not present in the answer.')
+        for field in claim.changed_fields:
+            value = getattr(claim, field)
+            if field == 'experience_months' or value in (None, 'unknown'): continue
+            statement = (f"For {claim.name}, attribution is {value}. Personal means the user actually performed it; team means teammates only; observed means watching only; denied means explicitly not personally performed."
+                if field == 'attribution' else f"For the user's {claim.name} work, {field} is {value}.")
+            block_id = str(len(blocks))
+            blocks.append({'id': block_id, 'text': claim.evidence_excerpt,
+                'reference_context': {'source_title': (item or {}).get('title'),
+                    'existing_skills': (item or {}).get('skill_names', []),
+                    'question': question.get('question')}})
+            refs.append({'block_id': block_id, 'excerpt': statement})
+            fields.append((claim.skill_id, field))
+    return blocks, refs, fields
+
+
+def validate_interpretation(payload, item, question, semantic_support=frozenset()):
     result = InterpretationOutput.model_validate(payload)
     if result.item_id != item['id'] or result.answer_revision != question['answer_revision']:
         raise ValueError('Interpretation refers to a different source or answer.')
@@ -348,12 +466,14 @@ def validate_interpretation(payload, item, question):
         elif excerpt not in answer:
             raise ValueError('Interpretation cited text not present in the answer.')
         if claim.skill_id not in existing and (claim.attribution != 'personal' or 'attribution' not in fields or
-                not excerpt or not re.search(r'(?<!\w)' + re.escape(normalized_name(claim.name)) + r'(?!\w)', normalized_name(excerpt))):
+                not excerpt or (not re.search(r'(?<!\w)' + re.escape(normalized_name(claim.name)) + r'(?!\w)', normalized_name(excerpt))
+                                and (claim.skill_id, 'attribution') not in semantic_support)):
             raise ValueError('A new skill requires an explicit personal mention in the answer.')
         for field in ('proficiency', 'experience_months'):
             if getattr(claim, field) is not None and field not in fields:
                 raise ValueError('Interpretation supplied an attribute outside its declared changes.')
-        if claim.proficiency is not None and (not excerpt or normalized_name(claim.proficiency) not in normalized_name(excerpt)):
+        if claim.proficiency is not None and (not excerpt or (normalized_name(claim.proficiency) not in normalized_name(excerpt)
+                and (claim.skill_id, 'proficiency') not in semantic_support)):
             raise ValueError('Proficiency must preserve the user’s wording.')
         if claim.experience_months is not None and (not excerpt or not _stated_months(excerpt, claim.experience_months)):
             raise ValueError('Known skill duration must be explicitly stated without invented precision.')
@@ -361,7 +481,8 @@ def validate_interpretation(payload, item, question):
             indicators = {'independent': r'\b(independently|on my own|without (?:any )?(?:help|guidance|supervision))\b',
                 'assisted': r'\b(assist(?:ed|ing)?|help(?:ed|ing)?|guidance|guided)\b',
                 'supervised': r'\b(supervis(?:ed|ion|or)|mentor|tutor|guidance|guided)\b'}
-            if not excerpt or not re.search(indicators[claim.assistance], normalized_name(excerpt)):
+            if not excerpt or (not re.search(indicators[claim.assistance], normalized_name(excerpt))
+                               and (claim.skill_id, 'assistance') not in semantic_support):
                 raise ValueError('Assistance or independence must be stated, not inferred.')
     resolved, remaining = set(result.resolved_uncertainties), set(result.remaining_uncertainties)
     if resolved & remaining or len(resolved) != len(result.resolved_uncertainties) or len(remaining) != len(result.remaining_uncertainties):

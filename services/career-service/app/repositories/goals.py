@@ -147,7 +147,7 @@ class GoalStore:
             payload=mongo_document(previous)
         return payload
 
-    def confirm(self, owner, key, data, prepared_goal=None):
+    def confirm(self, owner, key, data, prepared_goal=None, *, discovery_id=None):
         digest = fingerprint(data.model_dump(mode='json'))
         self.state.update_one({'_id': owner}, {'$setOnInsert': {'version': 0, 'goal_id': None, 'receipts': []}}, upsert=True)
         state = self.state.find_one({'_id': owner})
@@ -156,6 +156,10 @@ class GoalStore:
             if receipt['hash'] != digest:
                 raise GoalError('This request key was already used with different goal details.')
             return self.current(owner)
+        if discovery_id and state.get('active_discovery')!=discovery_id:
+            raise GoalError('A newer conversation replaced this discovery.')
+        selection_query={'_id':owner,'version':state['version']}
+        if discovery_id:selection_query['active_discovery']=discovery_id
         if state['version'] != data.expected_selection_version:
             raise GoalError('Your selected goal changed. Reload before confirming.')
         draft = self.draft(data.draft_id, owner) if data.draft_id else None
@@ -179,7 +183,7 @@ class GoalStore:
         fields = ('job_dates','discovery','target_type','field','role','employment_type','company','location','seniority_level','job_url','interests','preferences','source_cv_id','source_cv_version','source_extraction_version','source_profile_version','exploration_draft_id','exploration_draft_version','skills','non_skill_requirements','summary','responsibilities','readiness','requirements_need_review','skill_mapping_version')
         if previous and all(getattr(previous, f) == getattr(goal, f) for f in fields):
             receipt={'key':key,'hash':digest}
-            changed=self.state.update_one({'_id':owner,'version':state['version'],'receipts.key':{'$ne':key}},
+            changed=self.state.update_one({**selection_query,'receipts.key':{'$ne':key}},
                 {'$set':{'selected_review':{'id':goal.source_review_id,'version':goal.source_review_version} if goal.source_review_id else None},'$push':{'receipts':{'$each':[receipt],'$slice':-100}}}).modified_count
             if not changed and not self.state.find_one({'_id':owner,'receipts':{'$elemMatch':receipt}}):
                 raise GoalError('Another goal was selected. Reload before retrying.')
@@ -192,7 +196,7 @@ class GoalStore:
         if goal.discovery:
             discovery_workspace={'workspace':{'session_id':goal.source_review_id,'kind':'exploration','review_id':goal.source_review_id,'revision':goal.source_review_version,
                 'run_id':str(ObjectId()),'phase':'ready','research_id':None,'coverage':[],'error':None,'error_code':None,'retry_after':None,'expires_at':now()+timedelta(hours=24)}}
-        changed = self.state.update_one({'_id': owner, 'version': state['version']},
+        changed = self.state.update_one(selection_query,
             {'$set': {**discovery_workspace,'goal_id': payload['_id'], 'dependent_results_need_review': bool(previous),
                        'selected_review':{'id':goal.source_review_id,'version':goal.source_review_version} if goal.source_review_id else None},
              '$inc': {'version': 1}, '$push': {'receipts': {'$each': [receipt], '$slice': -100}}}).modified_count

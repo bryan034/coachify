@@ -633,3 +633,13 @@ in both early retrieval and durable research; search HTTP deadlines stay separat
 Existing private settings override defaults: apply `CAREER_LOCAL_TIMEOUT_SECONDS=60`
 for local inference or `AI_TIMEOUT_SECONDS=60` for cloud inference in your private
 `infrastructure/docker/.env`, then recreate Career yourself.
+
+### Skills Profile deployment update
+
+The summary-first Skills Profile adds shared Python schemas used by Profile and CV,
+plus frontend controls. Rebuild the Profile, CV and frontend images when applying
+this update; application-only hot reload does not install a changed shared package.
+No new environment setting, database or model credential is required. Existing
+`CV_LLM_*` settings also serve guided intake, question writing and semantic support
+checks. The owner-embedded profile and namespaced mutation receipts are additive;
+existing CV histories, manual declarations and onboarding fields are retained.

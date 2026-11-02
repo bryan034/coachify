@@ -15,6 +15,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
     if (url.pathname.endsWith('/auth/logout')) return route.fulfill({json:{ok:true}}); apiCalls.push(url.pathname);
   if(url.pathname.endsWith('/cv/policy'))return route.fulfill({json:policy});
   if(url.pathname === '/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
+  if(url.pathname.endsWith('/profile/skills-profile'))return route.fulfill({json:{version:0,status:'empty',saved_at:null,areas:{},entries:[]}});
   if(url.pathname.endsWith('/profile/capabilities'))return route.fulfill({json:emptyDeclarations});
   if(url.pathname === '/api/v1/roadmaps/workspace') {
    expect(route.request().method()).toBe('GET');
@@ -54,7 +55,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   await link.click();
   await expect(link).toHaveAttribute('aria-current','page');
   await expect(page.getByRole('heading',{level:1,name:heading})).toBeVisible();
-  if(label==='Skills Profile')await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
+  if(label==='Skills Profile'){await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveCount(0);}
   else if(label==='Search Jobs'){
    await expect(page.getByRole('textbox',{name:'Job title or keywords'})).toBeVisible();
    await page.getByRole('textbox',{name:'Job title or keywords'}).fill('Data analyst');
@@ -75,7 +76,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.locator('[aria-label="Month calendar"] .dh')).toHaveCount(7);
  await expect(page.getByRole('button',{name:'+ Add',exact:true})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Skills Profile'}).click();
- await expect(page.getByRole('button',{name:'Upload CV'})).toBeDisabled();
+ await page.getByRole('button',{name:/Upload your CV/}).click();await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Room for your next steps'})).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();

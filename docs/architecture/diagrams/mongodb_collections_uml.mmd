@@ -11,6 +11,7 @@ class users {
     +Date updated_at
     +CapabilityDeclaration[] capability_declarations
     +Integer declarations_version
+    +SkillsProfile skills_profile? [manual_intake]
 }
 
 class cvs {
@@ -26,6 +27,7 @@ class cvs {
     +CvDeletionReceipt deletion? [content_free_tombstone]
     +Integer version
     +Integer effective_version
+    +Integer profile_reviewed_effective_version?
     +CvItem[] items
     +Object corrections
     +Clarification[] clarifications
@@ -174,6 +176,9 @@ class cv_conversations {
     +String _id [opaque UUID]
     +String user_id [account UUID]
     +String cv_id?
+    +String purpose? [skills_profile]
+    +Integer intake_profile_version?
+    +Object intake_target?
     +Integer segment
     +Integer revision
     +Object[] messages
@@ -204,7 +209,7 @@ users "1" --> "0..*" cv_conversations : owns private retained history
 cv_conversations --> cvs : optional source reference
 users "1" --> "0..1" career_state : owns current goal metadata
 career_state --> career_goals : exact current goal reference
-note for cvs "CV-owned structured evidence, overlays, interpretation and history. UUID IDs and private temporary originals; public reads expose no path or owner metadata. Transient extraction/repair graph state is not checkpointed; only validated evidence and generation metadata persist. Deleted sources retain content-free receipts, excluded from reads and saved-record quota."
+note for cvs "Evidence may be a source-supported summary; semantic approval is transient. Bounded source-linked other_information retains uncategorised content; extraction dates are optional hints. CV-owned structured evidence, overlays, interpretation and history. UUID IDs and private temporary originals; public reads expose no path or owner metadata. Transient extraction/repair graph state is not checkpointed; only validated evidence and generation metadata persist. Deleted sources retain content-free receipts, excluded from reads and saved-record quota."
 note for cv_conversations "Nullable CV permits manual-only entry. Bounded messages/action receipts have separate transcript revisions; no automatic history expiry."
 note for career_state "Automatic goal saving is distinct from explicit CV confirmation. Stamp binds goal ID/version, selection revision and projection hash. Changes invalidate it without another goal record or deleting CV facts."
 note for career_goals "Older UUID reviewed-target documents remain retained history, excluded from canonical ObjectId reads. Canonical create_key metadata preserves the legacy uniqueness index; no destructive migration."

@@ -14,6 +14,7 @@ from app.repositories.profile import ProfileRepository
 from app.core.mail import SmtpMailer, mail_settings
 from app.api.v1.capabilities import router as capability_router
 from app.repositories.capabilities import CapabilityRepository
+from app.api.v1.skills_profile import router as skills_profile_router
 
 
 def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
@@ -47,6 +48,7 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
     app.include_router(router)
     app.include_router(account_router)
     app.include_router(capability_router)
+    app.include_router(skills_profile_router)
 
     @app.middleware("http")
     async def private_responses(request, call_next):

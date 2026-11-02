@@ -242,15 +242,21 @@ a fixed redirect without changing context or starting research; the turn's model
 call performs scope classification. The six clarification topics must be addressed
 before research; explicit unsure/skip answers are accepted. Role scope can
 stay broad without a separate broad-exploration or industry question.
-Discovery opens fresh with a fixed Python introduction and no initial AI calls;
-the introduction is returned only on fresh opening and excluded from model history; a new
-private session starts with the first sent message. Chat remains open during research
+Discovery restores the latest owner-scoped MongoDB conversation after refresh or
+re-entry, including after goal confirmation. Empty chats show a fixed Python
+introduction excluded from model history. The first message creates an initial
+session; **New chat** immediately persists a distinct empty session. Opening or
+creating an empty chat makes no model/search calls. Chat remains open during research
 and supports source-linked follow-up questions.
 Discovery assesses and ranks candidates by relevance and available Brave employer metadata;
 faithful paraphrases are accepted and rejected evidence gets one replacement search;
 usable sources survive replacement shortfalls, with honest coverage warnings;
 truncated extraction batches split without discarding completed source work.
-The final review uses the existing review/confirmation APIs and target persistence.
+The chat summary groups findings under headings with inline citations and a bold
+closing invitation to ask questions or refine the goal. Skill edits/direction
+refinements go through messages; the frontend has no separate editor panel. Validated results
+automatically publish all goal fields through the shared persistence path; there is
+no in-chat save action. Failed or superseded work preserves the current valid goal.
 No CV is needed. See [Career Discovery](CAREER_DISCOVERY.md) for exact routes, models,
 configuration, evidence rules, recovery and verification. Saved-goal question APIs remain
 available while research is waiting; the chat UI keeps its composer open while the combined overview is being prepared.

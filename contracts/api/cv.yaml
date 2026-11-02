@@ -3137,6 +3137,130 @@
           }
         }
       }
+    },
+    "/api/v1/cv/{cv_id}/profile-review": {
+      "post": {
+        "summary": "Save Profile Review",
+        "operationId": "save_profile_review_api_v1_cv__cv_id__profile_review_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cv_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cv Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Mutation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3915,7 +4039,8 @@
                 "enum": [
                   "review",
                   "continue",
-                  "skip"
+                  "skip",
+                  "finish"
                 ]
               },
               {
@@ -3964,6 +4089,18 @@
             "type": "string",
             "format": "uuid",
             "title": "Mutation Id"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "skills_profile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
           }
         },
         "additionalProperties": false,
@@ -4034,6 +4171,29 @@
           "revision": {
             "type": "integer",
             "title": "Revision"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "skills_profile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
+          },
+          "reviewed_effective_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed Effective Version"
           },
           "read_only": {
             "type": "boolean",
@@ -4116,6 +4276,17 @@
       },
       "CvDetail": {
         "properties": {
+          "profile_reviewed_effective_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Reviewed Effective Version"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -4183,6 +4354,14 @@
           "source_available": {
             "type": "boolean",
             "title": "Source Available"
+          },
+          "other_information": {
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            },
+            "type": "array",
+            "maxItems": 160,
+            "title": "Other Information"
           },
           "items": {
             "items": {
@@ -4612,6 +4791,17 @@
       },
       "CvSummary": {
         "properties": {
+          "profile_reviewed_effective_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Reviewed Effective Version"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -4913,7 +5103,8 @@
           },
           "excerpt": {
             "type": "string",
-            "title": "Excerpt"
+            "title": "Excerpt",
+            "description": "Source-linked evidence; CV extraction may contain a faithful summary rather than an exact quotation."
           },
           "location": {
             "type": "string",
@@ -5579,6 +5770,14 @@
             },
             "type": "array",
             "title": "Previous Items"
+          },
+          "candidate_other_information": {
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            },
+            "type": "array",
+            "maxItems": 160,
+            "title": "Candidate Other Information"
           },
           "candidate_items": {
             "items": {

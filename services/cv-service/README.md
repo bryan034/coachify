@@ -17,9 +17,11 @@ Deletion supports ready, queued, processing and failed CVs. It clears that sourc
 
 The saved-CV list uses the exact path `GET /api/v1/cv` with no trailing slash. It returns projected metadata in pages of 25 by default (`limit` 1–100 and opaque `cursor`), with `next_cursor` and the explicit selection retained on every page. Upload storage and saved-record quotas preserve existing records and report clear capacity errors; see the specification for defaults and recovery.
 
-Extraction runs a transient LangGraph harness: parse → extract → validate, with at most one model repair after schema/evidence failure. Each call uses the existing shared budget and live worker lease; only fully validated results can publish. `CV_LLM_RESPONSE_MODE=json_schema` (default) requests strict schema-constrained decoding for extraction/repair, with no automatic downgrade. Dates, evidence and provider-unsupported limits still require backend validation. Chat and clarification interpretation retain their existing JSON mode. See [harness details](SPEC.md#extraction-runtime-harness).
+Extraction runs a transient LangGraph with at most one model repair. Evidence accepts equivalent meaning: formatting differences pass locally, while paraphrases/summaries are checked against their cited source blocks by the configured model. Missing sources, unsupported facts, changed negation/attribution and malformed verification results are rejected. Each semantic check shares the existing model budget, concurrency slots and worker lease. Exact/formatting-equivalent evidence needs no extra call; a candidate can require one semantic check (up to four model calls including repair). This is model judgment, not independently verified evidence.
 
-Failures include `error.failure_stage`, `error.failure_category`, `error.repair_attempted` and, for provider HTTP rejections, `error.provider_status_code`, `error.provider_reason` and `error.provider_parameter` in saved-CV, operation and list responses. HTTP rejection messages distinguish invalid requests, credentials, quota and temporary outages. Reasons/parameter names are allowlisted; provider prose is never returned or logged. Successful extraction metadata includes `response_mode`, `workflow_version` and `repair_attempts`. Older records have null diagnostics until retried; see [failure diagnostics](SPEC.md#extraction-failure-diagnostics).
+`CV_LLM_RESPONSE_MODE=json_schema` requests strict decoding; Gemini receives a simplified decoding grammar while full backend limits remain enforced. Evidence targets fewer than 400 characters with a hard limit of 500. Source-supported long text is split losslessly within existing citation-count limits. `other_information` retains uncategorised source-linked content through retries/reconciliation and review. Dates are best effort: unclear, invalid, conflicting or unsupported dates become null without failing other facts. Manual corrections and clarification interpretation retain their existing validation. See [harness details](SPEC.md#extraction-runtime-harness).
+
+Failures include `error.failure_stage`, `error.failure_category`, `error.repair_attempted` and, for provider HTTP rejections, `error.provider_status_code`, `error.provider_reason` and `error.provider_parameter` in saved-CV, operation and list responses. HTTP rejection messages distinguish invalid requests, credentials, quota and temporary outages. Object and single-element list-wrapped provider rejections are classified. Reasons/parameter names are allowlisted; provider prose is never returned or logged. Successful extraction metadata includes `response_mode`, `workflow_version` and `repair_attempts`. Older records have null diagnostics until retried; see [failure diagnostics](SPEC.md#extraction-failure-diagnostics).
 
 See [SPEC.md](SPEC.md) for semantics, [OpenAPI](../../contracts/api/cv.yaml) for fields, and [setup](../../docs/setup.md) for Compose. `GET /health` is process health. All CV routes require an authenticated owner with completed onboarding and return `Cache-Control: no-store`.
 
@@ -35,3 +37,13 @@ For optional local testing, select `elo-deepseek-r1:1.5b` at
 requests and never receives stored cloud API keys. Local extraction gets a 120-second
 HTTP timeout; chat/interpretation get 60 seconds, retaining their existing leases.
 Extraction and repair timeouts are capped by the remaining 180-second worker lease, reserving ten seconds for validation/publication. Existing output/domain checks remain enforced. Rebuild the CV image to install LangGraph before retrying saved uploads.
+
+## Skills Profile guided entry
+
+Skills Profile opens on a summary. Uploading offers **Review CV** after extraction;
+chat starts only when selected. Manual guided entry uses Profile-owned structured
+background and per-experience skill evidence. Basic CV review works without a
+Career target; target-specific questions retain their existing confirmation rules.
+`POST /api/v1/cv/{cv_id}/profile-review` saves a version-bound review stamp from
+the summary. Unknowns remain uncertain. See the
+[guided intake specification](SPEC.md#skills-profile-entry-and-guided-intake).

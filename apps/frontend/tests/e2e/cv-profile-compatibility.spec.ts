@@ -18,6 +18,7 @@ async function workspace(page: Page) {
   });
   await page.route('**/api/v1/profile**', async route => {
     const path = new URL(route.request().url()).pathname;
+  if(path.endsWith('/skills-profile'))return route.fulfill({json:{version:0,status:'empty',saved_at:null,areas:{},entries:[]}});
     if (path.endsWith('/auth-config')) return route.fulfill({ json: { mode: 'email', google_enabled: false } });
     if (path.endsWith('/auth/logout')) return route.fulfill({ json: { logged_out: true } });
     if (path.endsWith('/auth/session')) {
@@ -60,6 +61,7 @@ async function visibility(page: Page, state: 'visible' | 'hidden') {
 
 async function enterDrafts(page: Page) {
   await page.goto('/cv');await openCvReviewTools(page);
+  await page.getByLabel('CV profile-compatible-cv',{exact:true}).getByRole('button',{name:'Review CV'}).click();
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toBeEnabled();
   await page.getByRole('button', { name: 'Edit or remove Team dashboard' }).click();
   await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Unsaved correction: I prepared the data.');

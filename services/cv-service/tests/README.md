@@ -16,6 +16,10 @@ Career adapter tests verify authenticated versioned requests, strict bounded con
 
 Interpretation cases cover personal/team/guided/observed/denied contribution, explicitly named new skills, independent evidence, attribute-specific updates, cross-source conflicts, partial/unknown answers, distinct follow-ups, semantic no-ops, exact excerpts, invalid output, invented date precision in extraction and answers, correction/interpretation ordering, interrupted leases, same-key concurrent calls and late-result fencing. Reconciliation cases cover retained candidates, explicit mapping/archival, replacement ownership, stale choices and safe dismissal after the previous source changes, and date conflicts after reapplication without losing the comparison. Handoff tests cover both target types and source/target/declaration races; they do not claim atomic admission.
 
+Semantic-evidence cases use explicit synthetic verdicts to cover paraphrase/formatting acceptance, unsupported/malformed verdict rejection, source scoping and shared daily admission. They do not measure live semantic accuracy.
+
+Extraction regressions cover lossless splitting of source-verified long quotations, invented-suffix rejection, retained explicit-skill/count checks, source-checked uncategorised content, persistence/API output and nonfatal unclear/invalid/unsupported dates. Frontend checks cover the Other information section.
+
 No live provider or real CV is used. These tests validate contracts and storage/failure behavior; they do not validate model quality against human labels or J/G gap analysis implementation.
 
 The public `contracts/api/models/cv.schema.json` is generated from `CvDetail`, the saved-CV API response. Career may project that response into its own context contract; that projection does not replace the CV schema or create another CV store. Read-contract checks exercise authenticated sparse listings, owner isolation, private-field exclusion, read-only GET behavior, and strict rejection of injected write controls. Repository checks retain idempotency and conflicting-upload protection for both adapters.
@@ -53,7 +57,7 @@ maximum interpretation fields plus worker bookkeeping. Private reservation data
 is excluded from public CV responses.
 
 Provider adapter tests exercise OpenAI SDK requests using explicit HTTP mocks,
-including host-scoped Gemini reasoning, DeepSeek extensions and local credential
+including host-scoped Gemini reasoning and reduced-complexity decoding schemas while retaining backend limits, DeepSeek extensions and local credential
 isolation. Shared transport tests cover bounded bodies, redirects and SDK retry
 suppression. No live provider credentials are used.
 
@@ -83,3 +87,9 @@ confirmation, review/selection reset, cancellation, interrupted-request identity
 stale-version refresh and strict deletion acknowledgements.
 Deletion OpenAPI checks also simulate Python 3.12's older HTTP status phrases;
 the published 413/422 descriptions remain stable across supported runtimes.
+
+Skills Profile tests cover explicit review without Career, model-written questions,
+manual field order/skips, semantically equivalent values, unsupported/foreign
+answer rejection, persisted partial drafts and exact-write recovery after lost
+cross-service acknowledgements. Semantic proficiency/independence acceptance uses
+explicit synthetic verdicts; it does not establish live model quality.

@@ -1,19 +1,20 @@
-import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
-import {beforeEach,expect,it,vi} from 'vitest';
+import {act,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {CareerGoalHome,CareerGoalOverview,LearningFocus} from './career-overview';
 import {CareerSessionProvider} from './career-session';
 import {getCvGoalConfirmation,confirmCvGoal} from '@/lib/api/career-cv-confirmation';
-import {careerApi,type CareerWorkspace} from '@/lib/api/career';
+import {careerApi,refreshWorkspace,type CareerWorkspace} from '@/lib/api/career';
 vi.mock('@/lib/api/career-cv-confirmation',()=>({getCvGoalConfirmation:vi.fn(),confirmCvGoal:vi.fn()}));
 const push=vi.fn(),params=new URLSearchParams();
 vi.mock('next/navigation',()=>({useRouter:()=>({push,replace:vi.fn()}),useSearchParams:()=>params}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-token'})}));
-vi.mock('@/lib/api/career',()=>({careerApi:vi.fn(),importCareer:vi.fn()}));
+vi.mock('@/lib/api/career',()=>({careerApi:vi.fn(),importCareer:vi.fn(),refreshWorkspace:vi.fn()}));
 const extraction={role:'Backend Software Engineer',field:'Software Engineering',company:'Example',location:'Singapore',seniority_level:'Entry level',job_url:null,summary:'Build backend services.',responsibilities:['Build APIs'],skills:[{item_id:'sql',name:'SQL',category:'Technical',priority:'required' as const,origin:'employer' as const},{item_id:'team',name:'Teamwork',category:'Transferable',priority:'preferred' as const,origin:'employer' as const}],non_skill_requirements:[{requirement_id:'degree',category:'Qualifications',description:'A relevant degree',priority:'preferred',evidence:'A relevant degree is preferred.',group_id:null,group_operator:'all' as const}]};
 const workspace:CareerWorkspace={session_id:'session',revision:1,kind:'jd',phase:'ready',current:{selection_version:1,goal:{...extraction,_id:'goal',version:1,target_type:'specific_job',interests:[],preferences:[],readiness:'pending',exploration_draft_id:null,exploration_draft_version:null},dependent_results_need_review:false},research_id:'research',research_version:1,coverage:[],error:null,retry_after:null,expires_at:null,exploration_id:null};
 
 function overview(value=workspace){return render(<CareerSessionProvider><CareerGoalOverview workspace={value} onReload={vi.fn()}/></CareerSessionProvider>);}
-beforeEach(()=>{vi.resetAllMocks();vi.mocked(getCvGoalConfirmation).mockResolvedValue({goal_id:'goal',goal_version:1,selection_version:1,confirmed:false,context:null,reason:null});params.forEach((_,key)=>params.delete(key));vi.mocked(careerApi).mockImplementation(async(path)=>path==='/workspace'?workspace as never:{status:'no_cv',cv_uploaded:false,skills_evaluated:false} as never);});
+afterEach(()=>vi.useRealTimers());
+beforeEach(()=>{vi.resetAllMocks();vi.mocked(refreshWorkspace).mockImplementation(async(_previous,token,signal)=>careerApi('/workspace',token,{signal}));vi.mocked(getCvGoalConfirmation).mockResolvedValue({goal_id:'goal',goal_version:1,selection_version:1,confirmed:false,context:null,reason:null});params.forEach((_,key)=>params.delete(key));vi.mocked(careerApi).mockImplementation(async(path)=>path==='/workspace'?workspace as never:{status:'no_cv',cv_uploaded:false,skills_evaluated:false} as never);});
 it('shows saved skills in briefing accordions and keeps refinement and replacement',async()=>{
  overview();expect(screen.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
  expect(screen.getByRole('heading',{name:'Your learning focus'})).toBeVisible();
@@ -170,4 +171,28 @@ it('updates the layout after the existing explicit confirmation succeeds',async(
  await waitFor(()=>expect(button).toBeEnabled());fireEvent.click(button);
  await waitFor(()=>expect(screen.getByRole('complementary',{name:'Your starting point'})).toHaveClass('briefing-context-banner'));
  expect(confirmCvGoal).toHaveBeenCalledTimes(1);
+});
+
+
+it('refreshes automatically when returning to a goal page updated by discovery',async()=>{
+ const mounted=render(<CareerSessionProvider><CareerGoalHome/></CareerSessionProvider>);
+ await screen.findByRole('heading',{name:'Backend Software Engineer'});
+ const changed={...workspace,current:{...workspace.current,selection_version:2,goal:{...workspace.current.goal!,role:'Data Engineer',version:2}}};
+ vi.mocked(careerApi).mockImplementation(async(path)=>path==='/workspace'?changed as never:{status:'no_cv',cv_uploaded:false,skills_evaluated:false} as never);
+ fireEvent.focus(window);
+ expect(await screen.findByRole('heading',{name:'Data Engineer'})).toBeInTheDocument();
+ mounted.unmount();
+});
+
+
+it('refreshes a ready goal when Discovery completes in the background',async()=>{
+ vi.useFakeTimers();
+ render(<CareerSessionProvider><CareerGoalHome/></CareerSessionProvider>);
+ await act(async()=>{});
+ expect(screen.getByRole('heading',{name:'Backend Software Engineer'})).toBeInTheDocument();
+ const changed={...workspace,current:{...workspace.current,selection_version:2,goal:{...workspace.current.goal!,role:'Data Engineer',version:2}}};
+ vi.mocked(careerApi).mockImplementation(async(path)=>path==='/workspace'?changed as never:{status:'no_cv',cv_uploaded:false,skills_evaluated:false} as never);
+ await act(async()=>{vi.advanceTimersByTime(5000);});
+ expect(screen.getByRole('heading',{name:'Data Engineer'})).toBeInTheDocument();
+ expect(refreshWorkspace).toHaveBeenCalled();
 });

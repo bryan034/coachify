@@ -1,3 +1,4 @@
+import {openCvReviewTools} from '../fixtures/cv-ui';
 import {expect, type Locator, type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
@@ -30,6 +31,7 @@ export async function setupChatScenario(page: Page) {
 
 export async function sendChat(page: Page, text: string) {
   const composer = page.getByRole('textbox', {name: 'Message elo', exact: true});
+  await expect(page.locator('.cv-chat-action-pending')).toHaveCount(0, {timeout: 35_000});
   await expect(composer).toBeEnabled(); await composer.fill(text);
   await page.getByRole('button', {name: 'Send message', exact: true}).click();
   await expect(composer).toBeEnabled(); await expect(composer).toHaveValue('');
@@ -47,12 +49,12 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   const readCv = async (): Promise<CvDetail> => (await account.get(`/api/v1/cv/${cvId}`)).json();
   const chat = page.getByRole('region', {name: 'CV conversation', exact: true});
   await page.goto('/cv');
+  await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   await chapter('1. Review your saved CV through a conversation', 'This is a synthetic account and model, using real local services and saves. The CV and Career target were explicitly selected before this walkthrough.', chat);
-  await chat.getByRole('button', {name: /^(Review with me|Continue review)$/}).click();
   await expect(chat.locator('.cv-chat-current-topic')).toContainText('Team dashboard');
-  await expect(chat).toContainText('Synthetic data analyst');
-  await chapter('2. One focused question', 'elo asks about the project contribution that matters to the confirmed target. You can answer naturally, ask why, or skip.', chat.locator('.cv-chat-current-topic'));
+  await expect(chat).toContainText('You can review your experience now.');
+  await chapter('2. One focused question', 'elo asks about the project contribution independently of the saved Career target. You can answer naturally, ask why, or skip.', chat.locator('.cv-chat-current-topic'));
   await sendChat(page, chatAnswer);
   await expect.poll(async () => (await readCv()).skills.find(skill => skill.skill_id === 'skill:python')?.experience_months).toBe(6);
   const first = await readCv(), projectId = first.items.find(item => item.kind === 'project')!.id;
@@ -93,17 +95,17 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
 
   const beforeReload = await readChat(account, cvId);
   await page.reload();
+  await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   const resumed = await readChat(account, cvId);
   expect(resumed.id).toBe(beforeReload.id); expect(resumed.messages).toEqual(beforeReload.messages);
   await expect(chat.getByText(chatAnswer, {exact: true}).first()).toBeVisible();
   await chapter('8. Return to the same saved conversation', 'Reload restores the account-owned history. No duplicate answer or correction is submitted.', chat);
 
-  await chat.getByRole('button', {name: /^(Review with me|Continue review)$/}).click();
   await expect(chat.getByRole('button', {name: 'Skip this question', exact: true})).toBeEnabled();
-  const beforeSkip = await readCv();
+  const beforeSkip = await readCv(), skippedQuestion = (await readChat(account, cvId)).active_question!;
   await chat.getByRole('button', {name: 'Skip this question', exact: true}).click();
-  await expect(chat.getByText(/Skipped; that detail remains unknown\./)).toBeVisible();
+  await expect.poll(async () => (await readCv()).clarifications.find(question => question.id === skippedQuestion.id)?.status).toBe('skipped');
   const skipped = await readCv();
   expect(skipped.effective_version).toBe(beforeSkip.effective_version);
   expect(skipped.clarifications.some(question => question.status === 'skipped')).toBe(true);
@@ -120,13 +122,14 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   await expect.poll(async () => (await (await account.get('/api/v1/profile/capabilities')).json()).declarations.length).toBe(1);
   await chapter('10. Add an omitted capability', 'A manual Figma statement is saved only after Save capability. Profile owns the declaration; it is not presented as text extracted from the CV.', chat);
 
-  await chat.getByRole('button', {name: 'View CV summary', exact: true}).click();
+  await chat.getByRole('button', {name: 'View skills profile', exact: true}).click();
+  await openCvReviewTools(page);
   await expect(page.getByRole('region', {name: 'Potential skills', exact: true})).toContainText('3 months');
   await expect(page.getByRole('heading', {name: 'Figma', exact: true})).toBeVisible();
   await chapter('11. Inspect the evidence whenever you need it', 'The summary retains the saved contributions, sources, original evidence and detailed review tools. It does not calculate readiness or create an assessment.', page.getByRole('region', {name: 'Potential skills', exact: true}));
   const storage = await page.evaluate(() => JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]));
   expect(storage).not.toContain(chatAnswer); expect(storage).not.toContain(manualMessage);
-  await page.locator('summary').filter({hasText: 'Your CV summary'}).click();
+  await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
   await page.setViewportSize({width: 390, height: 844});
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

@@ -45,14 +45,16 @@ def test_provider_rejections_preserve_only_status(monkeypatch, status):
     ('response_format json_schema is not supported by this model.', None, 'structured_output_unsupported', 'response_format'),
     ('Invalid schema: unsupported keyword in schema.', None, 'schema_rejected', 'schema'),
     ('Unsupported parameter reasoning_effort.', 'reasoning_effort', 'unsupported_parameter', 'reasoning_effort'),
+    ('Invalid reasoning_effort: minimal. Valid values are high, low, medium, none.', None, 'unsupported_parameter', 'reasoning_effort'),
     ('Invalid input ' + PRIVATE, PRIVATE, 'invalid_request', None),
 ])
-def test_safe_provider_rejection_reasons(monkeypatch, message, param, reason, parameter):
+@pytest.mark.parametrize('list_wrapped', [False, True])
+def test_safe_provider_rejection_reasons(monkeypatch, message, param, reason, parameter, list_wrapped):
     calls = []
     def reject(request):
         calls.append(json.loads(request.content))
-        return httpx.Response(400, json={'error': {'message': message, 'param': param,
-            'untrusted': PRIVATE}})
+        body = {'error': {'message': message, 'param': param, 'untrusted': PRIVATE}}
+        return httpx.Response(400, json=[body] if list_wrapped else body)
     extractor = provider(monkeypatch, reject)
     with pytest.raises(ExtractionFailure) as caught: extractor.extract([])
     assert caught.value.provider_reason == reason

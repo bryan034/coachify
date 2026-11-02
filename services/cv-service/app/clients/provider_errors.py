@@ -17,6 +17,10 @@ def provider_failure(response, stage):
     try:
         body = response.content
         payload = json.loads(body) if len(body) <= 16 * 1024 else None
+        # Some OpenAI-compatible rejections wrap their single error in a list.
+        # Never concatenate arbitrary/multiple errors or retain provider prose.
+        if isinstance(payload, list) and len(payload) == 1:
+            payload = payload[0]
         error = payload.get('error') if isinstance(payload, dict) else None
         message = error.get('message') if isinstance(error, dict) else None
         raw_parameter = error.get('param') if isinstance(error, dict) else None
@@ -31,7 +35,7 @@ def provider_failure(response, stage):
                 reason, parameter = 'structured_output_unsupported', 'response_format'
             elif 'schema' in text and any(word in text for word in ('invalid', 'unsupported', 'unknown name', 'not supported')):
                 reason, parameter = 'schema_rejected', 'schema'
-            elif unsupported:
+            elif unsupported or (parameter and 'invalid' in text) or ('invalid reasoning_effort' in text):
                 reason = 'unsupported_parameter'
                 if parameter is None:
                     parameter = next((name for name in sorted(PARAMETERS) if name in text), None)

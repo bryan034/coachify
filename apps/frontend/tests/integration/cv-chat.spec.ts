@@ -16,13 +16,27 @@ test('manual-only chat persists without a fake CV and recovers saved failed mess
   const account = await createLocalAccount(page, 'Synthetic manual-only chat');
   const profile = await (await account.get('/api/v1/profile')).json();
   expect((await account.finish({expected_version: profile.version, occupational_status: 'employed', no_previous_education: true})).ok()).toBeTruthy();
-  await page.goto('/cv'); await sendChat(page, manualMessage);
-  await page.getByRole('button', {name: 'Save capability', exact: true}).click();
+  await page.goto('/cv');
+  await page.getByRole('button', {name: /^Build through chat/}).click();
+  await expect(page.locator('.cv-chat-current-topic')).toContainText('What can you share about your work?');
+  await sendChat(page, manualMessage);
+  const draft = await (await account.get('/api/v1/profile/skills-profile')).json();
+  expect(draft.status).toBe('draft');
+  expect(draft.entries[0].skills[0]).toMatchObject({name: 'Figma', description: manualMessage});
+  expect((await (await account.get('/api/v1/profile/capabilities')).json()).declarations).toHaveLength(0);
+  await page.getByRole('button', {name: 'View skills profile', exact: true}).click();
+  await page.getByRole('button', {name: 'Save profile', exact: true}).click();
   await expect.poll(async () => (await (await account.get('/api/v1/profile/capabilities')).json()).declarations.length).toBe(1);
   expect((await (await account.get('/api/v1/cv')).json()).cvs).toHaveLength(0);
   const before = await readChat(account, null); await page.reload();
+  await page.getByRole('button', {name: /^Update through chat/}).click();
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
-  expect((await readChat(account, null)).messages).toEqual(before.messages);
+  await expect(page.locator('.cv-chat-current-topic')).toContainText('What can you share about your work?');
+  const resumed = await readChat(account, null);
+  // Publishing changes Profile's revision; reopening asks the current question
+  // again while preserving every saved factual turn and its action receipts.
+  expect(resumed.messages.slice(0, before.messages.length)).toEqual(before.messages);
+  expect(resumed.messages.filter(message => message.role === 'user' && message.text === manualMessage)).toHaveLength(1);
   await sendChat(page, 'SYNTHETIC_CHAT_PROVIDER_FAILURE');
   const failed = await readChat(account, null), action = failed.messages.flatMap(message => message.actions).find(action => action.status === 'failed')!;
   expect(action).toBeTruthy();
@@ -42,7 +56,7 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   const {account, cvId} = await setupChatScenario(page);
   const cv = async () => (await account.get(`/api/v1/cv/${cvId}`)).json();
   await page.goto('/cv');
-  await page.getByRole('button', {name: /^(Review with me|Continue review)$/}).click();
+  await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
   await expect(page.locator('.cv-chat-current-topic')).toContainText('Team dashboard');
   const before = await cv();
   await sendChat(page, 'I helped with that project.');
@@ -63,7 +77,7 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   await expect.poll(async () => (await readChat(account, cvId)).messages.flatMap(message => message.actions).some(action => action.status === 'pending')).toBe(false);
   expect((await readChat(account, cvId)).messages.filter(message => message.role === 'user' && message.text === body.text)).toHaveLength(1);
   expect(await cv()).toEqual(before);
-  await page.reload(); await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
+  await page.reload(); await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click(); await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
 
   await sendChat(page, 'SYNTHETIC_CHAT_INVALID_SOURCE');
   expect(await cv()).toEqual(before);
@@ -86,7 +100,7 @@ test('a multi-source message reports partial failure and retries only the unfini
   test.setTimeout(120_000);
   const {account, cvId} = await setupChatScenario(page);
   await page.goto('/cv');
-  await page.getByRole('button', {name: /^(Review with me|Continue review)$/}).click();
+  await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
   await expect(page.locator('.cv-chat-current-topic')).toContainText('Team dashboard');
   const text = chatAnswer + ' I cannot clarify my internship yet. SYNTHETIC_SECOND_ACTION_FAILURE';
   await sendChat(page, text);

@@ -27,7 +27,7 @@ for (const scenario of cases) {
     await page.getByLabel('Capability name', { exact: true }).fill('Public speaking');
     await page.getByLabel('Capability description', { exact: true }).fill('I presented a synthetic group project.');
     await page.getByRole('button', { name: 'Add capability', exact: true }).click();
-    await expect(page.getByText('I presented a synthetic group project.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', {name: 'Manual capabilities', exact: true}).getByText('I presented a synthetic group project.', { exact: true })).toBeVisible();
     // C07 must not overwrite education, employment, completion or the Profile revision.
     expect(await (await account.get('/api/v1/profile')).json()).toEqual(background);
 
@@ -59,7 +59,7 @@ for (const scenario of cases) {
     expect(current.onboarding_complete).toBe(true);
     await page.reload();await openCvReviewTools(page);
     await expect(page.getByLabel('Selected CV', { exact: true })).toContainText(cvId);
-    await expect(page.getByText('I presented a synthetic group project.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', {name: 'Manual capabilities', exact: true}).getByText('I presented a synthetic group project.', { exact: true })).toBeVisible();
     expect(await (await account.get('/api/v1/profile/capabilities')).json()).toEqual(declarations);
   });
 }

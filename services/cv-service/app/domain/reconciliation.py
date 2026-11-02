@@ -20,11 +20,12 @@ def affected_sources(source, items):
                   or any(field_value(old[identifier], field) != field_value(new[identifier], field) for field in fields))
 
 
-def candidate_for(document, items, metadata, notices, source=None):
+def candidate_for(document, items, metadata, notices, source=None, other_information=None):
     source = source or document
     old_ids = set(source['overlays']) | {q['item_id'] for q in source['clarifications']}
     affected = sorted(old_ids) if source['_id'] != document['_id'] else affected_sources(source, items)
     return {'id': str(uuid4()), 'source_cv_id': source['_id'], 'source_version': source['version'],
+            'other_information': deepcopy(document.get('other_information', []) if other_information is None else other_information),
             'items': deepcopy(items), 'extraction': deepcopy(metadata), 'notices': list(notices),
             'previous_items': effective_items(source), 'overlays': deepcopy(source['overlays']),
             'clarifications': deepcopy(source['clarifications']), 'affected_item_ids': affected,
@@ -36,6 +37,7 @@ def view(document):
     if not candidate: return None
     return {'cv_id': document['_id'], 'cv_version': document['version'],
             'candidate_id': candidate['id'], 'source_cv_id': candidate['source_cv_id'],
+            'candidate_other_information': candidate.get('other_information', []),
             'previous_items': candidate['previous_items'], 'candidate_items': candidate['items'],
             'affected_item_ids': candidate['affected_item_ids'],
             'previous_answers': candidate['clarifications'], 'extraction': candidate['extraction'],
@@ -128,7 +130,8 @@ def resolve(service, owner, identifier, mutation):
                         if old_question.get('followup_of') in identities else None,
                     reconciled_from={'cv_id': candidate['source_cv_id'], 'item_id': old, 'question_id': old_question['id']})
                 questions.append(question)
-        document.update(original_items=deepcopy(candidate['items']), overlays=overlays,
+        document.update(other_information=deepcopy(candidate.get('other_information', [])),
+                        original_items=deepcopy(candidate['items']), overlays=overlays,
                         clarifications=questions, extraction=deepcopy(candidate['extraction']),
                         notices=candidate['notices'], prepared_context=None)
         try:
@@ -140,6 +143,7 @@ def resolve(service, owner, identifier, mutation):
     document['history'].append({'operation': 'reconcile', 'action': mutation.action,
         'version': previous['version'], 'extraction_version': previous['extraction_version'],
         'effective_version': previous['effective_version'], 'original_items': deepcopy(previous['original_items']),
+        'other_information': deepcopy(previous.get('other_information', [])),
         'overlays': deepcopy(previous['overlays']), 'clarifications': deepcopy(previous['clarifications']),
         'candidate': deepcopy(candidate), 'choices': [choice.model_dump() for choice in mutation.choices], 'at': now()})
     document.pop('candidate', None)

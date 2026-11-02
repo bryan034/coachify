@@ -93,9 +93,12 @@ class PrepareMutation(Mutation):
     career_target_selection_version: int | None = Field(default=None, ge=1, strict=True)
 
 
+MAX_EVIDENCE_EXCERPT_CHARACTERS = 500
+
+
 class SourceExcerpt(StrictModel):
     block_id: str = Field(min_length=1, max_length=20)
-    excerpt: str = Field(min_length=1, max_length=500)
+    excerpt: str = Field(min_length=1, max_length=MAX_EVIDENCE_EXCERPT_CHARACTERS, description='Source-supported quotation or faithful summary; exact original formatting is not required.')
 
 
 class ExtractedItem(StrictModel):
@@ -108,8 +111,8 @@ class ExtractedItem(StrictModel):
     category: str | None = Field(default=None, max_length=120)
     proficiency: str | None = Field(default=None, max_length=120)
     experience_months: Months | None = None
-    start_date: PartialDate | None = None
-    end_date: PartialDate | None = None
+    start_date: str | None = Field(default=None, max_length=120)
+    end_date: str | None = Field(default=None, max_length=120)
     ongoing: bool = Field(default=False, strict=True)
     context: str | None = Field(default=None, max_length=500)
     supporting_items: list[Annotated[int, Field(strict=True)]] = Field(default_factory=list, max_length=15)
@@ -117,12 +120,24 @@ class ExtractedItem(StrictModel):
 
     @model_validator(mode='after')
     def valid_dates(self):
-        validate_item_dates(self.model_dump())
+        # Dates are optional extraction hints, never a reason to lose CV facts.
+        for field in ('start_date', 'end_date'):
+            try:
+                date_bounds(getattr(self, field))
+            except ValueError:
+                setattr(self, field, None)
+        if self.ongoing:
+            self.end_date = None
+        try:
+            validate_item_dates(self.model_dump())
+        except ValueError:
+            self.start_date = self.end_date = None
         return self
 
 
 class Extraction(StrictModel):
     items: list[ExtractedItem] = Field(min_length=1, max_length=160)
+    other_information: list[SourceExcerpt] = Field(default_factory=list, max_length=160)
 
 
 class TargetCondition(StrictModel):
@@ -162,7 +177,7 @@ class ConfirmedContext(StrictModel):
 
 class Evidence(BaseModel):
     id: str
-    excerpt: str
+    excerpt: str = Field(description='Source-linked evidence; CV extraction may contain a faithful summary rather than an exact quotation.')
     location: str
 
 
@@ -332,6 +347,7 @@ class ExtractionMetadata(BaseModel):
 
 
 class CvSummary(BaseModel):
+    profile_reviewed_effective_version: int | None = None
     id: str
     file_name: str
     file_type: Literal['pdf', 'docx']
@@ -348,6 +364,7 @@ class CvSummary(BaseModel):
 
 
 class CvDetail(CvSummary):
+    other_information: list[Evidence] = Field(default_factory=list, max_length=160)
     items: list[CvItem]
     skills: list[CvSkill]
     original_items: list[CvItem]

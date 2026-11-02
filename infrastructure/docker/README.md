@@ -55,6 +55,19 @@ For existing installations, read the [rename and data migration notes](../../doc
 
 ## Hot reload during development
 
+For shorter commands, load the repository's shell helper from the repository root
+in each terminal session (Bash or Zsh):
+
+```sh
+source infrastructure/docker/dev-shell.sh
+dc up --build -d
+dc restart gateway
+```
+
+The `dc` function forwards arguments to Docker Compose with the private configuration
+path and both Compose files selected. Run it from the repository root. Sourcing the
+helper only defines the function; it does not read configuration or start containers.
+
 From the repository root, run this yourself with your existing private configuration:
 
 ```sh

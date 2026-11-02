@@ -16,6 +16,22 @@ workspace response and adviser opening, then returns through Profile to edit the
 
 Preserve checks for distinct behavior and boundaries, including cross-service contracts. If a UI journey is replaced, retain its useful ownership, draft, retry and validation assertions against the new flow. Do not weaken or remove valid failures to obtain a pass. Historical discovery totals and earlier passing logs are not evidence for the current merged tree; report exact current results separately.
 
+Profile's test extra includes PyYAML for the published YAML contract comparisons.
+The goal-confirmation browser journey holds the concurrent workspace refresh while
+checking the stale-revision guard, then releases it after the explicit reload.
+This preserves the guard assertions without racing the normal focus refresh.
+
+Full-stack CV chat journeys explicitly enter Review CV or Build through chat from
+the Skills Profile summary. The synthetic provider serves guided questions, manual
+intake and a finite set of labelled semantic-evidence verdicts; unsupported claims
+and unrelated source blocks are rejected. Manual intake stays a draft until Save
+profile publishes it, and outage/retry checks retain the original saved turn.
+Chat sends wait for the preceding saved action to finish, including the next
+question prepared after a skip; the earlier CV write alone is not completion.
+Deterministic refresh races cover both manual intake and CV review: an older source
+snapshot cannot erase a concurrently published question, while fresh reads still
+invalidate questions after their source changes.
+
 ## Local commands
 
 Use Node.js 24 and Python 3.12. From the root:
@@ -482,3 +498,16 @@ checks. Synthetic OpenAI SDK tests cover sync/async request shapes, host-scoped
 options, credential isolation, bounded/closed streams, compressed rejections, no
 redirects and disabled SDK retries. Provider or model accuracy is not inferred from
 these mocked responses.
+
+## Skills Profile verification
+
+The summary-first page has component tests and a synthetic browser journey covering
+explicit upload/Review CV entry, processing gates, mobile layout and preserved draft
+recovery. Profile tests run structured draft/publication, declaration preservation,
+idempotent acknowledgement recovery and account CAS races against both memory and
+an explicitly supplied disposable MongoDB. CV tests cover target-independent basic
+review, manual field order, source/version changes, semantic positive/negative
+verdicts and safe legacy-conversation upgrades. Semantic tests use synthetic provider
+responses; no live-provider quality or job-fit accuracy is inferred. A local MongoDB
+7 result is functional persistence coverage, not MongoDB 8 compatibility when the
+host kernel prevents MongoDB 8 from starting.

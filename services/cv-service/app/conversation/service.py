@@ -1,5 +1,6 @@
 """CV conversation coordination. Existing domain operations remain the write authority."""
 from copy import deepcopy
+from functools import partial
 import asyncio
 import json
 from uuid import uuid4, uuid5, NAMESPACE_URL
@@ -47,6 +48,7 @@ def view(document, before=None, limit=40):
         'read_only': at_capacity(document),
         'previous_conversation_id': document.get('previous_conversation_id'),
         'active_question': document.get('active_question'), 'context': document.get('context'),
+        'purpose': document.get('purpose'), 'reviewed_effective_version': document.get('reviewed_effective_version'),
         'context_error': document.get('context_error'),
         'messages': [{**{k: m[k] for k in ('id', 'sequence', 'role', 'text', 'created_at')},
                       'actions': [public_action(a) for a in m.get('actions', [])]} for m in window],
@@ -130,10 +132,20 @@ class ConversationService:
         raise Conflict('The conversation is receiving another update. Refresh and retry your saved draft.')
 
     def start(self, owner, mutation):
-        if not mutation.cv_id: return self._start(owner, mutation)
-        self.cv.get(owner, mutation.cv_id)
-        with self.cv.files.lock(mutation.cv_id):
-            return self._start(owner, mutation)
+        if not mutation.cv_id:
+            document = self._start(owner, mutation)
+        else:
+            self.cv.get(owner, mutation.cv_id)
+            with self.cv.files.lock(mutation.cv_id):
+                document = self._start(owner, mutation)
+        if mutation.purpose and document.get('purpose') != mutation.purpose:
+            def upgrade(current):
+                if any(a['status'] in {'pending', 'awaiting_confirmation', 'needs_source', 'failed'}
+                       for m in current['messages'] for a in m.get('actions', [])):
+                    return  # Retain the execution semantics of unfinished older actions.
+                current['purpose'] = mutation.purpose
+            document = self.update(owner, document['_id'], upgrade)
+        return document
 
     def _start(self, owner, mutation):
         if mutation.cv_id: self.cv.get(owner, mutation.cv_id)
@@ -151,9 +163,13 @@ class ConversationService:
             'active_question': previous.get('active_question') if previous else None,
             'last_item_id': previous.get('last_item_id') if previous else None,
             'context': previous.get('context') if previous else None}
+        document['purpose'] = previous.get('purpose') if previous else mutation.purpose
         text = ('Welcome back. Your earlier conversation is available in history.' if previous else
             'Upload or choose a CV, then review it with me. You can ask questions, add context or correct a detail at any time.'
             if mutation.cv_id else 'Tell me about a capability you would like to add. You do not need to upload a CV.')
+        if not previous and mutation.purpose == 'skills_profile':
+            text = ('We will review your extracted experience and what you personally did, one question at a time. Unknown details can stay unknown.'
+                    if mutation.cv_id else 'Let’s build your Skills Profile from your work, projects, education and interests. You can skip any question or say you are unsure. You do not need a CV or proof.')
         document['messages'].append(make_message(document, 'assistant', text))
         document.update(message_count=1, at_capacity=False)
         return self.repository.insert(document)
@@ -164,15 +180,36 @@ class ConversationService:
 
     async def refresh(self, app, account, identifier):
         previous = self.get(account['id'], identifier)
+        if previous.get('purpose') == 'skills_profile' and not previous['cv_id']:
+            from app.conversation.intake import read_profile
+            profile = await read_profile(app, account)
+            def reconcile(current):
+                if current['revision'] != previous['revision']: return
+                if current.get('intake_profile_version') != profile['version']:
+                    current['active_question'] = None
+                    current['intake_target'] = None
+                    current['intake_profile_version'] = profile['version']
+            return await run_in_threadpool(self.update, account['id'], identifier, reconcile)
         context, error = None, None
-        if previous['cv_id']:
+        if previous['cv_id'] and previous.get('purpose') != 'skills_profile':
             try: context = await self.context(app, account['authorization'])
             except CvError as exc:
                 if exc.status in {401, 403}: raise
                 error = 'Career context is unavailable. Your conversation is saved; retry to prepare relevant questions.'
         document = self.cv.get(account['id'], previous['cv_id']) if previous['cv_id'] else None
         def transform(current):
+            # Source reads precede this CAS. A completed action may have published
+            # a question since those reads; only reconcile the captured revision.
+            if current['revision'] != previous['revision']: return
             active = current.get('active_question')
+            if current.get('purpose') == 'skills_profile':
+                if not document: return
+                if active:
+                    valid = next((q for q in document['clarifications'] if q['id'] == active['id']
+                        and q['status'] == 'unanswered' and not q.get('reconciliation_required')), None)
+                    if not valid: current['active_question'] = None
+                current['context'], current['context_error'] = context, error
+                return
             if active:
                 available = envelope(document, context) if document else {'questions': []}
                 valid = next((q for q in available['questions'] if q['id'] == active['id'] and
@@ -188,11 +225,11 @@ class ConversationService:
         selection = self.cv.repository.selection(owner)
         return {'cv_version': doc['version'] if doc else None,
                 'extraction_version': doc['extraction_version'] if doc else None,
-                'selection': {'cv_id': selection['selected_cv_id'], 'version': selection['version']},
+                'selection': None if conversation.get('purpose') == 'skills_profile' else {'cv_id': selection['selected_cv_id'], 'version': selection['version']},
                 'target': context_identity(ConfirmedContext.model_validate(context)) if context else None}
 
     async def check_snapshot(self, app, account, conversation, snapshot, target=True):
-        current = (await self.context(app, account['authorization']) if conversation['cv_id'] else None) if target else conversation.get('context')
+        current = (await self.context(app, account['authorization']) if conversation['cv_id'] and conversation.get('purpose') != 'skills_profile' else None) if target else conversation.get('context')
         latest = await run_in_threadpool(self.snapshot, account['id'], conversation, current)
         if latest != snapshot:
             raise Conflict('The CV, selected source or Career target changed. Your message is retained; review the current context before trying again.')
@@ -206,6 +243,14 @@ class ConversationService:
                 configured=getattr(self.provider, 'configured', True))
         finally: self.slots.release()
 
+    def verify_intake(self, owner, blocks, refs):
+        if not self.slots.acquire(blocking=False):
+            raise ValueError('Evidence validation is busy. Your message is saved; retry shortly.')
+        try:
+            return self.cv.model_usage.run(owner, partial(self.provider.verify_evidence, timeout_seconds=20), blocks, refs,
+                configured=getattr(self.provider, 'configured', True))
+        finally: self.slots.release()
+
     async def send(self, app, account, identifier, mutation):
         owner, receipt_id = account['id'], str(mutation.mutation_id)
         fingerprint = digest(mutation.model_dump(mode='json'))
@@ -214,7 +259,17 @@ class ConversationService:
         if receipt:
             if receipt['fingerprint'] != fingerprint: raise Conflict('This message key was already used for different text.')
             return previous
-        context = await self.context(app, account['authorization']) if previous['cv_id'] else None
+        if previous.get('purpose') == 'skills_profile':
+            # A second turn cannot overtake an uncommitted interpretation.
+            if any(a['status'] == 'pending' for m in previous['messages'] for a in m.get('actions', [])):
+                raise Conflict('Your previous answer is still processing. Wait or retry its saved action first.')
+        profile_version = None
+        if previous.get('purpose') == 'skills_profile' and not previous['cv_id']:
+            from app.conversation.intake import read_profile
+            profile_version = (await read_profile(app, account))['version']
+            if previous.get('active_question') and previous.get('intake_profile_version') != profile_version:
+                raise Conflict('Your profile changed after this question was shown. Refresh the conversation and continue from the updated summary.')
+        context = await self.context(app, account['authorization']) if previous['cv_id'] and previous.get('purpose') != 'skills_profile' else None
         snapshot = await run_in_threadpool(self.snapshot, owner, previous, context)
         if mutation.item_id:
             self.source(owner, previous, mutation.item_id)
@@ -233,6 +288,7 @@ class ConversationService:
                 '_token': token, '_lease_until': now() + LEASE_SECONDS,
                 '_text': mutation.text, '_command': mutation.command, '_item_id': mutation.item_id,
                 '_snapshot': snapshot, '_turn_id': receipt_id}
+            if profile_version is not None: action['_profile_version'] = profile_version
             if mutation.command == 'skip':
                 action['_guided_question_id'] = ((document.get('active_question') or {}).get('id')
                     if document.get('context') == context else None)
@@ -283,6 +339,10 @@ class ConversationService:
         route = deepcopy(action_in(conversation, route_id))
         try:
             await self.authenticate(app, account)
+            if conversation.get('purpose') == 'skills_profile' and not conversation['cv_id']:
+                from app.conversation.intake import process_intake
+                await process_intake(self, app, account, conversation, route, token)
+                return
             if route.get('_command'):
                 await self.guided(app, account, conversation, route, token)
                 return
@@ -303,8 +363,16 @@ class ConversationService:
                 if proposed.question_id and (proposed.question_id not in questions or
                         (proposed.item_id and questions[proposed.question_id]['item_id'] != proposed.item_id)):
                     raise ValueError('Chat interpretation referred to a different clarification.')
-                if proposed.kind == 'add_capability' and normalized_name(proposed.name) not in normalized_name(proposed.excerpt):
-                    raise ValueError('A manual capability must be named in your own explanation.')
+                if proposed.kind == 'add_capability':
+                    if conversation.get('purpose') == 'skills_profile':
+                        statement = f'The user personally performed {proposed.name}: {proposed.excerpt}'
+                        refs = [{'block_id': 'answer', 'excerpt': statement}]
+                        supported = await run_in_threadpool(self.verify_intake, owner,
+                            [{'id': 'answer', 'text': proposed.excerpt}], refs)
+                        if ('answer', statement) not in supported:
+                            raise ValueError('That skill is not supported by your personal contribution. Clarify what you did; your message is saved.')
+                    elif normalized_name(proposed.name) not in normalized_name(proposed.excerpt):
+                        raise ValueError('A manual capability must be named in your own explanation.')
                 actions.append(self.proposal(conversation, route, proposed, index, items, questions))
             if actions:
                 await self.check_snapshot(app, account, conversation, route['_snapshot'])
@@ -319,6 +387,15 @@ class ConversationService:
             for action in actions:
                 if action['status'] == 'pending':
                     await self.execute(app, account, identifier, action['id'])
+            if conversation.get('purpose') == 'skills_profile' and conversation['cv_id'] and actions:
+                latest = self.get(owner, identifier)
+                if not latest.get('active_question') and all(action_in(latest, a['id'])['status'] == 'saved' for a in actions):
+                    def advance(current):
+                        action = action_in(current, route_id)
+                        action.update(status='pending', _command='continue', _token=token,
+                                      _lease_until=now() + LEASE_SECONDS)
+                    latest = await run_in_threadpool(self.update, owner, identifier, advance)
+                    await self.guided(app, account, latest, deepcopy(action_in(latest, route_id)), token)
         except Conflict as exc:
             await self.fail(owner, identifier, route_id, token, exc.detail, 'stale')
         except Exception as exc:
@@ -379,6 +456,9 @@ class ConversationService:
         return str(value)
 
     async def guided(self, app, account, conversation, route, token):
+        if conversation.get('purpose') == 'skills_profile' and conversation['cv_id']:
+            from app.conversation.review import guided_review
+            return await guided_review(self, app, account, conversation, route, token)
         owner, command = account['id'], route['_command']
         await self.authenticate(app, account)
         expected = deepcopy(route['_snapshot'])
@@ -562,6 +642,14 @@ class ConversationService:
                 # before returning facts to the existing fenced publication path.
                 asyncio.run_coroutine_threadsafe(coordinator.authenticate(app, account), loop).result(timeout=8)
                 return result
+            def __getattr__(self, name):
+                if name != 'verify_evidence': raise AttributeError(name)
+                verify = getattr(app.state.interpreter, name)
+                def checked(*args, **kwargs):
+                    result = verify(*args, **kwargs)
+                    asyncio.run_coroutine_threadsafe(coordinator.authenticate(app, account), loop).result(timeout=8)
+                    return result
+                return checked
         interpreter = SessionInterpreter()
         question_id = action.get('_saved_question_id')
         recovered_unanswered = None
@@ -704,13 +792,13 @@ class ConversationService:
         if candidate['status'] in {'awaiting_confirmation', 'needs_source'} and mutation.decision == 'retry':
             raise CvError('Review this proposal and explicitly save or cancel it.')
         token = str(uuid4())
-        context = await self.context(app, account['authorization']) if previous['cv_id'] else None
+        context = await self.context(app, account['authorization']) if previous['cv_id'] and previous.get('purpose') != 'skills_profile' else None
         def choose(document):
             if document['revision'] != mutation.expected_revision:
                 raise Conflict('The conversation changed. Refresh and review this action again.')
             action = action_in(document, action_id)
             if mutation.decision == 'cancel':
-                attempted = action.get('_manual_body') or action.get('_cv_mutation')
+                attempted = action.get('_manual_body') or action.get('_cv_mutation') or action.get('_profile_body') or action.get('_review_mutation')
                 action.update(status='cancelled', summary=(
                     'Stopped retrying this action. Previously saved facts and explanations remain; check your summary for any save that already completed.'
                     if attempted else 'Cancelled. Saved CV facts were not changed.'), error=None)

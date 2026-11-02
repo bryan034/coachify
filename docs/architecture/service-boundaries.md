@@ -33,7 +33,7 @@ owner context. This slice does not introduce that separate credential protocol.
 
 ## CV extraction runtime
 
-CV runs a transient LangGraph for parse/extract/validate and at most one source-grounded repair. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Both calls request schema-constrained output by default; backend evidence/date/length checks remain authoritative. Graph state has no checkpointer, external tracing or new collection. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
+CV runs a transient LangGraph for parse/extract/validate and at most one source-grounded repair. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Extraction/repair and conditional semantic-evidence checks request schema-constrained output by default; formatting equivalence passes locally, and paraphrases need model approval against cited source blocks under the same budget/lease; backend evidence/date/length checks remain authoritative. Graph state has no checkpointer, external tracing or new collection. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
 
 ## Saved CV deletion
 
@@ -144,7 +144,7 @@ The Roadmap adviser now supports reviewed plan generation and daily workloads th
 
 ## Career research and discovery
 
-LangGraph runs inside Career. Career model inference supports local OpenAI-compatible, DeepSeek cloud and Gemini adapters; search independently selects Brave LLM Context or DeepSeek Search. Public retrieval uses only permitted public role/employer context, with owner-linked reports and typed citations. Private CV evidence, manual declarations and CV conversation messages do not enter shared research. Discovery and JD intake publish through the same goal persistence path. Current goals use owner/version-checked edits; research revisions remain immutable and compact progress/evidence reads avoid repeating full source payloads.
+LangGraph runs inside Career. Career model inference supports local OpenAI-compatible, DeepSeek cloud and Gemini adapters; search independently selects Brave LLM Context or DeepSeek Search. Public retrieval uses only permitted public role/employer context, with owner-linked reports and typed citations. Private CV evidence, manual declarations and CV conversation messages do not enter shared research. Discovery and JD intake publish through the same goal persistence path automatically, including validated Discovery refinements. Discovery publication checks the captured selection revision and active conversation marker; newer chats/JDs or goals prevent stale replacement. CV-context acknowledgement remains separate. Discovery resumes its latest owner-scoped `research_contexts` conversation after refresh/re-entry; only explicit New chat creates a replacement conversation once one exists. Messages outlive workflow checkpoints, and starting a new chat preserves earlier conversations and saved goals. Current goals use owner/version-checked edits; research revisions remain immutable and compact progress/evidence reads avoid repeating full source payloads.
 
 Career's 512 KiB CV transport/projection admission limit is separate from CV's 12 MiB stored-record boundary and conversation limits. An over-limit response is actionable failure, not an empty CV or permission to truncate sources. Model-specific context selection remains separately bounded. Synthetic provider tests do not measure live-provider quality, cost or comparative usability.
 
@@ -153,3 +153,19 @@ Career's 512 KiB CV transport/projection admission limit is separate from CV's 1
 The user's revised architecture separates Assessment from Career and places its UI in Roadmap. Assessment owns a separate database containing `skill_gap_analyses` and operational `workspaces`; Roadmap owns `roadmaps` and its own `workspaces`. Career's old analysis-v1 contracts remain compatibility code, with no automatic data migration. Producer exports preserve owner/reference/version checks. Shared canonical IDs/registry versions are additive; legacy CV/Profile skill keys and source IDs remain stable.
 
 Profile continues to own baseline P04–P06 defaults. User-chosen preparation target/ongoing horizon, weekly/day budgets and learning preferences are specific to the Roadmap plan and do not silently edit the Profile baseline. Day-specific scheduling supersedes the old equal-seven-day assumption only in this planner. The adviser provides recommendations and the user chooses scope and activation; completion does not mutate assessed capability. See [Assessment](../../services/assessment-service/SPEC.md) and [Roadmap](../../services/roadmap-service/SPEC.md) for implemented behaviour and remaining limits.
+
+## Guided Skills Profile
+
+Profile embeds independently versioned manual `skills_profile` entries, per-skill
+support dimensions and area dispositions in accounts. Explicit review publishes
+manual skills through the existing declaration authority with stable source entry
+IDs. Namespaced receipts reuse `capability_mutations`; there is no new domain
+collection. Onboarding fields are read-only context for this flow.
+
+CV owns the intake conversation, backend field-selection policy, separate semantic
+support verification and model-written questions. It accesses manual facts only
+through Profile APIs. Uploaded evidence and its answer history stay CV-owned.
+Basic source review has no Career dependency; confirmed target-specific preparation
+and Assessment comparison remain separate. A CV-owned effective-version review
+stamp records summary review without asserting mastery. Both diagrams and API
+contracts describe these additive fields.

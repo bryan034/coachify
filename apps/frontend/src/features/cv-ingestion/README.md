@@ -7,8 +7,8 @@ workflow. Search Jobs has its own navigation tab; application tracking is not
 implemented or presented here. Target confirmation and gap analysis remain separate.
 
 `resume-preview.tsx` coordinates the policy, saved CVs, explicit selection and
-recoverable upload/processing states. The primary experience is the text conversation
-in `cv-conversation.tsx`. **CV files** holds upload and explicit selection controls;
+recoverable upload/processing states. The initial experience is the skills summary; explicit review opens the text
+conversation in `cv-conversation.tsx`. **CV files** holds upload and explicit selection controls;
 **Your CV summary** exposes the effective evidence, detailed corrections,
 reconciliation and manual declarations when needed. Uploading never changes selection. The
 selected analysis source is identified separately from the CV currently being
@@ -28,7 +28,7 @@ invalidates in-flight reads so an old response cannot restore it.
 
 The conversation opens or resumes a CV-owned server record for the viewed CV, or a
 manual-only record when no CV is open. A compact header identifies the reviewed file
-and the confirmed Career target. **Review with me** starts guided questions explicitly.
+and the confirmed Career target. **Review CV** starts basic guided questions explicitly.
 Users may answer naturally, add context, ask a side question or propose a correction
 at any time. **Skip this question** and **Continue review** are explicit commands.
 The current topic remains visible when an explanation interrupts it. Voice input is
@@ -123,3 +123,21 @@ See the [CV service](../../../../../services/cv-service/README.md),
 [API contract](../../../../../contracts/api/cv.yaml) and
 [frontend tests](../../../tests/README.md). Synthetic mocked API tests demonstrate
 UI behavior; they do not establish real model extraction accuracy.
+
+## Summary-first Skills Profile
+
+Entry now shows `skills-profile-summary.tsx`, including saved/draft manual
+background, source-specific CV skills and clarifications, unknowns, and explicit
+Upload your CV / Build through chat choices. Upload supports drag/drop as well as
+keyboard file selection. It never starts chat or changes the analysis selection.
+Review CV starts/resumes basic guided review only after extraction is ready;
+failed/processing files expose View processing status instead.
+
+Manual chat and CV review use `purpose: skills_profile`. Backend field selection,
+semantic evidence checking and source-bound interpretation drive their questions.
+The summary has explicit Save profile / Save CV profile actions; partial profiles
+retain uncertainty. Returning to the summary preserves an unsent chat draft in page
+memory. An upload/source switch retains the existing discard-confirmation behavior.
+The old per-capability editor is retained as an advanced declaration control, not
+the primary no-CV intake. Career confirmation is needed for target-specific
+clarification/comparison, not for basic profile building or review.

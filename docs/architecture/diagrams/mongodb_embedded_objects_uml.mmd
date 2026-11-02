@@ -79,6 +79,7 @@ class GapResult {
 }
 
 class cvs {
+    +Evidence[] other_information [uncategorised_source_excerpts]
     +CvSkill[] skills
 }
 
@@ -326,6 +327,7 @@ career_goals *-- DiscoveryEvidence : optional_market_provenance
 
 
 class CapabilityDeclaration {
+    +String source_entry_id?
     +String id
     +String skill_id
     +String name
@@ -404,6 +406,9 @@ class Clarification {
 class cv_conversations {
     +String user_id
     +String cv_id?
+    +String purpose? [skills_profile]
+    +Integer intake_profile_version?
+    +Object intake_target?
     +Integer segment
     +Integer revision
     +ChatMessage[] messages
@@ -565,3 +570,28 @@ class CvDeletionReceipt {
 }
 cvs *-- CvDeletionReceipt : deletion control only
 note for CvDeletionReceipt "Pending/complete records contain no filename, CV facts, source hash or chat. Original upload key and identifiers remain on a minimal tombstone to fence replay."
+
+class SkillsProfile {
+    +Integer version
+    +String status [empty|draft|saved]
+    +Date saved_at?
+    +Map areas [answered|unknown|skipped|not_applicable]
+    +ProfileEntry[] entries
+}
+class ProfileEntry {
+    +UUID id
+    +String kind [work|project|education|interest]
+    +String title
+    +Map fields [value/status/answer_turn/quote]
+    +ProfileSkill[] skills
+}
+class ProfileSkill {
+    +String name
+    +String description
+    +Object[] evidence [answer_turn/quote]
+    +Map dimensions [task/tools/complexity/independence/recency/frequency/outcome/limitations]
+}
+users *-- SkillsProfile : manual intake
+SkillsProfile *-- ProfileEntry
+ProfileEntry *-- ProfileSkill
+note for SkillsProfile "Profile owns manual facts; CV owns transcripts and semantic intake coordination. Explicit save publishes existing declarations with source_entry_id; missing dimensions remain unknown."

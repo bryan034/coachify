@@ -22,6 +22,7 @@ from app.repositories.goals import GoalError,now,fingerprint,stable_id
 from app.schemas.analysis import ResearchContext,DiscoveryEvidence,Generation
 from app.schemas.discovery import Scope,Decision,Plan,Listings,MarketSummary,SourceAssessments,DiscoverySource,DiscoveryUnderstanding
 from app.schemas.jd import JDExtraction,ReviewSkill
+from app.schemas.goals import SaveGoal
 from app.domain.discovery_sources import POLICY,excluded_kind,candidates,validate_assessments,ranked_sources
 from app.domain.discovery_conversation import conversation_messages,conversational_reply
 from app.domain.discovery_readiness import clarification_bundle,grounded_understanding,ready_for_research,research_context,missing_fields
@@ -63,6 +64,41 @@ def citations(ids,sources):
 def plain_reply(value):
     # Only server-resolved references can create external links.
     return re.sub(r'https?://\S+', '', re.sub(r'\[([^]]+)\]\([^)]*\)', r'\1', value)).strip() or 'What would you like to explore?'
+
+
+def summary_message(scope,result,summary,sources):
+    """Readable display of validated findings; all links resolve from saved evidence."""
+    sections=[f"## Your career direction\n\n**{plain_reply(scope.area)}**\n\nYour Career Goal has been updated automatically.",
+        '### Research coverage\n\n'+f"Researched **{len(result['listings'])} distinct listings** across **{result['employers']} identified employers** · {result['coverage']} coverage."]
+    if summary.responsibility_refs:
+        work=[]
+        for i in summary.responsibility_refs[:3]:
+            item=result['responsibilities'][i]
+            work.append('- '+plain_reply(item['name'])+' '+citations(item['source_ids'][:1],sources))
+        sections.append('### Typical work\n\n'+'\n'.join(work))
+    if summary.skills:
+        labels={'core':'Foundation','specialisation':'Specialisation-dependent','optional':'Optional tool'}
+        skills=[]
+        for skill in summary.skills[:8]:
+            ids=list(dict.fromkeys(source for i in skill.skill_refs for source in result['stats'][i]['source_ids']))
+            skills.append('- **'+plain_reply(skill.name)+'** — '+labels[skill.requirement_type]+', **'+skill.learning_priority+' learning priority**. '+plain_reply(skill.relevance)+' '+
+                (citations(ids[:1],sources) if ids else '(user-requested addition; no listing evidence)'))
+        scope_note=f" This summary highlights 8 of {len(summary.skills)} recommended skills." if len(summary.skills)>8 else ''
+        sections.append('### Recommended skills\n\nLearning priorities are AI recommendations informed by this sample, not universal employer requirements.'+scope_note+'\n\n'+'\n'.join(skills))
+    if result['qualifications']:
+        conditions=['- '+plain_reply(item['name'])+' '+citations(item['source_ids'][:1],sources) for item in result['qualifications'][:2]]
+        sections.append('### Conditions to check\n\nThese vary by listing.\n\n'+'\n'.join(conditions))
+    if summary.specialisations:
+        ids=list(dict.fromkeys(item['source_id'] for item in result['listings']))
+        sections.append('### Possible specialisations\n\nAI interpretation: '+', '.join(plain_reply(v) for v in summary.specialisations)+'. '+citations(ids[:1],sources))
+    if result['warnings']:sections.append('### Research limitations\n\n'+'\n'.join('- '+plain_reply(w) for w in result['warnings']))
+    if summary.question:sections.append('### A question for you\n\n'+plain_reply(summary.question))
+    closing='**You can ask questions and refine your career goal through this chat.**'
+    # Reserve space for the invitation even when unusually long citations hit the bound.
+    message=''
+    for section in sections:
+        if len(message)+len(section)+len(closing)+4<=12000:message+=('\n\n' if message else '')+section
+    return message+'\n\n'+closing
 
 
 def validated_listings(output,sources,scope):
@@ -154,13 +190,21 @@ class DiscoveryEngine:
         if not row:raise GoalError('Career discovery was not found.',404)
         return row
 
-    def current(self,owner):return self.rows.find_one({'owner':owner,'kind':'career_discovery'},sort=[('created_at',-1)])
+    def current(self,owner):
+        state=self.app.state.goal_store.state.find_one({'_id':owner},{'active_discovery':1}) or {}
+        if state.get('active_discovery'):
+            active=self.rows.find_one({'_id':state['active_discovery'],'owner':owner,'kind':'career_discovery'})
+            if active:return active
+        return self.rows.find_one({'owner':owner,'kind':'career_discovery'},sort=[('created_at',-1)])
 
     def start(self,owner,key):
         identifier=stable_id(owner,key,'career-discovery');stamp=now()
         row={'_id':identifier,'kind':'career_discovery','owner':owner,'version':1,'status':'conversation','decision':None,
             'messages':[],'created_at':stamp,'updated_at':stamp,'receipts':[]}
-        self.rows.update_one({'_id':identifier},{'$setOnInsert':row},upsert=True)
+        inserted=self.rows.update_one({'_id':identifier},{'$setOnInsert':row},upsert=True)
+        if inserted.upserted_id:
+            self.app.state.goal_store.state.update_one({'_id':owner},
+                {'$set':{'active_discovery':identifier},'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]}},upsert=True)
         return self.get(identifier,owner)
 
     def research_row(self,state):
@@ -191,7 +235,8 @@ class DiscoveryEngine:
         if receipt:
             if receipt['hash']!=digest:raise GoalError('This message key was used for another message.')
             return row
-        if row['version']!=body.expected_version or row['status']=='confirmed':raise GoalError('Reload the latest discovery before changing its scope.')
+        if row['version']!=body.expected_version:raise GoalError('Reload the latest discovery before changing its scope.')
+        if row.get('publication_until',now())>now():raise GoalError('Your career goal is updating. Retry this message shortly.')
         check_conversation_capacity(row)
         facts=research_facts(row)
         allowed={source for fact in facts for source in fact['source_ids']}
@@ -281,11 +326,11 @@ class DiscoveryEngine:
         previous_memory=(row.get('decision') or {}).get('memory',{})
         preference_changed=any(decision.get('memory',{}).get(k,[])!=previous_memory.get(k,[])
             for k in ('interests','preferences','rejected_directions')) or research_context(decision.get('understanding'))!=research_context((row.get('decision') or {}).get('understanding')) or (decision.get('understanding',{}).get('other_interests') or {}).get('value')!=((row.get('decision') or {}).get('understanding',{}).get('other_interests') or {}).get('value')
-        ready=not value.get('partial') and ready_for_research(decision) and proposed and (decision['action'] in ('START_RESEARCH','CONFIRM_AREA','REFINE_SKILLS') or preference_changed and row['status']=='review')
+        ready=not value.get('partial') and ready_for_research(decision) and proposed and (decision['action'] in ('START_RESEARCH','CONFIRM_AREA','REFINE_SKILLS') or preference_changed and row['status'] in ('review','confirmed'))
         changed_scope=proposed and proposed!=row.get('scope')
-        if ready and (changed_scope or row['status'] in ('conversation','failed') or decision['action']=='REFINE_SKILLS' or preference_changed and row['status']=='review'):
+        if ready and (changed_scope or row['status'] in ('conversation','failed') or decision['action']=='REFINE_SKILLS' or preference_changed and row['status'] in ('review','confirmed')):
             values.update(await thread(self.research_values,row,proposed,False,decision['understanding']))
-        if changed_scope and not ready and row['status'] in ('researching','waiting','review'):
+        if changed_scope and not ready and row['status'] in ('researching','waiting','review','confirmed'):
             values.update(run=uuid4().hex,status='conversation',stage=None,scope=proposed,review_id=None,summary=None,summary_version=None,sources=[],aggregate=None)
             decision['source_ids']=[]
         reply=plain_reply(decision['reply'])
@@ -305,20 +350,36 @@ class DiscoveryEngine:
         if values.get('status')=='researching':reply+='\n\nResearching '+proposed['area']+'. You can keep chatting while I compare representative listings.'
         if value.get('partial') and not rejected:
             reply+='\n\nSome details could not be completed. I kept the parts I could verify; you can clarify the missing details in your next message.'
-        changed=await thread(self.rows.update_one,{'_id':identifier,'owner':owner,'version':body.expected_version,'status':{'$ne':'confirmed'}},
+        changed=await thread(self.rows.update_one,{'_id':identifier,'owner':owner,'version':body.expected_version,'status':'confirmed' if row['status']=='confirmed' else {'$ne':'confirmed'},
+            '$or':[{'publication_until':{'$exists':False}},{'publication_until':{'$lte':now()}}]},
             {'$set':values,'$inc':{'version':1},'$push':{
                 'messages':{'$each':[{'role':'user','content':body.message},{'role':'assistant','content':reply}]},
                 'receipts':{'$each':[{'key':key,'hash':digest}],'$slice':-100}}})
         if not changed.matched_count:raise GoalError('A newer discovery message arrived; reload it.')
         return await thread(self.get,identifier,owner)
 
+    def publication_selection(self,row):
+        store=self.app.state.goal_store
+        selection=store.state.find_one({'_id':row['owner']}) or {}
+        # Adopt the latest pre-upgrade chat once; a new JD explicitly clears this marker.
+        if 'active_discovery' not in selection and (self.current(row['owner']) or {}).get('_id')==row['_id']:
+            current=store.current(row['owner'])['goal']
+            same_chat=current and current.discovery and current.discovery.research_id.split(':')[0]==row['_id']
+            if not current or same_chat or current.updated_at<=row['created_at']:
+                store.state.update_one({'_id':row['owner']},{'$setOnInsert':{'version':0,'goal_id':None,'receipts':[]}},upsert=True)
+                store.state.update_one({'_id':row['owner'],'active_discovery':{'$exists':False}}, {'$set':{'active_discovery':row['_id']}})
+                selection=store.state.find_one({'_id':row['owner']})
+        if selection.get('active_discovery')!=row['_id']:raise GoalError('A newer conversation replaced this discovery. Start a new chat to change your goal.')
+        return selection.get('version',0)
+
     def research_values(self,row,scope,refresh,understanding=None):
+        selection_version=self.publication_selection(row)
         context=research_context(understanding)
         scope_key=fingerprint({'scope':{k:normal(v) if isinstance(v,str) else v for k,v in scope.items()},'context':context})
         cached=None if refresh else self.rows.find_one({'kind':'career_discovery','owner':row['owner'],'scope_key':scope_key,
             'research_policy':self.policy,'aggregate':{'$ne':None},'researched_at':{'$gt':now()-timedelta(hours=self.settings.freshness_hours)}},sort=[('researched_at',-1)])
         if not refresh and row.get('scope_key')==scope_key and row.get('research_policy')==self.policy and row['status'] in ('failed','researching','waiting'):cached=row
-        values={'run':uuid4().hex,'scope':scope,'scope_key':scope_key,'status':'researching','stage':'plan_research',
+        values={'publication_selection_version':selection_version,'run':uuid4().hex,'scope':scope,'scope_key':scope_key,'status':'researching','stage':'plan_research',
             'research_policy':self.policy,'next_attempt_at':now(),'lease':None,'lease_until':now(),'error_code':None,'limit_scope':None,'provider':None,'updated_at':now()}
         for field in ('plan','sources','searched','listings','evaluated','aggregate','generation','researched_at','search_failures','candidates','assessments','split_batches','narrowed_sources','extraction_failures','followup_requested','rejected_source_ids','replacement_searches','replacement_query','replacement_shortfall'):
             values[field]=cached.get(field) if cached else None
@@ -332,13 +393,14 @@ class DiscoveryEngine:
         if receipt:
             if receipt['hash']!=digest:raise GoalError('This research key was used with another scope.')
             return row
-        if row['version']!=body.expected_version or row['status'] in ('researching','waiting','confirmed'):raise GoalError('This discovery changed or research is already running.')
+        if row['version']!=body.expected_version or row['status'] in ('researching','waiting','confirmed') or row.get('publication_until',now())>now():raise GoalError('This discovery changed or research is already running.')
         check_conversation_capacity(row)
         decision=Decision.model_validate(row['decision']) if row['decision'] else None
         if not decision or decision.scope!=body.scope:raise GoalError('Research must match the current direction.',422)
         if not ready_for_research(decision):raise GoalError('Complete the discovery context in chat before researching; unsure or skip answers are allowed.',422)
         values=self.research_values(row,body.scope.model_dump(mode='json'),body.refresh,decision.understanding.model_dump())
-        changed=self.rows.update_one({'_id':identifier,'owner':owner,'version':body.expected_version,'status':row['status']},
+        changed=self.rows.update_one({'_id':identifier,'owner':owner,'version':body.expected_version,'status':row['status'],
+            '$or':[{'publication_until':{'$exists':False}},{'publication_until':{'$lte':now()}}]},
             {'$set':values,'$inc':{'version':1},'$push':{'receipts':{'$each':[{'key':key,'hash':digest}],'$slice':-100}}})
         if not changed.matched_count:raise GoalError('A newer research scope arrived; reload it.')
         return self.get(identifier,owner)
@@ -586,6 +648,9 @@ class DiscoveryEngine:
         # new memory; never publish recommendations for an older conversation.
         for _ in range(3):
             row=await thread(self.research_row,state);result=row['aggregate'];scope=Scope.model_validate(row['scope'])
+            if 'publication_selection_version' not in row:
+                row['publication_selection_version']=await thread(self.publication_selection,row)
+                await thread(self.update,row,publication_selection_version=row['publication_selection_version'])
             await thread(self.update,row,stage='generate_career_target')
             decision=row.get('decision') or {};excluded={normal(v) for v in decision.get('excluded_skills',[])}
             requested=decision.get('requested_skills',[])
@@ -628,32 +693,32 @@ class DiscoveryEngine:
             await thread(self.rows.update_one,{'_id':evidence.research_id},{'$setOnInsert':{
                 'kind':'career_discovery_evidence','owner':row['owner'],'review_id':review.id,'scope':row['scope'],
                 'sources':row.get('sources') or [],'aggregate':result,'summary':summary.model_dump(),'created_at':now()}},upsert=True)
-            lines=[f"Your career direction: **{scope.area}**.",
-                f"Researched {len(result['listings'])} distinct listings across {result['employers']} identified employers; {result['coverage']} coverage.",
-                'Learning priorities below are Gemini recommendations informed by this sample, not universal employer requirements.']
-            for i in summary.responsibility_refs[:3]:
-                item=result['responsibilities'][i];lines.append('- Typical work: '+plain_reply(item['name'])+' '+citations(item['source_ids'][:1],row.get('sources') or []))
-            labels={'core':'Foundation','specialisation':'Specialisation-dependent','optional':'Optional tool'}
-            for skill in summary.skills[:8]:
-                ids=list(dict.fromkeys(source for i in skill.skill_refs for source in result['stats'][i]['source_ids']))
-                lines.append('- '+labels[skill.requirement_type]+': **'+plain_reply(skill.name)+'** · '+skill.learning_priority+' learning priority. '+plain_reply(skill.relevance)+' '+
-                    (citations(ids[:1],row.get('sources') or []) if ids else '(user-requested addition; no listing evidence)'))
-            for item in result['qualifications'][:2]:lines.append('- Sample condition (varies by listing): '+plain_reply(item['name'])+' '+citations(item['source_ids'][:1],row.get('sources') or []))
-            if summary.specialisations:lines.append('Possible specialisations (AI interpretation): '+', '.join(plain_reply(v) for v in summary.specialisations)+'. '+citations(evidence.source_ids[:1],row.get('sources') or []))
-            lines.extend(result['warnings'])
-            if summary.question:lines.append(plain_reply(summary.question))
-            lines.append('Ask a question or describe a change. Review and confirm when you are ready to save this goal.')
-            # Keep each transcript entry bounded, including unusually long source URLs.
-            message=''
-            for line in lines:
-                if len(message)+len(line)+2<=12000:message+=('\n\n' if message else '')+line
-            changed=await thread(self.rows.update_one,{'_id':row['_id'],'run':row['run'],'lease':row['lease'],'version':row['version']},
-                {'$set':{'summary':summary.model_dump(),'summary_version':row['version'],'review_id':review.id,'status':'review',
-                    'aggregate':result,
-                    'stage':'review_career_target','researched_at':evidence.researched_at,'error_code':None,'lease_until':now(),'updated_at':now()},
-                 '$push':{'messages':{'role':'assistant','content':message}}})
-            if changed.matched_count:return state
+            message=summary_message(scope,result,summary,row.get('sources') or [])
+            if await thread(self.publish_target,row,review,summary,result,evidence,message):return state
         raise AIError('rate_limited',retry_after=1,provider=getattr(self.ai.settings,'provider',None))
+
+    def publish_target(self,row,review,summary,result,evidence,message):
+        """Publish validated guidance and complete its chat entry with bounded replay."""
+        query={'_id':row['_id'],'run':row['run'],'lease':row['lease'],'version':row['version']}
+        locked=self.rows.update_one({**query,'$or':[{'publication_until':{'$exists':False}},{'publication_until':{'$lte':now()}}]},
+            {'$set':{'publication_until':now()+timedelta(seconds=30)}})
+        if not locked.matched_count:return False
+        try:
+            owner=row['owner'];key='discovery-auto:'+row['_id']+':'+row['run']+':'+str(row['version'])
+            command=SaveGoal(target_type='career_exploration',role=review.content.role,field=review.content.field,
+                company=None,job_url=None,location=review.content.location,seniority_level=review.content.seniority_level,
+                employment_type=review.content.employment_type,review_id=review.id,expected_review_version=review.version,
+                expected_selection_version=row['publication_selection_version'],replace_current=True)
+            goal=self.app.state.review_store.goal(review,owner,key,command,allow_pending_context=True)
+            memory=(row.get('decision') or {}).get('memory',{})
+            goal.interests=memory.get('interests',[]);goal.preferences=memory.get('preferences',[])
+            self.app.state.goal_store.confirm(owner,key,command,goal,discovery_id=row['_id'])
+            changed=self.rows.update_one(query,{'$set':{'summary':summary.model_dump(),'summary_version':row['version'],
+                'review_id':review.id,'status':'review','aggregate':result,'stage':'career_goal_updated',
+                'researched_at':evidence.researched_at,'error_code':None,'lease_until':now(),'updated_at':now()},
+                '$push':{'messages':{'role':'assistant','content':message}}})
+            return bool(changed.matched_count)
+        finally:self.rows.update_one(query,{'$unset':{'publication_until':''}})
 
     def launch(self,identifier):
         if identifier in self.tasks or self.stopping:return
@@ -677,6 +742,8 @@ class DiscoveryEngine:
             try:await thread(self.update,row,status='waiting' if wait else 'failed',error_code=code,limit_scope=getattr(error,'limit_scope',None),provider=getattr(error,'provider',None),next_attempt_at=now()+timedelta(seconds=delay),lease_until=now())
             except GoalError:pass
         except GoalError:
+            try:await thread(self.update,row,status='failed',error_code='stale_input',lease_until=now())
+            except GoalError:pass
             return
         except Exception as error:
             log.error('discovery_worker_failed exception_type=%s',type(error).__name__)

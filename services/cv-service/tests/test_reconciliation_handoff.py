@@ -16,6 +16,7 @@ def changed_candidate(harness, remove=False):
         {'kind': 'project', 'title': 'Project A reinterpreted', 'description': 'Team built a Python and SQL application.',
          'explicit': True, 'skill_names': ['Python', 'SQL'], 'uncertainties': ['personal_contribution'],
          'evidence': [{'block_id': 'b2', 'excerpt': 'Team built a Python and SQL application.'}]}]}
+    extractor.payload['other_information'] = [{'block_id': 'b3', 'excerpt': 'Independent SQL queries for a personal dataset.'}]
     assert upload(client, cv_id=cv['id'], expected_version=edited['version']).status_code == 202
     app.state.worker.run_once()
     failed = client.get('/api/v1/cv/' + cv['id']).json()
@@ -37,6 +38,8 @@ def test_reprocessing_candidate_is_saved_and_keep_restores_previous_ready_result
     kept = result.json()
     assert kept['status'] == 'ready' and kept['items'] == edited['items']
     assert kept['effective_version'] == edited['effective_version']
+    assert candidate['candidate_other_information'][0]['excerpt'] == 'Independent SQL queries for a personal dataset.'
+    assert kept['other_information'] == edited['other_information'] == []
     assert kept['reconciliation_candidate_id'] is None
     assert client.post(f"/api/v1/cv/{cv['id']}/reconciliation", json=body).json()['version'] == kept['version']
     assert app.state.repository.get('owner-a', cv['id'])['history'][-1]['candidate']['id'] == candidate['candidate_id']
@@ -59,6 +62,7 @@ def test_candidate_requires_explicit_mapping_and_retains_previous_history(harnes
     accepted = result.json()
     assert accepted['status'] == 'ready' and accepted['extraction_version'] == cv['extraction_version'] + 1
     assert accepted['items'][1]['removed'] is reapply
+    assert accepted['other_information'] == candidate['candidate_other_information']
     old = app.state.repository.get('owner-a', cv['id'])['history'][-1]
     assert old['overlays'][item['id']]['removed'] is True
     assert old['original_items'][1]['id'] == item['id']
