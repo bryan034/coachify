@@ -9,7 +9,7 @@ from app.repositories.admission import AdmissionLedger, MemoryAdmissionLedger
 from app.repositories.model_usage import ModelUsageStore, MemoryModelUsageStore
 
 
-SUMMARY_FIELDS = {'_id': 1, 'file_name': 1, 'file_type': 1, 'operation': 1,
+SUMMARY_FIELDS = {'_id': 1, 'file_name': 1, 'display_name': 1, 'file_type': 1, 'operation': 1,
     'version': 1, 'extraction_version': 1, 'effective_version': 1, 'profile_version': 1, 'profile_reviewed_effective_version': 1,
     'created_at': 1, 'updated_at': 1, 'original_available': 1}
 CAPACITY_FIELDS = {'_id': 1, 'user_id': 1, 'original_available': 1, 'storage_generation': 1, 'deletion': 1}

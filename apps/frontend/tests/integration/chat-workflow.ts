@@ -52,9 +52,9 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   await chapter('1. Review your saved CV through a conversation', 'This is a synthetic account and model, using real local services and saves. The CV and Career target were explicitly selected before this walkthrough.', chat);
-  await expect(chat.locator('.cv-chat-current-topic')).toContainText('Team dashboard');
+  await expect(chat.locator('.cv-chat-transcript .cv-chat-message-assistant').last()).toContainText('Team dashboard');
   await expect(chat).toContainText('You can review your experience now.');
-  await chapter('2. One focused question', 'elo asks about the project contribution independently of the saved Career target. You can answer naturally, ask why, or skip.', chat.locator('.cv-chat-current-topic'));
+  await chapter('2. One focused question', 'elo asks about the project contribution independently of the saved Career target. You can answer naturally, ask why, or skip.', chat.locator('.cv-chat-transcript .cv-chat-message-assistant').last());
   await sendChat(page, chatAnswer);
   await expect.poll(async () => (await readCv()).skills.find(skill => skill.skill_id === 'skill:python')?.experience_months).toBe(6);
   const first = await readCv(), projectId = first.items.find(item => item.kind === 'project')!.id;
@@ -95,7 +95,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
 
   const beforeReload = await readChat(account, cvId);
   await page.reload();
-  await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
+  // The full-page review URL restores the mounted chat directly.
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   const resumed = await readChat(account, cvId);
   expect(resumed.id).toBe(beforeReload.id); expect(resumed.messages).toEqual(beforeReload.messages);
@@ -122,7 +122,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   await expect.poll(async () => (await (await account.get('/api/v1/profile/capabilities')).json()).declarations.length).toBe(1);
   await chapter('10. Add an omitted capability', 'A manual Figma statement is saved only after Save capability. Profile owns the declaration; it is not presented as text extracted from the CV.', chat);
 
-  await chat.getByRole('button', {name: 'View skills profile', exact: true}).click();
+  await chat.getByRole('button', {name: 'Back to Skills Profile', exact: true}).click();
   await openCvReviewTools(page);
   await expect(page.getByRole('region', {name: 'Potential skills', exact: true})).toContainText('3 months');
   await expect(page.getByRole('heading', {name: 'Figma', exact: true})).toBeVisible();

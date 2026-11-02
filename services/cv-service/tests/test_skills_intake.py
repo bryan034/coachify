@@ -42,6 +42,10 @@ class Provider:
     def __init__(self): self.calls = []
     def route(self, context):
         self.calls.append(deepcopy(context))
+        if context['task'].startswith('cv_interview_'):
+            from tests.interview_fixture import InterviewProvider
+            if not hasattr(self, 'interview'): self.interview = InterviewProvider()
+            return self.interview.route(context)
         if context['task'] == 'skills_intake':
             output = self.evaluation(context) if callable(self.evaluation) else self.evaluation
             return deepcopy(output or {'reply': 'You can describe what you did.', 'entries': [], 'areas': []}), {}
@@ -137,13 +141,14 @@ def test_cv_review_is_explicit_target_independent_and_source_bound(harness):
     active = chat['active_question']
     assert active and active['item_id'] in {i['id'] for i in cv['items']}
     assert app.state.target_provider.context_value is None
-    assert any(c['task'] == 'cv_review_question' for c in provider.calls)
+    assert any(c['task'] == 'cv_interview_plan' for c in provider.calls)
     chat = send(client, chat, 'Skip', command='skip')
     assert not chat['active_question'] or chat['active_question']['id'] != active['id']
     chat = send(client, chat, 'Save partial review', command='finish')
     saved = client.get('/api/v1/cv/'+cv['id']).json()
-    assert saved['profile_reviewed_effective_version'] == saved['effective_version']
+    assert saved['profile_reviewed_effective_version'] is None
     assert saved['effective_version'] == cv['effective_version']
+    assert chat['interview']['status'] == 'paused'
     assert not chat['active_question']
 
 

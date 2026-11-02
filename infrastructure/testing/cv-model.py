@@ -130,6 +130,8 @@ def interpret_fixture(value):
 
 def semantic_fixture(value):
     """Approve only reviewed text/claim pairs, never arbitrary model output."""
+    if any('SYNTHETIC_SECOND_ACTION_FAILURE' in block['text'] and 'I cannot clarify my internship yet.' in block['text'] for block in value['source_blocks']):
+        raise RuntimeError('Deliberate synthetic second-action evidence outage')
     labelled_answers = [CHAT_MIXED_ANSWER, CHAT_EXTRA_CONTEXT,
         "I wrote the SQL queries. A teammate built the Python application, with guidance from our tutor.",
         "I wrote the Python loader for six months with my tutor's help. My teammate wrote SQL."]
@@ -176,6 +178,49 @@ def review_question_fixture(value):
     return {'reply': f"What can you share about {target['field']} in {target['source_title']}? Unknown is fine.", 'actions': []}
 
 
+def interview_fixture(value):
+    """Finite labelled cases for the new interview protocol, not an agent fallback."""
+    source = value.get('focused_source') or {}
+    known = {'Team dashboard', 'Synthetic reporting internship', 'Python', 'SQL', 'Synthetic University'}
+    if source.get('title') not in known:
+        raise ValueError('Unknown synthetic interview source')
+    if value['task'] == 'cv_interview_plan':
+        fields = {f['field']: f['status'] for f in source.get('review_evidence', [])}
+        for field in ('personal_contribution', 'responsibilities', 'task_scope'):
+            attempt = value['memory']['attempts'].get(source['id'] + ':' + field + ':', {})
+            if fields.get(field) in {'supported', 'unknown', 'skipped', 'not_applicable'} or attempt.get('declined') or attempt.get('count', 0) >= 2:
+                continue
+            return {'action': 'ask', 'reply': f"What can you share about {field.replace('_', ' ')} in {source['title']}? Unknown is fine.",
+                    'item_id': source['id'], 'targets': [{'field': field}]}
+        return {'action': 'pause', 'reply': 'The synthetic interview can pause here with remaining details uncertain.'}
+    if value['message'] in {'Stop here.', 'I want to stop now.'}:
+        return {'intent': 'stop', 'reply': 'Paused.', 'actions': [], 'interpretations': []}
+    active = value.get('active_question')
+    uncertainty = (active or {}).get('uncertainty', 'claim')
+    routed = conversation_fixture({'message': value['message'], 'items': value['sources'],
+        'questions': [{**active, 'uncertainty': uncertainty}] if active else [], 'active_question': active})
+    interpretations = []
+    for action in routed['actions']:
+        if action['kind'] not in {'clarify', 'correct'} or action.get('fields'): continue
+        if not action.get('item_id') or action.get('item_id') not in {s['id'] for s in value['sources']}:
+            continue
+        if action.get('item_id') != source['id']:
+            other = next(s for s in value['sources'] if s['id'] == action['item_id'])
+            if value['message'] != CHAT_PARTIAL_FAILURE or other['title'] != 'Synthetic reporting internship':
+                raise ValueError('Unknown synthetic cross-source answer')
+            interpretations.append({'item_id': other['id'], 'resolution': 'unanswerable', 'claims': [],
+                'resolved_uncertainties': [], 'remaining_uncertainties': ['claim'],
+                'review_evidence': [{'field': 'responsibilities', 'status': 'unknown', 'value': None,
+                    'evidence': [{'source_id': 'answer', 'quote': action['excerpt']}]}]})
+            continue
+        output = interpret_fixture({'source_item': source, 'question': {'uncertainty': uncertainty},
+            'answer': value['message'], 'answer_revision': 1})
+        output.pop('answer_revision')
+        interpretations.append(output)
+    return {'intent': 'answer' if interpretations else 'change' if routed['actions'] else 'side_question',
+            **routed, 'interpretations': interpretations}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass
@@ -199,6 +244,9 @@ class Handler(BaseHTTPRequestHandler):
             if request.get('model') != 'synthetic-integration-fixture':
                 return self.send_json(422, {'error': 'Only the synthetic fixture model is accepted'})
             value = json.loads(request['messages'][-1]['content'])
+            if value.get('task') in {'cv_interview_interpret', 'cv_interview_plan'}:
+                result = interview_fixture(value)
+                return self.send_json(200, {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(result)}}]})
             if value.get('task') in {'skills_intake', 'skills_question'}:
                 try:
                     result = intake_fixture(value) if value['task'] == 'skills_intake' else {
@@ -207,7 +255,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(503, {'error': 'Deliberate synthetic outage'})
                 return self.send_json(200, {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(result)}}]})
             if 'summaries' in value or value.get('task') == 'cv_review_question':
-                result = semantic_fixture(value) if 'summaries' in value else review_question_fixture(value)
+                try: result = semantic_fixture(value) if 'summaries' in value else review_question_fixture(value)
+                except RuntimeError:
+                    return self.send_json(503, {'error': 'Deliberate synthetic evidence outage'})
                 return self.send_json(200, {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(result)}}]})
             if value.get('task') == 'cv_conversation' or 'source_item' in value:
                 try: result = conversation_fixture(value) if value.get('task') == 'cv_conversation' else interpret_fixture(value)

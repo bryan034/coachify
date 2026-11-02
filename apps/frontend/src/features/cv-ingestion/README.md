@@ -7,11 +7,11 @@ workflow. Search Jobs has its own navigation tab; application tracking is not
 implemented or presented here. Target confirmation and gap analysis remain separate.
 
 `resume-preview.tsx` coordinates the policy, saved CVs, explicit selection and
-recoverable upload/processing states. The initial experience is the skills summary; explicit review opens the text
-conversation in `cv-conversation.tsx`. **CV files** holds upload and explicit selection controls;
+recoverable upload/processing states. The initial experience is the skills summary; upload or explicit review opens the text
+conversation in `cv-conversation.tsx`. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, Set as active baseline and Delete CV. Original filenames and source versions remain under File details;
 **Your CV summary** exposes the effective evidence, detailed corrections,
 reconciliation and manual declarations when needed. Uploading never changes selection. The
-selected analysis source is identified separately from the CV currently being
+active baseline is identified separately from the CV currently being
 reviewed, including when filenames repeat. Same-source re-upload sends the original
 CV ID/version and preserves backend corrections; changed bytes require a separate
 new upload. Failed or expired originals offer source resupply. **Delete CV** is
@@ -129,7 +129,7 @@ UI behavior; they do not establish real model extraction accuracy.
 Entry now shows `skills-profile-summary.tsx`, including saved/draft manual
 background, source-specific CV skills and clarifications, unknowns, and explicit
 Upload your CV / Build through chat choices. Upload supports drag/drop as well as
-keyboard file selection. It never starts chat or changes the analysis selection.
+keyboard file selection. An accepted upload opens the full-page review immediately, shows processing/recovery status, and starts chat automatically once extraction is ready. It does not change the analysis selection.
 Review CV starts/resumes basic guided review only after extraction is ready;
 failed/processing files expose View processing status instead.
 
@@ -141,3 +141,42 @@ memory. An upload/source switch retains the existing discard-confirmation behavi
 The old per-capability editor is retained as an advanced declaration control, not
 the primary no-CV intake. Career confirmation is needed for target-specific
 clarification/comparison, not for basic profile building or review.
+
+## CV titles and full-page review
+
+CV titles use CV-owned optional `display_name` metadata, falling back to the original
+`file_name` for existing uploads. `PATCH /api/v1/cv/{cv_id}/title` is authenticated,
+owner/version checked and idempotent. Titles are trimmed, bounded to 200 characters
+and reject control characters. Renaming preserves original files, evidence versions,
+source identity and review history; processing and failed CVs can also be renamed.
+
+Review CV opens `/cv?review=<cv_id>` as a full-viewport review screen, hiding the
+workspace sidebar, upload/library and summary. Manual intake uses `?review=manual`.
+The transcript scrolls above the composer; Back to Skills Profile restores the
+summary and retains the mounted unsent draft. Native browser back and direct reload
+restore the corresponding view. Upload and review do not change the active baseline.
+The library retains pagination and bounded internal scrolling on mobile.
+
+The upload panel and CV library share the same desktop row height, while only the
+library contents scroll. On mobile they stack with independent natural/bounded heights.
+After an upload is accepted, `/cv?review=<cv_id>` opens immediately with processing,
+retry and failure states. Conversation creation and automatic clarification wait
+until the CV is ready. Returning to Skills Profile does not alter the active baseline.
+
+**Set as active baseline** warns when the current `effective_version` does not match
+`profile_reviewed_effective_version`. The warning explains that AI interpretation
+may misattribute team contributions if the CV does not identify the user's role,
+and asks whether to continue. Cancel preserves the baseline; a saved review of the
+current effective version avoids the warning. Later evidence changes require review
+again. This is guidance, not a new backend restriction on source selection.
+
+## Agent-led uploaded-CV interview
+
+Uploaded-CV review resumes persistent interview progress from the CV service. Paused
+or completed interviews do not automatically restart on refresh; Continue review
+or a new message resumes interaction. Agent questions, evidence updates and stopping
+decisions are backend-owned. Chat displays source-specific skill estimates as
+conversation-based judgments, while the summary exposes structured roles,
+responsibilities, skill evidence and unresolved/partial details with their quotes.
+Manual-only intake retains its existing Profile-owned flow. See the
+[CV interview harness](../../../../../services/cv-service/INTERVIEW.md).

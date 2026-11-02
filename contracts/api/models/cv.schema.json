@@ -361,6 +361,14 @@
           },
           "title": "Skill Claims",
           "type": "array"
+        },
+        "review_evidence": {
+          "items": {
+            "$ref": "#/$defs/ReviewFact"
+          },
+          "maxItems": 240,
+          "title": "Review Evidence",
+          "type": "array"
         }
       },
       "required": [
@@ -941,6 +949,128 @@
       "title": "InterpretedDates",
       "type": "object"
     },
+    "ReviewFact": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "enum": [
+            "role",
+            "responsibilities",
+            "personal_contribution",
+            "assistance",
+            "task_scope",
+            "complexity",
+            "problem_solving",
+            "outcome",
+            "skill_use",
+            "recency",
+            "frequency",
+            "limitations"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "skill_name": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Name"
+        },
+        "attribution": {
+          "anyOf": [
+            {
+              "enum": [
+                "personal",
+                "shared",
+                "team",
+                "observed",
+                "denied",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attribution"
+        },
+        "status": {
+          "enum": [
+            "supported",
+            "partial",
+            "unknown",
+            "conflicting",
+            "skipped",
+            "not_applicable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 800,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/ReviewQuote"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "field",
+        "status",
+        "evidence"
+      ],
+      "title": "ReviewFact",
+      "type": "object"
+    },
+    "ReviewQuote": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "quote": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "quote"
+      ],
+      "title": "ReviewQuote",
+      "type": "object"
+    },
     "SavedInterpretation": {
       "additionalProperties": false,
       "properties": {
@@ -996,6 +1126,14 @@
           ],
           "default": null,
           "title": "Statement Excerpt"
+        },
+        "review_evidence": {
+          "items": {
+            "$ref": "#/$defs/ReviewFact"
+          },
+          "maxItems": 12,
+          "title": "Review Evidence",
+          "type": "array"
         },
         "resolved_uncertainties": {
           "items": {
@@ -1249,6 +1387,18 @@
     "file_name": {
       "title": "File Name",
       "type": "string"
+    },
+    "display_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Name"
     },
     "file_type": {
       "enum": [

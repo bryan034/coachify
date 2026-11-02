@@ -126,3 +126,5 @@ legend bottom
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend
 @enduml
+
+' CV interview memory persists in existing CV Mongo records; extraction graph/provider context remains transient.

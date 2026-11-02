@@ -35,3 +35,14 @@ def test_manual_fixture_cites_only_the_current_message():
 def test_guided_review_fixture_refuses_unknown_sources():
     with pytest.raises(ValueError):
         fixture.review_question_fixture({'target': {'source_title': 'Personal CV', 'field': 'complexity'}})
+
+
+def test_interview_fixture_is_finite_and_keeps_side_questions_read_only():
+    source = {'id': 'synthetic-project', 'title': 'Team dashboard', 'kind': 'project', 'skill_ids': ['skill:python'], 'skill_names': ['Python']}
+    value = {'task': 'cv_interview_interpret', 'focused_source': source, 'sources': [source],
+             'active_question': {'id': 'question', 'item_id': source['id'], 'question': 'What was your personal contribution?'},
+             'source_answers': [], 'message': 'Why are you asking?'}
+    result = fixture.interview_fixture(value)
+    assert result['intent'] == 'side_question' and not result['interpretations']
+    with pytest.raises(ValueError): fixture.interview_fixture({**value, 'message': 'Invent an unlabelled contribution.'})
+    with pytest.raises(ValueError): fixture.interview_fixture({**value, 'focused_source': {**source, 'title': 'Private CV'}})

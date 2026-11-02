@@ -1,4 +1,5 @@
 from elo_shared.skills import resolve, MAPPING_VERSION
+from app.schemas.interview_evidence import ReviewFact
 from app.domain.extraction_errors import FailureStage, FailureCategory, ProviderReason, ProviderParameter
 from typing import Annotated, Literal
 import calendar
@@ -45,6 +46,17 @@ class StrictModel(BaseModel):
 class Mutation(StrictModel):
     expected_version: int = Field(ge=0, strict=True)
     mutation_id: UUID
+
+
+class RenameMutation(Mutation):
+    display_name: Title
+
+    @field_validator('display_name')
+    @classmethod
+    def readable_name(cls, value):
+        if any(ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ValueError('Use a readable CV title without control characters.')
+        return value
 
 
 class SelectionMutation(Mutation):
@@ -117,6 +129,7 @@ class ExtractedItem(StrictModel):
     context: str | None = Field(default=None, max_length=500)
     supporting_items: list[Annotated[int, Field(strict=True)]] = Field(default_factory=list, max_length=15)
     uncertainties: list[Uncertainty] = Field(default_factory=list, max_length=7)
+    review_evidence: list[ReviewFact] = Field(default_factory=list, max_length=12)
 
     @model_validator(mode='after')
     def valid_dates(self):
@@ -215,6 +228,7 @@ class CvItem(BaseModel):
     support_uncertain: bool = False
     uncertainties: list[str] = []
     skill_claims: list[SkillClaim] = []
+    review_evidence: list[ReviewFact] = Field(default_factory=list, max_length=240)
 
 
 class SkillSource(BaseModel):
@@ -282,6 +296,7 @@ class InterpretationOutput(StrictModel):
     claims: list[InterpretedClaim] = Field(default_factory=list, max_length=20)
     dates: InterpretedDates | None = None
     statement_excerpt: Annotated[str, StringConstraints(min_length=1, max_length=500)] | None = None
+    review_evidence: list[ReviewFact] = Field(default_factory=list, max_length=12)
     resolved_uncertainties: list[Uncertainty] = Field(default_factory=list, max_length=7)
     remaining_uncertainties: list[Uncertainty] = Field(default_factory=list, max_length=7)
 
@@ -350,6 +365,7 @@ class CvSummary(BaseModel):
     profile_reviewed_effective_version: int | None = None
     id: str
     file_name: str
+    display_name: str | None = None
     file_type: Literal['pdf', 'docx']
     status: Literal['queued', 'processing', 'ready', 'failed']
     operation_id: str

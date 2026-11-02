@@ -144,7 +144,7 @@ def _question(document, question_id):
     return question, item
 
 
-def _interpret(service, owner, identifier, question_id, saved, interpreter):
+def _interpret(service, owner, identifier, question_id, saved, interpreter, prepared=None):
     question, item = _question(saved, question_id)
     acquired = False
     try:
@@ -152,9 +152,14 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter):
         if not acquired:
             raise ValueError('Interpretation is busy. Your answer is saved; retry interpretation shortly.')
         if interpreter is None: raise ValueError('Interpretation is not configured. Your answer is saved; retry after configuration.')
-        payload, metadata = service.model_usage.run(owner, interpreter.interpret,
-            item, question, question['answer'], question['answer_revision'],
-            configured=getattr(interpreter, 'configured', True))
+        if prepared is None:
+            payload, metadata = service.model_usage.run(owner, interpreter.interpret,
+                item, question, question['answer'], question['answer_revision'],
+                configured=getattr(interpreter, 'configured', True))
+        else:
+            # Already admitted provider output from the interview interpretation stage.
+            payload, metadata = deepcopy(prepared)
+            payload['answer_revision'] = question['answer_revision']
         semantic_support = frozenset()
         if hasattr(interpreter, 'verify_evidence'):
             blocks, refs, fields = interpretation_semantic_checks(payload, question, item)
@@ -205,7 +210,7 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter):
     return service.repository.replace(current, document)
 
 
-def answer(service, owner, identifier, question_id, mutation, interpreter=None):
+def answer(service, owner, identifier, question_id, mutation, interpreter=None, prepared=None):
     previous = service.get(owner, identifier)
     replay = str(mutation.mutation_id) in previous['receipts']
     changed_answer = False
@@ -232,7 +237,7 @@ def answer(service, owner, identifier, question_id, mutation, interpreter=None):
     # Only the call whose private token actually won may perform provider work.
     if _question(saved, question_id)[0].get('interpretation_token') != invocation_token:
         return service.get(owner, identifier)
-    return _interpret(service, owner, identifier, question_id, saved, interpreter)
+    return _interpret(service, owner, identifier, question_id, saved, interpreter, prepared)
 
 
 def retry_interpretation(service, owner, identifier, question_id, mutation, interpreter=None):

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from app.domain.capabilities import digest, effective_items, normalized_name
 from app.domain.errors import Conflict, CvError, Missing
+from app.domain.model_usage import ModelAdmissionError
 from app.domain.service import now, iso, HISTORY_LIMIT_BYTES
 from app.domain.answer_capacity import preview_chat_answer
 from app.domain.attachments import source_fingerprint
@@ -48,6 +49,7 @@ def view(document, before=None, limit=40):
         'read_only': at_capacity(document),
         'previous_conversation_id': document.get('previous_conversation_id'),
         'active_question': document.get('active_question'), 'context': document.get('context'),
+        'interview': document.get('interview_progress'),
         'purpose': document.get('purpose'), 'reviewed_effective_version': document.get('reviewed_effective_version'),
         'context_error': document.get('context_error'),
         'messages': [{**{k: m[k] for k in ('id', 'sequence', 'role', 'text', 'created_at')},
@@ -162,7 +164,10 @@ class ConversationService:
             'created_at': now(), 'updated_at': now(), 'receipts': {}, 'messages': [],
             'active_question': previous.get('active_question') if previous else None,
             'last_item_id': previous.get('last_item_id') if previous else None,
-            'context': previous.get('context') if previous else None}
+            'context': previous.get('context') if previous else None,
+            'interview_memory': deepcopy(previous.get('interview_memory')) if previous else None,
+            'interview_targets': deepcopy(previous.get('interview_targets', [])) if previous else [],
+            'interview_progress': deepcopy(previous.get('interview_progress')) if previous else None}
         document['purpose'] = previous.get('purpose') if previous else mutation.purpose
         text = ('Welcome back. Your earlier conversation is available in history.' if previous else
             'Upload or choose a CV, then review it with me. You can ask questions, add context or correct a detail at any time.'
@@ -204,6 +209,10 @@ class ConversationService:
             active = current.get('active_question')
             if current.get('purpose') == 'skills_profile':
                 if not document: return
+                if current.get('interview_memory'):
+                    from app.conversation.interview import reconcile_memory, progress
+                    current['interview_memory'] = reconcile_memory(current, document)
+                    current['interview_progress'] = progress(current['interview_memory'], document)
                 if active:
                     valid = next((q for q in document['clarifications'] if q['id'] == active['id']
                         and q['status'] == 'unanswered' and not q.get('reconciliation_required')), None)
@@ -287,6 +296,7 @@ class ConversationService:
                 'summary': 'Your message is saved. Understanding it now.', 'error': None,
                 '_token': token, '_lease_until': now() + LEASE_SECONDS,
                 '_text': mutation.text, '_command': mutation.command, '_item_id': mutation.item_id,
+                '_message_id': document['messages'][-1]['id'],
                 '_snapshot': snapshot, '_turn_id': receipt_id}
             if profile_version is not None: action['_profile_version'] = profile_version
             if mutation.command == 'skip':
@@ -342,6 +352,18 @@ class ConversationService:
             if conversation.get('purpose') == 'skills_profile' and not conversation['cv_id']:
                 from app.conversation.intake import process_intake
                 await process_intake(self, app, account, conversation, route, token)
+                return
+            if conversation.get('purpose') == 'skills_profile' and conversation['cv_id']:
+                from app.conversation.interview import InterviewHarness, reconcile_memory
+                harness = InterviewHarness(self)
+                try:
+                    await harness.process(app, account, conversation, route, token)
+                except ModelAdmissionError:
+                    latest = self.get(owner, identifier)
+                    document = self.cv.get(owner, latest['cv_id'])
+                    memory = reconcile_memory(latest, document)
+                    await harness.pause(account, identifier, route_id, token, memory,
+                        'The review is paused because model capacity is unavailable. Your messages and evidence are saved. Continue when capacity is available.')
                 return
             if route.get('_command'):
                 await self.guided(app, account, conversation, route, token)
@@ -552,7 +574,8 @@ class ConversationService:
                     original['_saved_question_id'] = question_id
             await self.check_snapshot(app, account, conversation, expected)
             if original['kind'] == 'add_capability':
-                return await self.manual(app, account, conversation, original, decision, token)
+                await self.manual(app, account, conversation, original, decision, token)
+                return await self.resume_interview(app, account, identifier, action_id)
             document, item = self.source(owner, conversation, original['item_id'],
                 allow_removed=applied and original['kind'] == 'remove')
             action = deepcopy(original)
@@ -602,7 +625,27 @@ class ConversationService:
             message = exc.detail if isinstance(exc, CvError) else 'This action could not finish. Your message is saved; retry.'
             latest_token = action_in(self.get(owner, identifier), action_id).get('_token')
             await self.fail(owner, identifier, action_id, token if latest_token == token else original.get('_token'), message)
-        return self.get(owner, identifier)
+        return await self.resume_interview(app, account, identifier, action_id)
+
+    async def resume_interview(self, app, account, identifier, action_id):
+        owner = account['id']
+        result = self.get(owner, identifier)
+        if result.get('purpose') == 'skills_profile' and result['cv_id']:
+            message = action_message(result, action_id)
+            parent = next((a for a in message.get('actions', []) if a['kind'] == 'route'), None)
+            siblings = [a for a in message.get('actions', []) if a['kind'] != 'route']
+            if parent and parent.get('_interview_evaluation') and parent['status'] in {'saved', 'failed'} and siblings and all(a['status'] in {'saved', 'cancelled'} for a in siblings):
+                resume_token = str(uuid4())
+                def resume(current):
+                    candidate = action_in(current, parent['id'])
+                    if candidate['status'] not in {'saved', 'failed'}: return
+                    candidate.update(status='pending', _token=resume_token, _lease_until=now() + LEASE_SECONDS,
+                                     _command='continue', error=None)
+                resumed = await run_in_threadpool(self.update, owner, identifier, resume)
+                if action_in(resumed, parent['id']).get('_token') == resume_token:
+                    await self.process(app, account, identifier, parent['id'], resume_token)
+                result = self.get(owner, identifier)
+        return result
 
     def remember_mutation(self, owner, identifier, action_id, body):
         def transform(document): action_in(document, action_id)['_cv_mutation'] = body
@@ -710,7 +753,7 @@ class ConversationService:
         await run_in_threadpool(self.update, owner, conversation['_id'], remember)
         result = await run_in_threadpool(answer, self.cv, owner, cv_id, question_id,
             AnswerMutation(expected_version=document['version'], mutation_id=key(action['id'] + ':apply'),
-                           action='answer', answer=action['_text']), interpreter)
+                           action='answer', answer=action['_text']), interpreter, action.get('_prepared_interpretation'))
         q = next(q for q in result['clarifications'] if q['id'] == question_id)
         return result, self.answer_summary(q)
 

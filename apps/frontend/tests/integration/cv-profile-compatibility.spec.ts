@@ -44,8 +44,10 @@ for (const scenario of cases) {
       cvId = result.cvs[0]?.id ?? '';
       return result.cvs[0]?.status;
     }, { timeout: 30_000 }).toBe('ready');
+    await openCvReviewTools(page);
     await page.getByRole('button', { name: 'Refresh saved status', exact: true }).click();
-    await page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByRole('button', { name: 'Select for analysis', exact: true }).click();
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByRole('button', { name: 'Set as active baseline', exact: true }).click();
     await expect(page.getByLabel('Selected CV', { exact: true })).toContainText(cvId);
     await expect(page.getByText(`Source Profile version ${background.version}`, { exact: false })).toBeVisible();
     const saved = await (await account.get(`/api/v1/cv/${cvId}`)).json();

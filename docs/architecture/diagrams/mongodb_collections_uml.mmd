@@ -18,6 +18,7 @@ class cvs {
     +String _id [opaque UUID]
     +String user_id [account UUID]
     +String file_name
+    +String display_name? [editable title]
     +String private_original_reference?
     +String file_type
     +CvSkill[] skills
@@ -184,6 +185,7 @@ class cv_conversations {
     +Object[] messages
     +String previous_conversation_id?
     +Date updated_at
+    +Object interview_memory? [persistent_coverage_focus_question_history]
 }
 
 class career_state {

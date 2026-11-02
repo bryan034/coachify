@@ -40,10 +40,21 @@ Extraction and repair timeouts are capped by the remaining 180-second worker lea
 
 ## Skills Profile guided entry
 
-Skills Profile opens on a summary. Uploading offers **Review CV** after extraction;
-chat starts only when selected. Manual guided entry uses Profile-owned structured
+Skills Profile opens on a summary. Uploading opens the full-page review immediately;
+the review screen opens immediately after upload, waits for extraction and then starts guided questions automatically. Manual guided entry uses Profile-owned structured
 background and per-experience skill evidence. Basic CV review works without a
 Career target; target-specific questions retain their existing confirmation rules.
 `POST /api/v1/cv/{cv_id}/profile-review` saves a version-bound review stamp from
-the summary. Unknowns remain uncertain. See the
+the summary. Unknowns remain uncertain. Uploaded-CV review is agent-led, with persistent interview memory, grounded role/skill
+evidence, targeted partial-answer follow-ups and validated completion. See the
+[interview harness](INTERVIEW.md) and
 [guided intake specification](SPEC.md#skills-profile-entry-and-guided-intake).
+
+## Saved CV titles (C01/C09)
+
+`PATCH /api/v1/cv/{cv_id}/title` accepts `display_name`, `expected_version` and
+`mutation_id`. Titles are owner-scoped, trimmed, limited to 200 characters and
+reject control characters. Listing/detail responses expose nullable `display_name`;
+older records fall back to `file_name` in the UI without migration. Renaming is
+available during processing and after failure, uses the existing CAS/replay controls,
+and leaves source bytes, extraction/effective versions and review history intact.

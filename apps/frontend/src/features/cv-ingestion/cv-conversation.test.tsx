@@ -32,6 +32,16 @@ describe('saved CV conversation', () => {
   await waitFor(() => expect(cvApi.sendMessage).toHaveBeenCalledWith('chat-one',expect.objectContaining({command:'review',expected_revision:1}),'synthetic-session',expect.any(AbortSignal)));
   expect(await screen.findByRole('button',{name:'Skip this question'})).toBeEnabled(); expect(options.onChanged).toHaveBeenCalled();
  });
+ it('resumes paused interview memory without automatically restarting questions', async () => {
+  vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',interview:{status:'paused',reviewed_items:0,total_items:1,estimates:[]},messages:[message('m1','We can continue later.'),message('m2','Stop here.',[],'user')]}));
+  render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
+  expect(await screen.findByText('Review paused. Continue whenever you’re ready.')).toBeVisible();
+  expect(cvApi.sendMessage).not.toHaveBeenCalled();
+  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+  vi.mocked(cvApi.sendMessage).mockResolvedValue(conversation({purpose:'skills_profile',revision:2,messages:[message('m3','What did you build?')]}));
+  fireEvent.click(screen.getByRole('button',{name:'Continue review'}));
+  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat-one',expect.objectContaining({command:'continue'}),'synthetic-session',expect.any(AbortSignal)));
+ });
  it('retains an interrupted draft and retries the same message identity', async () => {
   vi.mocked(cvApi.sendMessage).mockRejectedValue(new Error('Connection interrupted.'));
   render(<CvConversationPanel {...props()}/>);
@@ -108,7 +118,7 @@ describe('saved CV conversation', () => {
   vi.mocked(cvApi.openConversation).mockResolvedValue(initial); vi.mocked(cvApi.sendMessage).mockResolvedValue({...initial,revision:2,messages:[...initial.messages,message('m2','This helps describe your own work.')]});
   render(<CvConversationPanel {...props()}/>); const input=await screen.findByRole('textbox',{name:'Message elo'}); await waitFor(()=>expect(input).toBeEnabled());
   fireEvent.change(input,{target:{value:'I built the screens'}}); fireEvent.click(screen.getByRole('button',{name:'Why this question?'}));
-  await screen.findByText('This helps describe your own work.'); expect(input).toHaveValue('I built the screens'); expect(screen.getByText(/Current topic:/)).toHaveTextContent('ShopTrack');
+  await screen.findByText('This helps describe your own work.'); expect(input).toHaveValue('I built the screens'); expect(screen.queryByText(/Current topic:/)).not.toBeInTheDocument(); expect(screen.getAllByText('What did you build?')).toHaveLength(1); expect(screen.getByRole('button',{name:'Why this question?'}).closest('.cv-chat-messages')).not.toBeNull();
   expect(vi.mocked(cvApi.sendMessage).mock.calls[0][1]).toMatchObject({text:'Why are you asking this question?'});
  });
  it('requires an explicit save or cancel for a proposed correction',async()=>{

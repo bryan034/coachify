@@ -106,11 +106,10 @@ h1 { font-size: clamp(34px, 3.6vw, 52px); letter-spacing: -.05em; }
 .cv-chat-mark { width: 38px; }
 .cv-chat-composer { border-color: var(--line); }
 .cv-chat-composer:focus-within { border-color: var(--slate); box-shadow: 0 0 0 2px var(--mint-mist); }
-.agent-message-user, .cv-chat-message-user .cv-chat-bubble { background: var(--cloud); color: var(--ink); }
+.agent-message.user, .agent-message-user, .cv-chat-message-user .cv-chat-bubble, .roadmap-adviser .adviser-message.user { background: var(--mint); color: var(--ink); }
 .cv-chat { box-shadow: none; border-radius: 16px; }
 .cv-chat-context { background: var(--mint-mist); color: var(--slate); }
 .cv-chat-context .text-link, .cv-chat-receipt .cv-chat-action-status { color: var(--green); }
-.cv-chat-current-topic { border-color: var(--mint); }
 .cv-chat-action { background: var(--snow); }
 .cv-chat-action-status, .cv-chat-quick-actions button { color: var(--slate); }
 .cv-chat-quick-actions button:hover:not(:disabled) { background: var(--mint-mist); border-color: var(--green); }

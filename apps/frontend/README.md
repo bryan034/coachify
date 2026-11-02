@@ -23,7 +23,7 @@ the Inter OFL licence; no runtime font request is needed. The browser tab icon u
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
 | `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
 | `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
-| `/cv` | **Skills Profile**: summary-first evidence, explicit CV upload/Review CV, guided manual intake, interpreted clarification and correction/reconciliation |
+| `/cv` | **Skills Profile**: summary-first evidence, CV upload-to-review, guided manual intake, interpreted clarification and correction/reconciliation |
 | `/jobs` | **Search Jobs**: manual keyword/location search links to LinkedIn and Indeed; results and applications open on the external job sites |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
 | `/calendar` | Current week/month views; events and task actions unavailable |
@@ -260,7 +260,7 @@ validated research and refinements automatically update the current goal. See [C
 
 ## Saved conversational CV review
 
-The CV workspace starts with a text conversation. **CV files** provides uploads and explicit source selection; **Your CV summary** provides saved evidence and direct review tools. Users can answer, add context or ask questions in one composer. Ordinary explanations save through validated interpretation; corrections, removals and manual additions retain explicit action cards. Unknown details and skips remain uncertain.
+The CV workspace starts with a skills summary. Upload sits beside **Your CVs**, which provides saved CV cards and explicit baseline selection. **Review CV** opens a full-page conversation; **Your CV summary** provides saved evidence and direct review tools. Users can answer, add context or ask questions in one composer. Ordinary explanations save through validated interpretation; corrections, removals and manual additions retain explicit action cards. Unknown details and skips remain uncertain.
 
 History is stored by CV and resumes after reload, including manual-only conversations with no uploaded CV. Messages are paginated in retained bounded segments. The client does not store CV text in browser storage. Message receipt, interpretation progress and factual save are distinct. Retry retains the original request after an unknown network outcome, and delayed responses cannot update a different displayed CV/account. Older loaded action pages refresh their statuses; full segments expose outstanding work before continuation.
 
@@ -292,3 +292,9 @@ CV-context acknowledgement stays separate.
 ## Roadmap adviser
 
 `/roadmap` now opens a persistent adviser conversation with the plan alongside it. It checks extracted/selected CV and Career inputs, obtains the separate Assessment result and proposes activities around user-chosen timeline, weekly/day budgets and learning preferences. Users explicitly Start/Apply a proposal; active edits and task progress preserve history and expose review conflicts. The starting-point tab explains captured comparison evidence. Preferences and activity editors support keyboard focus and mobile widths. See [Roadmap](../../services/roadmap-service/SPEC.md) for limits; this does not implement automatic revisions, exact time slots or live-model quality guarantees.
+
+Skills Profile shows upload beside a fixed-height, internally scrolling **Your CVs**
+library. Cards support persisted titles, Rename, Review CV, Set as active baseline
+and confirmed deletion. Review opens the full-viewport `/cv?review=<cv_id>` screen
+with the workspace sidebar hidden; Back to Skills Profile retains the mounted chat
+draft. Renaming keeps the original filename and extracted evidence intact.

@@ -40,7 +40,7 @@ Dates are optional hints during extraction. The prompt asks for an unambiguous n
 
 The CV worker runs an in-memory LangGraph with `parse → extract → validate` and a conditional `repair → validate` branch. Validation failure allows exactly one repair call; a second failure is terminal for that worker attempt. Parsing failures, missing configuration, provider rejection, transport/timeout errors, malformed/incomplete provider envelopes and invalid content JSON stop immediately and retain the existing explicit retry path. The application never strips fences, clips evidence or invents dates to force success.
 
-Workflow version 3 gathers evidence that is neither an exact nor a formatting-equivalent passage of its cited block. Case, Unicode presentation and whitespace/line-wrap changes pass locally while meaningful punctuation and words remain intact. Unknown block IDs fail before semantic inference. Remaining unique `(block_id, excerpt)` pairs are checked in one bounded model request per candidate, sending only referenced blocks and summaries. The verifier must reject added/contradicted facts, altered identities/numbers/dates/durations, lost negation/conditions or inflated attribution. Only explicitly approved indexes are accepted; malformed, duplicated, out-of-range or missing approvals cannot authorize other text. All source/summary content is untrusted. At most 1,120 unique references are admitted, derived from 160 items × six references plus 160 other-information entries. This is model-based semantic assessment and may make mistakes; synthetic tests do not establish live accuracy.
+Workflow version 3 gathers evidence that is neither an exact nor a formatting-equivalent passage of its cited block. Case, Unicode presentation and whitespace/line-wrap changes pass locally while meaningful punctuation and words remain intact. Unknown block IDs fail before semantic inference. Remaining unique `(block_id, excerpt)` pairs are checked in one bounded model request per candidate, sending only referenced blocks and summaries. The verifier must reject added/contradicted facts, altered identities/numbers/dates/durations, lost negation/conditions or inflated attribution. Only explicitly approved indexes are accepted; malformed, duplicated, out-of-range or missing approvals cannot authorize other text. All source/summary content is untrusted. At most 1,120 unique semantic references are admitted in one candidate, including quoted evidence and any shared review-field interpretations. Review fields require exact quote anchors and semantic support for their meanings and ownership attribution; a field naming a skill must refer to a skill on that source. This is model-based semantic assessment and may make mistakes; synthetic tests do not establish live accuracy.
 
 Overlong source-supported quotations or summaries are split losslessly into parts of at most 500 characters before schema validation. Full-text support must be established before splitting; approval is carried only to those exact parts. The six-reference/160-entry limits, skill provenance, dates and relationship checks remain enforced. Approval sets are transient and never apply to a changed repair candidate. Review labels evidence as potentially summarized.
 
@@ -83,7 +83,7 @@ On first use, a bounded metadata bootstrap accounts for existing records, actual
 
 Same-source reprocessing keeps corrections, removals and answers when stable source identities and interpreted attributes match. If a model changes a retained source identity, skill relationship or structured attribute, the previous result and a bounded structured candidate are saved for comparison. The user can keep the previous extraction or accept the candidate after explicitly archiving or mapping every affected statement to a same-kind item. No mapping is selected by name. Corrections/removals may be reapplied only by this explicit choice; explanations retain their original origin/history and require fresh interpretation against the new evidence. A newly uploaded replacement can explicitly compare a previous ready CV before acquiring its own edits or answers. Discarding a comparison remains possible if the old CV changes. Neither comparison nor acceptance changes the selected CV automatically. Pending comparisons, processing and failed sources cannot supply new capability inputs.
 
-History and idempotency receipts remain embedded with full source ownership. Before user content, extraction or retained history exceeds 12 MiB, the API rejects it with guidance to retain the historical source and upload a new copy; it never silently truncates history. Worker lease, bounded failure and original-deletion bookkeeping have an explicit additional 8 KiB allowance so a full source cannot block cleanup. Oversized extraction publishes a bounded failure against the prior record without replacing its evidence/history. Saved CVs can be deleted through the owner/version-checked API and CV files controls. There is no archive UI or unlimited lifetime edit storage.
+History and idempotency receipts remain embedded with full source ownership. Before user content, extraction or retained history exceeds 12 MiB, the API rejects it with guidance to retain the historical source and upload a new copy; it never silently truncates history. Worker lease, bounded failure and original-deletion bookkeeping have an explicit additional 8 KiB allowance so a full source cannot block cleanup. Oversized extraction publishes a bounded failure against the prior record without replacing its evidence/history. Saved CVs can be deleted through the owner/version-checked API and Your CVs card controls. There is no archive UI or unlimited lifetime edit storage.
 
 ## Delete a saved CV
 
@@ -141,7 +141,7 @@ The conversation supports existing C-series actions. It does not introduce voice
 
 ## Model-call admission
 
-Extraction, conversational routing and clarification interpretation share one CV-only admission boundary. The defaults are 120 provider-call attempts per account and 2,000 globally per UTC day, with one active call per account and three across all CV processes. A factual chat turn may use one routing call plus one interpretation call; these limits count provider attempts, not messages or money. Existing per-process limits on shared routing/interpretation remain in force. `/policy` exposes the account's `max_model_calls_per_day` and `max_concurrent_model_calls`.
+Extraction, conversational routing and clarification interpretation share one CV-only admission boundary. The defaults are 120 provider-call attempts per account and 2,000 globally per UTC day, with one active call per account and three across all CV processes. Legacy factual chat may use one routing call plus one interpretation call; uploaded-CV interviews use one turn interpretation, conditional evidence verification and up to three planner calls; these limits count provider attempts, not messages or money. Existing per-process limits on shared routing/interpretation remain in force. `/policy` exposes the account's `max_model_calls_per_day` and `max_concurrent_model_calls`.
 
 One journaled `cv_model_usage` document contains a monotonically revised daily counter and at most 10,000 hashed-owner counters. A newer UTC day resets the counters; a backwards clock never resets them. Invalid or uncertain counter state fails closed. An attempt is reserved immediately before the synchronous provider callback; failed or ambiguous attempts are not refunded. Disabled providers, parser failures, reads, question preparation, skips, explicit local edits and successful receipt replays do not consume attempts. Inputs are saved independently: denial leaves the upload/message/answer available with a clear retry explanation.
 
@@ -173,9 +173,10 @@ The additive `/{id}/assessment-input` export applies the selected-source/version
 
 The `/cv` page opens on an evidence summary with Upload your CV and Build through
 chat actions. It does not open/create a conversation on page entry. Uploading
-preserves source selection and stays on the summary. Review CV explicitly opens
-guided review after usable extraction; processing/failed files instead offer status
-and recovery. The existing detailed correction, reconciliation and declaration
+preserves source selection and immediately opens the full-page CV review screen.
+Processing/failed files show status and recovery there; usable extraction automatically
+opens the saved conversation and begins guided clarification. Existing ready CVs
+can also be reopened through Review CV. The existing detailed correction, reconciliation and declaration
 controls remain available under disclosures.
 
 Conversation start accepts optional `purpose: skills_profile`. Existing histories
@@ -209,15 +210,26 @@ Status refresh reconciles external Profile/CV snapshots only against the capture
 conversation revision. If an action publishes meanwhile, the refresh preserves its
 new question and state; a subsequent fresh poll can invalidate changed sources.
 
-In skills-profile mode, basic CV review is independent of Career availability and
-confirmation. The harness selects unresolved source uncertainties and additional
-personal-skill scope/independence/recency/frequency/outcome/limitation questions;
-the model writes the question. Answers use the existing CV answer/interpretation
-lifecycle; skips retain uncertainty. Successful factual answers advance to the next
-question. Exact source generations, existing answers and question identities prevent
-resolved/skipped questions from being recreated. Target-specific relevance/preparation
-continues through the existing confirmed-Career flow; basic review does not confirm
-a target or generate an assessment.
+In skills-profile mode, basic uploaded-CV review is independent of Career availability
+and confirmation. The agent chooses experience order, questions, follow-ups and
+completion; the harness owns persistent source-grounded memory, evidence validation
+and publication. Extraction and clarification share `review_evidence` fields for
+roles/responsibilities, ownership, assistance, task depth, problem solving, outcomes,
+skill use, recency/frequency and limitations. Known fields are not re-asked; partial
+and conflicting evidence permits a distinct follow-up. Unknown/skip dispositions
+are scoped to the selected field. Normal turns commit validated evidence before
+planning, reusing the initial interpretation instead of interpreting it again.
+Owner-scoped conversation memory survives restarts and segment rollover. Coverage
+and source-specific derived skill estimates are invalidated when their evidence
+changes. User stop produces paused partial progress; reviewed/reviewed-with-gaps
+completion requires validated coverage. The existing explicit summary review stamp
+remains separate. `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` defaults to 2 (1–5), limiting
+unproductive probes of an unchanged target. Context is capped at 96 KiB with focused
+source-answer recall and at most three planner calls per turn. Every provider call
+uses the existing shared model admission. Target-specific relevance/preparation and
+manual-only Profile intake retain their existing paths. See the
+[interview harness and code responsibilities](INTERVIEW.md) for exact lifecycle,
+memory, completion, recovery and remaining model-quality limits.
 
 `POST /api/v1/cv/{cv_id}/profile-review` marks the exact owner/version-visible
 effective extraction as reviewed, using the existing mutation/replay boundary. It
@@ -227,3 +239,22 @@ becomes out of date when effective evidence changes; review alone does not advan
 the effective evidence version. The summary shows the stamp, actual source skills,
 source-specific support and retained clarification answers. It never assigns a
 universal mastery score. Job-specific comparison remains Assessment-owned.
+
+## Saved CV title metadata
+
+The original upload `file_name` is immutable. Optional `display_name` is a user-facing
+title, initially absent. The authenticated owner may rename any visible saved CV
+through `PATCH /api/v1/cv/{cv_id}/title` with the current `expected_version` and a
+UUID `mutation_id`. Trim surrounding whitespace, require 1–200 characters and reject
+embedded control characters. The service stores the title using whole-document CAS
+and idempotent receipts. Stale versions/conflicting request identities return 409;
+foreign or deleted sources return 404. Only metadata/version/update time changes;
+renaming does not change extraction/effective versions, baseline selection, source
+hashes, review stamps or evidence history. Listing projections include this field.
+No data migration is needed; missing titles retain the original filename fallback.
+
+Baseline selection uses the label **Set as active baseline**. Before selecting a CV
+without a saved review for its current effective version, the UI warns that AI
+interpretation may be inaccurate and may attribute team skills to the user when
+project roles are unclear. The user may cancel or continue; this does not change
+the authenticated, explicit selection API or automatically regenerate analysis.

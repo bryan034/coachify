@@ -69,6 +69,8 @@ EXAMPLE = {
 EXAMPLE['extraction'] = Extraction.model_validate(EXAMPLE['extraction']).model_dump()
 
 
+SYSTEM += '''\nFor each item also extract review_evidence ONLY for facts actually supported by the CV: role, responsibilities, personal_contribution, assistance, task_scope, complexity, problem_solving, outcome, skill_use, recency, frequency, limitations. Use the same evidence fields as clarification. Each fact cites source_id from the supplied blocks and an exact quote (not a paraphrase). Values can be faithful interpretations. Use skill_name only for a fact specific to that skill. Preserve explicit partial/conflicting statements. Do not fill absent fields with invented unknown answers. Set attribution personal/shared only for explicitly personal work; team means teammates only, observed means watching only. Project/team output and job titles alone do not establish personal skill use or independence. Never put an inferred proficiency rating in review_evidence.'''
+
 
 class Extractor:
     def __init__(self):

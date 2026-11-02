@@ -21,6 +21,7 @@ class Settings:
     model_calls_global_per_day: int = 2000
     model_concurrent_per_owner: int = 1
     model_concurrent_global: int = 3
+    interview_max_target_attempts: int = 2
 
     @classmethod
     def environment(cls):
@@ -34,7 +35,7 @@ class Settings:
             ('max_original_bytes_global', 10 * 1024 * 1024 * 1024, 1024 ** 4),
             ('model_calls_per_owner_per_day', 120, 1_000_000),
             ('model_calls_global_per_day', 2000, 1_000_000),
-            ('model_concurrent_per_owner', 1, 31), ('model_concurrent_global', 3, 32)):
+            ('interview_max_target_attempts', 2, 5), ('model_concurrent_per_owner', 1, 31), ('model_concurrent_global', 3, 32)):
             value = int(os.getenv('CV_' + name.upper(), str(default)))
             if not 1 <= value <= upper: raise RuntimeError('CV_' + name.upper() + f' must be between 1 and {upper}.')
             limits[name] = value

@@ -93,3 +93,12 @@ manual field order/skips, semantically equivalent values, unsupported/foreign
 answer rejection, persisted partial drafts and exact-write recovery after lost
 cross-service acknowledgements. Semantic proficiency/independence acceptance uses
 explicit synthetic verdicts; it does not establish live model quality.
+
+Saved-title tests cover validation, owner isolation, persistence/list projections, stale/replayed writes, queued-source renaming and unchanged source/evidence/history. Mongo cases require the disposable test database described above.
+
+Agent-led CV interview checks in `test_cv_interview.py` cover durable memory on both
+repositories, rich/partial evidence, scoped skips, side questions, user stops,
+known-field suppression, unproductive probing, coverage/estimate guards, semantic
+rejection, old source-answer context, stale-provider fencing and retry without
+duplicate evidence. Mongo cases reconstruct the coordinator over persisted records.
+They use explicit synthetic outputs and do not measure live interview quality.

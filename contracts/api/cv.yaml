@@ -3261,6 +3261,131 @@
           }
         }
       }
+    },
+    "/api/v1/cv/{cv_id}/title": {
+      "patch": {
+        "summary": "Rename",
+        "operationId": "rename_api_v1_cv__cv_id__title_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cv_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cv Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameMutation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4261,6 +4386,16 @@
           },
           "limits": {
             "$ref": "#/components/schemas/ChatLimits"
+          },
+          "interview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InterviewProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -4294,6 +4429,17 @@
           "file_name": {
             "type": "string",
             "title": "File Name"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
           },
           "file_type": {
             "type": "string",
@@ -4624,6 +4770,14 @@
             "type": "array",
             "title": "Skill Claims",
             "default": []
+          },
+          "review_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewFact"
+            },
+            "type": "array",
+            "maxItems": 240,
+            "title": "Review Evidence"
           }
         },
         "type": "object",
@@ -4809,6 +4963,17 @@
           "file_name": {
             "type": "string",
             "title": "File Name"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
           },
           "file_type": {
             "type": "string",
@@ -5959,6 +6124,14 @@
             "type": "integer",
             "minimum": 1.0,
             "title": "Extraction Version"
+          },
+          "review_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewFact"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Review Evidence"
           }
         },
         "additionalProperties": false,
@@ -6459,6 +6632,241 @@
           "selection"
         ],
         "title": "CvDeletionResult"
+      },
+      "RenameMutation": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "display_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Display Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "display_name"
+        ],
+        "title": "RenameMutation"
+      },
+      "InterviewProgress": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "reviewing",
+              "reviewed",
+              "reviewed_with_gaps",
+              "paused"
+            ],
+            "title": "Status"
+          },
+          "reviewed_items": {
+            "type": "integer",
+            "title": "Reviewed Items"
+          },
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items"
+          },
+          "estimates": {
+            "items": {
+              "$ref": "#/components/schemas/SkillEstimate"
+            },
+            "type": "array",
+            "title": "Estimates"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "reviewed_items",
+          "total_items"
+        ],
+        "title": "InterviewProgress"
+      },
+      "ReviewFact": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "role",
+              "responsibilities",
+              "personal_contribution",
+              "assistance",
+              "task_scope",
+              "complexity",
+              "problem_solving",
+              "outcome",
+              "skill_use",
+              "recency",
+              "frequency",
+              "limitations"
+            ],
+            "title": "Field"
+          },
+          "skill_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Name"
+          },
+          "attribution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "personal",
+                  "shared",
+                  "team",
+                  "observed",
+                  "denied",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "partial",
+              "unknown",
+              "conflicting",
+              "skipped",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 800,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewQuote"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "status",
+          "evidence"
+        ],
+        "title": "ReviewFact"
+      },
+      "ReviewQuote": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "quote": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Quote"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "quote"
+        ],
+        "title": "ReviewQuote"
+      },
+      "SkillEstimate": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Item Id"
+          },
+          "skill_name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Skill Name"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "insufficient_evidence",
+              "guided_application",
+              "independent_application",
+              "complex_application"
+            ],
+            "title": "Level"
+          },
+          "explanation": {
+            "type": "string",
+            "maxLength": 800,
+            "minLength": 1,
+            "title": "Explanation"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Evidence Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item_id",
+          "skill_name",
+          "level",
+          "explanation",
+          "evidence_refs"
+        ],
+        "title": "SkillEstimate"
       }
     },
     "securitySchemes": {

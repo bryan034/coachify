@@ -27,10 +27,12 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  }, { timeout: 30_000 }).toBe('ready');
  const initialList = await (await account.get('/api/v1/cv')).json();
  expect(initialList.selection.cv_id).toBeNull();
+ await openCvReviewTools(page);
  await page.getByRole('button', { name: 'Refresh saved status', exact: true }).click();
  const saved = page.getByRole('article', { name: `CV ${cvId}`, exact: true });
- await saved.getByRole('button', { name: 'Select for analysis', exact: true }).click();
- await expect(saved.getByRole('button', { name: 'Selected', exact: true })).toBeVisible();
+ page.once('dialog', dialog => dialog.accept());
+ await saved.getByRole('button', { name: 'Set as active baseline', exact: true }).click();
+ await expect(saved.getByRole('button', { name: 'Active baseline', exact: true })).toBeVisible();
  await page.getByRole('button', { name: 'Edit or remove Team dashboard', exact: true }).click();
  const editor = page.getByRole('form', { name: 'Edit Team dashboard', exact: true });
  await editor.getByLabel('Description', { exact: true }).fill('I wrote SQL queries; another teammate implemented the Python application.');
@@ -75,6 +77,7 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  const reprocessed = await (await account.get(`/api/v1/cv/${cvId}`)).json();
  expect(reprocessed.items.find((item: { id: string }) => item.id === project.id).description).toBe(project.description);
  expect((await (await account.get('/api/v1/cv')).json()).cvs).toHaveLength(1);
+ await openCvReviewTools(page);
 
  // A model boundary failure on a different CV must not replace selected input.
  await page.getByLabel('CV document', { exact: true }).setInputFiles({ name: 'synthetic-cv.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: readFileSync(path.join(process.cwd(), 'tests/fixtures/synthetic-cv-failure.docx')) });
@@ -90,6 +93,7 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  expect((await (await account.get('/api/v1/profile/capabilities')).json()).declarations).toHaveLength(2);
  expect((await (await account.get(`/api/v1/cv/${cvId}/clarifications`)).json()).deferred).toBe(true);
 
+ await openCvReviewTools(page);
  // Use the real paged API with a small page so the selected older CV is absent
  // from page one. Responses still come from the gateway and MongoDB.
  await page.route(/\/api\/v1\/cv(?:\?.*)?$/, route => {
@@ -97,11 +101,11 @@ test('saved CVs retain corrections, require explicit selection and compose manua
   return route.continue({url:url.toString()});
  });
  await page.reload(); await openCvReviewTools(page);
- await expect(page.getByRole('complementary', {name:'Selected CV'})).toContainText(cvId);
+ await expect(page.getByLabel('Selected CV', {exact:true})).toContainText(cvId);
  await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true})).toHaveCount(0);
  await expect(page.getByRole('region', {name:'Projects',exact:true}).locator('.cv-copy')).toHaveText(project.description);
  await page.getByRole('button', {name:'Show more saved CVs',exact:true}).click();
- await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Selected',exact:true})).toBeDisabled();
+ await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Active baseline',exact:true})).toBeDisabled();
  await expect(page.getByRole('button', {name:'Show more saved CVs',exact:true})).toHaveCount(0);
 
  // A different authenticated account sees neither the original nor its saved
@@ -124,7 +128,7 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  page.once('dialog', dialog => dialog.accept());
  await page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Delete CV',exact:true}).click();
  await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true})).toHaveCount(0);
- await expect(page.getByRole('complementary', {name:'Selected CV'})).toContainText('No CV selected');
+ await expect(page.getByLabel('Selected CV', {exact:true})).toContainText('No CV selected');
  expect((await account.get(`/api/v1/cv/${cvId}`)).status()).toBe(404);
  for (const chat of conversationList.conversations) expect((await account.get(`/api/v1/cv/conversations/${chat.id}`)).status()).toBe(404);
  expect((await (await account.get('/api/v1/profile/capabilities')).json()).declarations).toHaveLength(2);
