@@ -1,9 +1,33 @@
 # Career Goal
 
-Career Discovery opens with an editable composer and no provider-consent checkbox.
-Sending the first message creates its session with `consent=true`; configured model
-processing and automatic public-job research are enabled by default. New chat has
-the same behavior. Opening the page alone makes no model or research calls.
+Career Discovery restores the account's latest saved conversation from Career on
+opening, refresh and re-entry, including confirmed conversations. Sent messages and
+structured progress live in Career's owner-scoped MongoDB records; the browser does
+not persist private chat content. Restored messages appear in full. Unsent drafts
+remain in page memory.
+
+An account with no conversation sees the Python introduction and an editable composer.
+Its first message creates a session with `consent=true`. **New chat** immediately
+creates a distinct empty saved session, so refresh also restores that new session
+before a message is sent. Creation retries reuse the request key, and failures keep
+the previous conversation visible. Opening or creating an empty chat makes no model
+or search calls. Completed research and validated refinements automatically publish
+all structured goal fields through Career's shared persistence path. There is no
+save/confirmation button or separate Career Discovery review/editor panel. Users
+request skill changes and direction refinements in the composer. Career Goal reads
+the latest fields on navigation, polls for background changes while visible, and
+refreshes on tab focus. The separate
+CV-context acknowledgement remains explicit and version-bound.
+
+New research summaries use Markdown headings, grouped bullet lists, inline sources,
+learning priorities and coverage limitations. The final invitation to ask questions
+and refine the goal in this chat is bold.
+
+Career Discovery reveals assistant chat replies word by word after the validated
+response arrives. Readers can choose **Show full response** to reveal it immediately;
+reduced-motion preferences show the complete answer. Existing replies stay visible
+while new replies appear, and scrolling follows new text only while the reader is
+at the bottom. This is a display animation, not provider streaming.
 
 `career-goal.tsx` keeps paste, URL and document previews in page memory. Its input
 methods and source-recovery controls remain independent from target persistence.

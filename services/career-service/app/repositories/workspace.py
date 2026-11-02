@@ -41,7 +41,7 @@ class WorkspaceStore:
                 return False
         incoming=row.get('incoming',{})
         if incoming.get('key')==key and incoming.get('until',now())>now():raise GoalError('This description is already being extracted. Retry shortly.')
-        self.rows.update_one({'_id':owner},{'$set':{'incoming':{'key':key,'hash':digest,'until':now()+timedelta(seconds=75)}}})
+        self.rows.update_one({'_id':owner},{'$set':{'incoming':{'key':key,'hash':digest,'until':now()+timedelta(seconds=75)},'active_discovery':None}})
         return True
 
     def activate(self,owner,session,review,*,input_key=None,digest=None,keep_run=False,chat_receipt=None):

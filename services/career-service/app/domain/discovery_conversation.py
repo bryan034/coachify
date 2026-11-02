@@ -17,7 +17,7 @@ PREVIOUS_INTRODUCTION = LEGACY_INTRODUCTION.replace(
     "I will ask questions to understand your interests and personalise your goal for you, then research representative roles once we have enough context.",
 )
 
-INTRODUCTION = (
+MANUAL_SAVE_INTRODUCTION = (
     "Hi, I’m elo’s career guidance assistant. I can help you explore career paths, "
     "compare roles, or talk through questions about jobs and internships.\n\n"
     "Tell me what’s on your mind, a field you’re curious about, or the kind of work you enjoy. "
@@ -28,10 +28,16 @@ INTRODUCTION = (
 )
 
 
+INTRODUCTION = MANUAL_SAVE_INTRODUCTION.replace(
+    'You’ll review and confirm before saving your career goal.',
+    'Your career goal updates automatically as we refine your direction together.',
+)
+
+
 def conversation_messages(messages):
     """Exclude display-only opening copy, including legacy stored introductions."""
     return [message for message in messages
-            if not (message.get('role') == 'assistant' and message.get('content') in (INTRODUCTION,PREVIOUS_INTRODUCTION,LEGACY_INTRODUCTION))]
+            if not (message.get('role') == 'assistant' and message.get('content') in (INTRODUCTION,MANUAL_SAVE_INTRODUCTION,PREVIOUS_INTRODUCTION,LEGACY_INTRODUCTION))]
 
 
 def conversational_reply(message, *, ongoing=False):
@@ -45,7 +51,7 @@ def conversational_reply(message, *, ongoing=False):
         return ('Start with a career question, an interest, or a kind of work you enjoy. '
             'We can compare directions and build up your interests and preferences together. '
             'Once there is enough context, I’ll research representative roles. '
-            'You review and confirm before saving a goal.')
+            'Your goal updates automatically as we refine it.')
     if text in ('thanks','thank you','thanks elo','thank you elo'):
         return 'You’re welcome! We can keep exploring your career direction whenever you’re ready.'
     return None

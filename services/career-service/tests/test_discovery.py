@@ -10,6 +10,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pymongo import MongoClient
+from bson import ObjectId
 from app.main import create_app
 from app.ai.adapter import AIError
 from app.schemas.discovery import Scope,Decision,Plan,Listings,MarketSummary,Listing,Requirement,RecommendedSkill,ConversationMemory,SourceAssessment,SourceAssessments,DiscoveryUnderstanding,DiscoveryAnswer
@@ -127,13 +128,13 @@ def wait(flow,row,status='review'):
     pytest.fail(str(value))
 
 @pytest.mark.parametrize('message',['Software Engineering','I want Backend Engineering','Keep it broad: Software Engineering','I changed my mind: Backend Engineering'])
-def test_clear_direction_automatically_launches_research_without_saving_goal(flow,message):
+def test_clear_direction_automatically_researches_and_saves_current_goal(flow,message):
     row=start(flow,message)
     assert row['status']=='researching' and row['decision']['action']=='START_RESEARCH'
     row=wait(flow,row)
     assert flow[3].calls
     assert flow[0].get(f"{BASE}/{row['id']}",headers=headers(other=True)).status_code==404
-    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal'] is None
+    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal']['_id']==row['review']['current']['goal']['_id']
 
 
 def test_unclear_interests_ask_one_question_without_research(flow):
@@ -162,31 +163,35 @@ def test_unknown_stage_and_location_do_not_block_research(flow):
     assert wait(flow,row)['status']=='review'
 
 
-def test_research_reviews_then_confirms_through_shared_persistence_without_cv(flow,monkeypatch):
-    row=start(flow);row=wait(flow,row)
+def test_research_and_chat_refinements_automatically_publish_through_shared_persistence(flow,monkeypatch):
+    seen=[];original=GoalStore.persist_target
+    def save(store,goal):seen.append(goal);return original(store,goal)
+    monkeypatch.setattr(GoalStore,'persist_target',save)
+    row=wait(flow,start(flow))
     assert row['listings_analysed']==10 and row['employers_analysed']==10
     assert row['coverage']=='good' and len(row['review']['current']['goal']['skills'])==2
     assert row['stats'][0]['requirement_type']=='core' and row['stats'][0]['mention_count']==10
     assert row['stats'][1]['requirement_type']=='optional'
     assert all('Singapore' in q and 'entry level' in q for q in flow[3].calls)
-    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal'] is None
-    review=row['review'];content={k:v for k,v in review['current']['goal'].items() if k in JDExtraction.model_fields};content['skills']=content['skills'][:1]
-    response=flow[0].patch('/api/v1/career/goals/'+review['current']['goal']['_id']+'/review',headers=headers(),json={'expected_version':review['current']['goal']['version'],'content':content})
-    assert response.status_code==200,response.text
-    review=response.json();seen=[];original=GoalStore.persist_target
-    def save(store,goal):seen.append(goal);return original(store,goal)
-    monkeypatch.setattr(GoalStore,'persist_target',save)
-    key=str(uuid4());body={'target_type':'career_exploration','role':content['role'],'field':content['field'],'location':content['location'],'seniority_level':content['seniority_level'],'review_id':review['current']['goal']['_id'],'expected_review_version':review['current']['goal']['version'],'expected_selection_version':0}
-    response=flow[0].post('/api/v1/career/goals/confirm',headers=headers(key=key),json=body)
-    assert response.status_code==200,response.text
-    goal=CareerGoal.model_validate(response.json()['goal']);assert len(seen)==1
+    current=flow[0].get('/api/v1/career/goals/current',headers=headers()).json()
+    goal=CareerGoal.model_validate(current['goal'])
+    assert len(seen)==1 and current['selection_version']==1
+    assert goal.id==row['review']['current']['goal']['_id']
     assert goal.company is None and goal.job_url is None and goal.discovery.listings_analysed==10
     assert goal.skills[0].source_urls and goal.skills[0].origin=='generated_guidance'
     assert goal.skills[0].priority=='suggested' and goal.skills[0].evidence is None
-    assert flow[0].get('/api/v1/career/workspace',headers=headers()).json()['current']['goal']['_id']==review['current']['goal']['_id']
-    assert flow[0].post('/api/v1/career/goals/confirm',headers=headers(key=key),json=body).json()['selection_version']==1
-    assert len(seen)==1
     assert flow[1].research_contexts.find_one({'_id':goal.discovery.research_id})['aggregate']['listings']
+    refined=wait(flow,send(flow,row,'Remove Python'))
+    updated=flow[0].get('/api/v1/career/workspace',headers=headers()).json()['current']
+    assert updated['goal']['_id']==refined['review']['current']['goal']['_id']
+    assert [skill['name'] for skill in updated['goal']['skills']]==['SQL']
+    assert updated['selection_version']==2 and len(seen)==2
+    assert flow[1].career_goals.find_one({'_id':ObjectId(goal.id),'user_id':OWNER})
+    # Reload/poll cannot repeat the publication or require a confirmation command.
+    flow[0].get(BASE+'/current',headers=headers())
+    flow[0].get(f"{BASE}/{refined['id']}",headers=headers())
+    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()==updated
+    assert len(seen)==2
 
 
 def test_quota_resume_reuses_searches_and_successful_extractions(flow):
@@ -204,12 +209,12 @@ def test_empty_sources_and_empty_supported_listings_are_honest(flow):
     assert len(flow[3].calls)==3 and 'alternative employers' in flow[3].calls[-1]
 
 
-def test_refresh_preserves_evidence_snapshot_and_requires_new_confirmation(flow):
+def test_refresh_preserves_evidence_snapshot_and_automatically_updates_goal(flow):
     row=start(flow);row=wait(flow,row);review=row['review'];calls=len(flow[3].calls)
     research(flow,row,refresh=True);latest=wait(flow,row)
     assert len(flow[3].calls)>calls and latest['review']['current']['goal']['_id']!=review['current']['goal']['_id']
     assert flow[1].research_contexts.count_documents({'kind':'career_discovery_evidence'})==2
-    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal'] is None
+    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal']['_id']==latest['review']['current']['goal']['_id']
 
 
 def test_schema_errors_are_bounded_and_leave_session_recoverable(flow):
@@ -308,7 +313,7 @@ def test_skill_refinement_reuses_evidence_and_retains_original_market_observatio
     assert any(s['name']=='Python' for s in row['stats'])
     assert flow[1].research_contexts.find_one({'_id':previous})
     assert row['review']['current']['goal']['discovery']['research_id']!=previous
-    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal'] is None
+    assert [skill['name'] for skill in flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal']['skills']]==['SQL']
 
 
 def test_chat_and_scope_change_during_search_prevent_old_results_from_publishing(flow):
@@ -329,7 +334,7 @@ def test_chat_and_scope_change_during_search_prevent_old_results_from_publishing
     finally:release.set()
     final=wait(flow,changed)
     assert final['review']['current']['goal']['role']=='Backend Engineering'
-    assert all('Your career direction: **Software Engineering**' not in m['content'] for m in final['messages'])
+    assert all('## Your career direction\n\n**Software Engineering**' not in m['content'] for m in final['messages'])
 
 
 def test_research_asks_optional_question_without_stopping_and_accepts_answer(flow):
@@ -366,7 +371,7 @@ def test_conversation_changed_during_synthesis_recomputes_before_publishing(flow
     finally:release.set()
     final=wait(flow,row)
     assert flow[2].calls.count('discovery_summary')==2
-    assert len([m for m in final['messages'] if 'Your career direction:' in m['content']])==1
+    assert len([m for m in final['messages'] if '## Your career direction' in m['content']])==1
     assert flow[2].contexts[-1][1]['memory']['interests']==['problem solving']
 
 
@@ -476,7 +481,7 @@ def test_one_unextractable_listing_keeps_other_results_and_reports_partial_cover
     assert row['status']=='review' and row['listings_analysed']==9 and row['coverage']=='limited'
     assert len(row['sources'])==9 and all(not source['title'].startswith('Employer 0 ·') for source in row['sources'])
     assert any('incomplete' in warning for warning in row['warnings'])
-    assert row['review'] and flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal'] is None
+    assert row['review'] and flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal']['_id']==row['review']['current']['goal']['_id']
     single=[data for request,data in flow[2].contexts if request.stage=='discovery_extract' and len(data['sources'])==1 and data['sources'][0]['title'].startswith('Employer 0 ·')]
     assert [data['max_requirements'] for data in single]==[15,8]
 
@@ -566,14 +571,14 @@ def test_retry_does_not_reuse_candidates_from_old_twenty_url_policy(flow):
     assert flow[1].research_contexts.find_one({'_id':previous})
 
 
-def test_new_session_has_no_introduction_or_model_or_search_calls(flow):
+def test_new_session_returns_display_introduction_without_model_or_search_calls(flow):
     from app.domain.discovery_conversation import INTRODUCTION
     key=str(uuid4())
     first=flow[0].post(BASE,headers=headers(key=key),json={'consent':True})
     assert first.status_code==200
     row=first.json()['session']
     assert row['messages']==[]
-    assert 'introduction' not in first.json()
+    assert first.json()['introduction']==INTRODUCTION
     assert row['decision'] is None and row['scope'] is None and row['summary'] is None
     assert row['sources']==[] and row['stats']==[] and row['review'] is None
     replay=flow[0].post(BASE,headers=headers(key=key),json={'consent':True})
@@ -602,7 +607,7 @@ def test_distinct_start_keys_create_isolated_chats_with_no_inherited_memory(flow
     fresh=response.json()['session']
     assert fresh['id']!=previous['id'] and fresh['version']==1
     assert fresh['messages']==[]
-    assert 'introduction' not in response.json()
+    assert response.json()['introduction']==INTRODUCTION
     assert fresh['decision'] is None and fresh['scope'] is None and fresh['review'] is None and fresh['sources']==[]
     assert flow[2].calls==calls and flow[3].calls==searches
     fresh=wait(flow,send(flow,fresh,'Backend Engineering\n'+PROFILE))
@@ -612,7 +617,7 @@ def test_distinct_start_keys_create_isolated_chats_with_no_inherited_memory(flow
     assert flow[0].get(f"{BASE}/{previous['id']}",headers=headers()).json()['session']['messages']==previous['messages']
 
 
-def test_introduction_is_only_returned_on_fresh_open_and_never_sent_to_ai(flow):
+def test_introduction_is_display_only_and_never_sent_to_ai(flow):
     from app.domain.discovery_conversation import INTRODUCTION
     opened=flow[0].get(BASE+'/current?fresh=true',headers=headers()).json()
     assert opened['introduction']==INTRODUCTION
@@ -938,3 +943,142 @@ def test_other_interests_personalise_synthesis_without_researching_unrelated_hob
     assert len(flow[3].calls)==searches
     context=[data for request,data in flow[2].contexts if request.stage=='discovery_summary'][-1]
     assert context['understanding']['other_interests']['value']=='photography'
+
+
+def test_current_restores_private_transcript_from_database_in_another_app_instance(flow):
+    from app.domain.discovery_conversation import INTRODUCTION
+    opened=flow[0].get(BASE+'/current',headers=headers()).json()
+    assert opened['session'] is None and opened['introduction']==INTRODUCTION
+    assert flow[1].research_contexts.count_documents({'kind':'career_discovery'})==0
+    previous=start(flow,'Hi',profile=None)
+    previous=send(flow,previous,'Thanks')
+    stored=flow[1].research_contexts.find_one({'_id':previous['id'],'owner':OWNER})
+    assert stored['messages']==previous['messages']
+    assert 'expires_at' not in stored
+    calls=list(flow[2].calls);searches=list(flow[3].calls)
+    upstream=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(
+        lambda request:httpx.Response(200,json={'id':OWNER,'email_verified':True} if request.url.path.endswith('/session') else {'onboarding_complete':True})))
+    with TestClient(create_app(database=flow[1],ai=flow[2],context_ai=flow[2],research_client=flow[3],profile_client=upstream)) as reopened:
+        for _ in range(2):
+            response=reopened.get(BASE+'/current',headers=headers())
+            assert response.status_code==200,response.text
+            assert response.json()['session']['id']==previous['id']
+            assert response.json()['session']['messages']==previous['messages']
+    assert flow[2].calls==calls and flow[3].calls==searches
+    assert flow[0].get(BASE+'/current',headers=headers(other=True)).json()['session'] is None
+    assert flow[0].get(BASE+'/current').status_code==401
+    assert flow[1].research_contexts.count_documents({'kind':'career_discovery'})==1
+
+
+def test_new_chat_is_current_even_before_its_first_message_and_keeps_old_history(flow):
+    from app.domain.discovery_conversation import INTRODUCTION
+    previous=start(flow,'Hi',profile=None)
+    key=str(uuid4())
+    started=flow[0].post(BASE,headers=headers(key=key),json={'consent':True})
+    assert started.status_code==200
+    fresh=started.json()['session']
+    assert fresh['id']!=previous['id'] and fresh['messages']==[]
+    for _ in range(2):
+        restored=flow[0].get(BASE+'/current',headers=headers()).json()
+        assert restored['session']['id']==fresh['id']
+        assert restored['session']['messages']==[] and restored['introduction']==INTRODUCTION
+    replay=flow[0].post(BASE,headers=headers(key=key),json={'consent':True}).json()['session']
+    assert replay['id']==fresh['id']
+    assert flow[1].research_contexts.count_documents({'kind':'career_discovery','owner':OWNER})==2
+    assert flow[0].get(f"{BASE}/{previous['id']}",headers=headers()).json()['session']['messages']==previous['messages']
+    assert flow[2].calls==[] and flow[3].calls==[]
+
+
+def test_legacy_confirmed_discovery_keeps_chat_and_goal_on_an_ordinary_followup(flow):
+    row=wait(flow,start(flow))
+    selected=flow[0].get('/api/v1/career/goals/current',headers=headers()).json()
+    flow[1].research_contexts.update_one({'_id':row['id']},{'$set':{'status':'confirmed'}})
+    row=flow[0].get(BASE+'/current',headers=headers()).json()['session']
+    continued=send(flow,row,'Thanks')
+    assert continued['id']==row['id'] and continued['status']=='confirmed'
+    assert continued['messages'][:-2]==row['messages']
+    assert continued['messages'][-2]['content']=='Thanks'
+    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()==selected
+    assert flow[1].research_contexts.count_documents({'kind':'career_discovery','owner':OWNER})==1
+
+
+@pytest.mark.parametrize('replacement',['new_chat','jd_input','goal_change'])
+def test_late_discovery_cannot_replace_a_newer_conversation_or_goal(flow,replacement):
+    import threading
+    entered=threading.Event();release=threading.Event()
+    initial=wait(flow,start(flow))
+    expected=flow[0].get('/api/v1/career/goals/current',headers=headers()).json()
+    async def hook(request,data):
+        if request.stage=='discovery_summary':
+            entered.set()
+            while not release.is_set():await asyncio.sleep(.01)
+    flow[2].hook=hook
+    pending=send(flow,initial,'Remove Python');assert entered.wait(2)
+    try:
+        if replacement=='new_chat':
+            assert flow[0].post(BASE,headers=headers(),json={'consent':True}).status_code==200
+        elif replacement=='jd_input':
+            flow[0].app.state.workspace_store.claim_input(OWNER,str(uuid4()),'synthetic-new-jd')
+        else:
+            response=flow[0].post('/api/v1/career/goals/confirm',headers=headers(),json={
+                'target_type':'specific_job','role':'Analyst','field':'Finance','expected_selection_version':expected['selection_version'],'replace_current':True})
+            assert response.status_code==200,response.text
+            expected=response.json()
+    finally:release.set()
+    stale=wait(flow,pending,'failed')
+    assert stale['error_code']=='stale_input'
+    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()==expected
+
+
+def test_failed_refinement_preserves_the_previous_current_goal(flow):
+    initial=wait(flow,start(flow))
+    expected=flow[0].get('/api/v1/career/goals/current',headers=headers()).json()
+    flow[3].fail=True
+    failed=wait(flow,send(flow,initial,'I changed my mind: Backend Engineering'),'failed')
+    assert failed['status']=='failed'
+    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()==expected
+
+
+def test_messages_cannot_race_the_short_goal_publication_lease(flow):
+    from datetime import timedelta
+    row=start(flow,'Hi',profile=None);calls=list(flow[2].calls)
+    flow[1].research_contexts.update_one({'_id':row['id']},{'$set':{'publication_until':now()+timedelta(seconds=30)}})
+    response=flow[0].post(f"{BASE}/{row['id']}/messages",headers=headers(),json={'expected_version':row['version'],'message':'Thanks'})
+    assert response.status_code==409
+    assert flow[2].calls==calls
+    assert flow[1].research_contexts.find_one({'_id':row['id']})['messages']==row['messages']
+
+
+def test_pre_upgrade_discovery_adopts_auto_publication_on_its_next_refinement(flow):
+    initial=wait(flow,start(flow))
+    flow[1].career_state.update_one({'_id':OWNER},{'$unset':{'active_discovery':''}})
+    refined=wait(flow,send(flow,initial,'Remove Python'))
+    current=flow[0].get('/api/v1/career/goals/current',headers=headers()).json()
+    assert current['goal']['_id']==refined['review']['current']['goal']['_id']
+    assert [skill['name'] for skill in current['goal']['skills']]==['SQL']
+
+
+def test_publication_replay_after_a_worker_failure_does_not_select_the_goal_twice(flow,monkeypatch):
+    from app.workflows.discovery import summary_message
+    original=flow[0].app.state.goal_store.confirm
+    failed=False
+    def confirm(*args,**kwargs):
+        nonlocal failed
+        value=original(*args,**kwargs)
+        if not failed:
+            failed=True
+            raise RuntimeError('Synthetic interruption after selecting the goal')
+        return value
+    monkeypatch.setattr(flow[0].app.state.goal_store,'confirm',confirm)
+    row=wait(flow,start(flow),'failed')
+    before=flow[0].get('/api/v1/career/goals/current',headers=headers()).json()
+    assert before['selection_version']==1
+    engine=flow[0].app.state.discovery;raw=engine.get(row['id'],OWNER)
+    goal=CareerGoal.model_validate(before['goal'])
+    review=flow[0].app.state.review_store.get(goal.id,OWNER)
+    evidence=flow[1].research_contexts.find_one({'_id':goal.discovery.research_id})
+    summary=MarketSummary.model_validate(evidence['summary'])
+    message=summary_message(Scope.model_validate(raw['scope']),raw['aggregate'],summary,raw['sources'])
+    assert engine.publish_target(raw,review,summary,raw['aggregate'],goal.discovery,message)
+    assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()==before
+    assert engine.get(row['id'],OWNER)['status']=='review'

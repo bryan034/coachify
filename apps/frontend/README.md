@@ -255,8 +255,8 @@ Opportunity Intelligence preserves individual saved findings and their citations
 
 Explore careers uses the goal-chat layout at `/career-goal/discovery`. Discovery alone
 keeps its owner-scoped transcript on the server, permits chat during automatic research,
-and clears the composer on send without overwriting the next draft. Final goal saving
-still requires explicit review and confirmation. See [Career Discovery](../../services/career-service/CAREER_DISCOVERY.md).
+and clears the composer on send without overwriting the next draft. Completed
+validated research and refinements automatically update the current goal. See [Career Discovery](../../services/career-service/CAREER_DISCOVERY.md).
 
 ## Saved conversational CV review
 
@@ -266,19 +266,28 @@ History is stored by CV and resumes after reload, including manual-only conversa
 
 Career remains the single goal authority. The saved goal overview shows whether the current goal/version/selection has been confirmed for CV review. Confirmation is explicit and independent of Career's automatic saving. A changed or replaced goal requires a fresh confirmation; earlier source-bound CV answers remain saved. CV context preserves requirement provenance and alternatives rather than treating unknown eligibility or location as a qualification fact. No second active target editor is required.
 
-Career Discovery opens with only the fixed Python-supplied introduction. **New chat**
-clears the visible history, scope, suggestions and draft; the first sent message
-creates a new private session. Opening the page performs no LLM or Brave calls.
-Reload saved progress within an active chat reads its session ID; reopening the page
-starts a clean view. Earlier sessions and confirmed goals remain saved.
+Career Discovery restores its latest owner-scoped MongoDB transcript and progress on
+refresh or re-entry. **New chat** immediately saves a new empty conversation; previous
+sessions and confirmed goals remain saved. Creation failures keep the displayed
+conversation and allow retry. Confirmed chats accept follow-up messages in the same
+session. Unsent drafts remain in page memory. Opening or creating an empty chat makes
+no model/search calls; initial load failures require recovery before sending.
 
-The Discovery introduction is fetched only on fresh opening and kept separately from
-the transcript. Subsequent session responses omit it, and it never enters model history.
+Empty conversations show the fixed Python-supplied introduction, kept separately from
+the transcript and excluded from model history. Restored replies appear in full;
+new replies use word-by-word reveal with an immediate full-response control and
+reduced-motion support. Discovery uses the chat for skill changes and direction
+refinements, with no separate review form. Validated Discovery results automatically update the current Career Goal; no chat
+save action is required. The goal page polls lightweight progress while visible and
+refreshes on tab focus. New research summaries have headings,
+grouped bullets, inline citations and a bold closing invitation to ask questions and
+refine the goal in this chat.
 
 Career Discovery collects its six research-readiness topics in a numbered bundle,
 omitting topics already answered. Role scope offers “keep it broad”; other questions
 end with “You can say unsure.” There is no repeated clarification preface. Explicit unsure/skip answers count, missing answers do not. The Career
-backend gates automatic research; final goal confirmation is unchanged.
+backend gates automatic research and publishes validated refinements automatically;
+CV-context acknowledgement stays separate.
 
 ## Roadmap adviser
 

@@ -18,13 +18,21 @@ export function CareerGoalHome(){
  const [workspace,setWorkspace]=useState<CareerWorkspace>(),[error,setError]=useState(''),[attempt,setAttempt]=useState(0);
  const creating=params.get('new')==='1';
  useEffect(()=>{
+  if(creating)return;
+  const refresh=()=>{if(document.visibilityState==='visible')setAttempt(value=>value+1);};
+  window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);
+  return()=>{window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};
+ },[creating]);
+ useEffect(()=>{
   if(!token||creating)return;
   const abort=new AbortController();let timer:ReturnType<typeof setTimeout>;
   let previous:CareerWorkspace|undefined;
-  async function load(){try{
+  async function load(){
+   if(document.visibilityState==='hidden'){timer=setTimeout(()=>void load(),5000);return;}
+   try{
    const value=previous?await refreshWorkspace(previous,token!,abort.signal):await careerApi<CareerWorkspace>('/workspace',token!,{signal:abort.signal});
    if(abort.signal.aborted)return;previous=value;setWorkspace(value);setError('');
-   if(processing.includes(value.phase))timer=setTimeout(()=>void load(),2000);
+   timer=setTimeout(()=>void load(),processing.includes(value.phase)?2000:5000);
   }catch{if(!abort.signal.aborted)setError('Your saved goal could not be loaded. Please retry.');}}
   void load();return()=>{abort.abort();clearTimeout(timer);};
  },[token,creating,attempt]);

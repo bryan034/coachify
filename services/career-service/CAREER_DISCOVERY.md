@@ -23,24 +23,36 @@ The Explore careers selector opens the same chat layout as the extracted-goal ch
 with a scrollable user/assistant transcript and an always-visible composer. Sending
 clears the composer immediately; users can type the next draft while awaiting the
 response. Failed messages have a separate retry action that preserves that draft.
-Opening the page or choosing **New chat** shows only a fixed introduction authored
-in Python (`app/domain/discovery_conversation.py`). The frontend fetches it using
-`GET /discoveries/current?fresh=true`, which returns no previous session/history.
-The composer is immediately editable without a consent checkbox. Sending the first
-message creates the session with `consent=true`; model processing and automatic
-public-job research are enabled by default when the configured services are available.
-No Gemini or Brave request is triggered by opening the page or
-New chat. Only sending the first message creates a new private session and starts
-conversation processing. The introduction is returned only on this fresh-open request and kept as display-only
-frontend state. It is not stored in new transcripts or sent to Gemini; legacy stored
-introductions are filtered from responses and model history. Normal session, message
-and research responses omit the introduction field.
-Each new start key creates a distinct session; retries of that key are idempotent.
-No prior memory, scope, suggestions, sources or review are copied into the new chat.
+Opening or refreshing the page reads `GET /discoveries/current`, restoring the
+owner's latest saved session, transcript, understanding and research/review progress.
+Leaving and returning uses the same conversation, including after automatic goal publication.
+Restored replies display in full; newly received replies reveal word by word.
+An account with no session sees a fixed introduction authored in Python
+(`app/domain/discovery_conversation.py`) and an editable composer without a consent
+checkbox. Its first message creates a private session with `consent=true`.
 
-**Reload saved progress** within an active chat reads that specific session ID.
-Reopening/reloading the discovery page starts with a clean view; earlier sessions
-and evidence remain owner-scoped on the server, and saved goals are preserved.
+**New chat** immediately calls `POST /discoveries` with a new idempotency key to
+persist an empty conversation. Refresh before sending a message restores that empty
+session. The previous chat stays visible if creation fails; retry uses the same key.
+Every distinct start key creates a separate session without copying memory, scope,
+suggestions, sources or review. Earlier sessions, evidence and confirmed goals remain
+saved. There is no history picker. **Reload saved progress** reads the displayed
+session ID, and initial load failures must be recovered before sending.
+
+Opening the page or creating an empty session makes no model or public-search calls.
+The fixed introduction is returned for empty current/start responses and the legacy
+`GET /discoveries/current?fresh=true` display-only read. That compatibility read does
+not create a conversation or change which one is current. The introduction is not
+stored in new transcripts or sent to the model; legacy stored introductions are
+filtered from responses and model history. Responses with messages omit it.
+
+Messages and structured memory persist privately in Career's `research_contexts`
+records with `kind=career_discovery`, independently of the 24-hour workflow checkpoint
+TTL. Only bounded recent context enters model input. No new collection, migration or
+browser chat storage is required. Unsent drafts remain in page memory. Legacy confirmed
+sessions accept follow-up messages. Validated direction/skill refinements automatically
+update the current goal in the same conversation; incomplete or failed work retains
+the prior valid goal.
 Other Career chat and JD workflows are unchanged.
 
 The configured model receives the saved structured understanding with user evidence, a compact memory (interests, preferences, rejected
@@ -175,8 +187,9 @@ Changed fields clear obsolete field/role/field-interest answers and retire previ
 active research; other interests, stage, location and general work preferences are
 retained. Other interests inform personalisation during synthesis, and do not become
 compulsory unrelated industry/job filters or automatically require new Brave searches.
-No separate scope confirmation is required once the six topics are addressed. Final
-goal confirmation is unchanged. The fixed Python introduction explains that questions
+No separate scope confirmation is required once the six topics are addressed.
+Completed validated results automatically update the current goal without a separate
+save or confirmation action. The fixed Python introduction explains that questions
 help understand interests and personalise the goal; it remains excluded from LLM input.
 
 Two existing LangGraph flows run inside Career:
@@ -204,7 +217,7 @@ reusing a fresh equivalent-scope sample when available. Explicit refresh bypasse
 reuse. Every worker checks its run/lease; an older run cannot publish into a changed
 direction. Synthesis checks the conversation version and recomputes if new answers
 arrive before publication. Research progress never overwrites user messages/memory.
-The output is a draft review, never an automatically confirmed goal.
+The output publishes the validated goal automatically; readiness and the separate CV-context acknowledgement remain independent.
 
 Gemini plans related titles and searches. Brave LLM Context retrieves bounded
 excerpts, with at most four initial queries and two targeted follow-ups, two requests
@@ -283,15 +296,39 @@ market evidence remain `user_declaration`. Original requirements and immutable e
 snapshots remain available separately; removing a recommendation does not rewrite
 what employers stated. Qualifications remain variable sample conditions.
 
-The chat result shows direction, representative responsibilities, up to eight concise
-skill recommendations with inline citations, supported conditions, possible
-specialisations and coverage warnings. The review contains the full selected skill
-set. Only server-resolved source references become citations; model-written links
-cannot introduce sources. No skill-gap assessment or roadmap is generated.
+The chat result uses Markdown headings for direction, research coverage, typical
+work, recommended skills, supported conditions, possible specialisations and research
+limitations. Empty sections are omitted. Skill names and learning priorities are
+bold, and responsibilities/skills/conditions use bullet lists with inline citations.
+The summary highlights up to eight recommendations and explicitly states the full
+count when more are saved in the server review. Its final line is always bold:
+“You can ask questions and refine your career goal through this chat.” The 12,000
+character message bound reserves space for this invitation. Only server-resolved
+source references become citations; model-written links cannot introduce sources.
+No skill-gap assessment or roadmap is generated.
 
-Users review title/overview, remove irrelevant skills/conditions/responsibilities,
-refine the scope or explicitly refresh research, then confirm their current goal.
-The existing `PATCH /goals/{id}/review` and `POST /goals/confirm` handle those saves.
+There is no review/editor panel or save action in the chat. Users request skill
+additions/removals and direction refinements through messages. Once synthesis succeeds,
+Career uses `ReviewStore.goal()` and the shared `GoalStore.confirm()` persistence
+orchestration internally to publish the goal's metadata, responsibilities, skills,
+conditions, summary, discovery evidence and declared interests/preferences. The
+Career Goal page reads the same current pointer, polls lightweight progress while
+visible, and refreshes on tab focus. Ordinary
+questions do not republish unchanged guidance. Generic review/confirmation endpoints
+remain compatibility APIs, with no Discovery UI dependency.
+
+Publication pins the selection revision captured when research begins, and checks
+`career_state.active_discovery` in the atomic current-pointer update. New chat changes
+that marker; a new JD input explicitly clears it. An older run cannot replace a newer
+conversation or goal. A bounded 30-second `publication_until` lease excludes message
+mutations during publication; callers retain their retry identity. Stable publication
+receipts allow replay if a worker stops after updating the goal and before completing
+its transcript entry, without selecting the goal twice. Failures preserve the previous
+current goal and retained evidence. Existing latest pre-upgrade conversations can be
+adopted on their next refinement when their goal context has not been replaced.
+The existing `review` status now means synthesis and automatic publication completed;
+it does not request a user save. Automatic saving never acknowledges CV context.
+
 `ReviewStore.goal()` constructs both JD and discovery targets; **both persist through
 `GoalStore.persist_target()`**, followed by the existing optimistic selection update.
 There is one `CareerGoal` schema. General targets have null company/job URL,
@@ -343,7 +380,7 @@ and return no-store responses. POSTs require UUID `Idempotency-Key`.
 | `PATCH /goals/{review_id}/review` | Existing review edits, versioned and owner-scoped |
 | `POST /goals/confirm` | Existing shared target confirmation and selection |
 
-Detailed schemas are in `contracts/api/career.yaml`. After confirmation the existing
+Detailed schemas are in `contracts/api/career.yaml`. After automatic publication the existing
 saved-goal page checks the CV service's owner-scoped assessment status. CV upload and
 end-user gap/roadmap generation retain their existing implementation status; this
 feature does not implement them.
@@ -415,8 +452,11 @@ bounded validation. Legacy structured recovery now stops after six repairs.
 From `services/career-service`, run `python -m pytest` with a disposable
 `MONGODB_TEST_URI`; external AI/search calls are mocked. From the root run
 `npm run typecheck --workspace apps/frontend` and `npm test --workspace apps/frontend`.
-The Chromium discovery journey uses mocked API boundaries and checks a fresh introduction without inference, clean re-entry, automatic research, inline citations and explicit final goal
-approval, category review, shared confirmation and narrow-screen layout.
+The Chromium discovery journey uses mocked API boundaries and checks an initial
+introduction without inference, restored history after refresh/navigation, explicit
+New chat, automatic research, inline citations, chat-based skill removal, summary
+headings/bold invitation, automatic goal updates without save requests and
+narrow-screen layout.
 
 Sources can be sparse, stale or contain only snippets. Coverage warnings and unknown
 values are expected; 10–20 listings/five employers are targets, not fabricated quotas.
