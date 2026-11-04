@@ -34,7 +34,10 @@ using its controls. The multi-source partial-failure journey creates a legacy
 conversation through the API before resuming its unfinished actions in the UI;
 that path still verifies interpreted evidence, while current interview answers
 reuse their admitted interpretation. All retry and source-preservation assertions
-remain in that journey.
+remain in that journey. Reload snapshots wait for the parent interview planner
+as well as the correction action. The synthetic planner moves to another topic
+when its three-question budget is exhausted, and explicit project corrections
+stay bound to that project after the focus moves.
 Deterministic refresh races cover both manual intake and CV review: an older source
 snapshot cannot erase a concurrently published question, while fresh reads still
 invalidate questions after their source changes.
