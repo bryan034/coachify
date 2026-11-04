@@ -36,8 +36,9 @@ The current topic remains visible when an explanation interrupts it. Voice input
 not part of this version; Career target editing remains on Career Goal.
 
 Messages and interpretation outcomes are separate. Accepted messages clear the
-composer; pending actions continue polling saved state and refresh the CV summary
-when the server revision changes. Save feedback comes from action states, not a
+composer. Review shows a processing status while pending actions poll saved state;
+the next draft stays editable, and Send waits for the saved turn to finish.
+The CV summary refreshes when the server revision changes. Save feedback comes from action states, not a
 model's claim to have saved. Explicit corrections and manual additions use compact
 Save/Cancel cards. Ambiguous source references and matching capabilities require an
 explicit choice. Failed actions can be retried individually; stale proposals cannot

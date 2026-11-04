@@ -44,7 +44,7 @@ test('manual-only chat persists without a fake CV and recovers saved failed mess
   expect(action).toBeTruthy();
   await Promise.all([
     page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/actions/${action.id}`)),
-    page.getByRole('button', {name: 'Retry this action', exact: true}).click(),
+    page.getByRole('button', {name: 'Try again', exact: true}).click(),
   ]);
   await expect.poll(async () => (await readChat(account, null)).messages.flatMap(message => message.actions).find(current => current.id === action.id)?.status).toBe('failed');
   const retry = await readChat(account, null);
@@ -99,15 +99,28 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   expect(await cv()).toEqual(newer);
 });
 
-test('a multi-source message reports partial failure and retries only the unfinished action', async ({page}) => {
+test('a legacy multi-source message reports partial failure and retries only the unfinished action', async ({page}) => {
   test.setTimeout(120_000);
   const {account, cvId} = await setupChatScenario(page);
-  await page.goto('/cv');
-  await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
-  await expect(page.getByRole('list',{name:'Saved conversation messages'})).toContainText('Team dashboard');
+  // Legacy pending actions retain their original semantic-verification/retry path.
+  // Interview answers now use an admitted interpretation without that second model call.
+  const opened=await page.request.post('/api/v1/cv/conversations',{headers:account.headers,
+    data:{cv_id:cvId,mutation_id:crypto.randomUUID()}});
+  expect(opened.ok()).toBeTruthy();
+  const id=(await opened.json()).id;
+  async function post(text:string,command?:string) {
+    const current=await readChat(account,cvId);
+    const response=await page.request.post(`/api/v1/cv/conversations/${id}/messages`,{headers:account.headers,
+      data:{text,command,expected_revision:current.revision,mutation_id:crypto.randomUUID()}});
+    expect(response.ok()).toBeTruthy();
+    await expect.poll(async()=>(await readChat(account,cvId)).messages.flatMap(m=>m.actions).some(a=>a.status==='pending'),{timeout:35_000}).toBe(false);
+  }
+  await post('Review my CV.','review');
   expect((await readChat(account,cvId)).active_question?.title).toBe('Team dashboard');
   const text = chatAnswer + ' I cannot clarify my internship yet. SYNTHETIC_SECOND_ACTION_FAILURE';
-  await sendChat(page, text);
+  await post(text);
+  await page.goto(`/cv?review=${cvId}`);
+  await expect(page.getByRole('button',{name:'Try again',exact:true})).toBeVisible();
   const conversation = await readChat(account, cvId);
   const actions = conversation.messages.flatMap(message => message.actions).filter(action => action.kind === 'clarify');
   expect(actions.filter(action => action.status === 'saved')).toHaveLength(1);
@@ -118,7 +131,7 @@ test('a multi-source message reports partial failure and retries only the unfini
   expect(before.skills.find((skill: {skill_id: string}) => skill.skill_id === 'skill:python')?.experience_months).toBe(6);
   await Promise.all([
     page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/actions/${failed.id}`)),
-    page.getByRole('button', {name: 'Retry this action', exact: true}).click(),
+    page.getByRole('button', {name: 'Try again', exact: true}).click(),
   ]);
   await expect.poll(async () => (await readChat(account, cvId)).messages.flatMap(message => message.actions).find(action => action.id === failed.id)?.status, {timeout: 35_000}).toBe('failed');
   const after = await (await account.get(`/api/v1/cv/${cvId}`)).json();

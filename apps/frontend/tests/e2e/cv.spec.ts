@@ -149,7 +149,11 @@ test('CV library scrolls internally, persists renamed titles and opens full-page
  }
  await page.goBack();await expect(page.getByRole('heading',{name:'Your CVs',exact:true})).toBeVisible();
  await first.getByRole('button',{name:'Review CV',exact:true}).click();await page.reload();await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeHidden();await expect(page.locator('.cv-chat-header')).toContainText('Software engineering CV');
- await page.getByRole('button',{name:'Back to Skills Profile'}).click();await expect(page.getByRole('heading',{name:'Your CVs',exact:true})).toBeVisible();await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();
+ await page.getByRole('button',{name:'Back to Skills Profile'}).click();await expect(page.getByRole('heading',{name:'Your CVs',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Menu',exact:true})).toHaveAttribute('aria-expanded','false');
+ await page.getByRole('button',{name:'Menu',exact:true}).click();
+ await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();
+ await page.getByRole('button',{name:'Close navigation',exact:true}).click();
  expect(await library.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
  await page.screenshot({path:testInfo.outputPath('cv-library-mobile.png'),fullPage:true});
 });
