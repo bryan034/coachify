@@ -28,6 +28,13 @@ and unrelated source blocks are rejected. Manual intake stays a draft until Save
 profile publishes it, and outage/retry checks retain the original saved turn.
 Chat sends wait for the preceding saved action to finish, including the next
 question prepared after a skip; the earlier CV write alone is not completion.
+Pending review status remains visible, and a newer draft cannot be submitted until
+the preceding turn finishes. Mobile account/CV journeys expand the sidebar before
+using its controls. The multi-source partial-failure journey creates a legacy
+conversation through the API before resuming its unfinished actions in the UI;
+that path still verifies interpreted evidence, while current interview answers
+reuse their admitted interpretation. All retry and source-preservation assertions
+remain in that journey.
 Deterministic refresh races cover both manual intake and CV review: an older source
 snapshot cannot erase a concurrently published question, while fresh reads still
 invalidate questions after their source changes.

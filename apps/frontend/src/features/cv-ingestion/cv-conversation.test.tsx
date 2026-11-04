@@ -21,6 +21,20 @@ describe('saved CV conversation', () => {
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
   expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:'cv-one'}),'synthetic-session',expect.any(AbortSignal));
  });
+ it('shows pending review work and keeps a new draft until the saved turn finishes', async () => {
+  const pending=action({id:'route-pending',kind:'route',status:'pending',title:'Understand your message'});
+  const current=conversation({purpose:'skills_profile',messages:[message('m1','A saved answer.',[],'user'),message('m2','Working on your answer.',[pending])]});
+  vi.mocked(cvApi.openConversation).mockResolvedValue(current);
+  vi.mocked(cvApi.conversation).mockResolvedValue(current);
+  render(<CvConversationPanel {...props()} purpose="skills_profile"/>);
+  expect(await screen.findByText('Reviewing your answer…')).toHaveAttribute('role','status');
+  const composer=screen.getByRole('textbox',{name:'Message elo'});
+  fireEvent.change(composer,{target:{value:'My next draft'}});
+  expect(composer).toHaveValue('My next draft');
+  expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+  fireEvent.keyDown(composer,{key:'Enter'});
+  expect(cvApi.sendMessage).not.toHaveBeenCalled();
+ });
  it('offers skip and continue after a failed next-step decision without an active question', async () => {
   const failed=action({id:'route-failed',kind:'route',status:'failed',title:'Continue review',summary:'Could not continue.',changes:[],error:'The interview could not choose a valid next step. Its proposed next steps did not pass the review checks.'});
   const current=conversation({purpose:'skills_profile',active_question:null,interview:{status:'reviewing',reviewed_items:0,total_items:2,estimates:[],topics:[{id:'one',title:'First project',status:'current'},{id:'two',title:'Next project',status:'pending'}]},messages:[message('m1','My original contribution is saved.',[],'user'),message('m2','Could not continue.',[failed])]});
