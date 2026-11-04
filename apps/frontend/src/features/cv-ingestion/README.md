@@ -165,10 +165,15 @@ until the CV is ready. Returning to Skills Profile does not alter the active bas
 
 **Set as active baseline** warns when the current `effective_version` does not match
 `profile_reviewed_effective_version`. The warning explains that AI interpretation
-may misattribute team contributions if the CV does not identify the user's role,
+may infer skills or experience inaccurately when any roles or responsibilities are
+not clearly stated in the CV, so the baseline may not reflect current skills,
 and asks whether to continue. Cancel preserves the baseline; a saved review of the
 current effective version avoids the warning. Later evidence changes require review
 again. This is guidance, not a new backend restriction on source selection.
+
+Evidence excerpts can share a source-block ID (for example, several excerpts from
+`b1`). The shared `EvidenceList` renderer keys each occurrence separately, preserving
+all excerpts without React key collisions in review and source reconciliation.
 
 ## Agent-led uploaded-CV interview
 

@@ -8,7 +8,7 @@ import {ReviewEvidence} from './review-evidence';
 
 export const provenanceLabel = {explicit:'Stated in CV',inferred:'Inferred · uncertain',user_corrected:'Your correction',user_clarified:'Your clarification'};
 export function EvidenceList({ item }: { item: CvItem }) {
- return <div className="cv-evidence"><p className="small">Source evidence may be summarised.</p>{item.evidence.length ? item.evidence.map(e=><blockquote key={e.id}><p>{e.excerpt}</p><cite>{e.location || 'Source location unavailable'}</cite></blockquote>) : <p className="small">Source excerpt unavailable.</p>}</div>;
+ return <div className="cv-evidence"><p className="small">Source evidence may be summarised.</p>{item.evidence.length ? item.evidence.map((e,index)=><blockquote key={`${e.id}:${index}`}><p>{e.excerpt}</p><cite>{e.location || 'Source location unavailable'}</cite></blockquote>) : <p className="small">Source excerpt unavailable.</p>}</div>;
 }
 function useMutationKey() {
  const receipt=useRef<{body:string;id:string}|null>(null);

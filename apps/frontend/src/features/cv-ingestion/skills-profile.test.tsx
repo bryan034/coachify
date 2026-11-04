@@ -95,3 +95,27 @@ it('withholds final saving while a conversation update needs attention',async()=
  expect(screen.getByText(/Finish or cancel the pending conversation updates/)).toBeVisible();
  expect(cvApi.saveSkillsProfile).not.toHaveBeenCalled();
 });
+
+it('opens Skills Profile with repeated source-block IDs without key collisions or lost evidence',async()=>{
+ const source=savedCv('shared-evidence');
+ source.items[0].evidence=[
+  {id:'b1',excerpt:'Cleaned the synthetic dataset.',location:'Page 1'},
+  {id:'b2',excerpt:'Wrote the synthetic report.',location:'Page 2'},
+  {id:'b1',excerpt:'Checked the synthetic dataset.',location:'Page 1'},
+  {id:'b2',excerpt:'Presented the synthetic report.',location:'Page 2'},
+ ];
+ vi.mocked(cvApi.list).mockResolvedValue({cvs:[source],selection:{cv_id:source.id,version:1}});
+ vi.mocked(cvApi.get).mockResolvedValue(source);
+ vi.mocked(cvApi.questions).mockResolvedValue(clarificationState(source));
+ const error=vi.spyOn(console,'error').mockImplementation(()=>{});
+ try{
+  render(<ResumePreview/>);
+  await waitFor(()=>expect(document.querySelectorAll('.cv-evidence blockquote')).toHaveLength(5));
+  for(const evidence of source.items[0].evidence)expect(screen.getByText(evidence.excerpt)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Refresh saved status'}));
+  await waitFor(()=>expect(cvApi.list).toHaveBeenCalledTimes(2));
+  await waitFor(()=>expect(document.querySelectorAll('.cv-evidence blockquote')).toHaveLength(5));
+  for(const evidence of source.items[0].evidence)expect(screen.getByText(evidence.excerpt)).toBeInTheDocument();
+  expect(error).not.toHaveBeenCalled();
+ }finally{error.mockRestore();}
+});

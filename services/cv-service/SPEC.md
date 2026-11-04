@@ -255,6 +255,7 @@ No data migration is needed; missing titles retain the original filename fallbac
 
 Baseline selection uses the label **Set as active baseline**. Before selecting a CV
 without a saved review for its current effective version, the UI warns that AI
-interpretation may be inaccurate and may attribute team skills to the user when
-project roles are unclear. The user may cancel or continue; this does not change
+interpretation may infer skills or experience inaccurately when any roles or
+responsibilities are not clearly stated in the CV, so the baseline may not reflect
+the skills the user currently possesses. The user may cancel or continue; this does not change
 the authenticated, explicit selection API or automatically regenerate analysis.

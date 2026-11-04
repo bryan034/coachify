@@ -220,7 +220,7 @@ it('opens the uploaded CV review immediately and starts questions only when extr
 it('warns before selecting an unreviewed baseline and respects cancellation',async()=>{
  const source=savedCv('unreviewed');vi.mocked(cvApi.list).mockResolvedValue({cvs:[source],selection:{cv_id:null,version:1}});vi.mocked(cvApi.select).mockResolvedValue({cv_id:source.id,version:2});
  const confirm=vi.spyOn(window,'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
- try{renderWorkspace();const button=within(await screen.findByLabelText(`CV ${source.id}`)).getByRole('button',{name:'Set as active baseline'});fireEvent.click(button);expect(confirm).toHaveBeenCalledWith(expect.stringContaining('it may attribute teammates’ work or skills to you'));expect(cvApi.select).not.toHaveBeenCalled();fireEvent.click(button);await waitFor(()=>expect(cvApi.select).toHaveBeenCalledTimes(1));}finally{confirm.mockRestore();}
+ try{renderWorkspace();const button=within(await screen.findByLabelText(`CV ${source.id}`)).getByRole('button',{name:'Set as active baseline'});fireEvent.click(button);expect(confirm).toHaveBeenCalledWith(expect.stringContaining('If any roles or responsibilities are not clearly stated in your CV details'));expect(cvApi.select).not.toHaveBeenCalled();fireEvent.click(button);await waitFor(()=>expect(cvApi.select).toHaveBeenCalledTimes(1));}finally{confirm.mockRestore();}
 });
 it('selects a currently reviewed baseline without a warning',async()=>{
  const source={...savedCv('reviewed'),profile_reviewed_effective_version:1};source.profile_reviewed_effective_version=source.effective_version;
