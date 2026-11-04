@@ -1,5 +1,6 @@
 from elo_shared.skills import resolve, MAPPING_VERSION
-from app.schemas.interview_evidence import ReviewFact
+from elo_shared.skill_groups import skill_groups
+from app.schemas.interview_evidence import ReviewFact, SkillEstimate
 from app.domain.extraction_errors import FailureStage, FailureCategory, ProviderReason, ProviderParameter
 from typing import Annotated, Literal
 import calendar
@@ -361,7 +362,14 @@ class ExtractionMetadata(BaseModel):
     repair_attempts: int | None = Field(default=None, ge=0, le=1)
 
 
+class ProcessingProgress(BaseModel):
+    stage: Literal['queued', 'source_read', 'document_parse', 'model_request', 'extraction_validation', 'model_repair', 'publication', 'ready']
+    percent: int = Field(ge=0, le=100)
+    message: str
+
+
 class CvSummary(BaseModel):
+    processing_progress: ProcessingProgress | None = None
     profile_reviewed_effective_version: int | None = None
     id: str
     file_name: str
@@ -380,6 +388,13 @@ class CvSummary(BaseModel):
 
 
 class CvDetail(CvSummary):
+    # Display categories by skill name, derived on read; see elo_shared.skill_groups.
+    skill_groups: dict[str, str] = Field(default_factory=dict)
+    @model_validator(mode='after')
+    def display_groups(self):
+        self.skill_groups = skill_groups((skill.name, skill.category) for skill in self.skills)
+        return self
+    skill_estimates: list[SkillEstimate] = Field(default_factory=list)
     other_information: list[Evidence] = Field(default_factory=list, max_length=160)
     items: list[CvItem]
     skills: list[CvSkill]

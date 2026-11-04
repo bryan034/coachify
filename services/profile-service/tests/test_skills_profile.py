@@ -130,3 +130,13 @@ def test_profile_contract_matches_runtime(client):
     assert contract['paths']['/api/v1/profile/skills-profile'] == runtime['paths']['/api/v1/profile/skills-profile']
     for name in ('SkillsProfile', 'SkillsProfileWrite', 'ProfileEntry', 'ProfileSkill', 'IntakeField'):
         assert contract['components']['schemas'][name] == runtime['components']['schemas'][name]
+
+
+def test_display_groups_are_derived_on_read_and_never_stored(repo):
+    from app.schemas.capabilities import CapabilityView
+    skills = SkillsProfileRepository(repo)
+    saved = skills.save('alice', write(status='saved', entries=[entry()]))
+    assert saved['skill_groups'] == {'pandas': 'Data & analytics'}
+    assert skills.current('alice')['skill_groups'] == {'pandas': 'Data & analytics'}
+    assert 'skill_groups' not in repo.account('alice')['skills_profile']
+    assert CapabilityView.model_validate(repo.current('alice')).skill_groups == {'pandas': 'Data & analytics'}

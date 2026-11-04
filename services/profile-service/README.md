@@ -142,7 +142,7 @@ reads require the device `time_zone`; optional `start_date` and `end_date` give 
 
 For Python code reload in Docker, use the [development Compose override](../../infrastructure/docker/README.md#hot-reload-during-development). Dependency changes need a rebuild; JSON snapshot changes need an API restart.
 
-Capability responses additionally expose shared `canonical_skill_id` and `skill_registry_version`. Existing declaration IDs, name-based keys, source attachments and mutation semantics are unchanged. Roadmap reads saved planning defaults but owns the user's per-plan preparation target and chosen weekday budgets.
+Capability and skills-profile responses expose `skill_groups`, mapping each skill name to its display category; it is derived on read and never stored. Capability responses additionally expose shared `canonical_skill_id` and `skill_registry_version`. Existing declaration IDs, name-based keys, source attachments and mutation semantics are unchanged. Roadmap reads saved planning defaults but owns the user's per-plan preparation target and chosen weekday budgets.
 
 ## Guided Skills Profile
 

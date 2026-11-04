@@ -93,7 +93,7 @@ def test_repair_recovers_overlong_quotes_and_conflicting_dates(harness, monkeypa
     with caplog.at_level(logging.WARNING): app.state.worker.run_once()
     result = read_result(client, queued)
     assert result['status'] == 'ready' and result['error'] is None
-    assert result['extraction']['workflow_version'] == 'cv-extraction-3'
+    assert result['extraction']['workflow_version'] == 'cv-extraction-4'
     assert result['extraction']['repair_attempts'] == 1
     assert result['extraction']['response_mode'] == 'json_schema'
     assert result['extraction_version'] == 1 and len(result['items']) == 2
@@ -354,3 +354,29 @@ def test_source_verified_long_quotations_publish_without_model_repair(harness, m
     assert len(evidence) == 2 and all(1 <= len(ref['excerpt']) <= 500 for ref in evidence)
     assert ''.join(ref['excerpt'] for ref in evidence) == SOURCES[0]
     assert ''.join(ref['excerpt'] for ref in result['other_information']) == 'A' * 510
+
+
+def test_graph_prepares_clarification_context_after_grounded_extraction():
+    from app.workflows.extraction import ExtractionHarness
+    source = 'I implemented the Python reporting API and owned its testing.'
+    facts = [{'field': field, 'skill_name': None, 'status': 'supported', 'value': value,
+              'attribution': 'personal', 'evidence': [{'source_id': 'b1', 'quote': source}]}
+             for field, value in [('personal_contribution', 'Implemented the reporting API'),
+                                  ('responsibilities', 'Owned API implementation and testing'),
+                                  ('task_scope', 'Python reporting API')]]
+    candidate = {'items': [{'kind': 'project', 'title': 'Reporting API', 'description': source,
+        'explicit': True, 'skill_names': ['Python'], 'evidence': [{'block_id': 'b1', 'excerpt': source}],
+        'review_evidence': facts, 'uncertainties': ['personal_contribution', 'responsibility', 'proficiency']}]}
+    calls = []
+    def model(*args):
+        calls.append(args)
+        return candidate, {'provider': 'synthetic', 'model': 'fixture', 'prompt_version': '1', 'schema_version': '1'}
+    graph = ExtractionHarness('synthetic-cv', lambda _: {'blocks': [{'id': 'b1', 'text': source, 'location': 'Paragraph 1'}]},
+                              model, lambda _: None,
+                              verify_evidence=lambda _, refs: frozenset((r['block_id'], r['excerpt']) for r in refs))
+    result = graph.run(b'synthetic')
+    assert 'prepare_review' in graph.graph.nodes
+    assert len(calls) == 1
+    assert result['items'][0]['uncertainties'] == ['proficiency']
+    assert result['items'][0]['review_evidence'] == facts
+    assert result['metadata']['workflow_version'] == 'cv-extraction-4'

@@ -2,8 +2,7 @@
 
 Next.js App Router, React, TypeScript, and a Node.js runtime.
 
-The UI uses the supplied Elo logo and ink/mint palette, with a broad public hero
-inspired by the Ebury reference. Shared navigation, forms, chat and saved-goal
+The UI uses the supplied Elo logo and seven-colour palette (Ink, Mint, Snow, Mint Mist, Cloud, Slate and White, defined in `src/styles/elo-theme.css`), with tints only of those colours. Workspace pages use a persistent left sidebar and compact content introductions; mobile navigation expands from a Menu button. Shared navigation, forms, chat and saved-goal
 briefings use the same visual system. Fonts are bundled in `public/fonts/` with
 the Inter OFL licence; no runtime font request is needed. The browser tab icon uses the supplied `public/brand/elo-app-icon.svg`, referenced by the root layout metadata. See the
 [design guide](../../docs/design/README.md) for tokens and asset provenance.
@@ -14,7 +13,7 @@ the Inter OFL licence; no runtime font request is needed. The browser tab icon u
 |---|---|
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
-| `/career-goal` | Saved career briefing with expandable learning focus, starting-point sidebar, collapsible role/research context, guided refinement and CV handoff; new accounts see JD inputs/exploration |
+| `/career-goal` | Saved career briefing with the skills the role needs by category, marked from a saved comparison when one exists, a starting-point panel, collapsible role/research context, guided refinement and CV handoff; new accounts see JD inputs/exploration |
 | `/career-goal/discovery` | Chat with bounded memory, automatic concurrent research, cited skill recommendations and explicit shared-goal confirmation |
 | `/career-goal?new=1` | Replace the goal using a new text, URL or document JD; preserve the previous goal until extraction succeeds |
 | `/career-goal/chat` | Saved-goal Q&A or separate career exploration; `?refine=1` opens guided goal refinement |
@@ -22,7 +21,7 @@ the Inter OFL licence; no runtime font request is needed. The browser tab icon u
 | `/profile` | Occupation, education and employment summary with inline Edit profile, Save changes and Cancel |
 | `/profile/edit` | Background/employment editing, planning preferences, directory search and save/retry |
 | `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
-| `/roadmap` | Saved planning summary and local filters; roadmap generation unavailable |
+| `/roadmap` | Planner form with an optional chat helper, repeating blackouts and runway, generated roadmap review, timed sessions and revision previews |
 | `/cv` | **Skills Profile**: summary-first evidence, CV upload-to-review, guided manual intake, interpreted clarification and correction/reconciliation |
 | `/jobs` | **Search Jobs**: manual keyword/location search links to LinkedIn and Indeed; results and applications open on the external job sites |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
@@ -116,7 +115,7 @@ FastAPI owns validation, resource ownership and database writes. See
 ## Structure
 
 - `src/app/`: file-based routes and shared workspace layout.
-- `src/components/layout/`: shared sidebar/navigation and workspace frame.
+- `src/components/layout/`: shared sidebar navigation and workspace frame.
 - `src/components/ui/`: icons, headings, empty states and disabled actions.
 - `src/features/`: profile logic and feature-specific screen presentation.
 - `src/lib/api/`, `src/lib/auth/`: API client and Google identity integration.
@@ -291,7 +290,7 @@ CV-context acknowledgement stays separate.
 
 ## Roadmap adviser
 
-`/roadmap` now opens a persistent adviser conversation with the plan alongside it. It checks extracted/selected CV and Career inputs, obtains the separate Assessment result and proposes activities around user-chosen timeline, weekly/day budgets and learning preferences. Users explicitly Start/Apply a proposal; active edits and task progress preserve history and expose review conflicts. The starting-point tab explains captured comparison evidence. Preferences and activity editors support keyboard focus and mobile widths. See [Roadmap](../../services/roadmap-service/SPEC.md) for limits; this does not implement automatic revisions, exact time slots or live-model quality guarantees.
+`/roadmap` opens a fixed planner form showing the goal and skills to be sent, the study settings, repeating blackout days and times, and a backend-calculated runway. A button opens the chat helper, which guides the user through the required details and fills in the form. Generation runs Assessment if needed and opens a roadmap page with Roadmap and Starting point tabs. Previews apply only when accepted. See the [feature README](src/features/roadmap/README.md).
 
 Skills Profile shows upload beside a fixed-height, internally scrolling **Your CVs**
 library. Cards support persisted titles, Rename, Review CV, Set as active baseline

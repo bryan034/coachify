@@ -8,8 +8,9 @@ from app.schemas.cv import Extraction
 from app.domain.extraction_errors import ExtractionFailure
 from app.domain.model_usage import ModelAdmissionError
 from app.domain.extraction_feedback import feedback_for
+from app.domain.review_context import prepare_review_items
 
-WORKFLOW_VERSION = 'cv-extraction-3'
+WORKFLOW_VERSION = 'cv-extraction-4'
 
 
 class ExtractionState(TypedDict, total=False):
@@ -34,11 +35,13 @@ class ExtractionHarness:
         graph.add_node('extract', self._extract)
         graph.add_node('validate', self._validate)
         graph.add_node('repair', self._repair)
+        graph.add_node('prepare_review', self._prepare_review)
         graph.add_edge(START, 'parse')
         graph.add_edge('parse', 'extract')
         graph.add_edge('extract', 'validate')
-        graph.add_conditional_edges('validate', self._next, {'repair': 'repair', 'done': END})
+        graph.add_conditional_edges('validate', self._next, {'repair': 'repair', 'done': 'prepare_review'})
         graph.add_edge('repair', 'validate')
+        graph.add_edge('prepare_review', END)
         self.graph = graph.compile()  # No checkpointer or store: CV text stays in memory.
 
     def _parse(self, state):
@@ -73,6 +76,9 @@ class ExtractionHarness:
             if state['repair_attempts'] >= 1: raise
             return {'feedback': feedback_for(error), 'validation_error': error}
         return {'items': items, 'other_information': other, 'validation_error': None}
+
+    def _prepare_review(self, state):
+        return {'items': prepare_review_items(state['items'])}
 
     def _next(self, state):
         return 'repair' if state.get('validation_error') is not None else 'done'

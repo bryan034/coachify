@@ -23,6 +23,7 @@ class cvs {
     +String file_type
     +CvSkill[] skills
     +String processing_status [derived]
+    +CvProcessingOperation operation [leased_stage_progress]
     +Integer extraction_version
     +CvExtractionMetadata extraction?
     +CvDeletionReceipt deletion? [content_free_tombstone]
@@ -185,7 +186,7 @@ class cv_conversations {
     +Object[] messages
     +String previous_conversation_id?
     +Date updated_at
-    +Object interview_memory? [persistent_coverage_focus_question_history]
+    +Object interview_memory? [persistent_topics_coverage_focus_question_history]
 }
 
 class career_state {
@@ -234,14 +235,22 @@ class roadmaps {
     +Object[] tasks
     +Object schedule
     +Object[] exclusions
+    +String schema_version? [roadmap-v2]
+    +PlannerConfig config? [roadmap-v2]
+    +Object[] gaps? [roadmap-v2]
+    +Object[] milestones? [roadmap-v2]
+    +Object[] assignments? [roadmap-v2]
+    +Object deadline_outcome? [roadmap-v2]
+    +Object[] beyond_deadline? [roadmap-v2]
 }
 class roadmap_workspaces {
     <<operational Roadmap database>>
     +String _id [owner UUID]
     +Integer version
     +Object[] messages
-    +Object draft
-    +Object active
+    +Object draft [earlier untimed]
+    +Object active [earlier untimed]
+    +Object planner [config, candidate, active, confirmations]
     +Object pending [leased operation]
     +Object[] receipts
 }
@@ -251,7 +260,7 @@ users --> roadmap_workspaces : owner API
 roadmap_workspaces --> roadmaps : reviewed activation and history
 roadmaps --> skill_gap_analyses : Assessment API snapshot
 note for skill_gap_analyses "New Assessment-owned database. UUID results use assessment-v1; old analysis-v1 Career contracts/records remain legacy with no automatic migration."
-note for roadmaps "Separate Roadmap-owned database; one database with owner-scoped records, not a database per user. Dates are daily workload dates without clock slots."
+note for roadmaps "Separate Roadmap-owned database; one database with owner-scoped records, not a database per user. roadmap-v2 revisions hold dated, timed first-week sessions and projected milestones. Earlier records hold daily workloads without clock slots."
 
 %% Saved-goal question research reuses immutable interview_research.question_findings snapshots.
 %% Owner/goal-version/focus question_result pointers in research_contexts append public evidence

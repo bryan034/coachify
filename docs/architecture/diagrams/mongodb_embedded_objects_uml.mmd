@@ -615,8 +615,12 @@ class InterviewMemory {
     +Map input_sources
     +String focus_item_id?
     +String status [reviewing/reviewed/reviewed_with_gaps/paused]
-    +Map coverage
+    +String[] topic_ids [stable_review_topics]
+    +Map coverage [topics_closed_on_transition_or_finish]
     +Map attempts
+    +Map question_counts [max_three_issued_per_topic]
+    +Map deferred_topics [source_bound_user_skip_uncertain_ownership]
+    +String[] discussed_topic_ids [rebuilt_from_saved_cv_questions]
     +Object[] questions
     +Object[] notes [exact_user_preference_quotes]
     +Object[] summary [rebuildable_coverage_refs]
@@ -624,4 +628,97 @@ class InterviewMemory {
 }
 CvItem *-- ReviewFact : grounded_review_fields
 cv_conversations *-- InterviewMemory : durable_navigation_not_factual_authority
-note for InterviewMemory "Mongo-persistent. Provider context is transient. Source/evidence changes invalidate affected coverage and estimates; no automatic mastery claim."
+note for InterviewMemory "Mongo-persistent. Transient provider context projects a compact per-source discussion summary, four recent messages and an answer ID/target/status index; exact answers hydrate only on recall. No summary model call or new stored facts. Relevant user review statements override CV/earlier facts; no evidence-alignment verifier. Source edits/re-extraction invalidate affected coverage; ordinary answers retain completed topics but invalidate estimates. Topics close on navigation or finish, never on a follow-up answer; progress does not measure mastery."
+
+class CvProcessingOperation {
+    +String id
+    +String status [queued|processing|ready|failed]
+    +String stage? [allowlisted_processing_milestone]
+    +Integer attempt
+    +String lease_token? [private]
+    +Number lease_until [private]
+    +Object error?
+}
+cvs *-- CvProcessingOperation : operation
+note for CvProcessingOperation "CV worker persists stage under the current lease/CAS. Public processing_progress derives fixed stage messages and 0-100 percent; model reasoning is not stored. No new collection."
+
+note for ReviewFact "replication_confidence records self-reported confidence in repeating a task, with support needs and uncertainty. It is not an assessed skill level. Internal evidence IDs stay structured and are omitted from assistant prose."
+
+note for InterviewMemory "Clarification targets rebuild from current CV facts. Missing optional fields alone do not create topics; clear sources can need zero questions. Extraction prepare_review removes superseded ambiguity flags without new stored facts or collections."
+
+class SkillEstimate {
+    +String item_id
+    +String skill_name
+    +String level [guided_application|independent_application|complex_application|insufficient_evidence]
+    +String explanation
+    +String[] evidence_refs [private_prose_hidden]
+}
+note for SkillEstimate "Derived CV baseline for each project skill; CvDetail.skill_estimates is a read projection of current CV evidence, not a new collection. A topic is a whole project/experience with its own three-question budget; there is no global three-question/topic cap. Assessment remains separate."
+
+class PlannerConfig {
+    +Date start_date?
+    +Date target_date?
+    +Object duration? [value/unit]
+    +String time_zone [IANA]
+    +Integer weekly_minutes?
+    +StudyBlock[] blocks
+    +Boolean use_backup
+    +BlackoutRule[] blackouts
+    +Integer preferred_session_minutes
+    +String[] learning_focus
+    +String learning_notes
+}
+class StudyBlock {
+    +Integer day [Monday 0 to Sunday 6]
+    +String start_time [HH:MM]
+    +Integer duration_minutes
+    +String kind [preferred|backup]
+}
+class BlackoutRule {
+    +String frequency [once|daily|weekly|monthly]
+    +Date start_date
+    +Date end_date?
+    +Integer interval [every N days, weeks or months]
+    +Integer[] weekdays [weekly; Monday 0 to Sunday 6]
+    +String start_time? [HH:MM; absent means all day]
+    +String end_time? [HH:MM]
+}
+class RoadmapMilestone {
+    +String key
+    +String title
+    +String[] gap_ids
+    +String[] prerequisite_keys
+    +Integer estimated_minutes [remaining]
+    +Date projected_start
+    +Date projected_end
+    +String demonstrable_outcome
+    +Object outcome [self_reported]
+}
+class RoadmapAssignment {
+    +String key
+    +String milestone_key
+    +String kind [study|diagnostic]
+    +Date date
+    +String start_time [HH:MM]
+    +Integer duration_minutes
+    +String task
+    +String completion_criterion
+    +String status [scheduled|completed]
+    +String evidence_note?
+    +Object[] history
+}
+class RoadmapGap {
+    +String id
+    +String requirement_ref?
+    +String source [stated|inferred]
+    +String status [confirmed_gap|unknown]
+    +String plan_impact [material|minor]
+    +String resolution? [diagnostic|confirm_experience]
+}
+roadmaps *-- PlannerConfig
+PlannerConfig *-- StudyBlock
+PlannerConfig *-- BlackoutRule
+roadmaps *-- RoadmapMilestone
+roadmaps *-- RoadmapAssignment
+roadmaps *-- RoadmapGap
+note for RoadmapAssignment "Detailed for the first planning week only. Completed sessions and evidence notes copy unchanged into revisions. Completion is not proficiency and writes nothing to Profile, CV or Assessment."

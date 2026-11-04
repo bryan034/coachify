@@ -38,7 +38,7 @@ Dates are optional hints during extraction. The prompt asks for an unambiguous n
 
 ### Extraction runtime harness
 
-The CV worker runs an in-memory LangGraph with `parse → extract → validate` and a conditional `repair → validate` branch. Validation failure allows exactly one repair call; a second failure is terminal for that worker attempt. Parsing failures, missing configuration, provider rejection, transport/timeout errors, malformed/incomplete provider envelopes and invalid content JSON stop immediately and retain the existing explicit retry path. The application never strips fences, clips evidence or invents dates to force success.
+The CV worker runs an in-memory LangGraph with `parse → extract → validate → prepare_review` and a conditional `repair → validate` branch. Validation failure allows exactly one repair call; a second failure is terminal for that worker attempt. Parsing failures, missing configuration, provider rejection, transport/timeout errors, malformed/incomplete provider envelopes and invalid content JSON stop immediately and retain the existing explicit retry path. The application never strips fences, clips evidence or invents dates to force success.
 
 Workflow version 3 gathers evidence that is neither an exact nor a formatting-equivalent passage of its cited block. Case, Unicode presentation and whitespace/line-wrap changes pass locally while meaningful punctuation and words remain intact. Unknown block IDs fail before semantic inference. Remaining unique `(block_id, excerpt)` pairs are checked in one bounded model request per candidate, sending only referenced blocks and summaries. The verifier must reject added/contradicted facts, altered identities/numbers/dates/durations, lost negation/conditions or inflated attribution. Only explicitly approved indexes are accepted; malformed, duplicated, out-of-range or missing approvals cannot authorize other text. All source/summary content is untrusted. At most 1,120 unique semantic references are admitted in one candidate, including quoted evidence and any shared review-field interpretations. Review fields require exact quote anchors and semantic support for their meanings and ownership attribution; a field naming a skill must refer to a skill on that source. This is model-based semantic assessment and may make mistakes; synthetic tests do not establish live accuracy.
 
@@ -52,7 +52,7 @@ Repair receives the original source blocks, rejected structured candidate and at
 
 Each extraction, repair and semantic-verification call independently reserves the existing owner/global daily budget and concurrency slot. There is at most one extraction, one repair and one semantic check per candidate (at most four provider calls total). Verification failures from the provider, malformed verdicts or local admission stop immediately, without being treated as evidence to repair. The worker rechecks its exact live lease before admission and again inside the callback. HTTP timeout ceilings remain 60 seconds cloud / 120 seconds local, reduced to remaining worker time minus ten seconds for validation/publication. No repair starts with ten seconds or less remaining. Stale work makes no further call or publication. Publication retains the existing final lease/token check and CAS; prior facts/overlays and source reconciliation remain worker-owned. Provider I/O still holds its concurrency slot until it actually exits, even if the lease expires. A restart recovers the durable upload job; it does not resume a private graph checkpoint.
 
-Graph source text, candidates and validation errors stay in memory. There is no checkpointer/store, state streaming or external tracing; LangSmith tracing and inherited callbacks are disabled during invocation. Successful metadata adds `workflow_version=cv-extraction-3`, `response_mode` and `repair_attempts` (0 or 1). Terminal errors add `repair_attempted`, indicating the repair branch was entered even if local budget/time checks prevented a provider call; older records without these fields return null. The graph never writes another service or starts an assessment/roadmap.
+Graph source text, candidates and validation errors stay in memory. There is no checkpointer/store, state streaming or external tracing; LangSmith tracing and inherited callbacks are disabled during invocation. Successful metadata adds `workflow_version=cv-extraction-4`, `response_mode` and `repair_attempts` (0 or 1). Terminal errors add `repair_attempted`, indicating the repair branch was entered even if local budget/time checks prevented a provider call; older records without these fields return null. The graph never writes another service or starts an assessment/roadmap.
 
 ### Extraction failure diagnostics
 
@@ -111,7 +111,7 @@ Answers accept up to 4,000 characters including partial knowledge and “I do no
 
 Successful interpretation updates individual source-linked skill claims: personal, team-only, observed, denied or unknown attribution, plus explicitly stated assistance, proficiency and duration. An explicitly named new personal skill can be added under that CV item; it is not silently added to account-level manual declarations. Team/observed/denied support is excluded only at that source and its affected derivations. Other supporting sources and unrelated known attributes survive. Unknown never becomes zero, mastery or global absence. Conflicting known values remain explicit rather than being summed or averaged. The review and matching UI use the same effective skills as downstream inputs. Original CV evidence, literal explanations and interpretation provenance remain available. Corrections and validated interpretations are projected in their actual change order, per field. A newer clarification can resolve support made uncertain by an earlier correction; a later correction still takes precedence. Date-only edits do not make an unrelated personal-contribution answer obsolete. Internal correction field sequences preserve this ordering, with retained history used for older records and conservative correction precedence when that history is unavailable.
 
-Pending/failed current interpretations remain visibly unresolved and are rejected by target-bound input assembly. An existing successful interpretation remains current saved evidence while a replacement answer on the unchanged source is pending; it must not be presented as the new answer's resolved result. Retry uses a separate mutation receipt, an invocation token and a 90-second execution lease. A live pending claim cannot start another retry; an expired interrupted claim can recover. Only the winning claim can call the provider and publish against matching source/answer/document revisions. Each service process permits at most two concurrent interpretation calls; capacity failures preserve the answer and offer retry. No automatic reinterpretation of older answers occurs; the user can explicitly interpret them.
+Pending/failed current interpretations remain visibly unresolved and are rejected by target-bound input assembly. An existing successful interpretation remains current saved evidence while a replacement answer on the unchanged source is pending; it must not be presented as the new answer's resolved result. Retry uses a separate mutation receipt, an invocation token and a 90-second execution lease. A live pending claim cannot start another retry; an expired interrupted claim can recover. Only the winning claim can call the provider and publish against matching source/answer/document revisions. Each service process permits at most two concurrent interpretation calls; capacity failures preserve the answer and offer retry. Legacy target-specific answers require explicit interpretation retry. Skills Profile chat can automatically retry an old evidence-alignment failure once when reopened, using the review policy below.
 
 A material title/description correction or removal marks affected questions and answers historical. Their interpretations and clarified statements no longer enter effective facts, fingerprints or current pending/unanswerable guards. Preparation is invalidated, and fresh source-bound questions can be prepared or answered through chat. Fresh prompt keys include the retired question identities for that item/uncertainty, so repeated preparation stays stable and an edit/revert cannot revive an old question. Literal answers and interpretation history remain readable. Narrow date/proficiency/duration edits affect only their question category; canonical case/whitespace-only display renaming preserves valid facts. Reconciliation derives each transferred answer's identity from its source CV/event and reviewed target, remaps follow-up links and retains provenance. It rejects ambiguous duplicate source IDs instead of silently collapsing statements.
 
@@ -219,13 +219,30 @@ skill use, recency/frequency and limitations. Known fields are not re-asked; par
 and conflicting evidence permits a distinct follow-up. Unknown/skip dispositions
 are scoped to the selected field. Normal turns commit validated evidence before
 planning, reusing the initial interpretation instead of interpreting it again.
+Review answers are self-reported and take precedence over CV/earlier statements
+at the same field and skill scope. Validation is limited to typed schema, topic
+relevance and source/reference/capacity boundaries; no evidence-alignment or
+consistency verifier is called. Unrelated messages redirect without factual updates.
+One automatic schema retry is allowed; repeated malformed output asks for a natural
+clarification. Authentication, ownership, leases and concurrent-edit fencing remain.
+Extraction and legacy target-specific interpretation retain their existing checks.
+
 Owner-scoped conversation memory survives restarts and segment rollover. Coverage
 and source-specific derived skill estimates are invalidated when their evidence
 changes. User stop produces paused partial progress; reviewed/reviewed-with-gaps
-completion requires validated coverage. The existing explicit summary review stamp
+completion requires topic coverage. `InterviewProgress.topics` supplies source IDs,
+titles and topic states; its counts represent stable experience/project topics
+needing clarification, not question counts. Follow-ups do not add topics. Manual
+intake reports its four background areas. Completion is announced in chat, with a
+completion-only Review profile button opening the Skills Profile summary. Opening
+a paused review resumes automatically; completed reviews do not auto-restart. The existing explicit summary review stamp
 remains separate. `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` defaults to 2 (1–5), limiting
-unproductive probes of an unchanged target. Context is capped at 96 KiB with focused
-source-answer recall and at most three planner calls per turn. Every provider call
+unproductive probes of an unchanged target. Context is capped at 96 KiB with four
+recent non-placeholder messages, a deterministic per-source discussion summary,
+focused attempt details and an answer ID/target/status index. Exact source answers
+are retrieved only on planner recall (up to four per call); evidence remains
+authoritative and the complete transcript stays saved. No extra summarisation model
+call is made. At most three planner calls are allowed per turn. Every provider call
 uses the existing shared model admission. Target-specific relevance/preparation and
 manual-only Profile intake retain their existing paths. See the
 [interview harness and code responsibilities](INTERVIEW.md) for exact lifecycle,
@@ -255,6 +272,145 @@ No data migration is needed; missing titles retain the original filename fallbac
 
 Baseline selection uses the label **Set as active baseline**. Before selecting a CV
 without a saved review for its current effective version, the UI warns that AI
-interpretation may be inaccurate and may attribute team skills to the user when
-project roles are unclear. The user may cancel or continue; this does not change
+interpretation may infer skills or experience inaccurately when any roles or
+responsibilities are not clearly stated in the CV, so the baseline may not reflect
+the skills the user currently possesses. The user may cancel or continue; this does not change
 the authenticated, explicit selection API or automatically regenerate analysis.
+
+### Upload processing progress
+
+Saved CV detail/list/operation responses include additive `processing_progress`
+(stage, percent, message). The worker saves allowlisted stage milestones under its
+current lease with CAS retries, without advancing evidence versions. Percent is a
+stage estimate (0 queued, 10 source read, 25 parsing, 45 extraction, 75 validation,
+85 optional repair, 95 publication, 100 ready), not time or token completion.
+Repair revalidation does not decrease progress within an attempt; explicit retries
+start a new attempt. Failed operations retain their last milestone and a paused
+message. Public messages are fixed application text, never provider reasoning.
+
+### Interview topic completion
+
+`InterviewProgress` counts topics left after discussion, rather than answers or
+individual supported fields. The active topic remains current through follow-ups,
+including planner proposals that prematurely label it covered. A validated move
+to a different source closes the prior discussed topic atomically with the next
+question; omitted coverage uses `reviewed_with_gaps`. Final completion retains
+the existing all-topics coverage guard. Pauses/side questions do not add coverage.
+Ordinary answer updates retain completed-topic navigation; explicit source edits,
+removal or a new extraction invalidate affected coverage. Skill estimates still
+invalidate on effective evidence changes.
+
+### Planner rejection recovery and diagnostics
+
+The planner context includes source-scoped `question_options` from the authoritative
+target-admission policy. Missing/partial/conflicting targets differ from closed
+explicit unknown/skipped/not-applicable answers. Adapter schema rejection is retried
+within the three invalid-decision attempts and six-call total limit. Saved answer
+interpretations are reused. Exhaustion returns a fixed reason-specific explanation;
+private receipt diagnostics retain at most six allowlisted reason/action events.
+Content-free logs contain those codes and attempt numbers only, never model prose,
+CV data, skill names or raw schema errors. See [planner diagnostics](INTERVIEW.md#planner-rejection-diagnostics).
+
+### Three questions per review topic
+
+Uploaded-CV review permits at most three issued questions per source topic. The
+review starts from CV context and asks only about material ambiguity. Scope,
+personally handled responsibilities and confidence in replicating the task are
+possible areas, not a required questionnaire. The last answer is stored as source-scoped
+`review_evidence.field=replication_confidence`, with its original quote and explicit
+uncertainty/support needs. It is self-reported confidence, not proficiency proof.
+Already answered areas need not be repeated; three is a maximum, not a minimum.
+Skipped questions count; failed proposals/retries and side explanations do not.
+Counts derive from retained CV interview questions across conversation segments,
+including older/source-corrected records of the same source identity. The validator
+rejects a fourth question, and exposes the budget in transient planner context.
+After the third answer/skip, move on or finish with gaps; completion still requires
+all review topics to have been covered. No new configuration or collection is added.
+
+Assistant reply publication and conversation read projections remove internal
+evidence/fact/source IDs from prose and active question text. Read filtering also
+covers legacy replies and estimate explanations, without modifying stored history
+or user messages. Structured identifiers and evidence linkage remain unchanged.
+
+### Clarification-first CV review
+
+The extraction LangGraph adds a deterministic `prepare_review` node after successful
+validation (also after repair). It removes superseded personal-contribution,
+responsibility and claim flags using source-validated review facts, preserving
+legacy target-specific proficiency/date/duration uncertainties. No extra provider
+call, schema change, checkpoint, collection or inferred capability is introduced.
+
+The same clarification projection is rebuilt from current effective evidence for
+saved CVs. Only material extracted ownership/responsibility/claim uncertainties,
+partial/conflicting review facts and unresolved personal-versus-team boundaries
+create review topics. Missing optional fields alone do not create topics. Full
+focused source descriptions, excerpts, skills and facts remain in bounded model
+context; all sources expose known skills and clarification targets. Planner
+`clarification_fields` indicate useful targets; generic open fields are not a
+required checklist. Named people/team achievements never become personal ownership
+without explicit source context or a user clarification.
+
+The three-question cap remains a maximum. CV sources with a supported skill baseline need zero questions. Clear wording
+alone is not enough when personal skill application/support is still unknown;
+responsibility and skill evidence gaps are reviewed within the per-project budget. Discussed
+topics retain stable progress through completion. Known, unvisited optional-only
+topics and obsolete active questions can retire on conversation reconciliation.
+Original CV evidence, user overrides and explicit source corrections retain their
+existing ownership and version boundaries. No automatic re-extraction is run for
+older CVs; they reuse their saved facts and source text.
+
+### Baseline skill evaluation — per-project question budgets
+
+A review topic means a whole project or experience. Each has its own maximum of
+three issued questions; there is no overall three-question/three-topic limit.
+The existing retained CV/history capacity is not a conversational topic cap.
+Questions use known CV scope and skills to establish personal responsibilities,
+concrete skill application/depth and assistance/independence or limitations.
+Related skills may be covered by one focused question. The review proceeds to
+remaining projects after a topic is covered/exhausted and can finish earlier if
+all project skills already have sufficient baseline evidence.
+
+`GET /api/v1/cv/{id}` exposes `skill_estimates` for supported source-scoped
+project/experience skill levels. The complete per-skill projection, including
+insufficient evidence, remains backend-only. Values are guided_application,
+independent_application, complex_application and insufficient_evidence. Each keeps
+its source item ID, skill name, fixed evidence-based explanation and references.
+References are structured provenance, never printed in assistant prose. Estimates
+recompute from effective evidence on read; no provider call, separate collection
+or competing skill store is introduced. Confidence/tenure alone cannot establish
+competence. After three answers, unsupported fields remain unknown rather than
+receiving a fabricated score. This is a CV/conversation baseline, separate from
+practical testing and target-specific Assessment comparisons.
+
+### Public supported baselines and focused review gaps
+
+CV detail and conversation read/mutation responses omit insufficient_evidence
+estimate entries. The internal domain projection, saved conversation memory and
+private interview progress retain them for planning and analysis; public filtering
+does not mutate those records. Frontend summary/chat defensively filter older
+responses too and show no empty diagnostic section. Supported skill levels remain
+visible. No API fields are removed and existing level enums stay compatible.
+
+A topic’s maximum of three questions addresses relevant project responsibilities
+and skill application gaps; it is not a request to fill every empty field. Backend
+target selection offers concrete skill use before probing support/independence,
+and consolidates missing personal ownership at project scope. Partial peripheral
+metadata does not generate required questions. Topic count/budgets, source evidence,
+user corrections and all backend uncertainty are preserved.
+
+### Skipped questions and uncertain ownership
+
+Question skips retain their field/skill scope in the existing CV question record.
+Effective review context projects an uncertain disposition, closes the target to
+repetition and preserves original facts/quotes and unrelated supported skills.
+A skipped/explicitly unknown ownership field permits reviewed-with-gaps coverage,
+never verified ownership. Optimistic planner coverage is normalized conservatively
+to reviewed-with-gaps for an explicit disposition and for missing or unsupported
+ownership, without rejecting the planner's next step.
+
+A failed next-step plan with no active question exposes Skip and continue for the
+current known project. This saves a source-bound deferred-topic receipt, cancels
+related failed planning receipts and proceeds to another uncovered project or
+completes with gaps. It neither resubmits answers nor skips failed evidence writes.
+CV versions/extraction generations/source fingerprints fence retry and correction
+races. Existing user history, ownership, leases and three-question budgets remain.

@@ -21,6 +21,51 @@ describe('saved CV conversation', () => {
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
   expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:'cv-one'}),'synthetic-session',expect.any(AbortSignal));
  });
+ it('shows pending review work and keeps a new draft until the saved turn finishes', async () => {
+  const pending=action({id:'route-pending',kind:'route',status:'pending',title:'Understand your message'});
+  const current=conversation({purpose:'skills_profile',messages:[message('m1','A saved answer.',[],'user'),message('m2','Working on your answer.',[pending])]});
+  vi.mocked(cvApi.openConversation).mockResolvedValue(current);
+  vi.mocked(cvApi.conversation).mockResolvedValue(current);
+  render(<CvConversationPanel {...props()} purpose="skills_profile"/>);
+  expect(await screen.findByText('Reviewing your answer…')).toHaveAttribute('role','status');
+  const composer=screen.getByRole('textbox',{name:'Message elo'});
+  fireEvent.change(composer,{target:{value:'My next draft'}});
+  expect(composer).toHaveValue('My next draft');
+  expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+  fireEvent.keyDown(composer,{key:'Enter'});
+  expect(cvApi.sendMessage).not.toHaveBeenCalled();
+ });
+ it('offers skip and continue after a failed next-step decision without an active question', async () => {
+  const failed=action({id:'route-failed',kind:'route',status:'failed',title:'Continue review',summary:'Could not continue.',changes:[],error:'The interview could not choose a valid next step. Its proposed next steps did not pass the review checks.'});
+  const current=conversation({purpose:'skills_profile',active_question:null,interview:{status:'reviewing',reviewed_items:0,total_items:2,estimates:[],topics:[{id:'one',title:'First project',status:'current'},{id:'two',title:'Next project',status:'pending'}]},messages:[message('m1','My original contribution is saved.',[],'user'),message('m2','Could not continue.',[failed])]});
+  vi.mocked(cvApi.openConversation).mockResolvedValue(current);
+  vi.mocked(cvApi.sendMessage).mockResolvedValue({...current,revision:2,active_question:{id:'q2',item_id:'two',title:'Next project',question:'What did you handle in the next project?'},interview:{...current.interview!,reviewed_items:1,topics:[{id:'one',title:'First project',status:'deferred'},{id:'two',title:'Next project',status:'current'}]},messages:[current.messages[0],message('m2','Skipped remaining questions.',[{...failed,status:'cancelled',error:null}]),message('m3','What did you handle in the next project?')]});
+  render(<CvConversationPanel {...props()} purpose="skills_profile"/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Skip and continue'}));
+  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat-one',expect.objectContaining({command:'skip',text:'Skip remaining questions for this experience.'}),'synthetic-session',expect.any(AbortSignal)));
+  expect(await screen.findByText('What did you handle in the next project?')).toBeVisible();
+  expect(screen.getByText('My original contribution is saved.')).toBeVisible();
+  expect(screen.queryByRole('button',{name:'Skip and continue'})).not.toBeInTheDocument();
+ });
+ it('hides insufficient-evidence estimates in restored conversations from older servers', async () => {
+  vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',interview:{status:'reviewing',reviewed_items:0,total_items:1,topics:[],estimates:[
+   {item_id:'project-one',skill_name:'Python',level:'guided_application',explanation:'Used personally with guidance.',evidence_refs:['internal-ref']},
+   {item_id:'project-one',skill_name:'SQL',level:'insufficient_evidence',explanation:'Internal missing-field diagnostic.',evidence_refs:['internal-ref']},
+  ]},messages:[message('m1','Which part of the pipeline did you implement?')]}));
+  render(<CvConversationPanel {...props()} purpose="skills_profile"/>);
+  await screen.findByText('Which part of the pipeline did you implement?');
+  expect(screen.getByText(/Python · .* · guided application/)).toBeVisible();
+  expect(screen.queryByText(/insufficient evidence|Internal missing-field diagnostic|SQL ·/)).not.toBeInTheDocument();
+ });
+ it('hides internal references in restored assistant messages while preserving the user transcript', async () => {
+  const source='12b476847583f093b7e8aaf5dac8d5d5';
+  const restored=conversation({purpose:'skills_profile',messages:[message('m1',`Regarding your Product Manager role [${source}], what tools did you use?`),message('m2',`My original reference was [${source}].`,[],'user')]});
+  vi.mocked(cvApi.openConversation).mockResolvedValue(restored);
+  render(<CvConversationPanel {...props()} purpose="skills_profile"/>);
+  expect(await screen.findByText('Regarding your Product Manager role, what tools did you use?')).toBeVisible();
+  expect(screen.getByText(`My original reference was [${source}].`)).toBeVisible();
+  expect(restored.messages[0].text).toContain(source);
+ });
  it('keeps successful routing machinery out of the visible conversation but retains retry for a routing failure',async()=>{
   vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({messages:[message('m1','Let’s focus on your own contribution.',[action({kind:'route',status:'saved',title:'Understand your message',summary:'Message understood.',changes:[]}),action({id:'route-failed',kind:'route',status:'failed',title:'Try understanding again',summary:'Your message is saved.',changes:[],error:'Provider unavailable.'})])]}));
   render(<CvConversationPanel {...props()}/>);await screen.findByText('Let’s focus on your own contribution.');expect(screen.queryByText('Understand your message')).not.toBeInTheDocument();expect(screen.queryByText('Message understood.')).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Retry this action'})).toBeEnabled();
@@ -32,15 +77,69 @@ describe('saved CV conversation', () => {
   await waitFor(() => expect(cvApi.sendMessage).toHaveBeenCalledWith('chat-one',expect.objectContaining({command:'review',expected_revision:1}),'synthetic-session',expect.any(AbortSignal)));
   expect(await screen.findByRole('button',{name:'Skip this question'})).toBeEnabled(); expect(options.onChanged).toHaveBeenCalled();
  });
- it('resumes paused interview memory without automatically restarting questions', async () => {
+ it('automatically resumes an opened paused review without a continue button', async () => {
   vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',interview:{status:'paused',reviewed_items:0,total_items:1,estimates:[]},messages:[message('m1','We can continue later.'),message('m2','Stop here.',[],'user')]}));
+  vi.mocked(cvApi.sendMessage).mockResolvedValue(conversation({purpose:'skills_profile',revision:2,active_question:{id:'q1',item_id:'project-one',title:'Project',question:'What did you build?'},messages:[message('m3','What did you build?')]}));
   render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
-  expect(await screen.findByText('Review paused. Continue whenever you’re ready.')).toBeVisible();
+  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat-one',expect.objectContaining({command:'review'}),'synthetic-session',expect.any(AbortSignal)));
+  expect(await screen.findByText('What did you build?')).toBeVisible();
+  expect(screen.queryByRole('button',{name:'Continue review'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Review profile summary'})).not.toBeInTheDocument();
+ });
+ it('shows topic progress and the profile button only after completion', async () => {
+  const options=props();
+  const reviewing=conversation({purpose:'skills_profile',interview:{status:'reviewing',reviewed_items:1,total_items:2,estimates:[],topics:[{id:'one',title:'First experience',status:'reviewed'},{id:'two',title:'Second experience',status:'current'}]},active_question:{id:'q1',item_id:'two',title:'Second experience',question:'What did you do?'},messages:[message('m1','What did you do?')]});
+  vi.mocked(cvApi.openConversation).mockResolvedValue(reviewing);
+  vi.mocked(cvApi.sendMessage).mockResolvedValue({...reviewing,revision:2,active_question:null,interview:{...reviewing.interview!,status:'reviewed_with_gaps',reviewed_items:2,topics:[{id:'one',title:'First experience',status:'reviewed'},{id:'two',title:'Second experience',status:'reviewed_with_gaps'}]},messages:[message('m2','Your review is complete.')]});
+  render(<CvConversationPanel {...options} purpose="skills_profile" autoReview/>);
+  expect(await screen.findByRole('progressbar',{name:'Review progress'})).toHaveAttribute('aria-valuenow','1');
+  expect(screen.getByText('50% · Experience review')).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Review profile'})).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'I handled reporting.'}});
+  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  const button=await screen.findByRole('button',{name:'Review profile'});
+  await waitFor(()=>expect(button).toBeEnabled());
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow','2');
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax','2');
+  expect(screen.getByText('100% · Review complete')).toBeInTheDocument();
+  fireEvent.click(button);expect(options.onOpenSummary).toHaveBeenCalledOnce();
+ });
+ it('keeps topic progress visible and unchanged through followups until a topic transition', async () => {
+  const reviewing=conversation({purpose:'skills_profile',interview:{status:'reviewing',reviewed_items:0,total_items:2,estimates:[],topics:[{id:'one',title:'First experience',status:'current'},{id:'two',title:'Second experience',status:'pending'}]},active_question:{id:'q1',item_id:'one',title:'First experience',question:'What did you do?'},messages:[message('m1','What did you do?')]});
+  vi.mocked(cvApi.openConversation).mockResolvedValue(reviewing);
+  vi.mocked(cvApi.sendMessage).mockResolvedValueOnce({...reviewing,revision:2,active_question:{...reviewing.active_question!,id:'q2',question:'What was the task scope?'},messages:[message('m2','What was the task scope?')]}).mockResolvedValueOnce({...reviewing,revision:3,interview:{...reviewing.interview!,reviewed_items:1,topics:[{id:'one',title:'First experience',status:'reviewed_with_gaps'},{id:'two',title:'Second experience',status:'current'}]},active_question:{id:'q3',item_id:'two',title:'Second experience',question:'Moving to your second experience: what did you do?'},messages:[message('m3','Moving to your second experience: what did you do?')]});
+  render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
+  const bar=await screen.findByRole('progressbar',{name:'Review progress'});
+  expect(bar).toHaveAttribute('aria-valuenow','0');
+  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'I implemented the reporting API.'}});
+  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  expect(screen.getByRole('progressbar')).toBe(bar);
+  await screen.findByText('What was the task scope?');
+  await waitFor(()=>expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled());
+  expect(screen.getByRole('progressbar')).toBe(bar);
+  expect(bar).toHaveAttribute('aria-valuenow','0');
+  expect(screen.getByText('0% · Experience review')).toBeVisible();
+  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'It generated weekly reports.'}});
+  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+  await screen.findByText('Moving to your second experience: what did you do?');
+  expect(screen.getByRole('progressbar')).toBe(bar);
+  expect(bar).toHaveAttribute('aria-valuenow','1');
+  expect(screen.getByText('50% · Experience review')).toBeVisible();
+ });
+ it('does not restart a completed review when reopened', async () => {
+  vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',interview:{status:'reviewed',reviewed_items:1,total_items:1,estimates:[]},messages:[message('m1','Your review is complete.')]}));
+  render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
+  expect(await screen.findByRole('button',{name:'Review profile'})).toBeEnabled();
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
-  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
-  vi.mocked(cvApi.sendMessage).mockResolvedValue(conversation({purpose:'skills_profile',revision:2,messages:[message('m3','What did you build?')]}));
-  fireEvent.click(screen.getByRole('button',{name:'Continue review'}));
-  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat-one',expect.objectContaining({command:'continue'}),'synthetic-session',expect.any(AbortSignal)));
+ });
+ it('automatically recovers one old evidence-alignment failure', async () => {
+  const failed=action({kind:'clarify',status:'failed',error:'Some interpreted skill details are not supported by your answer. Your answer is saved; clarify or retry interpretation.'});
+  vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',messages:[message('m1','Your answer is saved.',[failed])]}));
+  vi.mocked(cvApi.conversationAction).mockResolvedValue(conversation({purpose:'skills_profile',revision:2,active_question:{id:'q1',item_id:'project-one',title:'Project',question:'What happened next?'},messages:[message('m2','What happened next?')]}));
+  render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
+  await waitFor(()=>expect(cvApi.conversationAction).toHaveBeenCalledWith('chat-one',failed.id,expect.objectContaining({decision:'retry'}),'synthetic-session',expect.any(AbortSignal)));
+  expect(await screen.findByText('What happened next?')).toBeVisible();
+  expect(cvApi.conversationAction).toHaveBeenCalledOnce();
  });
  it('retains an interrupted draft and retries the same message identity', async () => {
   vi.mocked(cvApi.sendMessage).mockRejectedValue(new Error('Connection interrupted.'));

@@ -39,7 +39,8 @@ const goal=shape({_id:nonempty,version:positive,role:nonempty,field:nonempty,tar
  readiness:oneOf('pending','ready'),requirements_need_review:optional(boolean),
  exploration_draft_id:nullable(text),exploration_draft_version:nullable(positive),
 });
-const current=shape({goal:nullable(goal),selection_version:integer,dependent_results_need_review:boolean});
+const skillGroups:Check=value=>record(value)&&Object.values(value).every(text);
+const current=shape({goal:nullable(goal),selection_version:integer,dependent_results_need_review:boolean,skill_groups:optional(skillGroups)});
 const phase=oneOf('empty','exploring','research_pending','researching','waiting_quota','research_failed','ready','expired');
 const retryAfter=optional(nullable(integer));
 const errorFields={error:nullable(text),error_code:optional(nullable(text)),retry_after:retryAfter,

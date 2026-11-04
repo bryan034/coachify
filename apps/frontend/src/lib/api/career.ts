@@ -31,7 +31,7 @@ export type SavedGoal = {job_dates?:JobDate[];discovery?:DiscoveryEvidence|null;
  summary?:string|null;responsibilities?:string[];non_skill_requirements?:ReviewCondition[];
  skills:ReviewSkill[];interests:string[];preferences:string[];readiness:'pending'|'ready';
  source_review_id?:string|null;source_review_version?:number|null;requirements_need_review?:boolean; exploration_draft_id:string|null;exploration_draft_version:number|null };
-export type CurrentGoal = {review_selection?:{id:string;version:number}|null;selection_version:number;goal:SavedGoal|null;dependent_results_need_review:boolean};
+export type CurrentGoal = {skill_groups?:Record<string,string>;review_selection?:{id:string;version:number}|null;selection_version:number;goal:SavedGoal|null;dependent_results_need_review:boolean};
 export type CareerContext = {cvs:{id:string;filename:string;status:string;version:number;extraction_version:string}[];cv_service_available:boolean;ai_available:boolean};
 export class CareerApiError extends ApiError {
  retryAt:number|null;

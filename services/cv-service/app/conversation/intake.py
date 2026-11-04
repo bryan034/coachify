@@ -178,13 +178,25 @@ async def process_intake(service, app, account, conversation, route, token):
             'instruction': 'Ask one neutral question about this exact field. Accept partial/unknown answers and do not ask other fields.'})
         question = question_result['reply'] if isinstance(question_result, dict) else question_result.reply
     else:
-        question = 'You can review and save your profile now, including any unknown details. Add another experience whenever you like.'
+        question = 'Your review is complete. You can review your profile now; unknown details remain uncertain.'
     def publish(document):
         action = action_in(document, route['id'])
         service.check_lease(action, token)
         action.update(status='saved', summary='Skills profile saved.' if command == 'finish' else 'Draft checked.',
                       _token=None, _lease_until=0)
         action_message(document, route['id'])['text'] = (reply + '\n\n' if reply else '') + question
+        topics = []
+        for area, label in LABELS.items():
+            area_profile = {**candidate, 'entries': [e for e in candidate['entries'] if e['kind'] == area],
+                            'areas': {**candidate['areas'], **{a: 'skipped' for a in LABELS if a != area}}}
+            done = next_target(area_profile) is None
+            topics.append({'id': area, 'title': label, 'status': 'reviewed_with_gaps' if done else
+                           'current' if target and target['area'] == area else 'pending'})
+        covered = sum(t['status'] == 'reviewed_with_gaps' for t in topics)
+        document['interview_progress'] = {'status': 'reviewed_with_gaps' if covered == len(topics) else
+                                        'paused' if command == 'finish' else 'reviewing',
+                                        'reviewed_items': covered, 'total_items': len(topics),
+                                        'topics': topics, 'estimates': []}
         document['intake_target'] = target
         document['intake_profile_version'] = candidate['version']
         document['active_question'] = ({'id': key(str(target)), 'item_id': target.get('entry_id', target['area']),

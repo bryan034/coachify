@@ -46,3 +46,23 @@ def test_interview_fixture_is_finite_and_keeps_side_questions_read_only():
     assert result['intent'] == 'side_question' and not result['interpretations']
     with pytest.raises(ValueError): fixture.interview_fixture({**value, 'message': 'Invent an unlabelled contribution.'})
     with pytest.raises(ValueError): fixture.interview_fixture({**value, 'focused_source': {**source, 'title': 'Private CV'}})
+
+
+def test_interview_fixture_moves_to_another_topic_when_the_question_budget_is_used():
+    source = {'id': 'project', 'title': 'Team dashboard', 'kind': 'project'}
+    work = {'id': 'work', 'title': 'Synthetic reporting internship', 'kind': 'experience',
+            'questions_remaining': 3, 'clarification_targets': [{'field': 'personal_contribution', 'skill_name': None, 'reason': 'personal_vs_team_boundary'}]}
+    result = fixture.interview_fixture({'task': 'cv_interview_plan', 'focused_source': source,
+        'topic_question_budget': {'remaining': 0}, 'sources': [source, work]})
+    assert result['action'] == 'ask' and result['item_id'] == work['id']
+    assert result['targets'] == [{'field': 'personal_contribution', 'skill_name': None}]
+
+
+def test_interview_fixture_corrects_the_project_after_focus_moves_to_the_internship():
+    project = {'id': 'project', 'title': 'Team dashboard', 'kind': 'project'}
+    work = {'id': 'work', 'title': 'Synthetic reporting internship', 'kind': 'experience'}
+    result = fixture.interview_fixture({'task': 'cv_interview_interpret', 'focused_source': work,
+        'sources': [project, work], 'message': fixture.CHAT_CORRECTION})
+    assert result['actions'][0]['item_id'] == project['id']
+    assert result['interpretations'][0]['item_id'] == project['id']
+    assert result['interpretations'][0]['claims'][0]['experience_months'] == 3

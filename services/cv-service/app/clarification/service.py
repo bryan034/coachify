@@ -3,7 +3,7 @@ from functools import partial
 import re
 from uuid import uuid4
 from pydantic import ValidationError
-from app.domain.capabilities import digest, effective_items, effective_fingerprint, normalized_name, validate_interpretation, interpretation_semantic_checks
+from app.domain.capabilities import digest, effective_items, effective_fingerprint, normalized_name, validate_interpretation, validate_review_interpretation, interpretation_semantic_checks
 from app.domain.errors import Conflict, Missing
 from app.domain.service import bump, now
 from app.schemas.cv import ConfirmedContext, SavedInterpretation
@@ -161,7 +161,8 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter, prep
             payload, metadata = deepcopy(prepared)
             payload['answer_revision'] = question['answer_revision']
         semantic_support = frozenset()
-        if hasattr(interpreter, 'verify_evidence'):
+        review_statement = question.get('_review_statement', False)
+        if not review_statement and hasattr(interpreter, 'verify_evidence'):
             blocks, refs, fields = interpretation_semantic_checks(payload, question, item)
             if refs:
                 supported = service.model_usage.run(owner, partial(interpreter.verify_evidence, timeout_seconds=20), blocks, refs,
@@ -169,7 +170,8 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter, prep
                 if any((ref['block_id'], ref['excerpt']) not in supported for ref in refs):
                     raise ValueError('Some interpreted skill details are not supported by your answer. Your answer is saved; clarify or retry interpretation.')
                 semantic_support = frozenset(fields)
-        result = validate_interpretation(payload, item, question, semantic_support)
+        result = (validate_review_interpretation(payload, item, question) if review_statement else
+                  validate_interpretation(payload, item, question, semantic_support))
         result.update(metadata=metadata, applied_sequence=question['answer_sequence'],
                       extraction_version=saved['extraction_version'])
         result = SavedInterpretation.model_validate(result).model_dump(mode='json')
@@ -224,6 +226,7 @@ def answer(service, owner, identifier, question_id, mutation, interpreter=None, 
             return
         if question['status'] == 'answered' and question['answer'] == mutation.answer: return
         changed_answer = True
+        if getattr(interpreter, 'review_statements', False): question['_review_statement'] = True
         reserve(question, invocation_token)
         question.update(status='answered', answer=mutation.answer,
             answer_revision=question.get('answer_revision', 0) + 1, answer_sequence=document['version'] + 1,
@@ -265,6 +268,7 @@ def retry_interpretation(service, owner, identifier, question_id, mutation, inte
             release(question)
             return
         requested = True
+        if getattr(interpreter, 'review_statements', False): question['_review_statement'] = True
         question.update(interpretation_status='pending', interpretation_error=None, resolution='unresolved',
                         answer_revision=max(1, question.get('answer_revision', 0)),
                         answer_sequence=document['version'] + 1, interpretation_token=invocation_token,

@@ -98,7 +98,72 @@ Saved-title tests cover validation, owner isolation, persistence/list projection
 
 Agent-led CV interview checks in `test_cv_interview.py` cover durable memory on both
 repositories, rich/partial evidence, scoped skips, side questions, user stops,
-known-field suppression, unproductive probing, coverage/estimate guards, semantic
-rejection, old source-answer context, stale-provider fencing and retry without
+known-field suppression, unproductive probing, coverage/estimate guards, topic relevance/schema
+recovery, old source-answer context, stale-provider fencing and retry without
 duplicate evidence. Mongo cases reconstruct the coordinator over persisted records.
 They use explicit synthetic outputs and do not measure live interview quality.
+Context-compaction regressions verify bounded prompts with 100 long answers,
+four non-placeholder recent messages, rebuildable discussion summaries after
+segment rollover, exact on-demand answer recall, stale/foreign source exclusion,
+and safe failure without truncation when recalled content exceeds the context cap.
+
+Review-policy tests exercise latest-user-statement precedence over CV and earlier
+answers, absence of evidence-verifier calls, unrelated-topic rejection, bounded
+schema repair/conversational recovery, old failed-answer retry, stable topic counts
+and typed progress contracts. Existing legacy clarification and extraction tests
+retain their separate evidence-validation requirements.
+
+Upload progress regression checks queued/ready milestones and public detail/list
+reads while parsing and extraction are running, on both repository adapters.
+Interview recall regression verifies context retrieval preserves the three
+invalid-decision attempts without reinterpreting or resubmitting the answer.
+
+Topic-progress regressions cover premature model coverage on follow-ups, atomic
+topic transitions with/without explicit coverage, old-source citations after
+hydration, polling during answer interpretation, completion/reload and reopening
+a corrected source. Frontend checks retain the same visible progress bar through
+follow-up sends and advance it on the next topic.
+
+Planner regressions check shared open-target/attempt admission, explicit unknown
+closure, schema rejection at the real adapter boundary, answer reuse and bounded
+private rejection diagnostics. Log assertions exclude provider prose and answers.
+Frontend regressions hide source IDs from saved assistant replies while retaining
+user messages and unrelated technical hashes.
+
+Three-question regressions reject a fourth target even when its field changes,
+rebuild counts from CV history after compact-memory loss/rollover, keep progress
+open through the third question, transition to another topic and finish with gaps.
+Replication confidence persists with its own field and quote. API projection
+regressions hide fact/answer references in assistant prose while preserving
+structured identifiers, legacy stored messages and literal user text.
+
+Clarification-first regressions execute the real LangGraph prepare_review node after
+source validation, preserving facts and legacy uncertainty without an extra model
+call. Interview cases skip clear CVs, retain skills as context, clarify personal
+responsibility once, complete without a mandatory third question and preserve
+progress on reload. Synthetic tests do not establish live-provider question quality.
+
+Baseline regressions demonstrate six questions across two independent project
+topics, all project skills receiving a source-specific estimate, and twelve
+reviewable topics without an artificial topic cap. Rubric checks reject confidence,
+tenure, missing support or conflicts as proof of independence. The saved summary
+shows supported levels and keeps insufficient-evidence diagnostics internal, without
+exposing internal IDs.
+Earlier tests that treated clear role wording as complete review now require
+concrete per-skill application/support evidence before early completion.
+
+A polling regression asserts published baseline memory is already canonical and
+unchanged status reads do not advance the conversation revision. General project
+complexity alone cannot inflate every individual skill’s baseline level.
+
+Diagnostic-visibility regressions retain mixed supported/insufficient estimates
+in backend memory/progress while excluding insufficient entries from CV detail,
+conversation responses and frontend legacy rendering. Relevance cases prioritize
+concrete use before support and skip peripheral partial/missing metadata.
+
+Skip regressions retain source-scoped uncertain ownership without fabricated
+answers/quotes, allow conservative coverage despite optimistic model citations,
+reject whole-review completion with unvisited projects, and fence old skips after
+source correction. Failed-plan recovery preserves saved answers, avoids another
+interpretation, advances/completes with gaps and survives reload. Frontend checks
+expose Skip and continue only for a failed next-step plan with known current focus.

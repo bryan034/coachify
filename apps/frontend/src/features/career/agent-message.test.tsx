@@ -49,6 +49,19 @@ it('can reveal the whole answer immediately and does not restart on the same con
  expect(view.container).not.toHaveTextContent('response here');
 });
 
+it('keeps a revealed answer complete when animation is re-enabled',()=>{
+ motion(false);vi.useFakeTimers();
+ const answer='First second third fourth';
+ const view=render(<AgentReply>{answer}</AgentReply>);
+ fireEvent.click(screen.getByRole('button',{name:'Show full response'}));
+ view.rerender(<AgentReply animate={false}>{answer}</AgentReply>);
+ view.rerender(<AgentReply>{answer}</AgentReply>);
+ expect(view.container).toHaveTextContent(answer);
+ expect(screen.queryByRole('button',{name:'Show full response'})).toBeNull();
+ act(()=>vi.advanceTimersByTime(20));
+ expect(view.container).toHaveTextContent(answer);
+});
+
 it('respects reduced motion and shows older replies without animation',()=>{
  motion(true);const view=render(<AgentReply>{'Immediate complete response'}</AgentReply>);
  expect(view.container).toHaveTextContent('Immediate complete response');

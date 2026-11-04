@@ -90,7 +90,7 @@ export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry'
 
 /** Display animation after a validated response arrives; this is not provider streaming. */
 export function AgentReply({children,animate=true,onProgress}:{children:string;animate?:boolean;onProgress?:()=>void}){
- const [shown,setShown]=useState({text:children,count:0});
+ const [shown,setShown]=useState({text:children,count:1});
  const [reduced,setReduced]=useState(()=>typeof window!=='undefined'&&!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
  const words=children.match(/\s*\S+/g)||[];
  useEffect(()=>{
@@ -100,7 +100,7 @@ export function AgentReply({children,animate=true,onProgress}:{children:string;a
  },[]);
  useEffect(()=>{
   if(!animate||reduced)return;
-  setShown({text:children,count:1});
+  setShown(current=>current.text===children?current:{text:children,count:1});
   const timer=setInterval(()=>setShown(current=>{
    const count=current.text===children?current.count+1:1;
    if(count>=words.length)clearInterval(timer);

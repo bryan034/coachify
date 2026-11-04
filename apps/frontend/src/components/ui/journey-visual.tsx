@@ -1,9 +1,11 @@
-import { useId } from 'react';
+"use client";
+import { useId, useState } from 'react';
 
-/** A decorative path built from the three connected points in the Elo mark. */
-export function JourneyVisual() {
+/** A path built from the three connected points in the Elo mark. `animated` bounces the ball along the platforms. */
+export function JourneyVisual({ animated = false }: { animated?: boolean }) {
  const id = useId().replace(/:/g, '');
- return <div className="journey-visual" aria-hidden="true"><svg viewBox="0 0 600 540" fill="none">
+ const [paused, setPaused] = useState(false);
+ return <div className={`journey-visual${animated ? ' is-animated' : ''}${paused ? ' is-paused' : ''}`}><svg viewBox="0 0 600 540" fill="none" aria-hidden="true">
   <defs>
    <linearGradient id={`${id}-edge`} x1="110" y1="460" x2="485" y2="110" gradientUnits="userSpaceOnUse"><stop stopColor="#475569"/><stop offset=".5" stopColor="#111827"/><stop offset="1" stopColor="#475569"/></linearGradient>
    <linearGradient id={`${id}-top`} x1="180" y1="100" x2="400" y2="390" gradientUnits="userSpaceOnUse"><stop stopColor="#FFFFFF"/><stop offset=".55" stopColor="#F1F5F9"/><stop offset="1" stopColor="#475569"/></linearGradient>
@@ -17,15 +19,24 @@ export function JourneyVisual() {
   <path d="m153 335 211-216 57 33-211 216Z" fill={`url(#${id}-top)`}/>
   <path d="m153 335 57 33v17l-57-33Z" fill="#111827"/>
   <path d="m210 368 211-216v17L210 385Z" fill={`url(#${id}-edge)`}/>
-  <path d="M125 346v32c0 23 30 42 67 42s67-19 67-42v-32" fill={`url(#${id}-edge)`}/>
-  <ellipse cx="192" cy="346" rx="67" ry="39" fill={`url(#${id}-top)`}/>
-  <ellipse cx="192" cy="346" rx="47" ry="27" stroke="#FFFFFF" strokeOpacity=".7"/>
-  <path d="M230 243v33c0 23 30 42 67 42s67-19 67-42v-33" fill={`url(#${id}-edge)`}/>
-  <ellipse cx="297" cy="243" rx="67" ry="39" fill={`url(#${id}-top)`}/>
-  <ellipse cx="297" cy="243" rx="47" ry="27" stroke="#FFFFFF" strokeOpacity=".7"/>
-  <path d="M335 140v33c0 23 30 42 67 42s67-19 67-42v-33" fill={`url(#${id}-edge)`}/>
-  <ellipse cx="402" cy="140" rx="67" ry="39" fill={`url(#${id}-mint)`}/>
-  <ellipse cx="402" cy="140" rx="47" ry="27" stroke="#FFFFFF" strokeOpacity=".65"/>
-  <circle cx="402" cy="108" r="27" fill={`url(#${id}-mint)`}/>
- </svg></div>;
+  <g className="jv-platform jv-platform-1">
+   <path d="M125 346v32c0 23 30 42 67 42s67-19 67-42v-32" fill={`url(#${id}-edge)`}/>
+   <ellipse cx="192" cy="346" rx="67" ry="39" fill={`url(#${id}-top)`}/>
+   <ellipse cx="192" cy="346" rx="47" ry="27" stroke="#FFFFFF" strokeOpacity=".7"/>
+   <ellipse className="jv-ring" cx="192" cy="346" rx="47" ry="27" stroke="#34D399" strokeWidth="3"/>
+  </g>
+  <g className="jv-platform jv-platform-2">
+   <path d="M230 243v33c0 23 30 42 67 42s67-19 67-42v-33" fill={`url(#${id}-edge)`}/>
+   <ellipse cx="297" cy="243" rx="67" ry="39" fill={`url(#${id}-top)`}/>
+   <ellipse cx="297" cy="243" rx="47" ry="27" stroke="#FFFFFF" strokeOpacity=".7"/>
+   <ellipse className="jv-ring" cx="297" cy="243" rx="47" ry="27" stroke="#34D399" strokeWidth="3"/>
+  </g>
+  <g className="jv-platform jv-platform-3">
+   <path d="M335 140v33c0 23 30 42 67 42s67-19 67-42v-33" fill={`url(#${id}-edge)`}/>
+   <ellipse cx="402" cy="140" rx="67" ry="39" fill={`url(#${id}-mint)`}/>
+   <ellipse cx="402" cy="140" rx="47" ry="27" stroke="#FFFFFF" strokeOpacity=".65"/>
+   <ellipse className="jv-ring" cx="402" cy="140" rx="47" ry="27" stroke="#34D399" strokeWidth="3"/>
+  </g>
+  <g className="jv-ball-x"><g className="jv-ball-y"><circle className="jv-ball" cx="402" cy="108" r="27" fill={`url(#${id}-mint)`}/></g></g>
+ </svg>{animated && <button type="button" className="journey-pause" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? 'Play animation' : 'Pause animation'}</button>}</div>;
 }

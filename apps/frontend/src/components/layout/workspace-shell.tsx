@@ -2,7 +2,7 @@
 import { BrandLogo } from '@/components/ui/brand-logo';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { useProfile } from '@/features/profile/profile-provider';
 import { statuses, studyYearLabel } from '@/features/profile/types';
@@ -17,16 +17,20 @@ const nav = [
 ];
 export function WorkspaceShell({ children }: { children: ReactNode }) {
  const pathname = usePathname();
+ const [menuOpen, setMenuOpen] = useState(false);
+ const menuButton = useRef<HTMLButtonElement>(null);
+ const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
  const { profile, account, mode, token, signOut, loading, configError, loadError } = useProfile();
  const status = statuses.find(s => s.id === profile?.occupational_status)?.label;
  const year = profile?.current_study_year && profile.school_category ? studyYearLabel(profile.school_category, profile.current_study_year) : null;
  const detail = loading ? 'Loading your background…' : configError || loadError ? 'Profile unavailable' : mode === 'google' && !token ? 'Sign in to get started' : [year || status, profile?.education.institution?.name].filter(Boolean).join(' · ') || 'Add your background';
  return <div className="app">
   <a href="#main-content" className="skip-link">Skip to content</a>
-  <aside className="side">
+  <button ref={menuButton} type="button" className="workspace-menu btn ghost sm" aria-expanded={menuOpen} aria-controls="workspace-sidebar" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? 'Close navigation' : 'Menu'}</button>
+  <aside id="workspace-sidebar" className={`side${menuOpen ? ' is-open' : ''}`} aria-label="Workspace" onKeyDown={event => { if (event.key === 'Escape') { setMenuOpen(false); menuButton.current?.focus(); } }} onClick={event => { if ((event.target as HTMLElement).closest('a')) setMenuOpen(false); }}>
    <Link href="/dashboard" className="brand" aria-label="elo home"><BrandLogo/></Link>
-   <nav className="nav" aria-label="Main navigation">{nav.map(n => <Link key={n.href} href={n.href} className={pathname === n.href ? 'on' : ''} aria-current={pathname === n.href ? 'page' : undefined}><Icon name={n.icon}/>{n.label}</Link>)}</nav>
-   <div className="side-bottom"><Link href="/profile" className={`profile-link ${pathname === '/profile' ? 'on' : ''}`} aria-current={pathname === '/profile' ? 'page' : undefined}><Icon name="user"/>My profile<span>↗</span></Link>
+   <nav className="nav" aria-label="Main navigation">{nav.map(n => <Link key={n.href} href={n.href} className={isActive(n.href) ? 'on' : ''} aria-current={isActive(n.href) ? 'page' : undefined}><Icon name={n.icon}/>{n.label}</Link>)}</nav>
+   <div className="side-bottom"><Link href="/profile" className={`profile-link ${isActive('/profile') ? 'on' : ''}`} aria-current={isActive('/profile') ? 'page' : undefined}><Icon name="user"/>My profile</Link>
     <div className="me"><div className="avatar"><Icon name="user"/></div><div><strong>{account?.name || 'Your workspace'}</strong><div className="small">{detail}</div></div></div>
    <button type="button" className="btn ghost sm" onClick={signOut}>Sign out</button></div>
   </aside>
