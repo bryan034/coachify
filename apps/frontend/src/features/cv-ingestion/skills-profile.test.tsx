@@ -89,7 +89,7 @@ it('withholds final saving while a conversation update needs attention',async()=
  vi.mocked(cvApi.openConversation).mockResolvedValue({...chat,purpose:'skills_profile',messages:[{id:'message',sequence:1,role:'assistant',text:'Your answer needs attention.',created_at:'2026-11-02T00:00:00Z',actions:[failed]}]});
  render(<ResumePreview/>);
  fireEvent.click(await screen.findByRole('button',{name:/Continue building your profile/}));
- await screen.findByRole('button',{name:'Retry this action'});
+ await screen.findByRole('button',{name:'Try again'});
  fireEvent.click(screen.getByRole('button',{name:'Back to Skills Profile'}));
  expect(screen.getByRole('button',{name:'Save profile'})).toBeDisabled();
  expect(screen.getByText(/Finish or cancel the pending conversation updates/)).toBeVisible();

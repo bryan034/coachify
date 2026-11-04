@@ -226,7 +226,7 @@ saved-result staleness and roadmap generation remain unimplemented. See the
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml down
 ```
 
-MongoDB 8 requires a compatible kernel. Do not treat a local startup compatibility failure as an application test pass or silently bypass the server's guard. CI's MongoDB jobs use the compatible pinned runner; local MongoDB 7 functional checks are reported separately.
+The stack uses `mongo:8.2`, which starts on Docker Desktop kernels 6.19 and newer. The `mongo:8.0` and `mongo:8.3` images refuse to start on those kernels. Do not treat a local startup compatibility failure as an application test pass or silently bypass the server's guard. An existing 8.0 data volume opens on 8.2 with its feature compatibility version still at 8.0; leave it there if you may need to return to 8.0.
 See [testing](testing.md) for automated checks and disposable test stacks.
 
 ## Career model and search configuration
@@ -596,6 +596,7 @@ All user-configurable deployment inputs belong in the single ignored `infrastruc
 | `ROADMAP_LLM_API_KEY` | Server-only cloud credential for adviser recommendations; optional for explicit local HTTP |
 | `ASSESSMENT_LLM_MODEL`, `ROADMAP_LLM_MODEL` | Independent model identifiers; the public local profile uses `elo-deepseek-r1:1.5b`; absent settings retain Gemini compatibility defaults |
 | `ASSESSMENT_LLM_BASE_URL`, `ROADMAP_LLM_BASE_URL` | Independent OpenAI-compatible endpoints; local profile uses the Docker-host Ollama `/v1` URL |
+| `ASSESSMENT_LLM_TOKEN_PARAMETER`, `ROADMAP_LLM_TOKEN_PARAMETER` | `max_tokens` by default; set `max_completion_tokens` for models that reject `max_tokens` |
 | `ASSESSMENT_LLM_ALLOW_HTTP`, `ROADMAP_LLM_ALLOW_HTTP` | Explicit local HTTP permission; also requires `APP_ENV=development` |
 
 Generate only the new database passwords locally, then paste the printed lines into `infrastructure/docker/.env`:
@@ -622,6 +623,8 @@ The model credential may be the same provider key applied explicitly to both ser
 Rebuild using the existing Compose workflow after applying configuration. Profile/CV/Career Docker build contexts now use the repository root so all install the same `packages/elo-shared` registry package. New services expose no host ports and access foreign data only through owner-authenticated APIs. Do not rebuild the user's running stack as part of a test. Shared package or dependency changes require image rebuilds.
 
 For direct Python development, install `packages/elo-shared` before installing a service. Assessment and Roadmap each use their own `MONGODB_URI`/`MONGODB_DATABASE`; defaults are `elo_assessment` and `elo_roadmap`. Internal URLs are `PROFILE_SERVICE_URL`, `CV_SERVICE_URL`, `CAREER_SERVICE_URL` and `ASSESSMENT_SERVICE_URL`. The gateway exposes `/api/v1/assessments` and `/api/v1/roadmaps`; the UI stays at `/roadmap`.
+
+To use a real model for Roadmap, set `ASSESSMENT_LLM_API_KEY` and `ROADMAP_LLM_API_KEY` in your private `.env`, because generating a roadmap runs Assessment first. CV and Career also need keys to create the CV and goal it uses. Keep the template's Gemini URLs and model, or for OpenAI set each service's `*_LLM_BASE_URL=https://api.openai.com/v1`, an OpenAI model and, where the model requires it, `*_LLM_TOKEN_PARAMETER=max_completion_tokens`. Rebuild with `docker compose --env-file .env -f compose.yaml up --build -d assessment-service roadmap-service` from `infrastructure/docker`. Roadmap and Assessment call providers through the OpenAI Python SDK; no Google SDK is needed.
 
 Older extracted goals will not gain job dates automatically because their raw JDs are not retained. The adviser can discuss a user-selected preparation target; a new JD extraction can capture sourced application/interview/start wording. Existing CV skill keys and manual attachments are preserved. A null new canonical ID means unresolved mapping, not missing capability.
 

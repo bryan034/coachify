@@ -11,7 +11,7 @@ from app.domain.extraction_errors import ExtractionFailure
 from app.clients.extraction_schema import extraction_schema
 from app.clients.provider_errors import provider_failure
 
-PROMPT_VERSION = 'cv-extraction-7'
+PROMPT_VERSION = 'cv-extraction-8'
 SCHEMA_VERSION = '4'
 REPAIR_INSTRUCTIONS = '''
 Repair the rejected extraction using the original source_blocks and validation feedback.
@@ -70,6 +70,11 @@ EXAMPLE['extraction'] = Extraction.model_validate(EXAMPLE['extraction']).model_d
 
 
 SYSTEM += '''\nFor each item also extract review_evidence ONLY for facts actually supported by the CV: role, responsibilities, personal_contribution, assistance, task_scope, complexity, problem_solving, outcome, skill_use, recency, frequency, limitations. Use the same evidence fields as clarification. Each fact cites source_id from the supplied blocks and an exact quote (not a paraphrase). Values can be faithful interpretations. Use skill_name only for a fact specific to that skill. Preserve explicit partial/conflicting statements. Do not fill absent fields with invented unknown answers. Set attribution personal/shared only for explicitly personal work; team means teammates only, observed means watching only. Project/team output and job titles alone do not establish personal skill use or independence. Never put an inferred proficiency rating in review_evidence.'''
+
+
+SYSTEM += """
+Preserve the CV's concrete task scope, responsibilities, tools and skills as source-linked context for later review. Populate review_evidence for clearly stated facts instead of leaving the user to repeat them. Ambiguity flags are for materially unclear claims, especially which responsibilities belong to the CV owner versus teammates or other named people. Do not invent personal ownership from a team achievement. Do not add personal_contribution/responsibility/claim uncertainty when those details are already explicit and supported. Missing optional proficiency, dates or confidence alone does not require a generic skills interview.
+"""
 
 
 class Extractor:

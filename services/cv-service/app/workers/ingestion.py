@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from pydantic import ValidationError
 from app.domain.capabilities import effective_fingerprint
 from app.domain.errors import Conflict, CvError
-from app.domain.service import bump, now
+from app.domain.service import bump, now, PROCESSING_STAGES
 from app.domain.storage import UploadCapacity
 from app.domain.model_usage import ModelUsage, ModelAdmissionError
 from app.domain.extraction_errors import ExtractionFailure, StaleExtraction
@@ -83,7 +83,7 @@ class IngestionWorker:
             try: self.repository.replace(candidate, document)
             except Conflict: pass
             return None
-        operation.update(status='processing', attempt=operation['attempt'] + 1,
+        operation.update(status='processing', stage='source_read', attempt=operation['attempt'] + 1,
                          lease_token=str(uuid4()), lease_until=now() + self.settings.lease_seconds, error=None)
         bump(document, operational=True)
         try: return self.repository.replace(candidate, document)
@@ -98,6 +98,23 @@ class IngestionWorker:
         def observe(value):
             nonlocal stage
             stage = value
+            for _ in range(5):
+                current = self.repository.get(claimed['user_id'], claimed['_id'])
+                if (not current or current['operation']['lease_token'] != token
+                        or current['operation']['status'] != 'processing'
+                        or current['operation']['lease_until'] <= now()):
+                    raise StaleExtraction()
+                # Repair can revisit validation; never move the displayed progress backwards.
+                previous = current['operation'].get('stage', 'source_read')
+                if PROCESSING_STAGES[previous][0] >= PROCESSING_STAGES[value][0]: return
+                updated = deepcopy(current)
+                updated['operation']['stage'] = value
+                bump(updated, operational=True)
+                try:
+                    self.repository.replace(current, updated)
+                    return
+                except Conflict: continue
+            raise StaleExtraction()
 
         def remaining_time():
             current = self.repository.get(claimed['user_id'], claimed['_id'])
@@ -138,6 +155,7 @@ class IngestionWorker:
                 call_model, observe, verify_evidence=verify_evidence)
             result = harness.run(original)
             parsed, items, metadata = result['parsed'], result['items'], result['metadata']
+            observe('publication')
             error = None
         except StaleExtraction:
             return False

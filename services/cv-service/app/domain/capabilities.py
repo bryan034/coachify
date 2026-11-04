@@ -347,6 +347,15 @@ def effective_items(document):
                              support_uncertain=True)
         done.add(item['id'])
     for item in items: propagate(item)
+    # A declined question is a review disposition, not fabricated factual evidence.
+    # Rebuild from the durable skip receipt; corrections/reconciliation fence it.
+    for question in document.get('clarifications', []):
+        if (question.get('status') != 'skipped' or question.get('reconciliation_required')
+                or question.get('extraction_version') != document.get('extraction_version')): continue
+        item = by_id.get(question['item_id'])
+        if not item: continue
+        for target in question.get('_interview_targets', []):
+            item.setdefault('_review_skips', []).append({**target, 'status': 'reviewed_with_gaps', 'question_id': question['id']})
     for item in items:
         claims = list(item.pop('_claims').values())
         item.pop('_field_sequences', None)
@@ -492,6 +501,33 @@ def interpretation_semantic_checks(payload, question, item=None):
             refs.append({'block_id': block_id, 'excerpt': 'The latest statement refines the earlier account without contradiction, or explicitly corrects that earlier account.'})
             fields.append(('review-consistency', fact_key(data)))
     return blocks, refs, fields
+
+
+def validate_review_interpretation(payload, item, question):
+    """Review statements are user declarations, not claims to prove against a CV.
+
+    Topic admission happens in the interview router. Retain structural/source
+    checks here; the literal answer and prior CV remain in versioned history.
+    """
+    result = InterpretationOutput.model_validate(payload)
+    if result.item_id != item['id'] or result.answer_revision != question['answer_revision']:
+        raise ValueError('Interpretation refers to a different source or answer.')
+    claimed = [claim.skill_id for claim in result.claims]
+    if len(set(claimed)) != len(claimed):
+        raise ValueError('Interpretation duplicated a skill claim.')
+    for claim in result.claims:
+        if skill_id(claim.name) != claim.skill_id or len(set(claim.changed_fields)) != len(claim.changed_fields):
+            raise ValueError('Interpretation returned an invalid skill or field identity.')
+    facts = [fact_key(f.model_dump(mode='json')) for f in result.review_evidence]
+    if len(set(facts)) != len(facts):
+        raise ValueError('Interview evidence duplicated a field.')
+    if len({fact_key(f) for f in item.get('review_evidence', [])} | set(facts)) > 240:
+        raise ValueError('This experience has reached its review evidence limit.')
+    if set(result.resolved_uncertainties) & set(result.remaining_uncertainties):
+        raise ValueError('Interpretation returned conflicting uncertainty states.')
+    data = result.model_dump(mode='json')
+    data['summary'] = 'Updated your experience from your review answer.'
+    return data
 
 
 def validate_interpretation(payload, item, question, semantic_support=frozenset()):

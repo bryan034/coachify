@@ -64,6 +64,12 @@ def test_consistent_snapshot_pins_current_source_versions_and_personal_evidence(
     assert result['requirements'][0]['canonical_skill_id']=='language.python'
     assert result['evidence']['cv:item1:claim:0']['attribution']=='personal'
 
+def test_context_exposes_evidence_for_a_preview_without_a_model_call():
+    model=Interpreter()
+    with TestClient(create_app(MemoryStore(),Sources(),model)) as client:
+        response=client.get('/api/v1/assessments/context',headers=H);assert response.status_code==200,response.text
+    assert response.json()['evidence']['cv:item1:claim:0']['attribution']=='personal' and model.calls==0
+
 def test_explicit_partial_analysis_retry_replay_history_and_owner_isolation():
     sources=Sources();store=MemoryStore();model=Interpreter()
     with TestClient(create_app(store,sources,model)) as client:

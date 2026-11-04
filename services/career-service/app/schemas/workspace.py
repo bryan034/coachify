@@ -2,8 +2,8 @@
 from datetime import datetime
 from typing import Literal
 from app.schemas.providers import ResearchProvider
-from pydantic import Field
-from app.schemas.analysis import Contract,CareerGoal,DomainId,ResearchCoverage,Version
+from pydantic import Field,model_validator
+from app.schemas.analysis import Contract,CareerGoal,goal_skill_groups,DomainId,ResearchCoverage,Version
 from app.schemas.jd import JDReply
 
 class ReviewReference(Contract):
@@ -15,6 +15,13 @@ class CurrentCareerGoal(Contract):
     goal:CareerGoal|None
     dependent_results_need_review:bool=False
     review_selection:ReviewReference|None=None
+    # Display categories by skill name, derived on read. Kept off CareerGoal because its dump is
+    # stored and hashed for CV confirmation; see elo_shared.skill_groups.
+    skill_groups:dict[str,str]=Field(default_factory=dict)
+    @model_validator(mode='after')
+    def display_groups(self):
+        object.__setattr__(self,'skill_groups',goal_skill_groups(self.goal))
+        return self
 
 class WorkspaceView(Contract):
     session_id:DomainId|None

@@ -96,6 +96,10 @@ server activity, repair or quota status and a separate list of observed stages;
 these describe workflow progress, not private model reasoning. Temporary progress
 disappears once the summary arrives.
 
+The saved-goal overview shows skills in one card per category, using the backend's
+`current.skill_groups`. Importance (Required, Preferred and so on) is a label on each
+row, most important first, with any level the job states.
+
 The JD chat exposes saved role/skill/date details immediately after extraction,
 including while public research is running. API-boundary checks reject malformed
 nested responses before rendering; the combined summary waits for the linked
@@ -107,3 +111,7 @@ after goal saving, incorporating preceding replies and the latest goal version.
 Failed turns retain their own retry receipt and do not block following messages.
 Retrying preserves any newer unsent draft. Queued turns and transcript are lost on
 reload/navigation; failed or incomplete research is never presented as completed.
+
+## Skills needed and skills you have
+
+The saved goal lists the skills a role needs by the backend's categories, with jump links, importance tags and a count per category. When `GET /assessments/current` returns a fresh comparison, each skill also shows its result: in your profile, covered by an alternative, partly in your profile, not clear yet, or to build. This read never starts an analysis. With no fresh comparison, skills stay unmarked and the page points to Roadmap, which runs the comparison. A result reflects saved evidence, not proficiency, and missing proof is never shown as a gap.

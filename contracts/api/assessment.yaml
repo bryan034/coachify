@@ -846,6 +846,21 @@
             ],
             "title": "Research Coverage"
           },
+          "evidence": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
           "model_available": {
             "type": "boolean",
             "title": "Model Available"

@@ -4411,6 +4411,16 @@
       },
       "CvDetail": {
         "properties": {
+          "processing_progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcessingProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "profile_reviewed_effective_version": {
             "anyOf": [
               {
@@ -4500,6 +4510,20 @@
           "source_available": {
             "type": "boolean",
             "title": "Source Available"
+          },
+          "skill_groups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Skill Groups"
+          },
+          "skill_estimates": {
+            "items": {
+              "$ref": "#/components/schemas/SkillEstimate"
+            },
+            "type": "array",
+            "title": "Skill Estimates"
           },
           "other_information": {
             "items": {
@@ -4945,6 +4969,16 @@
       },
       "CvSummary": {
         "properties": {
+          "processing_progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcessingProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "profile_reviewed_effective_version": {
             "anyOf": [
               {
@@ -6673,6 +6707,13 @@
             ],
             "title": "Status"
           },
+          "topics": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewTopic"
+            },
+            "type": "array",
+            "title": "Topics"
+          },
           "reviewed_items": {
             "type": "integer",
             "title": "Reviewed Items"
@@ -6714,7 +6755,8 @@
               "skill_use",
               "recency",
               "frequency",
-              "limitations"
+              "limitations",
+              "replication_confidence"
             ],
             "title": "Field"
           },
@@ -6867,6 +6909,72 @@
           "evidence_refs"
         ],
         "title": "SkillEstimate"
+      },
+      "InterviewTopic": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "current",
+              "reviewed",
+              "reviewed_with_gaps",
+              "deferred"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "title": "InterviewTopic"
+      },
+      "ProcessingProgress": {
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "source_read",
+              "document_parse",
+              "model_request",
+              "extraction_validation",
+              "model_repair",
+              "publication",
+              "ready"
+            ],
+            "title": "Stage"
+          },
+          "percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Percent"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage",
+          "percent",
+          "message"
+        ],
+        "title": "ProcessingProgress"
       }
     },
     "securitySchemes": {

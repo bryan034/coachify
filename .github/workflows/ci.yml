@@ -79,7 +79,7 @@ jobs:
       - run: python -m pip install -e ../../packages/elo-shared -e '.[test]'
       - name: Verify shared API contracts and model transport
         if: matrix.service == 'assessment'
-        run: python -m pytest ../../packages/elo-shared/tests/test_api_contract.py ../../packages/elo-shared/tests/test_model.py ../../packages/elo-shared/tests/test_model_sdk.py
+        run: python -m pytest ../../packages/elo-shared/tests/test_api_contract.py ../../packages/elo-shared/tests/test_model.py ../../packages/elo-shared/tests/test_model_sdk.py ../../packages/elo-shared/tests/test_skill_groups.py
       - name: Provision Career tokenizer before test network isolation
         if: matrix.service == 'career'
         run: python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
@@ -96,12 +96,12 @@ jobs:
 
   profile-integration:
     name: Profile MongoDB integration
-    # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
+    # Runner pinned while MongoDB 8.0 rejected kernels >=6.19. mongo:8.2 starts on them; see docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     services:
       mongodb:
-        image: mongo:8.0
+        image: mongo:8.2
         ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
@@ -120,7 +120,7 @@ jobs:
 
   analysis-integration:
     name: Analysis MongoDB contracts (${{ matrix.service }})
-    # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
+    # Runner pinned while MongoDB 8.0 rejected kernels >=6.19. mongo:8.2 starts on them; see docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
@@ -131,7 +131,7 @@ jobs:
         service: [career, cv]
     services:
       mongodb:
-        image: mongo:8.0
+        image: mongo:8.2
         ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
@@ -156,7 +156,7 @@ jobs:
 
   local-ui-integration:
     name: Local UI and MongoDB integration
-    # MongoDB 8.0 rejects kernels >=6.19; Ubuntu 22.04 uses the 6.8 Azure kernel.
+    # Runner pinned while MongoDB 8.0 rejected kernels >=6.19. mongo:8.2 starts on them; see docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:

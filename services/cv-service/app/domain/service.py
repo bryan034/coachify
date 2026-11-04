@@ -12,6 +12,7 @@ from app.domain.storage import UploadCapacity
 from app.domain.answer_capacity import reserved_bytes, release as release_answer_capacity, CAPACITY_MESSAGE
 from app.domain.model_usage import ModelUsage
 from app.domain.deletion import CvDeletion
+from app.domain.baseline import baseline_estimates, visible_baseline_estimates
 
 
 HISTORY_LIMIT_BYTES = 12 * 1024 * 1024
@@ -35,9 +36,30 @@ def bump(document, visible=True, *, operational=False):
         raise CvError(CAPACITY_MESSAGE, 409)
 
 
+PROCESSING_STAGES = {
+    'queued': (0, 'Upload saved. Waiting to start.'),
+    'source_read': (10, 'Reading your saved file.'),
+    'document_parse': (25, 'Reading the document text.'),
+    'model_request': (45, 'Identifying your experience and skills.'),
+    'extraction_validation': (75, 'Checking extracted facts and source evidence.'),
+    'model_repair': (85, 'Refining details that need another check.'),
+    'publication': (95, 'Saving your CV review.'),
+    'ready': (100, 'Your CV is ready for review.'),
+}
+
+
+def processing_progress(operation):
+    status = operation['status']
+    stage = status if status in {'queued', 'ready'} else operation.get('stage', 'source_read')
+    percent, message = PROCESSING_STAGES.get(stage, PROCESSING_STAGES['source_read'])
+    return {'stage': stage, 'percent': percent,
+            'message': 'Processing paused. Retry to continue.' if status == 'failed' else message}
+
+
 def summary(document):
     operation = document['operation']
     return {'id': document['_id'], 'file_name': document['file_name'], 'display_name': document.get('display_name'), 'file_type': document['file_type'],
+        'processing_progress': processing_progress(operation),
         'status': operation['status'], 'operation_id': operation['id'], 'version': document['version'],
         'extraction_version': document['extraction_version'], 'effective_version': document['effective_version'],
         'profile_version': document['profile_version'],
@@ -50,6 +72,7 @@ def detail(document):
     items = effective_items(document)
     for item in items: item['source_fingerprint'] = source_fingerprint(item)
     return {**summary(document),
+        'skill_estimates': visible_baseline_estimates(baseline_estimates(items)),
         'other_information': document.get('other_information', []),
         'items': items, 'skills': skills_for(items), 'original_items': document['original_items'],
         'clarifications': document['clarifications'], 'extraction': document['extraction'],

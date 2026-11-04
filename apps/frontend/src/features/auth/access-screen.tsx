@@ -1,19 +1,18 @@
 "use client";
 import Link from 'next/link';
 import { BrandLogo } from '@/components/ui/brand-logo';
-import { JourneyVisual } from '@/components/ui/journey-visual';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useProfile } from '@/features/profile/profile-provider';
 import { ApiError, profileApi } from '@/lib/api/profile';
 import { GoogleSignIn } from '@/lib/auth/google-sign-in';
 export function AccessFrame({ children, entry = false }: { children: ReactNode; entry?: boolean }) {
- return <div className={`access-page${entry ? ' access-entry' : ''}`}>
+ return <div className={`access-page ${entry ? 'access-entry' : 'access-form-page'}`}>
   <a href="#access-content" className="skip-link">Skip to content</a>
   <header className="access-header"><Link href="/" className="brand" aria-label="Elo home"><BrandLogo/></Link><span className="access-header-note">Your career, moving forward.</span><Link href="/login" className="btn ghost">Sign in</Link></header>
   <main id="access-content" className="access-main" tabIndex={-1}>
    <section className="access-intro"><h1>A clearer path<br/>to your next<br/>career move.</h1><p>Bring your experience and ambitions together. Find a direction that feels like you.</p>{entry && <div className="entry-content">{children}</div>}</section>
-   {entry ? <JourneyVisual/> : <section className="access-card card">{children}</section>}
+   {!entry && <section className="access-card card">{children}</section>}
   </main>
   {entry && <section className="access-foundations" aria-label="Your career workspace"><div><span className="foundation-dot"/><div><h2>Start with you</h2><p>Your background, in one place.</p></div></div><div><span className="foundation-dot"/><div><h2>Find your direction</h2><p>Explore roles and set your career goal.</p></div></div><div><span className="foundation-dot"/><div><h2>Tell your story</h2><p>Upload and work through your CV.</p></div></div></section>}
   <footer className="access-footer"><span>Your next chapter starts here.</span><span>Built around your ambition.</span></footer>

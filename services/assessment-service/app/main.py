@@ -65,7 +65,7 @@ def create_app(store=None,upstream=None,model=None):
     @app.get('/api/v1/assessments/context',response_model=Context)
     async def context(request:Request,account=Depends(authenticated)):
         snapshot=await capture(app.state.upstream,account)
-        return {k:snapshot.get(k) for k in ('ready','issues','goal','cv','input_hash','inputs','research_coverage')} | {'model_available':app.state.model.configured}
+        return {k:snapshot.get(k) for k in ('ready','issues','goal','cv','input_hash','inputs','research_coverage','evidence')} | {'model_available':app.state.model.configured}
 
     @app.get('/api/v1/assessments/current',response_model=Current)
     async def current(request:Request,account=Depends(authenticated)):

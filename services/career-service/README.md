@@ -39,11 +39,11 @@ completion settings can still lower these budgets; agents never read/change them
 
 ## Canonical goal and chat — J02–J05 / J09
 
-- `GET /api/v1/career/workspace` returns one owner-scoped saved workspace; `/workspace/progress` supports lightweight polling.
+- `GET /api/v1/career/workspace` returns one owner-scoped saved workspace, with `current.skill_groups` mapping each goal skill to its display category; `/workspace/progress` supports lightweight polling.
 - `POST /api/v1/career/workspace/jd` starts or reconnects to versioned JD intake. A validated cloud identity overlaps full extraction with public-only retrieval; local R1 defers metadata and retrieval until full extraction. Successful extraction saves the goal; combined chat output waits for extraction and research to complete.
 - `POST /api/v1/career/workspace/summary` generates a concise Gemini overview from the saved goal and finished revision-linked research, including partial reports with explicit limitations. It supports the same owner-scoped background operations and snapshot retries.
 - `POST /api/v1/career/workspace/messages` asks scoped questions or refines the current goal. Ambiguous edits retain a private pending question; valid edits save with owner/version checks and retry receipts. While an edit is pending, clarification answers take precedence over direct public-question shortcuts; unrelated task execution remains refused.
-- `/api/v1/career/goals` and `/goals/current` expose canonical structured history/current state. Goals edit in place with versions. A replacement becomes current only after validated saving.
+- `/api/v1/career/goals` and `/goals/current` expose canonical structured history/current state; `/goals/current` includes the same `skill_groups` as the workspace. Goals edit in place with versions. A replacement becomes current only after validated saving.
 
 Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
 

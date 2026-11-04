@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { blankPlanner } from '../fixtures/roadmap-workspace';
 import { mockEmptyConversation } from '../fixtures/cv-ui';
 import { policy, emptyDeclarations } from '../fixtures/cv';
 
@@ -19,7 +20,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   if(url.pathname.endsWith('/profile/capabilities'))return route.fulfill({json:emptyDeclarations});
   if(url.pathname === '/api/v1/roadmaps/workspace') {
    expect(route.request().method()).toBe('GET');
-   return route.fulfill({json:{version:0,messages:[],operation:null,active:null,draft:null,assessment:null,stale:false,context:{ready:false,model_available:true,issues:[{source:'cv',message:'Upload, extract and select a CV before planning.',href:'/cv'},{source:'career',message:'Extract a Career goal before planning.',href:'/career-goal'}],planning_defaults:{application_date:null,weekly_hours:null,availability_periods:[]}}}});
+   return route.fulfill({json:{planner:blankPlanner(),version:0,messages:[],operation:null,active:null,draft:null,assessment:null,stale:false,context:{ready:false,model_available:true,issues:[{source:'cv',message:'Upload, extract and select a CV before planning.',href:'/cv'},{source:'career',message:'Extract a Career goal before planning.',href:'/career-goal'}],planning_defaults:{application_date:null,weekly_hours:null,availability_periods:[]}}}});
   }
   expect(url.pathname.startsWith('/api/v1/profile')).toBe(true);
   if (url.pathname.endsWith('/planning-inputs')) return route.fulfill({json:{profile_version:saved.version,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
@@ -50,12 +51,13 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.locator('[aria-label="Saved background"]')).toContainText('Design & Computing · Year 3');
  await page.reload();
  await expect(page.locator('[aria-label="Saved background"]')).toContainText('Synthetic College');
+ await page.screenshot({path:testInfo.outputPath('home-desktop.png'),fullPage:true});
  for (const [label,heading] of [['Roadmap','Roadmap'],['Skills Profile','Skills Profile'],['Search Jobs','Search Jobs'],['Chats & Socials','Chats & Socials'],['Calendar & Events','Calendar & Events']]) {
   const link=page.getByRole('navigation').getByRole('link',{name:label,exact:true});
   await link.click();
   await expect(link).toHaveAttribute('aria-current','page');
   await expect(page.getByRole('heading',{level:1,name:heading})).toBeVisible();
-  if(label==='Skills Profile'){await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveCount(0);}
+  if(label==='Skills Profile'){await page.screenshot({path:testInfo.outputPath('skills-desktop.png'),fullPage:true});await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveCount(0);}
   else if(label==='Search Jobs'){
    await expect(page.getByRole('textbox',{name:'Job title or keywords'})).toBeVisible();
    await page.getByRole('textbox',{name:'Job title or keywords'}).fill('Data analyst');
@@ -67,7 +69,8 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   }
   else if(label==='Roadmap') {
    await expect(page.getByRole('heading',{name:'Bring your starting point and direction'})).toBeVisible();
-   await expect(page.getByRole('textbox',{name:'Talk through your plan'})).toBeDisabled();
+   await page.getByRole('button',{name:'Start chat helper'}).click();
+   await expect(page.getByRole('textbox',{name:'Answer here'})).toBeDisabled();
    await expect(page.getByRole('button',{name:'Send message',exact:true})).toBeDisabled();
   } else await expect(page.locator('.feature-notice')).toContainText('Coming soon');
  }
@@ -78,18 +81,32 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.getByRole('navigation').getByRole('link',{name:'Skills Profile'}).click();
  await page.getByRole('button',{name:/Upload your CV/}).click();await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Room for your next steps'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'What elo will use'})).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/career-goal"]')).toBeVisible();
  await page.getByRole('tab',{name:'Starting point',exact:true}).click();
  await expect(page.getByRole('tabpanel',{name:'Starting point',exact:true})).toBeVisible();
  expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
  expect(apiCalls).toContain('/api/v1/cv/policy');
- // Mobile navigation and calendar scrolling stay inside their containers.
+ // The sidebar stays beside content, and mobile navigation expands on demand.
+ const sidebar = await page.locator('.side').boundingBox();
+ const main = await page.locator('main').boundingBox();
+ expect(sidebar!.x + sidebar!.width).toBeLessThanOrEqual(main!.x);
+ await expect(page.locator('.journey-visual, .path-mark')).toHaveCount(0);
+ await page.screenshot({path:testInfo.outputPath('sidebar-desktop.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
+ await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeHidden();
+ await page.getByRole('button',{name:'Menu',exact:true}).click();
+ await page.screenshot({path:testInfo.outputPath('sidebar-mobile.png'),fullPage:true});
+ await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Home',exact:true}).focus();
+ await page.keyboard.press('Escape');
+ await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeFocused();
  for(const label of ['Home','Skills Profile','Search Jobs','Chats & Socials','Calendar & Events']) {
+  await page.getByRole('button',{name:'Menu',exact:true}).click();
+  await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();
   await page.getByRole('navigation').getByRole('link',{name:label,exact:true}).click();
-  await expect(page.getByRole('navigation').getByRole('link',{name:label,exact:true})).toHaveAttribute('aria-current','page');
+  await expect(page.locator('.nav a[aria-current=page]')).toHaveText(label);
+  await expect(page.getByRole('button',{name:'Menu',exact:true})).toHaveAttribute('aria-expanded','false');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   if(label==='Search Jobs'){
    await page.getByRole('textbox',{name:'Job title or keywords'}).fill('Data analyst');

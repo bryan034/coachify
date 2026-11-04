@@ -56,7 +56,7 @@ class SkillsProfileRepository:
         timestamp = datetime.now(timezone.utc).isoformat()
         profile = SkillsProfile(version=previous.version + 1, status=request.status,
             saved_at=timestamp if request.status == 'saved' else previous.saved_at,
-            areas=request.areas, entries=request.entries).model_dump(mode='json')
+            areas=request.areas, entries=request.entries).model_dump(mode='json', exclude={'skill_groups'})
         declarations = deepcopy(account.get('capability_declarations', []))
         if request.status == 'saved':
             # Publish confirmed manual skills through the existing declaration authority.

@@ -52,14 +52,21 @@ class Model:
 app=create_app(model=Model())
 '''
 ROADMAP=r'''
+from datetime import datetime,timezone
 from app.main import create_app
+from app.schemas import ChatTurn
+BLOCKS=[{'day':2,'start_time':'19:00','duration_minutes':90,'kind':'preferred'},{'day':5,'start_time':'10:00','duration_minutes':120,'kind':'preferred'},{'day':6,'start_time':'09:00','duration_minutes':60,'kind':'backup'}]
 class Model:
  configured=True
- async def generate(self,schema,instructions,context):
-  return schema.model_validate({'reply':'Let us use your chosen days to practise explaining your existing API experience. This is a proposal you can edit.',
-   'preferences':{'start_date':'2030-01-07','target_date':'2030-02-01','weekly_minutes':180,'days':[{'day':0,'minutes':60},{'day':5,'minutes':120}]},
-   'task_changes':[{'id':'explain','title':'Explain API decisions','instructions':'Describe two trade-offs in your synthetic API project.','completion_outcome':'Write a concise explanation with two alternatives.','estimated_minutes':120,'rationale':'Build on declared Python experience.','requirement_refs':['job:req1'],'prerequisites':[],'milestone':'Explain your project','splittable':True}]})
-app=create_app(model=Model())
+ async def generate(self,schema,instructions,context,max_tokens=8192):
+  if schema is ChatTurn:
+   return schema.model_validate({'reply':'I added those to your settings. Review the panel, then press Generate.','settings':{'target_date':'2030-02-01','weekly_minutes':180,'blocks':BLOCKS,'blackouts':[{'frequency':'once','start_date':'2030-01-12'}]}})
+  return schema.model_validate({'summary':'Practise explaining your existing API experience.','gaps':[],
+   'milestones':[{'key':'explain','title':'Explain your API decisions','gap_ids':[],'prerequisite_keys':[],'estimated_minutes':120,'projected_start':'2030-01-09','projected_end':'2030-01-20','demonstrable_outcome':'A written explanation with two alternatives.'}],
+   'assignments':[{'key':'first','milestone_key':'explain','gap_id':None,'kind':'study','date':'2030-01-09','start_time':'19:00','duration_minutes':60,'task':'Describe two trade-offs in your synthetic API project.','completion_criterion':'Write a concise explanation with two alternatives.'}],
+   'deadline_outcome':{'summary':'You can explain your API decisions by the target date.','achievable_by_target':['A written explanation'],'fits_in_runway':True},'beyond_deadline':[],'exclusions':[]})
+# Wednesday 2030-01-09, 08:00 in Singapore: a partial first week with one blackout.
+app=create_app(model=Model(),clock=lambda:datetime(2030,1,9,0,0,tzinfo=timezone.utc))
 '''
 def port():
     with socket.socket() as s:s.bind(('127.0.0.1',0));return s.getsockname()[1]
@@ -91,25 +98,35 @@ def main():
             def read():
                 response=http.get('/api/v1/roadmaps/workspace');assert response.status_code==200,response.text;return response.json()
             state=read();assert state['context']['ready'] and not state['active']
-            body={'expected_version':state['version'],'mutation_id':str(uuid4()),'message':'I can do three hours on Mondays and Saturdays. Please propose a project explanation activity.','allow_partial_assessment':True}
+            def finish():
+                for _ in range(100):
+                    state=read()
+                    if (state['operation'] or {}).get('status') in ('succeeded','failed'):return state
+                    time.sleep(.1)
+                raise AssertionError('operation did not finish')
+            body={'expected_version':state['version'],'mutation_id':str(uuid4()),'message':'Three hours a week until 1 February, not on 12 January.','allow_partial_assessment':True}
             assert http.post('/api/v1/roadmaps/messages',json=body).status_code==202
-            for _ in range(100):
-                state=read()
-                if (state['operation'] or {}).get('status') in ('succeeded','failed'):break
-                time.sleep(.1)
-            assert state['operation']['status']=='succeeded',state['operation']
-            assert state['draft']['schedule']['status']=='feasible' and state['assessment']['research_coverage']=='unavailable'
+            state=finish();assert state['operation']['status']=='succeeded',state['operation']
+            runway=state['planner']['runway']
+            assert runway['can_generate'] and runway['weeks'][0]['partial'] and runway['weeks'][0]['usable_minutes']==90 and runway['study']['backup_extra_minutes']==60
+            assert state['planner']['inputs']['experience'] and not state['planner']['candidate']
+            body={'expected_version':state['version'],'mutation_id':str(uuid4()),'allow_partial_assessment':True}
+            assert http.post('/api/v1/roadmaps/planner/generate',json=body).status_code==202
+            state=finish();assert state['operation']['status']=='succeeded',state['operation']
+            assert state['planner']['candidate']['assessment']['research_coverage']=='unavailable'
             assert state['assessment']['job_skill_gaps'][0]['match_status']=='supported'
-            activate={'expected_version':state['version'],'mutation_id':str(uuid4())}
-            response=http.post('/api/v1/roadmaps/activate',json=activate);assert response.status_code==200,response.text;state=response.json()
-            identifier=state['active']['id'];task_id=state['active']['tasks'][0]['id']
-            assert http.post('/api/v1/roadmaps/activate',json=activate).json()['active']['id']==identifier
-            response=http.post('/api/v1/roadmaps/tasks/status',json={'expected_version':state['version'],'mutation_id':str(uuid4()),'task_id':task_id,'status':'completed'})
+            accept={'expected_version':state['version'],'mutation_id':str(uuid4())}
+            response=http.post('/api/v1/roadmaps/planner/accept',json=accept);assert response.status_code==200,response.text;state=response.json()
+            identifier=state['planner']['active']['id'];session=state['planner']['active']['assignments'][0]['id']
+            assert http.post('/api/v1/roadmaps/planner/accept',json=accept).json()['planner']['active']['id']==identifier
+            response=http.post('/api/v1/roadmaps/planner/assignments/status',json={'expected_version':state['version'],'mutation_id':str(uuid4()),'assignment_id':session,'status':'completed','evidence_note':'Explanation written.'})
             assert response.status_code==200,response.text
+            completed=response.json()['planner']['active']
             roadmap.terminate();roadmap.wait(timeout=10);start(ROADMAP,'roadmap',roadmap_port)
-            state=read();assert state['active']['tasks'][0]['status']=='completed' and len(state['messages'])==3
-            assert http.get('/api/v1/roadmaps/history/'+identifier,headers={'Authorization':'Bearer synthetic-other'}).status_code==404
-            print(json.dumps({'status':'passed','checks':['real cross-service HTTP snapshots','separate Assessment comparison','explicit partial research','daily allocation','reviewed activation','idempotent lost-response retry','task completion','MongoDB restart persistence','cross-owner history rejection']}))
+            state=read();assert state['planner']['active']==completed and state['planner']['active']['assignments'][0]['evidence_note']=='Explanation written.' and len(state['messages'])==2
+            assert http.get('/api/v1/roadmaps/history/'+completed['id']).json()['schema_version']=='roadmap-v2'
+            assert http.get('/api/v1/roadmaps/history/'+completed['id'],headers={'Authorization':'Bearer synthetic-other'}).status_code==404
+            print(json.dumps({'status':'passed','checks':['real cross-service HTTP snapshots','separate Assessment comparison','explicit partial research','chat-collected settings','calculated runway','validated timed plan','reviewed acceptance','idempotent lost-response retry','session completion and evidence','restart persistence','owner isolation','no external provider calls']}))
     finally:
         for process in processes:
             if process.poll() is None:process.terminate()

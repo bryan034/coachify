@@ -1200,6 +1200,11 @@ components:
           title: Declarations
         limits:
           $ref: '#/components/schemas/CapabilityLimits'
+        skill_groups:
+          additionalProperties:
+            type: string
+          type: object
+          title: Skill Groups
       type: object
       required:
       - user_id
@@ -2231,6 +2236,11 @@ components:
           type: array
           maxItems: 40
           title: Entries
+        skill_groups:
+          additionalProperties:
+            type: string
+          type: object
+          title: Skill Groups
       additionalProperties: false
       type: object
       title: SkillsProfile

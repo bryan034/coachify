@@ -51,3 +51,15 @@ def test_oversized_history_is_rejected_before_publication(store):
 def test_same_request_identity_cannot_rebind_an_immutable_result_to_different_inputs(store):
     store.save_result('owner',{'id':'result1','request_hash':'same','input_hash':'old'})
     with pytest.raises(Problem):store.save_result('owner',{'id':'result1','request_hash':'same','input_hash':'new'})
+
+
+def test_an_operation_can_request_a_longer_work_budget_without_changing_the_default():
+    from elo_shared.runtime import MemoryStore
+    class Body(BaseModel):
+        expected_version:int
+        mutation_id:str
+    store=MemoryStore()
+    row=begin(store,'owner',Body(expected_version=0,mutation_id='one'),'plan',330)
+    assert row['pending']['work_seconds']==330
+    store=MemoryStore()
+    assert 'work_seconds' not in begin(store,'owner',Body(expected_version=0,mutation_id='one'),'plan')['pending']

@@ -71,7 +71,10 @@
       "source_profile_version": null
     },
     "dependent_results_need_review": false,
-    "review_selection": null
+    "review_selection": null,
+    "skill_groups": {
+      "SQL": "Data & analytics"
+    }
   },
   "research_id": null,
   "research_version": null,

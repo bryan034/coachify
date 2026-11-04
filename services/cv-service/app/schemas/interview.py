@@ -18,6 +18,7 @@ class InterviewInterpretation(StrictModel):
 
 
 class InterviewTurn(ConversationRoute):
+    topic_relevant: bool = True
     intent: Literal['answer', 'side_question', 'stop', 'skip', 'change']
     memory_notes: list[ReviewQuote] = Field(default_factory=list, max_length=4)
     interpretations: list[InterviewInterpretation] = Field(default_factory=list, max_length=5)

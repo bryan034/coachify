@@ -1,3 +1,4 @@
+import {StrictMode} from 'react';
 import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {CvGoalConfirmationCard} from './cv-goal-confirmation';
@@ -14,6 +15,12 @@ it('requires an explicit confirmation of the current automatically saved revisio
  expect(confirmCvGoal).not.toHaveBeenCalled();expect(screen.getByText(/Your goal is saved automatically/)).toBeVisible();fireEvent.click(button);
  expect(await screen.findByRole('link',{name:'Review CV clarifications'})).toHaveAttribute('href','/cv');
  expect(confirmCvGoal).toHaveBeenCalledWith({expected_goal_id:goal._id,expected_goal_version:3,expected_selection_version:8,mutation_id:expect.any(String)},'owner-a',expect.any(AbortSignal));
+});
+it('does not show a cancelled status check as an error when its effect restarts',async()=>{
+ vi.mocked(getCvGoalConfirmation).mockImplementationOnce((_token,signal)=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('signal is aborted without reason')))));
+ render(<StrictMode><CvGoalConfirmationCard {...props()}/></StrictMode>);
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Confirm this goal for CV review'})).toBeEnabled());
+ expect(getCvGoalConfirmation).toHaveBeenCalledTimes(2);expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 it('restores confirmed status after returning without submitting again',async()=>{
  vi.mocked(getCvGoalConfirmation).mockResolvedValue(confirmed());render(<CvGoalConfirmationCard {...props()}/>);

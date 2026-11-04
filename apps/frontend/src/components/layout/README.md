@@ -1,12 +1,10 @@
 # layout
 
-`WorkspaceShell` provides the persistent desktop sidebar and a two-row mobile
-header with horizontally scrollable navigation. It uses the shared `BrandLogo`
-and the Elo visual tokens from `src/styles/elo-theme.css`. Account details and
-sign-out use the existing Profile provider; mobile keeps profile/sign-out controls
-above the navigation row.
+`WorkspaceShell` provides a persistent left sidebar on desktop and a Menu button
+that expands the same navigation above content on mobile. Selecting a link closes
+the mobile menu; Escape closes it and returns focus to Menu. Nested routes keep
+their parent navigation item active. CV review retains its focused full-screen layout.
 
-Skills Profile (`/cv`) and Search Jobs (`/jobs`) are separate main-navigation
-items. Skills Profile retains CV upload and skill/evidence extraction; the former
-Resume & Tracker combined label is removed. The navigation uses the same active-page
-and horizontally scrollable mobile behavior for both destinations.
+The sidebar uses `BrandLogo` and the Elo visual tokens in
+`src/styles/elo-theme.css`. Profile details and sign-out use the existing Profile
+provider. Skills Profile (`/cv`) and Search Jobs (`/jobs`) remain separate destinations.
