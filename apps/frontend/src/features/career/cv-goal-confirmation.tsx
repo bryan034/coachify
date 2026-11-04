@@ -11,9 +11,11 @@ export function CvGoalConfirmationCard({goal,selectionVersion,token,onReload,onC
  const matches=useCallback((value:CvGoalConfirmation)=>value.goal_id===goal._id&&value.goal_version===goal.version&&value.selection_version===selectionVersion,[goal._id,goal.version,selectionVersion]);
  const load=useCallback(async()=>{
   if(!token)return;setLoading(true);setError('');
-  try{const value=await getCvGoalConfirmation(token,lifetime.current.signal);if(lifetime.current.signal.aborted)return;setState(value);setStale(!matches(value));}
-  catch(cause){if(!lifetime.current.signal.aborted)setError(cause instanceof Error?cause.message:'Could not check this goal’s confirmation.');}
-  finally{if(!lifetime.current.signal.aborted)setLoading(false);}
+  // Check this request's own signal: the ref may already hold a newer controller after a restart.
+  const signal=lifetime.current.signal;
+  try{const value=await getCvGoalConfirmation(token,signal);if(signal.aborted)return;setState(value);setStale(!matches(value));}
+  catch(cause){if(!signal.aborted)setError(cause instanceof Error?cause.message:'Could not check this goal’s confirmation.');}
+  finally{if(!signal.aborted)setLoading(false);}
  },[token,matches]);
  useEffect(()=>{if(lifetime.current.signal.aborted)lifetime.current=new AbortController();void load();return()=>lifetime.current.abort();},[load]);
  useEffect(()=>{function refresh(){if(!saving&&document.visibilityState!=='hidden')void load();}window.addEventListener('focus',refresh);window.addEventListener('online',refresh);return()=>{window.removeEventListener('focus',refresh);window.removeEventListener('online',refresh);};},[load,saving]);
@@ -27,7 +29,7 @@ export function CvGoalConfirmationCard({goal,selectionVersion,token,onReload,onC
  }
  const confirmed=Boolean(state?.confirmed&&!stale),blocked=Boolean(!token||loading||saving||stale||!state||state.reason||goal.requirements_need_review);
  useEffect(()=>{onConfirmationChange?.(confirmed);},[confirmed,onConfirmationChange]);
- return <section className="card pad" aria-label="Goal confirmation for CV review" aria-busy={loading||saving}>
+ return <section className="card pad goal-confirmation" aria-label="Goal confirmation for CV review" aria-busy={loading||saving}>
   <h2>{confirmed?'Confirmed for CV review':'Review this goal before clarifying your CV'}</h2>
   <p className="small">Your goal is saved automatically. Confirm the displayed skills and requirements when you are ready to use them to focus CV questions. Changing this goal requires confirmation again.</p>
   {loading&&<p role="status">Checking your saved confirmation…</p>}

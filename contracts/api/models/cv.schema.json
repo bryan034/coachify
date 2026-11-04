@@ -949,6 +949,41 @@
       "title": "InterpretedDates",
       "type": "object"
     },
+    "ProcessingProgress": {
+      "properties": {
+        "stage": {
+          "enum": [
+            "queued",
+            "source_read",
+            "document_parse",
+            "model_request",
+            "extraction_validation",
+            "model_repair",
+            "publication",
+            "ready"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Percent",
+          "type": "integer"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "percent",
+        "message"
+      ],
+      "title": "ProcessingProgress",
+      "type": "object"
+    },
     "ReviewFact": {
       "additionalProperties": false,
       "properties": {
@@ -965,7 +1000,8 @@
             "skill_use",
             "recency",
             "frequency",
-            "limitations"
+            "limitations",
+            "replication_confidence"
           ],
           "title": "Field",
           "type": "string"
@@ -1283,6 +1319,57 @@
       "title": "SkillClaim",
       "type": "object"
     },
+    "SkillEstimate": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Item Id",
+          "type": "string"
+        },
+        "skill_name": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Skill Name",
+          "type": "string"
+        },
+        "level": {
+          "enum": [
+            "insufficient_evidence",
+            "guided_application",
+            "independent_application",
+            "complex_application"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "explanation": {
+          "maxLength": 800,
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "item_id",
+        "skill_name",
+        "level",
+        "explanation",
+        "evidence_refs"
+      ],
+      "title": "SkillEstimate",
+      "type": "object"
+    },
     "SkillSource": {
       "properties": {
         "item_id": {
@@ -1368,6 +1455,17 @@
     }
   },
   "properties": {
+    "processing_progress": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProcessingProgress"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "profile_reviewed_effective_version": {
       "anyOf": [
         {
@@ -1459,6 +1557,20 @@
     "source_available": {
       "title": "Source Available",
       "type": "boolean"
+    },
+    "skill_groups": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Skill Groups",
+      "type": "object"
+    },
+    "skill_estimates": {
+      "items": {
+        "$ref": "#/$defs/SkillEstimate"
+      },
+      "title": "Skill Estimates",
+      "type": "array"
     },
     "other_information": {
       "items": {

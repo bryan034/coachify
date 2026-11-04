@@ -6,9 +6,13 @@
 | CV | C01-C09, with C07 composition | Saved CVs, ingestion state, extracted facts/skills and bounded evidence, CV-specific correction/removal overlays, clarification questions/answers, processing operations, explicit saved-CV selection and private resumable CV conversations |
 | Career | J01–J13; G01–G07; SCRUM-282/310 | Canonical career_goals, one career_state workspace and CV confirmation stamp, public interview/opportunity research, workflow checkpoints and read-only assessment input exports; raw JD text stays transient |
 | Assessment | G01–G07 | Private immutable skill_gap_analyses, captured evidence/version vectors, comparison checkpoints and current result |
-| Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Consumed planning-input snapshots, milestones, tasks, progress history, proposed/applied revisions |
+| Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Study settings, consumed planning-input snapshots, milestones, timed sessions, progress history, self-reported outcomes and confirmations, proposed/applied revisions |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
 | Review | A01 orchestration; S01-S06 | Manual/scheduled review state, pace analysis, schedules, approval preferences |
+
+## Shared skill display categories
+
+`elo_shared.skill_groups` is the one classifier for skill display categories. CV, Profile and Career return its result as `skill_groups` on read responses; the frontend only displays it. Categories are never stored, hashed or used to compare skills, so changing them invalidates nothing. Use `canonical_skill_id` for identity.
 
 ## API dependencies
 
@@ -18,7 +22,7 @@
 - Career -> Profile: validate the account/session and completed onboarding.
 - Career -> CV: read owner-scoped saved metadata and effective evidence through the CV API; preserve CV identifiers and provenance in its internal projection. New Assessment comparison uses shared canonical identities and complete input revalidation; this Career CV projection remains a compatibility read.
 - Assessment -> Profile/CV/Career: authenticated source snapshots, current versions, effective evidence and owner-linked research; no foreign database reads.
-- Roadmap -> Assessment/Profile: comparison/context and baseline planning inputs; Roadmap owns plan-specific chosen days, proposed/active tasks and daily allocations.
+- Roadmap -> Assessment/Profile: comparison/context, an evidence preview and baseline planning inputs; Roadmap owns plan-specific study blocks, previews, active roadmaps and sessions.
 - Planned Career -> Profile: versioned background/planning inputs; manual additions use the Profile declaration API, while CV-specific corrections use CV.
 - Roadmap -> Assessment: source assessment ID/hash and freshness; immutable evidence remains addressable through the Assessment API.
 - Planned Roadmap -> Review: verify the current automatic-application policy.
@@ -33,7 +37,7 @@ owner context. This slice does not introduce that separate credential protocol.
 
 ## CV extraction runtime
 
-CV runs a transient LangGraph for parse/extract/validate and at most one source-grounded repair. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Extraction/repair and conditional semantic-evidence checks request schema-constrained output by default; formatting equivalence passes locally, and paraphrases need model approval against cited source blocks under the same budget/lease; backend evidence/date/length checks remain authoritative. Graph state has no checkpointer, external tracing or new collection. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
+CV runs a transient LangGraph for parse/extract/validate/prepare-review and at most one source-grounded repair. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Extraction/repair and conditional semantic-evidence checks request schema-constrained output by default; formatting equivalence passes locally, and paraphrases need model approval against cited source blocks under the same budget/lease; backend evidence/date/length checks remain authoritative. Graph state has no checkpointer, external tracing or new collection. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
 
 ## Saved CV deletion
 
@@ -181,3 +185,47 @@ questions and source-specific skill estimates before publication. User stop pres
 paused partial progress. No new service/collection, cross-database access or
 automatic practical assessment is introduced. Manual-only intake remains Profile-owned.
 See the [harness](../../services/cv-service/INTERVIEW.md).
+
+## Skills Profile review statements
+
+Uploaded-CV review treats relevant user statements as authoritative over CV/earlier
+facts at the same source/field/skill scope. The chat validates topic relevance and
+typed structure, with authenticated ownership, reference, capacity and CAS/lease
+fencing. It does not call the evidence-alignment verifier for review statements;
+extraction and legacy target-specific clarification retain their own checks.
+The original CV and literal answers remain in CV-owned history. Stable topic IDs
+and coverage stay in existing conversation memory; progress counts experiences
+needing clarification, with no new collection, dependency or service boundary.
+
+Uploaded-CV review limits each source topic to three issued questions, covering
+material ambiguity using the CV as context; scope, personal responsibilities and
+self-reported replication confidence are optional clarification areas. Counts
+rebuild from CV-owned question history across conversation segments. Confidence
+does not establish proficiency, and assistant prose omits internal evidence IDs;
+structured provenance remains CV-owned.
+
+A deterministic post-validation extraction graph node prepares review from validated
+CV facts. Interview context rebuilds the same ambiguity projection from effective
+evidence, including older saved CVs. Clear sources need no interview; uncertain
+personal/team responsibilities receive specific clarification. No new service,
+collection, provider call or cross-database dependency is introduced.
+
+CV baseline review evaluates source-specific project skill application from CV
+and review facts. One whole project/experience has a three-question budget; other
+projects retain independent budgets. CV detail derives `skill_estimates` on read
+with explicit insufficient evidence and no model call or separate skill store.
+This baseline does not create an Assessment result or assert practical mastery.
+
+The complete CV baseline projection and insufficient-evidence diagnostics remain
+CV-owned backend/planner data. Public CV/conversation projections expose only
+supported estimates; UI filters legacy entries too. Relevant responsibility and
+application gaps drive the three-question project budget, not a field checklist.
+
+CV keeps question skips as source-scoped uncertain review dispositions derived
+from its saved clarification receipts. Explicitly skipped/unknown ownership may
+close with gaps and never becomes verified competence. Failed-plan deferral is
+CV-conversation-owned, source-fenced and preserves saved answers while moving on.
+
+## Timed roadmap
+
+Roadmap runs Configure → Generate → Review. Assessment's `GET /context` additionally returns its evidence records, without a model call, so the settings panel can show what will be sent; generation still reuses or runs a full Assessment. Roadmap owns the deterministic runway calculation and plan validation. The LLM owns gaps, sequencing, effort and assignments within those checks. Session completion, self-reported outcomes and experience confirmations stay in Roadmap's `workspaces.planner` and `roadmaps`, and never write to Profile, CV or Assessment. No new service, collection or foreign database access is introduced. See the [Roadmap specification](../../services/roadmap-service/SPEC.md).

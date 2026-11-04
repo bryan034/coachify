@@ -70,12 +70,13 @@ traces are uploaded for seven days; use synthetic data because artifacts may con
 page content. Linting is not configured yet.
 
 MongoDB-backed jobs (`profile-integration`, `analysis-integration` and
-`local-ui-integration`) explicitly use `ubuntu-22.04`, whose hosted image uses
-the Linux 6.8 Azure kernel. MongoDB 8.0 refuses to start on affected kernels 6.19
-and newer, before test steps run; `ubuntu-latest` can introduce that incompatibility
-as hosted images change. Other jobs retain `ubuntu-latest`. This is a temporary
-compatibility pin: review it before Ubuntu 22.04 runner retirement, and move to a
-newer runner only after verifying its kernel with the MongoDB image. See the
+`local-ui-integration`) use `mongo:8.2` and explicitly use `ubuntu-22.04`, whose
+hosted image uses the Linux 6.8 Azure kernel. The pin dates from `mongo:8.0`, which
+refuses to start on kernels 6.19 and newer, before test steps run. `mongo:8.2` starts
+on those kernels locally, but newer runners are unverified. Other jobs retain
+`ubuntu-latest`. This is a temporary compatibility pin: review it before Ubuntu 22.04
+runner retirement, and move to a newer runner only after verifying its kernel with
+the MongoDB image. See the
 [runner image inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md).
 
 ## GitHub enforcement (repository administrator)
@@ -445,7 +446,7 @@ The integrated browser journey should save a canonical goal using synthetic fixt
 
 Use disposable databases and synthetic documents/accounts. Never mount a personal environment file into tests. One upstream public-template test has a narrow user-approved exception: run that exact test against a clean tracked public template in an isolated test copy. It does not authorize inspecting modified local examples or other environment files.
 
-On the observed Docker Desktop kernel, MongoDB 8 refused startup because of its known kernel compatibility guard. Isolated MongoDB 7 can establish functional repository behavior, but does not establish intended MongoDB 8 compatibility. MongoDB-backed CI uses a compatible pinned Ubuntu 22.04 runner. Report local functional checks, intended-version CI, browser fixtures and real-service journeys distinctly. Do not bypass the guard or change host settings as an incidental test repair.
+On Docker Desktop kernels 6.19 and newer, the `mongo:8.0` and `mongo:8.3` images refuse startup because of their kernel compatibility guard. Use `mongo:8.2`, the version the stack and CI run, for disposable test databases. Report local functional checks, intended-version CI, browser fixtures and real-service journeys distinctly. Do not bypass the guard or change host settings as an incidental test repair.
 
 The previous C-series captioned recording uses synthetic models and the pre-integration build. It is retained as a workflow reference, not proof of the merged Career confirmation flow or live-model accuracy. Re-record or exercise the integrated journey after the final code changes. Cost, latency, interpretation quality and comparative usability require separately authorized live-model/user evaluation.
 
@@ -460,11 +461,11 @@ PYTHONPATH=../../packages/elo-shared:. python -m pytest
 
 Repeat in `services/roadmap-service`. Shared runtime MongoDB race/recovery tests live under `packages/elo-shared/tests` and require an explicit disposable `MONGODB_TEST_URI`; they create/drop only uniquely named `elo_planning_test_*` databases. Never point these tests at application databases. Existing service tests also need the shared package installed or on `PYTHONPATH`. Career tests need a populated local `TIKTOKEN_CACHE_DIR` so synthetic provider checks never download encodings.
 
-New tests cover shared aliases, exact limitation/evidence references, complete requirement coverage, AND/OR rules, explicit partial research, source-change races, owner isolation, pending-operation restart recovery, idempotent lost-response retry, selected-day allocation/conservation, zero capacity, reduced periods, cycles, unsplittable work, proposal activation, stale proposal rejection and completion/definition history. Frontend tests cover input gates, next-message preservation, partial-analysis choice, old-account response isolation and exact retry identities. `roadmap.spec.ts` exercises chat, proposal activation, task completion/reload, evidence view, preference preview and desktop/mobile layout using synthetic HTTP fixtures.
+New tests cover shared aliases, exact limitation/evidence references, complete requirement coverage, AND/OR rules, explicit partial research, source-change races, owner isolation, pending-operation restart recovery, idempotent lost-response retry, runway capacity, plan validation, preview acceptance, stale preview rejection and session completion. Frontend tests cover input gates, next-message preservation, partial-analysis choice, old-account response isolation and exact retry identities. `test_planner_model.py` sends chat and plan requests through the real model client and OpenAI SDK with a mock transport. `test_planner_capacity.py`, `test_planner_validator.py` and `test_planner_flow.py` cover runway arithmetic, each validation rule and the full API flow with a scripted model and fixed clock: a partial first week, one-off and recurring blackouts and time slots, preferred and backup blocks, insufficient runway with a bounded retry, and a schedule change after a completed session. `roadmap-flow.test.tsx` covers the planner form, chat helper, blackout rules, gating, review and revision UI. `roadmap.spec.ts` exercises chat helper → planner → generate → review → accept → complete → revise and desktop/mobile layout using synthetic HTTP fixtures.
 
 Generated OpenAPI and result schemas must match the owning service models. Tests establish transport/domain behaviour, not the accuracy or usefulness of a live adviser. Use labelled representative CV/goal cases and separately authorised provider evaluation before making semantic-quality claims. Tests that read environment files must not run when the task prohibits that access.
 
-`infrastructure/testing/planner-smoke.py` starts the real Assessment and Roadmap HTTP applications with synthetic source APIs/model adapters against uniquely named disposable MongoDB databases. It checks cross-service capture, partial research, allocation, activation/replay, completion, process restart persistence and owner isolation, then removes its processes/databases. It requires the new service dependencies and an explicit disposable `MONGODB_TEST_URI`.
+`infrastructure/testing/planner-smoke.py` starts the real Assessment and Roadmap HTTP applications with synthetic source APIs/model adapters against uniquely named disposable MongoDB databases. It checks cross-service capture, partial research, chat-collected settings, runway, a validated timed plan, acceptance/replay, session completion, process restart persistence and owner isolation, then removes its processes/databases. It requires the new service dependencies and an explicit disposable `MONGODB_TEST_URI`.
 
 Assessment's `evaluate.py` is a separate paid-provider opt-in (`RUN_LIVE_ASSESSMENT_EVAL=1` plus an explicitly configured service key). It reports observed versus labelled outcomes for synthetic fixtures under `tests/fixtures/labelled-comparisons.json`; it does not read environment files. The small diagnostic set is not a representative accuracy benchmark. It has not been run as part of synthetic verification.
 
@@ -508,6 +509,4 @@ idempotent acknowledgement recovery and account CAS races against both memory an
 an explicitly supplied disposable MongoDB. CV tests cover target-independent basic
 review, manual field order, source/version changes, semantic positive/negative
 verdicts and safe legacy-conversation upgrades. Semantic tests use synthetic provider
-responses; no live-provider quality or job-fit accuracy is inferred. A local MongoDB
-7 result is functional persistence coverage, not MongoDB 8 compatibility when the
-host kernel prevents MongoDB 8 from starting.
+responses; no live-provider quality or job-fit accuracy is inferred.

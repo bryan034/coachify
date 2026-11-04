@@ -12,7 +12,7 @@ function publicReport(goalId:string,record:Json={},researchId='00000000000000000
  return {available:true,job_id:'synthetic-job',career_target_id:goalId,research_id:researchId,status:'completed',finished:true,categories,sources:record.sources||[],summary:record.intelligence?.summary||{},error_code:null,updated_at:'2026-10-28T00:00:00Z'};
 }
 function savedGoal(goal:Json):Json{return {company:null,location:null,seniority_level:null,job_url:null,interests:[],preferences:[],readiness:'pending',exploration_draft_id:null,exploration_draft_version:null,...goal};}
-function workspaceResponse(value:Json):Json{return {session_id:null,revision:0,kind:null,research_id:null,research_version:null,coverage:[],activities:[],error:null,retry_after:null,expires_at:null,exploration_id:null,...value,current:{selection_version:0,dependent_results_need_review:false,...value.current,goal:value.current?.goal?savedGoal(value.current.goal):null}};}
+function workspaceResponse(value:Json):Json{return {session_id:null,revision:0,kind:null,research_id:null,research_version:null,coverage:[],activities:[],error:null,retry_after:null,expires_at:null,exploration_id:null,...value,current:{selection_version:0,dependent_results_need_review:false,...value.current,goal:value.current?.goal?savedGoal(value.current.goal):null,skill_groups:Object.fromEntries((value.current?.goal?.skills||[]).map((skill:Json)=>[skill.name,skill.category]))}};}
 function goalResponse(review:Json){return {current:{goal:savedGoal({...review.extraction,_id:review.review_id,version:review.version,target_type:review.target_type||'specific_job',requirements_need_review:review.requirements_need_review||false})}};}
 function canonical(value:Json):Json{
  if(value.review?.extraction){

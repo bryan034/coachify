@@ -1,59 +1,140 @@
-import { test, expect } from '@playwright/test';
-import type { Workspace, Plan, Task } from '../../src/features/roadmap/types';
-function initial(): Workspace { return { version: 0, messages: [], operation: null, active: null, draft: null, assessment: null, stale: false,
- context: { ready: true, issues: [], model_available: true, research_coverage: 'no_findings', goal: { role: 'Backend developer', target_type: 'specific_job', job_dates: [{ kind: 'job_start', text: '1 April 2030', date: '2030-04-01', evidence: 'Start date: 1 April 2030.' }] }, cv: { id: 'synthetic-cv', name: 'synthetic-cv.docx' }, planning_defaults: { weekly_hours: 6, application_date: null, availability_periods: [] } } }; }
-function proposal(): Plan {
- const task: Task = { id: 'task1', title: 'Explain your API project decisions', instructions: 'Choose two decisions in your project. Explain the alternatives and why you chose your approach.', completion_outcome: 'Write a short explanation with two concrete trade-offs.', estimated_minutes: 120, rationale: 'Build on the Python and API experience you already declared.', requirement_refs: ['job:python'], prerequisites: [], milestone: 'Tell your project story', splittable: true, status: 'not_started' };
- const assessment = { id: 'assessment1', input_hash: 'source1', role: 'Backend developer', research_coverage: 'no_findings', job_skill_gaps: [{ ref: 'job:python', name: 'Explain project decisions', match_status: 'uncertain' as const, components: [{ dimension: 'independence', status: 'uncertain', explanation: 'Your project is described, but the decisions you personally made remain unclear.', evidence_refs: ['cv:project'] }] }], interview_prep_gaps: [], constraints: [], priorities: [], evidence: { 'cv:project': { name: 'Personal API project', text: 'I built a small API using Python.' } } };
- return { id: 'plan1', assessment_id: assessment.id, assessment_hash: assessment.input_hash, assessment, tasks: [task], preferences: { start_date: '2030-01-07', target_date: '2030-03-01', horizon_weeks: null, weekly_minutes: 360, days: [{ day: 0, minutes: 60 }, { day: 5, minutes: 300 }], max_session_minutes: 60, time_zone: 'Asia/Singapore', learning_preferences: 'Project-based learning', reduced_periods: [] }, exclusions: [], unaddressed_requirements: [], schedule: { status: 'feasible', issues: [], remainders: { task1: 0 }, allocations: [{ task_id: 'task1', date: '2030-01-07', minutes: 60, order: 0 }, { task_id: 'task1', date: '2030-01-12', minutes: 60, order: 1 }], milestones: [{ name: 'Tell your project story', task_ids: ['task1'], status: 'in_progress', target_date: '2030-01-12' }], remaining_minutes: 120, allocated_minutes: 120, available_minutes: 2400 } };
-}
-test('adviser chat, reviewed activation, edits, completion, reload and responsive plan', async ({ page }) => {
+import { test, expect, type Page } from '@playwright/test';
+import type { PlannedRoadmap, Workspace } from '../../src/features/roadmap/types';
+import { blankPlanner, config, review, roadmap, runway, workspace } from '../fixtures/roadmap-workspace';
+
+function initial(): Workspace { return workspace({ planner: { ...blankPlanner(), inputs: { goal: { role: 'Backend developer', target_type: 'specific_job', skills: [{ name: 'Python' }] }, cv: { id: 'synthetic-cv', name: 'synthetic-cv.docx' }, skills: [{ ref: 'cv:skill', name: 'Git', kind: 'skill', text: 'Used Git on a synthetic project.' }], experience: [{ ref: 'cv:project', name: 'Synthetic API project', kind: 'project', text: 'Built an API.' }], skill_groups: { Git: 'Tools' } } } }); }
+
+async function signIn(page: Page) {
  await page.addInitScript(() => { localStorage.setItem('elo.access-epoch', '1'); sessionStorage.setItem('elo.session', JSON.stringify({ token: 'synthetic-session', epoch: '1' })); });
  await page.route('**/api/v1/profile**', route => { const path = new URL(route.request().url()).pathname;
   return route.fulfill({ json: path.endsWith('/auth-config') ? { mode: 'email', google_enabled: false } : path.endsWith('/auth/session') ? { id: 'synthetic-owner', name: 'Synthetic User', email_verified: true, provider: 'email' } : { version: 1, onboarding_complete: true, occupational_status: 'employed', education: {} } }); });
- let state = initial(), generation = 0;
+}
+const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+
+test('chat helper fills the planner, then generate, review, accept, complete a session and revise with preview', async ({ page }) => {
+ await signIn(page);
+ let state = initial(), generations = 0, modelMessages = 0;
+ const firstPlan: PlannedRoadmap = roadmap();
+ const respond = (route: Parameters<Parameters<Page['route']>[1]>[0], body: unknown, status = 200) => route.fulfill({ status, json: body });
  await page.route('**/api/v1/roadmaps/**', async route => {
-  const path = new URL(route.request().url()).pathname;
-  if (route.request().method() === 'GET') return route.fulfill({ json: state });
-  const body = route.request().postDataJSON(); expect(body.expected_version).toBe(state.version); expect(body.mutation_id).toBeTruthy();
-  if (path.endsWith('/messages')) {
-   generation++; state = { ...state, version: state.version + 1, messages: [{ id: 'm1', role: 'user', content: body.message, created_at: '2030-01-01' }, { id: 'm2', role: 'assistant', content: 'You already have API experience. We could practise explaining two project decisions, keeping weekdays light. This is a proposal you can shape.', created_at: '2030-01-01' }], draft: proposal(), assessment: proposal().assessment, operation: { id: body.mutation_id, status: 'succeeded', stage: 'complete' } };
-   return route.fulfill({ status: 202, json: { version: state.version, operation: state.operation } });
+  const path = new URL(route.request().url()).pathname.replace('/api/v1/roadmaps', '');
+  if (route.request().method() === 'GET') return respond(route, state);
+  const body = route.request().postDataJSON();
+  if (path === '/planner/runway') { const usesBackup = body.config.use_backup; return respond(route, runway({ study: { preferred_minutes: 690, backup_extra_minutes: 120, usable_minutes: usesBackup ? 810 : 690 } })); }
+  expect(body.expected_version).toBe(state.version); expect(body.mutation_id).toBeTruthy();
+  if (path === '/messages') {
+   modelMessages++;
+   state = { ...state, version: state.version + 1, messages: [...state.messages, { id: `u${modelMessages}`, role: 'user', content: body.message, created_at: '2030-01-09' }, { id: `r${modelMessages}`, role: 'assistant', content: 'I added those to the planner. Please review it, then press Generate.', created_at: '2030-01-09' }], operation: { id: body.mutation_id, status: 'succeeded', stage: 'complete' }, planner: { ...state.planner, config: config(), config_saved: true, runway: runway() } };
+   return respond(route, { version: state.version, operation: state.operation }, 202);
   }
-  if (path.endsWith('/activate')) state = { ...state, version: state.version + 1, active: state.draft, draft: null };
-  if (path.endsWith('/tasks/status')) { state.version++; state.active!.tasks[0].status = body.status; state.active!.schedule.remaining_minutes = body.status === 'completed' ? 0 : 120; state.active!.schedule.status = body.status === 'completed' ? 'no_work' : 'feasible'; state.active!.schedule.milestones[0].status = body.status === 'completed' ? 'completed' : 'in_progress'; }
-  if (path.endsWith('/preferences')) { state.version++; state.draft = { ...state.active!, preferences: body.preferences }; }
-  return route.fulfill({ json: state });
+  if (path === '/planner/config') { state = { ...state, version: state.version + 1, planner: { ...state.planner, config: body.config, config_saved: true } }; return respond(route, state); }
+  if (path === '/planner/generate') {
+   generations++;
+   const done = state.planner.active?.assignments.find(a => a.status === 'completed');
+   const candidate = generations === 1 ? firstPlan : roadmap({ id: 'plan2', base_active_id: 'plan1', summary: 'Moved the next session to Thursday.', assignments: [...(done ? [done] : []), { ...firstPlan.assignments[0], id: 'a2', key: 'a2', date: '2030-01-10', start_time: '18:00', task: 'Add input validation to the endpoint.' }], changes: { completed_preserved: done ? 1 : 0, assignments_added: ['Add input validation to the endpoint.'], assignments_moved: [], assignments_removed: [], milestones_added: [], milestones_moved: [], milestones_removed: [] } });
+   state = { ...state, version: state.version + 1, operation: { id: body.mutation_id, status: 'succeeded', stage: 'complete' }, assessment: candidate.assessment, planner: { ...state.planner, candidate, candidate_review: review(candidate) } };
+   return respond(route, { version: state.version, operation: state.operation }, 202);
+  }
+  if (path === '/planner/accept') { const active = state.planner.candidate!; state = { ...state, version: state.version + 1, planner: { ...state.planner, active, active_review: review(active), candidate: null, candidate_review: null, signals: [] } }; return respond(route, state); }
+  if (path === '/planner/assignments/status') {
+   const active = { ...state.planner.active!, assignments: state.planner.active!.assignments.map(a => a.id === body.assignment_id ? { ...a, status: body.status, evidence_note: body.evidence_note, completed_at: '2030-01-09T12:00:00+00:00' } : a) };
+   state = { ...state, version: state.version + 1, planner: { ...state.planner, active, active_review: { ...review(active), next_assignment_id: null }, signals: [{ kind: 'progress', message: 'You’ve completed 1 session(s) since this roadmap was prepared.' }] } };
+   return respond(route, state);
+  }
+  return respond(route, state);
  });
+
  await page.goto('/roadmap');
- await expect(page.getByRole('heading', { name: 'Your career adviser' })).toBeVisible();
- await expect(page.getByText('Room for your next steps')).toBeVisible(); expect(generation).toBe(0);
- await page.getByRole('textbox', { name: 'Talk through your plan' }).fill('I have six hours a week. Keep weekdays light and use Saturday.');
- await page.getByRole('button', { name: 'Send message' }).click();
- await expect(page.getByRole('log')).toContainText('You already have API experience');
- await expect(page.getByRole('button', { name: 'Start this plan' })).toBeVisible();
- await page.getByRole('button', { name: 'Start this plan' }).click();
- await expect(page.getByText('Your active plan', { exact: true })).toBeVisible();
- await page.getByLabel('Focus date').fill('2030-01-07');
- await expect(page.getByLabel('Daily workload')).toContainText('Mon');
- await page.getByRole('tab', { name: 'Starting point' }).click();
- await page.locator('.assessment-view summary').click();
- await expect(page.getByText('I built a small API using Python.', { exact: false })).toBeVisible();
- await page.getByRole('tab', { name: 'Your plan', exact: true }).click();
- await page.locator('details.plan-task summary').click();
- await page.getByRole('button', { name: 'Mark complete' }).click();
- await expect(page.getByRole('button', { name: 'Reopen as not started' })).toBeVisible();
- await expect(page.getByLabel('Daily workload')).toContainText('No activities allocated in this period.');
- await page.reload(); await expect(page.getByText('Your active plan', { exact: true })).toBeVisible();
- await page.getByRole('button', { name: 'Adjust time and days' }).click();
- const dialog = page.getByRole('dialog'); await expect(dialog).toBeVisible(); await expect(page.getByLabel('Start preparing')).toBeFocused();
- await page.getByLabel('Weekly budget in hours').fill('7');
- await page.getByRole('button', { name: 'Preview schedule' }).click();
- await expect(page.getByRole('button', { name: 'Apply these changes' })).toBeVisible();
- await page.screenshot({ path: test.info().outputPath('roadmap-desktop.png'), fullPage: true });
+ await expect(page.getByRole('heading', { name: 'What elo will use' })).toBeVisible();
+ await expect(page.getByRole('heading', { name: 'Your chat helper' })).toHaveCount(0);
+ const beside = async () => (await page.getByRole('region', { name: 'Your runway' }).boundingBox())!.x > (await page.locator('legend', { hasText: 'Timeline' }).boundingBox())!.x + 200;
+ await page.setViewportSize({ width: 1920, height: 1080 });
+ expect(await page.locator('.roadmap-main').evaluate(el => innerWidth - el.getBoundingClientRect().right)).toBeLessThanOrEqual(64);
+ expect(await beside()).toBe(true);
+ await page.screenshot({ path: test.info().outputPath('roadmap-planner-wide.png'), fullPage: true });
+ await page.setViewportSize({ width: 1280, height: 900 });
+ expect(await beside()).toBe(true);
+ await page.screenshot({ path: test.info().outputPath('roadmap-planner.png'), fullPage: true });
  await page.setViewportSize({ width: 390, height: 844 });
- expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
- await expect(page.getByRole('textbox', { name: 'Talk through your plan' })).toBeVisible();
- await page.screenshot({ path: test.info().outputPath('roadmap-mobile.png'), fullPage: true });
- expect(generation).toBe(1);
+ expect(await noOverflow(page)).toBe(true);
+ await page.setViewportSize({ width: 1280, height: 900 });
+ await expect(page.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
+ expect(generations).toBe(0);
+
+ await page.getByRole('button', { name: 'Start chat helper' }).click();
+ await expect(page.getByRole('heading', { name: 'When would you like to be ready?' })).toBeVisible();
+ expect(await beside()).toBe(false);
+ await expect(page.getByRole('button', { name: 'Send message' })).toBeInViewport({ ratio: 1 });
+ await page.getByRole('textbox', { name: 'Answer here' }).fill('Five hours a week until 27 January, with Sunday as backup.');
+ await page.getByRole('button', { name: 'Send message' }).click();
+ await expect(page.getByRole('log')).toContainText('I added those to the planner');
+ await expect(page.getByLabel('Target date')).toHaveValue('2030-01-27');
+ await page.screenshot({ path: test.info().outputPath('roadmap-helper.png'), fullPage: false });
+ await page.setViewportSize({ width: 390, height: 844 });
+ expect(await noOverflow(page)).toBe(true);
+ await page.screenshot({ path: test.info().outputPath('roadmap-helper-mobile.png') });
+ await page.getByRole('button', { name: 'Close chat helper' }).click();
+ await page.getByRole('button', { name: 'Add blackout' }).click();
+ const blackout = page.getByRole('group', { name: 'Blackout 2' });
+ await blackout.getByLabel('Blackout 2 repeats').selectOption('monthly');
+ await blackout.getByLabel('Blackout 2 all day').uncheck();
+ await expect(blackout).toContainText('18:00–20:00');
+ expect(await noOverflow(page)).toBe(true);
+ await page.screenshot({ path: test.info().outputPath('roadmap-blackout-mobile.png'), fullPage: true });
+ await blackout.getByRole('button', { name: 'Remove blackout 2' }).click();
+ await page.setViewportSize({ width: 1280, height: 900 });
+ const runwaySection = page.getByRole('region', { name: 'Your runway' });
+ await expect(runwaySection).toContainText('2 weeks, 5 days');
+ await expect(runwaySection).toContainText('+2 h (not enabled)');
+ await page.getByRole('checkbox', { name: 'Allow backup blocks when preferred time runs out' }).check();
+ await expect(runwaySection).toContainText('13.5 h');
+ await page.screenshot({ path: test.info().outputPath('roadmap-configure.png'), fullPage: true });
+
+ await page.getByRole('button', { name: 'Generate roadmap' }).click();
+ await expect(page.getByText('Preview: not active until you accept it')).toBeVisible();
+ const timeline = page.getByRole('region', { name: 'Milestone timeline' });
+ await expect(timeline).toContainText('Sun, 27 Jan 2030');
+ await expect(page.getByRole('heading', { name: 'Beyond your deadline' })).toBeVisible();
+ await expect(page.getByRole('region', { name: 'Where you are now' })).toContainText('Wed, 9 Jan 2030, 19:00–20:00');
+ await page.screenshot({ path: test.info().outputPath('roadmap-review.png'), fullPage: true });
+ await page.setViewportSize({ width: 390, height: 844 });
+ expect(await noOverflow(page)).toBe(true);
+ await page.screenshot({ path: test.info().outputPath('roadmap-review-mobile.png'), fullPage: true });
+ await page.setViewportSize({ width: 1280, height: 900 });
+
+ await page.getByRole('button', { name: 'Back to configuration' }).click();
+ await expect(page.getByRole('heading', { name: 'Your runway' })).toBeVisible();
+ await page.setViewportSize({ width: 390, height: 844 });
+ expect(await noOverflow(page)).toBe(true);
+ await page.setViewportSize({ width: 1280, height: 900 });
+ await page.getByRole('button', { name: 'Return to roadmap' }).click();
+ await page.getByRole('button', { name: 'Accept plan' }).click();
+ await expect(page.getByText('Your active roadmap')).toBeVisible();
+
+ await page.getByText('Mark session complete').click();
+ await page.getByRole('textbox', { name: 'What did you produce? (optional)' }).fill('The endpoint test passes.');
+ await page.getByRole('button', { name: 'Complete session' }).click();
+ await expect(page.getByRole('heading', { name: 'Completed sessions' })).toBeVisible();
+ await expect(page.getByText('Your note: The endpoint test passes.')).toBeVisible();
+ await expect(timeline).toContainText('Outcome not yet demonstrated.');
+
+ await page.reload();
+ await expect(page.getByText('Your active roadmap')).toBeVisible();
+ await page.getByRole('button', { name: 'Change settings' }).click();
+ await page.getByLabel('Weekly budget in hours').fill('4');
+ await expect(page.getByRole('button', { name: 'Save settings' })).toBeVisible();
+ await page.getByRole('button', { name: 'Preview updated roadmap' }).click();
+ const changes = page.getByRole('region', { name: 'What this preview changes' });
+ await expect(changes).toContainText('1 completed session stays exactly as recorded.');
+ await expect(changes).toContainText('Add input validation to the endpoint.');
+ await expect(page.getByText('Your note: The endpoint test passes.')).toBeVisible();
+ expect(state.planner.active!.id).toBe('plan1');
+ await page.getByRole('button', { name: 'Accept plan' }).click();
+ await expect(page.getByText('Moved the next session to Thursday.')).toBeVisible();
+
+ await page.getByRole('button', { name: 'Continue with chat helper' }).click();
+ await expect(page.getByRole('textbox', { name: 'Ask for a change' })).toBeVisible();
+ await page.setViewportSize({ width: 390, height: 844 });
+ expect(await noOverflow(page)).toBe(true);
+ expect(generations).toBe(2);
 });

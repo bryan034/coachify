@@ -1,4 +1,4 @@
-# Personal career adviser — Roadmap
+# Roadmap
 
 Provider configuration: the service now reads its own `*_LLM_BASE_URL`,
 `*_LLM_MODEL`, `*_LLM_API_KEY` and `*_LLM_ALLOW_HTTP`. HTTPS is required outside
@@ -10,49 +10,73 @@ serialize per service instance and use a 180-second HTTP timeout; operations use
 600-second budgets and 630-second leases. Cloud limits remain unchanged.
 
 
-## Product direction — 30 October 2026
+## Product direction — 4 November 2026
 
-The user's revised flow supersedes mandatory application-date-only planning, equal-seven-day capacity, automatic exhaustive learning plans and a separate assessment screen. One persistent adviser conversation and its plan share `/roadmap`. The user chooses the pace, priorities, scope and learning approach. The LLM offers direction/recommendations based on declared skills and availability; it does not enforce a prescribed career path. Dated preparation targets and explicitly chosen ongoing horizons are supported. Assessment is a separate service feeding this page.
+The timed roadmap supersedes the 30 October chat-first direction and its "no exact time slots" limit. `/roadmap` is now Configure → Generate → Review. Configure is a fixed planner form. A button opens an optional chat helper, which guides the user through the required details and fills in the form; after a plan exists, the same helper requests edits. A selected, extracted CV and a Career goal are both required, and Assessment runs before planning.
 
-Jira references: G01/SCRUM-34, R01/SCRUM-41, R02–R09/SCRUM-42–49, E01–E07/SCRUM-50–56 and T01–T06/SCRUM-57–62. Retain existing identifiers/hierarchy/statuses. User-selected weekdays replace R07's hours/7 scheduling assumption for this planner; existing Profile planning APIs retain their historical semantics.
+Jira references: G01/SCRUM-34, R01/SCRUM-41, R02–R09/SCRUM-42–49, E01–E07/SCRUM-50–56 and T01–T06/SCRUM-57–62. Retain existing identifiers/hierarchy/statuses. These stories were not re-read for this slice because Jira was not accessible; check them for conflicts.
 
 ## Flow
 
-1. Authenticate through Profile and require completed onboarding. Check selected ready CV and generated Career goal through Assessment's APIs. Missing extraction/selection provides source links; service failure is separate from missing input.
-2. Opening performs read-only restoration. The first user message starts or reuses Assessment. Unavailable/stale/partial interview research needs an explicit partial-analysis choice. An all-uncertain assessment remains valid.
-3. Adviser reads source-linked outcomes, current goal/date evidence, current plan and latest twelve messages (labelled history window). Persistent structured choices retain earlier preferences. It asks gradually about start, readiness target or ongoing horizon, weekly hours, chosen days, session length and learning preferences. Saved Profile values are suggestions; plan-specific choices do not silently rewrite baseline Profile planning inputs.
-4. Career-owned job dates distinguish application, interview and job start. Only exact source date text/evidence enters the goal. Full recognised dates normalize; partial/ranged/relative wording stays text with no invented day/year. Recommend an appropriate preparation target, leaving the choice to the user. Older goals have no backfilled dates because raw JDs are not retained.
-5. LLM replies propose only changed/new activity definitions and preference changes. Python assigns task IDs and preserves unrelated tasks, statuses, removal history and user overrides. Each activity has concrete instructions, a completion outcome, positive integer-minute estimate, rationale, source links or explicit personal-development scope, prerequisites and optional milestone. Estimated hours display from the same stored minutes. Removing tasks/excluding scope through chat needs an exact quote from the current user request. Proposals may be edited/discarded; active plans remain intact until Start/Apply.
-6. Every proposal is scheduled deterministically. Users inspect fit, unallocated effort, dependencies and milestones beside the chat. Completing a task is self-declared progress, never a new skill assertion. Missed work is retained; rescheduling requires a reviewed proposal.
+1. **Configure.** The planner form has fixed sections: Timeline and Study time (required), Blackout days and times, and Learning focus (optional). It is the confirmed record and shows the goal and skills sent to the model. The chat helper asks for whatever `runway.issues` reports as missing (`missing_target`, `no_budget`, `no_blocks`), then offers the optional details once. It proposes settings through a validated patch; an invalid patch changes nothing and is explained. Chat never starts generation.
+2. **Runway.** `POST /planner/runway` calculates calendar time and usable hours without a model call. Generation is disabled, with reasons, when the goal or CV is missing, dates are invalid, no usable time exists or the model is unavailable. Incomplete interview research needs the existing explicit partial choice.
+3. **Generate.** One durable operation reuses or runs Assessment, then asks the model for a structured `PlanDraft`, validates it and stores it as a candidate. Reads make no model calls. Stages are `assessing`, `writing` and `correcting`.
+4. **Review.** Shows the next assignment, remaining calendar time and study hours, a milestone timeline with a target-date marker, the projected outcome, work beyond the deadline, gaps and confirmation questions. The user accepts, or returns to configuration with the candidate retained.
+5. **Revise.** Reads report signals for changed settings, progress, evidence or a finished week. The user requests a preview, from a button or the chat helper, and nothing applies until accepted.
 
-## Calendar and scheduling
+## Capacity (`app/planning/capacity.py`)
 
-Dates use a captured IANA time zone, initially Asia/Singapore. Workload dates contain no fixed clock times. Weekdays are Monday=0 through Sunday=6. User-selected daily minute budgets may not exceed the weekly budget; no work is allocated on unchosen/zero-capacity days. Profile reduced-period rates scale daily budgets proportionally to the declared plan weekly budget, never increasing capacity. The target date is an exclusive cutoff; an ongoing horizon ends at start + selected weeks. Maximum scheduling horizon is one year.
+This module is the only source of runway numbers; the frontend displays its results.
 
-Allocate tasks in a stable prerequisite order. Splittable tasks retain one identity across positive segments no longer than the chosen session limit. Same-day dependencies have explicit predecessor-before-dependent order. Unsplittable tasks need a whole fitting session; otherwise they remain unscheduled. Never shrink estimates to fit. Missing/cyclic/removed/unscheduled prerequisites block dependent allocations while independent work may proceed. Allocated minutes plus explicit remainder conserve each unfinished task estimate. At most 10,000 allocation segments are retained per proposal; any excess work remains explicitly unscheduled. A found schedule is labelled feasible; failure to allocate is partial, not proof that every possible schedule is infeasible. No-work results contain no filler.
+- The range is start date through target date, both inclusive. The target is the last study day. It must follow the start date, within one year.
+- Weeks run Monday to Sunday in the user's IANA time zone. Dates are real dates, so a partial week has no proration and still has the weekly cap.
+- A date is available only inside its blocks. Overlaps merge per date, so they count once, and preferred time takes precedence over backup. Blackouts, time already passed today, local minutes skipped by daylight saving and completed sessions are removed. Repeated local hours count once.
+- A week's usable time is `min(cap - completed minutes, merged minutes)`. Preferred time, extra backup capacity and usable time under the current toggle are reported separately.
+- A duration resolves to a target date, with months clamped to the month's end. The target is authoritative for planning; a matching duration is reported so both controls stay synchronised.
 
-Plan-specific preferences remain in Roadmap. Profile retains application-date/normal-capacity/reduced-period defaults and its own revisions. Each plan pins Assessment ID/hash and its captured preferences. Capability/goal changes need reassessment; a stale active plan remains readable. The current implementation conservatively revalidates Profile version as well, which can require reassessment after baseline planning changes.
+Non-zero Profile reduced periods appear as a notice and do not change capacity. Zero-hour periods can be added as a daily blackout over that range.
 
-## Proposals, edits and progress
+### Blackouts
 
-A draft pins its base active plan identity. Task edits/completion after a proposal invalidate activation of that old proposal; discard and rebuild it to preserve newer work. Apply rechecks source freshness and active identity. Old plan revisions remain immutable and owner-scoped. A new active snapshot never reuses a similarly named task from another source.
+`config.blackouts` holds rules, each a whole day or a time slot, tested against real local dates:
 
-Direct edits preserve existing allocations; show missing/excess allocation, dependency and milestone review reasons rather than silently redistributing other tasks. Completed-task definition changes retain earlier completion and definition snapshots and flag review. Start and repeated completion are idempotent; explicit reopen selects not-started or in-progress. Starting is not a timer; completion records no fabricated actual effort. Removal retains the task record/history and marks dependent/milestone implications. Empty or unresolved milestones cannot complete through deletion alone. Generated milestone completion derives from all current required task states.
+- `once` applies on `start_date`. `daily`, `weekly` and `monthly` repeat from `start_date` until the optional `end_date`, every `interval` days, weeks or months.
+- `weekly` applies on `weekdays` (Monday 0), counting intervals from the Monday-to-Sunday week of `start_date`. `monthly` applies on the day of `start_date`, or the last day of a shorter month.
+- `start_time` and `end_time` limit a rule to a slot on the same day; both empty means all day. `23:59` means through midnight. An overnight blackout needs two rules.
+- A slot removes only its overlap from a study block. A rule that cannot apply (ends before it starts, has one time, has a slot that doesn't end after it starts, or is weekly with no weekdays) removes nothing and is reported as a `blackout_invalid` runway issue, which blocks generation. A chat patch containing one changes nothing.
+- Saved `blackout_dates` are read as `once` rules without a migration, and that format change is not reported as a settings change.
 
-The UI supports chat, task definition/effort editing, personal activities, requirement links, prerequisites, day budgets, proposal application/discard, start/complete/reopen, and daily/weekly/monthly inspection. Factual capability corrections route back to CV/Profile; chat does not become another capability store.
+## Model ownership and validation
+
+The model owns gaps, priorities, prerequisite order, effort, milestones, assignments and the deadline outcome. It receives the goal, Assessment outcomes and evidence, completed work, self-reported confirmations, settings, exact windows for the first planning week and per-week capacity for the rest. The first planning week is the first Monday-to-Sunday week with usable capacity.
+
+`app/planning/validator.py` returns every error, and the errors plus the rejected output go back to the model, for at most three attempts in total. A failure leaves the active plan, any earlier candidate and settings unchanged. Checks:
+
+- **Assignments:** first-week dates, inside one eligible window, no overlap, not overlapping a blackout, not past and not after the target, within the week's remaining budget, and a known milestone. Backup needs permission and no free preferred window that could hold the session.
+- **Milestones:** unique keys, valid windows inside the runway, known acyclic prerequisites finishing first, assignment minutes within effort, and retained if they have completed sessions. For every date range, the remaining effort of milestones wholly inside it must fit usable capacity.
+- **Gaps:** `confirmed_gap` needs an Assessment `confirmed_shortfall` or a self-reported "no experience". `uncertain` and `partial` are `unknown`. Supported requirements, satisfied alternatives and non-learning constraints are not study gaps. Inferred requirements are labelled, explained and `unknown` unless the user says otherwise. A material unknown needs a diagnostic of at most 30 minutes or a confirmation question.
+- **Coverage:** every Assessment priority is in a milestone, in `beyond_deadline`, or excluded with an exact quote from the current user message. `fits_in_runway` is false exactly when work remains beyond the deadline.
+
+## Proposals, progress and evidence
+
+A candidate pins its base active plan, settings and inputs. Accept is rejected if the active plan, settings or inputs changed, or a session has passed. Completed sessions and their evidence notes are copied unchanged into each revision and keep their time slots.
+
+Session completion, self-reported milestone outcomes and experience confirmations stay in Roadmap and never write to Profile, CV or Assessment. None of them establishes proficiency. Factual corrections belong in Skills Profile.
 
 ## Persistence and recovery
 
-`workspaces` is a private operational owner document containing chat, active/draft snapshots, receipts and one leased operation. Immutable committed plan snapshots live in `roadmaps`. One database serves users through owner-scoped records; no per-user database is created. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Each active-plan change saves history before pointer CAS; request-bound insert recovery returns the same committed snapshot. Current reads do not accidentally select the newest unapproved candidate.
+`workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.
 
-Messages save before model work. Compact `/progress` polling reads only revision and operation metadata, without loading chat, plan or source evidence. Content reloads only when an operation completes or fails. Provider retry delays are persisted and cannot be bypassed with a new message key. Retry keeps the original message identity and adds no duplicate user turn. Durable source assessment operations are reused on retry/restart. Expired leases resume on authenticated reconnect; bearer tokens never enter MongoDB. Session/source checks fence publication. Failure retains saved chat and the earlier active plan. History is bounded to 300 messages, 1,000 operation receipts and 4 MiB/workspace; reaching capacity is explicit and leaves saved data readable. Continuation/archive UI is not implemented.
+Messages save before model work. Compact `/progress` polling reads only revision and operation metadata. Provider retry delays persist. Expired leases resume on authenticated reconnect, and bearer tokens never enter MongoDB. Source and session checks fence publication. If source freshness is unavailable, saved chat and plans stay readable and progress can be recorded, but new plans and accepting a preview wait. History is bounded to 300 messages, 1,000 operation receipts and 4 MiB per workspace.
 
-Frontend data/drafts stay in account-keyed React memory; logout/account switch clears private display and ignores late old-account responses. Unknown save outcomes retry the original mutation before creating another change. Same-account unsent drafts survive ordinary polling but not browser refresh. If Assessment/CV/Career source freshness is unavailable, authenticated users can still read saved chat/plans and record their own task progress. The UI labels freshness unavailable; new advice and proposal activation wait for a successful source check. Profile authentication still fails closed. Private responses use no-store. Provider keys and database credentials are backend-only.
+## Earlier untimed plans
+
+Workspace `active` and `draft` remain as older untimed plans, shown read-only under "Earlier plan", and `GET /history/{id}` can still read them. No migration runs. The endpoints and code that created or edited them have been removed.
 
 ## Configuration and limits
 
-See setup for required service-scoped credentials. The Gemini cloud default uses bounded JSON Schema, 55-second HTTP calls, safe provider errors and schema repairs; no live-provider fallback. Cloud processing uses a 210-second worker execution and renewable 240-second lease; local limits are listed above. Three process-local worker slots and one operation per owner bound concurrency. Requests are at most 64 KiB, upstream responses 1 MiB and model contexts 120,000 UTF-8 bytes. Overflow is explicit, not silent evidence truncation.
+See setup for required service-scoped credentials. All model calls go through the OpenAI Python SDK with the service's own base URL, key and model. `ROADMAP_LLM_TOKEN_PARAMETER` selects `max_completion_tokens` for models that reject `max_tokens`. Planning operations have a 330-second budget for Assessment polling plus three model calls, and plan calls allow 24,000 output tokens. Other limits are unchanged: 55-second cloud HTTP calls (local limits above), three worker slots, one operation per owner, 64 KiB requests, 1 MiB upstream responses and 120,000-byte model contexts. Overflow is explicit, not silent truncation.
 
 ## Remaining scope
 
-No exact time slots, external calendar/course integrations, automatic plan replacement, E05 manual allocation editing, scheduled reviews, dashboard projections, actual-time recording, conversation continuation or live semantic-quality claim. Read-view granularity/date focus is currently local to the mounted page. Full backlog-wide A/E/T delivery is not claimed. Live-model recommendations and effort estimates require separate representative evaluation.
+No external calendar or course integrations, automatic revision without a user request, E05 manual session editing, scheduled reviews, dashboard projections, actual-time recording, conversation continuation or modelled non-zero reduced periods. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.

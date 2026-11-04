@@ -9,6 +9,9 @@ import httpx
 from bson import BSON
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
+from app.conversation.presentation import review_reply
+from app.domain.review_context import clarification_context
+from app.domain.baseline import visible_baseline_estimates
 from app.domain.capabilities import digest, effective_items, normalized_name
 from app.domain.errors import Conflict, CvError, Missing
 from app.domain.model_usage import ModelAdmissionError
@@ -45,14 +48,24 @@ def public_action(action):
 def view(document, before=None, limit=40):
     messages = [message for message in document['messages'] if before is None or message['sequence'] < before]
     window = messages[-limit:]
+    review = document.get('purpose') == 'skills_profile' and document.get('cv_id')
+    active = deepcopy(document.get('active_question'))
+    interview = deepcopy(document.get('interview_progress'))
+    if review:
+        if active: active['question'] = review_reply(active['question'])
+        if interview:
+            interview['estimates'] = visible_baseline_estimates(interview.get('estimates', []))
+            for estimate in interview.get('estimates', []):
+                estimate['explanation'] = review_reply(estimate['explanation'])
     return {'id': document['_id'], 'cv_id': document['cv_id'], 'revision': document['revision'],
         'read_only': at_capacity(document),
         'previous_conversation_id': document.get('previous_conversation_id'),
-        'active_question': document.get('active_question'), 'context': document.get('context'),
-        'interview': document.get('interview_progress'),
+        'active_question': active, 'context': document.get('context'),
+        'interview': interview,
         'purpose': document.get('purpose'), 'reviewed_effective_version': document.get('reviewed_effective_version'),
         'context_error': document.get('context_error'),
         'messages': [{**{k: m[k] for k in ('id', 'sequence', 'role', 'text', 'created_at')},
+                      'text': review_reply(m['text']) if review and m['role'] == 'assistant' else m['text'],
                       'actions': [public_action(a) for a in m.get('actions', [])]} for m in window],
         'next_before': window[0]['sequence'] if len(messages) > len(window) else None}
 
@@ -216,7 +229,10 @@ class ConversationService:
                 if active:
                     valid = next((q for q in document['clarifications'] if q['id'] == active['id']
                         and q['status'] == 'unanswered' and not q.get('reconciliation_required')), None)
-                    if not valid: current['active_question'] = None
+                    source = next((item for item in effective_items(document) if item['id'] == active['item_id'] and not item['removed']), None)
+                    from app.conversation.interview_memory import evidence_for
+                    if not valid or not source or not clarification_context(source, evidence_for(source))['clarification_targets']:
+                        current['active_question'] = None
                 current['context'], current['context_error'] = context, error
                 return
             if active:
@@ -615,6 +631,17 @@ class ConversationService:
                 if current.get('active_question') and current['active_question']['item_id'] == item['id']:
                     q = next((q for q in saved['clarifications'] if q['id'] == current['active_question']['id']), None)
                     if q and q['status'] in {'answered', 'skipped'}: current['active_question'] = None
+                # Publish the pending continuation with the saved answer. Otherwise a
+                # poll can observe no pending work between this write and planner
+                # admission, stop polling, and strand the chat without a question.
+                if current.get('purpose') == 'skills_profile':
+                    turn = action_message(current, action_id)
+                    parent = next((a for a in turn.get('actions', []) if a['kind'] == 'route'), None)
+                    siblings = [a for a in turn.get('actions', []) if a['kind'] != 'route']
+                    if (parent and parent.get('_interview_evaluation') and parent['status'] in {'saved', 'failed'}
+                            and siblings and all(a['status'] in {'saved', 'cancelled'} for a in siblings)):
+                        parent.update(status='pending', _resume_requested=True,
+                                      _token=None, _lease_until=now() + LEASE_SECONDS)
             await run_in_threadpool(self.update, owner, identifier, completed)
         except Conflict as exc:
             # The saved CV receipt may already exist after a process/response failure;
@@ -634,11 +661,12 @@ class ConversationService:
             message = action_message(result, action_id)
             parent = next((a for a in message.get('actions', []) if a['kind'] == 'route'), None)
             siblings = [a for a in message.get('actions', []) if a['kind'] != 'route']
-            if parent and parent.get('_interview_evaluation') and parent['status'] in {'saved', 'failed'} and siblings and all(a['status'] in {'saved', 'cancelled'} for a in siblings):
+            if parent and parent.get('_interview_evaluation') and (parent['status'] in {'saved', 'failed'} or parent.get('_resume_requested')) and siblings and all(a['status'] in {'saved', 'cancelled'} for a in siblings):
                 resume_token = str(uuid4())
                 def resume(current):
                     candidate = action_in(current, parent['id'])
-                    if candidate['status'] not in {'saved', 'failed'}: return
+                    if candidate['status'] not in {'saved', 'failed'} and not candidate.get('_resume_requested'): return
+                    candidate.pop('_resume_requested', None)
                     candidate.update(status='pending', _token=resume_token, _lease_until=now() + LEASE_SECONDS,
                                      _command='continue', error=None)
                 resumed = await run_in_threadpool(self.update, owner, identifier, resume)
@@ -675,6 +703,7 @@ class ConversationService:
         loop = asyncio.get_running_loop()
         coordinator = self
         class SessionInterpreter:
+            review_statements = conversation.get('purpose') == 'skills_profile'
             @property
             def configured(self):
                 return getattr(app.state.interpreter, 'configured', True)

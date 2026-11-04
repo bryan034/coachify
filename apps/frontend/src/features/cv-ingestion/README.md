@@ -30,7 +30,8 @@ The conversation opens or resumes a CV-owned server record for the viewed CV, or
 manual-only record when no CV is open. A compact header identifies the reviewed file
 and the confirmed Career target. **Review CV** starts basic guided questions explicitly.
 Users may answer naturally, add context, ask a side question or propose a correction
-at any time. **Skip this question** and **Continue review** are explicit commands.
+at any time. **Skip this question** leaves the current detail uncertain. Skills
+Profile review automatically asks a follow-up or moves to the next topic.
 The current topic remains visible when an explanation interrupts it. Voice input is
 not part of this version; Career target editing remains on Career Goal.
 
@@ -126,9 +127,15 @@ UI behavior; they do not establish real model extraction accuracy.
 
 ## Summary-first Skills Profile
 
-Entry now shows `skills-profile-summary.tsx`, including saved/draft manual
-background, source-specific CV skills and clarifications, unknowns, and explicit
-Upload your CV / Build through chat choices. Upload supports drag/drop as well as
+Entry now shows `skills-profile-summary.tsx`. Skills come first, in one card per
+category (`skill-cards.tsx`), combining CV skills, skills described in chat and
+manually added capabilities. Each row shows the strongest supported baseline level,
+or "Level not established", with its source experience; evidence stays behind the
+row's details. The backend assigns categories (`skill_groups` on each response) and
+the frontend only displays them; a skill missing from the map shows under Other skills.
+Experience and clarifications, then the
+upload form and saved CVs, follow below, with links to jump between sections.
+Upload your CV / Build through chat remain explicit choices. Upload supports drag/drop as well as
 keyboard file selection. An accepted upload opens the full-page review immediately, shows processing/recovery status, and starts chat automatically once extraction is ready. It does not change the analysis selection.
 Review CV starts/resumes basic guided review only after extraction is ready;
 failed/processing files expose View processing status instead.
@@ -177,11 +184,76 @@ all excerpts without React key collisions in review and source reconciliation.
 
 ## Agent-led uploaded-CV interview
 
-Uploaded-CV review resumes persistent interview progress from the CV service. Paused
-or completed interviews do not automatically restart on refresh; Continue review
-or a new message resumes interaction. Agent questions, evidence updates and stopping
+Uploaded-CV review resumes persistent interview progress from the CV service.
+Opening a paused review resumes questions automatically; completed reviews do not
+restart. A segmented progress bar counts experience/project topics needing
+clarification, with follow-ups staying in the same topic. Ordinary answer receipts
+are hidden. Processing failures use compact retry; old evidence-alignment failures
+get one automatic recovery attempt per mounted chat. The persistent Continue review
+and Review profile summary controls are removed. Only completed reviews show
+**Review profile**, opening the existing Skills Profile summary. Agent questions, evidence updates and stopping
 decisions are backend-owned. Chat displays source-specific skill estimates as
 conversation-based judgments, while the summary exposes structured roles,
 responsibilities, skill evidence and unresolved/partial details with their quotes.
 Manual-only intake retains its existing Profile-owned flow. See the
 [CV interview harness](../../../../../services/cv-service/INTERVIEW.md).
+
+Manual intake uses the same progress display with its four background areas as topics.
+
+Upload preparation shows a smooth estimated 0–100% bar and a backend activity
+message. The existing three-second saved-status poll supplies observed milestones;
+the display eases forward toward the next milestone while a stage is running,
+with an activity sheen that continues during long waits. Stages cover document reading,
+extraction, evidence checks, optional repair and publication. Progress reaches 100%
+only after successful publication. Intermediate percentages are explicitly labelled
+as estimates, not elapsed-time or token measurements. Estimates stop on failure,
+reset for another upload/retry and respect reduced-motion preferences. Older
+servers without progress data show an indeterminate bar. The subsequent interview
+shows a separate percentage of review topics covered. Activity messages describe
+observed work and do not expose private model reasoning.
+
+Interview progress stays visible through answer submission and follow-ups. A topic
+counts as covered when the backend publishes a question for another topic, or
+finishes the review. Answering a single question, skipping a detail or pausing does
+not complete the current topic. Ordinary answers preserve completed-topic progress;
+explicit source corrections/re-extraction can reopen affected topics.
+
+Assistant review replies and estimate explanations hide opaque internal source
+references, including previously saved replies. Experience titles remain visible;
+structured source IDs, original saved messages and literal user text are retained.
+The backend prompt also keeps IDs out of visible prose.
+
+Uploaded-CV topics have a backend-enforced maximum of three questions, normally
+clarifying only material ambiguities after using the CV’s known facts. Scope,
+personal responsibilities and confidence are possible areas, not mandatory prompts.
+The agent can finish earlier when details are already known. Confidence is shown
+as self-reported information, not assessed proficiency. Evidence/fact/answer IDs
+are removed from delivered assistant prose as well as legacy display; structured
+backend references and original user messages remain intact.
+
+Review can finish without questions when CV context is clear, or after one answer
+resolves an ownership ambiguity. Missing optional fields and listed skills do not
+require users to repeat the CV. Discussed topics remain in progress at completion;
+older unvisited optional-only topics can disappear after reconciliation.
+
+Baseline review treats each whole project/experience as one topic, with its own
+three-question maximum and no overall topic cap. The saved Skills Profile project
+summary displays supported `skill_estimates` returned by CV detail; insufficient-
+evidence diagnostics remain backend-only. Questions focus on personal responsibilities and concrete
+application/depth/support of the project’s known skills. A clear project description
+alone is not the same as an established skill baseline. Internal evidence IDs
+remain hidden from the summary and conversation.
+
+Conversation and saved baseline sections omit insufficient-evidence entries,
+including stale/legacy server responses, and render no empty estimate section.
+The API also filters these entries without deleting internal uncertainty. Questions
+use the per-project budget for relevant responsibility/skill gaps instead of filling
+every field. Supported skill levels and original user/source text remain visible.
+
+Skip this question leaves its targeted detail uncertain and allows other useful
+questions or the next project. After a next-step planning failure with no active
+question, Skip and continue defers the current experience, preserves the saved
+answer and advances/completes with gaps. It is not offered for unrelated evidence
+failures or unknown source focus; ownership uncertainty is not graded as competence.
+
+Skills Profile lists the skills you have with the same category layout and jump links as the saved Career Goal.

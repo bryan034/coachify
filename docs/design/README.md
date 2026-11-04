@@ -5,8 +5,8 @@
 The October 2026 revision uses the user-supplied Elo SVG and palette, drawing its
 broad hero composition, generous spacing, large left-aligned sans-serif headings
 and restrained controls from the [Ebury reference](https://land-book.com/websites/94987-ebury-global-growth-unlocked).
-The public entry has a mint-mist hero and an original SVG illustration based on
-the three connected points in the logo. Login/registration keep the same header
+The public entry keeps its mint-mist background with a text-led introduction.
+Decorative path illustrations have been removed from account and workspace pages. Login/registration keep the same header
 and typography with a dedicated form. Dashboard, navigation, onboarding, CV chat
 and career briefings share the visual language without changing their APIs.
 
@@ -22,13 +22,14 @@ and career briefings share the visual language without changing their APIs.
 
 Inter remains bundled locally. Display headings use regular/medium weights and
 tight spacing. Dark green (`#116149`) is an accessible text companion to mint;
-error and warning colours keep their semantic meaning. Mobile navigation scrolls
-inside its own row. Keyboard focus and reduced-motion support are preserved.
+error and warning colours keep their semantic meaning. Desktop navigation uses a persistent left sidebar. Mobile navigation expands
+from a Menu button above the page; selecting a link or pressing Escape closes it. Keyboard focus and reduced-motion support are preserved.
 
 `apps/frontend/public/brand/elo-logo.svg` contains the supplied artwork with its
 non-rendering provenance metadata removed and whitespace cropped via its viewBox.
 `elo-mark.svg` reuses the supplied symbol for the favicon and chat identities.
-`JourneyVisual` is a decorative code-native illustration, not a progress indicator.
+Workspace introductions use compact headings and direct actions rather than oversized
+banners. `JourneyVisual` and `PathMark` remain unused visual primitives.
 No external fonts, images or additional dependencies are needed at runtime.
 The final shared overrides live in `apps/frontend/src/styles/elo-theme.css`.
 

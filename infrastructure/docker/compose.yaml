@@ -130,9 +130,8 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   mongodb-career-init:
-    image: mongo:8.0
+    image: mongo:8.2
     environment:
-      GLIBC_TUNABLES: glibc.pthread.rseq=1
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       CAREER_DB_PASSWORD: ${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}
       CV_DB_PASSWORD: ${CV_DB_PASSWORD:?Set CV_DB_PASSWORD}
@@ -159,6 +158,7 @@ services:
       ASSESSMENT_LLM_API_KEY: ${ASSESSMENT_LLM_API_KEY:-}
       ASSESSMENT_LLM_MODEL: ${ASSESSMENT_LLM_MODEL:-gemini-3.5-flash-lite}
       ASSESSMENT_LLM_BASE_URL: ${ASSESSMENT_LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      ASSESSMENT_LLM_TOKEN_PARAMETER: ${ASSESSMENT_LLM_TOKEN_PARAMETER:-max_tokens}
       ASSESSMENT_LLM_ALLOW_HTTP: ${ASSESSMENT_LLM_ALLOW_HTTP:-false}
     depends_on:
       mongodb-planning-init:
@@ -185,6 +185,7 @@ services:
       ROADMAP_LLM_API_KEY: ${ROADMAP_LLM_API_KEY:-}
       ROADMAP_LLM_MODEL: ${ROADMAP_LLM_MODEL:-gemini-3.5-flash-lite}
       ROADMAP_LLM_BASE_URL: ${ROADMAP_LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      ROADMAP_LLM_TOKEN_PARAMETER: ${ROADMAP_LLM_TOKEN_PARAMETER:-max_tokens}
       ROADMAP_LLM_ALLOW_HTTP: ${ROADMAP_LLM_ALLOW_HTTP:-false}
     depends_on:
       mongodb-planning-init:
@@ -197,9 +198,8 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   mongodb-planning-init:
-    image: mongo:8.0
+    image: mongo:8.2
     environment:
-      GLIBC_TUNABLES: glibc.pthread.rseq=1
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       ASSESSMENT_DB_PASSWORD: ${ASSESSMENT_DB_PASSWORD:?Set ASSESSMENT_DB_PASSWORD}
       ROADMAP_DB_PASSWORD: ${ROADMAP_DB_PASSWORD:?Set ROADMAP_DB_PASSWORD}
@@ -216,10 +216,9 @@ services:
     ports: ["127.0.0.1:${MAILPIT_PORT:-8025}:8025"]
     networks: [backend]
   mongodb:
-    image: mongo:8.0
+    # 8.0 and 8.3 images refuse to start on Docker Desktop kernels 6.19+; 8.2 starts.
+    image: mongo:8.2
     environment:
-      # Docker Desktop kernels 6.19+ need the rseq compatibility setting.
-      GLIBC_TUNABLES: glibc.pthread.rseq=1
       MONGO_INITDB_ROOT_USERNAME: elo_admin
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       PROFILE_DB_PASSWORD: ${PROFILE_DB_PASSWORD:?Set PROFILE_DB_PASSWORD}

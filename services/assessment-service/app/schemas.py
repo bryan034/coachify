@@ -78,6 +78,7 @@ class Context(Contract):
     input_hash:str|None=None
     inputs:InputVersions|None=None
     research_coverage:str|None=None
+    evidence:dict[str,dict]|None=None
     model_available:bool
 class Current(Contract):
     version:int

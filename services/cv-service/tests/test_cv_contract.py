@@ -28,7 +28,7 @@ def test_failure_diagnostics_openapi_matches_runtime(harness):
     _, app, *_ = harness
     artifact = Path(__file__).resolve().parents[3] / 'contracts/api/cv.yaml'
     contract = json.loads(artifact.read_text())['components']['schemas']
-    for name in ('ErrorInfo', 'ExtractionMetadata', 'CvDetail', 'ReconciliationView'):
+    for name in ('ErrorInfo', 'ExtractionMetadata', 'CvDetail', 'ReconciliationView', 'InterviewProgress', 'InterviewTopic', 'CvSummary', 'ProcessingProgress'):
         assert app.openapi()['components']['schemas'][name] == contract[name]
 
 
@@ -92,3 +92,41 @@ def test_cv_skill_adds_shared_identity_without_rewriting_source_key():
     assert value.canonical_skill_id=='language.sql'
     assert value.skill_id=='skill:structured query language'
     assert value.skill_registry_version=='skills-v2'
+
+
+def test_processing_progress_is_saved_and_visible_during_extraction(harness):
+    from tests.conftest import upload
+    client, app, extractor, *_ = harness
+    cv = upload(client).json()
+    assert cv['processing_progress'] == {'stage': 'queued', 'percent': 0, 'message': 'Upload saved. Waiting to start.'}
+    original_parse, original_extract = app.state.worker.parser, extractor.extract
+    observed = []
+
+    def capture():
+        value = client.get('/api/v1/cv/' + cv['id']).json()['processing_progress']
+        observed.append(value)
+        listed = client.get('/api/v1/cv').json()['cvs'][0]
+        assert listed['processing_progress'] == value
+
+    def parse(*args):
+        capture()
+        return original_parse(*args)
+
+    def extract(*args, **kwargs):
+        capture()
+        return original_extract(*args, **kwargs)
+
+    app.state.worker.parser, extractor.extract = parse, extract
+    app.state.worker.run_once()
+    assert [value['stage'] for value in observed] == ['document_parse', 'model_request']
+    assert [value['percent'] for value in observed] == [25, 45]
+    completed = client.get('/api/v1/cv/' + cv['id']).json()
+    assert completed['status'] == 'ready', completed
+    assert completed['processing_progress']['percent'] == 100
+
+
+def test_saved_cv_response_maps_each_skill_to_a_display_group_without_changing_the_skill():
+    value = CvDetail.model_validate(fixture())
+    assert set(value.skill_groups) == {skill.name for skill in value.skills}
+    assert all(group for group in value.skill_groups.values())
+    assert 'skill_groups' not in value.skills[0].model_dump()

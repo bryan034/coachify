@@ -2,6 +2,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
+from elo_shared.skill_groups import skill_groups
 
 Area = Literal['work', 'project', 'education', 'interest']
 Status = Literal['answered', 'unknown', 'skipped', 'not_applicable']
@@ -84,6 +85,13 @@ class SkillsProfile(Strict):
     saved_at: str | None = None
     areas: dict[Area, Status] = Field(default_factory=dict, max_length=4)
     entries: list[ProfileEntry] = Field(default_factory=list, max_length=40)
+    # Display categories by skill name, derived on read and never stored; see skill_groups.
+    skill_groups: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode='after')
+    def display_groups(self):
+        self.skill_groups = skill_groups((skill.name, None) for entry in self.entries for skill in entry.skills)
+        return self
 
     @model_validator(mode='after')
     def unique_entries(self):

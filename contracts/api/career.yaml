@@ -2837,6 +2837,13 @@
                 "type": "null"
               }
             ]
+          },
+          "skill_groups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Skill Groups"
           }
         },
         "additionalProperties": false,

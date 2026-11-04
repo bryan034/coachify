@@ -73,3 +73,35 @@ def test_local_model_serializes_calls(monkeypatch):
             finally:release.set()
             assert all(result.reply=='OK' for result in await asyncio.gather(*tasks))
     asyncio.run(run())
+
+
+def test_callers_can_raise_the_output_limit_and_the_default_is_unchanged(monkeypatch):
+    monkeypatch.setenv('ROADMAP_LLM_API_KEY','synthetic-key')
+    async def run():
+        calls=[]
+        def handler(request):
+            calls.append(json.loads(request.content))
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{"reply":"Synthetic answer"}'}}]})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            model=Model(client,'ROADMAP')
+            await model.generate(Answer,'Answer.',{})
+            await model.generate(Answer,'Answer.',{},max_tokens=24000)
+        assert [call['max_tokens'] for call in calls]==[8192,24000]
+    asyncio.run(run())
+
+
+def test_token_parameter_can_be_selected_for_models_that_require_it(monkeypatch):
+    monkeypatch.setenv('ROADMAP_LLM_API_KEY','synthetic-key')
+    monkeypatch.setenv('ROADMAP_LLM_BASE_URL','https://api.openai.com/v1')
+    monkeypatch.setenv('ROADMAP_LLM_TOKEN_PARAMETER','max_completion_tokens')
+    async def run():
+        calls=[]
+        def handler(request):
+            calls.append(json.loads(request.content))
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{"reply":"Synthetic answer"}'}}]})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await Model(client,'ROADMAP').generate(Answer,'Answer.',{},max_tokens=24000)
+            monkeypatch.setenv('ROADMAP_LLM_TOKEN_PARAMETER','temperature')
+            with pytest.raises(ValueError):Model(client,'ROADMAP')
+        assert calls[0]['max_completion_tokens']==24000 and 'max_tokens' not in calls[0]
+    asyncio.run(run())

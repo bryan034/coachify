@@ -11,7 +11,7 @@ from bson import ObjectId
 from bson.codec_options import CodecOptions
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
-from app.schemas.analysis import CareerGoal, mongo_document
+from app.schemas.analysis import CareerGoal, mongo_document, goal_skill_groups
 from app.schemas.goals import GoalDraft
 
 
@@ -106,7 +106,8 @@ class GoalStore:
     def current(self, owner):
         state = self.state.find_one({'_id': owner}) or {'version': 0, 'goal_id': None}
         goal = self.goals.find_one({'_id': state.get('goal_id'), 'user_id': owner}) if state.get('goal_id') else None
-        return {'selection_version': state['version'], 'goal': CareerGoal.model_validate({k:v for k,v in goal.items() if k in CareerGoal.model_fields or k=='_id'}) if goal else None,
+        saved = CareerGoal.model_validate({k:v for k,v in goal.items() if k in CareerGoal.model_fields or k=='_id'}) if goal else None
+        return {'selection_version': state['version'], 'goal': saved, 'skill_groups': goal_skill_groups(saved),
                 'dependent_results_need_review': state.get('dependent_results_need_review', False),
                 'review_selection':state.get('selected_review') or ({'id':str(goal['source_review_id']),'version':goal['source_review_version']} if goal and goal.get('source_review_id') else None)}
 

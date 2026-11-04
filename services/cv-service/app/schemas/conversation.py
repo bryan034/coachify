@@ -2,6 +2,7 @@
 from typing import Literal
 from uuid import UUID
 from pydantic import Field, field_validator, model_validator
+from app.schemas.interview_evidence import SkillEstimate
 from app.schemas.cv import StrictModel, Text, ConfirmedContext, ItemMutation
 
 
@@ -84,16 +85,17 @@ class ChatLimits(StrictModel):
     max_messages: int = 500
 
 
-class SkillEstimate(StrictModel):
-    item_id: str = Field(min_length=1, max_length=100)
-    skill_name: str = Field(min_length=1, max_length=120)
-    level: Literal['insufficient_evidence', 'guided_application', 'independent_application', 'complex_application']
-    explanation: str = Field(min_length=1, max_length=800)
-    evidence_refs: list[str] = Field(min_length=1, max_length=12)
+
+
+class InterviewTopic(StrictModel):
+    id: str
+    title: str
+    status: Literal['pending', 'current', 'reviewed', 'reviewed_with_gaps', 'deferred']
 
 
 class InterviewProgress(StrictModel):
     status: Literal['reviewing', 'reviewed', 'reviewed_with_gaps', 'paused']
+    topics: list[InterviewTopic] = Field(default_factory=list)
     reviewed_items: int
     total_items: int
     estimates: list[SkillEstimate] = Field(default_factory=list)

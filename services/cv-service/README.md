@@ -40,13 +40,20 @@ Extraction and repair timeouts are capped by the remaining 180-second worker lea
 
 ## Skills Profile guided entry
 
+Saved-CV detail responses include `skill_groups`, mapping each skill name to its display category. It is derived on read and never stored.
+
 Skills Profile opens on a summary. Uploading opens the full-page review immediately;
 the review screen opens immediately after upload, waits for extraction and then starts guided questions automatically. Manual guided entry uses Profile-owned structured
 background and per-experience skill evidence. Basic CV review works without a
 Career target; target-specific questions retain their existing confirmation rules.
 `POST /api/v1/cv/{cv_id}/profile-review` saves a version-bound review stamp from
 the summary. Unknowns remain uncertain. Uploaded-CV review is agent-led, with persistent interview memory, grounded role/skill
-evidence, targeted partial-answer follow-ups and validated completion. See the
+evidence, targeted partial-answer follow-ups and topic-based progress. Relevant
+review answers take precedence over CV statements; review checks schema and topic
+relevance, without an evidence-alignment verifier. The chat advances automatically
+and announces completion before offering Review profile. Model calls
+use a compact discussion summary, four recent messages and on-demand exact-answer
+recall, retaining the complete saved transcript without a separate summary model call. See the
 [interview harness](INTERVIEW.md) and
 [guided intake specification](SPEC.md#skills-profile-entry-and-guided-intake).
 
@@ -58,3 +65,36 @@ reject control characters. Listing/detail responses expose nullable `display_nam
 older records fall back to `file_name` in the UI without migration. Renaming is
 available during processing and after failure, uses the existing CAS/replay controls,
 and leaves source bytes, extraction/effective versions and review history intact.
+
+Upload status responses include persisted `processing_progress` with a stage-based
+percentage and fixed activity message. Successful publication alone reaches 100%;
+no model reasoning or simulated time progress is exposed. See [progress semantics](SPEC.md#upload-processing-progress).
+
+Interview planning supplies exact open targets and retains bounded, content-free
+rejection codes for debugging; exhausted plans explain the last rejection category.
+See [planner diagnostics](INTERVIEW.md#planner-rejection-diagnostics).
+
+Uploaded-CV review uses the CV as context and asks at most three clarification
+questions per ambiguous topic. Clear experiences and listed skills need no repeat
+questionnaire; confidence is optional, not a prerequisite for moving on.
+Question counts survive reloads and conversation rollover; assistant prose omits
+internal evidence IDs. See [topic budget](INTERVIEW.md#three-question-topic-budget).
+
+The extraction LangGraph now prepares review after validation, removing ambiguity
+flags already answered by the CV. Existing CVs reuse current saved evidence; a
+rich responsibility/skill clarification can finish a project when its baseline
+is established. Clear wording alone does not end skill evaluation. See [clarification-first routing](INTERVIEW.md#clarification-first-routing).
+
+Baseline review has three questions per whole project/experience, with no overall
+topic cap. It tracks all named project skills internally and asks about relevant responsibility
+and application gaps; insufficient evidence stays backend-only. Saved CV detail exposes supported `skill_estimates`, also shown in the
+Skills Profile project summary. See [baseline review](INTERVIEW.md#baseline-skill-review-per-project).
+
+Insufficient-evidence estimate entries stay in backend/planner state and are
+omitted from public CV/conversation responses and UI. Questions prioritize relevant
+project gaps within the three-question budget, rather than every missing field.
+
+Users may skip review questions, leaving targeted ownership/details uncertain.
+Skipped ownership can close with gaps and does not block moving to another project.
+A failed planner step offers Skip and continue without resubmitting saved answers.
+See [skip recovery](INTERVIEW.md#skips-uncertain-ownership-and-recovery).

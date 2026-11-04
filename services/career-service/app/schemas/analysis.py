@@ -6,6 +6,7 @@ ObjectIds represented as hex strings at the API boundary.
 from __future__ import annotations
 
 from elo_shared.skills import resolve, MAPPING_VERSION
+from elo_shared.skill_groups import skill_groups
 from elo_shared.dates import JobDate
 
 import hashlib
@@ -332,6 +333,11 @@ class DiscoveryEvidence(Contract):
     coverage: Literal['good','limited','insufficient']
     source_ids: list[Text] = Field(max_length=30)
     researched_at: datetime
+
+
+def goal_skill_groups(goal):
+    """Display categories for a goal's skills; derived on read, never part of the saved goal."""
+    return skill_groups((skill.name, skill.category) for skill in goal.skills) if goal else {}
 
 
 class CareerGoal(Document):

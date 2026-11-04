@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ReviewField = Literal['role', 'responsibilities', 'personal_contribution', 'assistance',
-    'task_scope', 'complexity', 'problem_solving', 'outcome', 'skill_use', 'recency', 'frequency', 'limitations']
+    'task_scope', 'complexity', 'problem_solving', 'outcome', 'skill_use', 'recency', 'frequency', 'limitations', 'replication_confidence']
 EvidenceStatus = Literal['supported', 'partial', 'unknown', 'conflicting', 'skipped', 'not_applicable']
 
 
@@ -42,3 +42,12 @@ def fact_statement(fact):
     if fact.get('attribution'):
         statement += f" Attribution is {fact['attribution']}; personal/shared means the user personally performed the stated work, team means teammates only, observed means watching only."
     return statement
+
+
+class SkillEstimate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    item_id: str = Field(min_length=1, max_length=100)
+    skill_name: str = Field(min_length=1, max_length=120)
+    level: Literal['insufficient_evidence', 'guided_application', 'independent_application', 'complex_application']
+    explanation: str = Field(min_length=1, max_length=800)
+    evidence_refs: list[str] = Field(min_length=1, max_length=12)

@@ -1,19 +1,16 @@
-# Roadmap adviser and tasks service
+# Roadmap service
 
-Works with the user on a personalised preparation plan through saved chat, proposed activities and daily workload. Owns active/proposed plans, immutable plan revisions and task history in a separate MongoDB database.
+Prepares a personal study roadmap towards the user's career goal. A fixed planner form collects the schedule, with an optional chat helper to guide the user through it. The service calculates the runway, the LLM writes the plan, and the service validates it before the user reviews it. Owns settings, plan revisions, session progress and adviser chat in a separate MongoDB database.
 
 ## API by Jira story
 
 | Stories | Available endpoints under `/api/v1/roadmaps` |
 |---|---|
-| R01 / SCRUM-185–187 | `GET /progress` polls compact operation state. `GET /workspace` restores chat, proposals, active plan, progress and source freshness. `POST /messages` saves a message and starts/resumes durable adviser work. `POST /activate` applies the reviewed proposal; `POST /draft/discard` discards it. |
-| R05–R09 | `POST /preferences` previews a date-based workload using selected weekdays/session budgets. `GET /history/{id}` reads an owner-scoped immutable plan revision. |
-| E01–E04/E06–E07 | `POST /tasks` adds/edits task definitions, estimates, links and prerequisites; `POST /tasks/remove` retains removal intent/history. |
-| T03–T06 | `POST /tasks/status` starts, completes or explicitly reopens work without altering capability evidence or fabricating actual time. |
+| R01 / SCRUM-185–187 | `GET /workspace` restores chat, settings, runway, previews, the active roadmap and change signals. `GET /progress` polls compact operation state. `POST /messages` saves a chat helper message; it updates settings or prepares a preview. |
+| R05–R09 | `POST /planner/runway` calculates runway without a model call. `POST /planner/config` saves settings, including recurring blackout rules. `POST /planner/generate` runs Assessment if needed, then writes and validates a plan or revision. `POST /planner/accept` applies a preview; `POST /planner/discard` removes it. `POST /planner/confirmations` saves self-reported experience answers. `GET /history/{id}` reads an owner-scoped immutable plan, including earlier untimed plans. |
+| T03–T06 | `POST /planner/assignments/status` completes or reopens a session with an optional evidence note. `POST /planner/milestones/outcome` records a self-reported outcome. Neither changes assessed skills. |
 
-The frontend opens chat with the plan beside it on `/roadmap`; daily/weekly/monthly workload views use the same saved allocations. Plan changes are proposals until explicitly applied. Direct task edits preserve timing and show review issues.
-
-[Specification](SPEC.md) · [API contract](../../contracts/api/roadmap.yaml) · [Setup](../../docs/setup.md#assessment-and-roadmap-adviser). Exact clock-time scheduling, external calendars, automatic adaptation and direct allocation editing (E05) remain unimplemented.
+[Specification](SPEC.md) · [API contract](../../contracts/api/roadmap.yaml) · [Setup](../../docs/setup.md#assessment-and-roadmap-adviser). External calendars, automatic revision and direct session editing (E05) are not implemented. Live-model plan quality has not been evaluated.
 
 Model calls use the shared OpenAI Python SDK transport with Gemini as the cloud
 default. No Gemini SDK is required. SDK retries are disabled; existing response

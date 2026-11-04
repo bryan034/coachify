@@ -78,18 +78,21 @@ class Model:
         self.local=parsed.scheme=='http' and os.getenv('APP_ENV')=='development' and os.getenv(prefix+'_LLM_ALLOW_HTTP')=='true'
         if (parsed.scheme!='https' and not self.local) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError(prefix+'_LLM_BASE_URL requires HTTPS or explicitly enabled development HTTP, without credentials, query or fragment.')
+        self.token_parameter=os.getenv(prefix+'_LLM_TOKEN_PARAMETER','max_tokens').strip() or 'max_tokens'
+        if self.token_parameter not in ('max_tokens','max_completion_tokens'):
+            raise ValueError(prefix+'_LLM_TOKEN_PARAMETER must be max_tokens or max_completion_tokens.')
         self.gemini=parsed.hostname=='generativelanguage.googleapis.com'
         self.deepseek=parsed.hostname=='api.deepseek.com'
         self.timeout=180 if self.local else 55
         self.slot=asyncio.Lock() if self.local else None
     @property
     def configured(self): return bool(os.getenv(self.prefix+'_LLM_MODEL','').strip()) if self.local else bool(os.getenv(self.prefix + '_LLM_API_KEY','').strip())
-    async def generate(self, schema, instructions, context):
+    async def generate(self, schema, instructions, context, max_tokens=8192):
         if self.slot is not None:
             context=copy.deepcopy(context)
-            async with self.slot:return await self._generate(schema,instructions,context)
-        return await self._generate(schema,instructions,context)
-    async def _generate(self, schema, instructions, context):
+            async with self.slot:return await self._generate(schema,instructions,context,max_tokens)
+        return await self._generate(schema,instructions,context,max_tokens)
+    async def _generate(self, schema, instructions, context, max_tokens):
         if not self.configured: raise Problem('Your adviser is unavailable. Your saved work is retained; please try again later.',503,'model_not_configured')
         content = json.dumps(context, ensure_ascii=False, default=str)
         if len(content.encode()) > 120000: raise Problem('The evidence exceeds this model request budget. No evidence was silently removed.',413,'model_context')
@@ -109,7 +112,7 @@ class Model:
         for attempt in range(3):
             try:
                 payload={'model':os.getenv(self.prefix+'_LLM_MODEL','gemini-3.5-flash-lite'), 'messages':messages,
-                         'max_tokens':8192,**options,'response_format':response_format}
+                         self.token_parameter:max_tokens,**options,'response_format':response_format}
                 async with async_model_response(self.client,self.base_url,
                     os.getenv(self.prefix+'_LLM_API_KEY','').strip(),self.timeout,payload,local=self.local) as response:
                     if response.status_code == 429:
@@ -158,8 +161,8 @@ class Store:
             except DuplicateKeyError: raise Problem('Your workspace changed. Reload before saving.') from None
         if not self.rows.replace_one({'_id':owner,'version':version},row).matched_count: raise Problem('Your workspace changed. Reload before saving.')
         return row
-    def checkpoint(self, owner, row):
-        row['pending']['lease']=time.time()+240
+    def checkpoint(self, owner, row, seconds=240):
+        row['pending']['lease']=time.time()+seconds
         saved=self.cas(owner,row['version'],row)
         row.update(saved)
         return row
@@ -266,7 +269,7 @@ def operation_view(row):
     if source.get('retry_at'):value['retry_after']=max(0,math.ceil(source['retry_at']-time.time()))
     return value or None
 
-def begin(store,owner,body,kind):
+def begin(store,owner,body,kind,work_seconds=None):
     row=store.load(owner); payload=body.model_dump(mode='json'); key=payload['mutation_id']; fingerprint=digest(payload)
     receipt=next((r for r in row['receipts'] if r['id']==key),None)
     if receipt:
@@ -285,7 +288,8 @@ def begin(store,owner,body,kind):
     if retry and failed.get('failed_at_version')!=row['version']: raise Problem('The workspace changed after this failure. Start a new request.')
     if not retry and kind=='message': row['messages'].append({'id':key,'role':'user','content':payload['message'],'created_at':stamp()})
     row['pending']={'id':key,'body':payload,'kind':kind,'hash':fingerprint,'status':'pending','stage':'preparing','lease':0,
-        **({'checkpoint':failed['checkpoint']} if retry and failed.get('checkpoint') else {})}
+        **({'checkpoint':failed['checkpoint']} if retry and failed.get('checkpoint') else {}),
+        **({'work_seconds':work_seconds} if work_seconds else {})}
     return store.cas(owner,row['version'],row)
 
 async def run_operation(app,owner,token,worker):
@@ -293,7 +297,7 @@ async def run_operation(app,owner,token,worker):
         row=await run_in_threadpool(app.state.store.load,owner); pending=row.get('pending')
         if not pending or pending.get('lease',0)>time.time(): return
         local=getattr(app.state.model,'local',False)
-        worker_seconds=600 if local else 210
+        worker_seconds=600 if local else pending.get('work_seconds',210)
         nonce=str(uuid4()); pending.update(lease=time.time()+worker_seconds+30,token=nonce,status='running')
         try: row=await run_in_threadpool(app.state.store.cas,owner,row['version'],row)
         except Problem: return
