@@ -93,6 +93,8 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   expect(corrected.skills.find(skill => skill.skill_id === 'skill:power bi')?.experience_months).toBe(2);
   await chapter('7. Save only the intended change', 'Python changes from six months to three. Earlier statements remain in history, and the independent Power BI fact stays intact.', chat);
 
+  await expect.poll(async () => (await readChat(account, cvId)).messages.flatMap(message => message.actions).some(action => action.status === 'pending'), {timeout: 35_000}).toBe(false);
+  await expect(page.locator('.cv-chat-action-pending')).toHaveCount(0, {timeout: 35_000});
   const beforeReload = await readChat(account, cvId);
   await page.reload();
   // The full-page review URL restores the mounted chat directly.

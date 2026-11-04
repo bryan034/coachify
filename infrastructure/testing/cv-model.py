@@ -24,7 +24,7 @@ def conversation_fixture(value):
     action = {'kind': 'clarify', 'item_id': project['id'] if project else None,
               'question_id': question['id'] if question else None, 'excerpt': message}
     if message in {CHAT_MIXED_ANSWER, CHAT_EXTRA_CONTEXT}:
-        if not project or not question: raise ValueError('The synthetic project question must exist')
+        if not project or (not question and not value.get('interview')): raise ValueError('The synthetic project question must exist')
         return {'reply': 'I will update the explanation for Team dashboard.', 'actions': [action]}
     if message == CHAT_PARTIAL_FAILURE:
         work = next(item for item in items if item.get('kind') == 'experience')
@@ -34,7 +34,7 @@ def conversation_fixture(value):
             {'kind': 'clarify', 'item_id': work['id'], 'question_id': work_question['id'] if work_question else None,
              'excerpt': 'I cannot clarify my internship yet. SYNTHETIC_SECOND_ACTION_FAILURE'}]}
     if message == CHAT_CORRECTION:
-        if not project or not question: raise ValueError('The synthetic project question must exist')
+        if not project or (not question and not value.get('interview')): raise ValueError('The synthetic project question must exist')
         return {'reply': 'Review this correction to the reported Python duration.', 'actions': [{**action, 'kind': 'correct'}]}
     if message in {'Why are you asking?', 'Why does that matter?', 'Why are you asking this question?'}:
         return {'reply': 'This distinguishes your own contribution from team work for the selected target. It does not establish whether you used the skill elsewhere.', 'actions': []}
@@ -185,6 +185,16 @@ def interview_fixture(value):
     if source.get('title') not in known:
         raise ValueError('Unknown synthetic interview source')
     if value['task'] == 'cv_interview_plan':
+        if value.get('topic_question_budget', {}).get('remaining') == 0:
+            next_source = next((item for item in value['sources']
+                if item['id'] != source['id'] and item['kind'] in {'project', 'experience'}
+                and not item.get('coverage') and item.get('questions_remaining', 0) > 0
+                and item.get('clarification_targets')), None)
+            if next_source:
+                target = next_source['clarification_targets'][0]
+                return {'action': 'ask', 'reply': f"What did you personally do in {next_source['title']}?",
+                        'item_id': next_source['id'], 'targets': [{key: target[key] for key in ('field', 'skill_name') if key in target}]}
+            return {'action': 'pause', 'reply': 'The synthetic interview can pause here with remaining details uncertain.'}
         fields = {f['field']: f['status'] for f in source.get('review_evidence', [])}
         for field in ('personal_contribution', 'responsibilities', 'task_scope'):
             attempt = value['memory']['attempts'].get(source['id'] + ':' + field + ':', {})
@@ -197,7 +207,7 @@ def interview_fixture(value):
         return {'intent': 'stop', 'reply': 'Paused.', 'actions': [], 'interpretations': []}
     active = value.get('active_question')
     uncertainty = (active or {}).get('uncertainty', 'claim')
-    routed = conversation_fixture({'message': value['message'], 'items': value['sources'],
+    routed = conversation_fixture({'message': value['message'], 'items': value['sources'], 'interview': True,
         'questions': [{**active, 'uncertainty': uncertainty}] if active else [], 'active_question': active})
     interpretations = []
     for action in routed['actions']:
@@ -206,6 +216,12 @@ def interview_fixture(value):
             continue
         if action.get('item_id') != source['id']:
             other = next(s for s in value['sources'] if s['id'] == action['item_id'])
+            if other['title'] == 'Team dashboard' and value['message'] in {CHAT_EXTRA_CONTEXT, CHAT_CORRECTION}:
+                output = interpret_fixture({'source_item': {**other, 'skill_ids': ['skill:python', 'skill:sql']},
+                    'question': {'uncertainty': 'claim'}, 'answer': value['message'], 'answer_revision': 1})
+                output.pop('answer_revision')
+                interpretations.append(output)
+                continue
             if value['message'] != CHAT_PARTIAL_FAILURE or other['title'] != 'Synthetic reporting internship':
                 raise ValueError('Unknown synthetic cross-source answer')
             interpretations.append({'item_id': other['id'], 'resolution': 'unanswerable', 'claims': [],
