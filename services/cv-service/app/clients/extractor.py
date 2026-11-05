@@ -5,7 +5,7 @@ import time
 from urllib.parse import urlparse
 import httpx
 from httpx import Client
-from elo_shared.model_sdk import sync_model_response
+from elo_shared.model_sdk import resolve_model_api_key, sync_model_response
 from app.schemas.cv import Extraction
 from app.domain.extraction_errors import ExtractionFailure
 from app.clients.extraction_schema import extraction_schema
@@ -79,7 +79,6 @@ Preserve the CV's concrete task scope, responsibilities, tools and skills as sou
 
 class Extractor:
     def __init__(self):
-        self.api_key = os.getenv('CV_LLM_API_KEY', '')
         self.model = os.getenv('CV_LLM_MODEL', '')
         self.response_mode = os.getenv('CV_LLM_RESPONSE_MODE', 'json_schema')
         if self.response_mode not in ('json_schema', 'json_object'):
@@ -90,6 +89,7 @@ class Extractor:
         self.local=development_http and parsed.hostname in ('localhost','127.0.0.1','::1','host.docker.internal')
         if (parsed.scheme != 'https' and not development_http) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise RuntimeError('CV_LLM_BASE_URL must be an HTTPS provider URL without credentials, query or fragment.')
+        self.api_key = resolve_model_api_key(self.base_url, os.getenv('CV_LLM_API_KEY', ''))
 
     @property
     def configured(self): return bool(self.model and (self.api_key or self.local))

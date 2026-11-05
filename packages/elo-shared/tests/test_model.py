@@ -105,3 +105,33 @@ def test_token_parameter_can_be_selected_for_models_that_require_it(monkeypatch)
             with pytest.raises(ValueError):Model(client,'ROADMAP')
         assert calls[0]['max_completion_tokens']==24000 and 'max_tokens' not in calls[0]
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('prefix',['ASSESSMENT','ROADMAP'])
+@pytest.mark.parametrize('base,override,expected',[
+    ('https://openrouter.ai/api/v1','','synthetic-shared'),
+    ('https://openrouter.ai/api/v1','synthetic-specific','synthetic-specific'),
+    ('https://api.openai.com/v1','',''),
+])
+def test_adviser_models_use_shared_key_only_for_openrouter(monkeypatch,prefix,base,override,expected):
+    monkeypatch.setenv(prefix+'_LLM_BASE_URL',base)
+    monkeypatch.setenv(prefix+'_LLM_MODEL','@preset/synthetic')
+    monkeypatch.setenv(prefix+'_LLM_API_KEY',override)
+    monkeypatch.setenv('OPENROUTER_API_KEY','synthetic-shared')
+    async def run():
+        calls=[]
+        def handler(request):
+            calls.append(request)
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{"reply":"OK"}'}}]})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            model=Model(client,prefix)
+            assert model.configured is bool(expected)
+            if expected:
+                await model.generate(Answer,'Answer.',{})
+                assert calls[0].headers['authorization']=='Bearer '+expected
+                assert json.loads(calls[0].content)['model']=='@preset/synthetic'
+            else:
+                from elo_shared.runtime import Problem
+                with pytest.raises(Problem):await model.generate(Answer,'Answer.',{})
+                assert calls==[]
+    asyncio.run(run())

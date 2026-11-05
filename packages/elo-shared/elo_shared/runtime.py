@@ -11,7 +11,7 @@ from uuid import uuid4
 from urllib.parse import urlsplit
 
 import httpx
-from elo_shared.model_sdk import async_model_response
+from elo_shared.model_sdk import async_model_response, resolve_model_api_key
 from bson import BSON
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -86,7 +86,10 @@ class Model:
         self.timeout=180 if self.local else 55
         self.slot=asyncio.Lock() if self.local else None
     @property
-    def configured(self): return bool(os.getenv(self.prefix+'_LLM_MODEL','').strip()) if self.local else bool(os.getenv(self.prefix + '_LLM_API_KEY','').strip())
+    def api_key(self):
+        return resolve_model_api_key(self.base_url, os.getenv(self.prefix + '_LLM_API_KEY', ''))
+    @property
+    def configured(self): return bool(os.getenv(self.prefix+'_LLM_MODEL','').strip()) if self.local else bool(self.api_key)
     async def generate(self, schema, instructions, context, max_tokens=8192):
         if self.slot is not None:
             context=copy.deepcopy(context)
@@ -114,7 +117,7 @@ class Model:
                 payload={'model':os.getenv(self.prefix+'_LLM_MODEL','gemini-3.5-flash-lite'), 'messages':messages,
                          self.token_parameter:max_tokens,**options,'response_format':response_format}
                 async with async_model_response(self.client,self.base_url,
-                    os.getenv(self.prefix+'_LLM_API_KEY','').strip(),self.timeout,payload,local=self.local) as response:
+                    self.api_key,self.timeout,payload,local=self.local) as response:
                     if response.status_code == 429:
                         delay=response.headers.get('retry-after','30')
                         delay=int(delay) if delay.isdigit() else 30

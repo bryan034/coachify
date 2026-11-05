@@ -43,6 +43,45 @@ def test_local_ollama_is_keyless_and_never_forwards_cloud_credentials(monkeypatc
     assert provider._request_timeout(60)==120 and provider._request_timeout(20)==60
 
 
+@pytest.mark.parametrize('provider_class',[Extractor,ConversationRouter,Interpreter])
+@pytest.mark.parametrize('base,override,expected',[
+    ('https://openrouter.ai/api/v1','','synthetic-shared'),
+    ('https://openrouter.ai/api/v1','synthetic-specific','synthetic-specific'),
+    ('https://api.openai.com/v1','',''),
+])
+def test_cv_adapters_resolve_shared_key_only_for_openrouter(monkeypatch,provider_class,base,override,expected):
+    monkeypatch.setenv('CV_LLM_BASE_URL',base)
+    monkeypatch.setenv('CV_LLM_MODEL','@preset/synthetic')
+    monkeypatch.setenv('CV_LLM_API_KEY',override)
+    monkeypatch.setenv('OPENROUTER_API_KEY','synthetic-shared')
+    provider=provider_class()
+    assert provider.configured is bool(expected)
+    assert provider.api_key==expected
+    assert provider.model=='@preset/synthetic'
+    if not expected:
+        return
+    responses={Extractor:{'items':[]},ConversationRouter:{'reply':'Please explain.','actions':[]},
+        Interpreter:{'item_id':'item-1','answer_revision':1,'resolution':'unanswerable',
+                     'claims':[],'resolved_uncertainties':[],'remaining_uncertainties':['proficiency']}}
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200,json={'choices':[{'finish_reason':'stop',
+            'message':{'content':json.dumps(responses[provider_class])}}]})
+    original=httpx.Client
+    for module in ('extractor','conversation','interpretation'):
+        monkeypatch.setattr('app.clients.'+module+'.Client',lambda **kwargs:original(transport=httpx.MockTransport(handler),**kwargs))
+    if provider_class is Extractor:
+        provider.extract([])
+    elif provider_class is ConversationRouter:
+        provider.route({'message':'What should I explain?'})
+    else:
+        provider.interpret({'id':'item-1'},{'id':'question-1','uncertainty':'proficiency','question':'What did you do?'},'I do not know.',1)
+    assert len(calls)==1
+    assert calls[0].headers['authorization']=='Bearer '+expected
+    assert json.loads(calls[0].content)['model']=='@preset/synthetic'
+
+
 @pytest.mark.parametrize('finish,content,expected', [('stop', '{"items":[]}', True), ('length', '{"items":[]}', False), ('stop', 'not json', False)])
 def test_compatible_provider_contract_and_incomplete_output(monkeypatch, finish, content, expected):
     configure(monkeypatch)

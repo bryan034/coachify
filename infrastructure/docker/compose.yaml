@@ -57,6 +57,7 @@ services:
       CAREER_LLM_TOKEN_PARAMETER: ${CAREER_LLM_TOKEN_PARAMETER:-max_tokens}
       CAREER_LLM_MODEL: ${CAREER_LLM_MODEL:-gemini-3.5-flash-lite}
       CAREER_LLM_API_KEY: ${CAREER_LLM_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       DISCOVERY_TARGET_LISTINGS: ${DISCOVERY_TARGET_LISTINGS:-10}
       DISCOVERY_MAX_LISTINGS: ${DISCOVERY_MAX_LISTINGS:-20}
       DISCOVERY_TARGET_EMPLOYERS: ${DISCOVERY_TARGET_EMPLOYERS:-5}
@@ -114,6 +115,7 @@ services:
       CV_LLM_MODEL: ${CV_LLM_MODEL:-gemini-3.5-flash-lite}
       CV_LLM_RESPONSE_MODE: ${CV_LLM_RESPONSE_MODE:-json_schema}
       CV_LLM_API_KEY: ${CV_LLM_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       CV_LLM_ALLOW_HTTP: ${CV_LLM_ALLOW_HTTP:-false}
     depends_on:
       profile-service:
@@ -156,6 +158,7 @@ services:
       MONGODB_URI: mongodb://elo_assessment:${ASSESSMENT_DB_PASSWORD:?Set ASSESSMENT_DB_PASSWORD}@mongodb:27017/elo_assessment
       MONGODB_DATABASE: elo_assessment
       ASSESSMENT_LLM_API_KEY: ${ASSESSMENT_LLM_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       ASSESSMENT_LLM_MODEL: ${ASSESSMENT_LLM_MODEL:-gemini-3.5-flash-lite}
       ASSESSMENT_LLM_BASE_URL: ${ASSESSMENT_LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
       ASSESSMENT_LLM_TOKEN_PARAMETER: ${ASSESSMENT_LLM_TOKEN_PARAMETER:-max_tokens}
@@ -183,6 +186,7 @@ services:
       MONGODB_URI: mongodb://elo_roadmap:${ROADMAP_DB_PASSWORD:?Set ROADMAP_DB_PASSWORD}@mongodb:27017/elo_roadmap
       MONGODB_DATABASE: elo_roadmap
       ROADMAP_LLM_API_KEY: ${ROADMAP_LLM_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       ROADMAP_LLM_MODEL: ${ROADMAP_LLM_MODEL:-gemini-3.5-flash-lite}
       ROADMAP_LLM_BASE_URL: ${ROADMAP_LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
       ROADMAP_LLM_TOKEN_PARAMETER: ${ROADMAP_LLM_TOKEN_PARAMETER:-max_tokens}

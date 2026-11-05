@@ -109,16 +109,22 @@ def test_public_docker_example_contains_only_active_inputs_and_no_example_secret
     compose=(root/'infrastructure/docker/compose.yaml').read_text()
     pairs=dict(re.findall(r'^([A-Z][A-Z0-9_]*)=(.*)$',template,re.M))
     consumed=set(re.findall(r'\$\{([A-Z][A-Z0-9_]*)',compose))
+    while True:
+        expanded=consumed | {reference for name in consumed for reference in
+            re.findall(r'\$\{([A-Z][A-Z0-9_]*)',pairs.get(name,''))}
+        if expanded==consumed:break
+        consumed=expanded
     assert set(pairs)<=consumed
     from app.ai.config import REASONING_MODEL
-    assert pairs['CAREER_LLM_PROVIDER']=='gemini'
-    assert pairs['CAREER_LLM_MODEL']==REASONING_MODEL
-    assert pairs['CAREER_LLM_BASE_URL']=='https://generativelanguage.googleapis.com/v1beta/openai'
-    assert pairs['CAREER_LLM_RESPONSE_MODE']=='json_schema'
+    assert pairs['CAREER_LLM_PROVIDER']=='compatible'
+    assert pairs['OPENROUTER_MODEL']=='openai/gpt-4o-mini'
+    assert pairs['CAREER_LLM_MODEL']=='${OPENROUTER_MODEL}'
+    assert pairs['CAREER_LLM_BASE_URL']=='https://openrouter.ai/api/v1'
+    assert pairs['CAREER_LLM_RESPONSE_MODE']=='json_schema_strict'
     assert pairs['CAREER_LLM_TOKEN_PARAMETER']=='max_tokens'
     assert pairs['CAREER_RESEARCH_PROVIDER']=='brave'
     for prefix in ('CV','ASSESSMENT','ROADMAP'):
-        assert pairs[prefix+'_LLM_MODEL']==REASONING_MODEL
+        assert pairs[prefix+'_LLM_MODEL']=='${OPENROUTER_MODEL}'
         assert pairs[prefix+'_LLM_BASE_URL']==pairs['CAREER_LLM_BASE_URL']
         assert pairs[prefix+'_LLM_ALLOW_HTTP']=='false'
     # Existing private deployments without new settings retain the old model.

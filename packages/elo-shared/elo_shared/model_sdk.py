@@ -4,9 +4,30 @@ The application owns the supplied HTTP client. Closing the SDK wrapper must not
 close it: search and authentication may still be using that same client.
 """
 from contextlib import asynccontextmanager, contextmanager
+import os
+from urllib.parse import urlsplit
 
 import httpx
 from openai import OpenAI, AsyncOpenAI, APIConnectionError, APIStatusError, APITimeoutError, Omit
+
+
+def resolve_model_api_key(base_url, service_key):
+    """Use the shared OpenRouter key only for its exact HTTPS origin.
+
+    An explicitly configured service key takes precedence. Future model
+    integrations can use the same resolver after validating their base URL.
+    """
+    key = (service_key or '').strip()
+    if key:
+        return key
+    try:
+        parsed = urlsplit(base_url)
+        is_openrouter = (parsed.scheme == 'https' and parsed.hostname == 'openrouter.ai'
+                         and parsed.port in (None, 443) and not parsed.username
+                         and not parsed.password and not parsed.query and not parsed.fragment)
+    except ValueError:
+        is_openrouter = False
+    return os.getenv('OPENROUTER_API_KEY', '').strip() if is_openrouter else ''
 
 
 class ProviderHTTPClient(httpx.AsyncClient):
