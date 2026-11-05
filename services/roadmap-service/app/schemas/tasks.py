@@ -32,6 +32,7 @@ class TaskChanges(Contract):
     instructions:Text|None=None
     completion_outcome:Text|None=None
     estimated_minutes:int|None=Field(default=None,strict=True,ge=1,le=60000)
+    requirement_refs:list[Key]|None=Field(default=None,max_length=30)
     schedule:list[TaskSlot]|None=Field(default=None,max_length=100)
 
 class AddTask(Mutation):

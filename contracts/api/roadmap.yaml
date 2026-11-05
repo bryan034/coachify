@@ -4559,6 +4559,23 @@
             ],
             "title": "Estimated Minutes"
           },
+          "requirement_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 80,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 30
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Refs"
+          },
           "schedule": {
             "anyOf": [
               {
