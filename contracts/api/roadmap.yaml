@@ -4369,6 +4369,19 @@
               }
             ],
             "title": "Instructions"
+          },
+          "completion_outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Outcome"
           }
         },
         "additionalProperties": false,

@@ -30,6 +30,7 @@ class TaskDefinition(Contract):
 class TaskChanges(Contract):
     title:Title|None=None
     instructions:Text|None=None
+    completion_outcome:Text|None=None
 
 class AddTask(Mutation):
     task:TaskDefinition
