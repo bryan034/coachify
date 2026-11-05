@@ -290,7 +290,7 @@ CV-context acknowledgement stays separate.
 
 ## Roadmap adviser
 
-`/roadmap` opens a fixed planner form showing the goal and skills to be sent, the study settings, repeating blackout days and times, and a backend-calculated runway. A button opens the chat helper, which guides the user through the required details and fills in the form. Generation runs Assessment if needed and opens a roadmap page with Roadmap and Starting point tabs. Previews apply only when accepted. See the [feature README](src/features/roadmap/README.md).
+`/roadmap` opens a planner that writes the goal, study settings and repeating blackout days and times as a sentence travelling down a road to a backend-calculated runway and Generate. The chat helper docks beside it on wide screens, guides the user through the required details and fills in the form. Generation runs Assessment if needed and opens a roadmap page led by a to-do list of sessions, viewed by day, week or a monthly calendar of weeks, with a Starting point tab. Previews apply only when accepted. See the [feature README](src/features/roadmap/README.md).
 
 Skills Profile shows upload beside a fixed-height, internally scrolling **Your CVs**
 library. Cards support persisted titles, Rename, Review CV, Set as active baseline

@@ -11,6 +11,14 @@ function state(overrides: Partial<Workspace> = {}): Workspace { return { planner
  context: { ready: true, issues: [], model_available: true, research_coverage: 'no_findings', goal: { role: 'Developer', target_type: 'specific_job' }, cv: { id: 'cv-one', name: 'synthetic.docx' }, planning_defaults: { application_date: null, weekly_hours: 6, availability_periods: [] } }, ...overrides }; }
 const openHelper = async () => fireEvent.click(await screen.findByRole('button', { name: /(Start|Continue with) chat helper/ }));
 beforeEach(() => { api.mockReset(); session.account = { id: 'owner-one' }; session.token = 'synthetic-token'; });
+it('shows why the workspace failed to load and recovers on retry', async () => {
+ api.mockRejectedValueOnce(new Error('Your plan could not be loaded or saved. Retry to recover your saved work.')).mockResolvedValue(state());
+ render(<RoadmapPlanner />);
+ expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded');
+ fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
+ await screen.findByRole('button', { name: /(Start|Continue with) chat helper/ });
+ expect(screen.queryByRole('alert')).toBeNull();
+});
 it('gates missing CV and goal without making model requests', async () => {
  const value = state(); value.context.ready = false; value.context.issues = [{ source: 'cv', message: 'Select an extracted CV.', href: '/cv' }]; api.mockResolvedValue(value);
  render(<RoadmapPlanner />); await screen.findByText('Select an extracted CV.');

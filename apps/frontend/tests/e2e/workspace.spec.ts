@@ -85,7 +85,6 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   }
   else if(label==='Roadmap') {
    await expect(page.getByRole('heading',{name:'Bring your starting point and direction'})).toBeVisible();
-   await page.getByRole('button',{name:'Start chat helper'}).click();
    await expect(page.getByRole('textbox',{name:'Answer here'})).toBeDisabled();
    await expect(page.getByRole('button',{name:'Send message',exact:true})).toBeDisabled();
   } else await expect(page.locator('.feature-notice')).toContainText('Coming soon');

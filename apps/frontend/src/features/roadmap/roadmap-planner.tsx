@@ -25,6 +25,7 @@ function Planner({ token }: { token: string }) {
  const [text, setText] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
  const [partial, setPartial] = useState(false); const [tab, setTab] = useState<'plan' | 'assessment'>('plan');
  const [helperOpen, setHelperOpen] = useState(false); const launcher = useRef<HTMLButtonElement>(null);
+ const helperDismissed = useRef(false); const helperTakesFocus = useRef(true);
  const [configuring, setConfiguring] = useState(false);
  const [pending, setPending] = useState<MessageRequest | null>(null);
  const mounted = useRef(true); const latest = useRef<Workspace | null>(null); const sequence = useRef(0);
@@ -66,7 +67,23 @@ function Planner({ token }: { token: string }) {
  // A saved message that failed can only be retried from the helper, so bring it into view.
  const failedMessageId = workspace?.operation?.status === 'failed' && workspace.retry_request ? workspace.operation.id : null;
  useEffect(() => { if (failedMessageId) setHelperOpen(true); }, [failedMessageId]);
- function closeHelper() { setHelperOpen(false); requestAnimationFrame(() => launcher.current?.focus()); }
+ function closeHelper() { helperDismissed.current = true; setHelperOpen(false); requestAnimationFrame(() => launcher.current?.focus()); }
+ function openHelper() { helperTakesFocus.current = true; helperDismissed.current = false; setHelperOpen(true); }
+ // Before a roadmap is shown the helper stays docked beside the planner, unless the user closed it.
+ const current = workspace?.planner; const currentReview = current?.candidate ? current.candidate_review : current?.active_review;
+ const planning = !!workspace && !((current?.candidate || current?.active) && currentReview && !configuring);
+ useEffect(() => {
+  const wide = window.matchMedia?.('(min-width: 1101px)');
+  if (!planning || !wide) return;
+  // On narrow screens the helper covers the page, so it only stays open there if the user opened it.
+  const fit = () => {
+   if (helperDismissed.current) return;
+   if (wide.matches) { helperTakesFocus.current = false; setHelperOpen(true); }
+   else if (!helperTakesFocus.current) setHelperOpen(false);
+  };
+  fit(); wide.addEventListener?.('change', fit);
+  return () => wide.removeEventListener?.('change', fit);
+ }, [planning]);
  async function change(path: string, data: Record<string, unknown>, retry = false) {
   if (busy || running || !latest.current) return false;
   const call = retry && unknownMutation.current ? unknownMutation.current : { path, body: { ...data, expected_version: latest.current.version, mutation_id: crypto.randomUUID() } };
@@ -112,12 +129,21 @@ function Planner({ token }: { token: string }) {
  const review = preview ? planner.candidate_review : planner.active_review;
  const showRoadmap = !!plan && !!review && !configuring;
  const failedGeneration = workspace.operation?.status === 'failed' ? planner.retry_generate : null;
- const helper = helperOpen && <AdviserChat workspace={workspace} runway={settings.runway} text={text} setText={setText} partial={partial} setPartial={setPartial} showPartial={showRoadmap} busy={busy} running={running} frozen={frozen} editing={!!plan} close={closeHelper} send={() => void send()}
+ const helper = helperOpen && <AdviserChat workspace={workspace} runway={settings.runway} text={text} setText={setText} partial={partial} setPartial={setPartial} showPartial={showRoadmap} busy={busy} running={running} frozen={frozen} editing={!!plan} takeFocus={helperTakesFocus.current} close={closeHelper} send={() => void send()}
   retry={() => void send(workspace.operation?.error?.code === 'inputs_changed' ? { ...workspace.retry_request!, expected_version: workspace.version, mutation_id: crypto.randomUUID() } : workspace.retry_request!)} />;
  const starting = <AssessmentView assessment={plan?.assessment || assessment} />;
  const legacy = earlier || earlierDraft;
  return <section className="roadmap-adviser">
-  <header className="roadmap-heading"><div><h1>Roadmap</h1><p>Make room for the career you want.</p></div><div className="roadmap-heading-side"><div className="roadmap-goal">{context.goal?.role || assessment?.role || 'Choose your direction'}{context.cv?.name && <span>Using {context.cv.name}</span>}</div><div className="helper-launcher"><button ref={launcher} type="button" className="btn ghost" aria-expanded={helperOpen} onClick={() => helperOpen ? closeHelper() : setHelperOpen(true)}>{helperOpen ? 'Hide chat helper' : workspace.messages.length ? 'Continue with chat helper' : 'Start chat helper'}</button><p className="small">{running && !helperOpen ? 'Your request is still being worked on. Changes are paused until it finishes.' : plan ? 'It can prepare a preview of your changes.' : 'It asks for one detail at a time and fills in the planner.'}</p></div></div></header>
+  <header className="roadmap-heading"><div><h1>Roadmap</h1><p>Make room for the career you want.</p></div>
+   <div className="roadmap-heading-side">
+    <div className="roadmap-tabs" role="tablist" aria-label={showRoadmap ? 'Roadmap views' : 'Planning detail'}>
+     <button id="plan-tab" role="tab" aria-selected={tab !== 'assessment'} aria-controls="plan-panel" onClick={() => setTab('plan')}>{showRoadmap ? 'Roadmap' : 'Planner'}</button>
+     <button id="assessment-tab" role="tab" aria-selected={tab === 'assessment'} aria-controls="assessment-panel" onClick={() => setTab('assessment')}>Starting point</button>
+    </div>
+    <button ref={launcher} type="button" className="btn ghost helper-launcher" aria-expanded={helperOpen} onClick={() => helperOpen ? closeHelper() : openHelper()}>{helperOpen ? 'Hide chat helper' : workspace.messages.length ? 'Continue with chat helper' : 'Start chat helper'}</button>
+    {running && !helperOpen && <p className="small">Your request is still being worked on. Changes are paused until it finishes.</p>}
+   </div>
+  </header>
   {error && <div className="roadmap-notice" role="alert"><p>{error}</p><button className="btn ghost" disabled={busy} onClick={() => void load()}>Reload saved work</button>{pending && <button className="btn" disabled={busy || running} onClick={() => void send(pending)}>Recover sent message</button>}{unknown && <button className="btn" disabled={busy || running} onClick={() => void change('', {}, true)}>Recover saved change</button>}</div>}
   {pending && !busy && !error && <div className="roadmap-notice"><p>The sent message is awaiting confirmation.</p><button className="btn" disabled={running} onClick={() => void send(pending)}>Recover sent message</button></div>}
   {unknown && !error && <div className="roadmap-notice"><p>The previous change is awaiting confirmation.</p><button className="btn" disabled={busy || running} onClick={() => void change('', {}, true)}>Recover saved change</button></div>}
@@ -126,25 +152,16 @@ function Planner({ token }: { token: string }) {
   <GenerationProgress stage={running ? workspace.operation?.stage : undefined} />
   {failedGeneration && <div className="roadmap-notice" role="status"><p>{workspace.operation?.error?.detail || 'Your plan could not be prepared.'}</p>{!!workspace.operation?.retry_after && <p>Provider capacity: retry in {workspace.operation.retry_after} seconds.</p>}<button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={() => retryGenerate(failedGeneration, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
   <div className={`roadmap-workspace${helperOpen ? ' helper-open' : ''}`}><div className="roadmap-main">
-  {showRoadmap ? <div className="roadmap-page">
-   <div className="roadmap-tabs" role="tablist" aria-label="Roadmap views">
-    <button id="plan-tab" role="tab" aria-selected={tab === 'plan'} aria-controls="plan-panel" onClick={() => setTab('plan')}>Roadmap</button>
-    <button id="assessment-tab" role="tab" aria-selected={tab === 'assessment'} aria-controls="assessment-panel" onClick={() => setTab('assessment')}>Starting point</button>
-   </div>
-   <div id="plan-panel" role="tabpanel" aria-labelledby="plan-tab" hidden={tab !== 'plan'}>
-    <RoadmapReview plan={plan!} review={review!} preview={preview} planner={planner} blockers={planner.candidate_blockers} frozen={frozen}
-     accept={() => void change('/planner/accept', {})} discard={() => void change('/planner/discard', {})} backToSettings={() => setConfiguring(true)} revise={() => void generate()}
-     complete={(session, note) => void change('/planner/assignments/status', { assignment_id: session.id, status: 'completed', evidence_note: note.trim() || null })}
-     reopen={session => void change('/planner/assignments/status', { assignment_id: session.id, status: 'scheduled' })}
-     recordOutcome={(milestone, demonstrated, note) => void change('/planner/milestones/outcome', { milestone_id: milestone.id, demonstrated, note: note || null })}
-     confirm={(gap, answer) => void change('/planner/confirmations', { gap_id: gap.id, answer })} />
-   </div>
-   <div id="assessment-panel" role="tabpanel" aria-labelledby="assessment-tab" hidden={tab !== 'assessment'}>{starting}</div>
-  </div> : <div className="adviser-plan">
-    <div className="roadmap-tabs" role="tablist" aria-label="Planning detail"><button id="plan-tab" role="tab" aria-selected={tab !== 'assessment'} aria-controls="plan-panel" onClick={() => setTab('plan')}>Planner</button><button id="assessment-tab" role="tab" aria-selected={tab === 'assessment'} aria-controls="assessment-panel" onClick={() => setTab('assessment')}>Starting point</button></div>
-    <div id="plan-panel" role="tabpanel" aria-labelledby="plan-tab" hidden={tab === 'assessment'}><SettingsPanel workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} returnToReview={plan ? () => setConfiguring(false) : null} /></div>
-    <div id="assessment-panel" role="tabpanel" aria-labelledby="assessment-tab" hidden={tab !== 'assessment'}>{starting}</div>
-  </div>}
+  <div id="plan-panel" role="tabpanel" aria-labelledby="plan-tab" hidden={tab === 'assessment'}>
+   {showRoadmap ? <RoadmapReview plan={plan!} review={review!} preview={preview} planner={planner} blockers={planner.candidate_blockers} frozen={frozen}
+    accept={() => void change('/planner/accept', {})} discard={() => void change('/planner/discard', {})} backToSettings={() => setConfiguring(true)} revise={() => void generate()}
+    complete={(session, note) => change('/planner/assignments/status', { assignment_id: session.id, status: 'completed', evidence_note: note.trim() || null })}
+    reopen={session => change('/planner/assignments/status', { assignment_id: session.id, status: 'scheduled' })}
+    recordOutcome={(milestone, demonstrated, note) => void change('/planner/milestones/outcome', { milestone_id: milestone.id, demonstrated, note: note || null })}
+    confirm={(gap, answer) => void change('/planner/confirmations', { gap_id: gap.id, answer })} />
+   : <SettingsPanel workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} returnToReview={plan ? () => setConfiguring(false) : null} />}
+  </div>
+  <div id="assessment-panel" role="tabpanel" aria-labelledby="assessment-tab" hidden={tab !== 'assessment'}>{starting}</div>
   </div>{helper}</div>
   {!!legacy && <details className="plan-explanation earlier-plan"><summary>Earlier plan without session times</summary><p className="small">This plan was made before timed roadmaps. It stays here for reference and isn’t part of your current roadmap.</p><ul>{legacy.tasks.filter(task => !task.removed).map(task => <li key={task.id}>{task.title} · {task.status.replaceAll('_', ' ')}</li>)}</ul></details>}
  </section>;
