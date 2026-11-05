@@ -48,7 +48,30 @@ def task_progress(plan,start,end,readiness):
             'readiness':readiness.get(t['id'])} for t in shown]}
 
 def milestone_progress(plan,review,readiness):
-    return []
+    result=[]; tasks=plan.get('editable_tasks') or []
+    for m in plan.get('milestones',[]):
+        all_members=[t for t in tasks if t.get('milestone_key')==m['key']]
+        members=[t for t in all_members if not t.get('removed')]
+        blocked=[t for t in members if not readiness.get(t['id'],{}).get('actionable',False) and t.get('status')!='completed']
+        reasons=[]
+        for task in blocked:
+            for reason in readiness.get(task['id'],{}).get('reasons',[]):reasons.append({'task_id':task['id'],**reason})
+        progress=dict((review or {}).get('milestones',{}).get(m['id'],{}))
+        if 'completed_minutes' in progress:
+            progress['completed_scheduled_minutes_estimate']=progress.pop('completed_minutes')
+        review_reasons=[]
+        if not members:review_reasons.append({'code':'no_active_tasks','message':'This milestone has no active tasks.'})
+        if any(t.get('removed') for t in all_members):review_reasons.append({'code':'removed_work','message':'Some milestone work was removed and needs review.'})
+        if any(t.get('definition_review_required') for t in all_members):review_reasons.append({'code':'task_definition_changed','message':'A task completion definition needs review.'})
+        outcome=m.get('outcome') or {}
+        if outcome.get('membership_review_required'):review_reasons.append({'code':'membership_changed','message':'The milestone tasks changed and its outcome needs review.'})
+        elif outcome.get('definition_review_required'):review_reasons.append({'code':'outcome_definition_changed','message':'The milestone outcome changed and needs review.'})
+        if not (m.get('outcome') or {}).get('demonstrated'):review_reasons.append({'code':'outcome_unconfirmed','message':'The milestone outcome has not been confirmed; detailed tasks may not cover all remaining work.'})
+        if progress.get('review_needed') and not review_reasons:review_reasons.append({'code':'roadmap_review_required','message':'Roadmap reports that this milestone needs review.'})
+        result.append({'id':m['id'],'title':m['title'],'outcome':m.get('outcome') or {},
+            'progress':progress,'review_reasons':review_reasons,
+            'blocked_task_ids':[t['id'] for t in blocked], 'blocked_reasons':reasons})
+    return result
 
 def requirements(result,assessment_state,plan):
     return {'state':'unavailable','items':[],'groups':[], 'unlinked_task_ids':[], 'stale_link_task_ids':[]}

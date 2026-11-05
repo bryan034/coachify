@@ -67,6 +67,15 @@ def test_owner_auth_no_plan_and_no_source_mutations():
     assert (fake.roadmap,fake.assessment,fake.baseline)==before
     assert all(p.endswith('dashboard-source') or '/history/' in p for _,p,_ in fake.calls)
 
+def test_empty_plan_ratio_is_unknown_and_removed_last_task_never_completes_milestone():
+    fake=Fake();fake.roadmap['active']['editable_tasks']=[task('removed',removed=True)]
+    fake.roadmap['active_review']['milestones']['m1']={'tasks_total':0,'tasks_completed':0,'review_needed':True}
+    with client(fake) as c:
+        data=c.get('/api/v1/dashboard',headers=H).json()
+        assert data['state']=='empty' and data['progress']['overall']['completion_ratio'] is None
+        assert data['milestones'][0]['progress']['review_needed'] is True
+        assert {'no_active_tasks','removed_work'} <= {r['code'] for r in data['milestones'][0]['review_reasons']}
+
 def test_unavailable_and_changed_sources_are_never_zero():
     fake=Fake();fake.unavailable.add('assessment')
     with client(fake) as c:
@@ -116,6 +125,14 @@ def test_completed_unscheduled_work_is_distinct_from_remaining_unscheduled_estim
         assert progress['remaining_unscheduled_minutes']==60
         assert 'personal-done' in progress['unscheduled_task_ids']
 
+def test_milestone_effort_is_labeled_and_unconfirmed_outcome_is_explained():
+    fake=Fake();fake.roadmap['active_review']['milestones']['m1']['completed_minutes']=30
+    with client(fake) as c:
+        milestone=c.get('/api/v1/dashboard',headers=H).json()['milestones'][0]
+        assert milestone['progress']['completed_scheduled_minutes_estimate']==30
+        assert 'completed_minutes' not in milestone['progress']
+        assert 'outcome_unconfirmed' in {reason['code'] for reason in milestone['review_reasons']}
+
 def test_missing_roadmap_update_time_is_not_replaced_by_creation_time():
     fake=Fake();fake.roadmap['active'].pop('updated_at')
     with client(fake) as c:
@@ -138,3 +155,11 @@ def test_failed_assessment_refresh_is_visible_without_exposing_error_details():
         assert data['assessment']['operation']=={'id':'operation-1','status':'failed','stage':'failed'}
         assert any('operation failed' in message for message in data['warnings'])
         assert 'private provider error' not in str(data)
+
+def test_milestone_membership_changes_are_explained():
+    fake=Fake();fake.roadmap['active']['milestones'][0]['outcome']={
+        'demonstrated':True,'definition_review_required':True,'membership_review_required':True}
+    with client(fake) as c:
+        milestone=c.get('/api/v1/dashboard',headers=H).json()['milestones'][0]
+        assert 'membership_changed' in {item['code'] for item in milestone['review_reasons']}
+        assert 'outcome_definition_changed' not in {item['code'] for item in milestone['review_reasons']}
