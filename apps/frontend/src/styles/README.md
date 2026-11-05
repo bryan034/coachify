@@ -11,3 +11,6 @@ Sent message bubbles in CV/manual intake, Career Discovery, saved-goal chat and
 Roadmap adviser use the shared mint accent (`--mint`) with ink text. CV question
 shortcuts appear in the scrollable conversation, without a separate question-review
 panel above the composer.
+
+Home and the sign-in pages keep their earlier presentation through the scoped rules at
+the end of `elo-theme.css`; palette or control changes elsewhere do not apply to them.

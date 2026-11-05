@@ -70,6 +70,13 @@ class Upstream:
         if profile.get('onboarding_complete') is not True: raise Problem('Finish your profile setup before planning.',403,'onboarding')
         return {**account, 'profile': profile, 'token':token}
 
+class ProviderOverloaded(Exception):
+    """The provider said it is temporarily over capacity, so the same request may succeed shortly."""
+
+# Pauses between attempts after a 503. Bounded so that a saved operation stays within its budget.
+OVERLOAD_DELAYS=(2,5)
+OVERLOAD_RETRY_AFTER=60
+
 class Model:
     def __init__(self, client, prefix):
         self.client, self.prefix = client, prefix
@@ -119,6 +126,7 @@ class Model:
                         delay=response.headers.get('retry-after','30')
                         delay=int(delay) if delay.isdigit() else 30
                         raise Problem('The adviser is waiting for provider capacity. Retry this saved operation.',429,'model_quota',min(max(delay,1),3600))
+                    if response.status_code == 503: raise ProviderOverloaded
                     if response.status_code != 200: raise Problem('The adviser provider could not complete this request. Your saved work is retained.',503,'model_provider')
                     data=bytearray()
                     async for chunk in response.aiter_bytes():
@@ -128,6 +136,10 @@ class Model:
                 choice=envelope['choices'][0]
                 if choice.get('finish_reason')!='stop': raise Problem('The adviser response was incomplete. Retry the saved request.',502,'model_output')
                 return schema.model_validate_json(choice['message']['content'])
+            except ProviderOverloaded:
+                if attempt==len(OVERLOAD_DELAYS):
+                    raise Problem('The AI model is busy right now. This is usually temporary, and your saved work is retained. Try again in a minute.',503,'model_busy',OVERLOAD_RETRY_AFTER) from None
+                await asyncio.sleep(OVERLOAD_DELAYS[attempt])
             except ValidationError:
                 messages.append({'role':'user','content':'The output failed local schema validation. Return a complete valid object with the same supplied evidence and allowed references.'})
             except (ValueError, KeyError, TypeError, IndexError):

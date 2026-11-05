@@ -4,7 +4,8 @@ import json
 import httpx
 import pytest
 from pydantic import BaseModel
-from elo_shared.runtime import Model
+from elo_shared import runtime
+from elo_shared.runtime import Model, Problem
 
 class Answer(BaseModel):
     reply:str
@@ -105,3 +106,34 @@ def test_token_parameter_can_be_selected_for_models_that_require_it(monkeypatch)
             with pytest.raises(ValueError):Model(client,'ROADMAP')
         assert calls[0]['max_completion_tokens']==24000 and 'max_tokens' not in calls[0]
     asyncio.run(run())
+
+class Reply(BaseModel):
+    value:str
+def overloaded_model(monkeypatch,outcomes):
+    monkeypatch.setenv('ROADMAP_LLM_API_KEY','synthetic-key');monkeypatch.setenv('ROADMAP_LLM_BASE_URL','https://provider.example/v1');monkeypatch.setenv('ROADMAP_LLM_MODEL','synthetic-model')
+    calls=[];pauses=[]
+    async def pause(seconds):pauses.append(seconds)
+    monkeypatch.setattr(runtime.asyncio,'sleep',pause)
+    def handler(request):
+        calls.append(request);status=outcomes[min(len(calls)-1,len(outcomes)-1)]
+        if status==200:return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{"value":"ok"}'}}]})
+        return httpx.Response(status,json={'error':{'status':'UNAVAILABLE','message':'High demand.'}})
+    return Model(httpx.AsyncClient(transport=httpx.MockTransport(handler)),'ROADMAP'),calls,pauses
+
+def test_an_overloaded_provider_is_retried_with_bounded_pauses(monkeypatch):
+    model,calls,pauses=overloaded_model(monkeypatch,[503,503,200])
+    assert asyncio.run(model.generate(Reply,'Reply.',{})).value=='ok'
+    assert len(calls)==3 and pauses==list(runtime.OVERLOAD_DELAYS)
+
+def test_lasting_overload_reports_a_busy_model_with_a_saved_delay(monkeypatch):
+    model,calls,pauses=overloaded_model(monkeypatch,[503])
+    with pytest.raises(Problem) as failure:asyncio.run(model.generate(Reply,'Reply.',{}))
+    assert len(calls)==3 and pauses==list(runtime.OVERLOAD_DELAYS)
+    assert (failure.value.code,failure.value.status,failure.value.retry_after)==('model_busy',503,runtime.OVERLOAD_RETRY_AFTER)
+    assert 'busy' in failure.value.detail and 'High demand' not in failure.value.detail
+
+@pytest.mark.parametrize('status',[400,401,403,404,500])
+def test_other_provider_rejections_are_not_retried(monkeypatch,status):
+    model,calls,pauses=overloaded_model(monkeypatch,[status])
+    with pytest.raises(Problem) as failure:asyncio.run(model.generate(Reply,'Reply.',{}))
+    assert len(calls)==1 and pauses==[] and failure.value.code=='model_provider'

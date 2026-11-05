@@ -14,7 +14,7 @@ The UI lives beside the adviser on **Roadmap**. `job_skill_gaps` and `interview_
 See [SPEC.md](SPEC.md), [contract](../../contracts/api/assessment.yaml) and [service setup](../../docs/setup.md#assessment-and-roadmap-adviser). All tests use synthetic data/provider outputs; live semantic accuracy remains to be evaluated.
 
 Model calls use the shared OpenAI Python SDK transport with Gemini as the cloud
-default. No Gemini SDK is required. SDK retries are disabled; existing response
+default. No Gemini SDK is required. SDK retries are disabled. A provider 503 gets two short retries, then reports a busy model with a saved retry delay. A comparison batch that breaks an output rule is sent back to the model with the exact error, up to three attempts in all, before the assessment fails. Existing response
 limits, provider quota handling and schema repair attempts remain enforced.
 
 Local testing can use the shared 1.5B Ollama alias through this service's own

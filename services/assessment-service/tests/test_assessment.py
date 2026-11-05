@@ -164,3 +164,33 @@ def test_or_routes_preserve_partial_support_but_every_proven_unmet_route_confirm
     items=[{'match_status':'partial','components':[{'status':'supported'},{'status':remainder}]},
         {'match_status':'confirmed_shortfall','components':[{'status':'confirmed_shortfall'}]}]
     assert group_outcome(items,'any')==expected
+
+
+class Citing:
+    """Cites the whole project item for the first calls, then the source-scoped claim."""
+    configured=True
+    def __init__(self,bad_calls):self.bad_calls=bad_calls;self.contexts=[]
+    async def generate(self,schema,instructions,context):
+        self.contexts.append(context)
+        ref='cv:item1' if len(self.contexts)<=self.bad_calls else 'cv:item1:claim:0'
+        return Batch(outcomes=[{'requirement_ref':r['ref'],'components':[{'dimension':'capability','status':'supported','explanation':'Declared personal project use.','evidence_refs':[ref]}],
+            'recommendation':None,'mapping_method':'canonical','mapping_reason':'Same Python identity.'} for r in context['requirements']])
+
+def test_a_rejected_batch_is_sent_back_with_the_exact_error_and_then_accepted():
+    model=Citing(bad_calls=1)
+    with TestClient(create_app(MemoryStore(),Sources(),model)) as client:
+        client.post('/api/v1/assessments',json={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True},headers=H);state=finish(client)
+    assert state['operation']['status']=='succeeded',state['operation']
+    assert len(model.contexts)==2 and 'validation_errors' not in model.contexts[0]
+    retry=model.contexts[1]
+    assert retry['attempt']==2 and retry['validation_errors']==['Use the source-scoped personal skill claim, not its whole team/project item.']
+    assert retry['previous_output']['outcomes'][0]['components'][0]['evidence_refs']==['cv:item1']
+    assert state['result']['job_skill_gaps'][0]['components'][0]['evidence_refs']==['cv:item1:claim:0']
+
+def test_a_model_that_keeps_breaking_the_rules_still_fails_after_three_attempts():
+    model=Citing(bad_calls=99)
+    with TestClient(create_app(MemoryStore(),Sources(),model)) as client:
+        client.post('/api/v1/assessments',json={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True},headers=H);state=finish(client)
+    assert state['operation']['status']=='failed' and len(model.contexts)==3
+    assert state['operation']['error']['code']=='assessment_output' and 'source-scoped' in state['operation']['error']['detail']
+    assert state['result'] is None

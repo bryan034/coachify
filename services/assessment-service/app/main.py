@@ -6,6 +6,24 @@ from app.schemas import Generate, Batch, Result, Context, Current
 from app.inputs import capture
 from app.domain import INSTRUCTIONS, validate_batch, group_outcome
 
+MAX_BATCH_ATTEMPTS=3
+
+async def compare_batch(model,requirements,evidence):
+    """Ask the model, check its output, and on a rule failure send the exact error back for another try.
+
+    The same checks stay authoritative; a model that keeps breaking them still fails the assessment.
+    """
+    context={'requirements':requirements,'evidence':evidence};failure=None
+    for attempt in range(1,MAX_BATCH_ATTEMPTS+1):
+        output=await model.generate(Batch,INSTRUCTIONS,context)
+        try:return validate_batch(output,requirements,evidence)
+        except Problem as problem:
+            if problem.code!='assessment_output' or attempt==MAX_BATCH_ATTEMPTS:raise
+            failure=problem
+            context={'requirements':requirements,'evidence':evidence,'attempt':attempt+1,
+                'validation_errors':[problem.detail],'previous_output':output.model_dump(mode='json')}
+    raise failure
+
 def create_app(store=None,upstream=None,model=None):
     app=application('elo Assessment API','ASSESSMENT',store=store,upstream=upstream,model=model)
     async def worker(row,account):
@@ -27,8 +45,7 @@ def create_app(store=None,upstream=None,model=None):
             live=await capture(app.state.upstream,verified)
             if live.get('input_hash')!=snapshot['input_hash']:raise Problem('Your inputs changed before the next comparison step.',409,'inputs_changed')
             requirements=snapshot['requirements'][start:start+8]
-            output=await app.state.model.generate(Batch,INSTRUCTIONS,{'requirements':requirements,'evidence':snapshot['evidence']})
-            outcomes.extend(validate_batch(output,requirements,snapshot['evidence']))
+            outcomes.extend(await compare_batch(app.state.model,requirements,snapshot['evidence']))
             row['pending']['checkpoint']['outcomes']=outcomes
             row['pending']['stage']='assessed_'+str(len(outcomes))
             await thread(app.state.store.checkpoint,account['id'],row)

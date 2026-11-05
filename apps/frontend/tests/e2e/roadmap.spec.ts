@@ -89,8 +89,13 @@ test('chat helper fills the planner, then generate, review, accept and run the w
  await expect(page.getByRole('heading', { name: 'When would you like to be ready?' })).toBeVisible();
  expect(await beside()).toBe(false);
  await expect(page.getByRole('button', { name: 'Send message' })).toBeInViewport({ ratio: 1 });
- await page.getByRole('textbox', { name: 'Answer here' }).fill('Five hours a week until 27 January, with Sunday as backup.');
- await page.getByRole('button', { name: 'Send message' }).click();
+ await expect(page.getByText('Timeline › Target date or Duration')).toBeVisible();
+ const answer = page.getByRole('textbox', { name: 'Answer here' });
+ await answer.fill('Five hours a week until 27 January,');
+ await answer.press('Meta+Enter');
+ await expect(answer).toHaveValue('Five hours a week until 27 January,\n');
+ await answer.fill('Five hours a week until 27 January, with Sunday as backup.');
+ await answer.press('Enter');
  await expect(page.getByRole('log')).toContainText('I added those to the planner');
  await expect(page.getByLabel('Target date')).toHaveValue('2030-01-27');
  await page.screenshot({ path: test.info().outputPath('roadmap-helper.png'), fullPage: false });
@@ -244,4 +249,46 @@ test('chat helper fills the planner, then generate, review, accept and run the w
  await page.setViewportSize({ width: 390, height: 844 });
  expect(await noOverflow(page)).toBe(true);
  expect(generations).toBe(2);
+});
+
+test('Generate is disabled until the form is complete, then a loading screen leads to the generated roadmap', async ({ page }) => {
+ await signIn(page);
+ const plan = firstPlan(); let finished = false, polls = 0;
+ const stagesSeen = ['assessing', 'writing', 'detailing'];
+ let state: Workspace = workspace();
+ await page.route('**/api/v1/roadmaps/**', async route => {
+  const path = new URL(route.request().url()).pathname.replace('/api/v1/roadmaps', '');
+  if (path === '/planner/runway') return route.fulfill({ json: runway() });
+  if (path === '/planner/config') { const body = route.request().postDataJSON(); state = { ...state, version: state.version + 1, planner: { ...state.planner, config: body.config } }; return route.fulfill({ json: state }); }
+  if (path === '/planner/generate') { state = { ...state, version: state.version + 1, operation: { id: 'g', status: 'running', stage: 'preparing' } }; return route.fulfill({ status: 202, json: { version: state.version, operation: state.operation } }); }
+  if (path === '/progress') {
+   const stage = stagesSeen[polls++];
+   if (stage) { state = { ...state, operation: { id: 'g', status: 'running', stage } }; return route.fulfill({ json: { version: state.version, operation: state.operation } }); }
+   finished = true; state = { ...state, version: state.version + 1, operation: { id: 'g', status: 'succeeded', stage: 'complete' }, planner: { ...state.planner, candidate: plan, candidate_review: review(plan), candidate_view: candidateView(plan) } };
+   return route.fulfill({ json: { version: state.version, operation: state.operation } });
+  }
+  return route.fulfill({ json: state });
+ });
+ await page.goto('/roadmap');
+ const generate = page.getByRole('button', { name: 'Generate roadmap' });
+ await expect(generate).toBeEnabled();
+ await page.getByLabel('Preferred session in minutes').fill('');
+ await expect(page.getByText('Enter your preferred session length.')).toBeVisible();
+ await expect(generate).toBeDisabled();
+ await page.getByLabel('Preferred session in minutes').fill('60');
+ await expect(generate).toBeEnabled();
+ await generate.click();
+ const bar = page.getByRole('progressbar', { name: 'Roadmap generation' });
+ await expect(bar).toBeVisible();
+ await expect(page.getByRole('heading', { name: 'Your runway' })).toHaveCount(0);
+ await expect(page.getByRole('heading', { name: 'Generating your roadmap' })).toBeFocused();
+ await expect(bar).toHaveAttribute('aria-valuetext', 'Writing your roadmap', { timeout: 6000 });
+ await page.screenshot({ path: test.info().outputPath('roadmap-generating.png') });
+ await page.setViewportSize({ width: 390, height: 844 });
+ expect(await noOverflow(page)).toBe(true);
+ await page.screenshot({ path: test.info().outputPath('roadmap-generating-mobile.png') });
+ await page.setViewportSize({ width: 1280, height: 900 });
+ await expect(page.getByText('Preview: not active until you accept it')).toBeVisible({ timeout: 10000 });
+ await expect(bar).toHaveCount(0);
+ expect(finished).toBe(true);
 });

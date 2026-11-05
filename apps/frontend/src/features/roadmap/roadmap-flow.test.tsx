@@ -124,6 +124,41 @@ it('the helper moves to the next question and says when the required details are
  expect(await screen.findByText(/All required details are filled in/)).toBeVisible();
 });
 
+it('the helper keeps naming the next field after the conversation has started, then offers optional sections', async () => {
+ const started = [{ id: 'one', role: 'assistant', content: 'Thanks, that helps.', created_at: '2030-01-09T00:00:00Z' }];
+ const partly = blankPlanner(); partly.runway = { ...partly.runway, issues: partly.runway.issues.filter(issue => issue.code !== 'missing_target') };
+ serve(workspace({ planner: partly, messages: started } as never)); const first = render(<RoadmapPlanner />);
+ await openHelper();
+ expect(await screen.findByText('Study time › Weekly budget in hours')).toBeVisible();
+ expect(screen.getByRole('heading', { name: 'How many hours can you study each week?' })).toBeVisible();
+ first.unmount();
+ const done = blankPlanner(); done.runway = { ...done.runway, issues: [] };
+ serve(workspace({ planner: done })); const second = render(<RoadmapPlanner />);
+ await openHelper();
+ expect(await screen.findByText('Blackout days and times › Blackout rules')).toBeVisible();
+ expect(screen.getByText(/Optional next/)).toBeVisible();
+ second.unmount();
+ const wrong = blankPlanner(); wrong.runway = { ...wrong.runway, issues: [{ code: 'target_elapsed', message: 'This target date has passed. Choose a new one.' }] };
+ serve(workspace({ planner: wrong })); render(<RoadmapPlanner />);
+ await openHelper();
+ expect(await screen.findByRole('heading', { name: 'This target date has passed. Choose a new one.' })).toBeVisible();
+ expect(screen.getByText('Timeline › Target date or Duration')).toBeVisible();
+});
+
+it('Enter sends a helper message only when sending is allowed, and Cmd+Enter adds a line', async () => {
+ serve(workspace({ planner: blankPlanner() })); render(<RoadmapPlanner />);
+ await openHelper();
+ const box = await screen.findByRole('textbox', { name: 'Answer here' });
+ fireEvent.keyDown(box, { key: 'Enter' });
+ expect(calls('/messages')).toHaveLength(0);
+ fireEvent.change(box, { target: { value: 'Eight weeks' } });
+ fireEvent.keyDown(box, { key: 'Enter', metaKey: true });
+ expect(box).toHaveValue('Eight weeks\n');
+ expect(calls('/messages')).toHaveLength(0);
+ fireEvent.keyDown(box, { key: 'Enter' });
+ await waitFor(() => expect(calls('/messages')).toHaveLength(1));
+});
+
 it('closing the helper keeps the unsent answer and the planner, and Escape closes it too', async () => {
  serve(workspace()); render(<RoadmapPlanner />); await openHelper();
  fireEvent.change(await screen.findByRole('textbox', { name: 'Answer here' }), { target: { value: 'Keep this.' } });
@@ -203,14 +238,59 @@ it('reports a backend validation problem and blocks generation', async () => {
  expect(screen.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
 });
 
-it('shows generation stages, then opens the review', async () => {
+it('replaces the page with a loading screen and progress bar during generation, then opens the review', async () => {
  const running = workspace({ operation: { id: 'g', status: 'running', stage: 'writing' } });
  const finished = withCandidate();
  api.mockImplementation((path: string) => path === '/progress' ? Promise.resolve({ version: 3, operation: { id: 'g', status: 'succeeded', stage: 'complete' } }) : Promise.resolve(api.mock.calls.length > 2 ? finished : running));
  render(<RoadmapPlanner />);
- await screen.findByText('Writing your roadmap');
- expect(screen.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
+ const bar = await screen.findByRole('progressbar', { name: 'Roadmap generation' });
+ expect(bar).toHaveAttribute('aria-valuenow', '50');
+ expect(bar).toHaveAttribute('aria-valuetext', 'Writing your roadmap');
+ expect(screen.getByRole('heading', { name: 'Generating your roadmap' })).toHaveFocus();
+ expect(screen.queryByRole('button', { name: 'Generate roadmap' })).not.toBeInTheDocument();
+ expect(screen.queryByRole('heading', { name: 'Your runway' })).not.toBeInTheDocument();
  await screen.findByRole('button', { name: 'Accept plan' }, { timeout: 3000 });
+ expect(screen.queryByRole('progressbar', { name: 'Roadmap generation' })).not.toBeInTheDocument();
+});
+
+it('shows the loading screen as soon as Generate is clicked, and returns to the form if the request is refused', async () => {
+ const { RoadmapError } = await import('@/lib/api/roadmap');
+ let refuse: (reason: unknown) => void = () => {};
+ serve(workspace(), { '/planner/generate': () => new Promise((_, reject) => { refuse = reject; }) });
+ render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: 'Generate roadmap' }));
+ expect(await screen.findByRole('progressbar', { name: 'Roadmap generation' })).toHaveAttribute('aria-valuenow', '5');
+ await act(async () => { const failure = new (RoadmapError as unknown as new (message: string) => Error & { status: number })('Choose a target date.'); failure.status = 409; refuse(failure); });
+ await screen.findByRole('heading', { name: 'Your runway' });
+ expect(screen.queryByRole('progressbar', { name: 'Roadmap generation' })).not.toBeInTheDocument();
+ expect(screen.getByText('Choose a target date.')).toBeVisible();
+});
+
+it('does not show the generation screen for a chat message or a check-in proposal', async () => {
+ serve(workspace({ operation: { id: 'm', status: 'running', stage: 'preparing' } })); const first = render(<RoadmapPlanner />);
+ await screen.findByRole('heading', { name: 'Your runway' });
+ expect(screen.queryByRole('progressbar', { name: 'Roadmap generation' })).not.toBeInTheDocument();
+ first.unmount();
+ serve(withActive(roadmap(), { })); api.mockImplementation(() => Promise.resolve({ ...withActive(), operation: { id: 'r', status: 'running', stage: 'revising' } })); render(<RoadmapPlanner />);
+ await screen.findByText('Preparing your proposal.');
+ expect(screen.queryByRole('progressbar', { name: 'Roadmap generation' })).not.toBeInTheDocument();
+});
+
+it('keeps Generate disabled until every required field is filled, without asking the backend', async () => {
+ serve(workspace()); render(<RoadmapPlanner />);
+ const generate = await screen.findByRole('button', { name: 'Generate roadmap' });
+ expect(generate).toBeEnabled();
+ const required: [string, string, string][] = [['Preferred session in minutes', '60', 'Enter your preferred session length.'], ['Buffer percentage', '20', 'Enter your buffer percentage.'], ['Plan timezone', 'Asia/Singapore', 'Enter your plan timezone.'], ['Block 1 minutes', '120', 'Enter at least 15 minutes for block 1.']];
+ for (const [label, value, reason] of required) {
+  const field = screen.getByLabelText(label);
+  fireEvent.change(field, { target: { value: '' } });
+  expect(await screen.findByText(reason)).toBeVisible();
+  expect(generate).toBeDisabled();
+  expect(screen.queryByText('Check the supplied values and field limits.')).not.toBeInTheDocument();
+  fireEvent.change(field, { target: { value } });
+  await waitFor(() => expect(generate).toBeEnabled());
+ }
+ expect(calls('/planner/generate')).toHaveLength(0);
 });
 
 it('reviews a plan: next assignment, remaining time, timeline, outcome and remaining gaps', async () => {

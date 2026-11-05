@@ -6,6 +6,7 @@ import {useProfile} from '@/features/profile/profile-provider';
 import {careerApi,type SavedReview,type ResearchSource} from '@/lib/api/career';
 import {AgentActivity,AgentMarkdown,AgentReply} from './agent-message';
 import {ChatScrollControl,useChatScroll} from './use-chat-scroll';
+import { chatEnterKey, chatKeyHint } from '@/lib/chat-keyboard';
 
 type Scope={field:string;area:string;specificity:'field'|'role_area'|'specialisation';career_stage:'internship'|'entry_level'|'experienced'|'unspecified';location:string|null};
 type DiscoveryAnswer={status:'unanswered'|'known'|'unsure'|'skipped';value:string|null;evidence:string|null};
@@ -96,8 +97,8 @@ function DiscoveryConversation({token}:{token:string|undefined}){
    </div>
    <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
    <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}>
-    <div className="agent-compose-row"><textarea id="discovery-message" aria-label="Message elo" rows={2} maxLength={600} placeholder="Share your interests, ask a question or refine your direction…" value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||!message.trim()||!view?.available}>↑</button></div>
-    <p className="small">Enter to send · Shift+Enter for a new line</p>
+    <div className="agent-compose-row"><textarea id="discovery-message" aria-label="Message elo" rows={2} maxLength={600} placeholder="Share your interests, ask a question or refine your direction…" value={message} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>chatEnterKey(e,()=>void send(),setMessage)}/><button className="btn pri" aria-label="Send message" disabled={busy||!message.trim()||!view?.available}>↑</button></div>
+    <p className="small">{chatKeyHint}</p>
    </form>
   </div>
  </section>;

@@ -13,6 +13,16 @@ export const longDate = (value: string) => new Date(`${value}T12:00:00Z`).toLoca
 const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? '' : 's'}`;
 const focuses: [LearningFocus, string][] = [['interview_practice', 'Interview practice'], ['portfolio_work', 'Portfolio work'], ['hands_on_projects', 'Hands-on projects'], ['courses_and_reading', 'Courses and reading'], ['certification', 'Certification'], ['networking', 'Networking']];
 
+/** Fields the form must have before it can be sent. Dates, budget and blocks are also checked by the backend's runway. */
+export function missingFields(config: PlannerConfig) {
+ const missing: string[] = [];
+ if (!config.time_zone.trim()) missing.push('Enter your plan timezone.');
+ if (config.preferred_session_minutes == null) missing.push('Enter your preferred session length.');
+ if (config.buffer_percent == null) missing.push('Enter your buffer percentage.');
+ config.blocks.forEach((block, index) => { if (block.duration_minutes < 15) missing.push(`Enter at least 15 minutes for block ${index + 1}.`); });
+ return missing;
+}
+
 /** The unsaved settings draft. All numbers shown beside it come from the backend's runway. */
 export function useSettingsDraft(workspace: Workspace | null, token: string) {
  const planner = workspace?.planner;
@@ -22,6 +32,8 @@ export function useSettingsDraft(workspace: Workspace | null, token: string) {
  const config = draft || planner?.config || null;
  useEffect(() => {
   if (!draft) { setPreview(null); setPreviewError(''); return; }
+  // An unfinished form is explained by missingFields, so there is nothing to calculate yet.
+  if (missingFields(draft).length) { setPreviewError(''); return; }
   const controller = new AbortController();
   const timer = setTimeout(() => {
    roadmapApi<Runway>('/planner/runway', token, { config: draft }, controller.signal)
@@ -31,10 +43,11 @@ export function useSettingsDraft(workspace: Workspace | null, token: string) {
   return () => { clearTimeout(timer); controller.abort(); };
  }, [draft, token]);
  const current = preview && preview.source === draft ? preview.runway : null;
+ const missing = config ? missingFields(config) : [];
  return {
-  config, dirty: !!draft, previewError,
+  config, dirty: !!draft, previewError, missing,
   runway: draft ? current || preview?.runway || planner?.runway || null : planner?.runway || null,
-  calculating: !!draft && !current && !previewError,
+  calculating: !!draft && !current && !previewError && !missing.length,
   update: (patch: Partial<PlannerConfig>) => { if (config) setDraft({ ...config, ...patch }); },
   clear: () => setDraft(null),
  };
@@ -83,12 +96,13 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
  const reasons = [
   ...(context.ready ? [] : [context.availability === 'unavailable' ? 'Your CV and Career goal can’t be checked right now.' : 'Finish the CV and Career goal steps shown above.']),
   ...runway.issues.map(issue => issue.message),
+  ...settings.missing,
   ...(settings.previewError ? [settings.previewError] : []),
   ...(context.model_available ? [] : ['Your adviser is unavailable right now.']),
   ...(context.ready && !validResearch && !partial ? ['Interview research is incomplete. Tick “Continue with available evidence” below to proceed.'] : []),
  ];
  const blocked = reasons.length > 0 || settings.calculating;
- const editBlocked = runway.issues.filter(issue => issue.code !== 'start_in_past').length > 0 || !!settings.previewError || settings.calculating;
+ const editBlocked = runway.issues.filter(issue => issue.code !== 'start_in_past').length > 0 || settings.missing.length > 0 || !!settings.previewError || settings.calculating;
  const groups = groupSkills(planner.inputs.skills, skill => skill.name, planner.inputs.skill_groups);
  const defaults = context.planning_defaults;
  const blackoutPeriods = defaults.availability_periods.filter(period => period.weekly_hours === 0);
@@ -127,8 +141,8 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
   <Stop label="Study time" required filled={!!config.weekly_minutes && config.blocks.length > 0} frozen={frozen}>
    <div className="settings-pair">
     <FieldRow label="Weekly budget in hours"><input type="number" min={0} max={168} step="any" value={config.weekly_minutes == null ? '' : config.weekly_minutes / 60} onChange={e => update({ weekly_minutes: e.target.value === '' ? null : Math.round(Number(e.target.value) * 60) })} /></FieldRow>
-    <FieldRow label="Preferred session in minutes"><input type="number" min={15} max={480} step={5} value={config.preferred_session_minutes} onChange={e => update({ preferred_session_minutes: Math.round(Number(e.target.value)) })} /></FieldRow>
-    <FieldRow label="Buffer percentage"><input type="number" min={0} max={50} step={5} value={config.buffer_percent} onChange={e => update({ buffer_percent: Math.round(Number(e.target.value)) })} /></FieldRow>
+    <FieldRow label="Preferred session in minutes"><input type="number" min={15} max={480} step={5} value={config.preferred_session_minutes ?? ''} onChange={e => update({ preferred_session_minutes: e.target.value === '' ? null : Math.round(Number(e.target.value)) })} /></FieldRow>
+    <FieldRow label="Buffer percentage"><input type="number" min={0} max={50} step={5} value={config.buffer_percent ?? ''} onChange={e => update({ buffer_percent: e.target.value === '' ? null : Math.round(Number(e.target.value)) })} /></FieldRow>
    </div>
    <p className="small">The buffer stays free each week for catch-up and rescheduling.</p>
    {config.weekly_minutes == null && defaults.weekly_hours != null && <div className="settings-suggestions"><button type="button" className="chip sm" onClick={() => update({ weekly_minutes: Math.round(defaults.weekly_hours! * 60) })}>Use saved {defaults.weekly_hours} hours a week</button></div>}
@@ -181,7 +195,7 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
     {mode === 'edit'
      ? <button type="button" className="btn primary" disabled={editBlocked || frozen} onClick={previewEdit}>Preview changes</button>
      : <button type="button" className="btn primary" disabled={blocked || frozen} onClick={generate}>{planner.active ? 'Generate new roadmap' : 'Generate roadmap'}</button>}
-    {settings.dirty && mode !== 'edit' && <button type="button" className="btn ghost" disabled={frozen || !!settings.previewError} onClick={save}>Save settings</button>}
+    {settings.dirty && mode !== 'edit' && <button type="button" className="btn ghost" disabled={frozen || !!settings.previewError || settings.missing.length > 0} onClick={save}>Save settings</button>}
     {returnToReview && <button type="button" className="btn ghost" onClick={returnToReview}>Return to roadmap</button>}
    </div>
   </section>

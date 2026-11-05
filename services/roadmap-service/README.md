@@ -15,7 +15,7 @@ Prepares a personal roadmap towards the user's career goal, then runs it as a we
 [Specification](SPEC.md) · [API contract](../../contracts/api/roadmap.yaml) · [Setup](../../docs/setup.md#assessment-and-roadmap-adviser). External calendars, reminders and actual-time logging are not implemented. Live-model plan quality has not been evaluated. Jira wording for these stories could not be checked when this was written, so reconcile it with the specification.
 
 Model calls use the shared OpenAI Python SDK transport with Gemini as the cloud
-default. No Gemini SDK is required. SDK retries are disabled; existing response
+default. No Gemini SDK is required. SDK retries are disabled. A provider 503 gets two short retries, then reports a busy model with a saved retry delay. Existing response
 limits, provider quota handling and schema repair attempts remain enforced.
 
 Local testing can use the shared 1.5B Ollama alias through this service's own
