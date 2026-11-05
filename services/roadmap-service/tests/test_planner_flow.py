@@ -360,6 +360,44 @@ def test_a_plan_saved_with_blackout_dates_is_not_reported_as_changed_settings():
         assert state['planner']['config']['blackouts'][0]['start_date']=='2030-01-12'
         assert 'settings' not in {s['kind'] for s in state['planner']['signals']}
 
+@pytest.mark.parametrize('plan_kind',[None,'candidate','active'])
+def test_retired_saved_settings_restore_without_rewriting_data(plan_kind):
+    retired={'buffer_percent':20,'checkin_day':4,'checkin_time':'18:00'}
+    with client_for(Scripted([draft()])) as client:
+        state=configure(client)
+        if plan_kind:
+            state=generate(client,state)
+            if plan_kind=='active':state=post(client,'/accept',state)
+        store=client.app.state.store;row=store.load(OWNER)
+        row['planner']['config'].update(retired)
+        if plan_kind:
+            plan=row['planner'][plan_kind]
+            plan['config'].update(retired)
+            store.results[(OWNER,plan['id'])]=copy.deepcopy(plan)
+        store.cas(OWNER,row['version'],row)
+        before=store.load(OWNER)
+        restored=read(client)
+        assert restored['planner']['config']==state['planner']['config']
+        assert restored['planner']['runway']==state['planner']['runway']
+        assert not any(s['kind']=='settings' for s in restored['planner']['signals'])
+        if plan_kind:
+            assert restored['planner'][plan_kind]['assignments']==plan['assignments']
+            history=client.get('/api/v1/roadmaps/history/'+plan['id'],headers=H)
+            assert history.status_code==200
+            assert history.json()['config']==restored['planner']['config']
+        assert store.load(OWNER)==before
+        updated=post(client,'/config',restored,config=settings(weekly_minutes=300))
+        assert updated['planner']['config']['weekly_minutes']==300
+
+@pytest.mark.parametrize('extra',[{'buffer_percent':20},{'checkin_day':4},{'checkin_time':'18:00'},{'unknown_setting':True}])
+def test_new_settings_requests_still_reject_retired_or_unknown_fields(extra):
+    with client_for(Scripted()) as client:
+        before=read(client)
+        response=client.post('/api/v1/roadmaps/planner/config',headers=H,json={
+            'expected_version':before['version'],'mutation_id':str(uuid4()),'config':settings(**extra)})
+        assert response.status_code==422
+        assert read(client)==before
+
 def test_chat_edits_prepare_a_preview_and_leave_the_active_plan_alone():
     edit={'reply':'I prepared a preview that moves the work to Thursday.','settings':{'blocks':[{'day':3,'start_time':'18:00','duration_minutes':60,'kind':'preferred'}]},'revision_instruction':'Move this week to Thursday evening.'}
     revised=draft(milestones=[milestone(estimated_minutes=120)],assignments=[assignment('a2',date='2030-01-10',start_time='18:00')])

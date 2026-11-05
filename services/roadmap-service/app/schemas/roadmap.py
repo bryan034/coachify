@@ -2,7 +2,7 @@
 from datetime import date
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, field_validator, model_validator
 from .base import Contract, Mutation, Text
 
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
@@ -41,6 +41,13 @@ class Duration(Contract):
         return self
 class PlannerConfig(Contract):
     """Date problems are reported as runway issues so the settings panel can explain them."""
+    @classmethod
+    def from_saved(cls, values):
+        """Retired settings are ignored only when reading persisted configurations."""
+        if isinstance(values,dict):
+            values={k:v for k,v in values.items() if k not in ('buffer_percent','checkin_day','checkin_time')}
+        return cls.model_validate(values)
+
     start_date:date|None=None
     target_date:date|None=None
     duration:Duration|None=None
@@ -228,6 +235,10 @@ class PlannedRoadmap(Contract):
     assessment_hash:str
     assessment:dict
     config:PlannerConfig
+    @field_validator('config',mode='before')
+    @classmethod
+    def read_saved_config(cls,value):
+        return PlannerConfig.from_saved(value)
     config_hash:str
     confirmations_hash:str
     base_active_id:str|None

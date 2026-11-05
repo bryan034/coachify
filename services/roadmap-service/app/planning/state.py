@@ -15,12 +15,12 @@ def saved_config(state,default_zone=None):
     if state['config'] is None and default_zone:
         try:return PlannerConfig(time_zone=default_zone)
         except ValueError:pass
-    return PlannerConfig.model_validate(state['config'] or {})
+    return PlannerConfig.from_saved(state['config'] or {})
 def config_digest(config):
     return digest(config.model_dump(mode='json'))
 def settings_differ(plan,state):
     """Compares current forms, so a saved plan's older settings format never reads as a change."""
-    return config_digest(PlannerConfig.model_validate(plan['config']))!=config_digest(saved_config(state))
+    return config_digest(PlannerConfig.from_saved(plan['config']))!=config_digest(saved_config(state))
 def completed_sessions(plan):
     return [a for a in (plan or {}).get('assignments',[]) if a['status']=='completed']
 def session_has_passed(session,capacity):
@@ -41,7 +41,7 @@ def plan_inputs(source):
 
 def plan_review(plan,now):
     if not plan:return None
-    capacity=Capacity(PlannerConfig.model_validate(plan['config']),now,completed_sessions(plan))
+    capacity=Capacity(PlannerConfig.from_saved(plan['config']),now,completed_sessions(plan))
     scheduled=sorted((a for a in plan['assignments'] if a['status']=='scheduled'),key=lambda a:(str(a['date']),a['start_time']))
     missed=[a['id'] for a in scheduled if session_has_passed(a,capacity)]
     upcoming=[a for a in scheduled if a['id'] not in missed]
@@ -66,7 +66,7 @@ def candidate_blockers(state,source,now):
         add('inputs_changed','Your CV or Career goal changed after this preview was prepared. Generate a fresh plan.')
     if settings_differ(candidate,state):
         add('settings_changed','Your settings changed after this preview was prepared. Generate a fresh plan.')
-    capacity=Capacity(PlannerConfig.model_validate(candidate['config']),now)
+    capacity=Capacity(PlannerConfig.from_saved(candidate['config']),now)
     if any(a['status']=='scheduled' and session_has_passed(a,capacity) for a in candidate['assignments']):
         add('plan_expired','A session in this preview has already passed. Generate a fresh plan.')
     return blockers
@@ -83,7 +83,7 @@ def revision_signals(state,source,now):
         add('settings','Your study settings changed since this roadmap was accepted.')
     if source.get('input_hash') and active['assessment_hash']!=source['input_hash']:
         add('evidence','Your CV, skills or Career goal changed since this roadmap was prepared.')
-    capacity=Capacity(PlannerConfig.model_validate(active['config']),now)
+    capacity=Capacity(PlannerConfig.from_saved(active['config']),now)
     scheduled=[a for a in active['assignments'] if a['status']=='scheduled']
     done=completed_sessions(active)
     if len(done)>active.get('completed_at_generation',0):

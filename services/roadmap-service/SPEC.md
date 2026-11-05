@@ -65,6 +65,13 @@ Session completion, self-reported milestone outcomes and experience confirmation
 
 ## Persistence and recovery
 
+Saved timed-planner configurations may still contain the retired `buffer_percent`,
+`checkin_day` and `checkin_time` fields. Workspace, preview, active-plan and history
+reads ignore those fields while validating all current settings. Reads do not
+rewrite stored records or reset schedules and progress. New configuration requests
+still reject retired and unknown fields; saving current settings uses the current
+schema. No database migration is required.
+
 `workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.
 
 Messages save before model work. Compact `/progress` polling reads only revision and operation metadata. Provider retry delays persist. Expired leases resume on authenticated reconnect, and bearer tokens never enter MongoDB. Source and session checks fence publication. If source freshness is unavailable, saved chat and plans stay readable and progress can be recorded, but new plans and accepting a preview wait. History is bounded to 300 messages, 1,000 operation receipts and 4 MiB per workspace.
