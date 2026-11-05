@@ -16,7 +16,7 @@ def test_a_fitting_plan_passes():
 
 @pytest.mark.parametrize('change,code',[
     ({'date':'2030-01-12','start_time':'10:00'},'assignment_on_blackout'),
-    ({'date':'2030-01-14'},'assignment_outside_first_week'),
+    ({'date':'2030-01-21'},'assignment_outside_window'),
     ({'start_time':'18:00'},'assignment_outside_block'),
     ({'duration_minutes':120},'assignment_outside_block'),
     ({'date':'2030-01-13','start_time':'09:00'},'backup_not_enabled'),
@@ -72,10 +72,12 @@ def test_milestone_structure_errors():
     assert 'assignment_effort_exceeds_milestone' in codes(draft(milestones=[milestone(estimated_minutes=30)]))
 
 def test_milestone_effort_must_fit_capacity_through_its_window_alone_and_together():
-    # Wednesday's 90 preferred minutes are all that exist before Monday the 14th.
-    assert 'milestone_capacity_exceeded' in codes(draft(milestones=[milestone(projected_end='2030-01-13',estimated_minutes=91)]))
-    assert 'milestone_capacity_exceeded' not in codes(draft(milestones=[milestone(projected_end='2030-01-13',estimated_minutes=90)]))
-    # Each fits its own window, but both share the same 690 minutes.
+    # Wednesday's 90 preferred minutes are all that exist before Monday the 14th; the 20% buffer leaves 72 to plan.
+    assert 'milestone_capacity_exceeded' in codes(draft(milestones=[milestone(projected_end='2030-01-13',estimated_minutes=73)]))
+    assert 'milestone_capacity_exceeded' not in codes(draft(milestones=[milestone(projected_end='2030-01-13',estimated_minutes=72)]))
+    # With no buffer, all 90 are available to plan.
+    assert 'milestone_capacity_exceeded' not in codes(draft(milestones=[milestone(projected_end='2030-01-13',estimated_minutes=90)]),config=settings(buffer_percent=0))
+    # Each fits its own window, but both share the same 552 planned minutes.
     shared=[milestone('m1',estimated_minutes=400,projected_end='2030-01-27'),milestone('m2',estimated_minutes=400,projected_start='2030-01-09',projected_end='2030-01-27')]
     assert 'milestone_capacity_exceeded' in codes(draft(milestones=shared))
 
@@ -123,7 +125,7 @@ def test_completed_sessions_cannot_be_rewritten_dropped_or_overlapped():
     assert 'assignment_outside_block' in codes(draft(),completed=[session],retained=['m1'])
     assert 'completed_assignment_rewritten' in codes(draft(assignments=[assignment('done',start_time='20:00',duration_minutes=30)]),completed=[session],retained=['m1'])
     assert 'completed_milestone_dropped' in codes(draft(),completed=[session],retained=['earlier'])
-    moved=draft(assignments=[assignment('next',start_time='20:00',duration_minutes=30)])
+    moved=draft(assignments=[assignment('next',start_time='20:00',duration_minutes=20)])
     assert codes(moved,completed=[session],retained=['m1'])==set()
     tight=settings(weekly_minutes=70)
     assert 'weekly_budget_exceeded' in codes(moved,config=tight,completed=[session],retained=['m1'])

@@ -6,10 +6,14 @@ from uuid import uuid5,NAMESPACE_URL
 from fastapi import Depends,Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import application,authenticated,Problem,begin,launch,operation_view,stamp,digest
-from app.schemas import Message,Workspace,Plan,PlannedRoadmap
-from app.planning.generator import PLANNING_SECONDS,chat_turn,prepare_plan
+from app.schemas import Message,Workspace,Plan,PlannedRoadmap,LegacyRoadmap,RoadmapSummary
+from app.schemas.roadmap import RollDetail
+from app.planning.checkin import expire_checkins
+from app.planning.generator import PLANNING_SECONDS,chat_turn,fill_window,prepare_plan,propose_checkin
+from app.planning.metrics import detail_needed
 from app.planning.routes import register_planner
-from app.planning.state import planner_state,planner_view,retry_body
+from app.planning.schedule import is_current_schema,reconcile_tasks
+from app.planning.state import planner_state,planner_view,retry_body,roadmap_summary
 
 def create_app(store=None,upstream=None,model=None,clock=None):
     app=application('elo Roadmap Adviser API','ROADMAP',store=store,upstream=upstream,model=model)
@@ -46,9 +50,49 @@ def create_app(store=None,upstream=None,model=None,clock=None):
                 return current['result']
         raise Problem('Assessment is still processing. Retry this saved planning message to reconnect.',503,'assessment_processing')
     async def worker(row,account):
-        if row['pending']['kind']=='generate':await prepare_plan(app,row,account,assessment,context)
+        kind=row['pending']['kind']
+        if kind=='generate':await prepare_plan(app,row,account,assessment,context)
+        elif kind=='rolling':await fill_window(app,row,account)
+        elif kind=='checkin':await propose_checkin(app,row,account)
         else:await chat_turn(app,row,account,assessment,context)
         return row
+
+    def reconcile(row,now):
+        """Move missed work and close passed check-ins. Reports whether anything changed. Makes no model call."""
+        plan=planner_state(row)['active']
+        if not is_current_schema(plan):return False
+        return bool(reconcile_tasks(plan,now)+expire_checkins(plan,now))
+    async def reconcile_on_access(owner):
+        """Runs before any new detail, so several weeks away settle missed work first.
+
+        The version fence decides between concurrent requests. The loser reloads and finds nothing left to do,
+        so repeated access never duplicates a move or a history entry.
+        """
+        row=await thread(app.state.store.load,owner)
+        for _ in range(4):
+            if row.get('pending') or not is_current_schema(planner_state(row)['active']):return row
+            working=copy.deepcopy(row)
+            if not reconcile(working,app.state.clock()):return row
+            try:return await thread(app.state.store.cas,owner,row['version'],working)
+            except Problem as problem:
+                if problem.status!=409:raise
+                row=await thread(app.state.store.load,owner)
+        return row
+    async def roll_detail(row,account):
+        """Start the idempotent saved operation when the two-week window has outline-only weeks."""
+        plan=planner_state(row)['active']
+        if row.get('pending') or not is_current_schema(plan) or not app.state.model.configured:return row
+        weeks=detail_needed(plan,app.state.clock())
+        if not weeks:return row
+        identity=uuid5(NAMESPACE_URL,account['id']+':roll:'+plan['id']+':'+','.join(w.isoformat() for w in weeks))
+        last=row.get('last_operation') or {}
+        if last.get('id')==str(identity) and last.get('status')=='failed':return row
+        body=RollDetail(expected_version=row['version'],mutation_id=identity,weeks=weeks)
+        if any(r['id']==str(identity) for r in row['receipts']):return row
+        try:return await thread(begin,app.state.store,account['id'],body,'rolling',PLANNING_SECONDS)
+        except Problem as problem:
+            if problem.status in (409,413,429):return await thread(app.state.store.load,account['id'])
+            raise
 
     def visible(row,source,time_zone=None):
         return {'version':row['version'],'messages':row['messages'],'draft':row.get('draft'),'active':row.get('active'),
@@ -58,9 +102,14 @@ def create_app(store=None,upstream=None,model=None,clock=None):
 
     @app.get('/api/v1/roadmaps/workspace',response_model=Workspace)
     async def workspace(request:Request,time_zone:str|None=None,account=Depends(authenticated)):
-        row=await thread(app.state.store.load,account['id'])
+        row=await reconcile_on_access(account['id'])
+        row=await roll_detail(row,account)
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return visible(row,await context(account,tolerate_unavailable=True),time_zone)
+    @app.get('/api/v1/roadmaps/summary',response_model=RoadmapSummary)
+    async def summary(request:Request,account=Depends(authenticated)):
+        row=await thread(app.state.store.load,account['id'])
+        return roadmap_summary(planner_state(row),app.state.clock())
     @app.get('/api/v1/roadmaps/progress')
     async def progress(request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.progress,account['id'])
@@ -92,18 +141,24 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         fresh=await context(fresh_account,tolerate_unavailable=True)
         if fresh.get('input_hash')!=source.get('input_hash'):raise Problem('Your selected inputs changed during saving. Refresh and retry.',409,'inputs_changed')
         updated['receipts'].append({'id':key,'hash':fingerprint})
-        accepted=planner_state(updated)['active']
-        if accepted and accepted!=planner_state(row)['active']:
+        state=planner_state(updated);accepted=state['active'];previous=planner_state(row)['active']
+        # Identity changes only when a new roadmap is accepted. Its predecessor's final state is saved
+        # first under a key-derived id, so a lost response repeats the same archive rather than a new one.
+        if accepted and (not previous or accepted['id']!=previous['id']) and accepted is not previous:
             accepted['id']=str(uuid5(NAMESPACE_URL,account['id']+':roadmap:'+key))
             accepted['updated_at']=stamp()
             accepted['request_hash']=fingerprint
-            updated['planner']['active']=await thread(app.state.store.save_result,account['id'],accepted)
+            if previous:
+                archived=copy.deepcopy(previous);archived.update(id=state['archived'][-1]['id'],source_plan_id=previous['id'],archived_at=state['archived'][-1]['archived_at'],request_hash=fingerprint)
+                await thread(app.state.store.save_result,account['id'],archived)
+            state['active']=await thread(app.state.store.save_result,account['id'],accepted)
+        reconcile(updated,app.state.clock())
         saved=await thread(app.state.store.cas,account['id'],row['version'],updated)
         return visible(saved,fresh)
 
     register_planner(app,context,mutate,worker)
 
-    @app.get('/api/v1/roadmaps/history/{identifier}',response_model=PlannedRoadmap|Plan)
+    @app.get('/api/v1/roadmaps/history/{identifier}',response_model=PlannedRoadmap|LegacyRoadmap|Plan)
     async def history(identifier:str,request:Request,account=Depends(authenticated)):
         return await thread(app.state.store.result,account['id'],identifier)
     return app

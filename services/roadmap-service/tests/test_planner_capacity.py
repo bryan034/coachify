@@ -132,3 +132,40 @@ def test_saved_blackout_dates_are_read_as_one_off_rules():
     saved=PlannerConfig.model_validate({'time_zone':'Asia/Singapore','blackout_dates':['2030-01-12','2030-01-13']})
     assert [(r.frequency,r.start_date.isoformat()) for r in saved.blackouts]==[('once','2030-01-12'),('once','2030-01-13')]
     assert 'blackout_dates' not in saved.model_dump()
+
+def test_buffer_is_reserved_each_week_and_reported_before_generation():
+    report=Capacity(config(),NOW).report()
+    assert [(w['usable_minutes'],w['planned_minutes'],w['buffer_minutes']) for w in report['weeks']]==[(90,72,18),(300,240,60),(300,240,60)]
+    assert report['budget']=={'available_weeks':3,'eligible_minutes':690,'planned_minutes':552,'buffer_minutes':138}
+    none=Capacity(config(buffer_percent=0),NOW).report()['budget']
+    assert none['planned_minutes']==690 and none['buffer_minutes']==0
+    half=Capacity(config(buffer_percent=50),NOW).report()['budget']
+    assert half['planned_minutes']==345 and half['buffer_minutes']==345
+
+def test_buffer_percentage_and_checkin_settings_are_validated_with_safe_defaults():
+    saved=config()
+    assert (saved.buffer_percent,saved.checkin_day,saved.checkin_time)==(20,4,'18:00')
+    for bad in ({'buffer_percent':51},{'buffer_percent':-1},{'checkin_day':7},{'checkin_time':'25:00'}):
+        with pytest.raises(ValidationError):config(**bad)
+
+def test_buffer_rounds_up_so_the_plan_never_uses_reserved_minutes():
+    report=Capacity(config(buffer_percent=33,weekly_minutes=100,blocks=[{'day':0,'start_time':'10:00','duration_minutes':100,'kind':'preferred'}],start_date='2030-01-14',target_date='2030-01-20',blackouts=[]),NOW).report()
+    assert (report['weeks'][0]['planned_minutes'],report['weeks'][0]['buffer_minutes'])==(67,33)
+
+def test_backup_adds_capacity_only_where_the_weekly_maximum_allows():
+    report=Capacity(config(use_backup=True),NOW).report()
+    # Week one has room, so backup adds 120. Weeks two and three are already capped at 300.
+    assert [w['usable_minutes'] for w in report['weeks']]==[210,300,300]
+
+def test_weeks_follow_the_plan_timezone_at_a_week_boundary():
+    # Sunday 23:30 in New York is already Monday in Singapore.
+    moment=datetime(2030,1,14,4,30,tzinfo=timezone.utc)
+    late=[{'day':6,'start_time':'23:40','duration_minutes':20,'kind':'preferred'},{'day':0,'start_time':'09:00','duration_minutes':60,'kind':'preferred'}]
+    york=Capacity(config(time_zone='America/New_York',start_date='2030-01-13',target_date='2030-01-20',blocks=late,blackouts=[]),moment).report()
+    assert [w['week_start'] for w in york['weeks']]==['2030-01-07','2030-01-14'] and york['weeks'][0]['usable_minutes']==20
+    singapore=Capacity(config(time_zone='Asia/Singapore',start_date='2030-01-14',target_date='2030-01-20',blocks=late,blackouts=[]),moment).report()
+    assert [w['week_start'] for w in singapore['weeks']]==['2030-01-14']
+
+def test_paused_week_has_no_capacity_and_is_labelled():
+    report=Capacity(config(),NOW,paused=['2030-01-14']).report()
+    assert [(w['usable_minutes'],w['paused']) for w in report['weeks']]==[(90,False),(0,True),(300,False)]

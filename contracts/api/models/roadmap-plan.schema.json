@@ -114,44 +114,66 @@
       "title": "DeadlineOutcome",
       "type": "object"
     },
-    "DraftBeyond": {
+    "DeferredItem": {
       "additionalProperties": false,
+      "description": "Work beyond the target date. It stays outside the dated schedule until a scope or date change is accepted.",
       "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
         "title": {
-          "maxLength": 160,
-          "minLength": 1,
           "title": "Title",
           "type": "string"
         },
         "gap_ids": {
           "items": {
-            "maxLength": 80,
-            "minLength": 1,
             "type": "string"
           },
-          "maxItems": 20,
           "title": "Gap Ids",
           "type": "array"
         },
         "reason": {
-          "maxLength": 4000,
-          "minLength": 1,
           "title": "Reason",
           "type": "string"
         },
         "estimated_minutes": {
-          "maximum": 60000,
-          "minimum": 0,
           "title": "Estimated Minutes",
           "type": "integer"
+        },
+        "dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "source_milestone": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Milestone"
         }
       },
       "required": [
+        "id",
+        "key",
         "title",
         "reason",
         "estimated_minutes"
       ],
-      "title": "DraftBeyond",
+      "title": "DeferredItem",
       "type": "object"
     },
     "DraftExclusion": {
@@ -209,25 +231,90 @@
       "title": "Duration",
       "type": "object"
     },
-    "PlanAssignment": {
+    "OutlineWeek": {
       "additionalProperties": false,
       "properties": {
+        "week_start": {
+          "title": "Week Start",
+          "type": "string"
+        },
+        "theme": {
+          "title": "Theme",
+          "type": "string"
+        },
+        "milestone_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Milestone Keys",
+          "type": "array"
+        },
+        "target_minutes": {
+          "title": "Target Minutes",
+          "type": "integer"
+        },
+        "expected_output": {
+          "title": "Expected Output",
+          "type": "string"
+        }
+      },
+      "required": [
+        "week_start",
+        "theme",
+        "target_minutes",
+        "expected_output"
+      ],
+      "title": "OutlineWeek",
+      "type": "object"
+    },
+    "PlanAssignment": {
+      "additionalProperties": false,
+      "description": "A generated or custom task. status scheduled has a placement; backlog has only a week preference.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
         "key": {
           "maxLength": 80,
           "minLength": 1,
           "title": "Key",
           "type": "string"
         },
-        "milestone_key": {
-          "maxLength": 80,
-          "minLength": 1,
-          "title": "Milestone Key",
+        "origin": {
+          "default": "generated",
+          "enum": [
+            "generated",
+            "custom"
+          ],
+          "title": "Origin",
           "type": "string"
+        },
+        "kind": {
+          "default": "study",
+          "enum": [
+            "study",
+            "diagnostic",
+            "custom"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "milestone_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Milestone Key"
         },
         "gap_id": {
           "anyOf": [
             {
-              "maxLength": 80,
               "type": "string"
             },
             {
@@ -237,31 +324,6 @@
           "default": null,
           "title": "Gap Id"
         },
-        "kind": {
-          "default": "study",
-          "enum": [
-            "study",
-            "diagnostic"
-          ],
-          "title": "Kind",
-          "type": "string"
-        },
-        "date": {
-          "format": "date",
-          "title": "Date",
-          "type": "string"
-        },
-        "start_time": {
-          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
-          "title": "Start Time",
-          "type": "string"
-        },
-        "duration_minutes": {
-          "maximum": 480,
-          "minimum": 1,
-          "title": "Duration Minutes",
-          "type": "integer"
-        },
         "task": {
           "maxLength": 4000,
           "minLength": 1,
@@ -269,24 +331,6 @@
           "type": "string"
         },
         "completion_criterion": {
-          "maxLength": 4000,
-          "minLength": 1,
-          "title": "Completion Criterion",
-          "type": "string"
-        },
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "status": {
-          "enum": [
-            "scheduled",
-            "completed"
-          ],
-          "title": "Status",
-          "type": "string"
-        },
-        "completed_at": {
           "anyOf": [
             {
               "type": "string"
@@ -296,7 +340,96 @@
             }
           ],
           "default": null,
-          "title": "Completed At"
+          "title": "Completion Criterion"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "refresher_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Refresher Reason"
+        },
+        "week_start": {
+          "title": "Week Start",
+          "type": "string"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Time"
+        },
+        "duration_minutes": {
+          "maximum": 480,
+          "minimum": 1,
+          "title": "Duration Minutes",
+          "type": "integer"
+        },
+        "status": {
+          "default": "scheduled",
+          "enum": [
+            "scheduled",
+            "backlog",
+            "completed",
+            "skipped",
+            "removed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "pinned": {
+          "default": false,
+          "title": "Pinned",
+          "type": "boolean"
+        },
+        "count_hours": {
+          "default": true,
+          "title": "Count Hours",
+          "type": "boolean"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
         },
         "evidence_note": {
           "anyOf": [
@@ -310,6 +443,99 @@
           "default": null,
           "title": "Evidence Note"
         },
+        "feedback": {
+          "anyOf": [
+            {
+              "enum": [
+                "too_easy",
+                "about_right",
+                "too_hard"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feedback"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "auto_moves": {
+          "default": 0,
+          "title": "Auto Moves",
+          "type": "integer"
+        },
+        "manual_moves": {
+          "default": 0,
+          "title": "Manual Moves",
+          "type": "integer"
+        },
+        "action_needed": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Needed"
+        },
+        "backlog_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backlog Reason"
+        },
+        "removed_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Removed Reason"
+        },
+        "baseline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline"
+        },
+        "revision": {
+          "default": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
         "history": {
           "items": {
             "additionalProperties": true,
@@ -320,17 +546,92 @@
         }
       },
       "required": [
-        "key",
-        "milestone_key",
-        "date",
-        "start_time",
-        "duration_minutes",
-        "task",
-        "completion_criterion",
         "id",
-        "status"
+        "key",
+        "task",
+        "week_start",
+        "duration_minutes"
       ],
       "title": "PlanAssignment",
+      "type": "object"
+    },
+    "PlanEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "auto_move",
+            "auto_backlog",
+            "undo",
+            "manual_move",
+            "skip",
+            "restore",
+            "complete",
+            "reopen",
+            "custom_added",
+            "detail_added",
+            "milestone_completed",
+            "milestone_reopened",
+            "pause",
+            "unpause",
+            "plan_edit",
+            "scope_change",
+            "checkin_applied",
+            "revision_applied"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "undo": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Undo"
+        },
+        "undone": {
+          "default": false,
+          "title": "Undone",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "at",
+        "message"
+      ],
+      "title": "PlanEvent",
       "type": "object"
     },
     "PlanGap": {
@@ -516,6 +817,19 @@
           "additionalProperties": true,
           "title": "Outcome",
           "type": "object"
+        },
+        "completion": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completion"
         }
       },
       "required": [
@@ -640,6 +954,26 @@
           "maxLength": 1000,
           "title": "Learning Notes",
           "type": "string"
+        },
+        "buffer_percent": {
+          "default": 20,
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Buffer Percent",
+          "type": "integer"
+        },
+        "checkin_day": {
+          "default": 4,
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Checkin Day",
+          "type": "integer"
+        },
+        "checkin_time": {
+          "default": "18:00",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Checkin Time",
+          "type": "string"
         }
       },
       "title": "PlannerConfig",
@@ -682,18 +1016,72 @@
       ],
       "title": "StudyBlock",
       "type": "object"
+    },
+    "WeekState": {
+      "additionalProperties": false,
+      "properties": {
+        "paused": {
+          "default": false,
+          "title": "Paused",
+          "type": "boolean"
+        },
+        "exception_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exception Task Ids",
+          "type": "array"
+        },
+        "workload_minutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workload Minutes"
+        },
+        "workload_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workload Source"
+        }
+      },
+      "title": "WeekState",
+      "type": "object"
     }
   },
   "additionalProperties": true,
+  "description": "A roadmap-v3 plan: an outline through the target date, a rolling two-week detail window and deferred scope.",
   "properties": {
     "schema_version": {
-      "const": "roadmap-v2",
+      "const": "roadmap-v3",
       "title": "Schema Version",
       "type": "string"
     },
     "id": {
       "title": "Id",
       "type": "string"
+    },
+    "revision": {
+      "default": 0,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "progress_revision": {
+      "default": 0,
+      "title": "Progress Revision",
+      "type": "integer"
     },
     "assessment_id": {
       "title": "Assessment Id",
@@ -730,9 +1118,33 @@
       ],
       "title": "Base Active Id"
     },
+    "base_progress_revision": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Progress Revision"
+    },
     "created_at": {
       "title": "Created At",
       "type": "string"
+    },
+    "accepted_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Accepted At"
     },
     "first_planning_week": {
       "title": "First Planning Week",
@@ -756,6 +1168,13 @@
       "title": "Milestones",
       "type": "array"
     },
+    "outline": {
+      "items": {
+        "$ref": "#/$defs/OutlineWeek"
+      },
+      "title": "Outline",
+      "type": "array"
+    },
     "assignments": {
       "items": {
         "$ref": "#/$defs/PlanAssignment"
@@ -763,21 +1182,43 @@
       "title": "Assignments",
       "type": "array"
     },
+    "deferred_scope": {
+      "items": {
+        "$ref": "#/$defs/DeferredItem"
+      },
+      "title": "Deferred Scope",
+      "type": "array"
+    },
     "deadline_outcome": {
       "$ref": "#/$defs/DeadlineOutcome"
-    },
-    "beyond_deadline": {
-      "items": {
-        "$ref": "#/$defs/DraftBeyond"
-      },
-      "title": "Beyond Deadline",
-      "type": "array"
     },
     "exclusions": {
       "items": {
         "$ref": "#/$defs/DraftExclusion"
       },
       "title": "Exclusions",
+      "type": "array"
+    },
+    "week_states": {
+      "additionalProperties": {
+        "$ref": "#/$defs/WeekState"
+      },
+      "title": "Week States",
+      "type": "object"
+    },
+    "checkins": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Checkins",
+      "type": "object"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/PlanEvent"
+      },
+      "title": "Events",
       "type": "array"
     },
     "changes": {
@@ -814,9 +1255,10 @@
     "summary",
     "gaps",
     "milestones",
+    "outline",
     "assignments",
+    "deferred_scope",
     "deadline_outcome",
-    "beyond_deadline",
     "exclusions",
     "generation"
   ],

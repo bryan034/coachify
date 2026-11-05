@@ -6,9 +6,9 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from elo_shared.runtime import MemoryStore, Model
-from planner_fixtures import NOW, assessment, draft, settings
+from planner_fixtures import NOW, assessment, draft, outline_rows, settings
 from app.main import create_app
-from app.schemas import ChatTurn, PlanDraft
+from app.schemas import ChatTurn, PlanOutline, WindowDetail
 
 H={'Authorization':'Bearer synthetic'}
 class Sources:
@@ -25,8 +25,8 @@ def run_flow(monkeypatch,base,*,parameter=None):
     requests=[]
     def handler(request):
         body=json.loads(request.content);requests.append((request,body))
-        chat='current_plan' in json.loads(body['messages'][1]['content']) and 'first_week_windows' not in json.loads(body['messages'][1]['content'])
-        content={'reply':'Saved.','settings':{'weekly_minutes':300},'revision_instruction':None} if chat else draft()
+        sent=json.loads(body['messages'][1]['content']);fields=draft();tasks=fields.pop('assignments')
+        content={'outline':{**fields,'outline':outline_rows(sent.get('planned_capacity',[]))},'detail':{'assignments':tasks}}.get(sent.get('stage'),{'reply':'Saved.','settings':{'weekly_minutes':300},'revision_instruction':None})
         return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(content)}}]})
     with TestClient(create_app(MemoryStore(),Sources(),None,clock=lambda:NOW)) as client:
         client.app.state.model=Model(httpx.AsyncClient(transport=httpx.MockTransport(handler)),'ROADMAP')
@@ -46,15 +46,15 @@ def run_flow(monkeypatch,base,*,parameter=None):
 
 def test_gemini_requests_use_the_openai_sdk_and_a_provider_ready_schema(monkeypatch):
     requests=run_flow(monkeypatch,'https://generativelanguage.googleapis.com/v1beta/openai')
-    assert len(requests)==2
+    assert len(requests)==3
     for request,body in requests:
         assert str(request.url)=='https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
         assert request.headers['authorization']=='Bearer synthetic-key'
         assert request.headers['user-agent'].startswith('AsyncOpenAI/Python') and request.headers['x-stainless-lang']=='python'
         assert body['model']=='synthetic-model' and body['response_format']['type']=='json_schema' and body['response_format']['json_schema']['strict'] is True
         assert not references(body['response_format']['json_schema']['schema'])
-    assert [body['response_format']['json_schema']['name'] for _,body in requests]==[ChatTurn.__name__,PlanDraft.__name__]
-    assert requests[0][1]['max_tokens']==8192 and requests[1][1]['max_tokens']==24000
+    assert [body['response_format']['json_schema']['name'] for _,body in requests]==[ChatTurn.__name__,PlanOutline.__name__,WindowDetail.__name__]
+    assert requests[0][1]['max_tokens']==8192 and requests[1][1]['max_tokens']==24000 and requests[2][1]['max_tokens']==12000
 
 def test_openai_requests_use_the_selected_token_parameter_and_json_output(monkeypatch):
     requests=run_flow(monkeypatch,'https://api.openai.com/v1',parameter='max_completion_tokens')

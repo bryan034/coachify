@@ -5,9 +5,8 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 from elo_shared.runtime import MemoryStore, Problem
-from planner_fixtures import NOW, OWNER, assessment, assignment, draft, gap, milestone, settings
+from planner_fixtures import NOW, OWNER, Staged, assessment, assignment, draft, gap, milestone, second_week, settings
 from app.main import create_app
-from app.schemas.roadmap import ChatTurn, PlanDraft
 
 H={'Authorization':'Bearer synthetic'}
 class Sources:
@@ -21,17 +20,7 @@ class Sources:
         return {'version':0,'ready':self.ready,'result':self.result,'stale':False,'operation':None}
     async def write(self,service,path,token,body):
         self.writes.append(path);self.result=assessment(self.hash);return {'version':1}
-class Scripted:
-    """Returns each supplied plan once; a dict is a PlanDraft and a ChatTurn is returned for chat."""
-    configured=True
-    def __init__(self,plans=(),chats=()):self.plans=list(plans);self.chats=list(chats);self.contexts=[];self.tokens=[]
-    async def generate(self,schema,instructions,context,max_tokens=8192):
-        self.contexts.append(copy.deepcopy(context));self.tokens.append(max_tokens)
-        if schema is ChatTurn:return ChatTurn.model_validate(self.chats.pop(0))
-        assert schema is PlanDraft
-        item=self.plans.pop(0)
-        if isinstance(item,Exception):raise item
-        return PlanDraft.model_validate(item)
+Scripted=Staged
 def client_for(model,sources=None,clock=None):
     return TestClient(create_app(MemoryStore(),sources or Sources(),model,clock=clock or (lambda:NOW)))
 def read(client):
@@ -108,10 +97,12 @@ def test_generation_sends_settings_and_windows_for_the_partial_first_week_and_bl
         state=generate(client,configure(client))
         assert state['operation']['status']=='succeeded',state['operation']
         sent=model.contexts[0]
-        assert sent['first_planning_week']=='2030-01-07'
-        # Monday and Tuesday have passed, Saturday is a blackout and backup is disabled.
-        assert sent['first_week_windows']==[{'date':'2030-01-09','start_time':'19:00','end_time':'20:30','kind':'preferred','minutes':90}]
-        assert [w['usable_minutes'] for w in sent['weekly_capacity']]==[90,300,300]
+        assert sent['stage']=='outline' and 'windows' not in sent
+        # Monday and Tuesday have passed, Saturday is a blackout, backup is disabled and 20% is reserved.
+        assert [w['planned_minutes'] for w in sent['planned_capacity']]==[72,240,240]
+        detail=model.contexts[1]
+        assert detail['stage']=='detail' and detail['requested_weeks']==['2030-01-07','2030-01-14'] and detail['week_budgets']=={'2030-01-07':72,'2030-01-14':240}
+        assert detail['windows'][0]=={'date':'2030-01-09','start_time':'19:00','end_time':'20:30','kind':'preferred','minutes':90}
         assert state['planner']['candidate'] and not state['planner']['active']
         session=state['planner']['candidate']['assignments'][0]
         assert (session['date'],session['start_time'],session['duration_minutes'],session['milestone_key'])==('2030-01-09','19:00',60,'m1')
@@ -119,8 +110,8 @@ def test_generation_sends_settings_and_windows_for_the_partial_first_week_and_bl
         assert review['next_assignment_id']==session['id'] and review['remaining']['calendar']['label']=='2 weeks, 5 days'
 
 def test_backup_windows_are_only_offered_and_accepted_when_enabled():
-    using_backup=draft(assignments=[assignment('a1',duration_minutes=90),assignment('a2',date='2030-01-13',start_time='09:00')])
-    model=Scripted([using_backup,using_backup,using_backup])
+    using_backup=draft(assignments=[assignment('a1',duration_minutes=90),assignment('a2',date='2030-01-13',start_time='09:00'),second_week('a3')])
+    model=Scripted([using_backup])
     with client_for(model) as client:
         state=generate(client,configure(client))
         assert state['operation']['error']['code']=='plan_validation' and 'backup' in state['operation']['error']['detail']
@@ -128,33 +119,33 @@ def test_backup_windows_are_only_offered_and_accepted_when_enabled():
     with client_for(model) as client:
         state=generate(client,configure(client,use_backup=True))
         assert state['operation']['status']=='succeeded',state['operation']
-        assert [w['kind'] for w in model.contexts[0]['first_week_windows']]==['preferred','backup']
-        assert [w['usable_minutes'] for w in model.contexts[0]['weekly_capacity']]==[210,300,300]
+        assert [w['kind'] for w in model.contexts[1]['windows'] if w['date']<'2030-01-14']==['preferred','backup']
+        assert [w['planned_minutes'] for w in model.contexts[0]['planned_capacity']]==[168,240,240]
 
 def test_insufficient_runway_retries_with_errors_then_reports_what_remains():
     overcommitted=draft(milestones=[milestone(estimated_minutes=5000,projected_end='2030-01-27')])
-    honest=draft(milestones=[milestone(estimated_minutes=600,projected_end='2030-01-27')],
-        beyond_deadline=[{'title':'Advanced Python','gap_ids':['python'],'reason':'Needs more time than the runway allows.','estimated_minutes':4400}],
+    honest=draft(milestones=[milestone(estimated_minutes=500,projected_end='2030-01-27')],
+        beyond_deadline=[{'title':'Advanced Python','gap_ids':['python'],'reason':'Needs more time than the runway allows.','estimated_minutes':4500}],
         deadline_outcome={'summary':'By the target you can show a basic API, but not advanced Python.','achievable_by_target':['A basic API'],'fits_in_runway':False})
     model=Scripted([overcommitted,honest])
     with client_for(model) as client:
         state=generate(client,configure(client))
         assert state['operation']['status']=='succeeded',state['operation']
-        assert len(model.contexts)==2 and 'validation_errors' not in model.contexts[0]
+        assert len(model.contexts)==3 and 'validation_errors' not in model.contexts[0]
         retry=model.contexts[1]
-        assert retry['attempt']==2 and {e['code'] for e in retry['validation_errors']}=={'milestone_capacity_exceeded'}
-        assert '5000 minutes' in retry['validation_errors'][0]['message'] and retry['previous_output']['milestones'][0]['estimated_minutes']==5000
+        assert retry['attempt']==2 and 'milestone_capacity_exceeded' in {e['code'] for e in retry['validation_errors']}
+        assert any('5000 minutes' in e['message'] for e in retry['validation_errors']) and retry['previous_output']['milestones'][0]['estimated_minutes']==5000
         candidate=state['planner']['candidate']
-        assert candidate['beyond_deadline'][0]['title']=='Advanced Python' and candidate['deadline_outcome']['fits_in_runway'] is False
-        assert candidate['generation']['attempts']==2
+        assert candidate['deferred_scope'][0]['title']=='Advanced Python' and candidate['deadline_outcome']['fits_in_runway'] is False
+        assert candidate['generation']['attempts']==3
 
 def test_retries_are_bounded_and_the_last_valid_plan_is_preserved():
-    bad=draft(assignments=[assignment(date='2030-01-12',start_time='10:00')])
-    model=Scripted([draft(),bad,bad,bad])
+    bad=draft(assignments=[assignment(date='2030-01-12',start_time='10:00'),second_week()])
+    model=Scripted([draft(),bad])
     with client_for(model) as client:
         state=accepted(client);active=state['planner']['active']
         state=generate(client,state)
-        assert len(model.contexts)==4 and state['operation']['status']=='failed' and state['operation']['error']['code']=='plan_validation'
+        assert len(model.contexts)==6 and state['operation']['status']=='failed' and state['operation']['error']['code']=='plan_validation'
         assert 'blackout' in state['operation']['error']['detail']
         assert state['planner']['active']==active and state['planner']['candidate'] is None
         assert state['planner']['retry_generate']['mutation_id']==state['operation']['id'] and state['retry_request'] is None
@@ -176,7 +167,7 @@ def test_failed_generation_retry_reuses_its_identity_and_replay_is_idempotent():
         state=finish(client);time.sleep(.01);state=finish(client)
         assert state['operation']['status']=='succeeded' and state['planner']['candidate']
         assert client.post('/api/v1/roadmaps/planner/generate',headers=H,json=body).status_code==202
-        assert len(model.contexts)==2
+        assert model.schemas==['PlanOutline','PlanOutline','WindowDetail']
 
 def test_assessment_runs_before_planning_when_none_is_current():
     sources=Sources();sources.result=None;model=Scripted([draft()])
@@ -202,7 +193,7 @@ def test_accept_requires_a_current_preview_and_snapshots_the_plan():
         response=client.post('/api/v1/roadmaps/planner/accept',headers=H,json=body);assert response.status_code==200,response.text
         state=response.json();plan=state['planner']['active'];assert plan and state['planner']['candidate'] is None
         assert client.post('/api/v1/roadmaps/planner/accept',headers=H,json=body).json()['planner']['active']['id']==plan['id']
-        history=client.get('/api/v1/roadmaps/history/'+plan['id'],headers=H);assert history.status_code==200 and history.json()['schema_version']=='roadmap-v2'
+        history=client.get('/api/v1/roadmaps/history/'+plan['id'],headers=H);assert history.status_code==200 and history.json()['schema_version']=='roadmap-v3'
         sources.owner='22222222-2222-4222-8222-222222222222'
         assert client.get('/api/v1/roadmaps/history/'+plan['id'],headers=H).status_code==404
         assert read(client)['planner']['active'] is None
@@ -217,37 +208,40 @@ def test_preview_expires_once_a_session_has_passed():
         response=client.post('/api/v1/roadmaps/planner/accept',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
         assert response.status_code==409 and response.json()['code']=='plan_expired'
 
-def test_schedule_change_after_completion_previews_a_revision_and_preserves_completed_work():
+def test_new_roadmap_after_completion_stays_a_preview_and_archives_completed_work():
     sources=Sources()
-    revised=draft(summary='Moved to Thursday evenings.',milestones=[milestone(estimated_minutes=120)],assignments=[assignment('a2',date='2030-01-10',start_time='18:00')])
-    model=Scripted([draft(assignments=[assignment('a1'),assignment('a3',start_time='20:00',duration_minutes=30)]),revised])
+    revised=draft(summary='Moved to Thursday evenings.',milestones=[milestone(estimated_minutes=120)],assignments=[assignment('a2',date='2030-01-10',start_time='18:00',duration_minutes=45,task='Write a second tested endpoint.'),second_week('a4',start_time='18:00')])
+    model=Scripted([draft(assignments=[assignment('a1'),second_week('a3',task='Document the endpoint.')]),revised])
     with client_for(model,sources) as client:
         state=accepted(client);session=state['planner']['active']['assignments'][0]
         state=post(client,'/assignments/status',state,assignment_id=session['id'],status='completed',evidence_note='Endpoint test passed.')
         done=state['planner']['active']['assignments'][0]
         assert done['status']=='completed' and done['evidence_note']=='Endpoint test passed.'
-        assert 'progress' in {s['kind'] for s in state['planner']['signals']}
         active_before=copy.deepcopy(state['planner']['active'])
-        blocks=[{'day':3,'start_time':'18:00','duration_minutes':60,'kind':'preferred'},{'day':0,'start_time':'19:00','duration_minutes':120,'kind':'preferred'}]
+        blocks=[{'day':3,'start_time':'18:00','duration_minutes':60,'kind':'preferred'},{'day':0,'start_time':'18:00','duration_minutes':120,'kind':'preferred'}]
         state=configure(client,state,blocks=blocks,blackouts=[])
-        assert {'settings','progress'}<={s['kind'] for s in state['planner']['signals']}
+        assert 'settings' in {s['kind'] for s in state['planner']['signals']}
         assert state['planner']['active']==active_before
         state=generate(client,state)
         assert state['operation']['status']=='succeeded',state['operation']
         sent=model.contexts[-1]
-        assert sent['completed_work'][0]['key']=='a1' and sent['completed_work'][0]['evidence_note']=='Endpoint test passed.'
-        assert sent['current_plan']['scheduled'][0]['key']=='a3'
-        assert sent['first_week_windows']==[{'date':'2030-01-10','start_time':'18:00','end_time':'19:00','kind':'preferred','minutes':60}]
+        assert sent['prior_completed_work'][0]['task']==done['task'] and sent['prior_completed_work'][0]['note']=='Endpoint test passed.' and sent['prior_completed_work'][0]['skills']==['Python']
+        assert model.contexts[-2]['stage']=='outline' and sent['windows'][0]['date']=='2030-01-10'
         assert state['planner']['active']==active_before
         preview=state['planner']['candidate']
-        assert preview['assignments'][0]==done and [a['key'] for a in preview['assignments']]==['a1','a2']
-        assert preview['changes']['completed_preserved']==1 and preview['changes']['assignments_removed'] and preview['changes']['assignments_added']
+        assert [a['key'] for a in preview['assignments']]==['a2','a4']
+        assert preview['changes']['assignments_removed'] and preview['changes']['assignments_added']
         state=post(client,'/accept',state)
-        assert state['planner']['active']['assignments'][0]==done and state['planner']['active']['summary']=='Moved to Thursday evenings.'
+        active=state['planner']['active']
+        assert active['summary']=='Moved to Thursday evenings.' and active['accepted_at']
+        archive=state['planner']['archived'][0]
+        assert archive['completed_minutes']==60 and archive['tasks_completed']==1
+        kept=client.get('/api/v1/roadmaps/history/'+archive['id'],headers=H).json()
+        assert kept['source_plan_id']==active_before['id'] and kept['assignments'][0]==done
         assert sources.writes==[]
 
 def test_completing_a_session_invalidates_an_older_preview():
-    model=Scripted([draft(),draft(assignments=[assignment('a9',start_time='19:30')])])
+    model=Scripted([draft(),draft(assignments=[assignment('a9',start_time='19:30'),second_week('a8')])])
     with client_for(model) as client:
         state=accepted(client);session=state['planner']['active']['assignments'][0]
         state=generate(client,state);assert state['planner']['candidate']
@@ -291,19 +285,16 @@ def test_changed_evidence_prompts_a_revision():
         accepted(client);sources.hash='hash2'
         assert 'evidence' in {s['kind'] for s in read(client)['planner']['signals']}
 
-def test_finished_week_prompts_the_next_week_and_revision_rolls_detail_forward():
+def test_a_missed_session_moves_automatically_on_the_next_access():
     moments=[NOW]
-    next_week=draft(milestones=[milestone(projected_start='2030-01-14')],assignments=[assignment('w2',date='2030-01-14',start_time='19:00')])
-    model=Scripted([draft(),next_week])
+    model=Scripted([draft()])
     with client_for(model,clock=lambda:moments[0]) as client:
         state=accepted(client);session=state['planner']['active']['assignments'][0]
-        moments[0]=NOW.replace(day=13)  # Sunday; the Wednesday session was missed.
+        moments[0]=NOW.replace(day=11)  # Friday; Wednesday's session was missed.
         state=read(client)
-        assert {'progress','next_week'}<={s['kind'] for s in state['planner']['signals']}
-        assert state['planner']['active_review']['missed_assignment_ids']==[session['id']]
-        state=generate(client,state)
-        assert state['operation']['status']=='succeeded',state['operation']
-        assert model.contexts[-1]['first_planning_week']=='2030-01-14'
+        moved=next(a for a in state['planner']['active']['assignments'] if a['id']==session['id'])
+        assert moved['auto_moves']==1 and moved['status']=='scheduled' and moved['date']>'2030-01-11'
+        assert state['planner']['active_view']['coach']['recent_moves'][0]['task_id']==session['id']
 
 def test_chat_collects_settings_without_generating_a_plan():
     patch={'target_date':'2030-01-27','weekly_minutes':300,'blocks':settings()['blocks'],'blackouts':[{'frequency':'once','start_date':'2030-01-12'}]}
@@ -362,25 +353,29 @@ def test_a_plan_saved_with_blackout_dates_is_not_reported_as_changed_settings():
 
 def test_chat_edits_prepare_a_preview_and_leave_the_active_plan_alone():
     edit={'reply':'I prepared a preview that moves the work to Thursday.','settings':{'blocks':[{'day':3,'start_time':'18:00','duration_minutes':60,'kind':'preferred'}]},'revision_instruction':'Move this week to Thursday evening.'}
-    revised=draft(milestones=[milestone(estimated_minutes=120)],assignments=[assignment('a2',date='2030-01-10',start_time='18:00')])
-    model=Scripted([draft(),revised],[edit])
+    model=Scripted([draft()],[edit],revisions=[{'message':'Moved to Thursday evening.','assignments':[assignment('a2',date='2030-01-10',start_time='18:00',duration_minutes=45)]}])
     with client_for(model) as client:
         state=accepted(client);active=state['planner']['active']
         state=chat(client,state,'Can we move it to Thursday evening?')
         assert state['operation']['status']=='succeeded',state['operation']
-        assert state['planner']['active']==active and state['planner']['candidate']['assignments'][0]['key']=='a2'
+        assert state['planner']['active']==active and state['planner']['candidate'] is None
+        proposal=state['planner']['proposal']
+        assert proposal['kind']=='revision' and proposal['message']=='Moved to Thursday evening.' and proposal['patch']['config']['blocks'][0]['day']==3
         assert model.contexts[-1]['instruction']=='Move this week to Thursday evening.'
-        assert state['planner']['config']['blocks'][0]['day']==3
+        assert state['planner']['config']['blocks'][0]['day']!=3
         assert state['messages'][-1]['role']=='assistant'
+        state=post(client,'/proposals/accept',state,proposal_id=proposal['id'],keep_task_ids=[])
+        assert state['planner']['config']['blocks'][0]['day']==3 and state['planner']['active']['config']['blocks'][0]['day']==3
+        assert any(a['key']=='a2' and a['date']=='2030-01-10' for a in state['planner']['active']['assignments'])
 
 def test_a_chat_edit_that_fails_validation_keeps_settings_and_preview():
     edit={'reply':'Preparing that.','settings':{'weekly_minutes':30},'revision_instruction':'Reduce the weekly budget.'}
-    bad=draft()
-    model=Scripted([draft(),bad,bad,bad],[edit])
+    bad={'message':'Too much.','assignments':[assignment('a5',start_time='19:00',duration_minutes=90)]}
+    model=Scripted([draft()],[edit],revisions=[bad,bad,bad])
     with client_for(model) as client:
-        state=accepted(client);config=state['planner']['config']
+        state=accepted(client);config=state['planner']['config'];active=state['planner']['active']
         state=chat(client,state,'Reduce to thirty minutes.')
-        assert state['operation']['status']=='failed' and state['planner']['config']==config and state['planner']['candidate'] is None
+        assert state['operation']['status']=='failed' and state['planner']['config']==config and state['planner']['proposal'] is None and state['planner']['active']==active
         assert state['retry_request'] and state['planner']['retry_generate'] is None
 
 def test_writes_are_rejected_for_stale_versions_and_other_operations():

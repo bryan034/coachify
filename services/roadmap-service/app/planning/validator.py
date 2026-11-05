@@ -12,13 +12,21 @@ def assessment_lookup(assessment):
         for ref in group.get('requirement_refs',[])}
     return outcomes,conditions,satisfied
 
-def check_assignments(draft,capacity,completed,first_week,milestones):
-    errors=[];config=capacity.config;booked={};week_minutes={};last=first_week+timedelta(days=6)
+def check_assignments(draft,capacity,completed,first_week,milestones,*,weeks=None,budgets=None):
+    """completed holds every fixed item: finished work and tasks a stage must plan around.
+
+    weeks is the detail window, by default the first planning week and the week after it.
+    budgets overrides a week's minutes; by default each week may use its planned workload, leaving the buffer free.
+    """
+    errors=[];config=capacity.config;booked={};week_minutes={}
+    window=set(weeks) if weeks else {first_week,first_week+timedelta(days=7)}
+    described=', '.join(f'{week} to {week+timedelta(days=6)}' for week in sorted(window))
     backup_sessions=[]
     completed_keys={s['key'] for s in completed}
     keys=[a.key for a in draft.assignments]
     for key in sorted({k for k in keys if keys.count(k)>1}):errors.append(issue('duplicate_assignment',f"Assignment key '{key}' is used more than once."))
     for session in completed:
+        if not session.get('start_time'):continue
         begin=to_minute(session['start_time'])
         booked.setdefault(date.fromisoformat(str(session['date'])),[]).append((begin,begin+session['duration_minutes'],session['key']))
     for item in draft.assignments:
@@ -26,7 +34,7 @@ def check_assignments(draft,capacity,completed,first_week,milestones):
         begin=to_minute(item.start_time);end=begin+item.duration_minutes
         if item.key in completed_keys:errors.append(issue('completed_assignment_rewritten',f"{label} reuses a completed session key. Completed sessions cannot change."))
         if item.milestone_key not in milestones:errors.append(issue('unknown_milestone',f"{label} references unknown milestone '{item.milestone_key}'."))
-        if not first_week<=item.date<=last:errors.append(issue('assignment_outside_first_week',f"{label} is outside the first planning week ({first_week} to {last})."));continue
+        if week_of(item.date) not in window:errors.append(issue('assignment_outside_window',f"{label} is outside the detail window ({described})."));continue
         if item.date>capacity.target:errors.append(issue('assignment_after_target',f"{label} is after the target date {capacity.target}."));continue
         if any(begin<high and low<end for low,high in capacity.blackout_windows(item.date)):errors.append(issue('assignment_on_blackout',f"{label} overlaps a blackout."));continue
         if item.date<capacity.today or (item.date==capacity.today and begin<capacity.now_minute):errors.append(issue('assignment_in_past',f"{label} has already passed."));continue
@@ -44,17 +52,34 @@ def check_assignments(draft,capacity,completed,first_week,milestones):
         backup_used=sum(max(0,min(end,high)-max(begin,low)) for low,high in windows['backup'])
         if backup_used:backup_sessions.append((item,label))
     for week,minutes in week_minutes.items():
-        left=capacity.week_left(week)
-        if minutes>left:errors.append(issue('weekly_budget_exceeded',f"Week of {week} schedules {minutes} minutes, but only {left} remain within the weekly budget."))
+        left=budgets[week] if budgets and week in budgets else capacity.week_minutes(week)[1]
+        if minutes>left:errors.append(issue('weekly_budget_exceeded',f"Week of {week} schedules {minutes} minutes, but only {left} remain within the planned workload."))
     for item,label in backup_sessions:
         for offset in range(7):
-            day=first_week+timedelta(days=offset)
+            day=week_of(item.date)+timedelta(days=offset)
             taken=[(low,high) for low,high,_ in booked.get(day,[])]
             free=subtract(capacity.days.get(day,{'preferred':[]})['preferred'],taken)
             if any(high-low>=item.duration_minutes for low,high in free):
                 errors.append(issue('backup_before_preferred',f"{label} uses a backup block while a preferred window on {day} could hold it."))
                 break
+    errors.extend(check_dependencies(draft,completed))
     return errors
+
+def check_dependencies(draft,fixed):
+    errors=[];known={a.key:a for a in draft.assignments};settled={s['key']:s for s in fixed}
+    for item in draft.assignments:
+        for key in item.depends_on:
+            other=known.get(key)
+            if not other and key not in settled:errors.append(issue('unknown_dependency',f"Assignment '{item.key}' depends on unknown task '{key}'."))
+            elif other and (other.date,to_minute(other.start_time)+other.duration_minutes)>(item.date,to_minute(item.start_time)):
+                errors.append(issue('task_dependency_order',f"Assignment '{item.key}' starts before its prerequisite '{key}' finishes."))
+    return errors
+
+def check_repetition(draft,prior):
+    """Trusted completed work is not repeated unless the model says why a refresher helps."""
+    finished={(p.get('task') or '').strip().casefold() for p in prior}
+    return [issue('repeats_completed_work',f"Assignment '{a.key}' repeats completed work. Write new work, or set refresher_reason to explain why a refresher or harder application helps.")
+        for a in draft.assignments if a.task.strip().casefold() in finished and not (a.refresher_reason or '').strip()]
 
 def check_milestones(draft,capacity,completed,retained):
     errors=[];keys=[m.key for m in draft.milestones];lookup={m.key:m for m in draft.milestones}
@@ -83,30 +108,31 @@ def check_milestones(draft,capacity,completed,retained):
         return cyclic
     if any(visit(key) for key in list(lookup)):errors.append(issue('prerequisite_cycle','Milestone prerequisites contain a cycle.'))
     assigned={}
-    for item in draft.assignments:assigned[item.milestone_key]=assigned.get(item.milestone_key,0)+item.duration_minutes
+    for item in getattr(draft,'assignments',[]):assigned[item.milestone_key]=assigned.get(item.milestone_key,0)+item.duration_minutes
     for key,minutes in assigned.items():
         if key in lookup and minutes>lookup[key].estimated_minutes:errors.append(issue('assignment_effort_exceeds_milestone',f"Assignments for '{key}' total {minutes} minutes, above its {lookup[key].estimated_minutes}-minute remaining estimate."))
     # Every window is tested against the milestones wholly inside it, which also catches a
     # milestone that fits on its own but not alongside the others sharing its dates.
+    # Generation plans into the workload budget, leaving each week's buffer free.
     found=[]
     for first in sorted({m.projected_start for m in draft.milestones}):
         for last in sorted({m.projected_end for m in draft.milestones}):
             if last<first:continue
             inside=[m for m in draft.milestones if first<=m.projected_start and m.projected_end<=last]
             effort=sum(m.estimated_minutes for m in inside)
-            available=capacity.between(first,last)
+            available=capacity.planned_between(first,last)
             if inside and effort>available:found.append((effort-available,first,last,effort,available,inside))
     for _,first,last,effort,available,inside in sorted(found,key=lambda row:-row[0])[:3]:
         names=', '.join(m.key for m in inside)
-        errors.append(issue('milestone_capacity_exceeded',f'{names} need {effort} minutes between {first} and {last}, but only {available} usable minutes exist. Reduce scope or move work to beyond_deadline.'))
+        errors.append(issue('milestone_capacity_exceeded',f'{names} need {effort} minutes between {first} and {last}, but only {available} planned minutes exist after the buffer. Reduce scope or move work to beyond_deadline.'))
     return errors
 
 def check_gaps(draft,assessment,confirmations,instruction):
     errors=[];outcomes,conditions,satisfied=assessment_lookup(assessment)
     ids=[g.id for g in draft.gaps];known=set(ids)
     for key in sorted({k for k in ids if ids.count(k)>1}):errors.append(issue('duplicate_gap',f"Gap id '{key}' is used more than once."))
-    diagnostics={}
-    for item in draft.assignments:
+    diagnostics={};detailed=hasattr(draft,'assignments')
+    for item in getattr(draft,'assignments',[]):
         if item.kind=='diagnostic':
             diagnostics.setdefault(item.gap_id,[]).append(item)
             if item.gap_id not in known:errors.append(issue('diagnostic_without_gap',f"Diagnostic '{item.key}' must reference a listed gap."))
@@ -138,7 +164,7 @@ def check_gaps(draft,assessment,confirmations,instruction):
             if gap.status=='confirmed_gap' and answer!='no_experience':errors.append(issue('unknown_labelled_confirmed',f'{label} is an inferred requirement, so label it unknown.'))
         if gap.status=='confirmed_gap' and gap.id not in placed and gap.requirement_ref not in excluded:errors.append(issue('gap_not_placed',f'{label} is confirmed but is in no milestone or beyond_deadline entry.'))
         if gap.status=='unknown' and gap.plan_impact=='material' and not answer:
-            if gap.resolution=='diagnostic' and gap.id not in diagnostics:errors.append(issue('unresolved_material_unknown',f'{label} needs a diagnostic assignment in the first planning week.'))
+            if gap.resolution=='diagnostic' and detailed and gap.id not in diagnostics:errors.append(issue('unresolved_material_unknown',f'{label} needs a diagnostic assignment in the detail window.'))
             elif gap.resolution=='confirm_experience' and not (gap.confirmation_question or '').strip():errors.append(issue('unresolved_material_unknown',f'{label} needs a confirmation_question.'))
             elif not gap.resolution:errors.append(issue('unresolved_material_unknown',f'{label} could change the plan, so it needs a diagnostic or a confirmation question.'))
     by_ref={g.requirement_ref:g for g in draft.gaps if g.requirement_ref}
@@ -150,10 +176,42 @@ def check_gaps(draft,assessment,confirmations,instruction):
     if not fits and not draft.beyond_deadline:errors.append(issue('deadline_outcome_inconsistent','fits_in_runway is false, but no work is listed beyond the deadline.'))
     return errors
 
-def validate_plan(draft,capacity,assessment,first_week,*,completed=(),retained_milestones=(),confirmations=None,instruction=None):
+def validate_plan(draft,capacity,assessment,first_week,*,completed=(),retained_milestones=(),confirmations=None,instruction=None,weeks=None,prior=()):
     milestones={m.key for m in draft.milestones}
-    errors=[*check_assignments(draft,capacity,completed,first_week,milestones),*check_milestones(draft,capacity,completed,retained_milestones),
-        *check_gaps(draft,assessment,confirmations or {},instruction)]
-    if draft.milestones and not draft.assignments:errors.append(issue('no_assignments','Write detailed assignments for the first planning week.'))
+    errors=[*check_assignments(draft,capacity,completed,first_week,milestones,weeks=weeks),*check_milestones(draft,capacity,completed,retained_milestones),
+        *check_gaps(draft,assessment,confirmations or {},instruction),*check_repetition(draft,prior)]
+    if draft.milestones and not draft.assignments:errors.append(issue('no_assignments','Write detailed assignments for the detail window.'))
     if draft.gaps and not draft.milestones and not draft.beyond_deadline:errors.append(issue('no_milestones','Define milestones for the gaps you identified.'))
     return errors
+
+def validate_outline(outline,capacity,assessment,*,completed=(),confirmations=None,instruction=None):
+    """Stage one: scope and one row per week through the target date. Task-level checks wait for stage two."""
+    errors=[*check_milestones(outline,capacity,completed,()),*check_gaps(outline,assessment,confirmations or {},instruction)]
+    if outline.gaps and not outline.milestones and not outline.beyond_deadline:errors.append(issue('no_milestones','Define milestones for the gaps you identified.'))
+    weeks={date.fromisoformat(w['week_start']):w for w in capacity.weeks()}
+    keys={m.key for m in outline.milestones};seen=set();budgeted=0
+    for row in outline.outline:
+        label=f'Outline week {row.week_start}'
+        if row.week_start in seen:errors.append(issue('outline_duplicate_week',f'{label} appears more than once.'));continue
+        seen.add(row.week_start)
+        if row.week_start not in weeks:errors.append(issue('outline_unknown_week',f'{label} is not a Monday in this runway.'));continue
+        if row.target_minutes>weeks[row.week_start]['planned_minutes']:errors.append(issue('outline_over_budget',f"{label} targets {row.target_minutes} minutes, but only {weeks[row.week_start]['planned_minutes']} are planned."))
+        for key in row.milestone_keys:
+            if key not in keys:errors.append(issue('outline_unknown_milestone',f"{label} references unknown milestone '{key}'."))
+        budgeted+=row.target_minutes
+    missing=[str(week) for week in sorted(weeks) if week not in seen]
+    if missing:errors.append(issue('outline_missing_week','Add an outline row for every week through the target date. Missing: '+', '.join(missing[:12])+'.'))
+    effort=sum(m.estimated_minutes for m in outline.milestones)
+    if budgeted<effort:errors.append(issue('outline_under_scope',f'The weekly targets total {budgeted} minutes, but the milestones need {effort}.'))
+    return errors
+
+def check_window_coverage(draft,weeks,budgets,effort):
+    """Stage two must detail each requested week that has work to give, or the candidate is not ready.
+
+    effort is the work still to be detailed before this output.
+    """
+    assigned={}
+    for item in draft.assignments:assigned[week_of(item.date)]=assigned.get(week_of(item.date),0)+item.duration_minutes
+    left=effort-sum(assigned.values())
+    return [issue('window_week_empty',f'Write tasks for the week of {week}; it has planned time and unfinished work.')
+        for week in sorted(weeks) if not assigned.get(week) and budgets.get(week,0)>=15 and left>0]

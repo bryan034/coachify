@@ -2,6 +2,9 @@
 
 Times are wall-clock minutes on real local dates. A date is available only inside its
 configured blocks, so overlapping blocks merge and repeated daylight-saving hours count once.
+Local minutes a forward clock change skips are removed. A week runs Monday to Sunday in the
+plan's time zone. Each week's eligible time is capped by the weekly maximum, then the buffer
+share is reserved for catch-up, leaving the planned workload.
 """
 from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
@@ -78,6 +81,10 @@ def blackout_span(rule):
     """Local minutes a rule removes on a day it occurs. 23:59 is the latest a time field can say, so it means midnight."""
     if rule.start_time is None:return (0,1440)
     return (to_minute(rule.start_time),1440 if rule.end_time=='23:59' else to_minute(rule.end_time))
+def split_buffer(eligible,percent):
+    """Planned and reserved minutes for eligible time. The buffer rounds up, so the plan never eats into it."""
+    buffer=-(-eligible*percent//100)
+    return eligible-buffer,buffer
 def resolve_dates(config,today):
     start=config.start_date or today
     target=add_duration(start,config.duration) if config.duration else config.target_date
@@ -88,8 +95,9 @@ def normalized(config,today):
 
 class Capacity:
     """Eligible study time for one configuration, from now until the target date."""
-    def __init__(self,config,now,completed=()):
+    def __init__(self,config,now,completed=(),paused=()):
         self.config=config
+        self.paused={date.fromisoformat(str(week)) for week in paused}
         self.zone=ZoneInfo(config.time_zone)
         local=now.astimezone(self.zone)
         self.today=local.date()
@@ -100,11 +108,14 @@ class Capacity:
         self.completed_by_date={}
         self.completed_by_week={}
         for session in completed:
+            if not session.get('date'):continue
             day=date.fromisoformat(str(session['date']))
-            begin=to_minute(session['start_time'])
-            self.completed_by_date.setdefault(day,[]).append((begin,begin+session['duration_minutes']))
-            week=week_of(day)
-            self.completed_by_week[week]=self.completed_by_week.get(week,0)+session['duration_minutes']
+            if session.get('start_time'):
+                begin=to_minute(session['start_time'])
+                self.completed_by_date.setdefault(day,[]).append((begin,begin+session['duration_minutes']))
+            if session.get('count_hours',True):
+                week=week_of(day)
+                self.completed_by_week[week]=self.completed_by_week.get(week,0)+session['duration_minutes']
         self.blackouts=[rule for rule in config.blackouts if not blackout_problem(rule)]
         self.days={}
         if self.target and self.target>=self.start and (self.target-self.start).days<=MAX_RUNWAY_DAYS:
@@ -115,6 +126,7 @@ class Capacity:
     def blackout_windows(self,day):
         return merge([blackout_span(rule) for rule in self.blackouts if blackout_occurs(rule,day)])
     def _windows(self,day):
+        if week_of(day) in self.paused:return {'preferred':[],'backup':[]}
         blocks=[b for b in self.config.blocks if b.day==day.weekday()]
         span=lambda b:(to_minute(b.start_time),to_minute(b.start_time)+b.duration_minutes)
         holes=[*missing_local_minutes(day,self.zone),*self.completed_by_date.get(day,[]),*self.blackout_windows(day)]
@@ -132,6 +144,19 @@ class Capacity:
                 minutes=total(windows['preferred'])+(total(windows['backup']) if self.config.use_backup else 0)
                 weeks[week_of(day)]=weeks.get(week_of(day),0)+minutes
         return sum(min(self.week_left(week),minutes) for week,minutes in weeks.items())
+    def planned_between(self,first,last):
+        """Like between, after reserving each week's buffer: what generation may plan into."""
+        weeks={}
+        for day,windows in self.days.items():
+            if first<=day<=last:
+                minutes=total(windows['preferred'])+(total(windows['backup']) if self.config.use_backup else 0)
+                weeks[week_of(day)]=weeks.get(week_of(day),0)+minutes
+        return sum(split_buffer(min(self.week_left(week),minutes),self.config.buffer_percent)[0] for week,minutes in weeks.items())
+    def week_minutes(self,week):
+        """(eligible, planned, buffer) for one week, from the time still available in it."""
+        eligible=self.between(week,week+timedelta(days=6))
+        planned,buffer=split_buffer(eligible,self.config.buffer_percent)
+        return eligible,planned,buffer
     def weeks(self):
         rows={}
         for day,windows in self.days.items():
@@ -146,8 +171,11 @@ class Capacity:
             left=self.week_left(week)
             preferred=min(left,row['preferred'])
             both=min(left,row['preferred']+row['backup'])
+            usable=both if self.config.use_backup else preferred
+            planned,buffer=split_buffer(usable,self.config.buffer_percent)
             result.append({'week_start':week.isoformat(),'weekly_cap':self.cap,'completed_minutes':self.completed_by_week.get(week,0),
-                'preferred_minutes':preferred,'backup_extra_minutes':both-preferred,'usable_minutes':both if self.config.use_backup else preferred,
+                'preferred_minutes':preferred,'backup_extra_minutes':both-preferred,'usable_minutes':usable,
+                'planned_minutes':planned,'buffer_minutes':buffer,'paused':week in self.paused,
                 'partial':week<self.start or week+timedelta(days=6)>self.target})
             week+=timedelta(days=7)
         return result
@@ -191,7 +219,9 @@ class Capacity:
             calendar={'days':days,'weeks':days//7,'extra_days':days%7,'label':', '.join(parts),'partial_first_week':self.start.weekday()!=0}
         first=next((w['week_start'] for w in weeks if w['usable_minutes']),None)
         matched=matched_duration(self.start_date,self.target) if self.target and self.target>self.start_date else None
-        return {'can_generate':not issues,'issues':issues,'calendar':calendar,'study':study,'weeks':weeks,'first_planning_week':first,
+        budget={'available_weeks':sum(1 for w in weeks if w['usable_minutes']),'eligible_minutes':study['usable_minutes'],
+            'planned_minutes':sum(w['planned_minutes'] for w in weeks),'buffer_minutes':sum(w['buffer_minutes'] for w in weeks)}
+        return {'can_generate':not issues,'issues':issues,'calendar':calendar,'study':study,'budget':budget,'weeks':weeks,'first_planning_week':first,
             'resolved':{'today':self.today.isoformat(),'start_date':self.start_date.isoformat(),
                 'target_date':self.target.isoformat() if self.target else None,
                 'matched_duration':matched.model_dump() if matched else None}}

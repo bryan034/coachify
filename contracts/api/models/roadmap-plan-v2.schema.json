@@ -1,0 +1,846 @@
+{
+  "$defs": {
+    "BlackoutRule": {
+      "additionalProperties": false,
+      "description": "A whole day or a time slot, once or repeating. Weekly uses weekdays; monthly uses start_date's day.\n\nOrdering problems are reported as runway issues so the planner form can explain them.",
+      "properties": {
+        "frequency": {
+          "default": "once",
+          "enum": [
+            "once",
+            "daily",
+            "weekly",
+            "monthly"
+          ],
+          "title": "Frequency",
+          "type": "string"
+        },
+        "start_date": {
+          "format": "date",
+          "title": "Start Date",
+          "type": "string"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Date"
+        },
+        "interval": {
+          "default": 1,
+          "maximum": 52,
+          "minimum": 1,
+          "title": "Interval",
+          "type": "integer"
+        },
+        "weekdays": {
+          "items": {
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 7,
+          "title": "Weekdays",
+          "type": "array"
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Time"
+        },
+        "end_time": {
+          "anyOf": [
+            {
+              "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Time"
+        }
+      },
+      "required": [
+        "start_date"
+      ],
+      "title": "BlackoutRule",
+      "type": "object"
+    },
+    "DeadlineOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "achievable_by_target": {
+          "items": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Achievable By Target",
+          "type": "array"
+        },
+        "fits_in_runway": {
+          "title": "Fits In Runway",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "summary",
+        "fits_in_runway"
+      ],
+      "title": "DeadlineOutcome",
+      "type": "object"
+    },
+    "DraftExclusion": {
+      "additionalProperties": false,
+      "properties": {
+        "requirement_ref": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Requirement Ref",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "quote": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requirement_ref",
+        "reason",
+        "quote"
+      ],
+      "title": "DraftExclusion",
+      "type": "object"
+    },
+    "Duration": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "maximum": 52,
+          "minimum": 1,
+          "title": "Value",
+          "type": "integer"
+        },
+        "unit": {
+          "enum": [
+            "weeks",
+            "months"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "unit"
+      ],
+      "title": "Duration",
+      "type": "object"
+    },
+    "LegacyAssignment": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "milestone_key": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Milestone Key",
+          "type": "string"
+        },
+        "gap_id": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gap Id"
+        },
+        "kind": {
+          "default": "study",
+          "enum": [
+            "study",
+            "diagnostic"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "start_time": {
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Start Time",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "maximum": 480,
+          "minimum": 1,
+          "title": "Duration Minutes",
+          "type": "integer"
+        },
+        "task": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Task",
+          "type": "string"
+        },
+        "completion_criterion": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Completion Criterion",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "scheduled",
+            "completed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "evidence_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Note"
+        },
+        "history": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "History",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "milestone_key",
+        "date",
+        "start_time",
+        "duration_minutes",
+        "task",
+        "completion_criterion",
+        "id",
+        "status"
+      ],
+      "title": "LegacyAssignment",
+      "type": "object"
+    },
+    "LegacyBeyond": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "gap_ids": {
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Gap Ids",
+          "type": "array"
+        },
+        "reason": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "estimated_minutes": {
+          "maximum": 60000,
+          "minimum": 0,
+          "title": "Estimated Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "title",
+        "reason",
+        "estimated_minutes"
+      ],
+      "title": "LegacyBeyond",
+      "type": "object"
+    },
+    "LegacyMilestone": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "gap_ids": {
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Gap Ids",
+          "type": "array"
+        },
+        "prerequisite_keys": {
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Prerequisite Keys",
+          "type": "array"
+        },
+        "estimated_minutes": {
+          "maximum": 60000,
+          "minimum": 0,
+          "title": "Estimated Minutes",
+          "type": "integer"
+        },
+        "projected_start": {
+          "format": "date",
+          "title": "Projected Start",
+          "type": "string"
+        },
+        "projected_end": {
+          "format": "date",
+          "title": "Projected End",
+          "type": "string"
+        },
+        "demonstrable_outcome": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Demonstrable Outcome",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "outcome": {
+          "additionalProperties": true,
+          "title": "Outcome",
+          "type": "object"
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "estimated_minutes",
+        "projected_start",
+        "projected_end",
+        "demonstrable_outcome",
+        "id",
+        "outcome"
+      ],
+      "title": "LegacyMilestone",
+      "type": "object"
+    },
+    "PlanGap": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "requirement_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirement Ref"
+        },
+        "source": {
+          "enum": [
+            "stated",
+            "inferred"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "inference_reason": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inference Reason"
+        },
+        "status": {
+          "enum": [
+            "confirmed_gap",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "priority": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "plan_impact": {
+          "enum": [
+            "material",
+            "minor"
+          ],
+          "title": "Plan Impact",
+          "type": "string"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "enum": [
+                "diagnostic",
+                "confirm_experience"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
+        },
+        "confirmation_question": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmation Question"
+        },
+        "rationale": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "source",
+        "status",
+        "priority",
+        "plan_impact",
+        "rationale"
+      ],
+      "title": "PlanGap",
+      "type": "object"
+    },
+    "PlannerConfig": {
+      "additionalProperties": false,
+      "description": "Date problems are reported as runway issues so the settings panel can explain them.",
+      "properties": {
+        "start_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Date"
+        },
+        "target_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Date"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Duration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "time_zone": {
+          "default": "Asia/Singapore",
+          "title": "Time Zone",
+          "type": "string"
+        },
+        "weekly_minutes": {
+          "anyOf": [
+            {
+              "maximum": 10080,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weekly Minutes"
+        },
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/StudyBlock"
+          },
+          "maxItems": 28,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "use_backup": {
+          "default": false,
+          "title": "Use Backup",
+          "type": "boolean"
+        },
+        "blackouts": {
+          "items": {
+            "$ref": "#/$defs/BlackoutRule"
+          },
+          "maxItems": 366,
+          "title": "Blackouts",
+          "type": "array"
+        },
+        "preferred_session_minutes": {
+          "default": 60,
+          "maximum": 480,
+          "minimum": 15,
+          "title": "Preferred Session Minutes",
+          "type": "integer"
+        },
+        "learning_focus": {
+          "items": {
+            "enum": [
+              "interview_practice",
+              "portfolio_work",
+              "hands_on_projects",
+              "courses_and_reading",
+              "certification",
+              "networking"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "title": "Learning Focus",
+          "type": "array"
+        },
+        "learning_notes": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Learning Notes",
+          "type": "string"
+        },
+        "buffer_percent": {
+          "default": 20,
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Buffer Percent",
+          "type": "integer"
+        },
+        "checkin_day": {
+          "default": 4,
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Checkin Day",
+          "type": "integer"
+        },
+        "checkin_time": {
+          "default": "18:00",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Checkin Time",
+          "type": "string"
+        }
+      },
+      "title": "PlannerConfig",
+      "type": "object"
+    },
+    "StudyBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Day",
+          "type": "integer"
+        },
+        "start_time": {
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Start Time",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "maximum": 480,
+          "minimum": 15,
+          "title": "Duration Minutes",
+          "type": "integer"
+        },
+        "kind": {
+          "default": "preferred",
+          "enum": [
+            "preferred",
+            "backup"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "day",
+        "start_time",
+        "duration_minutes"
+      ],
+      "title": "StudyBlock",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "description": "A roadmap-v2 plan. It stays readable and is never changed by roadmap-v3 mutations.",
+  "properties": {
+    "schema_version": {
+      "const": "roadmap-v2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "assessment_id": {
+      "title": "Assessment Id",
+      "type": "string"
+    },
+    "assessment_hash": {
+      "title": "Assessment Hash",
+      "type": "string"
+    },
+    "assessment": {
+      "additionalProperties": true,
+      "title": "Assessment",
+      "type": "object"
+    },
+    "config": {
+      "$ref": "#/$defs/PlannerConfig"
+    },
+    "config_hash": {
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "confirmations_hash": {
+      "title": "Confirmations Hash",
+      "type": "string"
+    },
+    "base_active_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Base Active Id"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "first_planning_week": {
+      "title": "First Planning Week",
+      "type": "string"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "gaps": {
+      "items": {
+        "$ref": "#/$defs/PlanGap"
+      },
+      "title": "Gaps",
+      "type": "array"
+    },
+    "milestones": {
+      "items": {
+        "$ref": "#/$defs/LegacyMilestone"
+      },
+      "title": "Milestones",
+      "type": "array"
+    },
+    "assignments": {
+      "items": {
+        "$ref": "#/$defs/LegacyAssignment"
+      },
+      "title": "Assignments",
+      "type": "array"
+    },
+    "deadline_outcome": {
+      "$ref": "#/$defs/DeadlineOutcome"
+    },
+    "beyond_deadline": {
+      "items": {
+        "$ref": "#/$defs/LegacyBeyond"
+      },
+      "title": "Beyond Deadline",
+      "type": "array"
+    },
+    "exclusions": {
+      "items": {
+        "$ref": "#/$defs/DraftExclusion"
+      },
+      "title": "Exclusions",
+      "type": "array"
+    },
+    "changes": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Changes"
+    },
+    "generation": {
+      "additionalProperties": true,
+      "title": "Generation",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "assessment_id",
+    "assessment_hash",
+    "assessment",
+    "config",
+    "config_hash",
+    "confirmations_hash",
+    "base_active_id",
+    "created_at",
+    "first_planning_week",
+    "summary",
+    "gaps",
+    "milestones",
+    "assignments",
+    "deadline_outcome",
+    "beyond_deadline",
+    "exclusions",
+    "generation"
+  ],
+  "title": "LegacyRoadmap",
+  "type": "object"
+}
