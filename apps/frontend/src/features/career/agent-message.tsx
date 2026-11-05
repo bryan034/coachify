@@ -110,7 +110,9 @@ export function AgentReply({children,animate=true,onProgress}:{children:string;a
  },[children,animate,reduced]);
  const count=shown.text===children?shown.count:0;
  const complete=!animate||reduced||count>=words.length;
- const visible=complete?children:words.slice(0,count).join('');
+ const revealed=words.slice(0,count).join('');
+ // Close a bold phrase cut off mid-reveal so its markers never flash as literal text.
+ const visible=complete?children:(revealed.match(/(?<!\\)\*\*/g)||[]).length%2?revealed+'**':revealed;
  useEffect(()=>{onProgress?.();},[visible,onProgress]);
  return <div className="agent-reply" aria-busy={!complete}>
   <AgentMarkdown>{visible}</AgentMarkdown>

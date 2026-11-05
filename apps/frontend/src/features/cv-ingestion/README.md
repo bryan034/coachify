@@ -26,7 +26,8 @@ invalidates in-flight reads so an old response cannot restore it.
 
 ## Saved conversation
 
-The conversation opens or resumes a CV-owned server record for the viewed CV, or a
+elo's replies render as safe Markdown so key words and phrases can be bold; the user's
+own messages stay literal text. The conversation opens or resumes a CV-owned server record for the viewed CV, or a
 manual-only record when no CV is open. A compact header identifies the reviewed file
 and the confirmed Career target. **Review CV** starts basic guided questions explicitly.
 Users may answer naturally, add context, ask a side question or propose a correction
@@ -51,7 +52,7 @@ errors; interrupted sends reuse their request identity. The UI never puts transc
 or CV content into browser storage. Account/token changes abort the conversation and
 clear private drafts; changing the viewed CV warns before discarding unsent input.
 
-Conversation controls retain keyboard focus, offer Enter/Shift+Enter input, announce
+Conversation controls retain keyboard focus, send on Enter and add a line on Cmd+Enter, announce
 status without re-announcing the transcript, and keep the composer visible beneath
 the scrollable history on mobile. Long input is rejected visibly without truncation.
 

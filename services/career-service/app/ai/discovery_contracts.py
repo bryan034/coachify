@@ -1,4 +1,5 @@
 """Models see scope and bounded public excerpts, never CVs or private research prompts."""
+from app.ai.chat_style import CHAT_EMPHASIS
 from app.schemas.discovery import Decision,Plan,Listings,MarketSummary,SourceAssessments
 OUTPUTS={'discovery_turn':Decision,'discovery_plan':Plan,'discovery_assess':SourceAssessments,'discovery_extract':Listings,'discovery_summary':MarketSummary}
 PROMPTS={
@@ -90,7 +91,7 @@ checklist or repeat resolved questions. A new question goes at the end; ask only
 Return cited source_ids from supplied facts for market claims; do not write URLs or Markdown links.
 Unknown facts stay unknown. Do not claim research or saving has happened before the server does it.
 If research reveals an important choice, ask one focused optional question; do not require specialisation.
-Keep reply warm, concise and career-focused. Your goal is to help the user discover a career path.''',
+Keep reply warm, concise and career-focused. Your goal is to help the user discover a career path.'''+CHAT_EMPHASIS,
 'discovery_plan':'''Plan searches for real employer JOB LISTINGS in the selected scope.
 Use supplied research_context to respect the stated work/industry/preferences, treating absent
 values as unknown. Return up to four closely related role titles and distinct short search phrases. Respect breadth,

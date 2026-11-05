@@ -11,6 +11,7 @@ import {careerApi,importExplorationCV,type CareerContext,type CurrentGoal,type G
 const warning='For more reliable current-skill extraction, use the dedicated CV upload section. This career-goal agent may interpret a CV attached here less accurately.';
 import {AgentMarkdown,AgentActivity,AgentReply,AgentRecovery,errorCode} from './agent-message';
 import {JobReviewChat} from './job-review-chat';
+import { chatEnterKey, chatKeyHint } from '@/lib/chat-keyboard';
 export function CareerChat(){
  const params=useSearchParams(),session=useCareerSession(),{token}=useProfile();
  // Clearing the temporary JD after saving must not replace the active chat.
@@ -99,7 +100,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
  }
  function navigate(path:string){if(busy)return;if(!dirty.current||window.confirm('Leave this conversation? Unsent messages and temporary attachments may be discarded.'))router.push(path);}
  const needsAttachment=draft?.cv.mode==='temporary'&&!cvText;
- const initial='Hi, I’m your career agent. Tell me what you’d like to achieve, or what you’re unsure about. We’ll work through it together, one question at a time.';
+ const initial='Hi, I’m your career agent. Tell me **what you’d like to achieve**, or **what you’re unsure about**. We’ll work through it together, **one question at a time**.';
  return <section className="page on career-agent-page">
   <header className="agent-page-header"><div><p className="small">Your direction, one conversation at a time</p><h1>Career Goal</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>navigate('/career-goal')}>← Career Goal</button></header>
   <div className="agent-workspace"><div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true"><BrandLogo compact decorative/></span><div><strong>elo agent</strong><p className="small">Career exploration</p></div></div><button className="btn ghost sm" disabled={busy} onClick={()=>setShowDetails(v=>!v)}>{showDetails?'Hide details':'Conversation details'}</button></div>
@@ -116,7 +117,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
 
   </details>}
   <div className="agent-transcript" ref={transcript} {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">
-   <div className="agent-message assistant"><span className="agent-message-label">elo</span><p>{initial}</p></div>
+   <div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentMarkdown>{initial}</AgentMarkdown></div>
    {!draft&&<p className="agent-cv-reminder small">No CV is required to start. {warning} <Link href="/cv">CV upload</Link></p>}
    {loading&&<p role="status">Opening your conversation…</p>}
    {draft?.turns.map((turn,index)=><div className="agent-exchange" key={`${draft._id}-${index}`}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.answer.value||'I’m not sure; skip this for now.'}</p></div><div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply animate={index===draft.turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div></div>)}
@@ -131,8 +132,8 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
   <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
    <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}>
    <label className="agent-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>Allow elo to send this conversation and chosen CV context to the configured AI provider.</label>
-   <div className="agent-compose-row"><textarea aria-label="Message elo" placeholder="Tell me what you’re hoping to achieve…" value={message} maxLength={600} rows={2} disabled={busy||loading} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={busy||loading||!message.trim()||(!consent||needsAttachment||!current)}>↑</button></div>
-   {<div className="agent-compose-meta"><span className="small">Enter to send · Shift+Enter for a new line</span>{draft?.next_question&&<button type="button" className="btn ghost sm" disabled={busy||!consent||needsAttachment} onClick={()=>void send(true)}>Skip this question</button>}</div>}
+   <div className="agent-compose-row"><textarea aria-label="Message elo" placeholder="Tell me what you’re hoping to achieve…" value={message} maxLength={600} rows={2} disabled={busy||loading} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>chatEnterKey(e,()=>void send(),setMessage)}/><button className="btn pri" aria-label="Send message" disabled={busy||loading||!message.trim()||(!consent||needsAttachment||!current)}>↑</button></div>
+   {<div className="agent-compose-meta"><span className="small">{chatKeyHint}</span>{draft?.next_question&&<button type="button" className="btn ghost sm" disabled={busy||!consent||needsAttachment} onClick={()=>void send(true)}>Skip this question</button>}</div>}
    {needsAttachment&&<p role="status" className="small">Reattach the temporary CV above, or start a new conversation without it.</p>}
   </form></div>
  </section>;

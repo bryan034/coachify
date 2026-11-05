@@ -247,3 +247,20 @@ def test_summary_reconnects_to_an_unfinished_snapshot():
         assert first['operation_id']==second['operation_id']
         await jobs.close()
     asyncio.run(run())
+
+
+def test_every_career_chat_prompt_asks_for_bold_key_phrases():
+    from app.ai.chat_style import CHAT_EMPHASIS
+    from app.ai import adapter
+    from app.ai.discovery_contracts import PROMPTS
+    prompts=[adapter.JD_CHAT_PROMPT,adapter.FOCUSED_ANSWER_PROMPT,adapter.GOAL_EDIT_PROMPT,
+             adapter.WORKSPACE_CHAT_PROMPT,adapter.EXPLORATION_PROMPT,PROMPTS['discovery_turn']]
+    assert all(CHAT_EMPHASIS in prompt for prompt in prompts)
+    assert 'plain-text' not in adapter.JD_CHAT_PROMPT
+
+
+def test_bold_discovery_introduction_and_its_plain_stored_form_stay_display_only():
+    from app.domain.discovery_conversation import INTRODUCTION,PLAIN_INTRODUCTION,conversation_messages
+    assert '**compare roles**' in INTRODUCTION and INTRODUCTION.replace('**','')==PLAIN_INTRODUCTION
+    saved=[{'role':'assistant','content':INTRODUCTION},{'role':'assistant','content':PLAIN_INTRODUCTION},{'role':'user','content':'Hi'}]
+    assert conversation_messages(saved)==[{'role':'user','content':'Hi'}]

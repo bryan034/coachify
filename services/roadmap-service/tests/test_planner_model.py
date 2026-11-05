@@ -62,3 +62,8 @@ def test_openai_requests_use_the_selected_token_parameter_and_json_output(monkey
         assert str(request.url)=='https://api.openai.com/v1/chat/completions' and request.headers['user-agent'].startswith('AsyncOpenAI/Python')
         assert body['response_format']=={'type':'json_object'} and 'max_tokens' not in body and 'JSON schema' in body['messages'][0]['content']
     assert requests[1][1]['max_completion_tokens']==24000
+
+
+def test_chat_helper_prompt_asks_for_bold_key_phrases():
+    from app.planning.generator import CHAT_INSTRUCTIONS
+    assert '**double asterisks**' in CHAT_INSTRUCTIONS

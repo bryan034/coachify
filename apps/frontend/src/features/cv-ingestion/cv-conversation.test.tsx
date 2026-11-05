@@ -21,6 +21,14 @@ describe('saved CV conversation', () => {
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
   expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:'cv-one'}),'synthetic-session',expect.any(AbortSignal));
  });
+ it('renders bold key phrases in elo replies while keeping your own message as literal text', async () => {
+  vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({messages:[message('m1','I used **React** daily.',[],'user'),message('m2','Tell me how you tested **React screens**.')]}));
+  render(<CvConversationPanel {...props()}/>);
+  expect(await screen.findByText('I used **React** daily.')).toBeVisible();
+  const bold=screen.getByText('React screens');
+  expect(bold.tagName).toBe('STRONG');
+  expect(bold.parentElement).toHaveTextContent('Tell me how you tested React screens.');
+ });
  it('shows pending review work and keeps a new draft until the saved turn finishes', async () => {
   const pending=action({id:'route-pending',kind:'route',status:'pending',title:'Understand your message'});
   const current=conversation({purpose:'skills_profile',messages:[message('m1','A saved answer.',[],'user'),message('m2','Working on your answer.',[pending])]});

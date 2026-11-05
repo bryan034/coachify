@@ -21,7 +21,8 @@ CV-context acknowledgement remains explicit and version-bound.
 
 New research summaries use Markdown headings, grouped bullet lists, inline sources,
 learning priorities and coverage limitations. The final invitation to ask questions
-and refine the goal in this chat is bold.
+and refine the goal in this chat is bold. Each chat service's `chat_style.py`
+asks its models to bold key words and phrases in chat text.
 
 Career Discovery reveals assistant chat replies word by word after the validated
 response arrives. Readers can choose **Show full response** to reveal it immediately;

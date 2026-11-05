@@ -10,6 +10,7 @@ import {sourceCitations} from './source-links';
 import {careerOperation,type CareerOperation} from '@/lib/api/career-operation';
 import {retryCareerRead} from '@/lib/api/career-polling';
 import {careerApi,refreshWorkspace,type OpportunityView,type CareerWorkspace} from '@/lib/api/career';
+import { chatEnterKey, chatKeyHint } from '@/lib/chat-keyboard';
 
 type QueuedMessage={id:string;input:string;key:string;body?:string;session?:string|null};
 function researchPending(workspace:CareerWorkspace){
@@ -179,7 +180,7 @@ export function JobReviewChat(){
     {connectionIssue&&<p role="status" className="small">Connection interrupted. Reconnecting to task updates…</p>}
     {!ready&&<AgentProgress steps={[...extractionSteps,...(activeOperation?.activities||[]),...(workspace?.activities||[])]}/>}
     <div className="agent-message assistant" key="initial-answer"><span className="agent-message-label">elo</span>
-     {ready&&<AgentReply onProgress={followReply}>{refining.current?'What would you like to refine in your career goal? We can work through your role, location, skills, qualifications or responsibilities. Tell me what feels different, and I’ll ask for any details needed before saving the update.':summary!.reply}</AgentReply>}{<>
+     {ready&&<AgentReply onProgress={followReply}>{refining.current?'What would you like to refine in your career goal? We can work through your **role**, **location**, **skills**, **qualifications** or **responsibilities**. Tell me what feels different, and I’ll ask for any details needed before saving the update.':summary!.reply}</AgentReply>}{<>
       {(!workspace||researchPending(workspace)||loadingResearch||researchReady&&!ready)&&!error&&<AgentActivity step
        label={activeOperation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?waitLabel:activeOperation?.status==='repairing'?'Refining the response…':activeOperation?observedActivity(activeOperation.activities)||(source.current?'Extracting your career goal…':'Preparing your career-goal summary…'):researchReady&&!ready?'Preparing your career-goal summary…':workspace&&researchPending(workspace)?observedActivity(workspace?.activities)||'Researching interview expectations…':loadingResearch?'Loading your saved research…':source.current?'Extracting your career goal…':'Opening your career goal…'}
        detail={activeOperation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?(secondsLeft>0?`Resuming in ${secondsLeft} seconds.`:'Retrying research…'):researchReady?'Your goal and research are saved. I’m preparing your summary.':workspace?.current.goal?'Your goal is saved. You can ask questions while research continues.':undefined}/>}
@@ -192,7 +193,7 @@ export function JobReviewChat(){
     {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||chatCooldown} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(failedMessage)void send(failedMessage);else if(goal&&message.trim())void send();else if(researchReady&&!ready)setSummaryRetry(v=>v+1);else if(loadingResearch)setResearchRetry(v=>v+1);else void retry();}}/>}
    </div>
    <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
-   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message elo" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={!token||!message.trim()}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
+   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message elo" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>chatEnterKey(e,()=>void send(),setMessage)}/><button className="btn pri" aria-label="Send message" disabled={!token||!message.trim()}>↑</button></div><p className="small">{chatKeyHint}</p></form>
   </div>
  </section>;
 }

@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from uuid import NAMESPACE_URL, uuid5
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool as thread
+from app.planning.chat_style import CHAT_EMPHASIS
 from elo_shared.runtime import Problem, digest, stamp
 from app.planning.capacity import Capacity, blackout_problem, normalized, to_clock, week_of
 from app.planning.checkin import next_week_workload, recap
@@ -65,7 +66,7 @@ A blackout is time the user cannot study. frequency is once, daily, weekly or mo
 
 Never compute available hours, finish dates or claim the schedule fits: the page shows the calculated numbers. You cannot start generation or apply a plan. When the required details are in, tell the user to review the form and press Generate.
 
-When current_plan is present the user has an accepted roadmap. Settings they ask to change prepare an Edit plan preview. Set revision_instruction to a short, precise description only when they ask to change what unfinished generated tasks say or do; that prepares a task preview. Nothing applies until the user accepts it, and you must say so. Do not set revision_instruction when the user only asks a question. Completed, pinned and custom tasks cannot be changed by you: the user can Complete, Skip, Move, Pin or add custom tasks on the page. Missed tasks move automatically by fixed rules, and the target date only changes if the user accepts a change. Deferred scope stays outside the dated schedule until they accept a scope or date preview. Factual skill corrections belong in Skills Profile, so point the user there.'''
+When current_plan is present the user has an accepted roadmap. Settings they ask to change prepare an Edit plan preview. Set revision_instruction to a short, precise description only when they ask to change what unfinished generated tasks say or do; that prepares a task preview. Nothing applies until the user accepts it, and you must say so. Do not set revision_instruction when the user only asks a question. Completed, pinned and custom tasks cannot be changed by you: the user can Complete, Skip, Move, Pin or add custom tasks on the page. Missed tasks move automatically by fixed rules, and the target date only changes if the user accepts a change. Deferred scope stays outside the dated schedule until they accept a scope or date preview. Factual skill corrections belong in Skills Profile, so point the user there.'''+CHAT_EMPHASIS
 
 def compact_plan(plan):
     if not plan:return None

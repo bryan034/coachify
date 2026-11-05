@@ -406,7 +406,8 @@ class InterviewHarness:
             uncertainty = 'claim'
             question = {'id': active['id'], 'item_id': active['item_id'],
                 'kind': 'project' if context['focused_source']['kind'] == 'project' else 'work' if context['focused_source']['kind'] == 'experience' else 'other',
-                'question': active['question'], 'uncertainty': uncertainty,
+                # The saved clarification is plain text; only the chat bubble renders Markdown.
+                'question': active['question'].replace('**', ''), 'uncertainty': uncertainty,
                 'uncertainty_key': digest({'interview_question': active['id']}), 'status': 'unanswered', 'answer': None,
                 'career_target_id': None, 'career_target_version': None, 'career_target_type': None,
                 'extraction_version': document['extraction_version'], 'reconciliation_required': False,

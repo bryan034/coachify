@@ -684,6 +684,7 @@ def test_real_provider_adapter_uses_the_typed_interview_protocol(monkeypatch, ta
     assert metadata['prompt_version'] == 'cv-interview-11'
     assert len(requests) == 1 and requests[0]['max_tokens'] == 5000
     assert 'untrusted' in requests[0]['messages'][0]['content'].lower()
+    assert '**double asterisks**' in requests[0]['messages'][0]['content']
     assert 'synthetic-secret-for-test' not in json.dumps(requests[0]['messages'])
 
 
@@ -1274,3 +1275,17 @@ def test_explicit_unknown_ownership_allows_finish_with_gaps_without_verified_own
         'coverage': [{'item_id': source, 'status': 'reviewed', 'evidence_refs': ['bad-model-reference']}]}, context, memory)
     assert decision.action == 'finish'
     assert coverage[source] == {'item_id': source, 'status': 'reviewed_with_gaps', 'evidence_refs': []}
+
+
+def test_bold_question_stays_bold_in_chat_but_is_saved_plain_for_the_clarification_card(harness):
+    client, app, *_ = harness
+    cv, chat, provider = opened(harness)
+    provider.plans = [lambda context: {'action': 'ask', 'reply': 'What did you **personally build**?',
+        'item_id': context['focused_source']['id'], 'targets': [{'field': 'personal_contribution'}]}]
+    chat = send(client, chat, 'Review my CV', command='review')
+    assert chat['active_question']['question'] == 'What did you **personally build**?'
+    assert '**personally build**' in chat['messages'][-1]['text']
+    owner = client.headers['authorization'].removeprefix('Bearer ')
+    saved = app.state.conversations.cv.get(owner, cv['id'])['clarifications']
+    asked = next(q for q in saved if q['id'] == chat['active_question']['id'])
+    assert asked['question'] == 'What did you personally build?'

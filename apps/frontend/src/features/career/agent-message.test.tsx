@@ -37,6 +37,19 @@ it('reveals a new reply word by word and ends with proper Markdown',()=>{
  expect(screen.queryByRole('button',{name:'Show full response'})).toBeNull();
 });
 
+it('never shows literal markers while a multi-word bold phrase is being revealed',()=>{
+ motion(false);vi.useFakeTimers();
+ const {container}=render(<AgentReply>{'**Business analysis skills** matter here.'}</AgentReply>);
+ expect(container).not.toHaveTextContent('*');
+ expect(container.querySelector('strong')).toHaveTextContent('Business');
+ act(()=>vi.advanceTimersByTime(20));
+ expect(container).not.toHaveTextContent('*');
+ expect(container.querySelector('strong')).toHaveTextContent('Business analysis');
+ act(()=>vi.advanceTimersByTime(200));
+ expect(container.querySelector('strong')).toHaveTextContent('Business analysis skills');
+ expect(container).toHaveTextContent('Business analysis skills matter here.');
+});
+
 it('can reveal the whole answer immediately and does not restart on the same content',()=>{
  motion(false);vi.useFakeTimers();
  const view=render(<AgentReply>{'First second third fourth'}</AgentReply>);

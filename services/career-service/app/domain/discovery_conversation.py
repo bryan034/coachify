@@ -28,16 +28,21 @@ MANUAL_SAVE_INTRODUCTION = (
 )
 
 
-INTRODUCTION = MANUAL_SAVE_INTRODUCTION.replace(
+PLAIN_INTRODUCTION = MANUAL_SAVE_INTRODUCTION.replace(
     'You’ll review and confirm before saving your career goal.',
     'Your career goal updates automatically as we refine your direction together.',
 )
+
+INTRODUCTION = PLAIN_INTRODUCTION
+for _phrase in ('explore career paths', 'compare roles', 'don’t need a CV or a clear direction',
+                'research representative roles', 'suggest a skill set', 'career goal updates automatically'):
+    INTRODUCTION = INTRODUCTION.replace(_phrase, '**' + _phrase + '**')
 
 
 def conversation_messages(messages):
     """Exclude display-only opening copy, including legacy stored introductions."""
     return [message for message in messages
-            if not (message.get('role') == 'assistant' and message.get('content') in (INTRODUCTION,MANUAL_SAVE_INTRODUCTION,PREVIOUS_INTRODUCTION,LEGACY_INTRODUCTION))]
+            if not (message.get('role') == 'assistant' and message.get('content') in (INTRODUCTION,PLAIN_INTRODUCTION,MANUAL_SAVE_INTRODUCTION,PREVIOUS_INTRODUCTION,LEGACY_INTRODUCTION))]
 
 
 def conversational_reply(message, *, ongoing=False):
