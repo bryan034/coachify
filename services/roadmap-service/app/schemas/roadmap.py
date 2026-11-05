@@ -2,7 +2,7 @@
 from datetime import date
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from pydantic import ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from .base import Contract, Mutation, Text
 
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
@@ -41,13 +41,6 @@ class Duration(Contract):
         return self
 class PlannerConfig(Contract):
     """Date problems are reported as runway issues so the settings panel can explain them."""
-    @classmethod
-    def from_saved(cls, values):
-        """Retired settings are ignored only when reading persisted configurations."""
-        if isinstance(values,dict):
-            values={k:v for k,v in values.items() if k not in ('buffer_percent','checkin_day','checkin_time')}
-        return cls.model_validate(values)
-
     start_date:date|None=None
     target_date:date|None=None
     duration:Duration|None=None
@@ -59,14 +52,6 @@ class PlannerConfig(Contract):
     preferred_session_minutes:int=Field(default=60,strict=True,ge=15,le=480)
     learning_focus:list[Focus]=Field(default_factory=list,max_length=6)
     learning_notes:str=Field(default='',max_length=1000)
-    @model_validator(mode='before')
-    @classmethod
-    def upgrade_saved_blackout_dates(cls,values):
-        """Saved settings and plans from before blackout rules keep their dates as one-off rules."""
-        if not isinstance(values,dict) or 'blackout_dates' not in values:return values
-        upgraded={k:v for k,v in values.items() if k!='blackout_dates'}
-        upgraded.setdefault('blackouts',[{'frequency':'once','start_date':day} for day in values['blackout_dates']])
-        return upgraded
     @model_validator(mode='after')
     def coherent(self):
         try:ZoneInfo(self.time_zone)
@@ -214,19 +199,68 @@ class Runway(Contract):
     study:RunwayStudy
     weeks:list[RunwayWeek]
     first_planning_week:str|None
+class OperationError(Contract):
+    detail:str
+    code:str
+class OperationView(Contract):
+    """Stages run preparing, assessing, writing, correcting, then complete or failed."""
+    id:str
+    status:Literal['pending','running','succeeded','failed']
+    stage:str
+    error:OperationError|None=None
+    retry_after:int|None=None
+class OperationAccepted(Contract):
+    version:int
+    operation:OperationView|None
+# Stored records can predate these models. Unexpected extras stay readable instead of failing the page.
+class SavedRecord(Contract):
+    model_config=ConfigDict(extra='allow')
+class MilestoneOutcomeRecord(SavedRecord):
+    demonstrated:bool
+    note:str|None=None
+    recorded_at:str|None=None
+    source:Literal['self_reported']|None=None
+class AssignmentChange(SavedRecord):
+    model_config=ConfigDict(extra='allow',populate_by_name=True)
+    at:str|None=None
+    from_status:Literal['scheduled','completed']|None=Field(default=None,alias='from')
+    to:Literal['scheduled','completed']|None=None
+    evidence_note:str|None=None
+class PlanChanges(SavedRecord):
+    completed_preserved:int=0
+    assignments_added:list[str]=Field(default_factory=list)
+    assignments_removed:list[str]=Field(default_factory=list)
+    assignments_moved:list[str]=Field(default_factory=list)
+    milestones_added:list[str]=Field(default_factory=list)
+    milestones_removed:list[str]=Field(default_factory=list)
+    milestones_moved:list[str]=Field(default_factory=list)
+class PlanGeneration(SavedRecord):
+    prompt_version:str|None=None
+    attempts:int|None=None
+class ConfirmationRecord(SavedRecord):
+    name:str|None=None
+    question:str|None=None
+    answer:Literal['have_experience','some_experience','no_experience','not_sure']
+    note:str|None=None
+    source:Literal['self_reported']|None=None
+    recorded_at:str|None=None
+class MilestoneProgress(Contract):
+    sessions_total:int
+    sessions_completed:int
+    completed_minutes:int
 class PlanGap(DraftGap):
     pass
 class PlanMilestone(DraftMilestone):
     model_config=ConfigDict(extra='forbid')
     id:str
-    outcome:dict
+    outcome:MilestoneOutcomeRecord
 class PlanAssignment(DraftAssignment):
     model_config=ConfigDict(extra='forbid')
     id:str
     status:Literal['scheduled','completed']
     completed_at:str|None=None
     evidence_note:str|None=None
-    history:list[dict]=Field(default_factory=list)
+    history:list[AssignmentChange]=Field(default_factory=list)
 class PlannedRoadmap(Contract):
     model_config=ConfigDict(extra='allow')
     schema_version:Literal['roadmap-v2']
@@ -235,14 +269,13 @@ class PlannedRoadmap(Contract):
     assessment_hash:str
     assessment:dict
     config:PlannerConfig
-    @field_validator('config',mode='before')
-    @classmethod
-    def read_saved_config(cls,value):
-        return PlannerConfig.from_saved(value)
     config_hash:str
     confirmations_hash:str
     base_active_id:str|None
     created_at:str
+    updated_at:str|None=None
+    request_hash:str|None=None
+    completed_at_generation:int=0
     first_planning_week:str
     summary:str
     gaps:list[PlanGap]
@@ -251,21 +284,37 @@ class PlannedRoadmap(Contract):
     deadline_outcome:DeadlineOutcome
     beyond_deadline:list[DraftBeyond]
     exclusions:list[DraftExclusion]
-    changes:dict|None=None
-    generation:dict
+    changes:PlanChanges|None=None
+    generation:PlanGeneration
 class PlanReview(Contract):
     next_assignment_id:str|None
     missed_assignment_ids:list[str]
     remaining:Runway
-    milestones:dict[str,dict]
+    milestones:dict[str,MilestoneProgress]
 class Signal(Contract):
     kind:Literal['settings','evidence','progress','next_week']
     message:str
+class InputRecord(Contract):
+    ref:str
+    name:str|None
+    kind:str|None
+    text:str
+class InputSkill(InputRecord):
+    attribution:str|None=None
+    assistance:str|None=None
+    proficiency:str|int|float|None=None
+    experience_months:int|float|None=None
+    support_uncertain:bool|None=None
+class InputExperience(InputRecord):
+    start_date:str|None=None
+    end_date:str|None=None
+    ongoing:bool|None=None
 class PlanInputs(Contract):
+    """goal and cv belong to the Assessment service's context, so they stay open objects here."""
     goal:dict|None
     cv:dict|None
-    skills:list[dict]
-    experience:list[dict]
+    skills:list[InputSkill]
+    experience:list[InputExperience]
     skill_groups:dict[str,str]
 class PlannerView(Contract):
     config:PlannerConfig
@@ -277,6 +326,6 @@ class PlannerView(Contract):
     candidate_blockers:list[RunwayIssue]
     active:PlannedRoadmap|None
     active_review:PlanReview|None
-    confirmations:dict[str,dict]
+    confirmations:dict[str,ConfirmationRecord]
     signals:list[Signal]
-    retry_generate:dict|None=None
+    retry_generate:GeneratePlan|None=None

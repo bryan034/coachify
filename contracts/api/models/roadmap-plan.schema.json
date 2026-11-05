@@ -1,5 +1,68 @@
 {
   "$defs": {
+    "AssignmentChange": {
+      "additionalProperties": true,
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "At"
+        },
+        "from": {
+          "anyOf": [
+            {
+              "enum": [
+                "scheduled",
+                "completed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "From"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "enum": [
+                "scheduled",
+                "completed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "To"
+        },
+        "evidence_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Note"
+        }
+      },
+      "title": "AssignmentChange",
+      "type": "object"
+    },
     "BlackoutRule": {
       "additionalProperties": false,
       "description": "A whole day or a time slot, once or repeating. Weekly uses weekdays; monthly uses start_date's day.\n\nOrdering problems are reported as runway issues so the planner form can explain them.",
@@ -209,6 +272,57 @@
       "title": "Duration",
       "type": "object"
     },
+    "MilestoneOutcomeRecord": {
+      "additionalProperties": true,
+      "properties": {
+        "demonstrated": {
+          "title": "Demonstrated",
+          "type": "boolean"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "recorded_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recorded At"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "const": "self_reported",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "demonstrated"
+      ],
+      "title": "MilestoneOutcomeRecord",
+      "type": "object"
+    },
     "PlanAssignment": {
       "additionalProperties": false,
       "properties": {
@@ -312,8 +426,7 @@
         },
         "history": {
           "items": {
-            "additionalProperties": true,
-            "type": "object"
+            "$ref": "#/$defs/AssignmentChange"
           },
           "title": "History",
           "type": "array"
@@ -331,6 +444,60 @@
         "status"
       ],
       "title": "PlanAssignment",
+      "type": "object"
+    },
+    "PlanChanges": {
+      "additionalProperties": true,
+      "properties": {
+        "completed_preserved": {
+          "default": 0,
+          "title": "Completed Preserved",
+          "type": "integer"
+        },
+        "assignments_added": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assignments Added",
+          "type": "array"
+        },
+        "assignments_removed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assignments Removed",
+          "type": "array"
+        },
+        "assignments_moved": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assignments Moved",
+          "type": "array"
+        },
+        "milestones_added": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Milestones Added",
+          "type": "array"
+        },
+        "milestones_removed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Milestones Removed",
+          "type": "array"
+        },
+        "milestones_moved": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Milestones Moved",
+          "type": "array"
+        }
+      },
+      "title": "PlanChanges",
       "type": "object"
     },
     "PlanGap": {
@@ -451,6 +618,37 @@
       "title": "PlanGap",
       "type": "object"
     },
+    "PlanGeneration": {
+      "additionalProperties": true,
+      "properties": {
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "attempts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempts"
+        }
+      },
+      "title": "PlanGeneration",
+      "type": "object"
+    },
     "PlanMilestone": {
       "additionalProperties": false,
       "properties": {
@@ -513,9 +711,7 @@
           "type": "string"
         },
         "outcome": {
-          "additionalProperties": true,
-          "title": "Outcome",
-          "type": "object"
+          "$ref": "#/$defs/MilestoneOutcomeRecord"
         }
       },
       "required": [
@@ -734,6 +930,35 @@
       "title": "Created At",
       "type": "string"
     },
+    "updated_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Updated At"
+    },
+    "request_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request Hash"
+    },
+    "completed_at_generation": {
+      "default": 0,
+      "title": "Completed At Generation",
+      "type": "integer"
+    },
     "first_planning_week": {
       "title": "First Planning Week",
       "type": "string"
@@ -783,20 +1008,16 @@
     "changes": {
       "anyOf": [
         {
-          "additionalProperties": true,
-          "type": "object"
+          "$ref": "#/$defs/PlanChanges"
         },
         {
           "type": "null"
         }
       ],
-      "default": null,
-      "title": "Changes"
+      "default": null
     },
     "generation": {
-      "additionalProperties": true,
-      "title": "Generation",
-      "type": "object"
+      "$ref": "#/$defs/PlanGeneration"
     }
   },
   "required": [

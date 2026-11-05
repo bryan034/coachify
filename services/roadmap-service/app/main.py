@@ -1,19 +1,28 @@
 """One saved adviser conversation with proposed and active plans beside it."""
 import asyncio
 import copy
+from contextlib import asynccontextmanager
 from datetime import datetime,timezone
 from uuid import uuid5,NAMESPACE_URL
 from fastapi import Depends,Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import application,authenticated,Problem,begin,launch,operation_view,stamp,digest
-from app.schemas import Message,Workspace,Plan,PlannedRoadmap
+from app.schemas import Message,OperationAccepted,Workspace,Plan,PlannedRoadmap
 from app.planning.generator import PLANNING_SECONDS,chat_turn,prepare_plan
+from app.planning.retired_settings import remove_retired_settings
 from app.planning.routes import register_planner
 from app.planning.state import planner_state,planner_view,retry_body
 
 def create_app(store=None,upstream=None,model=None,clock=None):
     app=application('elo Roadmap Adviser API','ROADMAP',store=store,upstream=upstream,model=model)
     app.state.clock=clock or (lambda:datetime.now(timezone.utc))
+    shared_lifespan=app.router.lifespan_context
+    @asynccontextmanager
+    async def lifespan(instance):
+        async with shared_lifespan(instance):
+            await thread(remove_retired_settings,instance.state.store)
+            yield
+    app.router.lifespan_context=lifespan
     async def context(account, tolerate_unavailable=False):
         try:source=await app.state.upstream.read('assessment','/api/v1/assessments/context',account['token'])
         except Problem as error:
@@ -61,13 +70,13 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         row=await thread(app.state.store.load,account['id'])
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return visible(row,await context(account,tolerate_unavailable=True),time_zone)
-    @app.get('/api/v1/roadmaps/progress')
+    @app.get('/api/v1/roadmaps/progress',response_model=OperationAccepted)
     async def progress(request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.progress,account['id'])
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return {'version':row['version'],'operation':operation_view(row)}
 
-    @app.post('/api/v1/roadmaps/messages',status_code=202)
+    @app.post('/api/v1/roadmaps/messages',status_code=202,response_model=OperationAccepted)
     async def message(body:Message,request:Request,account=Depends(authenticated)):
         source=await context(account)
         if not source['ready']:raise Problem('Complete your selected CV and extracted Career goal first.',409,'inputs_missing')

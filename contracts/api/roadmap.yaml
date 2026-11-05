@@ -251,7 +251,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OperationAccepted"
+                }
               }
             }
           },
@@ -372,7 +374,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OperationAccepted"
+                }
               }
             }
           },
@@ -739,7 +743,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OperationAccepted"
+                }
               }
             }
           },
@@ -1591,6 +1597,65 @@
   },
   "components": {
     "schemas": {
+      "AssignmentChange": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "scheduled",
+                  "completed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "scheduled",
+                  "completed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "AssignmentChange"
+      },
       "AssignmentStatus": {
         "properties": {
           "expected_version": {
@@ -1719,6 +1784,121 @@
         ],
         "title": "BlackoutRule",
         "description": "A whole day or a time slot, once or repeating. Weekly uses weekdays; monthly uses start_date's day.\n\nOrdering problems are reported as runway issues so the planner form can explain them."
+      },
+      "ChatMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage"
+      },
+      "ConfirmationRecord": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "enum": [
+              "have_experience",
+              "some_experience",
+              "no_experience",
+              "not_sure"
+            ],
+            "title": "Answer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "self_reported"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "answer"
+        ],
+        "title": "ConfirmationRecord"
       },
       "DayBudget": {
         "properties": {
@@ -1970,6 +2150,189 @@
         ],
         "title": "GeneratePlan"
       },
+      "InputExperience": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "ongoing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ongoing"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ref",
+          "name",
+          "kind",
+          "text"
+        ],
+        "title": "InputExperience"
+      },
+      "InputSkill": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "attribution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution"
+          },
+          "assistance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistance"
+          },
+          "proficiency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proficiency"
+          },
+          "experience_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience Months"
+          },
+          "support_uncertain": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Uncertain"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ref",
+          "name",
+          "kind",
+          "text"
+        ],
+        "title": "InputSkill"
+      },
       "Message": {
         "properties": {
           "expected_version": {
@@ -2048,6 +2411,78 @@
         ],
         "title": "MilestoneOutcome"
       },
+      "MilestoneOutcomeRecord": {
+        "properties": {
+          "demonstrated": {
+            "type": "boolean",
+            "title": "Demonstrated"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "self_reported"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "demonstrated"
+        ],
+        "title": "MilestoneOutcomeRecord"
+      },
+      "MilestoneProgress": {
+        "properties": {
+          "sessions_total": {
+            "type": "integer",
+            "title": "Sessions Total"
+          },
+          "sessions_completed": {
+            "type": "integer",
+            "title": "Sessions Completed"
+          },
+          "completed_minutes": {
+            "type": "integer",
+            "title": "Completed Minutes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessions_total",
+          "sessions_completed",
+          "completed_minutes"
+        ],
+        "title": "MilestoneProgress"
+      },
       "Mutation": {
         "properties": {
           "expected_version": {
@@ -2068,6 +2503,102 @@
           "mutation_id"
         ],
         "title": "Mutation"
+      },
+      "OperationAccepted": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "operation"
+        ],
+        "title": "OperationAccepted"
+      },
+      "OperationError": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "detail",
+          "code"
+        ],
+        "title": "OperationError"
+      },
+      "OperationView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "stage": {
+            "type": "string",
+            "title": "Stage"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "stage"
+        ],
+        "title": "OperationView",
+        "description": "Stages run preparing, assessing, writing, correcting, then complete or failed."
       },
       "Plan": {
         "properties": {
@@ -2223,8 +2754,7 @@
           },
           "history": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/AssignmentChange"
             },
             "type": "array",
             "title": "History"
@@ -2244,6 +2774,60 @@
           "status"
         ],
         "title": "PlanAssignment"
+      },
+      "PlanChanges": {
+        "properties": {
+          "completed_preserved": {
+            "type": "integer",
+            "title": "Completed Preserved",
+            "default": 0
+          },
+          "assignments_added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assignments Added"
+          },
+          "assignments_removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assignments Removed"
+          },
+          "assignments_moved": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assignments Moved"
+          },
+          "milestones_added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Milestones Added"
+          },
+          "milestones_removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Milestones Removed"
+          },
+          "milestones_moved": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Milestones Moved"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "PlanChanges"
       },
       "PlanGap": {
         "properties": {
@@ -2359,6 +2943,35 @@
         ],
         "title": "PlanGap"
       },
+      "PlanGeneration": {
+        "properties": {
+          "prompt_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Version"
+          },
+          "attempts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempts"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "PlanGeneration"
+      },
       "PlanInputs": {
         "properties": {
           "goal": {
@@ -2387,16 +3000,14 @@
           },
           "skills": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/InputSkill"
             },
             "type": "array",
             "title": "Skills"
           },
           "experience": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/InputExperience"
             },
             "type": "array",
             "title": "Experience"
@@ -2418,7 +3029,8 @@
           "experience",
           "skill_groups"
         ],
-        "title": "PlanInputs"
+        "title": "PlanInputs",
+        "description": "goal and cv belong to the Assessment service's context, so they stay open objects here."
       },
       "PlanMilestone": {
         "properties": {
@@ -2481,9 +3093,7 @@
             "title": "Id"
           },
           "outcome": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Outcome"
+            "$ref": "#/components/schemas/MilestoneOutcomeRecord"
           }
         },
         "additionalProperties": false,
@@ -2525,8 +3135,7 @@
           },
           "milestones": {
             "additionalProperties": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/MilestoneProgress"
             },
             "type": "object",
             "title": "Milestones"
@@ -2592,6 +3201,33 @@
             "type": "string",
             "title": "Created At"
           },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "request_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Hash"
+          },
+          "completed_at_generation": {
+            "type": "integer",
+            "title": "Completed At Generation",
+            "default": 0
+          },
           "first_planning_week": {
             "type": "string",
             "title": "First Planning Week"
@@ -2641,19 +3277,15 @@
           "changes": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/PlanChanges"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Changes"
+            ]
           },
           "generation": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Generation"
+            "$ref": "#/components/schemas/PlanGeneration"
           }
         },
         "additionalProperties": true,
@@ -2855,8 +3487,7 @@
           },
           "confirmations": {
             "additionalProperties": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ConfirmationRecord"
             },
             "type": "object",
             "title": "Confirmations"
@@ -2871,14 +3502,12 @@
           "retry_generate": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/GeneratePlan"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Retry Generate"
+            ]
           }
         },
         "additionalProperties": false,
@@ -3596,8 +4225,7 @@
           },
           "messages": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ChatMessage"
             },
             "type": "array",
             "title": "Messages"
@@ -3637,14 +4265,12 @@
           "operation": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/OperationView"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Operation"
+            ]
           },
           "context": {
             "additionalProperties": true,
@@ -3658,14 +4284,12 @@
           "retry_request": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/Message"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Retry Request"
+            ]
           },
           "planner": {
             "$ref": "#/components/schemas/PlannerView"
@@ -3684,7 +4308,8 @@
           "stale",
           "planner"
         ],
-        "title": "Workspace"
+        "title": "Workspace",
+        "description": "assessment and context come from the Assessment service, so they stay open objects here."
       }
     },
     "securitySchemes": {

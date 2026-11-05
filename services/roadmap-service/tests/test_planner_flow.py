@@ -4,10 +4,11 @@ import time
 from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from elo_shared.runtime import MemoryStore, Problem
-from planner_fixtures import NOW, OWNER, assessment, assignment, draft, gap, milestone, settings
+from planner_fixtures import NOW, OWNER, CleanableStore, assessment, assignment, draft, gap, milestone, settings
 from app.main import create_app
-from app.schemas.roadmap import ChatTurn, PlanDraft
+from app.schemas.roadmap import ChatTurn, PlanDraft, PlannedRoadmap
 
 H={'Authorization':'Bearer synthetic'}
 class Sources:
@@ -348,55 +349,140 @@ def test_chat_blackout_that_cannot_apply_changes_nothing_and_is_explained():
         assert state['operation']['status']=='succeeded' and state['planner']['config']==before
         assert 'unchanged' in state['messages'][-1]['content']
 
-def test_a_plan_saved_with_blackout_dates_is_not_reported_as_changed_settings():
-    with client_for(Scripted([draft()])) as client:
-        state=accepted(client)
-        store=client.app.state.store;row=store.load(OWNER)
-        for section in (row['planner'],row['planner']['active']):
-            config=section['config']
-            config['blackout_dates']=[rule['start_date'] for rule in config.pop('blackouts')]
-        store.cas(OWNER,row['version'],row)
-        state=read(client)
-        assert state['planner']['config']['blackouts'][0]['start_date']=='2030-01-12'
-        assert 'settings' not in {s['kind'] for s in state['planner']['signals']}
+OLD_SETTINGS={'buffer_percent':20,'checkin_day':4,'checkin_time':'18:00'}
+def restarted(store,model=None,sources=None):
+    return TestClient(create_app(store,sources or Sources(),model or Scripted(),clock=lambda:NOW))
+def add_old_settings(store,*plan_kinds):
+    row=store.data[OWNER];row['planner']['config'].update(OLD_SETTINGS)
+    for kind in plan_kinds:
+        plan=row['planner'][kind];plan['config'].update(OLD_SETTINGS)
+        if kind=='active':store.results[(OWNER,plan['id'])]['config'].update(OLD_SETTINGS)
 
 @pytest.mark.parametrize('plan_kind',[None,'candidate','active'])
-def test_retired_saved_settings_restore_without_rewriting_data(plan_kind):
-    retired={'buffer_percent':20,'checkin_day':4,'checkin_time':'18:00'}
-    with client_for(Scripted([draft()])) as client:
+def test_a_restart_removes_old_settings_from_storage_and_keeps_the_plan(plan_kind):
+    store=CleanableStore();model=Scripted([draft()])
+    with restarted(store,model) as client:
         state=configure(client)
         if plan_kind:
             state=generate(client,state)
             if plan_kind=='active':state=post(client,'/accept',state)
-        store=client.app.state.store;row=store.load(OWNER)
-        row['planner']['config'].update(retired)
-        if plan_kind:
-            plan=row['planner'][plan_kind]
-            plan['config'].update(retired)
-            store.results[(OWNER,plan['id'])]=copy.deepcopy(plan)
-        store.cas(OWNER,row['version'],row)
-        before=store.load(OWNER)
+    add_old_settings(store,*[plan_kind] if plan_kind else [])
+    version=store.data[OWNER]['version']
+    with restarted(store,model) as client:
+        row=store.data[OWNER]
+        assert row['version']==version
+        assert not OLD_SETTINGS.keys()&row['planner']['config'].keys()
         restored=read(client)
         assert restored['planner']['config']==state['planner']['config']
         assert restored['planner']['runway']==state['planner']['runway']
         assert not any(s['kind']=='settings' for s in restored['planner']['signals'])
         if plan_kind:
-            assert restored['planner'][plan_kind]['assignments']==plan['assignments']
-            history=client.get('/api/v1/roadmaps/history/'+plan['id'],headers=H)
-            assert history.status_code==200
-            assert history.json()['config']==restored['planner']['config']
-        assert store.load(OWNER)==before
-        updated=post(client,'/config',restored,config=settings(weekly_minutes=300))
-        assert updated['planner']['config']['weekly_minutes']==300
+            plan=row['planner'][plan_kind]
+            assert not OLD_SETTINGS.keys()&plan['config'].keys()
+            assert restored['planner'][plan_kind]['assignments']==state['planner'][plan_kind]['assignments']
+        if plan_kind=='active':
+            assert not OLD_SETTINGS.keys()&store.results[(OWNER,plan['id'])]['config'].keys()
+            assert client.get('/api/v1/roadmaps/history/'+plan['id'],headers=H).json()['config']==restored['planner']['config']
 
-@pytest.mark.parametrize('extra',[{'buffer_percent':20},{'checkin_day':4},{'checkin_time':'18:00'},{'unknown_setting':True}])
-def test_new_settings_requests_still_reject_retired_or_unknown_fields(extra):
+def test_a_restart_turns_old_blackout_dates_into_rules_without_a_settings_change():
+    store=CleanableStore();model=Scripted([draft()])
+    with restarted(store,model) as client:
+        accepted(client)
+    row=store.data[OWNER]
+    for section in (row['planner'],row['planner']['active']):
+        config=section['config']
+        config['blackout_dates']=[rule['start_date'] for rule in config.pop('blackouts')]
+    with restarted(store,model) as client:
+        assert 'blackout_dates' not in store.data[OWNER]['planner']['config']
+        state=read(client)
+        assert state['planner']['config']['blackouts'][0]['start_date']=='2030-01-12'
+        assert 'settings' not in {s['kind'] for s in state['planner']['signals']}
+
+def test_every_change_works_on_a_plan_cleaned_of_old_settings():
+    edit={'reply':'Moved to Thursday.','settings':{'blocks':[{'day':3,'start_time':'18:00','duration_minutes':60,'kind':'preferred'}]},'revision_instruction':'Move this week to Thursday evening.'}
+    settings_only={'reply':'Updated.','settings':{'weekly_minutes':240}}
+    revised=draft(milestones=[milestone(estimated_minutes=120)],assignments=[assignment('a2',date='2030-01-10',start_time='18:00')])
+    store=CleanableStore();model=Scripted([draft(),revised,revised],[settings_only,edit])
+    with restarted(store,model) as client:
+        accepted(client)
+    add_old_settings(store,'active')
+    with restarted(store,model) as client:
+        state=read(client);active=state['planner']['active']
+        state=post(client,'/assignments/status',state,assignment_id=active['assignments'][0]['id'],status='completed',evidence_note='Finished.')
+        state=post(client,'/milestones/outcome',state,milestone_id=active['milestones'][0]['id'],demonstrated=True,note='Shown to a friend.')
+        state=chat(client,state,'I can only do four hours.')
+        assert state['operation']['status']=='succeeded',state['operation']
+        assert state['planner']['config']['weekly_minutes']==240
+        state=chat(client,state,'Can we move it to Thursday evening?')
+        assert state['operation']['status']=='succeeded',state['operation']
+        assert state['planner']['candidate']['assignments'][0]['status']=='completed'
+        state=post(client,'/discard',state)
+        assert state['planner']['candidate'] is None
+        state=generate(client,state)
+        assert state['operation']['status']=='succeeded',state['operation']
+        assert not any(s['kind']=='settings' for s in state['planner']['signals'])
+        state=post(client,'/accept',state)
+        statuses={a['key']:a['status'] for a in state['planner']['active']['assignments']}
+        assert statuses=={'a1':'completed','a2':'scheduled'}
+
+@pytest.mark.parametrize('extra',[{'buffer_percent':20},{'checkin_day':4},{'checkin_time':'18:00'},{'blackout_dates':['2030-02-01']},{'unknown_setting':True}])
+def test_new_settings_requests_reject_retired_or_unknown_fields(extra):
     with client_for(Scripted()) as client:
         before=read(client)
         response=client.post('/api/v1/roadmaps/planner/config',headers=H,json={
             'expected_version':before['version'],'mutation_id':str(uuid4()),'config':settings(**extra)})
         assert response.status_code==422
+        assert client.post('/api/v1/roadmaps/planner/runway',headers=H,json={'config':settings(**extra)}).status_code==422
         assert read(client)==before
+
+def declared_keys(model):
+    return {field.alias or name for name,field in model.model_fields.items()}
+
+def test_a_generated_roadmap_returns_only_declared_fields_through_the_frontend_flow():
+    with client_for(Scripted([draft()])) as client:
+        state=configure(client)
+        started=client.post('/api/v1/roadmaps/planner/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
+        assert started.status_code==202
+        assert started.json().keys()=={'version','operation'}
+        assert started.json()['operation'].keys()=={'id','status','stage','error','retry_after'}
+        state=finish(client)
+        progress=client.get('/api/v1/roadmaps/progress',headers=H).json()
+        assert progress['operation']['status']=='succeeded' and progress['operation']['stage']=='complete'
+        planner=state['planner'];candidate=planner['candidate']
+        assert candidate.keys()<=declared_keys(PlannedRoadmap)
+        assert candidate['generation']=={'prompt_version':'roadmap-plan-v1','attempts':1}
+        assert candidate['milestones'][0]['outcome'].keys()=={'demonstrated','note','recorded_at','source'}
+        assert planner['candidate_review']['milestones']['m1'].keys()=={'sessions_total','sessions_completed','completed_minutes'}
+        assert state['messages']==[] and planner['inputs']['experience'][0].keys()>={'ref','name','kind','text','start_date','end_date','ongoing'}
+        state=post(client,'/accept',state)
+        assert state['planner']['active'].keys()<=declared_keys(PlannedRoadmap)
+
+def test_a_saved_plan_or_settings_holding_old_fields_is_rejected_on_read():
+    with client_for(Scripted([draft()])) as client:
+        plan=generate(client,configure(client))['planner']['candidate']
+    for field,value in {**OLD_SETTINGS,'blackout_dates':['2030-02-01']}.items():
+        with pytest.raises(ValidationError):PlannedRoadmap.model_validate({**plan,'config':{**plan['config'],field:value}})
+
+def test_a_generated_roadmap_can_drive_a_daily_weekly_and_monthly_to_do_list():
+    """Each session carries what a to-do item needs, and its skills resolve through its milestone."""
+    with client_for(Scripted([draft()])) as client:
+        state=accepted(client);plan=state['planner']['active']
+        names={gap['id']:gap['name'] for gap in plan['gaps']}
+        milestones={item['key']:item for item in plan['milestones']}
+        session=plan['assignments'][0]
+        assert (session['date'],session['start_time'],session['duration_minutes'])==('2030-01-09','19:00',60)
+        assert session['task'] and session['completion_criterion'] and session['status']=='scheduled'
+        assert [names[g] for g in milestones[session['milestone_key']]['gap_ids']]==['Python']
+        assert plan['first_planning_week']=='2030-01-07'
+        assert state['planner']['active_review']['next_assignment_id']==session['id']
+        later=plan['milestones'][0]
+        assert (later['projected_start'],later['projected_end'])==('2030-01-09','2030-01-20')
+        done=post(client,'/assignments/status',state,assignment_id=session['id'],status='completed')
+        change=done['planner']['active']['assignments'][0]['history'][0]
+        assert (change['from'],change['to'])==('scheduled','completed')
+        assert done['planner']['active_review']['milestones']['m1']['sessions_completed']==1
+        reopened=post(client,'/assignments/status',done,assignment_id=session['id'],status='scheduled')
+        assert reopened['planner']['active']['assignments'][0]['status']=='scheduled'
 
 def test_chat_edits_prepare_a_preview_and_leave_the_active_plan_alone():
     edit={'reply':'I prepared a preview that moves the work to Thursday.','settings':{'blocks':[{'day':3,'start_time':'18:00','duration_minutes':60,'kind':'preferred'}]},'revision_instruction':'Move this week to Thursday evening.'}

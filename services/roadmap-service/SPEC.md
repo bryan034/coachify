@@ -44,7 +44,7 @@ Non-zero Profile reduced periods appear as a notice and do not change capacity. 
 - `weekly` applies on `weekdays` (Monday 0), counting intervals from the Monday-to-Sunday week of `start_date`. `monthly` applies on the day of `start_date`, or the last day of a shorter month.
 - `start_time` and `end_time` limit a rule to a slot on the same day; both empty means all day. `23:59` means through midnight. An overnight blackout needs two rules.
 - A slot removes only its overlap from a study block. A rule that cannot apply (ends before it starts, has one time, has a slot that doesn't end after it starts, or is weekly with no weekdays) removes nothing and is reported as a `blackout_invalid` runway issue, which blocks generation. A chat patch containing one changes nothing.
-- Saved `blackout_dates` are read as `once` rules without a migration, and that format change is not reported as a settings change.
+- Saved `blackout_dates` are converted to `once` rules at service start (see [Persistence and recovery](#persistence-and-recovery)), and that format change is not reported as a settings change.
 
 ## Model ownership and validation
 
@@ -63,14 +63,15 @@ A candidate pins its base active plan, settings and inputs. Accept is rejected i
 
 Session completion, self-reported milestone outcomes and experience confirmations stay in Roadmap and never write to Profile, CV or Assessment. None of them establishes proficiency. Factual corrections belong in Skills Profile.
 
+## Reading a generated roadmap
+
+`POST /planner/generate` returns `{version, operation}` straight away. Poll `GET /progress` until `operation.status` is `succeeded` or `failed`, then read `GET /workspace`: the preview is `planner.candidate`, with `planner.candidate_review` and `planner.candidate_blockers`. `POST /planner/accept` makes it `planner.active`. `roadmap.yaml` and `models/roadmap-plan.schema.json` publish these shapes.
+
+Each `assignments` item is one to-do: `date`, `start_time`, `duration_minutes`, `task`, `completion_criterion` and `status`, changed with `POST /planner/assignments/status`. Its skills are found through `milestone_key` → `milestones[].gap_ids` → `gaps[].name`. Only `first_planning_week` has dated sessions. Later work exists only as milestones with `projected_start` and `projected_end`, until the user plans the next week.
+
 ## Persistence and recovery
 
-Saved timed-planner configurations may still contain the retired `buffer_percent`,
-`checkin_day` and `checkin_time` fields. Workspace, preview, active-plan and history
-reads ignore those fields while validating all current settings. Reads do not
-rewrite stored records or reset schedules and progress. New configuration requests
-still reject retired and unknown fields; saving current settings uses the current
-schema. No database migration is required.
+Saved settings cannot hold the removed `buffer_percent`, `checkin_day`, `checkin_time` or `blackout_dates` fields. `PlannerConfig` rejects them in requests and on read, and new records are written from that model. Earlier records are cleaned once at service start by `app/planning/retired_settings.py`, across workspace settings, previews, active plans and `roadmaps` snapshots. This is the one exception to snapshots being immutable: it removes only fields that never affected a plan, and leaves schedules, progress and workspace versions unchanged. The service does not start if this cleanup cannot reach MongoDB. Any other unexpected saved field still fails validation, so corruption is not hidden.
 
 `workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.
 

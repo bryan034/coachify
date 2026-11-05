@@ -5,7 +5,7 @@ from elo_shared.runtime import Problem, authenticated, begin, launch, operation_
 from app.planning.capacity import Capacity, normalized
 from app.planning.generator import PLANNING_SECONDS
 from app.planning.state import candidate_blockers, completed_sessions, planner_state, saved_config
-from app.schemas.roadmap import (AssignmentStatus, ExperienceConfirmation, GeneratePlan, Runway, MilestoneOutcome,
+from app.schemas.roadmap import (AssignmentStatus, ExperienceConfirmation, GeneratePlan, OperationAccepted, Runway, MilestoneOutcome,
     PlannerConfig, RunwayRequest, SaveConfig)
 from app.schemas.planner import Mutation, Workspace
 
@@ -25,7 +25,7 @@ def register_planner(app,context,mutate,worker):
             return row
         return await mutate(body,account,apply)
 
-    @app.post(prefix+'/generate',status_code=202)
+    @app.post(prefix+'/generate',status_code=202,response_model=OperationAccepted)
     async def generate(body:GeneratePlan,request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id']);state=planner_state(row)
         repeated=any(r['id']==str(body.mutation_id) for r in row['receipts']) or (row.get('pending') or {}).get('id')==str(body.mutation_id)

@@ -1,5 +1,7 @@
 """Synthetic scenario shared by the validator and flow tests. Wednesday 2030-01-09, 08:00 Singapore."""
+import copy
 from datetime import datetime, timezone
+from elo_shared.runtime import MemoryStore
 
 NOW=datetime(2030,1,9,0,0,tzinfo=timezone.utc)
 OWNER='11111111-1111-4111-8111-111111111111'
@@ -33,3 +35,28 @@ def draft(**changes):
     return {'summary':'Build Python depth first.','gaps':[gap()],'milestones':[milestone()],'assignments':[assignment()],
         'deadline_outcome':{'summary':'You can show a working API by the target date.','achievable_by_target':['A working API'],'fits_in_runway':True},
         'beyond_deadline':[],'exclusions':[],**changes}
+
+class FakeCollection:
+    """The small part of a MongoDB collection the saved-settings cleanup uses, over a plain dict."""
+    def __init__(self,documents):self.documents=documents
+    @staticmethod
+    def value(document,path):
+        for part in path.split('.'):
+            if not isinstance(document,dict) or part not in document:return None,False
+            document=document[part]
+        return document,True
+    def find(self,query,projection):
+        for key,document in list(self.documents.items()):
+            if any(self.value(document,field)[1] for clause in query['$or'] for field in clause):
+                yield {'_id':key,**copy.deepcopy(document)}
+    def update_one(self,query,update):
+        document=self.documents[query['_id']]
+        for path,value in update.get('$set',{}).items():
+            parent,_=self.value(document,path.rsplit('.',1)[0]);parent[path.rsplit('.',1)[1]]=value
+        for path in update['$unset']:
+            parent,_=self.value(document,path.rsplit('.',1)[0]);parent.pop(path.rsplit('.',1)[1])
+class CleanableStore(MemoryStore):
+    """A memory store that exposes collections, so the startup cleanup runs against it."""
+    def __init__(self):
+        super().__init__()
+        self.rows=FakeCollection(self.data);self.results_collection=FakeCollection(self.results)
