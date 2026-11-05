@@ -125,7 +125,7 @@ def planner_view(row,source,now,default_zone=None):
     from app.planning.tasks import ensure_tasks, project_assignments, schedule_warnings
     active,candidate=copy.deepcopy(state['active']),copy.deepcopy(state['candidate'])
     for plan in (active,candidate):
-        if plan is not None and 'editable_tasks' in plan:
+        if plan is not None:
             ensure_tasks(plan)
             project_assignments(plan)
     config=saved_config(state,default_zone)

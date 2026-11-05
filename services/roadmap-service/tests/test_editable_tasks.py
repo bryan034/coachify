@@ -34,6 +34,7 @@ def tasks(client, **params):
 def by_title(state, title):
     return next(t for t in state['planner']['active']['editable_tasks'] if t['title'] == title)
 
+
 def test_add_unscheduled_personal_task_restore_and_owner_isolation():
     sources = Sources()
     with client_for(Scripted([draft()]), sources) as client:
@@ -54,6 +55,7 @@ def test_add_unscheduled_personal_task_restore_and_owner_isolation():
         sources.owner = '11111111-1111-4111-8111-111111111111'
         assert by_title(read(client), added['title'])['id'] == added['id']
 
+
 def test_validation_rejects_invalid_definitions_and_stale_or_reused_keys():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -71,6 +73,7 @@ def test_validation_rejects_invalid_definitions_and_stale_or_reused_keys():
         changed = copy.deepcopy(body); changed['task']['title'] = 'Different change'
         assert client.post(PREFIX + '/tasks/add', headers=H, json=changed).status_code == 409
         assert request(client, 'add', state, task=definition(title='Stale save')).status_code == 409
+
 
 def test_edits_removals_and_prerequisites_preserve_dependents_and_history():
     with client_for(Scripted([draft()])) as client:
@@ -92,6 +95,7 @@ def test_edits_removals_and_prerequisites_preserve_dependents_and_history():
         blocked = next(t for t in visible if t['id'] == dependent)
         assert not blocked['readiness']['actionable'] and blocked['readiness']['reasons']
 
+
 def test_progress_keeps_previous_completion_and_does_not_verify_capability():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -107,6 +111,7 @@ def test_progress_keeps_previous_completion_and_does_not_verify_capability():
         assert state['planner']['active']['milestones'][0]['outcome']['demonstrated'] is False
         assert state['assessment']['job_skill_gaps'][0]['match_status'] == 'confirmed_shortfall'
 
+
 def test_manual_overlapping_slots_are_saved_with_warnings_not_silent_rescheduling():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -117,6 +122,7 @@ def test_manual_overlapping_slots_are_saved_with_warnings_not_silent_reschedulin
         listing = tasks(client, start_date='2030-01-09', end_date='2030-01-09')
         assert any(added['id'] in warning['task_ids'] for warning in listing['warnings'])
         assert by_title(read(client), added['title'])['schedule'] == schedule
+
 
 def test_revision_retains_edits_personal_tasks_and_removal_intent():
     revised = draft(assignments=[assignment('a1')])
@@ -134,6 +140,7 @@ def test_revision_retains_edits_personal_tasks_and_removal_intent():
         assert removed['instructions'] == 'My own instructions.'
         assert any(t['title'] == 'My own task' and not t['removed'] for t in candidate['editable_tasks'])
         assert not any(t['id'] != generated['id'] and t.get('generated_key') == 'a1' and not t['removed'] for t in candidate['editable_tasks'])
+
 
 def test_planned_prerequisite_date_does_not_unblock_and_completion_does():
     with client_for(Scripted([draft()])) as client:
@@ -153,6 +160,7 @@ def test_planned_prerequisite_date_does_not_unblock_and_completion_does():
         view = next(t for t in tasks(client)['tasks'] if t['id'] == dependent)
         assert view['readiness']['actionable'] is True
 
+
 def test_edit_invalidates_preexisting_revision_preview():
     with client_for(Scripted([draft(), draft()])) as client:
         state = accepted(client)
@@ -164,6 +172,25 @@ def test_edit_invalidates_preexisting_revision_preview():
         response = client.post(PREFIX + '/accept', headers=H,
                                json={'expected_version': state['version'], 'mutation_id': str(uuid4())})
         assert response.status_code == 409
+
+
+def test_saved_pre_task_model_roadmap_is_readable_without_read_migration():
+    with client_for(Scripted([draft()])) as client:
+        state = accepted(client)
+        store = client.app.state.store
+        owner = '11111111-1111-4111-8111-111111111111'
+        # Simulate a saved roadmap-v2 document created before the editable-task model.
+        store.data[owner]['planner']['active'].pop('editable_tasks', None)
+        old = copy.deepcopy(store.data[owner])
+        restored = read(client)
+        assert restored['planner']['active']['id'] == state['planner']['active']['id']
+        assert restored['planner']['active']['editable_tasks']
+        assert store.data[owner] == old
+        assignment_id = restored['planner']['active']['assignments'][0]['id']
+        task = next(t for t in tasks(client)['tasks'] if t['id'] == assignment_id)
+        assert task['schedule']
+        assert client.get(PREFIX + '/tasks').status_code == 401
+
 
 def test_revision_requires_explicit_review_of_unmatched_work_after_removal():
     with client_for(Scripted([draft(), draft(assignments=[assignment('new-key')])])) as client:
@@ -189,6 +216,7 @@ def test_revision_requires_explicit_review_of_unmatched_work_after_removal():
         assert any(t['id'] == old['id'] and t['removed'] for t in active)
         assert not any(t['id'] == review['task_id'] and not t['removed'] for t in active)
 
+
 def test_old_assignment_status_updates_canonical_task_and_new_status_projects_back():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -205,6 +233,7 @@ def test_old_assignment_status_updates_canonical_task_and_new_status_projects_ba
         assert session['status'] == 'scheduled' and session['completed_at'] is None
         assert any(event.get('to') == 'completed' for event in session['history'])
 
+
 def test_requirement_links_are_validated_and_edited_without_inventing_a_link():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -214,6 +243,7 @@ def test_requirement_links_are_validated_and_edited_without_inventing_a_link():
         assert task['requirement_refs'] == ['job:python', 'job:sql']
         state = save(client, 'edit', state, task_id=task['id'], changes={'requirement_refs': []})
         assert by_title(state, task['title'])['requirement_refs'] == []
+
 
 def test_changed_completion_definition_requires_review_before_unblocking_dependents():
     with client_for(Scripted([draft()])) as client:
@@ -228,6 +258,7 @@ def test_changed_completion_definition_requires_review_before_unblocking_depende
         assert by_title(state, 'Prerequisite')['definition_review_required']
         view = next(t for t in tasks(client)['tasks'] if t['id'] == dependent)
         assert not view['readiness']['actionable'] and view['readiness']['reasons']
+
 
 def test_period_views_include_unscheduled_remainder_and_filter_fully_scheduled_work():
     with client_for(Scripted([draft()])) as client:
@@ -245,6 +276,7 @@ def test_period_views_include_unscheduled_remainder_and_filter_fully_scheduled_w
         assert client.get(PREFIX + '/tasks', headers=H, params={'start_date': '2030-01-10'}).status_code == 422
         assert client.get(PREFIX + '/tasks', headers=H, params={'start_date': '2030-01-11', 'end_date': '2030-01-10'}).status_code == 422
 
+
 def test_cyclic_and_unknown_prerequisites_are_rejected_without_changing_saved_tasks():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -257,6 +289,7 @@ def test_cyclic_and_unknown_prerequisites_are_rejected_without_changing_saved_ta
         restored = read(client)
         assert by_title(restored, 'First')['prerequisites'] == []
         assert by_title(restored, 'Second')['prerequisites'] == [first]
+
 
 def test_reused_generated_key_with_changed_content_requires_reconciliation():
     changed = draft(assignments=[assignment('a1', task='A different generated exercise.', start_time='20:00', duration_minutes=30)])
@@ -280,6 +313,7 @@ def test_reused_generated_key_with_changed_content_requires_reconciliation():
         assert next(t for t in tasks_after if t['id'] == original['id'])['instructions'] == 'My saved exercise.'
         assert any(t['id'] == review['task_id'] and not t['removed'] for t in tasks_after)
 
+
 def test_revision_preserves_prerequisite_of_personal_task():
     initial = draft(assignments=[assignment('a1'), assignment('a2', start_time='20:00', duration_minutes=30)])
     revised = draft(assignments=[assignment('a1')])
@@ -293,6 +327,7 @@ def test_revision_preserves_prerequisite_of_personal_task():
         assert any(t['id'] == prerequisite['id'] and not t['removed'] for t in candidate)
         dependent = next(t for t in candidate if t['title'] == 'My dependent')
         assert dependent['prerequisites'] == [prerequisite['id']]
+
 
 def test_old_requirement_link_survives_an_unrelated_edit_and_is_flagged():
     with client_for(Scripted([draft()])) as client:
@@ -310,6 +345,7 @@ def test_old_requirement_link_survives_an_unrelated_edit_and_is_flagged():
         assert view['stale_requirement_refs'] == ['job:python']
         assert request(client, 'edit', state, task_id=ident, changes={'requirement_refs': ['job:unknown']}).status_code == 422
 
+
 def test_completed_first_week_does_not_finish_projected_milestone():
     from app.planning.tasks import task_readiness
     earlier = {'id': 'early', 'title': 'First week', 'milestone_key': 'm1', 'status': 'completed',
@@ -321,6 +357,7 @@ def test_completed_first_week_does_not_finish_projected_milestone():
     assert not task_readiness(later, [earlier, later], plan)['actionable']
     plan['milestones'][0]['outcome'] = {'demonstrated': True}
     assert task_readiness(later, [earlier, later], plan)['actionable']
+
 
 def test_same_requirement_id_from_new_assessment_is_flagged_until_reselected():
     with client_for(Scripted([draft()])) as client:
@@ -336,6 +373,7 @@ def test_same_requirement_id_from_new_assessment_is_flagged_until_reselected():
         state = save(client, 'edit', state, task_id=ident, changes={'requirement_refs': ['job:python']})
         view = next(t for t in tasks(client)['tasks'] if t['id'] == ident)
         assert view['stale_requirement_refs'] == []
+
 
 def test_requirement_source_uses_result_id_even_when_input_hash_is_unchanged():
     with client_for(Scripted([draft()])) as client:
