@@ -34,10 +34,12 @@
 .job-card-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
 .job-card-actions .btn.pri .small{color:rgb(255 255 255 / .85);margin-left:8px}
 .job-card-actions+.small{margin-top:12px}
-.job-prompt{display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
+.job-application-check{position:fixed;right:24px;bottom:24px;z-index:40;width:min(380px,calc(100vw - 32px));background:var(--snow);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 12px 32px rgb(17 24 39 / .16)}
+.job-application-check p{margin:0 0 12px;line-height:1.5;overflow-wrap:anywhere}
+.job-application-check-actions{display:flex;flex-wrap:wrap;gap:10px}
 .job-status-control{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:500}
 .job-status-control select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--snow);color:var(--ink);font:inherit}
-@media(max-width:700px){.job-search-panel{padding:20px}.job-search-form{grid-template-columns:minmax(0,1fr)}.job-filters{grid-template-columns:minmax(0,1fr)}.job-card{padding:18px}.job-search-destinations{flex-direction:column}.job-search-destinations a{justify-content:space-between}}
+@media(max-width:700px){.job-application-check{right:16px;bottom:16px}.job-search-panel{padding:20px}.job-search-form{grid-template-columns:minmax(0,1fr)}.job-filters{grid-template-columns:minmax(0,1fr)}.job-card{padding:18px}.job-search-destinations{flex-direction:column}.job-search-destinations a{justify-content:space-between}}
 :root {
   /* The elo palette. Every colour on the site is one of these, or a tint of one. */
   --ink: #111827;

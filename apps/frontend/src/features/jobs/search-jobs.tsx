@@ -6,6 +6,7 @@ import {Icon} from '@/components/ui/icon';
 import {useProfile} from '@/features/profile/profile-provider';
 import {JobsError,listApplications,readJobFilters,removeApplication,saveApplication,searchJobs,updateApplication,
  type Application,type ApplicationStatus,type FilterOption,type FilterOptions,type JobFilters,type Posting} from '@/lib/api/jobs';
+import {APPLICATION_RECORDED,noteApplyVisit} from './application-check';
 
 const JOB_TYPES:Record<string,string>={internship:'Internship',graduate:'Graduate programme',full_time:'Full-time',part_time:'Part-time',contract:'Contract',temporary:'Temporary',unknown:'Not stated'};
 const WORKPLACES:Record<string,string>={onsite:'On-site',hybrid:'Hybrid',remote:'Remote',unknown:'Not stated'};
@@ -40,10 +41,10 @@ function toFilters(q:string,choices:Choices):JobFilters{
 export function SearchJobs(){
  const {account,token}=useProfile();
  if(!account||!token)return null;
- return <JobSearch key={`${account.id}:${token}`} token={token}/>;
+ return <JobSearch key={`${account.id}:${token}`} accountId={account.id} token={token}/>;
 }
 
-function JobSearch({token}:{token:string}){
+function JobSearch({accountId,token}:{accountId:string;token:string}){
  const [tab,setTab]=useState<'search'|'tracker'>('search');
  const [draft,setDraft]=useState('');const [keywords,setKeywords]=useState('');
  const [choices,setChoices]=useState(NO_CHOICES);
@@ -52,7 +53,7 @@ function JobSearch({token}:{token:string}){
  const [unavailable,setUnavailable]=useState<string[]>([]);
  const [loading,setLoading]=useState(true);const [more,setMore]=useState(false);const [error,setError]=useState('');
  const [applications,setApplications]=useState<Application[]>([]);const [trackerError,setTrackerError]=useState('');
- const [asking,setAsking]=useState<string|null>(null);const [retry,setRetry]=useState(0);
+ const [retry,setRetry]=useState(0);
  const filters=useMemo(()=>toFilters(keywords,choices),[keywords,choices]);
  const latest=useRef(0);
 
@@ -94,26 +95,23 @@ function JobSearch({token}:{token:string}){
   if(problem instanceof JobsError&&(problem.status===409||problem.status===404))setApplications(await listApplications(token).catch(()=>applications));
  },[token,applications]);
 
- async function track(posting:Posting){
-  const existing=tracked.get(posting.id);
-  if(existing)return existing;
-  const saved=await saveApplication(token,posting.id);remember(saved);return saved;
- }
+ useEffect(()=>{
+  const recorded=(event:Event)=>remember((event as CustomEvent<Application>).detail);
+  window.addEventListener(APPLICATION_RECORDED,recorded);
+  return ()=>window.removeEventListener(APPLICATION_RECORDED,recorded);
+ },[remember]);
+
  async function save(posting:Posting){
   setTrackerError('');
-  try{await track(posting);}catch(problem){await recover(problem);}
+  try{remember(await saveApplication(token,posting.id));}catch(problem){await recover(problem);}
+ }
+ function visitEmployer(posting:Posting){
+  const status=tracked.get(posting.id)?.status;
+  if(!status||status==='saved')noteApplyVisit(accountId,posting);
  }
  async function changeStatus(item:Application,status:ApplicationStatus){
   setTrackerError('');
   try{remember(await updateApplication(token,item,status));}catch(problem){await recover(problem);}
- }
- async function markApplied(posting:Posting){
-  setTrackerError('');
-  try{
-   const item=await track(posting);
-   if(item.status==='saved')remember(await updateApplication(token,item,'applied'));
-   setAsking(null);
-  }catch(problem){await recover(problem);}
  }
  async function remove(item:Application){
   setTrackerError('');
@@ -171,8 +169,7 @@ function JobSearch({token}:{token:string}){
     {!loading&&unavailable.length>0&&<p role="status">Some employer boards could not be read. Results may be incomplete. Search again to retry.</p>}
     {!loading&&!error&&!items.length&&<p>{filtered?'No jobs match these filters. Try removing one.':'No jobs are listed right now.'}</p>}
     <ul className="job-list">
-     {items.map(posting=><JobCard key={posting.id} posting={posting} item={tracked.get(posting.id)} asking={asking===posting.id}
-      onSave={()=>save(posting)} onApply={()=>{setAsking(posting.id);void save(posting);}} onApplied={()=>markApplied(posting)} onDismiss={()=>setAsking(null)}/>)}
+     {items.map(posting=><JobCard key={posting.id} posting={posting} item={tracked.get(posting.id)} onSave={()=>save(posting)} onApply={()=>visitEmployer(posting)}/>)}
     </ul>
     {cursor&&!loading&&<button type="button" className="btn ghost" disabled={more} onClick={loadMore}>{more?'Loading…':'Show more jobs'}</button>}
     {keywords&&<section className="job-search-links" aria-labelledby="job-search-links-title">
@@ -196,7 +193,7 @@ function CheckGroup({legend,options,names,selected,onChange}:{legend:string;opti
  </fieldset>;
 }
 
-function JobCard({posting,item,asking,onSave,onApply,onApplied,onDismiss}:{posting:Posting;item?:Application;asking:boolean;onSave:()=>void;onApply:()=>void;onApplied:()=>void;onDismiss:()=>void}){
+function JobCard({posting,item,onSave,onApply}:{posting:Posting;item?:Application;onSave:()=>void;onApply:()=>void}){
  const apply=httpsOnly(posting.apply_url),listing=httpsOnly(posting.listing_url);
  return <li className="job-card">
   <h3>{posting.title}</h3>
@@ -214,16 +211,11 @@ function JobCard({posting,item,asking,onSave,onApply,onApplied,onDismiss}:{posti
    {item?<span className="small">{STATUSES[item.status]} in My applications</span>:<button type="button" className="btn ghost" onClick={onSave}>Save job</button>}
   </div>
   <p className="small">Listed through {label(PROVIDERS,posting.provider)}. Details and applications are handled by {posting.company}.</p>
-  {asking&&<div className="job-prompt" role="group" aria-label={`Application for ${posting.title}`}>
-   <span>Did you submit your application?</span>
-   <button type="button" className="btn ghost" onClick={onApplied}>Yes, mark as applied</button>
-   <button type="button" className="btn ghost" onClick={onDismiss}>Not yet</button>
-  </div>}
  </li>;
 }
 
 function Tracker({items,onStatus,onRemove}:{items:Application[];onStatus:(item:Application,status:ApplicationStatus)=>void;onRemove:(item:Application)=>void}){
- if(!items.length)return <p>You haven&rsquo;t saved any jobs yet. Jobs you save or apply for will appear here.</p>;
+ if(!items.length)return <p>You haven&rsquo;t saved any jobs yet. Jobs you save or confirm you applied to will appear here.</p>;
  return <ul className="job-list job-results">
   {items.map(item=>{
    const link=httpsOnly(item.snapshot.listing_url);

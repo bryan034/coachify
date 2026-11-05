@@ -1,6 +1,7 @@
 import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {SearchJobs} from './search-jobs';
+import {JobApplicationCheck} from './application-check';
 
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({account:{id:'synthetic-account'},token:'synthetic-token'})}));
 vi.mock('next/link',()=>({default:({href,children,...props}:{href:string;children:React.ReactNode})=><a href={href} {...props}>{children}</a>}));
@@ -12,7 +13,7 @@ const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{statu
 
 let search:(url:URL)=>Response;let saved:ReturnType<typeof application>[];let calls:{method:string;url:URL;body?:string}[];
 beforeEach(()=>{
- calls=[];saved=[];
+ calls=[];saved=[];localStorage.clear();
  search=()=>json({items:[posting('a','Data Intern'),posting('b','Backend Engineer',{job_type:'full_time',posted_at_estimated:true,application_deadline:'2026-12-01T00:00:00Z'})],total:2,next_cursor:null});
  vi.stubGlobal('fetch',vi.fn(async(input:string,init:RequestInit={})=>{
   const url=new URL(input,'http://elo.test');const method=init.method||'GET';calls.push({method,url,body:init.body as string});
@@ -29,6 +30,18 @@ afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
 
 const searches=()=>calls.filter(call=>call.url.pathname.endsWith('/search'));
 const lastSearch=()=>searches().at(-1)!.url.searchParams;
+const writes=()=>calls.filter(call=>call.method!=='GET');
+const prompt=()=>screen.queryByRole('region',{name:'Application check'});
+const VISITS='elo.job-apply-visits.synthetic-account';
+const renderWithCheck=()=>render(<><SearchJobs/><JobApplicationCheck/></>);
+async function visitEmployer(title:string){
+ const card=(await screen.findByRole('heading',{name:title})).closest('li')!;
+ const apply=within(card).getByRole('link',{name:/Apply on employer site/});
+ apply.addEventListener('click',event=>event.preventDefault());
+ fireEvent.click(apply);
+ return card;
+}
+const returnToElo=()=>fireEvent.focus(window);
 
 describe('Search Jobs',()=>{
  it('shows current listings with their facts and the bearer token',async()=>{
@@ -93,30 +106,98 @@ describe('Search Jobs',()=>{
   expect(storage).not.toHaveBeenCalled();
   expect(screen.getByRole('link',{name:/Use its job description/})).toHaveAttribute('href','/career-goal?new=1');
  });
- it('opens the employer form, saves the job and marks it applied only after the user confirms',async()=>{
-  render(<SearchJobs/>);
-  const card=(await screen.findByRole('heading',{name:'Data Intern'})).closest('li')!;
+ it('records nothing for an employer visit and asks only once the user returns',async()=>{
+  renderWithCheck();
+  const card=await visitEmployer('Data Intern');
   const apply=within(card).getByRole('link',{name:/Apply on employer site/});
   expect(apply).toHaveAttribute('href','https://jobs.example.test/a/apply');
   expect(apply).toHaveAttribute('target','_blank');expect(apply).toHaveAttribute('rel','noopener noreferrer');
-  apply.addEventListener('click',event=>event.preventDefault());
-  fireEvent.click(apply);
-  await within(card).findByText('Saved in My applications');
-  expect(calls.some(call=>call.method==='PATCH')).toBe(false);
-  fireEvent.click(within(card).getByRole('button',{name:'Yes, mark as applied'}));
+  expect(prompt()).toBeNull();
+  expect(writes()).toEqual([]);
+  expect(within(card).queryByText(/in My applications/)).toBeNull();
+  returnToElo();
+  expect(await screen.findByText(/Did you apply to/)).toHaveTextContent('Did you apply to Data Intern at Synthetic Pay?');
+  expect(writes()).toEqual([]);
+ });
+ it('marks the job applied when the user says yes',async()=>{
+  renderWithCheck();
+  const card=await visitEmployer('Data Intern');
+  returnToElo();
+  fireEvent.click(await screen.findByRole('button',{name:'Yes, I applied'}));
   await within(card).findByText('Applied in My applications');
   expect(JSON.parse(calls.find(call=>call.method==='PATCH')!.body!)).toEqual({expected_version:1,status:'applied'});
-  expect(within(card).queryByText('Did you submit your application?')).toBeNull();
+  expect(screen.getByRole('button',{name:'My applications (1)'})).toBeVisible();
+  expect(prompt()).toBeNull();
+  expect(localStorage.getItem(VISITS)).toBeNull();
  });
- it('leaves the job as saved when the user has not submitted',async()=>{
-  render(<SearchJobs/>);
-  const card=(await screen.findByRole('heading',{name:'Data Intern'})).closest('li')!;
-  const apply=within(card).getByRole('link',{name:/Apply on employer site/});
-  apply.addEventListener('click',event=>event.preventDefault());
-  fireEvent.click(apply);
-  fireEvent.click(await within(card).findByRole('button',{name:'Not yet'}));
-  await within(card).findByText('Saved in My applications');
-  expect(calls.some(call=>call.method==='PATCH')).toBe(false);
+ it('records nothing and stops asking when the user says no',async()=>{
+  renderWithCheck();
+  const card=await visitEmployer('Data Intern');
+  returnToElo();
+  fireEvent.click(await screen.findByRole('button',{name:'No'}));
+  expect(prompt()).toBeNull();
+  returnToElo();
+  expect(prompt()).toBeNull();
+  expect(writes()).toEqual([]);
+  expect(within(card).getByRole('button',{name:'Save job'})).toBeVisible();
+  expect(screen.getByRole('button',{name:'My applications (0)'})).toBeVisible();
+  expect(localStorage.getItem(VISITS)).toBeNull();
+ });
+ it('asks about each visited job in turn',async()=>{
+  renderWithCheck();
+  await visitEmployer('Data Intern');
+  await visitEmployer('Backend Engineer');
+  returnToElo();
+  expect(await screen.findByText(/Did you apply to/)).toHaveTextContent('Data Intern');
+  fireEvent.click(screen.getByRole('button',{name:'No'}));
+  expect(await screen.findByText(/Did you apply to/)).toHaveTextContent('Backend Engineer');
+  fireEvent.click(screen.getByRole('button',{name:'No'}));
+  expect(prompt()).toBeNull();
+ });
+ it('still asks after a reload and on any workspace page, for the same account only',async()=>{
+  const view=renderWithCheck();
+  await visitEmployer('Data Intern');
+  view.unmount();
+  localStorage.setItem('elo.job-apply-visits.another-account',JSON.stringify([{id:'b'.repeat(32),title:'Other Account Role',company:'Synthetic Pay'}]));
+  render(<JobApplicationCheck/>);
+  expect(await screen.findByText(/Did you apply to/)).toHaveTextContent('Data Intern');
+  expect(screen.queryByText('Other Account Role')).toBeNull();
+ });
+ it('ignores unreadable stored visits',async()=>{
+  localStorage.setItem(VISITS,'not-json');
+  render(<JobApplicationCheck/>);
+  await waitFor(()=>expect(prompt()).toBeNull());
+ });
+ it('keeps asking when recording the application fails, then succeeds on retry',async()=>{
+  renderWithCheck();
+  await visitEmployer('Data Intern');
+  returnToElo();
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementationOnce(async()=>json({detail:'Storage is unavailable.',code:'storage'},503));
+  fireEvent.click(await screen.findByRole('button',{name:'Yes, I applied'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Storage is unavailable.');
+  expect(localStorage.getItem(VISITS)).toContain('a'.repeat(32));
+  vi.mocked(fetch).mockImplementation(original);
+  fireEvent.click(screen.getByRole('button',{name:'Yes, I applied'}));
+  await waitFor(()=>expect(prompt()).toBeNull());
+  expect(screen.getByRole('button',{name:'My applications (1)'})).toBeVisible();
+ });
+ it('promotes an already saved job on yes and leaves a further status alone',async()=>{
+  saved=[application('saved',1)];
+  const view=renderWithCheck();
+  await screen.findByText('Saved in My applications');
+  await visitEmployer('Data Intern');
+  returnToElo();
+  fireEvent.click(await screen.findByRole('button',{name:'Yes, I applied'}));
+  await screen.findByText('Applied in My applications');
+  view.unmount();
+  saved=[application('interviewing',3)];
+  renderWithCheck();
+  await screen.findByText('Interviewing in My applications');
+  await visitEmployer('Data Intern');
+  returnToElo();
+  expect(prompt()).toBeNull();
+  expect(localStorage.getItem(VISITS)).toBeNull();
  });
  it('tracks, updates and removes saved jobs',async()=>{
   saved=[application('saved',1)];

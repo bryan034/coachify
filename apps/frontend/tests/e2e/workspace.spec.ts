@@ -71,6 +71,17 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
    await expect(page.getByRole('link',{name:/Apply on employer site/})).toHaveAttribute('href','https://jobs.example.test/1/apply');
    await expect(page.getByRole('link',{name:'Skills Profile',exact:true})).toHaveAttribute('href','/cv');
    await page.screenshot({path:testInfo.outputPath('jobs-desktop.png'),fullPage:true});
+   const [employer]=await Promise.all([page.waitForEvent('popup'),page.getByRole('link',{name:/Apply on employer site/}).click()]);
+   const applicationCheck=page.getByRole('region',{name:'Application check'});
+   await expect(applicationCheck).toHaveCount(0);
+   await employer.close();
+   await page.bringToFront();
+   await page.evaluate(()=>window.dispatchEvent(new Event('focus'))); // Playwright keeps every page focused, so returning fires no event of its own.
+   await expect(applicationCheck).toContainText('Did you apply to Synthetic Data Intern at Synthetic Pay?');
+   await page.screenshot({path:testInfo.outputPath('jobs-application-check.png')});
+   await applicationCheck.getByRole('button',{name:'No',exact:true}).click();
+   await expect(applicationCheck).toHaveCount(0);
+   await expect(page.getByRole('button',{name:'My applications (0)'})).toBeVisible();
   }
   else if(label==='Roadmap') {
    await expect(page.getByRole('heading',{name:'Bring your starting point and direction'})).toBeVisible();
