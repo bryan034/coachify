@@ -7,6 +7,7 @@ from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, digest, stamp
 from app.planning.capacity import Capacity, blackout_problem, normalized, to_clock, to_minute
 from app.planning.state import ASSESSMENT_FIELDS, completed_sessions, config_digest, planner_state, saved_config
+from app.planning.milestone_membership import mark_plan_membership_changes
 from app.planning.validator import validate_plan
 from app.schemas.roadmap import ChatTurn, PlanDraft, PlannerConfig
 
@@ -48,6 +49,9 @@ When current_plan is present and the user asks to change it, set revision_instru
 
 def compact_plan(plan):
     if not plan:return None
+    if 'editable_tasks' in plan:
+        from app.planning.tasks import project_assignments
+        plan=copy.deepcopy(plan);project_assignments(plan)
     fields=('summary','first_planning_week','gaps','milestones','deadline_outcome','beyond_deadline','exclusions')
     return {**{k:plan.get(k) for k in fields},'scheduled':[{k:a[k] for k in ('key','milestone_key','date','start_time','duration_minutes','task')} for a in plan['assignments'] if a['status']=='scheduled']}
 
@@ -84,6 +88,9 @@ async def write_plan(model,context,check,before_retry):
 def plan_changes(previous,assignments,milestones):
     """What a preview changes relative to the active plan, shown before the user accepts it."""
     if not previous:return None
+    if 'editable_tasks' in previous:
+        from app.planning.tasks import project_assignments
+        previous=copy.deepcopy(previous);project_assignments(previous)
     slot=lambda a:(str(a['date']),a['start_time'],a['duration_minutes'])
     before={a['key']:a for a in previous['assignments'] if a['status']=='scheduled'}
     after={a['key']:a for a in assignments if a['status']=='scheduled'}
@@ -149,7 +156,7 @@ def reconcile_tasks(plan,active):
     """Carry protected records into a preview and flag possible duplicate work.
 
     Model-generated keys cannot establish that a newly worded task is distinct
-    from a removed, edited, or in-progress task. Require an explicit decision
+    from a removed, edited, in-progress or completed task. Require a decision
     for newly generated work when such protected records exist.
     """
     from app.planning.tasks import ensure_tasks, project_assignments
@@ -164,25 +171,22 @@ def reconcile_tasks(plan,active):
             ids.update(str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(i))) for i in range(1,len(task.get('schedule',[]))))
     keys={t.get('generated_key'):t for t in retained if t.get('generated_key')}
     # Completed assignments are also copied into the new plan by build_plan.
-    # A reused generated key belongs to the protected record, not a new identity.
+    # Generated keys are not proof of identity. Copied completed slots have
+    # already been recognized by their stable IDs above.
     fresh=[];ambiguous={}
     for task in generated:
         if task['id'] in ids:continue
         prior=keys.get(task.get('generated_key'))
         if prior:
-            old=prior.get('source_assignment') or {}
-            new=task.get('source_assignment') or {}
-            if (old.get('task'),old.get('completion_criterion'))==(new.get('task'),new.get('completion_criterion')):
-                continue
-            # A recycled model key with changed content is not proof of identity.
-            # Give the proposed task its own key and ask the student to decide.
+            # Even identical wording with a recycled key could be distinct work.
+            # Give the proposal its own key and let the student decide.
             task['generated_key']=str(uuid5(NAMESPACE_URL,plan['id']+':reconciled:'+task['id']))
             ambiguous[task['id']]=prior['id']
         fresh.append(task)
     plan['editable_tasks']=[*retained,*fresh]
     removed=[t['id'] for t in retained if t.get('removed')]
     protected=[t['id'] for t in retained if not t.get('removed') and
-        (t.get('overrides') or t.get('status')=='in_progress')]
+        (t.get('overrides') or t.get('status') in ('in_progress','completed'))]
     plan['revision_review']=[]
     for task in fresh:
         related=list(dict.fromkeys([*protected,*([ambiguous[task['id']]] if task['id'] in ambiguous else [])]))
@@ -229,6 +233,7 @@ def build_plan(draft,assessment,config,first_week,operation_id,attempts,active,c
         'deadline_outcome':data['deadline_outcome'],'beyond_deadline':data['beyond_deadline'],'exclusions':data['exclusions'],
         'changes':plan_changes(active,assignments,milestones),'generation':{'prompt_version':PROMPT_VERSION,'attempts':attempts}}
     reconcile_tasks(plan,active)
+    mark_plan_membership_changes(active,plan)
     plan['changes']=plan_changes(active,plan['assignments'],plan['milestones'])
     return plan
 

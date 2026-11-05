@@ -32,6 +32,7 @@ class TaskChanges(Contract):
     instructions:Text|None=None
     completion_outcome:Text|None=None
     estimated_minutes:int|None=Field(default=None,strict=True,ge=1,le=60000)
+    schedule:list[TaskSlot]|None=Field(default=None,max_length=100)
 
 class AddTask(Mutation):
     task:TaskDefinition
@@ -95,6 +96,7 @@ class TaskList(Contract):
     plan_id:str
     stale:bool
     source_unavailable:bool
+    freshness:Literal['current','stale','not_ready','unavailable']
     tasks:list[TaskView]
     warnings:list[TaskWarning]
 class RevisionReview(Contract):

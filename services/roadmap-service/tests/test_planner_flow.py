@@ -242,6 +242,11 @@ def test_schedule_change_after_completion_previews_a_revision_and_preserves_comp
         preview=state['planner']['candidate']
         assert preview['assignments'][0]==done and [a['key'] for a in preview['assignments']]==['a1','a2']
         assert preview['changes']['completed_preserved']==1 and preview['changes']['assignments_removed'] and preview['changes']['assignments_added']
+        review=preview['revision_review']
+        assert len(review)==1 and done['id'] in review[0]['related_task_ids']
+        assert 'revision_review_required' in {item['code'] for item in state['planner']['candidate_blockers']}
+        state=post(client,'/tasks/reconcile',state,candidate_id=preview['id'],
+            decisions=[{'task_id':review[0]['task_id'],'decision':'keep'}])
         state=post(client,'/accept',state)
         assert state['planner']['active']['assignments'][0]==done and state['planner']['active']['summary']=='Moved to Thursday evenings.'
         assert sources.writes==[]

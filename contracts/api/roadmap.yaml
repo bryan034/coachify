@@ -4395,6 +4395,21 @@
               }
             ],
             "title": "Estimated Minutes"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TaskSlot"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
           }
         },
         "additionalProperties": false,

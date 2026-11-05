@@ -6,6 +6,7 @@ from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, authenticated, begin, launch, operation_view, stamp
 from app.planning.capacity import Capacity, normalized
 from app.planning.generator import PLANNING_SECONDS
+from app.planning.milestone_membership import mark_plan_membership_changes
 from app.planning.state import candidate_blockers, completed_sessions, planner_state, saved_config
 from app.planning.tasks import change_status, ensure_tasks, project_assignments
 from app.planning.task_routes import register_task_routes
@@ -51,6 +52,7 @@ def register_planner(app,context,mutate,worker):
             if not state['candidate']:raise Problem('There is no previewed roadmap to accept.')
             blockers=candidate_blockers(state,source,app.state.clock())
             if blockers:raise Problem(blockers[0]['message'],409,blockers[0]['code'])
+            mark_plan_membership_changes(state['active'],state['candidate'])
             state['active']=state['candidate'];state['candidate']=None
             return row
         return await mutate(body,account,apply)
@@ -91,7 +93,12 @@ def register_planner(app,context,mutate,worker):
             if not milestone:raise Problem('This milestone was not found.',404,'not_found')
             note=(body.note or '').strip()
             if body.demonstrated and not note:raise Problem('Describe how you demonstrated this outcome.',422,'validation')
+            prior=milestone.get('outcome') or {}
+            history=copy.deepcopy(prior.get('history',[]))
+            if prior.get('recorded_at'):
+                history.append({k:copy.deepcopy(v) for k,v in prior.items() if k!='history'})
             milestone['outcome']={'demonstrated':body.demonstrated,'note':note or None,'recorded_at':stamp(),'source':'self_reported'}
+            if history:milestone['outcome']['history']=history
             return row
         return await mutate(body,account,apply)
 

@@ -6,6 +6,7 @@ from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, authenticated, stamp
 from app.planning.state import planner_state
+from app.planning.milestone_membership import mark_membership_review, mark_plan_membership_changes
 from app.planning.tasks import change_status, ensure_tasks, find_task, project_assignments, requirement_ids, schedule_warnings, task_readiness, validate_links
 from app.schemas.planner import Workspace
 from app.schemas.tasks import AddTask, EditTask, RemoveTask, ChangeTaskStatus, ReconcileTasks, TaskList
@@ -28,7 +29,8 @@ def register_task_routes(app,context,mutate):
                 'requirement_source_id':plan.get('assessment_id'),
                 'status':'not_started','completed_at':None,'evidence_note':None,'history':[],
                 'removed':False,'removal':None,'definition_review_required':False,'origin':'user','generated_key':None,'overrides':[], 'source_assignment':None}
-            validate_links(plan,task);tasks.append(task);project_assignments(plan)
+            validate_links(plan,task);tasks.append(task)
+            mark_membership_review(plan,[task.get('milestone_key')]);project_assignments(plan)
             return row
         return await mutate(body,account,apply,operation='tasks.add')
 
@@ -44,12 +46,15 @@ def register_task_routes(app,context,mutate):
                 changed.append('requirement_refs')
             if changed:
                 task=find_task(plan,body.task_id)
+                old_milestone=task.get('milestone_key')
                 task.setdefault('history',[]).append({'at':stamp(),'event':'edited','fields':changed,
                     'previous':{k:copy.deepcopy(task.get(k)) for k in changed}})
                 if 'completion_outcome' in changed and task['status']=='completed':task['definition_review_required']=True
                 if 'requirement_refs' in changed:
                     task['requirement_source_hash']=plan.get('assessment_hash');task['requirement_source_id']=plan.get('assessment_id')
                 task.update(changes);task['overrides']=sorted(set(task.get('overrides',[]))|set(changed))
+                if old_milestone!=task.get('milestone_key'):
+                    mark_membership_review(plan,[old_milestone,task.get('milestone_key')])
                 project_assignments(plan)
             return row
         return await mutate(body,account,apply,operation='tasks.edit')
@@ -68,5 +73,6 @@ def register_task_routes(app,context,mutate):
                     now=stamp();task['removed']=True;task['removal']={'at':now,'reason':'Discarded during revision review.'}
                     task.setdefault('history',[]).append({'at':now,'event':'removed','reason':task['removal']['reason']})
                 pending.pop(decision.task_id)
+            mark_plan_membership_changes(planner_state(row)['active'],candidate,reset_unchanged=True)
             candidate['revision_review']=list(pending.values());project_assignments(candidate);return row
         return await mutate(body,account,apply,operation='tasks.reconcile')

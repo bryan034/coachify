@@ -73,6 +73,26 @@ Completion outcomes can be edited; changed definitions on completed tasks need r
 
 Effort estimates can be edited and must remain positive whole minutes.
 
+Schedules can be edited, with warnings for valid conflicts instead of silent rescheduling.
+
+Removed work and dependency records survive revisions.
+
+Requirement links can be edited against the retained Assessment snapshot.
+
+### Editable task backend
+
+Task creation stores canonical task records in the active roadmap using owner-scoped version and retry checks. Personal work need not have a requirement or a schedule.
+
+Changes in milestone membership require review of a previously recorded milestone outcome. Completed work is retained and potential repetition in a revision requires review.
+
+Task edits retain history, and ambiguous regenerated work requires an explicit review.
+
+Completion outcomes can be edited; changed definitions on completed tasks need review.
+
+Effort estimates can be edited and must remain positive whole minutes.
+
+Schedules can be edited, with warnings for valid conflicts or calendar limits instead of silent rescheduling. Split-session compatibility keys are collision-safe while keeping session IDs stable.
+
 ## Persistence and recovery
 
 `workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.
@@ -89,4 +109,4 @@ See setup for required service-scoped credentials. All model calls go through th
 
 ## Remaining scope
 
-No external calendar or course integrations, automatic revision without a user request, E05 manual session editing, scheduled reviews, dashboard projections, actual-time recording, conversation continuation or modelled non-zero reduced periods. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.
+No external calendar or course integrations, automatic revision without a user request, scheduled reviews, dashboard projections, actual-time recording, conversation continuation or modelled non-zero reduced periods. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.

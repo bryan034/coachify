@@ -7,3 +7,7 @@ The shared runtime also has disposable MongoDB CAS/lease/result tests. `infrastr
 `planner_fixtures.py` holds the synthetic timed-roadmap scenario. `test_planner_capacity.py`, `test_planner_validator.py` and `test_planner_flow.py` cover runway arithmetic, each validation rule and the Configure → Generate → Review → Revise API flow. `test_planner_model.py` sends plans through the real model client and OpenAI SDK with a mock transport. `test_planner.py` covers chat retry, quota and restart recovery, and read-only earlier plans.
 
 `test_editable_tasks.py` exercises the currently exposed task operations using synthetic accounts and data.
+Schedule warning tests cover overlapping work and prerequisite order.
+
+`test_editable_tasks.py` exercises the currently exposed task operations using synthetic accounts and data.
+Schedule warning tests cover overlapping work and prerequisite order.

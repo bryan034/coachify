@@ -30,16 +30,47 @@ def ensure_tasks(plan):
 
 
 def project_assignments(plan):
-    """Build old-format sessions from scheduled, milestone-linked active tasks."""
+    """Build old-format sessions with unique keys and stable session IDs.
+
+    The model can choose any valid key, including strings that look like a
+    generated split key. Reserve all first-session keys before allocating split
+    keys so a newly generated key cannot hide a different assignment.
+    """
     milestones={m['key'] for m in plan.get('milestones',[])}
+    tasks=[task for task in ensure_tasks(plan) if not task.get('removed') and
+        task.get('milestone_key') in milestones and task.get('schedule')]
+    reserved={task.get('generated_key') or task['id'] for task in tasks}
+    used=set();primary={}
+
+    def allocate(task,slot,kind):
+        attempt=0
+        while True:
+            key='slot-'+str(uuid5(NAMESPACE_URL,f"roadmap:{kind}:{task['id']}:{slot}:{attempt}"))
+            if key not in reserved and key not in used:
+                used.add(key)
+                return key
+            attempt+=1
+
+    # A malformed or older snapshot may already contain repeated primary keys.
+    # Resolve them deterministically rather than hiding a session in key maps.
+    for task in sorted(tasks,key=lambda item:item['id']):
+        key=task.get('generated_key') or task['id']
+        if key in used:key=allocate(task,0,'primary')
+        else:used.add(key)
+        primary[task['id']]=key
+
+    # Preallocate in task-id order; output remains in the user's original order.
+    split={}
+    for task in sorted(tasks,key=lambda item:item['id']):
+        for i in range(1,len(task['schedule'])):
+            split[(task['id'],i)]=allocate(task,i,'split')
+
     output=[]
-    for task in ensure_tasks(plan):
-        if task.get('removed') or task.get('milestone_key') not in milestones:continue
+    for task in tasks:
         source=task.get('source_assignment') or {}
         for i,slot in enumerate(task.get('schedule',[])):
             ident=task['id'] if i==0 else str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(i)))
-            key=task.get('generated_key') or task['id']
-            if i:key=f'{key[:68]}-{i}'
+            key=primary[task['id']] if i==0 else split[(task['id'],i)]
             output.append({'id':ident,'key':key,'milestone_key':task['milestone_key'],
                 'gap_id':source.get('gap_id'),'kind':source.get('kind','study'),**slot,
                 'task':task['instructions'],'completion_criterion':task['completion_outcome'],
@@ -145,11 +176,19 @@ def schedule_warnings(plan,now):
             week['minutes']+=slot['duration_minutes'];week['task_ids'][task['id']]=None
             if day<capacity.start_date or (capacity.target and day>capacity.target):add('outside_plan','A session is outside the roadmap dates.',[task['id']])
             if day not in windows_by_day:
-                windows=capacity._windows(day)
-                windows_by_day[day]=(capacity.blackout_windows(day),windows['preferred']+(windows['backup'] if capacity.config.use_backup else []))
+                blackouts=capacity.blackout_windows(day)
+                try:
+                    windows=capacity._windows(day)
+                    eligible=windows['preferred']+(windows['backup'] if capacity.config.use_backup else [])
+                except OverflowError:
+                    # Python cannot represent the next day at its calendar limit.
+                    # Preserve accepted dates and report that eligibility is unknown.
+                    eligible=None
+                windows_by_day[day]=(blackouts,eligible)
             blackouts,eligible=windows_by_day[day]
             if any(begin<high and end>low for low,high in blackouts):add('blackout','A session overlaps a blackout.',[task['id']])
-            if not any(begin>=low and end<=high for low,high in eligible):add('outside_study_time','A session is outside available study time.',[task['id']])
+            if eligible is None:add('calendar_unavailable','Study-time eligibility cannot be calculated for this calendar date.',[task['id']])
+            elif not any(begin>=low and end<=high for low,high in eligible):add('outside_study_time','A session is outside available study time.',[task['id']])
     # For each date, the previous interval with the latest end is sufficient to
     # identify every task participating in any overlap, without enumerating pairs.
     last_day=None;latest_end=-1;latest_id=None

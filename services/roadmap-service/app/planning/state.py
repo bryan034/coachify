@@ -23,7 +23,16 @@ def settings_differ(plan,state):
     """Compares current forms, so a saved plan's older settings format never reads as a change."""
     return config_digest(PlannerConfig.model_validate(plan['config']))!=config_digest(saved_config(state))
 def completed_sessions(plan):
-    return [a for a in (plan or {}).get('assignments',[]) if a['status']=='completed']
+    if not plan:return []
+    if isinstance(plan.get('editable_tasks'),list):
+        # Historical snapshots may contain the old, collision-prone projection.
+        # Rebuild from canonical tasks in memory without mutating the snapshot.
+        from app.planning.tasks import project_assignments
+        projection={'editable_tasks':plan['editable_tasks'],'milestones':plan.get('milestones',[])}
+        assignments=project_assignments(projection)
+    else:
+        assignments=plan.get('assignments',[])
+    return [a for a in assignments if a['status']=='completed']
 def session_has_passed(session,capacity):
     day=str(session['date']);today=capacity.today.isoformat()
     return day<today or (day==today and to_minute(session['start_time'])<capacity.now_minute)
