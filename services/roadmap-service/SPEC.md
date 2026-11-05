@@ -99,6 +99,8 @@ Requirement links can be edited against the retained Assessment snapshot.
 
 Date-filtered reads retain unscheduled work and expose scheduling warnings. Source freshness distinguishes current, stale, not-ready and unavailable assessment inputs.
 
+Prerequisites and milestone links can be edited; readiness requires completed prerequisites, not merely planned dates.
+
 ## Persistence and recovery
 
 `workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.

@@ -72,6 +72,26 @@ def test_validation_rejects_invalid_definitions_and_stale_or_reused_keys():
         assert client.post(PREFIX + '/tasks/add', headers=H, json=changed).status_code == 409
         assert request(client, 'add', state, task=definition(title='Stale save')).status_code == 409
 
+def test_edits_removals_and_prerequisites_preserve_dependents_and_history():
+    with client_for(Scripted([draft()])) as client:
+        state = accepted(client)
+        state = save(client, 'add', state, task=definition(title='First task'))
+        prerequisite = by_title(state, 'First task')['id']
+        state = save(client, 'add', state, task=definition(title='Dependent task', prerequisites=[prerequisite]))
+        dependent = by_title(state, 'Dependent task')['id']
+        view = next(t for t in tasks(client)['tasks'] if t['id'] == dependent)
+        assert not view['readiness']['actionable'] and view['readiness']['reasons']
+        state = save(client, 'edit', state, task_id=prerequisite, changes={'instructions': 'Practise the explanation twice.'})
+        assert by_title(state, 'First task')['instructions'] == 'Practise the explanation twice.'
+        state = save(client, 'remove', state, task_id=prerequisite, reason='No longer useful')
+        removed = by_title(state, 'First task')
+        assert removed['removed'] and removed['removal']['reason'] == 'No longer useful'
+        assert by_title(state, 'Dependent task')['prerequisites'] == [prerequisite]
+        visible = tasks(client)['tasks']
+        assert all(t['id'] != prerequisite for t in visible)
+        blocked = next(t for t in visible if t['id'] == dependent)
+        assert not blocked['readiness']['actionable'] and blocked['readiness']['reasons']
+
 def test_manual_overlapping_slots_are_saved_with_warnings_not_silent_rescheduling():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -162,6 +182,19 @@ def test_period_views_include_unscheduled_remainder_and_filter_fully_scheduled_w
         assert client.get(PREFIX + '/tasks', headers=H, params={'start_date': '2030-01-10'}).status_code == 422
         assert client.get(PREFIX + '/tasks', headers=H, params={'start_date': '2030-01-11', 'end_date': '2030-01-10'}).status_code == 422
 
+def test_cyclic_and_unknown_prerequisites_are_rejected_without_changing_saved_tasks():
+    with client_for(Scripted([draft()])) as client:
+        state = accepted(client)
+        assert request(client, 'add', state, task=definition(prerequisites=['missing'])).status_code == 422
+        state = save(client, 'add', state, task=definition(title='First'))
+        first = by_title(state, 'First')['id']
+        state = save(client, 'add', state, task=definition(title='Second', prerequisites=[first]))
+        second = by_title(state, 'Second')['id']
+        assert request(client, 'edit', state, task_id=first, changes={'prerequisites': [second]}).status_code == 422
+        restored = read(client)
+        assert by_title(restored, 'First')['prerequisites'] == []
+        assert by_title(restored, 'Second')['prerequisites'] == [first]
+
 def test_reused_generated_key_with_changed_content_requires_reconciliation():
     changed = draft(assignments=[assignment('a1', task='A different generated exercise.', start_time='20:00', duration_minutes=30)])
     with client_for(Scripted([draft(), changed])) as client:
@@ -183,6 +216,20 @@ def test_reused_generated_key_with_changed_content_requires_reconciliation():
         tasks_after = response.json()['planner']['active']['editable_tasks']
         assert next(t for t in tasks_after if t['id'] == original['id'])['instructions'] == 'My saved exercise.'
         assert any(t['id'] == review['task_id'] and not t['removed'] for t in tasks_after)
+
+def test_revision_preserves_prerequisite_of_personal_task():
+    initial = draft(assignments=[assignment('a1'), assignment('a2', start_time='20:00', duration_minutes=30)])
+    revised = draft(assignments=[assignment('a1')])
+    with client_for(Scripted([initial, revised])) as client:
+        state = accepted(client)
+        prerequisite = next(t for t in state['planner']['active']['editable_tasks'] if t['generated_key'] == 'a2')
+        state = save(client, 'add', state, task=definition(title='My dependent', prerequisites=[prerequisite['id']]))
+        state = generate(client, state)
+        assert state['operation']['status'] == 'succeeded', state['operation']
+        candidate = state['planner']['candidate']['editable_tasks']
+        assert any(t['id'] == prerequisite['id'] and not t['removed'] for t in candidate)
+        dependent = next(t for t in candidate if t['title'] == 'My dependent')
+        assert dependent['prerequisites'] == [prerequisite['id']]
 
 def test_old_requirement_link_survives_an_unrelated_edit_and_is_flagged():
     with client_for(Scripted([draft()])) as client:
