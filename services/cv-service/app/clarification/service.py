@@ -3,6 +3,7 @@ from functools import partial
 import re
 from uuid import uuid4
 from pydantic import ValidationError
+from app.core.chat_failures import log_chat_failure
 from app.domain.capabilities import digest, effective_items, effective_fingerprint, normalized_name, validate_interpretation, validate_review_interpretation, interpretation_semantic_checks
 from app.domain.errors import Conflict, Missing
 from app.domain.service import bump, now
@@ -176,11 +177,14 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter, prep
                       extraction_version=saved['extraction_version'])
         result = SavedInterpretation.model_validate(result).model_dump(mode='json')
         error = None
-    except ValidationError:
+    except ValidationError as exc:
+        log_chat_failure('interpretation', identifier, question_id, exc)
         result, error = None, 'Interpretation returned an invalid structure. Your answer is saved; retry interpretation.'
     except ValueError as exc:
+        log_chat_failure('interpretation', identifier, question_id, exc)
         result, error = None, str(exc)[:1000]
-    except Exception:
+    except Exception as exc:
+        log_chat_failure('interpretation', identifier, question_id, exc)
         result, error = None, 'Interpretation could not finish. Your answer is saved; retry interpretation.'
     finally:
         if acquired: service.interpretation_slots.release()

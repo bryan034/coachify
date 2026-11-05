@@ -8,6 +8,7 @@ import re
 import httpx
 from bson import BSON
 from pydantic import ValidationError
+from app.core.chat_failures import log_chat_failure
 from starlette.concurrency import run_in_threadpool
 from app.conversation.presentation import review_reply
 from app.domain.review_context import clarification_context
@@ -96,6 +97,7 @@ class ConversationService:
     async def dispatch(self, operation, owner, identifier, action_id, token=None):
         if len(self.tasks) >= 16:
             operation.close()
+            log_chat_failure('dispatch', identifier, action_id, ValueError(), category='capacity_busy')
             await self.fail(owner, identifier, action_id, token, 'Conversation processing is busy. Your message is saved; retry shortly.')
             return
         task = asyncio.create_task(operation)
@@ -374,7 +376,8 @@ class ConversationService:
                 harness = InterviewHarness(self)
                 try:
                     await harness.process(app, account, conversation, route, token)
-                except ModelAdmissionError:
+                except ModelAdmissionError as exc:
+                    log_chat_failure('route', identifier, route_id, exc, category='model_admission')
                     latest = self.get(owner, identifier)
                     document = self.cv.get(owner, latest['cv_id'])
                     memory = reconcile_memory(latest, document)
@@ -435,8 +438,10 @@ class ConversationService:
                     latest = await run_in_threadpool(self.update, owner, identifier, advance)
                     await self.guided(app, account, latest, deepcopy(action_in(latest, route_id)), token)
         except Conflict as exc:
+            log_chat_failure('route', identifier, route_id, exc, category='conflict')
             await self.fail(owner, identifier, route_id, token, exc.detail, 'stale')
         except Exception as exc:
+            log_chat_failure('route', identifier, route_id, exc)
             message = str(exc) if isinstance(exc, ValueError) and not isinstance(exc, ValidationError) else 'Chat interpretation could not finish. Your message is saved; retry.'
             await self.fail(owner, identifier, route_id, token, message[:1000])
 
@@ -646,9 +651,11 @@ class ConversationService:
         except Conflict as exc:
             # The saved CV receipt may already exist after a process/response failure;
             # recovery uses the stored exact mutation payload rather than a new write.
+            log_chat_failure('action', identifier, action_id, exc, category='conflict')
             latest_token = action_in(self.get(owner, identifier), action_id).get('_token')
             await self.fail(owner, identifier, action_id, token if latest_token == token else original.get('_token'), exc.detail, 'stale')
         except Exception as exc:
+            log_chat_failure('action', identifier, action_id, exc)
             message = exc.detail if isinstance(exc, CvError) else 'This action could not finish. Your message is saved; retry.'
             latest_token = action_in(self.get(owner, identifier), action_id).get('_token')
             await self.fail(owner, identifier, action_id, token if latest_token == token else original.get('_token'), message)
