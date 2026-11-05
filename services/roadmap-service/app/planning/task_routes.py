@@ -31,3 +31,42 @@ def register_task_routes(app,context,mutate):
             validate_links(plan,task);tasks.append(task);project_assignments(plan)
             return row
         return await mutate(body,account,apply,operation='tasks.add')
+
+    @app.post(prefix+'/edit',response_model=Workspace)
+    async def edit(body:EditTask,request:Request,account=Depends(authenticated)):
+        def apply(row,source):
+            plan=active(row);task=find_task(copy.deepcopy(plan),body.task_id)
+            changes=body.changes.model_dump(mode='json',exclude_unset=True)
+            if any(v is None and k!='milestone_key' for k,v in changes.items()):raise Problem('Task fields cannot be empty.',422,'validation')
+            updated={**task,**changes};validate_links(copy.deepcopy(plan),updated,() if 'requirement_refs' in changes else task.get('requirement_refs',[]))
+            changed=[k for k,v in changes.items() if task.get(k)!=v]
+            if 'requirement_refs' in changes and (task.get('requirement_source_hash')!=plan.get('assessment_hash') or task.get('requirement_source_id')!=plan.get('assessment_id')) and 'requirement_refs' not in changed:
+                changed.append('requirement_refs')
+            if changed:
+                task=find_task(plan,body.task_id)
+                task.setdefault('history',[]).append({'at':stamp(),'event':'edited','fields':changed,
+                    'previous':{k:copy.deepcopy(task.get(k)) for k in changed}})
+                if 'completion_outcome' in changed and task['status']=='completed':task['definition_review_required']=True
+                if 'requirement_refs' in changed:
+                    task['requirement_source_hash']=plan.get('assessment_hash');task['requirement_source_id']=plan.get('assessment_id')
+                task.update(changes);task['overrides']=sorted(set(task.get('overrides',[]))|set(changed))
+                project_assignments(plan)
+            return row
+        return await mutate(body,account,apply,operation='tasks.edit')
+
+    @app.post(prefix+'/reconcile',response_model=Workspace)
+    async def reconcile(body:ReconcileTasks,request:Request,account=Depends(authenticated)):
+        def apply(row,source):
+            candidate=planner_state(row)['candidate']
+            if not candidate or candidate['id']!=body.candidate_id:raise Problem('This revision preview changed. Reload before reviewing it.',409,'candidate_changed')
+            pending={r['task_id']:r for r in candidate.get('revision_review',[])}
+            if len({d.task_id for d in body.decisions})!=len(body.decisions) or any(d.task_id not in pending for d in body.decisions):
+                raise Problem('Choose each unresolved task only once.',422,'validation')
+            for decision in body.decisions:
+                task=find_task(candidate,decision.task_id)
+                if decision.decision=='discard':
+                    now=stamp();task['removed']=True;task['removal']={'at':now,'reason':'Discarded during revision review.'}
+                    task.setdefault('history',[]).append({'at':now,'event':'removed','reason':task['removal']['reason']})
+                pending.pop(decision.task_id)
+            candidate['revision_review']=list(pending.values());project_assignments(candidate);return row
+        return await mutate(body,account,apply,operation='tasks.reconcile')

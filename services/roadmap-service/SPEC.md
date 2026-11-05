@@ -67,6 +67,8 @@ Session completion, self-reported milestone outcomes and experience confirmation
 
 Task creation stores canonical task records in the active roadmap using owner-scoped version and retry checks. Personal work need not have a requirement or a schedule.
 
+Task edits retain history, and ambiguous regenerated work requires an explicit review.
+
 ## Persistence and recovery
 
 `workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.

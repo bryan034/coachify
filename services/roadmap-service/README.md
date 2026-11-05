@@ -7,7 +7,7 @@ Prepares a personal study roadmap towards the user's career goal. A fixed planne
 | Stories | Available endpoints under `/api/v1/roadmaps` |
 |---|---|
 | R01 / SCRUM-185–187 | `GET /workspace` restores chat, settings, runway, previews, the active roadmap and change signals. `GET /progress` polls compact operation state. `POST /messages` saves a chat helper message; it updates settings or prepares a preview. |
-| E / T Roadmap task backend | `POST /planner/tasks/add` saves a personal or linked task. |
+| E / T Roadmap task backend | `POST /planner/tasks/add` saves a personal or linked task. `POST /planner/tasks/edit` changes task instructions or title; `/reconcile` resolves possible repeated work in previews. |
 | R05–R09 | `POST /planner/runway` calculates runway without a model call. `POST /planner/config` saves settings, including recurring blackout rules. `POST /planner/generate` runs Assessment if needed, then writes and validates a plan or revision. `POST /planner/accept` applies a preview; `POST /planner/discard` removes it. `POST /planner/confirmations` saves self-reported experience answers. `GET /history/{id}` reads an owner-scoped immutable plan, including earlier untimed plans. |
 | T03–T06 | `POST /planner/assignments/status` completes or reopens a session with an optional evidence note. `POST /planner/milestones/outcome` records a self-reported outcome. Neither changes assessed skills. |
 
