@@ -244,6 +244,23 @@ it('returns to configuration without losing the preview and can go back', async 
  await screen.findByRole('button', { name: 'Accept plan' });
 });
 
+it('stays in configuration when saving settings returns the same preview', async () => {
+ const state = withCandidate();
+ serve(state, { '/planner/config': () => ({ ...state, version: state.version + 1 }) });
+ render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: 'Back to configuration' }));
+ fireEvent.change(await screen.findByLabelText('Preferred session in minutes'), { target: { value: '45' } });
+ const save = await screen.findByRole('button', { name: 'Save settings' });
+ await waitFor(() => expect(save).toBeEnabled());
+ fireEvent.click(save);
+ await waitFor(() => expect(calls('/planner/config')).toHaveLength(1));
+ await waitFor(() => expect(screen.queryByRole('button', { name: 'Save settings' })).not.toBeInTheDocument());
+ expect(screen.getByRole('heading', { name: 'Your runway' })).toBeVisible();
+ expect(calls('/planner/discard')).toHaveLength(0);
+ fireEvent.click(screen.getByRole('button', { name: 'Return to roadmap' }));
+ expect(await screen.findByRole('button', { name: 'Accept plan' })).toBeVisible();
+});
+
 it('draws the route with a numbered stop per milestone, today and reached outcomes', async () => {
  const base = roadmap().milestones[0];
  const plan = roadmap({ milestones: [{ ...base, id: 'm2', key: 'm2', title: 'Second', projected_end: '2030-01-24' }, { ...base, outcome: { demonstrated: true, note: 'Shown.' } }] });
