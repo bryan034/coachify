@@ -16,6 +16,9 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
     if (url.pathname.endsWith('/auth/logout')) return route.fulfill({json:{ok:true}}); apiCalls.push(url.pathname);
   if(url.pathname.endsWith('/cv/policy'))return route.fulfill({json:policy});
   if(url.pathname === '/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
+  if(url.pathname === '/api/v1/jobs/filters')return route.fulfill({json:{job_types:[{value:'internship',count:1}],industries:[{value:'fintech',count:1}],workplaces:[{value:'hybrid',count:1}],companies:[{value:'Synthetic Pay',count:1}],last_synced_at:'2026-11-05T04:00:00Z'}});
+  if(url.pathname === '/api/v1/jobs/applications')return route.fulfill({json:{items:[]}});
+  if(url.pathname === '/api/v1/jobs/search')return route.fulfill({json:{items:[{id:'0'.repeat(32),title:'Synthetic Data Intern',company:'Synthetic Pay',industry:'fintech',location:'Singapore',department:null,job_type:'internship',workplace:'hybrid',posted_at:'2026-11-01T00:00:00Z',posted_at_estimated:false,application_deadline:null,excerpt:'Support synthetic payments analysis.',listing_url:'https://jobs.example.test/1',apply_url:'https://jobs.example.test/1/apply',provider:'lever',status:'open'}],total:1,next_cursor:null}});
   if(url.pathname.endsWith('/profile/skills-profile'))return route.fulfill({json:{version:0,status:'empty',saved_at:null,areas:{},entries:[]}});
   if(url.pathname.endsWith('/profile/capabilities'))return route.fulfill({json:emptyDeclarations});
   if(url.pathname === '/api/v1/roadmaps/workspace') {
@@ -61,9 +64,11 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   else if(label==='Search Jobs'){
    await expect(page.getByRole('textbox',{name:'Job title or keywords'})).toBeVisible();
    await page.getByRole('textbox',{name:'Job title or keywords'}).fill('Data analyst');
-   await page.getByRole('button',{name:'Find jobs'}).click();
+   await page.getByRole('button',{name:'Search',exact:true}).click();
    await expect(page.getByRole('link',{name:/LinkedIn/})).toHaveAttribute('href',/keywords=Data\+analyst/);
    await expect(page.getByRole('link',{name:/LinkedIn/})).toHaveAttribute('target','_blank');
+   await expect(page.getByRole('heading',{name:'Synthetic Data Intern'})).toBeVisible();
+   await expect(page.getByRole('link',{name:/Apply on employer site/})).toHaveAttribute('href','https://jobs.example.test/1/apply');
    await expect(page.getByRole('link',{name:'Skills Profile',exact:true})).toHaveAttribute('href','/cv');
    await page.screenshot({path:testInfo.outputPath('jobs-desktop.png'),fullPage:true});
   }
@@ -86,7 +91,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.locator('.roadmap-prerequisites a[href="/career-goal"]')).toBeVisible();
  await page.getByRole('tab',{name:'Starting point',exact:true}).click();
  await expect(page.getByRole('tabpanel',{name:'Starting point',exact:true})).toBeVisible();
- expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
+ expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||p.startsWith('/api/v1/jobs/')||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
  expect(apiCalls).toContain('/api/v1/cv/policy');
  // The sidebar stays beside content, and mobile navigation expands on demand.
  const sidebar = await page.locator('.side').boundingBox();
@@ -110,7 +115,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   if(label==='Search Jobs'){
    await page.getByRole('textbox',{name:'Job title or keywords'}).fill('Data analyst');
-   await page.getByRole('button',{name:'Find jobs'}).click();
+   await page.getByRole('button',{name:'Search',exact:true}).click();
    await expect(page.getByRole('link',{name:/Indeed/})).toBeVisible();
    await page.screenshot({path:testInfo.outputPath('jobs-mobile.png'),fullPage:true});
   }

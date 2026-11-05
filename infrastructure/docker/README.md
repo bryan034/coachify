@@ -1,6 +1,6 @@
 # Docker deployment structure
 
-The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV ingestion/review, canonical Career goal/research, Assessment comparisons, Roadmap adviser chat/plans, scoped MongoDB users and an optional development Mailpit inbox. Dashboard and Review remain source scaffolds. See [application setup](../../docs/setup.md).
+The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV ingestion/review, canonical Career goal/research, Assessment comparisons, Roadmap adviser chat/plans, live Jobs search, scoped MongoDB users and an optional development Mailpit inbox. Dashboard and Review remain source scaffolds. See [application setup](../../docs/setup.md).
 
 ## Storage and service boundaries
 
@@ -12,7 +12,7 @@ The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV
 
 ## Configuration
 
-The public [`.env.example`](.env.example) lists all active deployment inputs, grouped by service: gateway/auth/email, scoped database passwords, Career LLM/research and limits, CV model/storage/usage settings, and separate Assessment/Roadmap database passwords and Gemini model keys. Keep every user-configurable deployment value in the single ignored `infrastructure/docker/.env`; do not add per-service environment files. Agents may maintain the public template. Configure private values yourself, preserving existing database passwords. Agents must not inspect private environment files. Career uses `AI_ENABLED`, `CAREER_LLM_PROVIDER`, `CAREER_LLM_BASE_URL`, `CAREER_LLM_RESPONSE_MODE`, `CAREER_LLM_MODEL`, `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_PROVIDER` and `CAREER_RESEARCH_API_KEY`. The public template selects Gemini inference through the OpenAI Python SDK for all four AI services, plus Brave search. Local and DeepSeek configurations remain optional. See [model/search setup](../../docs/setup.md#career-model-and-search-configuration). CV has a separate configurable OpenAI SDK adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
+The public [`.env.example`](.env.example) lists all active deployment inputs, grouped by service: gateway/auth/email, scoped database passwords, Career LLM/research and limits, CV model/storage/usage settings, separate Assessment/Roadmap database passwords and Gemini model keys, and the Jobs database password. Keep every user-configurable deployment value in the single ignored `infrastructure/docker/.env`; do not add per-service environment files. Agents may maintain the public template. Configure private values yourself, preserving existing database passwords. Agents must not inspect private environment files. Career uses `AI_ENABLED`, `CAREER_LLM_PROVIDER`, `CAREER_LLM_BASE_URL`, `CAREER_LLM_RESPONSE_MODE`, `CAREER_LLM_MODEL`, `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_PROVIDER` and `CAREER_RESEARCH_API_KEY`. The public template selects Gemini inference through the OpenAI Python SDK for all four AI services, plus Brave search. Local and DeepSeek configurations remain optional. See [model/search setup](../../docs/setup.md#career-model-and-search-configuration). CV has a separate configurable OpenAI SDK adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
 
 The local profile uses `elo-deepseek-r1:1.5b` (an Ollama alias with 16,384 context
 tokens), `AI_CONTEXT_TOKENS=16384`, `CAREER_LOCAL_TIMEOUT_SECONDS=45` and
@@ -136,6 +136,10 @@ container capabilities remain dropped. It is applied only to Career. See
 [Playwright's Docker guidance](https://playwright.dev/python/docs/docker).
 Browser profiles are temporary, receive no service secrets and are removed on exit.
 This improves JavaScript-page support; it does not guarantee access to blocked sites.
+
+## Jobs service
+
+`jobs-service` fetches public boards on request and uses `elo_jobs` only for private application snapshots. `compose.test.yaml` disables provider access through the existing synthetic-test flag. Apply the [required setting](../../docs/setup.md#jobs-service) before rebuilding.
 
 ## Assessment and Roadmap adviser services
 

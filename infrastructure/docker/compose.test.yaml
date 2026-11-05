@@ -13,6 +13,10 @@ services:
       CV_LLM_API_KEY: synthetic-no-provider-key
       CV_LLM_ALLOW_HTTP: 'true'
     depends_on: [cv-model-fixture]
+  jobs-service:
+    # Disable provider egress only in this disposable test stack.
+    environment:
+      ELO_SYNTHETIC_TEST_FIXTURES: '1'
   cv-model-fixture:
     image: python:3.12-slim
     command: [python, /fixture/cv-model.py]

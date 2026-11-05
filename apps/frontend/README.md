@@ -23,7 +23,7 @@ the Inter OFL licence; no runtime font request is needed. The browser tab icon u
 | `/onboarding/preview` | Development-only replay with fresh, unsaved answers |
 | `/roadmap` | Planner form with an optional chat helper, repeating blackouts and runway, generated roadmap review, timed sessions and revision previews |
 | `/cv` | **Skills Profile**: summary-first evidence, CV upload-to-review, guided manual intake, interpreted clarification and correction/reconciliation |
-| `/jobs` | **Search Jobs**: manual keyword/location search links to LinkedIn and Indeed; results and applications open on the external job sites |
+| `/jobs` | **Search Jobs**: search and filter Singapore listings, apply on the employer's site and track self-reported applications; see the [feature README](src/features/jobs/README.md) |
 | `/chats` | Chats/socials layout and local filters; requests unavailable |
 | `/calendar` | Current week/month views; events and task actions unavailable |
 | `/career`, `/reviews` | Matching placeholders for existing reserved routes |

@@ -32,7 +32,16 @@ function Planner({ token }: { token: string }) {
  const unknownMutation = useRef<{ path: string; body: unknown } | null>(null); const [unknown, setUnknown] = useState(false);
  const settings = useSettingsDraft(workspace, token);
  useEffect(() => { mounted.current = true; return () => { mounted.current = false; sequence.current++; }; }, []);
- function receive(value: Workspace) { if (mounted.current) { latest.current = value; setWorkspace(value); } }
+ function receive(value: Workspace) {
+  if (!mounted.current) return;
+  // Choose the view in the same update as the new preview. A later effect can
+  // otherwise override a Back click made just after the preview appears.
+  const candidateId = value.planner.candidate?.id;
+  if (candidateId && candidateId !== latest.current?.planner.candidate?.id) {
+   setConfiguring(false); setTab('plan'); setHelperOpen(false);
+  }
+  latest.current = value; setWorkspace(value);
+ }
  async function load(signal?: AbortSignal) {
   const order = ++sequence.current;
   try { const value = await roadmapApi<Workspace>(workspacePath(), token, undefined, signal); if (mounted.current && order === sequence.current) { receive(value); setError(''); if (pendingRef.current && value.operation?.id === pendingRef.current.mutation_id) { pendingRef.current = null; setPending(null); } } }
@@ -54,9 +63,6 @@ function Planner({ token }: { token: string }) {
   }, 1500);
   return () => clearTimeout(timer);
  }, [workspace, running]); // eslint-disable-line react-hooks/exhaustive-deps
- // A new preview always opens on the roadmap page, whichever route prepared it.
- const candidateId = workspace?.planner.candidate?.id;
- useEffect(() => { if (candidateId) { setConfiguring(false); setTab('plan'); setHelperOpen(false); } }, [candidateId]);
  // A saved message that failed can only be retried from the helper, so bring it into view.
  const failedMessageId = workspace?.operation?.status === 'failed' && workspace.retry_request ? workspace.operation.id : null;
  useEffect(() => { if (failedMessageId) setHelperOpen(true); }, [failedMessageId]);

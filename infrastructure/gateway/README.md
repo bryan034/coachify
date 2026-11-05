@@ -18,5 +18,7 @@ Reload/restart NGINX after config edits. Production Next.js does not expose an H
 Model-backed Career routes allow 610 seconds of upstream inactivity to accommodate
 local inference and sequential model calls. The UI uses asynchronous operation polling;
 synchronous clients may still exceed this limit when queued. Career preview/import,
-Profile, CV, Assessment and Roadmap timeouts retain their existing limits. Restart or
+Profile, CV, Assessment, Roadmap and Jobs timeouts retain their existing limits. Restart or
 reload the gateway after changing its mounted `nginx.conf`.
+
+Jobs requests have a 60-second upstream timeout for bounded live employer-board aggregation. No scheduled catalogue worker is required.

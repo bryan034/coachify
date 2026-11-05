@@ -4,7 +4,7 @@ services:
     image: nginx:1.28-alpine
     ports: ["127.0.0.1:${GATEWAY_PORT:-8080}:80"]
     volumes: ["../gateway/nginx.conf:/etc/nginx/nginx.conf:ro"]
-    depends_on: [frontend, profile-service, career-service, cv-service, assessment-service, roadmap-service]
+    depends_on: [frontend, profile-service, career-service, cv-service, assessment-service, roadmap-service, jobs-service]
     networks: [web, backend]
   frontend:
     build:
@@ -197,6 +197,37 @@ services:
     pids_limit: 64
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+  jobs-service:
+    build:
+      context: ../..
+      dockerfile: services/jobs-service/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      PROFILE_SERVICE_URL: http://profile-service:8000
+      MONGODB_URI: mongodb://elo_jobs:${JOBS_DB_PASSWORD:?Set JOBS_DB_PASSWORD}@mongodb:27017/elo_jobs
+      MONGODB_DATABASE: elo_jobs
+    depends_on:
+      mongodb-jobs-init:
+        condition: service_completed_successfully
+    networks: [backend, database]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=0700,uid=10001,gid=10001"]
+    mem_limit: 512m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  mongodb-jobs-init:
+    image: mongo:8.2
+    environment:
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+      JOBS_DB_PASSWORD: ${JOBS_DB_PASSWORD:?Set JOBS_DB_PASSWORD}
+    volumes: ["../mongodb/init-jobs.js:/setup/init-jobs.js:ro"]
+    command: ["mongosh", "--nodb", "--quiet", "/setup/init-jobs.js"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks: [database]
+    restart: "no"
   mongodb-planning-init:
     image: mongo:8.2
     environment:

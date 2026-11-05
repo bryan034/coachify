@@ -265,3 +265,19 @@ note for roadmaps "Separate Roadmap-owned database; one database with owner-scop
 %% Saved-goal question research reuses immutable interview_research.question_findings snapshots.
 %% Owner/goal-version/focus question_result pointers in research_contexts append public evidence
 %% after up to three distinct question searches; no new collection or raw question is stored.
+
+class job_applications {
+    +String _id [owner and posting hash]
+    +String user_id
+    +String posting_id
+    +Integer version
+    +String status [self-reported]
+    +JobApplicationSnapshot snapshot
+    +JobStatusChange[] history
+    +Date created_at
+    +Date updated_at
+}
+users "1" --> "0..*" job_applications : tracks
+note for job_applications "Private and owner-scoped. Snapshot keeps the record readable after a listing closes or is removed. Applied means the user reported it; Elo never submits applications."
+
+%% Public job results are fetched live and remain transient; legacy catalogue collections are ignored.

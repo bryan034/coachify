@@ -460,6 +460,10 @@ On Docker Desktop kernels 6.19 and newer, the `mongo:8.0` and `mongo:8.3` images
 
 The previous C-series captioned recording uses synthetic models and the pre-integration build. It is retained as a workflow reference, not proof of the merged Career confirmation flow or live-model accuracy. Re-record or exercise the integrated journey after the final code changes. Cost, latency, interpretation quality and comparative usability require separately authorized live-model/user evaluation.
 
+## Jobs service
+
+See the [Jobs test guide](../services/jobs-service/tests/README.md). Tests use synthetic listings on `mongomock`, plus disposable real MongoDB when `MONGODB_TEST_URI` is set. Contract tests compare the complete generated OpenAPI document. No test calls a live job provider. `compose.test.yaml` disables provider access via the synthetic-test flag. Live-search tests inject changing provider responses and verify that no catalogue writes occur.
+
 ## Assessment and Roadmap adviser
 
 Run each service separately because they use independent `app` namespaces. With pinned dependencies installed, repository tests can use:

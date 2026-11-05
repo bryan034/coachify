@@ -722,3 +722,20 @@ roadmaps *-- RoadmapMilestone
 roadmaps *-- RoadmapAssignment
 roadmaps *-- RoadmapGap
 note for RoadmapAssignment "Detailed for the first planning week only. Completed sessions and evidence notes copy unchanged into revisions. Completion is not proficiency and writes nothing to Profile, CV or Assessment."
+
+class JobApplicationSnapshot {
+    +String title
+    +String company
+    +String location
+    +String job_type
+    +String listing_url
+    +String apply_url
+}
+class JobStatusChange {
+    +String status
+    +Date at
+}
+job_applications *-- JobApplicationSnapshot
+job_applications *-- JobStatusChange
+
+%% JobApplicationSnapshot persists independently of live job-provider results; availability is unknown on tracker reads.
