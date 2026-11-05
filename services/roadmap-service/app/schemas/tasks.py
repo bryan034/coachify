@@ -31,6 +31,7 @@ class TaskChanges(Contract):
     title:Title|None=None
     instructions:Text|None=None
     completion_outcome:Text|None=None
+    estimated_minutes:int|None=Field(default=None,strict=True,ge=1,le=60000)
 
 class AddTask(Mutation):
     task:TaskDefinition

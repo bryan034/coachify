@@ -4382,6 +4382,19 @@
               }
             ],
             "title": "Completion Outcome"
+          },
+          "estimated_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Minutes"
           }
         },
         "additionalProperties": false,
