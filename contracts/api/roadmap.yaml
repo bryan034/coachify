@@ -2529,7 +2529,10 @@
           },
           "status": {
             "type": "string",
-            "const": "in_progress",
+            "enum": [
+              "in_progress",
+              "completed"
+            ],
             "title": "Status"
           },
           "evidence_note": {

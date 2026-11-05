@@ -47,7 +47,7 @@ class RemoveTask(Mutation):
     reason:str|None=Field(default=None,max_length=2000)
 class ChangeTaskStatus(Mutation):
     task_id:Key
-    status:Literal['in_progress']
+    status:Literal['in_progress','completed']
     evidence_note:str|None=Field(default=None,max_length=2000)
 class ReconcileDecision(Contract):
     task_id:Key
