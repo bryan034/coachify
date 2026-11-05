@@ -11,3 +11,4 @@ Schedule warning tests cover overlapping work and prerequisite order.
 
 `test_editable_tasks.py` exercises the currently exposed task operations using synthetic accounts and data.
 Schedule warning tests cover overlapping work and prerequisite order.
+Calendar-boundary tests cover saving and restoring extreme dates.

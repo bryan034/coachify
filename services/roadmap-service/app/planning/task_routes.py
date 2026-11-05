@@ -19,6 +19,35 @@ def register_task_routes(app,context,mutate):
         if not plan:raise Problem('There is no active roadmap yet.',404,'not_found')
         return plan
 
+    @app.get(prefix,response_model=TaskList)
+    async def tasks(request:Request,start_date:date|None=None,end_date:date|None=None,account=Depends(authenticated)):
+        if (start_date is None)!=(end_date is None) or (start_date and end_date<start_date):
+            raise Problem('Choose a valid start and end date.',422,'validation')
+        row=await thread(app.state.store.load,account['id']);plan=copy.deepcopy(active(row))
+        all_tasks=ensure_tasks(plan); result=[]
+        for task in all_tasks:
+            if task.get('removed'):continue
+            slots=task['schedule']
+            if start_date and not any(start_date<=date.fromisoformat(str(s['date']))<=end_date for s in slots) and sum(s['duration_minutes'] for s in slots)>=task['estimated_minutes']:continue
+            view=copy.deepcopy(task)
+            view['readiness']=task_readiness(task,all_tasks,plan)
+            snapshot_changed=(task.get('requirement_source_hash',plan.get('assessment_hash'))!=plan.get('assessment_hash') or
+                task.get('requirement_source_id',plan.get('assessment_id'))!=plan.get('assessment_id'))
+            view['stale_requirement_refs']=[ref for ref in task['requirement_refs'] if snapshot_changed or ref not in requirement_ids(plan)]
+            view['unscheduled_minutes']=max(0,task['estimated_minutes']-sum(s['duration_minutes'] for s in slots))
+            result.append(view)
+        source=await context(account,tolerate_unavailable=True)
+        # Keep the existing booleans for compatibility, while distinguishing a
+        # missing/incomplete input snapshot from a verified matching snapshot.
+        if source.get('availability')=='unavailable':freshness='unavailable'
+        elif source.get('ready') is not True or not source.get('input_hash'):freshness='not_ready'
+        elif not plan.get('assessment_hash'):freshness='unavailable'
+        else:freshness='current' if source['input_hash']==plan['assessment_hash'] else 'stale'
+        return {'version':row['version'],'plan_id':plan['id'],
+            'stale':bool(source.get('input_hash') and source['input_hash']!=plan['assessment_hash']),
+            'source_unavailable':source.get('availability')=='unavailable','freshness':freshness,
+            'tasks':result,'warnings':schedule_warnings(plan,app.state.clock())}
+
     @app.post(prefix+'/add',response_model=Workspace)
     async def add(body:AddTask,request:Request,account=Depends(authenticated)):
         def apply(row,source):
