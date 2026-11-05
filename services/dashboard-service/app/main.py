@@ -74,7 +74,7 @@ def create_app(upstream=None,clock=None):
         app.router.lifespan_context=lifespan
 
     @app.get('/api/v1/dashboard',response_model=Dashboard)
-    async def dashboard(period:Literal['whole']='whole',focus_date:date|None=None,account=Depends(authenticated)):
+    async def dashboard(period:Literal['daily','weekly','monthly','whole']='whole',focus_date:date|None=None,account=Depends(authenticated)):
         if focus_date and not 2<=focus_date.year<=9998:
             raise Problem('Choose a focus date within the supported calendar range.',422,'validation')
         now=app.state.clock();out=base_response(period,focus_date,now);token=account['token'];client=app.state.upstream

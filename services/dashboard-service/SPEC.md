@@ -1,0 +1,13 @@
+# Dashboard backend
+
+The dashboard is a stateless aggregation service. Authenticated requests forward the owner's bearer to passive Roadmap and Assessment endpoints; they do not read other services' databases, start model work, or mutate source state. Two bounded source reads check versions and identities during assembly. This detects observed changes but is not a distributed transaction. Source failures, missing plans, empty work, stale assessments and mismatched assessment snapshots are distinct response states.
+
+`GET /api/v1/dashboard` accepts `period` (`daily`, `weekly`, `monthly`, or `whole`) and optional `focus_date` in ISO date form. Dates use the active plan's IANA time zone; weeks are Monday through Sunday and months are calendar months. The API does not persist the selection. A future frontend must retain the period and focus per account to meet the cross-session part of SCRUM-68.
+
+Task progress counts each active task once. Empty task sets have no completion ratio. Scheduled segments contribute planned minutes to their own periods, while unscheduled remainder is shown separately; personal tasks remain visible. `unscheduled_minutes` describes the unallocated part of estimates regardless of status, while `remaining_unscheduled_minutes` excludes valid completed work. Unfinished effort is an estimate, not recorded time. Removed tasks are excluded from active totals. Milestone results come from Roadmap, including its review and readiness information; completed scheduled minutes are labelled as an estimate and an empty or removed-last milestone is not proof of completion.
+
+Requirement outcomes and AND/OR groups come from the assessment independently of linked task status. Links retain their assessment provenance; mismatched or stale links are flagged rather than treated as current evidence. The response also reports assessment coverage, partial results and the status of the latest assessment operation when available. Task completion does not verify a skill or capability.
+
+Pace uses the most recently accepted immutable roadmap snapshot as its identified baseline. Subsequent edits retain that baseline; accepting a revision establishes another. Existing plans without an identifiable baseline do not receive an invented one. Period comparisons retain the baseline's planned dates and use timestamped task status history; missing completion-definition or effort provenance is non-comparable. Split segments are not treated as independently completed work. No actual hours or completion forecast is inferred.
+
+The backend does not implement the dashboard screens, per-account saved period preference or automatically refresh the frontend. Verify live provider quality separately; dashboard reads make no provider calls.

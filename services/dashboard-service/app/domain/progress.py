@@ -16,8 +16,10 @@ def period_bounds(kind, focus, zone, now):
     return {'kind':kind,'focus_date':focus.isoformat(),'start_date':start.isoformat() if start else None,
         'end_date':end.isoformat() if end else None,'time_zone':zone},start,end
 
+
 def slots_in_period(task,start,end):
     return [s for s in task.get('schedule',[]) if start is None or start<=date.fromisoformat(str(s['date']))<=end]
+
 
 def counts(tasks):
     total=len(tasks);completed=sum(t.get('status')=='completed' and not t.get('definition_review_required') for t in tasks)
@@ -29,6 +31,7 @@ def counts(tasks):
     return {'total':total,'completed':completed,'in_progress':in_progress,'not_started':not_started,'completion_review':review,
         'completion_ratio':completed/total if total else None,
         'remaining_estimated_minutes':sum(t['estimated_minutes'] for t in tasks if t.get('status')!='completed' or t.get('definition_review_required'))}
+
 
 def task_progress(plan,start,end,readiness):
     tasks=plan.get('editable_tasks') or []
@@ -46,6 +49,7 @@ def task_progress(plan,start,end,readiness):
             'schedule':slots_in_period(t,start,end),'unscheduled_minutes':remainder[t['id']],
             'definition_review_required':bool(t.get('definition_review_required')),
             'readiness':readiness.get(t['id'])} for t in shown]}
+
 
 def milestone_progress(plan,review,readiness):
     result=[]; tasks=plan.get('editable_tasks') or []
@@ -73,6 +77,7 @@ def milestone_progress(plan,review,readiness):
             'blocked_task_ids':[t['id'] for t in blocked], 'blocked_reasons':reasons})
     return result
 
+
 def requirements(result,assessment_state,plan):
     items=[];groups=[];tasks=[t for t in (plan or {}).get('editable_tasks',[]) if not t.get('removed')]
     if result:
@@ -96,6 +101,7 @@ def requirements(result,assessment_state,plan):
     return {'state':assessment_state,'items':items,'groups':groups,
         'unlinked_task_ids':[t['id'] for t in tasks if not t.get('requirement_refs')], 'stale_link_task_ids':stale}
 
+
 def parse_timestamp(value):
     if not value:return None
     try:
@@ -111,6 +117,7 @@ def baseline_tasks(baseline):
         'estimated_minutes':a['duration_minutes'],'completion_outcome':a['completion_criterion'],
         'schedule':[{'date':str(a['date']),'start_time':a['start_time'],'duration_minutes':a['duration_minutes']}],
         'removed':False,'history':a.get('history',[])} for a in baseline['assignments']]
+
 
 def pace(plan,baseline,start,end,zone,now):
     baseline_id=plan.get('pace_baseline_id')

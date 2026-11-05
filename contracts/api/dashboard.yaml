@@ -126,7 +126,12 @@
             "in": "query",
             "required": false,
             "schema": {
-              "const": "whole",
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly",
+                "whole"
+              ],
               "type": "string",
               "default": "whole",
               "title": "Period"
