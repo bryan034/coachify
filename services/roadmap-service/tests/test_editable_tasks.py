@@ -92,6 +92,21 @@ def test_edits_removals_and_prerequisites_preserve_dependents_and_history():
         blocked = next(t for t in visible if t['id'] == dependent)
         assert not blocked['readiness']['actionable'] and blocked['readiness']['reasons']
 
+def test_progress_keeps_previous_completion_and_does_not_verify_capability():
+    with client_for(Scripted([draft()])) as client:
+        state = accepted(client)
+        state = save(client, 'add', state, task=definition())
+        task_id = by_title(state, 'Practise explaining a project')['id']
+        state = save(client, 'status', state, task_id=task_id, status='in_progress')
+        state = save(client, 'status', state, task_id=task_id, status='completed', evidence_note='Recorded it.')
+        state = save(client, 'status', state, task_id=task_id, status='in_progress')
+        task = by_title(state, 'Practise explaining a project')
+        assert task['status'] == 'in_progress'
+        completed = [event for event in task['history'] if event['to'] == 'completed']
+        assert len(completed) == 1 and completed[0]['at'] and completed[0]['completion_definition']
+        assert state['planner']['active']['milestones'][0]['outcome']['demonstrated'] is False
+        assert state['assessment']['job_skill_gaps'][0]['match_status'] == 'confirmed_shortfall'
+
 def test_manual_overlapping_slots_are_saved_with_warnings_not_silent_rescheduling():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -119,6 +134,24 @@ def test_revision_retains_edits_personal_tasks_and_removal_intent():
         assert removed['instructions'] == 'My own instructions.'
         assert any(t['title'] == 'My own task' and not t['removed'] for t in candidate['editable_tasks'])
         assert not any(t['id'] != generated['id'] and t.get('generated_key') == 'a1' and not t['removed'] for t in candidate['editable_tasks'])
+
+def test_planned_prerequisite_date_does_not_unblock_and_completion_does():
+    with client_for(Scripted([draft()])) as client:
+        state = accepted(client)
+        state = save(client, 'add', state, task=definition(title='Prerequisite',
+            schedule=[{'date': '2030-01-09', 'start_time': '14:00', 'duration_minutes': 45}]))
+        prerequisite = by_title(state, 'Prerequisite')['id']
+        state = save(client, 'add', state, task=definition(title='Dependent', prerequisites=[prerequisite],
+            schedule=[{'date': '2030-01-10', 'start_time': '14:00', 'duration_minutes': 45}]))
+        dependent = by_title(state, 'Dependent')['id']
+        view = next(t for t in tasks(client)['tasks'] if t['id'] == dependent)
+        assert view['readiness']['actionable'] is False and view['readiness']['reasons']
+        state = save(client, 'status', state, task_id=dependent, status='in_progress')
+        view = next(t for t in tasks(client)['tasks'] if t['id'] == dependent)
+        assert view['status'] == 'in_progress' and not view['readiness']['actionable']
+        state = save(client, 'status', state, task_id=prerequisite, status='completed')
+        view = next(t for t in tasks(client)['tasks'] if t['id'] == dependent)
+        assert view['readiness']['actionable'] is True
 
 def test_edit_invalidates_preexisting_revision_preview():
     with client_for(Scripted([draft(), draft()])) as client:
@@ -156,6 +189,22 @@ def test_revision_requires_explicit_review_of_unmatched_work_after_removal():
         assert any(t['id'] == old['id'] and t['removed'] for t in active)
         assert not any(t['id'] == review['task_id'] and not t['removed'] for t in active)
 
+def test_old_assignment_status_updates_canonical_task_and_new_status_projects_back():
+    with client_for(Scripted([draft()])) as client:
+        state = accepted(client)
+        session = state['planner']['active']['assignments'][0]
+        response = client.post(PREFIX + '/assignments/status', headers=H,
+            json={'expected_version': state['version'], 'mutation_id': str(uuid4()),
+                  'assignment_id': session['id'], 'status': 'completed', 'evidence_note': 'Completed synthetic work.'})
+        assert response.status_code == 200, response.text
+        state = response.json()
+        task = next(t for t in state['planner']['active']['editable_tasks'] if t['id'] == session['id'])
+        assert task['status'] == 'completed' and task['evidence_note'] == 'Completed synthetic work.'
+        state = save(client, 'status', state, task_id=task['id'], status='not_started')
+        session = next(a for a in state['planner']['active']['assignments'] if a['id'] == task['id'])
+        assert session['status'] == 'scheduled' and session['completed_at'] is None
+        assert any(event.get('to') == 'completed' for event in session['history'])
+
 def test_requirement_links_are_validated_and_edited_without_inventing_a_link():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -165,6 +214,20 @@ def test_requirement_links_are_validated_and_edited_without_inventing_a_link():
         assert task['requirement_refs'] == ['job:python', 'job:sql']
         state = save(client, 'edit', state, task_id=task['id'], changes={'requirement_refs': []})
         assert by_title(state, task['title'])['requirement_refs'] == []
+
+def test_changed_completion_definition_requires_review_before_unblocking_dependents():
+    with client_for(Scripted([draft()])) as client:
+        state = accepted(client)
+        state = save(client, 'add', state, task=definition(title='Prerequisite'))
+        prerequisite = by_title(state, 'Prerequisite')['id']
+        state = save(client, 'add', state, task=definition(title='Dependent', prerequisites=[prerequisite]))
+        dependent = by_title(state, 'Dependent')['id']
+        state = save(client, 'status', state, task_id=prerequisite, status='completed')
+        assert next(t for t in tasks(client)['tasks'] if t['id'] == dependent)['readiness']['actionable']
+        state = save(client, 'edit', state, task_id=prerequisite, changes={'completion_outcome': 'A revised outcome exists.'})
+        assert by_title(state, 'Prerequisite')['definition_review_required']
+        view = next(t for t in tasks(client)['tasks'] if t['id'] == dependent)
+        assert not view['readiness']['actionable'] and view['readiness']['reasons']
 
 def test_period_views_include_unscheduled_remainder_and_filter_fully_scheduled_work():
     with client_for(Scripted([draft()])) as client:
@@ -246,6 +309,18 @@ def test_old_requirement_link_survives_an_unrelated_edit_and_is_flagged():
         assert view['requirement_refs'] == ['job:python']
         assert view['stale_requirement_refs'] == ['job:python']
         assert request(client, 'edit', state, task_id=ident, changes={'requirement_refs': ['job:unknown']}).status_code == 422
+
+def test_completed_first_week_does_not_finish_projected_milestone():
+    from app.planning.tasks import task_readiness
+    earlier = {'id': 'early', 'title': 'First week', 'milestone_key': 'm1', 'status': 'completed',
+               'estimated_minutes': 30, 'removed': False, 'prerequisites': []}
+    later = {'id': 'later', 'title': 'Later work', 'milestone_key': 'm2', 'status': 'not_started',
+             'estimated_minutes': 30, 'removed': False, 'prerequisites': []}
+    plan = {'milestones': [{'key': 'm1', 'estimated_minutes': 120, 'outcome': {'demonstrated': False}},
+                           {'key': 'm2', 'prerequisite_keys': ['m1']}]}
+    assert not task_readiness(later, [earlier, later], plan)['actionable']
+    plan['milestones'][0]['outcome'] = {'demonstrated': True}
+    assert task_readiness(later, [earlier, later], plan)['actionable']
 
 def test_same_requirement_id_from_new_assessment_is_flagged_until_reselected():
     with client_for(Scripted([draft()])) as client:

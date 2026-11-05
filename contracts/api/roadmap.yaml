@@ -2530,6 +2530,7 @@
           "status": {
             "type": "string",
             "enum": [
+              "not_started",
               "in_progress",
               "completed"
             ],
