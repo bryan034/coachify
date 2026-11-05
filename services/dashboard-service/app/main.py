@@ -92,6 +92,14 @@ def create_app(upstream=None,clock=None):
             out['warnings'].append('Assessment data is unavailable or changed during this read.')
         active=roadmap.get('active')
         baseline=None
+        if active and active.get('pace_baseline_id'):
+            baseline_id=active['pace_baseline_id']
+            if not isinstance(baseline_id,str) or len(baseline_id)>80:
+                raise Problem('The saved baseline reference is invalid.',503,'invalid_source')
+            try:baseline=await client.read('roadmap','/api/v1/roadmaps/history/'+quote(baseline_id,safe=''),token)
+            except Problem as error:
+                source_failure(error)
+                out['warnings'].append('The saved pace baseline could not be read.')
         # A bounded re-read detects concurrent source changes, not an atomic
         # cross-service transaction. A changed source never returns mixed values.
         try:

@@ -3813,6 +3813,17 @@
             ],
             "title": "Base Active Id"
           },
+          "pace_baseline_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pace Baseline Id"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"

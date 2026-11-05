@@ -232,6 +232,7 @@ class PlannedRoadmap(Contract):
     config_hash:str
     confirmations_hash:str
     base_active_id:str|None
+    pace_baseline_id:str|None=None
     created_at:str
     updated_at:str|None=None
     first_planning_week:str
@@ -256,7 +257,6 @@ class DashboardSource(Contract):
     active:PlannedRoadmap|None
     active_review:PlanReview|None
     task_readiness:dict[str,TaskReadiness]
-
 class Signal(Contract):
     kind:Literal['settings','evidence','progress','next_week']
     message:str

@@ -55,14 +55,14 @@ def register_planner(app,context,mutate,worker):
             mark_plan_membership_changes(state['active'],state['candidate'])
             state['active']=state['candidate'];state['candidate']=None
             return row
-        return await mutate(body,account,apply)
+        return await mutate(body,account,apply,operation='preview.accept',mark_baseline=True)
 
     @app.post(prefix+'/discard',response_model=Workspace)
     async def discard(body:Mutation,request:Request,account=Depends(authenticated)):
         def apply(row,source):
             planner_state(row)['candidate']=None
             return row
-        return await mutate(body,account,apply)
+        return await mutate(body,account,apply,operation='preview.discard')
 
     def active_plan(row):
         plan=planner_state(row)['active']

@@ -113,4 +113,83 @@ def baseline_tasks(baseline):
         'removed':False,'history':a.get('history',[])} for a in baseline['assignments']]
 
 def pace(plan,baseline,start,end,zone,now):
-    return {'state':'unavailable','as_of':now.astimezone(timezone.utc).isoformat(), 'note':'No comparable saved baseline is available.'}
+    baseline_id=plan.get('pace_baseline_id')
+    cutoff=min(now,datetime.combine(end+timedelta(days=1),time.min,ZoneInfo(zone))-timedelta(microseconds=1)) if end else now
+    result={'state':'unavailable','baseline_id':baseline_id,'baseline_created_at':None,'baseline_updated_at':None,
+        'as_of':cutoff.astimezone(timezone.utc).isoformat(),'items':[],'unscheduled_task_ids':[], 'added_task_ids':[],
+        'historical_added_scope_unknown':False, 'planned_minutes':None,
+        'note':'Estimates use the saved schedule; they are not actual hours or a forecast.'}
+    if not baseline_id or not baseline:return result
+    if baseline.get('id')!=baseline_id:return result
+    tasks_at_baseline=baseline_tasks(baseline)
+    if tasks_at_baseline is None:return result
+    accepted_at=parse_timestamp(baseline.get('updated_at'))
+    if accepted_at is None:return result
+    result.update(baseline_created_at=baseline.get('created_at'),baseline_updated_at=baseline.get('updated_at'))
+    current={t['id']:t for t in plan.get('editable_tasks') or []}
+    cohort=[t for t in tasks_at_baseline if not t.get('removed')]
+    cohort_ids={t['id'] for t in cohort}
+    added=[t['id'] for t in current.values() if not t.get('removed') and t['id'] not in cohort_ids]
+    if cutoff==now:result['added_task_ids']=added
+    else:result['historical_added_scope_unknown']=bool(added)
+    result['unscheduled_task_ids']=[t['id'] for t in cohort if not t.get('schedule')]
+    relevant=[t for t in cohort if slots_in_period(t,start,end)]
+    result['planned_minutes']=sum(s['duration_minutes'] for t in relevant for s in slots_in_period(t,start,end))
+    result['state']='available' if relevant else 'empty'
+    today=cutoff.astimezone(ZoneInfo(zone)).date()
+    for old in relevant:
+        selected_slots=slots_in_period(old,start,end)
+        dates=sorted({str(s['date']) for s in selected_slots})
+        due=max(date.fromisoformat(day) for day in dates)
+        cur=current.get(old['id']);reason=None;completed_at=None
+        removed_at=parse_timestamp((cur or {}).get('removal',{}).get('at')) if (cur or {}).get('removal') else None
+        history=(cur or {}).get('history',[])
+        scope_edits=[event for event in history if event.get('event')=='edited' and
+            set(event.get('fields',[])) & {'schedule','estimated_minutes','completion_outcome'}]
+        unknown_history=any(parse_timestamp(event.get('at')) is None for event in scope_edits)
+        later_edit=any(parse_timestamp(event.get('at')) and parse_timestamp(event['at'])>cutoff for event in scope_edits)
+        if cutoff<accepted_at:
+            classification='non_comparable';reason='The selected period ended before this baseline was accepted.'
+        elif not cur:
+            classification='non_comparable';reason='The baseline task is unavailable in the current roadmap.'
+        elif cur.get('removed') and not removed_at:
+            classification='non_comparable';reason='The removal time is unavailable.'
+        elif cur.get('removed') and removed_at<=cutoff:
+            classification='removed';reason='This task was removed after the baseline.'
+        elif len(selected_slots)!=len(old.get('schedule',[])):
+            classification='non_comparable';reason='Completion is recorded for the whole task, not individual scheduled segments.'
+        elif unknown_history or later_edit:
+            classification='non_comparable';reason='The task definition or schedule at this period cutoff cannot be established safely.'
+        elif any(cur.get(k)!=old.get(k) for k in ('completion_outcome','estimated_minutes','schedule')):
+            classification='changed';reason='The task definition, estimate or schedule changed after the baseline.'
+        elif cur.get('definition_review_required'):
+            classification='non_comparable';reason='The completion definition needs review.'
+        else:
+            events=[{**event,'to':'not_started' if event.get('to')=='scheduled' else event.get('to'),
+                'from':'not_started' if event.get('from')=='scheduled' else event.get('from')} for event in cur.get('history',[])
+                if event.get('to') in ('scheduled','not_started','in_progress','completed')]
+            parsed=[(parse_timestamp(event.get('at')),event) for event in events]
+            if any(moment is None for moment,event in parsed):
+                classification='non_comparable';reason='A task status change has no valid time.'
+            else:
+                parsed.sort(key=lambda pair:pair[0]);status=old.get('status');last=None
+                for moment,event in parsed:
+                    if moment<=cutoff:
+                        if event['to']!='completed':last=None
+                        elif event.get('from')!='completed':last=event
+                    if accepted_at<moment<=cutoff:status=event['to']
+                if cutoff==now and status!=cur.get('status'):
+                    classification='non_comparable';reason='The task status cannot be reconstructed from its history.'
+                elif status=='completed':
+                    last=last or {};completed_at=last.get('at');moment=parse_timestamp(completed_at)
+                    if (not moment or last.get('completion_definition')!=old.get('completion_outcome') or
+                        last.get('estimated_minutes_at_completion')!=old.get('estimated_minutes')):
+                        classification='non_comparable';reason='Completion time, definition or estimate provenance is missing or changed.'
+                    else:
+                        completed_day=moment.astimezone(ZoneInfo(zone)).date()
+                        classification='completed_early' if completed_day<due else 'completed_on_time' if completed_day==due else 'completed_late'
+                elif status in ('not_started','in_progress'):classification='overdue' if due<today else 'upcoming'
+                else:classification='non_comparable';reason='The task status at the baseline is unavailable.'
+        result['items'].append({'task_id':old['id'],'planned_date':due.isoformat(),'planned_dates':dates,'classification':classification,
+            'completed_at':completed_at,'reason':reason})
+    return result

@@ -991,6 +991,18 @@
       ],
       "title": "Base Active Id"
     },
+    "pace_baseline_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pace Baseline Id"
+    },
     "created_at": {
       "title": "Created At",
       "type": "string"

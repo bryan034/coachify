@@ -101,6 +101,33 @@ def test_unavailable_and_changed_sources_are_never_zero():
         data=c.get('/api/v1/dashboard',headers=H).json()
         assert data['state']=='unavailable' and data['progress'] is None
 
+def test_pace_requires_identified_baseline_and_estimate_snapshot():
+    fake=Fake();fake.roadmap['active']['pace_baseline_id']=None
+    with client(fake) as c:assert c.get('/api/v1/dashboard',headers=H).json()['pace']['state']=='unavailable'
+    fake=Fake();fake.roadmap['active']['editable_tasks'][0]['history'][0].pop('estimated_minutes_at_completion')
+    with client(fake) as c:assert c.get('/api/v1/dashboard',headers=H).json()['pace']['items'][0]['classification']=='non_comparable'
+
+def test_reopen_and_scope_changes_are_not_credited_as_completed_pace():
+    fake=Fake();fake.roadmap['active']['editable_tasks'][0]['status']='in_progress'
+    fake.roadmap['active']['editable_tasks'][0]['history'].append({'at':'2030-01-09T11:00:00+00:00','from':'completed','to':'in_progress'})
+    with client(fake) as c:assert c.get('/api/v1/dashboard',headers=H).json()['pace']['items'][0]['classification']=='upcoming'
+    fake.roadmap['active']['editable_tasks'][0]['completion_outcome']='Changed'
+    with client(fake) as c:assert c.get('/api/v1/dashboard',headers=H).json()['pace']['items'][0]['classification']=='changed'
+
+def test_completion_note_changes_do_not_change_completion_time():
+    fake=Fake();task=fake.roadmap['active']['editable_tasks'][0]
+    task['history'].append({'at':'2030-01-10T00:00:00+00:00','from':'completed','to':'completed',
+        'completion_definition':'Working outcome','estimated_minutes_at_completion':60,'new_evidence_note':'A later note.'})
+    task['completed_at']='2030-01-10T00:00:00+00:00'
+    with client(fake) as c:
+        result=c.get('/api/v1/dashboard',headers=H).json()['pace']['items'][0]
+        assert result['completed_at']=='2030-01-09T10:00:00+00:00'
+        assert result['classification']=='completed_early'
+    # A same-state edit must never supply a missing original effort snapshot.
+    task['history'][0].pop('estimated_minutes_at_completion')
+    with client(fake) as c:
+        assert c.get('/api/v1/dashboard',headers=H).json()['pace']['items'][0]['classification']=='non_comparable'
+
 def test_source_transport_forwards_only_bearer_and_bounds_response():
     import asyncio
     import httpx
@@ -124,6 +151,20 @@ def test_source_transport_forwards_only_bearer_and_bounds_response():
     asyncio.run(run())
     assert all(request.headers['Authorization']=='Bearer synthetic' for request in seen)
     assert len(seen)==5  # A redirect was not followed.
+
+def test_legacy_assignment_baseline_is_projected_in_memory():
+    fake=Fake();legacy=fake.baseline;legacy['schema_version']='roadmap-v2'
+    old=legacy.pop('editable_tasks')[0]
+    legacy['assignments']=[{'id':'a','status':'scheduled','duration_minutes':60,'completion_criterion':'Working outcome',
+        'date':'2030-01-09','start_time':'19:00','history':[]}]
+    fake.roadmap['active']['editable_tasks'][0]['schedule']=[slot('2030-01-09',60)]
+    before=copy.deepcopy(legacy)
+    with client(fake) as c:
+        result=c.get('/api/v1/dashboard',headers=H).json()['pace']
+        assert result['state']=='available' and result['items'][0]['classification']=='completed_on_time'
+    assert fake.baseline==before  # The snapshot remains untouched.
+    fake.roadmap['active']['editable_tasks'][0]['history'][0].pop('estimated_minutes_at_completion')
+    with client(fake) as c:assert c.get('/api/v1/dashboard',headers=H).json()['pace']['items'][0]['classification']=='non_comparable'
 
 def test_completed_unscheduled_work_is_distinct_from_remaining_unscheduled_estimate():
     fake=Fake()
