@@ -3,7 +3,7 @@
 ## Current state
 
 The profile slice has component, browser and API tests plus real MongoDB integration.
-Career has preview/AI/contract/workflow tests; CV has parser, saved-operation, interpretation, owner/mutation, conversation and handoff tests. Only the unimplemented Roadmap, Dashboard and Review services may pass with empty suites. Implemented services must collect tests.
+Career has preview/AI/contract/workflow tests; CV has parser, saved-operation, interpretation, owner/mutation, conversation and handoff tests. Only the unimplemented Review service may pass with an empty suite. Implemented services must collect tests.
 See [application setup](setup.md) and the affected service README for setup and service details.
 
 ## Suite maintenance

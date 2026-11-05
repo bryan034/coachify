@@ -28,7 +28,7 @@
 - Roadmap -> Assessment: source assessment ID/hash and freshness; immutable evidence remains addressable through the Assessment API.
 - Jobs -> Profile: validate the account/session and completed onboarding. Jobs reads no other service's data, and no service calls Jobs yet.
 - Planned Roadmap -> Review: verify the current automatic-application policy.
-- Planned Dashboard -> Roadmap/Career/Review: current progress and dated pace analysis.
+- Dashboard -> Roadmap/Assessment: passive owner-scoped progress and assessment snapshots, with bounded version rechecks; no cross-service database access.
 - Planned Review -> Profile/Career/Roadmap: read inputs, request a revision, request authorised application.
 
 Records are read through APIs, never another service's collections. Public endpoints

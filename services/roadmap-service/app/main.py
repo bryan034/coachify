@@ -10,6 +10,9 @@ from app.schemas import Message,Workspace,Plan,PlannedRoadmap
 from app.planning.generator import PLANNING_SECONDS,chat_turn,prepare_plan
 from app.planning.routes import register_planner
 from app.planning.state import planner_state,planner_view,retry_body
+from app.planning.state import plan_review
+from app.planning.tasks import ensure_tasks,project_assignments,task_readiness
+from app.schemas.roadmap import DashboardSource
 
 def create_app(store=None,upstream=None,model=None,clock=None):
     app=application('elo Roadmap Adviser API','ROADMAP',store=store,upstream=upstream,model=model)
@@ -67,6 +70,18 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return {'version':row['version'],'operation':operation_view(row)}
 
+
+    @app.get('/api/v1/roadmaps/dashboard-source',response_model=DashboardSource)
+    async def dashboard_source(request:Request,account=Depends(authenticated)):
+        # Unlike workspace and progress, this read never resumes pending work or
+        # queries other source services. Existing snapshots are projected in memory.
+        row=await thread(app.state.store.load,account['id'])
+        active=copy.deepcopy(planner_state(row)['active'])
+        if not active:return {'version':row['version'],'active':None,'active_review':None,'task_readiness':{}}
+        tasks=ensure_tasks(active)
+        project_assignments(active)
+        readiness={task['id']:task_readiness(task,tasks,active) for task in tasks if not task.get('removed')}
+        return {'version':row['version'],'active':active,'active_review':plan_review(active,app.state.clock()),'task_readiness':readiness}
 
     @app.post('/api/v1/roadmaps/messages',status_code=202)
     async def message(body:Message,request:Request,account=Depends(authenticated)):

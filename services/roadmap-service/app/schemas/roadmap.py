@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from .base import Contract, Mutation, Text
-from .tasks import EditableTask, RevisionReview
+from .tasks import EditableTask, RevisionReview, TaskReadiness
 
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
 Key=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
@@ -251,6 +251,12 @@ class PlanReview(Contract):
     missed_assignment_ids:list[str]
     remaining:Runway
     milestones:dict[str,dict]
+class DashboardSource(Contract):
+    version:int
+    active:PlannedRoadmap|None
+    active_review:PlanReview|None
+    task_readiness:dict[str,TaskReadiness]
+
 class Signal(Contract):
     kind:Literal['settings','evidence','progress','next_week']
     message:str

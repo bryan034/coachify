@@ -88,7 +88,7 @@ jobs:
         run: |
           status=0
           python -m pytest || status=$?
-          if [ "$status" -eq 5 ] && [[ '${{ matrix.service }}' =~ ^(dashboard|review)$ ]]; then
+          if [ "$status" -eq 5 ] && [[ '${{ matrix.service }}' =~ ^review$ ]]; then
             echo "No pytest tests collected; passing this service."
             exit 0
           fi

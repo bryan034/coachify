@@ -4,7 +4,7 @@ services:
     image: nginx:1.28-alpine
     ports: ["127.0.0.1:${GATEWAY_PORT:-8080}:80"]
     volumes: ["../gateway/nginx.conf:/etc/nginx/nginx.conf:ro"]
-    depends_on: [frontend, profile-service, career-service, cv-service, assessment-service, roadmap-service, jobs-service]
+    depends_on: [frontend, profile-service, career-service, cv-service, assessment-service, roadmap-service, dashboard-service, jobs-service]
     networks: [web, backend]
   frontend:
     build:
@@ -195,6 +195,23 @@ services:
       mongodb-planning-init:
         condition: service_completed_successfully
     networks: [backend, database]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=0700,uid=10001,gid=10001"]
+    mem_limit: 512m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  dashboard-service:
+    build:
+      context: ../..
+      dockerfile: services/dashboard-service/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      PROFILE_SERVICE_URL: http://profile-service:8000
+      ROADMAP_SERVICE_URL: http://roadmap-service:8000
+      ASSESSMENT_SERVICE_URL: http://assessment-service:8000
+    depends_on: [profile-service, roadmap-service, assessment-service]
+    networks: [backend]
     read_only: true
     tmpfs: ["/tmp:size=32m,mode=0700,uid=10001,gid=10001"]
     mem_limit: 512m

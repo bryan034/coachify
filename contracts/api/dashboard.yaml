@@ -1,9 +1,1135 @@
-# Contract shell only: no endpoint or request/response schema is implemented.
-openapi: 3.1.0
-info:
-  title: elo Progress dashboard API
-  version: 0.0.0
-  description: Structure-only contract shell. Public prefix /api/v1/dashboard.
-servers:
-  - url: /api/v1
-paths: {}
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "elo Progress dashboard API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard": {
+      "get": {
+        "summary": "Dashboard",
+        "operationId": "dashboard_api_v1_dashboard_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "const": "whole",
+              "type": "string",
+              "default": "whole",
+              "title": "Period"
+            }
+          },
+          {
+            "name": "focus_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Focus Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Counts": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "completed": {
+            "type": "integer",
+            "title": "Completed"
+          },
+          "in_progress": {
+            "type": "integer",
+            "title": "In Progress"
+          },
+          "not_started": {
+            "type": "integer",
+            "title": "Not Started"
+          },
+          "completion_review": {
+            "type": "integer",
+            "title": "Completion Review"
+          },
+          "completion_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Ratio"
+          },
+          "remaining_estimated_minutes": {
+            "type": "integer",
+            "title": "Remaining Estimated Minutes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "completed",
+          "in_progress",
+          "not_started",
+          "completion_review",
+          "completion_ratio",
+          "remaining_estimated_minutes"
+        ],
+        "title": "Counts"
+      },
+      "Dashboard": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "empty",
+              "no_plan",
+              "unavailable",
+              "conflict"
+            ],
+            "title": "State"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "roadmap": {
+            "$ref": "#/components/schemas/SourceState"
+          },
+          "assessment": {
+            "$ref": "#/components/schemas/SourceState"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/Milestone"
+            },
+            "type": "array",
+            "title": "Milestones"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/Requirements"
+          },
+          "pace": {
+            "$ref": "#/components/schemas/Pace"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "period",
+          "roadmap",
+          "assessment",
+          "progress",
+          "milestones",
+          "requirements",
+          "pace"
+        ],
+        "title": "Dashboard"
+      },
+      "ErrorView": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorView"
+      },
+      "Milestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "outcome": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Outcome"
+          },
+          "progress": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Progress"
+          },
+          "blocked_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocked Task Ids"
+          },
+          "blocked_reasons": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Blocked Reasons"
+          },
+          "review_reasons": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Review Reasons"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "outcome",
+          "progress",
+          "blocked_task_ids",
+          "blocked_reasons",
+          "review_reasons"
+        ],
+        "title": "Milestone"
+      },
+      "Pace": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "empty"
+            ],
+            "title": "State"
+          },
+          "baseline_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Id"
+          },
+          "baseline_created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Created At"
+          },
+          "baseline_updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Updated At"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PaceItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "unscheduled_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unscheduled Task Ids"
+          },
+          "added_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Added Task Ids"
+          },
+          "historical_added_scope_unknown": {
+            "type": "boolean",
+            "title": "Historical Added Scope Unknown",
+            "default": false
+          },
+          "planned_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Minutes"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "as_of",
+          "note"
+        ],
+        "title": "Pace"
+      },
+      "PaceItem": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "planned_date": {
+            "type": "string",
+            "title": "Planned Date"
+          },
+          "planned_dates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Planned Dates"
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "upcoming",
+              "overdue",
+              "completed_early",
+              "completed_on_time",
+              "completed_late",
+              "removed",
+              "changed",
+              "non_comparable"
+            ],
+            "title": "Classification"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_id",
+          "planned_date",
+          "planned_dates",
+          "classification"
+        ],
+        "title": "PaceItem"
+      },
+      "Period": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "whole"
+            ],
+            "title": "Kind"
+          },
+          "focus_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Date"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Zone"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "focus_date",
+          "start_date",
+          "end_date",
+          "time_zone"
+        ],
+        "title": "Period"
+      },
+      "Requirement": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "match_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Status"
+          },
+          "components": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Components"
+          },
+          "linked_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Linked Task Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ref",
+          "name",
+          "kind",
+          "match_status",
+          "components",
+          "linked_task_ids"
+        ],
+        "title": "Requirement"
+      },
+      "Requirements": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "current",
+              "stale",
+              "missing",
+              "unavailable",
+              "not_ready",
+              "conflict",
+              "mismatch"
+            ],
+            "title": "State"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Requirement"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "groups": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "unlinked_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unlinked Task Ids"
+          },
+          "stale_link_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Stale Link Task Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "items",
+          "groups",
+          "unlinked_task_ids",
+          "stale_link_task_ids"
+        ],
+        "title": "Requirements"
+      },
+      "SourceState": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "current",
+              "stale",
+              "missing",
+              "unavailable",
+              "not_ready",
+              "conflict",
+              "mismatch"
+            ],
+            "title": "State"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "input_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Hash"
+          },
+          "current_input_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Input Hash"
+          },
+          "input_versions": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Versions"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "workspace_updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Updated At"
+          },
+          "roadmap_match": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "matched",
+                  "different",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Match"
+          },
+          "analysis_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Status"
+          },
+          "research_coverage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Coverage"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "SourceState"
+      },
+      "TaskProgress": {
+        "properties": {
+          "overall": {
+            "$ref": "#/components/schemas/Counts"
+          },
+          "selected": {
+            "$ref": "#/components/schemas/Counts"
+          },
+          "selected_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Selected Task Ids"
+          },
+          "planned_minutes": {
+            "type": "integer",
+            "title": "Planned Minutes"
+          },
+          "unscheduled_minutes": {
+            "type": "integer",
+            "title": "Unscheduled Minutes"
+          },
+          "remaining_unscheduled_minutes": {
+            "type": "integer",
+            "title": "Remaining Unscheduled Minutes"
+          },
+          "unscheduled_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unscheduled Task Ids"
+          },
+          "removed_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Removed Task Ids"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskSummary"
+            },
+            "type": "array",
+            "title": "Tasks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "overall",
+          "selected",
+          "selected_task_ids",
+          "planned_minutes",
+          "unscheduled_minutes",
+          "remaining_unscheduled_minutes",
+          "unscheduled_task_ids",
+          "removed_task_ids",
+          "tasks"
+        ],
+        "title": "TaskProgress"
+      },
+      "TaskReadiness": {
+        "properties": {
+          "actionable": {
+            "type": "boolean",
+            "title": "Actionable"
+          },
+          "reasons": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "actionable",
+          "reasons"
+        ],
+        "title": "TaskReadiness"
+      },
+      "TaskSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress",
+              "completed"
+            ],
+            "title": "Status"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "title": "Estimated Minutes"
+          },
+          "schedule": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Schedule"
+          },
+          "unscheduled_minutes": {
+            "type": "integer",
+            "title": "Unscheduled Minutes"
+          },
+          "definition_review_required": {
+            "type": "boolean",
+            "title": "Definition Review Required"
+          },
+          "readiness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskReadiness"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "estimated_minutes",
+          "schedule",
+          "unscheduled_minutes",
+          "definition_review_required",
+          "readiness"
+        ],
+        "title": "TaskSummary"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

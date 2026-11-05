@@ -353,6 +353,119 @@
         ]
       }
     },
+    "/api/v1/roadmaps/dashboard-source": {
+      "get": {
+        "summary": "Dashboard Source",
+        "operationId": "dashboard_source_api_v1_roadmaps_dashboard_source_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSource"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/roadmaps/messages": {
       "post": {
         "summary": "Message",
@@ -2558,6 +2671,50 @@
           "status"
         ],
         "title": "ChangeTaskStatus"
+      },
+      "DashboardSource": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlannedRoadmap"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_readiness": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TaskReadiness"
+            },
+            "type": "object",
+            "title": "Task Readiness"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "active",
+          "active_review",
+          "task_readiness"
+        ],
+        "title": "DashboardSource"
       },
       "DayBudget": {
         "properties": {

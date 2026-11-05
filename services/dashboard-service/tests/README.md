@@ -1,3 +1,3 @@
-# Progress dashboard tests
+# Dashboard tests
 
-Reserved for future service-level tests. No tests or test application have been implemented.
+Run with the service and shared package dependencies installed: `python -m pytest` from `services/dashboard-service`. Tests use synthetic source adapters and do not call providers.

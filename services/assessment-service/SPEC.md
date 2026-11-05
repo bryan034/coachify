@@ -24,6 +24,8 @@ Career exports `/api/v1/career/assessment-input`, containing its exact current g
 
 Capture CV/version/extraction/effective/selection revisions, declarations revision, Profile version, goal/version/selection, research/version/coverage and registry version. Recheck before publication and on current reads. A Singapore comparison date is additionally pinned for conditions or ongoing evidence, so time-sensitive results become stale on a later date. This is API-based revalidation, not a cross-service transaction. History stays immutable; changed sources mark the current comparison and consuming roadmap stale.
 
+`GET /dashboard-source` reads the account's saved result and the current input vector without launching or resuming pending model work. It reports current, stale, missing, not-ready, unavailable or conflicting input states and retains the saved result when input sources cannot be checked. A changed Assessment workspace during capture returns a conflict rather than combining versions. The version and source vector support bounded consumer rechecks; they do not constitute a cross-service atomic snapshot. Its workspace update time and result creation time come from the saved records, not the read time.
+
 All producers expose additive `canonical_skill_id` plus `skill_registry_version` from `packages/elo-shared`. Original `skill_id` keys remain intact for saved clarification/attachment compatibility. The shared registry resolves explicit unambiguous aliases independently of superficial category labels. Unknown identities stay null. Contextual LLM matching is recorded as semantic relevance with a reason; it cannot publish new registry identities or change source records.
 
 ## Comparison

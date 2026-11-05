@@ -1,15 +1,11 @@
 # Progress dashboard service
 
-Brings together progress from the other services so users can see how they are doing.
+Provides an authenticated, stateless dashboard read using passive Roadmap and Assessment APIs. It does not own a database or launch model work.
 
 ## API by Jira story
 
-**No API endpoints are implemented yet.** The `/api/v1/dashboard` prefix is reserved.
-
-| Jira stories | Planned purpose |
+| Story | Available endpoint under `/api/v1/dashboard` |
 |---|---|
-| D01–D06 | Show progress and remaining work across daily, weekly, monthly and whole-roadmap goals. |
+| D01 / SCRUM-63 | `GET` checks the owner's saved sources and reports missing, unavailable or changed data. Detailed progress projections are introduced in later stories. |
 
-The dashboard will read other services through their APIs; it will not own a separate database.
-
-See the [application API overview](../../docs/api/README.md) and [service boundaries](../../docs/architecture/service-boundaries.md).
+See the [API contract](../../contracts/api/dashboard.yaml) and [tests](tests/README.md). Dashboard frontend integration is not implemented.

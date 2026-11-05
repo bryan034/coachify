@@ -22,3 +22,5 @@ Profile, CV, Assessment, Roadmap and Jobs timeouts retain their existing limits.
 reload the gateway after changing its mounted `nginx.conf`.
 
 Jobs requests have a 60-second upstream timeout for bounded live employer-board aggregation. No scheduled catalogue worker is required.
+
+The active gateway also forwards `/api/v1/dashboard` to the stateless dashboard service on the private backend network, with a 60-second upstream timeout. The dashboard validates the owner session and reads Roadmap and Assessment through their APIs.

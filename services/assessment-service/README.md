@@ -8,6 +8,7 @@ Compares the owner's effective CV/declarations and Career goal with relevant int
 |---|---|
 | G01 / SCRUM-169–171 | `GET /context` checks selected extracted inputs without model calls. `POST` at the exact prefix (no trailing slash) accepts an idempotent analysis operation. `GET /operation` restores/retries interrupted work on a subsequent authenticated read. |
 | G01–G04, G06–G07 | `GET /current` returns the complete saved comparison, progress and freshness; `GET /{id}` reads an owner-scoped immutable historical result. |
+| D01–D06 / SCRUM-63–68 | `GET /dashboard-source` passively reads the saved comparison and source freshness without resuming a pending operation. |
 
 The UI lives beside the adviser on **Roadmap**. `job_skill_gaps` and `interview_prep_gaps` contain supported/partial/uncertain outcomes as well as explicit shortfalls. Non-learning conditions and priorities remain separate. This is not a readiness guarantee.
 
