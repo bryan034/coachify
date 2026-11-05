@@ -98,6 +98,16 @@ def register_task_routes(app,context,mutate):
             project_assignments(plan);return row
         return await mutate(body,account,apply,operation='tasks.remove')
 
+    @app.post(prefix+'/status',response_model=Workspace)
+    async def status(body:ChangeTaskStatus,request:Request,account=Depends(authenticated)):
+        def apply(row,source):
+            plan=active(row);task=find_task(copy.deepcopy(plan),body.task_id)
+            note=(body.evidence_note or '').strip() or None
+            if task['status']==body.status and (body.status!='completed' or task.get('evidence_note')==note) and not task.get('definition_review_required'):return row
+            task=find_task(plan,body.task_id)
+            change_status(task,body.status,body.evidence_note);project_assignments(plan);return row
+        return await mutate(body,account,apply,operation='tasks.status')
+
     @app.post(prefix+'/reconcile',response_model=Workspace)
     async def reconcile(body:ReconcileTasks,request:Request,account=Depends(authenticated)):
         def apply(row,source):

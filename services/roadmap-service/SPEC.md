@@ -101,6 +101,8 @@ Date-filtered reads retain unscheduled work and expose scheduling warnings. Sour
 
 Prerequisites and milestone links can be edited; readiness requires completed prerequisites, not merely planned dates.
 
+Progress history records status transitions; task completion does not verify capability.
+
 ## Persistence and recovery
 
 `workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.
