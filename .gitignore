@@ -34,6 +34,7 @@ htmlcov/
 runtime/
 uploads/
 mongo-data/
+*.tgz
 logs/
 *.log
 work/
