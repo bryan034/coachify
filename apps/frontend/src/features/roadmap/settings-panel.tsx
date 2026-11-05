@@ -49,10 +49,15 @@ function DateToken({ name, value, shown, warn, required, onChange }: { name: str
  </label>;
 }
 
+/** Sizes an input to its text. Digits differ in width, so a width from the digit count leaves gaps. */
+function FittedInput({ value, ...input }: React.InputHTMLAttributes<HTMLInputElement> & { value: number | '' }) {
+ return <span className="token-fit"><span className="token-ghost" aria-hidden="true">{value === '' ? '0' : value}</span><input type="number" placeholder="0" value={value} {...input} /></span>;
+}
+
 /** A number written into the sentence, sized to what it holds. */
 function NumberToken({ name, value, suffix, attached, onChange, ...limits }: { name: string; value: number | ''; suffix: string; attached?: boolean; onChange: (value: string) => void; min: number; max: number; step: number | 'any' }) {
  return <label className={`token${value === '' ? ' empty' : ''}`}>
-  <input aria-label={name} type="number" placeholder="0" value={value} style={{ width: `${Math.max(String(value).length, 1) + .1}ch` }} onChange={event => onChange(event.target.value)} {...limits} />
+  <FittedInput aria-label={name} value={value} onChange={event => onChange(event.target.value)} {...limits} />
   <span className={attached ? undefined : 'token-unit'}>{suffix}</span>
  </label>;
 }
@@ -151,7 +156,7 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
     <span className={`token${duration || runway.calendar ? '' : ' empty'}${!duration && runway.calendar ? ' calculated' : ''}`} role="group" aria-label="Duration">
      {!duration && runway.calendar && <span className="token-shown" aria-hidden="true">{runway.calendar.label}</span>}
      <span className="token-edit">
-      <input aria-label="Duration length" type="number" min={1} max={52} placeholder="0" value={duration?.value ?? ''} style={{ width: `${Math.max(String(duration?.value ?? '').length, 1) + .1}ch` }} onChange={e => { const value = Math.round(Number(e.target.value)); update(value >= 1 ? { duration: { value, unit: duration?.unit || 'weeks' }, target_date: null } : { duration: null }); }} />
+      <FittedInput aria-label="Duration length" min={1} max={52} value={duration?.value ?? ''} onChange={e => { const value = Math.round(Number(e.target.value)); update(value >= 1 ? { duration: { value, unit: duration?.unit || 'weeks' }, target_date: null } : { duration: null }); }} />
       <select aria-label="Duration unit" value={duration?.unit || 'weeks'} onChange={e => update({ duration: { value: duration?.value || 1, unit: e.target.value as Duration['unit'] }, target_date: null })}><option value="weeks">weeks</option><option value="months">months</option></select>
      </span>
     </span>.

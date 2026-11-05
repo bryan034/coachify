@@ -134,6 +134,7 @@ function Planner({ token }: { token: string }) {
  const starting = <AssessmentView assessment={plan?.assessment || assessment} />;
  const legacy = earlier || earlierDraft;
  return <section className="roadmap-adviser">
+  <div className={`roadmap-workspace${helperOpen ? ' helper-open' : ''}`}><div className="roadmap-main">
   <header className="roadmap-heading"><div><h1>Roadmap</h1><p>Make room for the career you want.</p></div>
    <div className="roadmap-heading-side">
     <div className="roadmap-tabs" role="tablist" aria-label={showRoadmap ? 'Roadmap views' : 'Planning detail'}>
@@ -151,7 +152,6 @@ function Planner({ token }: { token: string }) {
   {!context.ready && context.availability !== 'unavailable' && <div className="roadmap-prerequisites"><h2>Bring your starting point and direction</h2><p>Your roadmap needs your extracted CV and Career goal to personalise the plan.</p>{context.issues.map(issue => <div key={issue.source}><p>{issue.message}</p><Link className="btn ghost" href={issue.href}>Open {issue.source === 'cv' ? 'CV' : 'Career Goal'}</Link></div>)}</div>}
   <GenerationProgress stage={running ? workspace.operation?.stage : undefined} />
   {failedGeneration && <div className="roadmap-notice" role="status"><p>{workspace.operation?.error?.detail || 'Your plan could not be prepared.'}</p>{!!workspace.operation?.retry_after && <p>Provider capacity: retry in {workspace.operation.retry_after} seconds.</p>}<button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={() => retryGenerate(failedGeneration, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
-  <div className={`roadmap-workspace${helperOpen ? ' helper-open' : ''}`}><div className="roadmap-main">
   <div id="plan-panel" role="tabpanel" aria-labelledby="plan-tab" hidden={tab === 'assessment'}>
    {showRoadmap ? <RoadmapReview plan={plan!} review={review!} preview={preview} planner={planner} blockers={planner.candidate_blockers} frozen={frozen}
     accept={() => void change('/planner/accept', {})} discard={() => void change('/planner/discard', {})} backToSettings={() => setConfiguring(true)} revise={() => void generate()}
@@ -162,8 +162,8 @@ function Planner({ token }: { token: string }) {
    : <SettingsPanel workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} returnToReview={plan ? () => setConfiguring(false) : null} />}
   </div>
   <div id="assessment-panel" role="tabpanel" aria-labelledby="assessment-tab" hidden={tab !== 'assessment'}>{starting}</div>
-  </div>{helper}</div>
   {!!legacy && <details className="plan-explanation earlier-plan"><summary>Earlier plan without session times</summary><p className="small">This plan was made before timed roadmaps. It stays here for reference and isn’t part of your current roadmap.</p><ul>{legacy.tasks.filter(task => !task.removed).map(task => <li key={task.id}>{task.title} · {task.status.replaceAll('_', ' ')}</li>)}</ul></details>}
+  </div>{helper}</div>
  </section>;
 }
 
