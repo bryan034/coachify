@@ -15,6 +15,7 @@ actor "User browser" as Browser
 component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nAccount-owned manual skills intake + capability declarations" as Profile
 cloud "Configured CV model API\nOpenAI-compatible extraction, routing and interpretation" as CVLLM
 cloud "Career model router\nLocal OpenAI-compatible / DeepSeek cloud / Gemini\nShared adapter: extraction, chat, research coordination" as LLM
+cloud "Public employer job boards\nGreenhouse / Lever / Ashby" as JobBoards
 cloud "Public search API\nBrave LLM Context (testing) / DeepSeek Search (production)" as Sources
 
 node "Docker Compose — focused design" {
@@ -34,6 +35,9 @@ node "Docker Compose — focused design" {
     node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
       artifact "Chat-assisted settings and calculated runway\nValidated LLM plans with reviewed previews\nTimed sessions and progress history\n/api/v1/roadmaps" as RoadmapAPI
     }
+    node "Job search and application tracking\nservices/jobs-service" as Jobs <<Docker container>> {
+      artifact "Singapore listing search and filters\nSelf-reported application tracking\n/api/v1/jobs" as JobsAPI
+    }
   }
 
   node "MongoDB — local development" as Mongo <<Docker container>> {
@@ -41,6 +45,7 @@ node "Docker Compose — focused design" {
     database "Career-owned database\ncareer_goals + career_state (operational)\ninterview_research" as CareerDB
     database "Assessment-owned database\nskill_gap_analyses\nworkspaces with batch checkpoints" as AssessmentDB
     database "Roadmap-owned database\nroadmaps immutable revisions\nworkspaces with chat and active/draft" as RoadmapDB
+    database "Jobs-owned database\njob_applications only" as JobsDB
   }
   artifact "Service-private temporary CV storage\nQuota admission, shared POSIX locks and recoverable cleanup" as Uploads <<Private storage>>
 }
@@ -52,6 +57,7 @@ Gateway --> CV : Saved CV and conversation routes
 Gateway --> Career : Career routes
 Gateway --> Assessment : Assessment owner routes
 Gateway --> Roadmap : Adviser and tasks
+Gateway --> Jobs : Job search and tracking
 
 ' API dependencies point from caller to the service it calls.
 CV --> Profile : Validate session / read declarations / confirmed additions
@@ -64,11 +70,14 @@ Assessment --> CV : Selected effective evidence and versions
 Assessment --> Career : Full goal and linked research snapshot
 Assessment --> Profile : Verify session and current background
 Roadmap --> Assessment : Current comparison, evidence preview and freshness
+Jobs --> Profile : Verify session
 
 CV --> CVDB : Own records only
 Career --> CareerDB : Own records only
 Assessment --> AssessmentDB : Own records only
 Roadmap --> RoadmapDB : Own records only
+Jobs --> JobsDB : Private application snapshots only
+Jobs --> JobBoards : Fetch public boards on each search
 CV --> Uploads : Temporary original access
 CV --> CVLLM : Schema-constrained extraction/repair, bounded routing and interpretation
 Career --> LLM : Goal interpretation / scoped chat / cited research synthesis
@@ -105,7 +114,7 @@ end note
 
 legend bottom
   Focused design direction, not a deployment or implementation claim.
-  Core scope: CV, Career, separate Assessment and Roadmap adviser.
+  Core scope: CV, Career, separate Assessment, Roadmap adviser and Jobs.
   Existing Profile/auth is shown only as an external dependency.
   Dashboard, review/scheduling and future services are intentionally omitted;
   extend this diagram when their scope is agreed.

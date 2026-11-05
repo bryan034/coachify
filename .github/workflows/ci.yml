@@ -67,7 +67,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [profile, cv, career, assessment, roadmap, dashboard, review]
+        service: [profile, cv, career, assessment, roadmap, jobs, dashboard, review]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}-service
@@ -128,7 +128,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [career, cv]
+        service: [career, cv, jobs]
     services:
       mongodb:
         image: mongo:8.2
@@ -177,6 +177,7 @@ jobs:
       CV_DB_PASSWORD: ci-only-cv-password
       ASSESSMENT_DB_PASSWORD: ci-only-assessment-password
       ROADMAP_DB_PASSWORD: ci-only-roadmap-password
+      JOBS_DB_PASSWORD: ci-only-jobs-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

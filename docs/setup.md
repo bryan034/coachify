@@ -1,7 +1,7 @@
 # Run elo locally
 
 Use Docker Desktop, Node.js 24 and Python 3.12. The active local stack contains
-NGINX, the Next.js frontend, Profile, saved CV ingestion/review, Career goal/research, Assessment, Roadmap and MongoDB. Dashboard and Review remain placeholders. See the [API overview](api/README.md) and individual service
+NGINX, the Next.js frontend, Profile, saved CV ingestion/review, Career goal/research, Assessment, Roadmap, Jobs and MongoDB. Dashboard and Review remain placeholders. See the [API overview](api/README.md) and individual service
 READMEs for feature details.
 
 ## Renamed installations
@@ -583,6 +583,18 @@ their values. Legacy names are fallback aliases only when new names are absent; 
 explicitly blank new key takes precedence. The key rename does not change providers
 or the existing `CAREER_LLM_MODEL` setting. CV uses its separate `CV_LLM_*`
 settings from the same infrastructure configuration.
+
+## Jobs service
+
+Add one new required value to your private `infrastructure/docker/.env` without changing existing passwords. Compose refuses to start without it, including for the other services:
+
+```sh
+JOBS_DB_PASSWORD=   # generate with: openssl rand -hex 24
+```
+
+Then rebuild with your usual Compose command. The `mongodb-jobs-init` job adds the Jobs database user to existing volumes without changing other data. `jobs-service` fetches listings when users search, using no provider API key. No catalogue seeding or sync worker is required. Recreate the stack with `--remove-orphans` to stop a previously deployed `jobs-sync` container; existing saved applications are preserved.
+
+To change employers, edit [`sources.json`](../services/jobs-service/app/sources.json) and rebuild `jobs-service`.
 
 ## Assessment and Roadmap adviser
 

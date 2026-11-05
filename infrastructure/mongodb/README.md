@@ -4,7 +4,7 @@ The active stack uses separate `elo_profile`, `elo_ingestion` and `elo_career` d
 
 ## Ownership
 
-Profile's existing `accounts` collection is the logical `users` authority, retaining UUID account IDs and manual declarations. CV owns saved `cvs`, processing/history, explicit `cv_selections` and private bounded `cv_conversations`. Career owns canonical `career_goals`, public `interview_research`, future `skill_gap_analyses`, and operational `career_state`, research jobs and checkpoints. Planned Roadmap/Review services own their future records; Dashboard remains stateless.
+Profile's existing `accounts` collection is the logical `users` authority, retaining UUID account IDs and manual declarations. CV owns saved `cvs`, processing/history, explicit `cv_selections` and private bounded `cv_conversations`. Career owns canonical `career_goals`, public `interview_research`, future `skill_gap_analyses`, and operational `career_state`, research jobs and checkpoints. Jobs owns only private `job_applications`; public listings are fetched live and legacy `job_postings`/`job_sources` collections are ignored in a separate `elo_jobs` database, created by the idempotent `mongodb-jobs-init` job. Planned Roadmap/Review services own their future records; Dashboard remains stateless.
 
 Services access foreign records through authenticated APIs. CV IDs remain UUID strings; Career's internal CV projection also accepts existing ObjectId references without remapping. Career-owned goal/research identities remain ObjectIds. There is no account or CV-ID migration.
 

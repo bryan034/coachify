@@ -40,9 +40,9 @@ without executing its scripts in the application. The live app uses typed React
 components, Next.js page navigation and existing profile endpoints.
 
 The original Resume & Tracker reference is historical. The live navigation now
-separates Skills Profile (`/cv`) from Search Jobs (`/jobs`). Job search opens explicit
-keyword/location searches on external boards; it does not present sample applications
-or invented integrated job results.
+separates Skills Profile (`/cv`) from Search Jobs (`/jobs`). Job search shows real listings
+from the Jobs service and sends users to employers' sites to apply; it does not present
+sample applications or invented results.
 
 The visual reference defines the sidebar, typography, colour tokens, cards, tables
 and responsive layouts. Sample users and activity are not live application data:

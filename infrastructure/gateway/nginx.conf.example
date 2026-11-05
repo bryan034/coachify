@@ -4,6 +4,7 @@
 # /api/v1/cv/                     -> cv-service:8000
 # /api/v1/career/                 -> career-service:8000
 # /api/v1/roadmaps and descendants -> roadmap-service:8000
+# /api/v1/jobs and descendants    -> jobs-service:8000
 # /api/v1/dashboard               -> dashboard-service:8000
 # /api/v1/reviews and descendants -> review-service:8000
 # /api/v1/review-schedules/       -> review-service:8000

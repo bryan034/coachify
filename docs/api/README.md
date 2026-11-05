@@ -10,6 +10,7 @@ service below; its README lists individual endpoints grouped by Jira story.
 | `/api/v1/career` | Career exploration, temporary JD/CV previews, saved role/skill/condition review, one autosaved goal/chat with explicit version-bound CV confirmation, LangGraph JD interpretation, advisory skills and Brave interview evidence; read-only versioned Assessment handoff | [career-service](../../services/career-service/README.md) | Available; external AI/research requires configured provider access |
 | `/api/v1/assessments` | Private version-pinned CV/goal/interview comparison and durable operations | [assessment-service](../../services/assessment-service/README.md) | Available; configured database and model required |
 | `/api/v1/roadmaps` | Study settings, chat helper and runway, validated LLM roadmaps with reviewed previews, timed sessions and progress | [roadmap-service](../../services/roadmap-service/README.md) | Available; configured database and model required |
+| `/api/v1/jobs` | Singapore job and internship search with filters, and private tracking of self-reported applications | [jobs-service](../../services/jobs-service/README.md) | Available; listings fetched live from configured employer boards |
 | `/api/v1/dashboard` | Daily, weekly, monthly and whole-roadmap progress | [dashboard-service](../../services/dashboard-service/README.md) | Planned |
 | `/api/v1/reviews`, `/api/v1/review-schedules` | Manual or scheduled pace reviews and adaptation preferences | [review-service](../../services/review-service/README.md) | Planned |
 

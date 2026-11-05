@@ -3,8 +3,7 @@
 Saved, private CV uploads and effective evidence review for C01–C09. The existing
 `/cv` workspace is named **Skills Profile** in navigation and its page heading.
 It uploads CVs, extracts potential skills and retains the existing evidence/review
-workflow. Search Jobs has its own navigation tab; application tracking is not
-implemented or presented here. Target confirmation and gap analysis remain separate.
+workflow. Search Jobs has its own navigation tab, which also holds application tracking. Target confirmation and gap analysis remain separate.
 
 `resume-preview.tsx` coordinates the policy, saved CVs, explicit selection and
 recoverable upload/processing states. The initial experience is the skills summary; upload or explicit review opens the text
