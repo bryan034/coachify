@@ -79,7 +79,7 @@ Existing `roadmap-v2` assignments are converted in memory for reads, with no mig
 
 Split-session compatibility keys are generated without colliding with primary assignment keys. Task and session IDs remain stable; secondary assignment keys may change on projection, including for old snapshots. No stored snapshot is migrated by a read.
 
-Revisions retain student-created, edited, started, completed and removed tasks and related dependency records. Model-generated keys do not establish semantic identity. A preview flags new work that might repeat removed, edited, started or completed work, including reused protected keys; `/planner/tasks/reconcile` records an explicit keep/discard decision before acceptance. A changed active plan invalidates an earlier preview. This conservative review can include work that is actually unrelated.
+Revisions retain student-created, edited, started, completed and removed tasks and related dependency records. Model-generated keys do not establish semantic identity. A preview flags new work that might repeat student-created, removed, edited, started or completed work, including reused protected keys; `/planner/tasks/reconcile` records an explicit keep/discard decision before acceptance. A changed active plan invalidates an earlier preview. This conservative review can include work that is actually unrelated.
 
 ## Persistence and recovery
 

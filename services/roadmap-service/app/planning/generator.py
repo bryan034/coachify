@@ -156,8 +156,8 @@ def reconcile_tasks(plan,active):
     """Carry protected records into a preview and flag possible duplicate work.
 
     Model-generated keys cannot establish that a newly worded task is distinct
-    from a removed, edited, in-progress or completed task. Require a decision
-    for newly generated work when such protected records exist.
+    from removed, user-created, edited, in-progress or completed work. Require
+    a decision for newly generated work when such protected records exist.
     """
     from app.planning.tasks import ensure_tasks, project_assignments
     generated=ensure_tasks(plan)
@@ -186,7 +186,7 @@ def reconcile_tasks(plan,active):
     plan['editable_tasks']=[*retained,*fresh]
     removed=[t['id'] for t in retained if t.get('removed')]
     protected=[t['id'] for t in retained if not t.get('removed') and
-        (t.get('overrides') or t.get('status') in ('in_progress','completed'))]
+        (t.get('origin')=='user' or t.get('overrides') or t.get('status') in ('in_progress','completed'))]
     plan['revision_review']=[]
     for task in fresh:
         related=list(dict.fromkeys([*protected,*([ambiguous[task['id']]] if task['id'] in ambiguous else [])]))
