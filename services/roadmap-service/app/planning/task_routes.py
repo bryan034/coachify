@@ -59,6 +59,16 @@ def register_task_routes(app,context,mutate):
             return row
         return await mutate(body,account,apply,operation='tasks.edit')
 
+    @app.post(prefix+'/remove',response_model=Workspace)
+    async def remove(body:RemoveTask,request:Request,account=Depends(authenticated)):
+        def apply(row,source):
+            plan=active(row);task=find_task(plan,body.task_id);now=stamp()
+            task['removed']=True;task['removal']={'at':now,'reason':(body.reason or '').strip() or None}
+            task.setdefault('history',[]).append({'at':now,'event':'removed','reason':task['removal']['reason']})
+            mark_membership_review(plan,[task.get('milestone_key')])
+            project_assignments(plan);return row
+        return await mutate(body,account,apply,operation='tasks.remove')
+
     @app.post(prefix+'/reconcile',response_model=Workspace)
     async def reconcile(body:ReconcileTasks,request:Request,account=Depends(authenticated)):
         def apply(row,source):

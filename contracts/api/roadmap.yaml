@@ -720,6 +720,129 @@
         ]
       }
     },
+    "/api/v1/roadmaps/planner/tasks/remove": {
+      "post": {
+        "summary": "Remove",
+        "operationId": "remove_api_v1_roadmaps_planner_tasks_remove_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveTask"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/roadmaps/planner/tasks/reconcile": {
       "post": {
         "summary": "Reconcile",
@@ -3754,6 +3877,46 @@
           "weekly_hours"
         ],
         "title": "ReducedPeriod"
+      },
+      "RemoveTask": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "task_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Task Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "task_id"
+        ],
+        "title": "RemoveTask"
       },
       "RevisionReview": {
         "properties": {

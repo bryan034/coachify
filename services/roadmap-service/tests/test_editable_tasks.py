@@ -52,6 +52,23 @@ def test_validation_rejects_invalid_definitions_and_stale_or_reused_keys():
         assert client.post(PREFIX + '/tasks/add', headers=H, json=changed).status_code == 409
         assert request(client, 'add', state, task=definition(title='Stale save')).status_code == 409
 
+def test_revision_retains_edits_personal_tasks_and_removal_intent():
+    revised = draft(assignments=[assignment('a1')])
+    with client_for(Scripted([draft(), revised])) as client:
+        state = accepted(client)
+        generated = next(t for t in state['planner']['active']['editable_tasks'] if t['schedule'])
+        state = save(client, 'edit', state, task_id=generated['id'], changes={'instructions': 'My own instructions.'})
+        state = save(client, 'add', state, task=definition(title='My own task'))
+        state = save(client, 'remove', state, task_id=generated['id'], reason='Not needed')
+        state = generate(client, state)
+        assert state['operation']['status'] == 'succeeded', state['operation']
+        candidate = state['planner']['candidate']
+        removed = next(t for t in candidate['editable_tasks'] if t['id'] == generated['id'])
+        assert removed['removed'] and removed['removal']['reason'] == 'Not needed'
+        assert removed['instructions'] == 'My own instructions.'
+        assert any(t['title'] == 'My own task' and not t['removed'] for t in candidate['editable_tasks'])
+        assert not any(t['id'] != generated['id'] and t.get('generated_key') == 'a1' and not t['removed'] for t in candidate['editable_tasks'])
+
 def test_edit_invalidates_preexisting_revision_preview():
     with client_for(Scripted([draft(), draft()])) as client:
         state = accepted(client)

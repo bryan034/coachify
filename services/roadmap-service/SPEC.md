@@ -93,6 +93,8 @@ Effort estimates can be edited and must remain positive whole minutes.
 
 Schedules can be edited, with warnings for valid conflicts or calendar limits instead of silent rescheduling. Split-session compatibility keys are collision-safe while keeping session IDs stable.
 
+Removed work and dependency records survive revisions.
+
 ## Persistence and recovery
 
 `workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.
