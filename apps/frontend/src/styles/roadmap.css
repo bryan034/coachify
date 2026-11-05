@@ -208,3 +208,110 @@
  .roadmap-tabs{flex-wrap:wrap;gap:4px 18px}
 }
 @media(prefers-reduced-motion:reduce){.route-map{animation:none}}
+
+/* Accepted roadmap: a weekly task planner, in reading order from header to secondary details */
+.active-roadmap{display:flex;flex-direction:column;gap:32px}
+.active-roadmap h2{font-size:20px;font-weight:500;letter-spacing:-.025em}
+.active-header{background:var(--mint-mist);border-radius:18px;padding:26px 32px}
+.active-title{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;align-items:flex-start}
+.active-title .plan-actions{margin-top:0}
+.active-header h2{font-size:clamp(26px,2.6vw,36px);line-height:1.16;letter-spacing:-.045em;margin-top:10px}
+.active-header .plan-state{display:inline-block;background:white;color:var(--green);padding:4px 10px;border-radius:99px}
+.active-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 24px;margin:20px 0 8px}
+.active-facts dt,.coach-stats dt{font-size:12px;color:var(--slate)}
+.active-facts dd{margin:2px 0 0;font-size:15px;font-weight:600}
+.coach-stats dd{margin:2px 0 0;font-size:14px;font-weight:600}
+.pace-status.behind{color:#9a3412}.pace-status.on_track{color:var(--green)}
+.active-progress{margin-top:16px}
+.active-progress-label{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:6px}
+.progress-track{height:8px;border-radius:4px;background:white;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.progress-track i{display:block;height:100%;background:var(--ink)}
+.active-counts{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-wrap:wrap;gap:4px 18px;font-size:12px;color:var(--slate)}
+.today{border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+.today-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;align-items:baseline;margin-bottom:10px}
+.today .progress-track{background:var(--soft2);box-shadow:none;margin-bottom:6px}
+.task-list{list-style:none;padding:0!important;margin:0}
+.task-item{padding:14px 0;border-top:1px solid var(--line);font-size:13px;min-width:0}
+.today-next>.task-item{border-top:0}
+.task-when{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12px;color:var(--slate);margin-bottom:4px}
+.task-when strong{color:var(--ink);font-weight:600}
+.task-badges{display:inline-flex;flex-wrap:wrap;gap:4px}
+.task-title{font-size:14px;margin:0 0 4px}
+.task-item.completed .task-title,.task-item.skipped .task-title,.task-item.removed .task-title{color:var(--slate)}
+.task-item.needs-action{background:var(--abg);border-radius:10px;padding:14px;margin:8px 0;border-top:0}
+.task-action-needed{font-weight:600;margin:6px 0 0}
+.task-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}
+.task-actions .btn{height:32px;padding:0 12px;font-size:12px}
+.task-hours{margin:0 0 0 4px;font-size:12px}
+.task-feedback{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px}
+.task-feedback .chip.selected{background:var(--ink);color:white;border-color:var(--ink)}
+.task-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px;padding:12px;background:var(--soft);border-radius:10px;font-size:12px}
+.task-form label:not(.settings-check){display:flex;flex-direction:column;gap:4px;min-width:0}
+.task-form input:not([type=checkbox]):not([type=radio]),.task-form select,.task-form textarea,.coach-note textarea{border:1px solid var(--line);border-radius:7px;padding:8px 10px;font:inherit;font-size:13px;background:white;width:100%;min-width:0;min-height:38px}
+.task-form textarea,.coach-note textarea{min-height:64px;resize:vertical}
+.task-form-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;grid-column:1/-1}
+.task-add-title,.task-problem{grid-column:1/-1}
+.task-problem{color:#9a3412;font-size:12px;margin:6px 0 0;font-weight:500}
+.coach-panel{display:flex;flex-direction:column;gap:14px}
+.coach-messages{padding-left:18px;font-size:13px;margin:0}
+.coach-panel .roadmap-notice{margin:0}
+.coach-card{border:1px solid var(--line);border-radius:14px;padding:18px 20px;font-size:13px}
+.coach-card h3{font-size:15px;font-weight:600;margin-bottom:6px}
+.coach-card h4,.proposal-panel h4{font-size:12px;font-weight:600;margin:12px 0 2px}
+.coach-card ul:not(.task-list):not(.coach-moves),.proposal-panel ul{padding-left:18px;font-size:13px;margin:0}
+.coach-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px 18px;margin:10px 0}
+.checkin{background:var(--mint-mist);border:0}
+.checkin fieldset{border:0;padding:0;margin:14px 0 0}
+.checkin legend{font-weight:600;padding:0;margin-bottom:4px}
+.coach-radio{display:inline-flex;gap:6px;align-items:center;margin:4px 16px 4px 0}
+.coach-radio input{accent-color:var(--ink)}
+.coach-note{display:flex;flex-direction:column;gap:4px;margin-top:12px;font-size:12px}
+.coach-hint{background:var(--abg);border-radius:8px;padding:8px 12px;margin:10px 0 0;font-size:13px}
+.pace-late{font-size:15px;font-weight:600;color:#9a3412;margin:6px 0}
+.coach-moves{list-style:none;padding:0;margin:0}
+.coach-moves li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.coach-moves .btn{height:32px;padding:0 12px;font-size:12px;flex-shrink:0}
+.proposal-panel{border:2px solid var(--ink);border-radius:14px;padding:20px 24px;font-size:13px}
+.proposal-panel h3{font-size:17px;font-weight:600;margin:8px 0 6px}
+.proposal-panel .plan-state{color:var(--ink)}
+.proposal-decisions{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px}
+.proposal-decisions legend{font-weight:600;padding:0 4px}
+.proposal-decision p{margin:6px 0 2px}
+.weekly-roadmap h2,.backlog-section h2{margin-bottom:10px}
+.week-list{list-style:none;padding:0;margin:0}
+.week-row{border-top:1px solid var(--line)}
+.week-row:last-child{border-bottom:1px solid var(--line)}
+.week-row summary{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) auto;gap:4px 16px;align-items:center;padding:12px 4px;cursor:pointer;font-size:13px}
+.week-name{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.week-theme{color:var(--slate)}
+.week-hours{font-size:12px;white-space:nowrap}
+.week-row.current summary{font-weight:500}
+.week-row.paused summary{color:var(--slate)}
+.week-body{padding:0 4px 14px;font-size:13px}
+.week-later{padding-left:18px;font-size:12px;color:var(--slate);margin:6px 0}
+.target-boundary{margin:0;padding:8px 10px;border-left:3px solid var(--ink);background:var(--mint-mist);font-size:12px;font-weight:600}
+.backlog-section{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px 40px}
+.backlog-entry>.small{margin-top:10px}
+.backlog-entry>.task-list .task-item{border-top:0;padding-top:4px}
+.backlog-skipped{margin-top:12px;font-size:13px}.backlog-skipped summary{cursor:pointer;font-weight:500}
+.deferred-list{list-style:none;padding:0;margin:0}
+.deferred-list li{padding:12px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-size:13px}
+.deferred-list .btn{height:32px;padding:0 12px;font-size:12px;margin-top:4px}
+.secondary-details>summary{cursor:pointer;font-weight:600;font-size:14px;padding:12px 0;border-top:1px solid var(--line)}
+.secondary-details .review-body{margin-top:12px}
+.milestone-actions{margin-top:6px}.milestone-actions>.btn{height:32px;padding:0 12px;font-size:12px}
+.past-list{list-style:none;padding:0!important;margin:0}
+.past-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.past-list li>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.past-detail{background:var(--cloud);border-radius:12px;padding:14px 18px;margin-top:10px;font-size:13px}
+.outline-list{list-style:none;padding:0;margin:0;font-size:13px}
+.outline-list li{padding:10px 0;border-top:1px solid var(--line)}
+.outline-list li>div{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.outline-list .target-boundary{margin-top:6px}
+@media(max-width:700px){
+ .week-row summary{grid-template-columns:minmax(0,1fr)}
+ .week-hours{white-space:normal}
+ .active-header{padding:22px 20px}.today{padding:18px}.proposal-panel{padding:18px}.coach-card{padding:16px}
+ .coach-moves li{flex-direction:column;align-items:flex-start}
+ .task-actions .btn{min-height:40px}
+}

@@ -6,7 +6,7 @@
 | CV | C01-C09, with C07 composition | Saved CVs, ingestion state, extracted facts/skills and bounded evidence, CV-specific correction/removal overlays, clarification questions/answers, processing operations, explicit saved-CV selection and private resumable CV conversations |
 | Career | J01–J13; G01–G07; SCRUM-282/310 | Canonical career_goals, one career_state workspace and CV confirmation stamp, public interview/opportunity research, workflow checkpoints and read-only assessment input exports; raw JD text stays transient |
 | Assessment | G01–G07 | Private immutable skill_gap_analyses, captured evidence/version vectors, comparison checkpoints and current result |
-| Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Study settings, consumed planning-input snapshots, milestones, timed sessions, progress history, self-reported outcomes and confirmations, proposed/applied revisions |
+| Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Study settings, consumed planning-input snapshots, milestones, weekly outlines, dated and custom tasks, deferred scope, check-ins, per-week overrides, task and move history, self-reported outcomes and confirmations, proposals and archived roadmaps |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
 | Review | A01 orchestration; S01-S06 | Manual/scheduled review state, pace analysis, schedules, approval preferences |
 
@@ -26,7 +26,7 @@
 - Planned Career -> Profile: versioned background/planning inputs; manual additions use the Profile declaration API, while CV-specific corrections use CV.
 - Roadmap -> Assessment: source assessment ID/hash and freshness; immutable evidence remains addressable through the Assessment API.
 - Planned Roadmap -> Review: verify the current automatic-application policy.
-- Planned Dashboard -> Roadmap/Career/Review: current progress and dated pace analysis.
+- Planned Dashboard -> Roadmap/Career/Review: current progress and dated pace analysis. Roadmap exposes `GET /api/v1/roadmaps/summary` for this; no caller exists yet.
 - Planned Review -> Profile/Career/Roadmap: read inputs, request a revision, request authorised application.
 
 Records are read through APIs, never another service's collections. Public endpoints
@@ -229,3 +229,7 @@ CV-conversation-owned, source-fenced and preserves saved answers while moving on
 ## Timed roadmap
 
 Roadmap runs Configure → Generate → Review. Assessment's `GET /context` additionally returns its evidence records, without a model call, so the settings panel can show what will be sent; generation still reuses or runs a full Assessment. Roadmap owns the deterministic runway calculation and plan validation. The LLM owns gaps, sequencing, effort and assignments within those checks. Session completion, self-reported outcomes and experience confirmations stay in Roadmap's `workspaces.planner` and `roadmaps`, and never write to Profile, CV or Assessment. No new service, collection or foreign database access is introduced. See the [Roadmap specification](../../services/roadmap-service/SPEC.md).
+
+## Weekly planner
+
+Roadmap reconciles missed tasks and check-ins on authenticated workspace access, with no scheduler or new service, using deterministic rules and the existing version fence. Rolling detail, check-in proposals and chat revisions use the existing saved-operation and lease pattern. Task, milestone and check-in records stay in Roadmap's `workspaces.planner`; accepted and archived plans are in `roadmaps`. Trusted completed work informs later Roadmap planning but never writes to Profile, CV or Assessment. No new collection or foreign database access is introduced. See the [Roadmap specification](../../services/roadmap-service/SPEC.md#the-weekly-planner).

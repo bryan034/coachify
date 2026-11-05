@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { beforeEach, expect, it, vi } from 'vitest';
 import { RoadmapPlanner } from './roadmap-planner';
 import type { PlannedRoadmap, Workspace } from './types';
-import { blankPlanner, blockedRunway, config, planner, review, roadmap, runway, workspace } from '../../../tests/fixtures/roadmap-workspace';
+import { activeView, blankPlanner, blockedRunway, candidateView, config, planner, review, roadmap, runway, task, workspace } from '../../../tests/fixtures/roadmap-workspace';
 
 const session = vi.hoisted(() => ({ account: { id: 'owner-one' }, token: 'synthetic-token' }));
 const api = vi.hoisted(() => vi.fn());
@@ -18,8 +18,8 @@ function serve(state: Workspace, handlers: Record<string, (body: never) => unkno
  });
 }
 const calls = (path: string) => api.mock.calls.filter(call => call[0] === path);
-const withCandidate = (plan: PlannedRoadmap = roadmap(), overrides = {}) => workspace({ planner: planner({ candidate: plan, candidate_review: review(plan), ...overrides }) });
-const withActive = (plan: PlannedRoadmap = roadmap(), overrides = {}) => workspace({ planner: planner({ active: plan, active_review: review(plan), ...overrides }) });
+const withCandidate = (plan: PlannedRoadmap = roadmap(), overrides = {}) => workspace({ planner: planner({ candidate: plan, candidate_review: review(plan), candidate_view: candidateView(plan), ...overrides }) });
+const withActive = (plan: PlannedRoadmap = roadmap(), overrides = {}) => workspace({ planner: planner({ active: plan, active_review: review(plan), active_view: activeView(plan), ...overrides }) });
 const openHelper = async () => fireEvent.click(await screen.findByRole('button', { name: /(Start|Continue with) chat helper/ }));
 beforeEach(() => { api.mockReset(); });
 
@@ -247,9 +247,9 @@ it('returns to configuration without losing the preview and can go back', async 
 it('draws the route with a numbered stop per milestone, today and reached outcomes', async () => {
  const base = roadmap().milestones[0];
  const plan = roadmap({ milestones: [{ ...base, id: 'm2', key: 'm2', title: 'Second', projected_end: '2030-01-24' }, { ...base, outcome: { demonstrated: true, note: 'Shown.' } }] });
- const state = withActive(plan); state.planner.active_review = { ...review(plan), remaining: runway({ resolved: { today: '2030-01-18', start_date: '2030-01-18', target_date: '2030-01-27', matched_duration: null } }) };
+ const state = withCandidate(plan); state.planner.candidate_review = { ...review(plan), remaining: runway({ resolved: { today: '2030-01-18', start_date: '2030-01-18', target_date: '2030-01-27', matched_duration: null } }) };
  serve(state); const { container } = render(<RoadmapPlanner />);
- await screen.findByText('Your active roadmap');
+ await screen.findByText('Preview: not active until you accept it');
  const route = container.querySelector('.route-map')!;
  expect(route).toHaveAttribute('aria-hidden', 'true');
  expect(within(route as HTMLElement).getByText('Today')).toBeInTheDocument();
@@ -270,19 +270,16 @@ it('accepts a preview and explains when it cannot be accepted', async () => {
  expect(screen.getByRole('button', { name: 'Accept plan' })).toBeDisabled();
 });
 
-it('completes a session with evidence, separately from proficiency', async () => {
- const plan = roadmap(); const done = roadmap({ assignments: [{ ...plan.assignments[0], status: 'completed', completed_at: '2030-01-09T12:00:00+00:00', evidence_note: 'Test passed.' }] });
+it('completes a task with one click, separately from proficiency', async () => {
+ const plan = roadmap(); const done = roadmap({ assignments: [task({ status: 'completed', completed_at: '2030-01-09T12:00:00+00:00' })] });
  serve(withActive(plan), { '/planner/assignments/status': () => withActive(done) }); render(<RoadmapPlanner />);
  await screen.findByText('Your active roadmap');
- fireEvent.click(screen.getByText('Mark session complete'));
- fireEvent.change(screen.getByRole('textbox', { name: 'What did you produce? (optional)' }), { target: { value: 'Test passed.' } });
- fireEvent.click(screen.getByRole('button', { name: 'Complete session' }));
- await screen.findByRole('heading', { name: 'Completed sessions' });
- expect(calls('/planner/assignments/status')[0][2]).toMatchObject({ assignment_id: 'a1', status: 'completed', evidence_note: 'Test passed.' });
- expect(screen.getByText('These record what you did. They don’t change your assessed skills.')).toBeVisible();
- expect(screen.getByText('Your note: Test passed.')).toBeVisible();
- expect(screen.getByText('Outcome not yet demonstrated.', { exact: false })).toBeVisible();
- expect(screen.getByText(/Finishing sessions records progress, not proficiency/)).toBeVisible();
+ fireEvent.click(screen.getAllByRole('button', { name: 'Complete Write one tested Python endpoint.' })[0]);
+ await screen.findAllByText(/How was it\? \(optional\)/);
+ expect(calls('/planner/assignments/status')[0][2]).toMatchObject({ assignment_id: 'a1', status: 'completed' });
+ expect(calls('/planner/assignments/status')[0][2]).not.toHaveProperty('evidence_note');
+ expect(screen.getByText(/doesn’t change your Skills Profile/)).toBeInTheDocument();
+ expect(screen.getByText(/Finishing sessions records progress, not proficiency/)).toBeInTheDocument();
 });
 
 it('records a demonstrated outcome with a note', async () => {
@@ -304,29 +301,30 @@ it('asks experience questions and offers to regenerate once answered', async () 
  await waitFor(() => expect(calls('/planner/generate')).toHaveLength(1));
 });
 
-it('shows what a revision changes, keeps completed work and applies only on accept', async () => {
- const active = roadmap({ id: 'old', assignments: [{ ...roadmap().assignments[0], status: 'completed', completed_at: 'x', evidence_note: 'Done.' }] });
- const revised = roadmap({ id: 'new', base_active_id: 'old', assignments: [active.assignments[0], { ...roadmap().assignments[0], id: 'a2', key: 'a2', date: '2030-01-10', start_time: '18:00', task: 'Add input validation.' }], changes: { completed_preserved: 1, assignments_added: ['Add input validation.'], assignments_moved: [], assignments_removed: [], milestones_added: [], milestones_moved: ['Build a Python API'], milestones_removed: [] } });
- serve(workspace({ planner: planner({ active, active_review: review(active), candidate: revised, candidate_review: review(revised) }) }), { '/planner/discard': () => withActive(active) });
+it('shows what a new roadmap replaces and leaves the current one active until accepted', async () => {
+ const active = roadmap({ id: 'old' });
+ const next = roadmap({ id: 'new', base_active_id: 'old', assignments: [task({ id: 'a2', key: 'a2', date: '2030-01-10', start_time: '18:00', task: 'Add input validation.' })], changes: { completed_preserved: 0, assignments_added: ['Add input validation.'], assignments_moved: [], assignments_removed: [], milestones_added: [], milestones_moved: ['Build a Python API'], milestones_removed: [] } });
+ serve(workspace({ planner: planner({ active, active_review: review(active), active_view: activeView(active), candidate: next, candidate_review: review(next), candidate_view: candidateView(next) }) }), { '/planner/discard': () => withActive(active) });
  render(<RoadmapPlanner />);
  const changes = await screen.findByRole('region', { name: 'What this preview changes' });
- expect(within(changes).getByText('1 completed session stays exactly as recorded.')).toBeVisible();
- expect(within(changes).getByText('Add input validation.')).toBeVisible();
+ expect(within(changes).getAllByText('Add input validation.').length).toBeGreaterThan(0);
  expect(within(changes).getByText('Build a Python API')).toBeVisible();
- expect(screen.getByRole('heading', { name: 'Completed sessions' })).toBeVisible();
- expect(screen.queryByRole('button', { name: 'Reopen session' })).not.toBeInTheDocument();
- expect(screen.queryByText('Mark session complete')).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('button', { name: 'Discard preview' }));
+ expect(screen.getByText(/Your current roadmap stays active until you accept this one/)).toBeVisible();
+ expect(screen.queryByRole('button', { name: /^Complete/ })).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button', { name: 'View current roadmap' }));
+ expect(await screen.findByText('Your active roadmap')).toBeVisible();
+ fireEvent.click(screen.getByRole('button', { name: 'Review it' }));
+ fireEvent.click(await screen.findByRole('button', { name: 'Discard preview' }));
  await screen.findByText('Your active roadmap');
  expect(calls('/planner/accept')).toHaveLength(0);
 });
 
-it('offers an updated preview when settings, progress or evidence change', async () => {
- serve(withActive(roadmap(), { signals: [{ kind: 'settings', message: 'Your study settings changed since this roadmap was accepted.' }] }), { '/planner/generate': () => ({ version: 3, operation: null }) });
+it('explains saved settings that differ and offers Edit plan rather than an automatic change', async () => {
+ serve(withActive(roadmap(), { signals: [{ kind: 'settings', message: 'Your saved settings differ from this roadmap. Use Edit plan to preview applying them, or Start new roadmap to plan with them.' }] }));
  render(<RoadmapPlanner />);
- await screen.findByText('Your study settings changed since this roadmap was accepted.');
- fireEvent.click(screen.getByRole('button', { name: 'Preview updated roadmap' }));
- await waitFor(() => expect(calls('/planner/generate')).toHaveLength(1));
+ await screen.findByText(/Your saved settings differ/);
+ expect(screen.getByRole('button', { name: 'Edit plan' })).toBeEnabled();
+ expect(calls('/planner/generate')).toHaveLength(0);
 });
 
 it('keeps the plan and offers an exact retry when generation fails', async () => {

@@ -32,7 +32,7 @@ node "Docker Compose — focused design" {
       artifact "Version-pinned comparison and source evidence\nSeparate role, interview and constraint outcomes\n/api/v1/assessments" as AssessmentAPI
     }
     node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
-      artifact "Chat-assisted settings and calculated runway\nValidated LLM plans with reviewed previews\nTimed sessions and progress history\n/api/v1/roadmaps" as RoadmapAPI
+      artifact "Chat-assisted settings and calculated capacity\nStaged, validated LLM plans with reviewed previews\nWeekly tasks, deterministic rescheduling on access,\ncheck-ins, pace and archives\n/api/v1/roadmaps" as RoadmapAPI
     }
   }
 
@@ -40,7 +40,7 @@ node "Docker Compose — focused design" {
     database "CV-owned database\ncvs\ncv_selections + cv_conversations (operational)\ncv_upload_capacity + cv_model_usage (operational)" as CVDB
     database "Career-owned database\ncareer_goals + career_state (operational)\ninterview_research" as CareerDB
     database "Assessment-owned database\nskill_gap_analyses\nworkspaces with batch checkpoints" as AssessmentDB
-    database "Roadmap-owned database\nroadmaps immutable revisions\nworkspaces with chat and active/draft" as RoadmapDB
+    database "Roadmap-owned database\nroadmaps accepted and archived plans\nworkspaces with chat, active plan, proposal and archive list" as RoadmapDB
   }
   artifact "Service-private temporary CV storage\nQuota admission, shared POSIX locks and recoverable cleanup" as Uploads <<Private storage>>
 }
@@ -74,7 +74,7 @@ CV --> CVLLM : Schema-constrained extraction/repair, bounded routing and interpr
 Career --> LLM : Goal interpretation / scoped chat / cited research synthesis
 Career --> Sources : LangGraph parallel public research branches
 Assessment --> LLM : Service-scoped evidence interpretation
-Roadmap --> LLM : Settings chat and schema-constrained plans, with bounded validation retry
+Roadmap --> LLM : Settings chat, staged schema-constrained plans, rolling detail and check-in proposals, with bounded validation retry
 
 note bottom of Career
   One career_goals model: specific_job or career_exploration.

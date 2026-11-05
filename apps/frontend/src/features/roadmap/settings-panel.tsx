@@ -66,9 +66,9 @@ function BlockRow({ block, index, change, remove }: { block: StudyBlock; index: 
  </div>;
 }
 
-export function SettingsPanel({ workspace, settings, partial, setPartial, frozen, generate, save, returnToReview }: {
+export function SettingsPanel({ workspace, settings, partial, setPartial, frozen, generate, save, returnToReview, mode = 'plan', previewEdit }: {
  workspace: Workspace; settings: ReturnType<typeof useSettingsDraft>; partial: boolean; setPartial: (value: boolean) => void; frozen: boolean;
- generate: () => void; save: () => void; returnToReview: (() => void) | null;
+ generate: () => void; save: () => void; returnToReview: (() => void) | null; mode?: 'plan' | 'new' | 'edit'; previewEdit?: () => void;
 }) {
  const { context, planner } = workspace;
  const { config, runway, update } = settings;
@@ -88,6 +88,7 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
   ...(context.ready && !validResearch && !partial ? ['Interview research is incomplete. Tick “Continue with available evidence” below to proceed.'] : []),
  ];
  const blocked = reasons.length > 0 || settings.calculating;
+ const editBlocked = runway.issues.filter(issue => issue.code !== 'start_in_past').length > 0 || !!settings.previewError || settings.calculating;
  const groups = groupSkills(planner.inputs.skills, skill => skill.name, planner.inputs.skill_groups);
  const defaults = context.planning_defaults;
  const blackoutPeriods = defaults.availability_periods.filter(period => period.weekly_hours === 0);
@@ -119,14 +120,17 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
    </div>
    {runway.resolved.target_date && <p className="settings-resolved">Target date: <strong>{longDate(runway.resolved.target_date)}</strong>. This is your last study day.</p>}
    {(defaults.application_date || jobDates.length > 0) && <div className="settings-suggestions">{defaults.application_date && <button type="button" className="chip sm" onClick={() => update({ target_date: defaults.application_date, duration: null })}>Use saved application date ({defaults.application_date})</button>}{jobDates.map(date => <button type="button" className="chip sm" key={`${date.kind}${date.date}`} onClick={() => update({ target_date: date.date, duration: null })}>Use {date.kind.replaceAll('_', ' ')} ({date.date})</button>)}</div>}
-   <p className="small">Times are in {config.time_zone}.{zone && zone !== config.time_zone && <> Your device uses {zone}. <button type="button" className="settings-link" onClick={() => update({ time_zone: zone })}>Use {zone}</button></>}</p>
+   <FieldRow label="Plan timezone"><input value={config.time_zone} maxLength={64} onChange={e => update({ time_zone: e.target.value })} /></FieldRow>
+   <p className="small">Times are in {config.time_zone}. Weeks run Monday to Sunday there.{zone && zone !== config.time_zone && <> Your device uses {zone}. <button type="button" className="settings-link" onClick={() => update({ time_zone: zone })}>Use {zone}</button></>}</p>
   </Stop>
 
   <Stop label="Study time" required filled={!!config.weekly_minutes && config.blocks.length > 0} frozen={frozen}>
    <div className="settings-pair">
     <FieldRow label="Weekly budget in hours"><input type="number" min={0} max={168} step="any" value={config.weekly_minutes == null ? '' : config.weekly_minutes / 60} onChange={e => update({ weekly_minutes: e.target.value === '' ? null : Math.round(Number(e.target.value) * 60) })} /></FieldRow>
     <FieldRow label="Preferred session in minutes"><input type="number" min={15} max={480} step={5} value={config.preferred_session_minutes} onChange={e => update({ preferred_session_minutes: Math.round(Number(e.target.value)) })} /></FieldRow>
+    <FieldRow label="Buffer percentage"><input type="number" min={0} max={50} step={5} value={config.buffer_percent} onChange={e => update({ buffer_percent: Math.round(Number(e.target.value)) })} /></FieldRow>
    </div>
+   <p className="small">The buffer stays free each week for catch-up and rescheduling.</p>
    {config.weekly_minutes == null && defaults.weekly_hours != null && <div className="settings-suggestions"><button type="button" className="chip sm" onClick={() => update({ weekly_minutes: Math.round(defaults.weekly_hours! * 60) })}>Use saved {defaults.weekly_hours} hours a week</button></div>}
    <h3>Recurring study blocks</h3>
    <p className="small">Time outside these blocks is treated as unavailable.</p>
@@ -145,26 +149,39 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
    <div className="settings-focus">{focuses.map(([value, label]) => <label key={value} className="settings-check"><input type="checkbox" checked={config.learning_focus.includes(value)} onChange={e => update({ learning_focus: e.target.checked ? [...config.learning_focus, value] : config.learning_focus.filter(f => f !== value) })} />{label}</label>)}</div>
    <FieldRow label="Anything else about how you like to learn?"><textarea maxLength={1000} value={config.learning_notes} onChange={e => update({ learning_notes: e.target.value })} /></FieldRow>
   </Stop>
+
+  <Stop label="Weekly check-in" required={false} filled frozen={frozen}>
+   <p className="small">A short check-in opens at this time and stays open until you finish it or next week’s first task starts.</p>
+   <div className="settings-pair">
+    <FieldRow label="Check-in day"><select value={config.checkin_day} onChange={e => update({ checkin_day: Number(e.target.value) })}>{days.map((day, i) => <option key={day} value={i}>{day}</option>)}</select></FieldRow>
+    <FieldRow label="Check-in time"><input type="time" value={config.checkin_time} onChange={e => { if (e.target.value) update({ checkin_time: e.target.value }); }} /></FieldRow>
+   </div>
+  </Stop>
   </div><div className="settings-column runway-column">
   <section className="settings-section settings-runway" aria-label="Your runway" aria-live="polite">
    <h2>Your runway</h2>
    {runway.calendar ? <>
     <dl className="runway-stats">
-     <div className="runway-lead"><dt>Usable study time</dt><dd>{hours(runway.study.usable_minutes)}</dd></div>
+     <div className="runway-lead"><dt>Eligible study hours</dt><dd>{hours(runway.study.usable_minutes)}</dd></div>
+     <div><dt>Available weeks</dt><dd>{runway.budget.available_weeks}</dd></div>
+     <div><dt>Planned hours</dt><dd>{hours(runway.budget.planned_minutes)}</dd></div>
+     <div><dt>Buffer hours</dt><dd>{hours(runway.budget.buffer_minutes)}</dd></div>
      <div><dt>Calendar time</dt><dd>{runway.calendar.label}</dd></div>
      <div><dt>From preferred blocks</dt><dd>{hours(runway.study.preferred_minutes)}</dd></div>
      <div><dt>Extra from backup blocks</dt><dd>+{hours(runway.study.backup_extra_minutes)}{config.use_backup ? ' (included)' : ' (not enabled)'}</dd></div>
     </dl>
     {runway.calendar.partial_first_week && <p className="small">Your first week is partial, so it only counts time from {longDate(config.start_date || runway.resolved.start_date)}.</p>}
     <div className="runway-bars" aria-hidden="true">{runway.weeks.map(week => <i key={week.week_start} title={`Week of ${week.week_start}: ${hours(week.usable_minutes)}`} style={{ height: `${Math.max(week.usable_minutes / Math.max(...runway.weeks.map(w => w.usable_minutes), 1) * 100, 3)}%` }} />)}</div>
-    <details><summary>Week by week</summary><ul className="runway-weeks">{runway.weeks.map(week => <li key={week.week_start}><span>Week of {week.week_start}{week.partial ? ' (partial)' : ''}</span><span>{hours(week.usable_minutes)}{week.backup_extra_minutes > 0 && !config.use_backup ? ` · +${hours(week.backup_extra_minutes)} backup` : ''}</span></li>)}</ul></details>
+    <details><summary>Week by week</summary><ul className="runway-weeks">{runway.weeks.map(week => <li key={week.week_start}><span>Week of {week.week_start}{week.partial ? ' (partial)' : ''}</span><span>{hours(week.usable_minutes)} eligible · {hours(week.planned_minutes)} planned{week.backup_extra_minutes > 0 && !config.use_backup ? ` · +${hours(week.backup_extra_minutes)} backup` : ''}</span></li>)}</ul></details>
    </> : <p className="small">Your runway appears once the dates are valid.</p>}
    {settings.calculating && <p role="status" className="small">Recalculating…</p>}
-   {reasons.length > 0 && <div className="settings-blockers"><h3>Before you can generate</h3><ul>{reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul></div>}
+   {mode !== 'edit' && reasons.length > 0 && <div className="settings-blockers"><h3>Before you can generate</h3><ul>{reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul></div>}
    {context.ready && !validResearch && <label className="settings-check"><input type="checkbox" disabled={frozen} checked={partial} onChange={e => setPartial(e.target.checked)} />Continue with available evidence. Interview research is {context.research_coverage || 'unavailable'}; the comparison will be labelled partial.</label>}
    <div className="plan-actions">
-    <button type="button" className="btn primary" disabled={blocked || frozen} onClick={generate}>{planner.active ? 'Preview updated roadmap' : 'Generate roadmap'}</button>
-    {settings.dirty && <button type="button" className="btn ghost" disabled={frozen || !!settings.previewError} onClick={save}>Save settings</button>}
+    {mode === 'edit'
+     ? <button type="button" className="btn primary" disabled={editBlocked || frozen} onClick={previewEdit}>Preview changes</button>
+     : <button type="button" className="btn primary" disabled={blocked || frozen} onClick={generate}>{planner.active ? 'Generate new roadmap' : 'Generate roadmap'}</button>}
+    {settings.dirty && mode !== 'edit' && <button type="button" className="btn ghost" disabled={frozen || !!settings.previewError} onClick={save}>Save settings</button>}
     {returnToReview && <button type="button" className="btn ghost" onClick={returnToReview}>Return to roadmap</button>}
    </div>
   </section>

@@ -234,7 +234,7 @@ async def fill_window(app,row,account):
     if not is_current_schema(plan):raise Problem('This roadmap can’t be detailed. Start a new roadmap.',409,'legacy_plan')
     weeks=detail_needed(plan,now)
     if not weeks:return
-    await set_stage(app,row,owner,'detailing')
+    await set_stage(app,row,owner,'rolling')
     plan=planner_state(row)['active'];capacity=plan_capacity(plan,now)
     budgets={week:max(0,week_target(plan,week,capacity)-included_scheduled(plan,week)) for week in weeks}
     fixed=[t for t in plan['assignments'] if t.get('date') and t.get('start_time') and t['status'] in ('scheduled','completed')]
@@ -245,7 +245,7 @@ async def fill_window(app,row,account):
     undetailed=sum(row['undetailed'] for row in milestone_totals(plan).values())
     def check(output):
         return [*validate_detail(output,plan,capacity,weeks,budgets,fixed),*check_window_coverage(output,weeks,budgets,undetailed)]
-    output,_=await write_stage(app.state.model,WindowDetail,DETAIL_INSTRUCTIONS,context,check,lambda:set_stage(app,row,owner,'correcting'),DETAIL_MAX_TOKENS)
+    output,_=await write_stage(app.state.model,WindowDetail,DETAIL_INSTRUCTIONS,context,check,lambda:set_stage(app,row,owner,'rolling'),DETAIL_MAX_TOKENS)
     plan=planner_state(row)['active']
     operation=row['pending']['id']
     for item in output.model_dump(mode='json')['assignments']:
@@ -277,7 +277,7 @@ async def revise_tasks(app,row,account,*,weeks,budgets,extra,kind,config=None,ke
         cleared=[t for t in fixed if t['key'] not in replacing]
         errors=check_assignments(output,capacity,cleared,weeks[0],{m['key'] for m in working['milestones']},weeks=weeks,budgets=room)
         return errors
-    output,attempts=await write_stage(app.state.model,TaskRevision,REVISION_INSTRUCTIONS,context,check,lambda:set_stage(app,row,owner,'correcting'),DETAIL_MAX_TOKENS)
+    output,attempts=await write_stage(app.state.model,TaskRevision,REVISION_INSTRUCTIONS,context,check,lambda:set_stage(app,row,owner,'revising'),DETAIL_MAX_TOKENS)
     data=output.model_dump(mode='json')
     old_by_key={t['key']:t for t in replaceable};added=[];moved=[];removed=[]
     for item in data['assignments']:
@@ -305,7 +305,7 @@ async def propose_checkin(app,row,account):
     if record.get('status') in ('completed','expired'):raise Problem('This check-in has closed. Your workload target is unchanged.',409,'checkin_closed')
     week=date.fromisoformat(code);capacity=plan_capacity(plan,now)
     load=next_week_workload(plan,week,answers['next_week'],capacity);following=load['week']
-    await set_stage(app,row,account['id'],'writing')
+    await set_stage(app,row,account['id'],'revising')
     state=planner_state(row);plan=state['active']
     if capacity.target<following or week_target(plan,following,capacity)==0 and load['target']==0:
         working=private_copy(plan)

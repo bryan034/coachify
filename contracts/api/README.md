@@ -8,4 +8,4 @@
 
 Individual endpoint explanations live in service READMEs; the [API overview](../../docs/api/README.md) maps prefixes to services. Keep generated schemas aligned with implementation. Private internal routes stay behind the gateway.
 
-`assessment.schema.json` describes the new Assessment-owned result; `roadmap-plan.schema.json` describes a saved timed roadmap; `roadmap.schema.json` describes an earlier untimed plan. The older `skill-gap-analysis.schema.json` remains Career analysis-v1 compatibility and is not the new service response. Producer schemas add canonical skill identities and Career source-grounded job dates without rewriting legacy references.
+`assessment.schema.json` describes the new Assessment-owned result; `roadmap-plan.schema.json` describes a saved `roadmap-v3` plan; `roadmap-plan-v2.schema.json` describes an older timed plan, which stays readable; `roadmap.schema.json` describes an earlier untimed plan. The older `skill-gap-analysis.schema.json` remains Career analysis-v1 compatibility and is not the new service response. Producer schemas add canonical skill identities and Career source-grounded job dates without rewriting legacy references.

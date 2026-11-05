@@ -54,17 +54,21 @@ app=create_app(model=Model())
 ROADMAP=r'''
 from datetime import datetime,timezone
 from app.main import create_app
-from app.schemas import ChatTurn
+from app.schemas import ChatTurn,PlanOutline,WindowDetail
 BLOCKS=[{'day':2,'start_time':'19:00','duration_minutes':90,'kind':'preferred'},{'day':5,'start_time':'10:00','duration_minutes':120,'kind':'preferred'},{'day':6,'start_time':'09:00','duration_minutes':60,'kind':'backup'}]
 class Model:
  configured=True
  async def generate(self,schema,instructions,context,max_tokens=8192):
   if schema is ChatTurn:
    return schema.model_validate({'reply':'I added those to your settings. Review the panel, then press Generate.','settings':{'target_date':'2030-02-01','weekly_minutes':180,'blocks':BLOCKS,'blackouts':[{'frequency':'once','start_date':'2030-01-12'}]}})
-  return schema.model_validate({'summary':'Practise explaining your existing API experience.','gaps':[],
-   'milestones':[{'key':'explain','title':'Explain your API decisions','gap_ids':[],'prerequisite_keys':[],'estimated_minutes':120,'projected_start':'2030-01-09','projected_end':'2030-01-20','demonstrable_outcome':'A written explanation with two alternatives.'}],
-   'assignments':[{'key':'first','milestone_key':'explain','gap_id':None,'kind':'study','date':'2030-01-09','start_time':'19:00','duration_minutes':60,'task':'Describe two trade-offs in your synthetic API project.','completion_criterion':'Write a concise explanation with two alternatives.'}],
-   'deadline_outcome':{'summary':'You can explain your API decisions by the target date.','achievable_by_target':['A written explanation'],'fits_in_runway':True},'beyond_deadline':[],'exclusions':[]})
+  if schema is PlanOutline:
+   return schema.model_validate({'summary':'Practise explaining your existing API experience.','gaps':[],
+    'milestones':[{'key':'explain','title':'Explain your API decisions','gap_ids':[],'prerequisite_keys':[],'estimated_minutes':120,'projected_start':'2030-01-09','projected_end':'2030-01-20','demonstrable_outcome':'A written explanation with two alternatives.'}],
+    'outline':[{'week_start':w['week_start'],'theme':'Explain your decisions','milestone_keys':['explain'],'target_minutes':w['planned_minutes'],'expected_output':'One written explanation.'} for w in context['planned_capacity']],
+    'deadline_outcome':{'summary':'You can explain your API decisions by the target date.','achievable_by_target':['A written explanation'],'fits_in_runway':True},'beyond_deadline':[],'exclusions':[]})
+  return schema.model_validate({'assignments':[
+   {'key':'first','milestone_key':'explain','gap_id':None,'kind':'study','date':'2030-01-09','start_time':'19:00','duration_minutes':60,'task':'Describe two trade-offs in your synthetic API project.','completion_criterion':'Write a concise explanation with two alternatives.'},
+   {'key':'second','milestone_key':'explain','gap_id':None,'kind':'study','date':'2030-01-16','start_time':'19:00','duration_minutes':60,'task':'Compare your design with one alternative.','completion_criterion':'Write the comparison down.'}]})
 # Wednesday 2030-01-09, 08:00 in Singapore: a partial first week with one blackout.
 app=create_app(model=Model(),clock=lambda:datetime(2030,1,9,0,0,tzinfo=timezone.utc))
 '''
@@ -124,7 +128,17 @@ def main():
             completed=response.json()['planner']['active']
             roadmap.terminate();roadmap.wait(timeout=10);start(ROADMAP,'roadmap',roadmap_port)
             state=read();assert state['planner']['active']==completed and state['planner']['active']['assignments'][0]['evidence_note']=='Explanation written.' and len(state['messages'])==2
-            assert http.get('/api/v1/roadmaps/history/'+completed['id']).json()['schema_version']=='roadmap-v2'
+            assert http.get('/api/v1/roadmaps/history/'+completed['id']).json()['schema_version']=='roadmap-v3'
+            def change(path,**body):
+                response=http.post('/api/v1/roadmaps/planner'+path,json={'expected_version':read()['version'],'mutation_id':str(uuid4()),**body});assert response.status_code==200,response.text;return response.json()
+            second=state['planner']['active']['assignments'][1]['id']
+            # Dates and proposals must survive real BSON encoding, not only the in-memory test store.
+            state=change('/tasks/move',task_id=second,date='2030-01-19',start_time='10:00')
+            state=change('/tasks/custom',title='Mock interview',duration_minutes=30,week_start='2030-01-14',date='2030-01-23',start_time='19:00')
+            state=change('/proposals/pause',week_start='2030-01-14')
+            state=change('/proposals/accept',proposal_id=state['planner']['proposal']['id'],keep_task_ids=[])
+            assert state['planner']['active']['week_states']['2030-01-14']['paused']
+            assert http.get('/api/v1/roadmaps/summary').json()['progress']['roadmap_minutes']['completed']==60
             assert http.get('/api/v1/roadmaps/history/'+completed['id'],headers={'Authorization':'Bearer synthetic-other'}).status_code==404
             print(json.dumps({'status':'passed','checks':['real cross-service HTTP snapshots','separate Assessment comparison','explicit partial research','chat-collected settings','calculated runway','validated timed plan','reviewed acceptance','idempotent lost-response retry','session completion and evidence','restart persistence','owner isolation','no external provider calls']}))
     finally:

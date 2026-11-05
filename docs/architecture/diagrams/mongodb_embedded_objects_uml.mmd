@@ -667,6 +667,9 @@ class PlannerConfig {
     +Integer preferred_session_minutes
     +String[] learning_focus
     +String learning_notes
+    +Integer buffer_percent [0 to 50]
+    +Integer checkin_day [Monday 0 to Sunday 6]
+    +String checkin_time [HH:MM]
 }
 class StudyBlock {
     +Integer day [Monday 0 to Sunday 6]
@@ -693,6 +696,7 @@ class RoadmapMilestone {
     +Date projected_end
     +String demonstrable_outcome
     +Object outcome [self_reported]
+    +Object completion? [roadmap-v3; self_reported, with unfinished-task choice]
 }
 class RoadmapAssignment {
     +String key
@@ -721,4 +725,39 @@ PlannerConfig *-- BlackoutRule
 roadmaps *-- RoadmapMilestone
 roadmaps *-- RoadmapAssignment
 roadmaps *-- RoadmapGap
-note for RoadmapAssignment "Detailed for the first planning week only. Completed sessions and evidence notes copy unchanged into revisions. Completion is not proficiency and writes nothing to Profile, CV or Assessment."
+class RoadmapOutlineWeek {
+    +String week_start
+    +String theme
+    +String[] milestone_keys
+    +Integer target_minutes
+    +String expected_output
+}
+class RoadmapDeferredItem {
+    +String id
+    +String key
+    +String title
+    +String[] gap_ids
+    +String reason
+    +Integer estimated_minutes
+    +String[] dependencies
+}
+class RoadmapWeekState {
+    +Boolean paused
+    +String[] exception_task_ids
+    +Integer workload_minutes?
+    +String workload_source?
+}
+class RoadmapEvent {
+    +String id
+    +String type
+    +String at
+    +String task_id?
+    +String message
+    +Object undo?
+    +Boolean undone
+}
+roadmaps *-- RoadmapOutlineWeek
+roadmaps *-- RoadmapDeferredItem
+roadmaps *-- RoadmapWeekState
+roadmaps *-- RoadmapEvent
+note for RoadmapAssignment "roadmap-v3 adds origin, status (scheduled, backlog, completed, skipped, removed), pinned, count_hours, note, feedback, auto_moves, manual_moves, action_needed, backlog_reason, baseline and depends_on. Date and time are empty in Backlog. Completion is not proficiency and writes nothing to Profile, CV or Assessment."

@@ -235,13 +235,19 @@ class roadmaps {
     +Object[] tasks
     +Object schedule
     +Object[] exclusions
-    +String schema_version? [roadmap-v2]
+    +String schema_version? [roadmap-v2 or roadmap-v3]
     +PlannerConfig config? [roadmap-v2]
     +Object[] gaps? [roadmap-v2]
     +Object[] milestones? [roadmap-v2]
     +Object[] assignments? [roadmap-v2]
     +Object deadline_outcome? [roadmap-v2]
     +Object[] beyond_deadline? [roadmap-v2]
+    +Object[] outline? [roadmap-v3]
+    +Object[] deferred_scope? [roadmap-v3]
+    +Map week_states? [roadmap-v3]
+    +Map checkins? [roadmap-v3]
+    +Object[] events? [roadmap-v3]
+    +String source_plan_id? [archived copy]
 }
 class roadmap_workspaces {
     <<operational Roadmap database>>
@@ -250,7 +256,7 @@ class roadmap_workspaces {
     +Object[] messages
     +Object draft [earlier untimed]
     +Object active [earlier untimed]
-    +Object planner [config, candidate, active, confirmations]
+    +Object planner [config, candidate, active, proposal, archived, completed_work, confirmations]
     +Object pending [leased operation]
     +Object[] receipts
 }
@@ -260,7 +266,7 @@ users --> roadmap_workspaces : owner API
 roadmap_workspaces --> roadmaps : reviewed activation and history
 roadmaps --> skill_gap_analyses : Assessment API snapshot
 note for skill_gap_analyses "New Assessment-owned database. UUID results use assessment-v1; old analysis-v1 Career contracts/records remain legacy with no automatic migration."
-note for roadmaps "Separate Roadmap-owned database; one database with owner-scoped records, not a database per user. roadmap-v2 revisions hold dated, timed first-week sessions and projected milestones. Earlier records hold daily workloads without clock slots."
+note for roadmaps "Separate Roadmap-owned database; one database with owner-scoped records, not a database per user. roadmap-v3 plans hold a weekly outline, a rolling two-week task window, deferred scope, check-ins and move history; progress stays in the workspace until a final archived copy. roadmap-v2 revisions hold dated, timed first-week sessions and projected milestones, and stay read-only. Earlier records hold daily workloads without clock slots."
 
 %% Saved-goal question research reuses immutable interview_research.question_findings snapshots.
 %% Owner/goal-version/focus question_result pointers in research_contexts append public evidence
