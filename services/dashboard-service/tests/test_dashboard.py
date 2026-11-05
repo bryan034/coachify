@@ -76,6 +76,15 @@ def test_empty_plan_ratio_is_unknown_and_removed_last_task_never_completes_miles
         assert data['milestones'][0]['progress']['review_needed'] is True
         assert {'no_active_tasks','removed_work'} <= {r['code'] for r in data['milestones'][0]['review_reasons']}
 
+def test_stale_and_mismatched_assessment_never_establishes_capability():
+    fake=Fake();fake.assessment['freshness']='stale';fake.assessment['result']['id']='assessment-new'
+    with client(fake) as c:
+        data=c.get('/api/v1/dashboard',headers=H).json()
+        assert data['assessment']['state']=='stale' and data['assessment']['roadmap_match']=='different'
+        assert data['requirements']['state']=='stale' and data['requirements']['stale_link_task_ids']==['a']
+        assert data['requirements']['items'][0]['linked_task_ids']==[]
+        assert data['requirements']['items'][0]['match_status']=='uncertain'
+
 def test_unavailable_and_changed_sources_are_never_zero():
     fake=Fake();fake.unavailable.add('assessment')
     with client(fake) as c:

@@ -74,7 +74,27 @@ def milestone_progress(plan,review,readiness):
     return result
 
 def requirements(result,assessment_state,plan):
-    return {'state':'unavailable','items':[],'groups':[], 'unlinked_task_ids':[], 'stale_link_task_ids':[]}
+    items=[];groups=[];tasks=[t for t in (plan or {}).get('editable_tasks',[]) if not t.get('removed')]
+    if result:
+        snapshot_id=result.get('id'); snapshot_hash=result.get('input_hash')
+        for section in ('job_skill_gaps','interview_prep_gaps','constraints'):
+            for outcome in result.get(section,[]):
+                ref=outcome['ref']
+                linked=[t['id'] for t in tasks if ref in t.get('requirement_refs',[]) and
+                    t.get('requirement_source_id')==snapshot_id and t.get('requirement_source_hash')==snapshot_hash]
+                items.append({'ref':ref,'name':outcome.get('name'),'kind':outcome.get('kind'),
+                    'match_status':outcome.get('match_status'),'components':outcome.get('components',[]),'linked_task_ids':linked})
+        for group in result.get('groups',[]):
+            group=dict(group)
+            group['linked_task_ids']=[t['id'] for t in tasks if group['id'] in t.get('requirement_refs',[]) and
+                t.get('requirement_source_id')==snapshot_id and t.get('requirement_source_hash')==snapshot_hash]
+            groups.append(group)
+    known={i['ref'] for i in items}|{g['id'] for g in groups}
+    stale=[t['id'] for t in tasks if t.get('requirement_refs') and (not result or
+        t.get('requirement_source_id')!=result.get('id') or t.get('requirement_source_hash')!=result.get('input_hash') or
+        any(ref not in known for ref in t['requirement_refs']))]
+    return {'state':assessment_state,'items':items,'groups':groups,
+        'unlinked_task_ids':[t['id'] for t in tasks if not t.get('requirement_refs')], 'stale_link_task_ids':stale}
 
 def parse_timestamp(value):
     if not value:return None
