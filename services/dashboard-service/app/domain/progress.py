@@ -31,7 +31,21 @@ def counts(tasks):
         'remaining_estimated_minutes':sum(t['estimated_minutes'] for t in tasks if t.get('status')!='completed' or t.get('definition_review_required'))}
 
 def task_progress(plan,start,end,readiness):
-    return None
+    tasks=plan.get('editable_tasks') or []
+    active=[t for t in tasks if not t.get('removed')]
+    selected=[t for t in active if start is None or slots_in_period(t,start,end)]
+    remainder={t['id']:max(0,t['estimated_minutes']-sum(s['duration_minutes'] for s in t.get('schedule',[]))) for t in active}
+    selected_ids={t['id'] for t in selected}
+    shown=[t for t in active if t['id'] in selected_ids or remainder[t['id']]>0]
+    return {'overall':counts(active),'selected':counts(selected),'selected_task_ids':[t['id'] for t in selected],
+        'planned_minutes':sum(s['duration_minutes'] for t in selected for s in slots_in_period(t,start,end)),
+        'unscheduled_minutes':sum(remainder.values()),'unscheduled_task_ids':[t['id'] for t in active if remainder[t['id']]>0],
+        'remaining_unscheduled_minutes':sum(remainder[t['id']] for t in active if t['status']!='completed' or t.get('definition_review_required')),
+        'removed_task_ids':[t['id'] for t in tasks if t.get('removed')],
+        'tasks':[{'id':t['id'],'title':t['title'],'status':t['status'],'estimated_minutes':t['estimated_minutes'],
+            'schedule':slots_in_period(t,start,end),'unscheduled_minutes':remainder[t['id']],
+            'definition_review_required':bool(t.get('definition_review_required')),
+            'readiness':readiness.get(t['id'])} for t in shown]}
 
 def milestone_progress(plan,review,readiness):
     return []

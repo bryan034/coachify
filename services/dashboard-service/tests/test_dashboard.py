@@ -107,6 +107,15 @@ def test_source_transport_forwards_only_bearer_and_bounds_response():
     assert all(request.headers['Authorization']=='Bearer synthetic' for request in seen)
     assert len(seen)==5  # A redirect was not followed.
 
+def test_completed_unscheduled_work_is_distinct_from_remaining_unscheduled_estimate():
+    fake=Fake()
+    fake.roadmap['active']['editable_tasks'].append(task('personal-done',status='completed',milestone_key=None))
+    with client(fake) as c:
+        progress=c.get('/api/v1/dashboard',headers=H).json()['progress']
+        assert progress['unscheduled_minutes']==120
+        assert progress['remaining_unscheduled_minutes']==60
+        assert 'personal-done' in progress['unscheduled_task_ids']
+
 def test_missing_roadmap_update_time_is_not_replaced_by_creation_time():
     fake=Fake();fake.roadmap['active'].pop('updated_at')
     with client(fake) as c:

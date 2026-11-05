@@ -139,7 +139,7 @@ def create_app(upstream=None,clock=None):
             out['pace']=pace(active,baseline,start,end,zone,now)
         except (KeyError,TypeError,ValueError,ZoneInfoNotFoundError):
             raise Problem('The saved roadmap could not be interpreted. Your saved work is unchanged.',503,'invalid_source') from None
-        out['state']='available'
+        out['state']='empty' if out['progress']['overall']['total']==0 else 'available'
         return out
     return app
 
