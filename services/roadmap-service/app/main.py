@@ -67,6 +67,7 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return {'version':row['version'],'operation':operation_view(row)}
 
+
     @app.post('/api/v1/roadmaps/messages',status_code=202)
     async def message(body:Message,request:Request,account=Depends(authenticated)):
         source=await context(account)
@@ -75,8 +76,11 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return {'version':row['version'],'operation':operation_view(row)}
 
-    async def mutate(body,account,action):
-        row=await thread(app.state.store.load,account['id']);payload=body.model_dump(mode='json');key=payload['mutation_id'];fingerprint=digest(payload)
+    async def mutate(body,account,action,operation=None):
+        row=await thread(app.state.store.load,account['id']);payload=body.model_dump(mode='json');key=payload['mutation_id']
+        # Existing receipts retain their original fingerprint. New task actions
+        # include their operation so a key cannot replay a different endpoint.
+        fingerprint=digest({'operation':operation,'payload':payload}) if operation else digest(payload)
         prior=next((r for r in row['receipts'] if r['id']==key),None)
         if prior:
             if prior['hash']!=fingerprint:raise Problem('This request key was used for a different change.')

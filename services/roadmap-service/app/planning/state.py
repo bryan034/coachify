@@ -1,4 +1,5 @@
 """Read projections and change detection for the timed roadmap. No model calls happen here."""
+import copy
 from elo_shared.runtime import digest
 from elo_shared.skill_groups import skill_groups
 from app.planning.capacity import Capacity, to_minute
@@ -49,7 +50,11 @@ def plan_review(plan,now):
     for milestone in plan['milestones']:
         members=[a for a in plan['assignments'] if a['milestone_key']==milestone['key']]
         done=[a for a in members if a['status']=='completed']
-        milestones[milestone['id']]={'sessions_total':len(members),'sessions_completed':len(done),'completed_minutes':sum(a['duration_minutes'] for a in done)}
+        tasks=[t for t in plan.get('editable_tasks',[]) if t.get('milestone_key')==milestone['key']]
+        current=[t for t in tasks if not t.get('removed')]
+        milestones[milestone['id']]={'sessions_total':len(members),'sessions_completed':len(done),'completed_minutes':sum(a['duration_minutes'] for a in done),
+            'tasks_total':len(current),'tasks_completed':sum(t['status']=='completed' and not t.get('definition_review_required') for t in current),
+            'review_needed':not current or (milestone.get('outcome') or {}).get('definition_review_required',False) or any(t.get('removed') or t.get('definition_review_required') for t in tasks)}
     return {'next_assignment_id':upcoming[0]['id'] if upcoming else None,'missed_assignment_ids':missed,
         'remaining':capacity.report(allow_past_start=True),'milestones':milestones}
 
@@ -66,8 +71,13 @@ def candidate_blockers(state,source,now):
         add('inputs_changed','Your CV or Career goal changed after this preview was prepared. Generate a fresh plan.')
     if settings_differ(candidate,state):
         add('settings_changed','Your settings changed after this preview was prepared. Generate a fresh plan.')
+    if candidate.get('revision_review'):
+        add('revision_review_required','Review proposed tasks that may duplicate saved or removed work before accepting this roadmap.')
     capacity=Capacity(PlannerConfig.model_validate(candidate['config']),now)
-    if any(a['status']=='scheduled' and session_has_passed(a,capacity) for a in candidate['assignments']):
+    # Student-retained sessions may already be in the past; their timing is an
+    # explicit saved choice. Only newly proposed sessions can expire the preview.
+    prior_ids={a['id'] for a in (active or {}).get('assignments',[])}
+    if any(a['status']=='scheduled' and a['id'] not in prior_ids and session_has_passed(a,capacity) for a in candidate['assignments']):
         add('plan_expired','A session in this preview has already passed. Generate a fresh plan.')
     return blockers
 
@@ -101,11 +111,19 @@ def retry_body(row,kind):
 
 def planner_view(row,source,now,default_zone=None):
     state=planner_state(row)
-    active,candidate=state['active'],state['candidate']
+    # Legacy snapshots are converted only in the response. A read never saves an
+    # upgrade; the next explicit task mutation persists the canonical task data.
+    from app.planning.tasks import ensure_tasks, project_assignments, schedule_warnings
+    active,candidate=copy.deepcopy(state['active']),copy.deepcopy(state['candidate'])
+    for plan in (active,candidate):
+        if plan is not None and 'editable_tasks' in plan:
+            ensure_tasks(plan)
+            project_assignments(plan)
     config=saved_config(state,default_zone)
     capacity=Capacity(config,now,completed_sessions(active))
     return {'config':config.model_dump(mode='json'),'config_saved':state['config'] is not None,
         'runway':capacity.report(allow_past_start=bool(active)),'inputs':plan_inputs(source),
         'candidate':candidate,'candidate_review':plan_review(candidate,now),'candidate_blockers':candidate_blockers(state,source,now),
-        'active':active,'active_review':plan_review(active,now),'confirmations':state['confirmations'],
+        'active':active,'active_review':plan_review(active,now),
+        'task_warnings':schedule_warnings(active,now) if active else [],'confirmations':state['confirmations'],
         'signals':revision_signals(state,source,now),'retry_generate':retry_body(row,'generate')}

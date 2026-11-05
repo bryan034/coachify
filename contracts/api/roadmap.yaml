@@ -474,6 +474,129 @@
         ]
       }
     },
+    "/api/v1/roadmaps/planner/tasks/add": {
+      "post": {
+        "summary": "Add",
+        "operationId": "add_api_v1_roadmaps_planner_tasks_add_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTask"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/roadmaps/planner/runway": {
       "post": {
         "summary": "Runway",
@@ -1591,6 +1714,31 @@
   },
   "components": {
     "schemas": {
+      "AddTask": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "task": {
+            "$ref": "#/components/schemas/TaskDefinition"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "task"
+        ],
+        "title": "AddTask"
+      },
       "AssignmentStatus": {
         "properties": {
           "expected_version": {
@@ -1868,6 +2016,203 @@
           "unit"
         ],
         "title": "Duration"
+      },
+      "EditableTask": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Instructions"
+          },
+          "completion_outcome": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Completion Outcome"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "maximum": 60000.0,
+            "minimum": 1.0,
+            "title": "Estimated Minutes"
+          },
+          "requirement_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requirement Refs"
+          },
+          "requirement_source_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Source Hash"
+          },
+          "requirement_source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Source Id"
+          },
+          "prerequisites": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Prerequisites"
+          },
+          "milestone_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Key"
+          },
+          "schedule": {
+            "items": {
+              "$ref": "#/components/schemas/TaskSlot"
+            },
+            "type": "array",
+            "title": "Schedule"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress",
+              "completed"
+            ],
+            "title": "Status"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "evidence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Note"
+          },
+          "history": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "History"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed",
+            "default": false
+          },
+          "definition_review_required": {
+            "type": "boolean",
+            "title": "Definition Review Required",
+            "default": false
+          },
+          "removal": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removal"
+          },
+          "generated_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Key"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "generated",
+              "user"
+            ],
+            "title": "Origin"
+          },
+          "overrides": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Overrides"
+          },
+          "source_assignment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Assignment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "instructions",
+          "completion_outcome",
+          "estimated_minutes",
+          "status",
+          "origin"
+        ],
+        "title": "EditableTask"
       },
       "ErrorView": {
         "properties": {
@@ -2592,6 +2937,17 @@
             "type": "string",
             "title": "Created At"
           },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
           "first_planning_week": {
             "type": "string",
             "title": "First Planning Week"
@@ -2620,6 +2976,27 @@
             },
             "type": "array",
             "title": "Assignments"
+          },
+          "editable_tasks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EditableTask"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editable Tasks"
+          },
+          "revision_review": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionReview"
+            },
+            "type": "array",
+            "title": "Revision Review"
           },
           "deadline_outcome": {
             "$ref": "#/components/schemas/DeadlineOutcome"
@@ -2853,6 +3230,14 @@
               }
             ]
           },
+          "task_warnings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Task Warnings"
+          },
           "confirmations": {
             "additionalProperties": {
               "additionalProperties": true,
@@ -3028,6 +3413,34 @@
           "weekly_hours"
         ],
         "title": "ReducedPeriod"
+      },
+      "RevisionReview": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "removed_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Removed Task Ids"
+          },
+          "related_task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Related Task Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_id"
+        ],
+        "title": "RevisionReview"
       },
       "Runway": {
         "properties": {
@@ -3587,6 +4000,112 @@
           "status"
         ],
         "title": "Task"
+      },
+      "TaskDefinition": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Instructions"
+          },
+          "completion_outcome": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Completion Outcome"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "maximum": 60000.0,
+            "minimum": 1.0,
+            "title": "Estimated Minutes"
+          },
+          "requirement_refs": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Requirement Refs"
+          },
+          "prerequisites": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Prerequisites"
+          },
+          "milestone_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Key"
+          },
+          "schedule": {
+            "items": {
+              "$ref": "#/components/schemas/TaskSlot"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Schedule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "instructions",
+          "completion_outcome",
+          "estimated_minutes"
+        ],
+        "title": "TaskDefinition"
+      },
+      "TaskSlot": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "start_time": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Start Time"
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "maximum": 480.0,
+            "minimum": 1.0,
+            "title": "Duration Minutes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "start_time",
+          "duration_minutes"
+        ],
+        "title": "TaskSlot"
       },
       "Workspace": {
         "properties": {

@@ -209,6 +209,211 @@
       "title": "Duration",
       "type": "object"
     },
+    "EditableTask": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "instructions": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Instructions",
+          "type": "string"
+        },
+        "completion_outcome": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Completion Outcome",
+          "type": "string"
+        },
+        "estimated_minutes": {
+          "maximum": 60000,
+          "minimum": 1,
+          "title": "Estimated Minutes",
+          "type": "integer"
+        },
+        "requirement_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requirement Refs",
+          "type": "array"
+        },
+        "requirement_source_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirement Source Hash"
+        },
+        "requirement_source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirement Source Id"
+        },
+        "prerequisites": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prerequisites",
+          "type": "array"
+        },
+        "milestone_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Milestone Key"
+        },
+        "schedule": {
+          "items": {
+            "$ref": "#/$defs/TaskSlot"
+          },
+          "title": "Schedule",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "not_started",
+            "in_progress",
+            "completed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "evidence_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Note"
+        },
+        "history": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "removed": {
+          "default": false,
+          "title": "Removed",
+          "type": "boolean"
+        },
+        "definition_review_required": {
+          "default": false,
+          "title": "Definition Review Required",
+          "type": "boolean"
+        },
+        "removal": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Removal"
+        },
+        "generated_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generated Key"
+        },
+        "origin": {
+          "enum": [
+            "generated",
+            "user"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "overrides": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Overrides",
+          "type": "array"
+        },
+        "source_assignment": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Assignment"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "instructions",
+        "completion_outcome",
+        "estimated_minutes",
+        "status",
+        "origin"
+      ],
+      "title": "EditableTask",
+      "type": "object"
+    },
     "PlanAssignment": {
       "additionalProperties": false,
       "properties": {
@@ -645,6 +850,34 @@
       "title": "PlannerConfig",
       "type": "object"
     },
+    "RevisionReview": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "removed_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Removed Task Ids",
+          "type": "array"
+        },
+        "related_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Related Task Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "title": "RevisionReview",
+      "type": "object"
+    },
     "StudyBlock": {
       "additionalProperties": false,
       "properties": {
@@ -681,6 +914,34 @@
         "duration_minutes"
       ],
       "title": "StudyBlock",
+      "type": "object"
+    },
+    "TaskSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "start_time": {
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Start Time",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "maximum": 480,
+          "minimum": 1,
+          "title": "Duration Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "date",
+        "start_time",
+        "duration_minutes"
+      ],
+      "title": "TaskSlot",
       "type": "object"
     }
   },
@@ -734,6 +995,18 @@
       "title": "Created At",
       "type": "string"
     },
+    "updated_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Updated At"
+    },
     "first_planning_week": {
       "title": "First Planning Week",
       "type": "string"
@@ -761,6 +1034,28 @@
         "$ref": "#/$defs/PlanAssignment"
       },
       "title": "Assignments",
+      "type": "array"
+    },
+    "editable_tasks": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/EditableTask"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Editable Tasks"
+    },
+    "revision_review": {
+      "items": {
+        "$ref": "#/$defs/RevisionReview"
+      },
+      "title": "Revision Review",
       "type": "array"
     },
     "deadline_outcome": {

@@ -63,6 +63,10 @@ A candidate pins its base active plan, settings and inputs. Accept is rejected i
 
 Session completion, self-reported milestone outcomes and experience confirmations stay in Roadmap and never write to Profile, CV or Assessment. None of them establishes proficiency. Factual corrections belong in Skills Profile.
 
+### Editable task backend
+
+Task creation stores canonical task records in the active roadmap using owner-scoped version and retry checks. Personal work need not have a requirement or a schedule.
+
 ## Persistence and recovery
 
 `workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.

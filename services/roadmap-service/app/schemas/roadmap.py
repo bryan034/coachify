@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from .base import Contract, Mutation, Text
+from .tasks import EditableTask, RevisionReview
 
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
 Key=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
@@ -232,11 +233,14 @@ class PlannedRoadmap(Contract):
     confirmations_hash:str
     base_active_id:str|None
     created_at:str
+    updated_at:str|None=None
     first_planning_week:str
     summary:str
     gaps:list[PlanGap]
     milestones:list[PlanMilestone]
     assignments:list[PlanAssignment]
+    editable_tasks:list[EditableTask]|None=None
+    revision_review:list[RevisionReview]=Field(default_factory=list)
     deadline_outcome:DeadlineOutcome
     beyond_deadline:list[DraftBeyond]
     exclusions:list[DraftExclusion]
@@ -266,6 +270,7 @@ class PlannerView(Contract):
     candidate_blockers:list[RunwayIssue]
     active:PlannedRoadmap|None
     active_review:PlanReview|None
+    task_warnings:list[dict]=Field(default_factory=list)
     confirmations:dict[str,dict]
     signals:list[Signal]
     retry_generate:dict|None=None
