@@ -64,6 +64,8 @@ it('shows a saved partial profile and its uncertainty without inventing a skill 
  render(<ResumePreview/>);
  expect(await screen.findByText('Saved profile')).toBeVisible();
  expect(screen.getByRole('heading',{name:'Weekly reports'})).toBeVisible();
+ // The CV review owns the named regions for these kinds, so the summary columns must not add a second one.
+ expect(screen.queryByRole('region',{name:'Work and internships'})).not.toBeInTheDocument();
  fireEvent.click(screen.getByText('Data processing',{selector:'summary'}));
  expect(screen.getByText('unknown',{selector:'dd'})).toBeVisible();
  expect(screen.queryByText('Advanced')).not.toBeInTheDocument();

@@ -57,7 +57,7 @@ export function SkillsProfileSummary({title, profile, cv, declarations, error, u
      const items=cv?experience.filter(item=>item.kind===cvKind(kind)):[];
      const entries=profile?.entries.filter(entry=>entry.kind===kind)??[];
      if(!items.length&&!entries.length)return null;
-     return <section className="skills-experience-column" key={kind} aria-label={label}><header><h3>{label}</h3><span>{items.length+entries.length}</span></header>
+     return <section className="skills-experience-column" key={kind}><header><h3>{label}</h3><span>{items.length+entries.length}</span></header>
       {items.map(item=><details className="skills-background" key={item.id}><summary>{item.title}</summary><p className="cv-copy">{item.description}</p><ReviewEvidence facts={item.review_evidence}/><SkillBaseline estimates={cv!.skill_estimates?.filter(estimate=>estimate.item_id===item.id)}/>{cv!.clarifications.filter(q=>q.item_id===item.id&&q.status!=='unanswered'&&!q.reconciliation_required).map(q=><div key={q.id}><p className="small">{q.question}</p><blockquote>{q.answer??'Skipped. This detail remains unknown.'}</blockquote>{q.interpretation_status==='failed'&&<p className="small">Interpretation needs attention before saving this review.</p>}</div>)}</details>)}
       {entries.map(entry=><article className="skills-background" key={entry.id}><h4>{entry.title}</h4><dl className="skills-facts">{Object.entries(entry.fields).map(([field,value])=><div key={field}><dt>{readable(field)}</dt><dd>{value.value ?? readable(value.status)}</dd></div>)}</dl></article>)}
      </section>;
