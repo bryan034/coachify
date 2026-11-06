@@ -7,7 +7,7 @@ const units: Partial<Record<BlackoutFrequency, string>> = { daily: 'day', weekly
 const shortDate = (value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const weekdayOf = (value: string) => (new Date(`${value}T12:00:00Z`).getUTCDay() + 6) % 7;
 
-export const weeklyBlackout = (start_date: string): BlackoutRule => ({ frequency: 'weekly', start_date, end_date: null, interval: 1, weekdays: [weekdayOf(start_date)], start_time: null, end_time: null });
+export const newBlockedTime = (start_date: string): BlackoutRule => ({ frequency: 'weekly', start_date, end_date: null, interval: 1, weekdays: [0], start_time: '18:00', end_time: '20:00' });
 export const dailyBlackout = (start_date: string, end_date: string): BlackoutRule => ({ frequency: 'daily', start_date, end_date, interval: 1, weekdays: [], start_time: null, end_time: null });
 
 /** The rule in words, so a person can check what they configured. Capacity itself is calculated by the backend. */
@@ -27,7 +27,12 @@ function withFrequency(rule: BlackoutRule, frequency: BlackoutFrequency): Blacko
  return { ...rule, frequency, interval: 1, end_date: frequency === 'once' ? null : rule.end_date, weekdays: frequency !== 'weekly' ? [] : rule.weekdays.length ? rule.weekdays : [weekdayOf(rule.start_date)] };
 }
 
-function Rule({ rule, number, change, remove }: { rule: BlackoutRule; number: number; change: (rule: BlackoutRule) => void; remove: () => void }) {
+/** Which day of the week grid shows this rule. One-day and monthly rules have no fixed weekday, so they sit under the grid. */
+export const blockedOn = (rule: BlackoutRule, day: number) => rule.frequency === 'daily' || (rule.frequency === 'weekly' && rule.weekdays.includes(day));
+export const blockedHours = (rule: BlackoutRule) => rule.start_time && rule.end_time ? `${rule.start_time}–${rule.end_time}` : 'All day';
+export const blockedRepeat = (rule: BlackoutRule) => rule.interval > 1 ? `Every ${rule.interval} ${units[rule.frequency]}s` : rule.frequency === 'daily' ? 'Daily' : 'Weekly';
+
+export function BlockedTimeEditor({ rule, number, change, remove, close }: { rule: BlackoutRule; number: number; change: (rule: BlackoutRule) => void; remove: () => void; close: () => void }) {
  const name = `Blackout ${number}`;
  const once = rule.frequency === 'once';
  const allDay = rule.start_time === null && rule.end_time === null;
@@ -45,13 +50,7 @@ function Rule({ rule, number, change, remove }: { rule: BlackoutRule; number: nu
    {!allDay && <><label><span aria-hidden="true">From</span><input aria-label={`${name} start time`} type="time" value={rule.start_time || ''} onChange={e => { if (e.target.value) change({ ...rule, start_time: e.target.value }); }} /></label>
    <label><span aria-hidden="true">To</span><input aria-label={`${name} end time`} type="time" value={rule.end_time || ''} onChange={e => { if (e.target.value) change({ ...rule, end_time: e.target.value }); }} /></label></>}
    <button type="button" className="btn ghost" aria-label={`Remove blackout ${number}`} onClick={remove}>Remove</button>
+   <button type="button" className="btn ghost" onClick={close}>Done</button>
   </div>
  </div>;
-}
-
-export function BlackoutRules({ rules, update }: { rules: BlackoutRule[]; update: (rules: BlackoutRule[]) => void }) {
- return <>
-  <p className="small">Days or times you can’t study. Study blocks that overlap them are removed from your runway.</p>
-  <div className="settings-tiles">{rules.map((rule, index) => <Rule key={index} rule={rule} number={index + 1} change={next => update(rules.map((r, i) => i === index ? next : r))} remove={() => update(rules.filter((_, i) => i !== index))} />)}</div>
- </>;
 }

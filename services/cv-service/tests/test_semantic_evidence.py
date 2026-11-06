@@ -73,7 +73,7 @@ def test_semantic_verification_uses_shared_daily_budget(harness, monkeypatch):
     assert not result['error']['repair_attempted']
 
 
-def test_approved_long_summary_is_split_without_losing_approval_scope(harness, monkeypatch):
+def test_approved_long_summary_is_kept_whole(harness, monkeypatch):
     _, value = candidates()
     summary = ('Synthetic University study record. ' * 17) + 'The period was 2024 to 2025.'
     value['items'][0]['evidence'] = [{'block_id': 'b1', 'excerpt': summary}]
@@ -82,8 +82,7 @@ def test_approved_long_summary_is_split_without_losing_approval_scope(harness, m
     result = read_result(client, queued)
     assert result['status'] == 'ready' and len(calls) == 2
     refs = result['items'][0]['evidence']
-    assert len(refs) > 1 and all(len(ref['excerpt']) <= 500 for ref in refs)
-    assert ''.join(ref['excerpt'] for ref in refs) == summary
+    assert [ref['excerpt'] for ref in refs] == [summary]
 
 
 @pytest.mark.parametrize('lose_at', [1, 2])

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createLocalAccount } from './account-helpers';
 
 test('saved CVs retain corrections, require explicit selection and compose manual inputs through real services', async ({ page, browser }) => {
- test.setTimeout(120_000);
+ test.setTimeout(210_000);
  const account = await createLocalAccount(page, 'Synthetic CV reviewer');
  const before = await (await account.get('/api/v1/profile')).json();
  const complete = await account.finish({ expected_version: before.version, occupational_status: 'employed', no_previous_education: true });
@@ -79,13 +79,14 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  expect((await (await account.get('/api/v1/cv')).json()).cvs).toHaveLength(1);
  await openCvReviewTools(page);
 
- // A model boundary failure on a different CV must not replace selected input.
+ // A model boundary failure on a different CV must not replace selected input. Rejected output
+ // retries automatically twice, after 20 and 40 seconds, before it is reported as failed.
  await page.getByLabel('CV document', { exact: true }).setInputFiles({ name: 'synthetic-cv.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: readFileSync(path.join(process.cwd(), 'tests/fixtures/synthetic-cv-failure.docx')) });
  await page.getByRole('button', { name: 'Upload CV', exact: true }).click();
  await expect.poll(async () => {
   const value = await (await account.get('/api/v1/cv')).json();
   return value.cvs.find((item: { id: string }) => item.id !== cvId)?.status;
- }, { timeout: 30_000 }).toBe('failed');
+ }, { timeout: 90_000, intervals: [2_000] }).toBe('failed');
  const finalList = await (await account.get('/api/v1/cv')).json();
  expect(finalList.cvs).toHaveLength(2);
  expect(finalList.cvs.map((item: { file_name: string }) => item.file_name)).toEqual(['synthetic-cv.docx', 'synthetic-cv.docx']);

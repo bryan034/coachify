@@ -18,8 +18,6 @@
 .roadmap-settings textarea{min-height:64px;resize:vertical}
 .settings-suggestions{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
 .settings-link{border:0;background:none;padding:0;color:var(--green);font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;overflow-wrap:anywhere}
-.settings-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:10px;margin:10px 0}
-.settings-tiles:empty{display:none}
 .study-block,.blackout-rule{min-width:0;padding:12px;background:white;border:1px solid var(--line);border-radius:10px}
 .settings-check{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:10px 0}
 .settings-check input{margin-top:3px;flex-shrink:0;accent-color:var(--ink)}
@@ -124,7 +122,6 @@
 .earlier-plan summary{cursor:pointer}
 @media(max-width:600px){
  .helper-needed{padding:10px 18px}.adviser-composer textarea{min-height:64px}
- .settings-tiles{grid-template-columns:minmax(0,1fr)}
  .route-map{height:130px;margin:60px 8px 24px}.route-stop{width:16px;height:16px;font-size:9px}.route-end{width:26px;height:26px}
  .route-label-end{white-space:normal;max-width:80%}.route-label-end strong{font-size:13px}
 }
@@ -148,15 +145,15 @@
 .use-chips{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .use-chip{display:inline-block;padding:7px 14px;border-radius:99px;background:var(--white);border:1px solid var(--line);font-size:13px;line-height:1.3;overflow-wrap:anywhere}
 .use-chip.goal{background:var(--ink);border-color:var(--ink);color:var(--white);font-weight:500}
-.use-chip-menu summary{cursor:pointer;list-style:none}
-.use-chip-menu summary::-webkit-details-marker{display:none}
-.use-chip-menu[open] summary{border-color:var(--ink)}
-.use-chip-menu summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.use-panel{position:absolute;z-index:6;left:0;right:0;top:calc(100% + 8px);max-height:360px;overflow:auto;padding:16px 20px;background:var(--white);border:1px solid var(--line);border-radius:16px;font-size:13px;box-shadow:0 14px 32px rgb(17 24 39 / .12)}
-.use-panel h3{font-size:12px;font-weight:600;margin:12px 0 4px}
-.use-panel ul{list-style:none;padding:0;margin:0}
-.use-panel li{padding:6px 0;border-bottom:1px solid var(--line)}
-.use-panel li span{display:block;color:var(--slate);font-size:12px}
+.use-chip-button{font:inherit;font-size:13px;color:inherit;cursor:pointer}
+.use-chip-button:hover{background:var(--cloud)}
+.use-chip-button.open{border-color:var(--ink)}
+.use-chip-button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.use-panel{position:absolute;z-index:6;left:0;top:calc(100% + 6px);display:grid;gap:12px;width:min(520px,100%);max-height:340px;overflow:auto;padding:14px 16px;background:var(--white);border:1px solid var(--line);border-radius:14px;font-size:13px;box-shadow:0 12px 28px rgb(17 24 39 / .1)}
+.use-group h3{margin:0 0 6px;font-size:12px;font-weight:500;color:var(--slate)}
+.use-tags{display:flex;flex-wrap:wrap;gap:5px;margin:0;padding:0;list-style:none}
+.use-tags li{padding:3px 10px;border-radius:99px;background:var(--cloud);font-size:12.5px;line-height:1.45;overflow-wrap:anywhere}
+.use-panel-link{justify-self:start;font-size:12.5px;font-weight:500;text-decoration:underline;text-underline-offset:3px}
 
 /* The plan as one sentence travelling down a road. The road is the page's one bold thing. */
 .road-intro{margin-bottom:-8px}
@@ -175,7 +172,6 @@
 .road-stop.filled .road-dot{background:var(--mint);box-shadow:inset 0 0 0 2px var(--ink)}
 .road-stop.current .road-dot{background:var(--ink);box-shadow:0 0 0 4px rgb(52 211 153 / .45)}
 .road-content{min-width:0;margin:0 0 14px;padding:8px 16px;border:0;border-radius:16px}
-.road-stop.current .road-content{background:var(--white);box-shadow:inset 0 0 0 1px var(--line)}
 .road-clause{margin:0;font-size:16px;line-height:2}
 .road-clause .small{margin-left:2px}
 .road-hint{margin:0 0 8px}
@@ -198,11 +194,17 @@
 .token.calculated:focus-within .token-edit{opacity:1}
 .token.calculated:focus-within .token-shown{visibility:hidden}
 .roadmap-settings .token select{width:auto;cursor:pointer}
-.roadmap-settings .date-token input[type=date]{position:absolute;inset:0;width:100%;padding:0 .3em;opacity:0;cursor:pointer}
+.date-token:focus-within{min-width:8.8em}
+.roadmap-settings .date-token input[type=date]{position:absolute;inset:0;box-sizing:border-box;width:100%;height:100%;min-height:0;margin:0;padding:0 .3em;line-height:inherit;opacity:0;cursor:pointer}
+.roadmap-settings .date-token input[type=date]::-webkit-calendar-picker-indicator{width:.9em;height:.9em;margin:0 0 0 .2em;padding:0}
+.roadmap-settings .date-token input[type=date]::-webkit-datetime-edit{padding:0}
 .roadmap-settings .date-token:focus-within input[type=date]{opacity:1;background:inherit;border-radius:inherit}
 .toggle-token input{position:absolute;inset:0;margin:0;opacity:0;cursor:pointer}
 .settings-suggestions{margin:6px 0 0}
-.road-add{margin-top:10px;height:34px;padding:0 14px;font-size:13px}
+.road-adds{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.road-add{height:34px;padding:0 14px;font-size:13px}
+.road-note{margin:8px 0 0}
+.plan-saved{align-self:center;color:var(--slate)}
 .block-week{container-type:inline-size;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
 .block-day{display:flex;flex-direction:column;gap:5px;min-width:0}
 .block-day-name{font-size:12px;color:var(--slate);text-align:center}
@@ -212,7 +214,13 @@
 .block-chip span:nth-of-type(1){color:var(--mint)}
 .block-chip.backup{background:var(--white);color:var(--ink);box-shadow:inset 0 0 0 1px var(--slate)}
 .block-chip.backup span:nth-of-type(1){color:var(--slate)}
+.block-chip.blocked{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--slate) 20%,var(--white)) 0 6px,color-mix(in srgb,var(--slate) 10%,var(--white)) 6px 12px);color:var(--ink)}
+.block-chip.blocked span:nth-of-type(1){color:var(--slate)}
 .block-chip[aria-expanded=true]{box-shadow:0 0 0 2px var(--mint)}
+.road-content .blackout-rule{margin-top:10px}
+.block-others{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.block-others .block-chip{width:auto;min-width:130px}
+.block-hint{font-size:11px;color:#92400e}
 /* In a narrow week the chip's colour already says preferred or backup */
 @container (max-width:520px){
  .block-chip{padding:5px 3px;font-size:10px;text-align:center}
@@ -221,16 +229,16 @@
 }
 .block-add{flex:1 0 24px;min-height:24px;border:0;border-radius:9px;background:none;color:var(--slate);font:inherit;font-size:15px;cursor:pointer}
 .block-add:hover,.block-add:focus-visible{background:var(--white)}
-.study-block{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;align-items:end;margin-top:10px;padding:12px;background:var(--white);border:1px solid var(--line);border-radius:12px}
+.study-block{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;align-items:end;margin-top:10px;padding:12px;background:var(--white);border:1px solid var(--line);border-radius:12px}
 .study-block label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--slate);min-width:0}
-.study-block .btn{height:36px;padding:0 12px;grid-column:span 2}
+.study-block .btn{height:36px;padding:0 12px}
 .focus-panel{margin-top:8px}
 .focus-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .focus-chip{position:relative;padding:6px 13px;border:1px solid var(--line);border-radius:99px;background:var(--white);font-size:13px;cursor:pointer}
 .focus-chip input{position:absolute;inset:0;margin:0;opacity:0;cursor:pointer}
 .focus-chip.on{background:var(--ink);border-color:var(--ink);color:var(--white)}
 .focus-chip:focus-within{outline:2px solid var(--ink);outline-offset:2px}
-.road-content>.small,.road-content>.settings-tiles{margin-top:8px}
+.road-content>.small{margin-top:8px}
 
 /* The road ends at the runway, where generating happens */
 .road-end .road-dot.road-flag{top:24px;width:30px;height:30px;margin:-15px 0 0 -15px;background:var(--white);box-shadow:inset 0 0 0 2px #c3ccd6}

@@ -1,12 +1,12 @@
 "use client";
 import Link from 'next/link';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { deviceTimeZone } from '@/features/profile/planning-preferences';
 import { groupSkills } from '@/lib/skill-groups';
 import { roadmapApi } from '@/lib/api/roadmap';
-import { BlackoutRules, dailyBlackout, weeklyBlackout } from './blackout-rules';
+import { BlockedTimeEditor, blockedHours, blockedOn, blockedRepeat, dailyBlackout, describeBlackout, newBlockedTime } from './blackout-rules';
 import { fullDate, monthName, monthsBetween } from './roadmap-calendar';
-import type { Duration, LearningFocus, PlannerConfig, Runway, StudyBlock, Workspace } from './types';
+import type { BlackoutRule, Duration, LearningFocus, PlannerConfig, Runway, StudyBlock, Workspace } from './types';
 
 export const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const hours = (minutes: number) => `${Number((minutes / 60).toFixed(2))} h`;
@@ -33,11 +33,13 @@ export function useSettingsDraft(workspace: Workspace | null, token: string) {
  }, [draft, token]);
  const current = preview && preview.source === draft ? preview.runway : null;
  return {
-  config, dirty: !!draft, previewError,
+  config, draft, dirty: !!draft, previewError,
   runway: draft ? current || preview?.runway || planner?.runway || null : planner?.runway || null,
   calculating: !!draft && !current && !previewError,
   update: (patch: Partial<PlannerConfig>) => { if (config) setDraft({ ...config, ...patch }); },
   clear: () => setDraft(null),
+  // Only clears the version that was saved, so edits made during the save are kept.
+  clearIf: (saved: PlannerConfig) => setDraft(current => current === saved ? null : current),
  };
 }
 
@@ -62,11 +64,28 @@ function NumberToken({ name, value, suffix, attached, onChange, ...limits }: { n
  </label>;
 }
 
+const clockMinutes = (clock: string) => { const [hour, minute] = clock.split(':').map(Number); return hour * 60 + minute; };
+const clockOf = (minutes: number) => { const value = ((minutes % 1440) + 1440) % 1440; return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
+const blockEnd = (block: StudyBlock) => clockOf(clockMinutes(block.start_time) + block.duration_minutes);
+const blockHours = (block: StudyBlock) => `${block.start_time}–${blockEnd(block)}`;
+const MIN_BLOCK = 15, MAX_BLOCK = 480;
+
+/** The end time drives the block's minutes. A time that makes the block too short or long waits here until it's corrected. */
+function BlockEnd({ block, name, change }: { block: StudyBlock; name: string; change: (patch: Partial<StudyBlock>) => void }) {
+ const saved = blockEnd(block);
+ const [typed, setTyped] = useState(saved);
+ useEffect(() => setTyped(saved), [saved]);
+ const minutes = (clockMinutes(typed || '00:00') - clockMinutes(block.start_time) + 1440) % 1440;
+ const fits = minutes >= MIN_BLOCK && minutes <= MAX_BLOCK;
+ return <label><span aria-hidden="true">Ends</span><input aria-label={`${name} end time`} aria-invalid={!fits} type="time" value={typed} onChange={e => { const value = e.target.value; setTyped(value); if (!value) return; const next = (clockMinutes(value) - clockMinutes(block.start_time) + 1440) % 1440; if (next >= MIN_BLOCK && next <= MAX_BLOCK) change({ duration_minutes: next }); }} onBlur={() => setTyped(saved)} />{!fits && <span className="block-hint">Use 15 minutes to 8 hours</span>}</label>;
+}
+
 function BlockRow({ block, index, change, remove, close }: { block: StudyBlock; index: number; change: (patch: Partial<StudyBlock>) => void; remove: () => void; close: () => void }) {
  const name = `Block ${index + 1}`;
  return <div className="study-block">
   <label><span aria-hidden="true">Day</span><select aria-label={`${name} day`} value={block.day} onChange={e => change({ day: Number(e.target.value) })}>{days.map((day, i) => <option key={day} value={i}>{day}</option>)}</select></label>
   <label><span aria-hidden="true">Starts</span><input aria-label={`${name} start time`} type="time" value={block.start_time} onChange={e => { if (e.target.value) change({ start_time: e.target.value }); }} /></label>
+  <BlockEnd block={block} name={name} change={change} />
   <label><span aria-hidden="true">Minutes</span><input aria-label={`${name} minutes`} type="number" min={15} max={480} step={5} value={block.duration_minutes} onChange={e => change({ duration_minutes: Math.round(Number(e.target.value)) })} /></label>
   <label><span aria-hidden="true">Type</span><select aria-label={`${name} type`} value={block.kind} onChange={e => change({ kind: e.target.value as StudyBlock['kind'] })}><option value="preferred">Preferred</option><option value="backup">Backup</option></select></label>
   <button type="button" className="btn ghost" aria-label={`Remove block ${index + 1}`} onClick={remove}>Remove</button>
@@ -74,22 +93,60 @@ function BlockRow({ block, index, change, remove, close }: { block: StudyBlock; 
  </div>;
 }
 
-/** The week of recurring study blocks. Choosing a block opens its details underneath. */
-function StudyWeek({ blocks, setBlocks }: { blocks: StudyBlock[]; setBlocks: (blocks: StudyBlock[]) => void }) {
- const [editing, setEditing] = useState<number | null>(null);
- const add = (day: number) => { if (blocks.length >= 28) return; setBlocks([...blocks, { day, start_time: '19:00', duration_minutes: 60, kind: 'preferred' }]); setEditing(blocks.length); };
- const block = editing === null ? undefined : blocks[editing];
+/** Breaks after the dash, so a narrow week shows the start above the end instead of cutting them off. */
+const Hours = ({ text }: { text: string }) => { const [from, to] = text.split('–'); return <strong>{to ? <>{from}–<wbr />{to}</> : text}</strong>; };
+
+/** The week of study blocks and blocked times. Choosing one opens its details underneath. */
+function StudyWeek({ blocks, blackouts, startDate, setBlocks, setBlackouts }: { blocks: StudyBlock[]; blackouts: BlackoutRule[]; startDate: string; setBlocks: (blocks: StudyBlock[]) => void; setBlackouts: (rules: BlackoutRule[]) => void }) {
+ const [editing, setEditing] = useState<{ type: 'study' | 'blocked'; index: number } | null>(null);
+ const isOpen = (type: 'study' | 'blocked', index: number) => editing?.type === type && editing.index === index;
+ const toggle = (type: 'study' | 'blocked', index: number) => setEditing(isOpen(type, index) ? null : { type, index });
+ const add = (day: number) => { if (blocks.length >= 28) return; setBlocks([...blocks, { day, start_time: '19:00', duration_minutes: 60, kind: 'preferred' }]); setEditing({ type: 'study', index: blocks.length }); };
+ const addBlocked = () => { if (blackouts.length >= 366) return; setBlackouts([...blackouts, newBlockedTime(startDate)]); setEditing({ type: 'blocked', index: blackouts.length }); };
+ const block = editing?.type === 'study' ? blocks[editing.index] : undefined;
+ const rule = editing?.type === 'blocked' ? blackouts[editing.index] : undefined;
+ const others = blackouts.map((item, index) => ({ item, index })).filter(({ item }) => item.frequency === 'once' || item.frequency === 'monthly');
  return <>
-  <div className="block-week">{days.map((name, day) => <div className="block-day" key={name}>
-   <span className="block-day-name">{name.slice(0, 3)}</span>
-   <div className="block-cell">
-    {blocks.map((item, index) => ({ item, index })).filter(({ item }) => item.day === day).sort((a, b) => a.item.start_time.localeCompare(b.item.start_time)).map(({ item, index }) => <button type="button" key={index} className={`block-chip ${item.kind}`} aria-expanded={editing === index} aria-label={`Edit ${name} block: ${item.start_time}, ${item.duration_minutes} minutes, ${item.kind}`} onClick={() => setEditing(editing === index ? null : index)}><strong>{item.start_time}</strong><span>{item.duration_minutes} min</span><span className="block-kind">{item.kind === 'backup' ? 'Backup' : 'Preferred'}</span></button>)}
-    <button type="button" className="block-add" aria-label={`Add study block on ${name}`} disabled={blocks.length >= 28} onClick={() => add(day)}><span aria-hidden="true">+</span></button>
-   </div>
-  </div>)}</div>
-  {block && editing !== null && <BlockRow block={block} index={editing} change={patch => setBlocks(blocks.map((b, i) => i === editing ? { ...b, ...patch } : b))} remove={() => { setBlocks(blocks.filter((_, i) => i !== editing)); setEditing(null); }} close={() => setEditing(null)} />}
-  <button type="button" className="btn ghost road-add" disabled={blocks.length >= 28} onClick={() => add(0)}><span aria-hidden="true">+ </span>Add study block</button>
+  <div className="block-week">{days.map((name, day) => {
+   const studies = blocks.map((item, index) => ({ item, index, at: item.start_time })).filter(({ item }) => item.day === day);
+   const blocked = blackouts.map((item, index) => ({ item, index, at: item.start_time || '' })).filter(({ item }) => blockedOn(item, day));
+   const chips = [
+    ...studies.map(({ item, index, at }) => ({ at, key: `study${index}`, chip: <button type="button" key={`study${index}`} className={`block-chip ${item.kind}`} aria-expanded={isOpen('study', index)} aria-label={`Edit ${name} block: ${blockHours(item)}, ${item.duration_minutes} minutes, ${item.kind}`} onClick={() => toggle('study', index)}><Hours text={blockHours(item)} /><span>{item.duration_minutes} min</span><span className="block-kind">{item.kind === 'backup' ? 'Backup' : 'Preferred'}</span></button> })),
+    ...blocked.map(({ item, index, at }) => ({ at, key: `blocked${index}`, chip: <button type="button" key={`blocked${index}`} className="block-chip blocked" aria-expanded={isOpen('blocked', index)} aria-label={`Edit blocked time on ${name}: ${describeBlackout(item)}`} onClick={() => toggle('blocked', index)}><Hours text={blockedHours(item)} /><span>{blockedRepeat(item)}</span><span className="block-kind">Blocked</span></button> })),
+   ].sort((a, b) => a.at.localeCompare(b.at));
+   return <div className="block-day" key={name}>
+    <span className="block-day-name">{name.slice(0, 3)}</span>
+    <div className="block-cell">
+     {chips.map(({ chip }) => chip)}
+     <button type="button" className="block-add" aria-label={`Add study block on ${name}`} disabled={blocks.length >= 28} onClick={() => add(day)}><span aria-hidden="true">+</span></button>
+    </div>
+   </div>;
+  })}</div>
+  {others.length > 0 && <div className="block-others">{others.map(({ item, index }) => <button type="button" key={index} className="block-chip blocked" aria-expanded={isOpen('blocked', index)} aria-label={`Edit blocked time: ${describeBlackout(item)}`} onClick={() => toggle('blocked', index)}><Hours text={blockedHours(item)} /><span>{describeBlackout(item).split(',')[0]}</span><span className="block-kind">Blocked</span></button>)}</div>}
+  {block && editing && <BlockRow block={block} index={editing.index} change={patch => setBlocks(blocks.map((b, i) => i === editing.index ? { ...b, ...patch } : b))} remove={() => { setBlocks(blocks.filter((_, i) => i !== editing.index)); setEditing(null); }} close={() => setEditing(null)} />}
+  {rule && editing && <BlockedTimeEditor rule={rule} number={editing.index + 1} change={next => setBlackouts(blackouts.map((r, i) => i === editing.index ? next : r))} remove={() => { setBlackouts(blackouts.filter((_, i) => i !== editing.index)); setEditing(null); }} close={() => setEditing(null)} />}
+  <div className="road-adds">
+   <button type="button" className="btn ghost road-add" disabled={blocks.length >= 28} onClick={() => add(0)}><span aria-hidden="true">+ </span>Add study block</button>
+   <button type="button" className="btn ghost road-add" disabled={blackouts.length >= 366} onClick={addBlocked}><span aria-hidden="true">+ </span>Add Blockout Times</button>
+  </div>
  </>;
+}
+
+/** A chip that opens a small panel. Escape or a click anywhere else closes it. */
+function UseMenu({ label, children }: { label: string; children: ReactNode }) {
+ const [open, setOpen] = useState(false);
+ const root = useRef<HTMLDivElement>(null); const button = useRef<HTMLButtonElement>(null); const id = useId();
+ useEffect(() => {
+  if (!open) return;
+  const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+  const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setOpen(false); button.current?.focus(); } };
+  document.addEventListener('pointerdown', outside); document.addEventListener('keydown', escape);
+  return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+ }, [open]);
+ return <div className="use-chip-menu" ref={root}>
+  <button ref={button} type="button" className={`use-chip use-chip-button${open ? ' open' : ''}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>{label}</button>
+  {open && <div className="use-panel" id={id}>{children}</div>}
+ </div>;
 }
 
 /** Start to target as a line of months. The stats beside it carry the numbers. */
@@ -116,9 +173,10 @@ function Road({ index, travelled }: { index: number; travelled: boolean }) {
 
 type StopSpec = { name: string; filled: boolean; required: boolean; content: ReactNode };
 
-export function SettingsPanel({ workspace, settings, partial, setPartial, frozen, generate, save, returnToReview }: {
+export type AutosaveState = 'idle' | 'saving' | 'saved' | 'failed';
+export function SettingsPanel({ workspace, settings, partial, setPartial, frozen, generate, save, autosave, returnToReview }: {
  workspace: Workspace; settings: ReturnType<typeof useSettingsDraft>; partial: boolean; setPartial: (value: boolean) => void; frozen: boolean;
- generate: () => void; save: () => void; returnToReview: (() => void) | null;
+ generate: () => void; save: () => void; autosave: AutosaveState; returnToReview: (() => void) | null;
 }) {
  const { context, planner } = workspace;
  const { config, runway, update } = settings;
@@ -170,8 +228,10 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
   { name: 'Session length', required: true, filled: config.preferred_session_minutes > 0, content: <p className="road-clause">in <NumberToken name="Preferred session in minutes" min={15} max={480} step={5} value={config.preferred_session_minutes} suffix="-minute" attached onChange={value => update({ preferred_session_minutes: Math.round(Number(value)) })} /> sessions,</p> },
   { name: 'Recurring study blocks', required: true, filled: config.blocks.length > 0, content: <>
    <p className="road-clause">on these days each week:</p>
-   <p className="small road-hint">Time outside these blocks is treated as unavailable.</p>
-   <StudyWeek blocks={config.blocks} setBlocks={blocks => update({ blocks })} />
+   <p className="small road-hint">Time outside these blocks is treated as unavailable, and blocked times remove any study time they overlap.</p>
+   <StudyWeek blocks={config.blocks} blackouts={config.blackouts} startDate={start} setBlocks={blocks => update({ blocks })} setBlackouts={blackouts => update({ blackouts })} />
+   {blackoutPeriods.map(period => <p className="small road-note" key={period.start_date}>You saved no availability from {period.start_date} to {period.end_date}. <button type="button" className="settings-link" onClick={() => update({ blackouts: [...config.blackouts, dailyBlackout(period.start_date, period.end_date)] })}>Add as blackout</button></p>)}
+   {reduced.map(period => <p className="small road-note" key={period.start_date}>You saved {period.weekly_hours} hours a week from {period.start_date} to {period.end_date}. This isn’t applied automatically, so adjust your budget or blocked times if needed.</p>)}
   </> },
   { name: 'Backup blocks', required: false, filled: config.use_backup, content: <p className="road-clause">Backup blocks are <label className={`token toggle-token${config.use_backup ? '' : ' off'}`}><input type="checkbox" aria-label="Allow backup blocks when preferred time runs out" checked={config.use_backup} onChange={e => update({ use_backup: e.target.checked })} /><span aria-hidden="true">{config.use_backup ? 'allowed' : 'not allowed'}</span></label> when preferred time runs out.</p> },
   { name: 'Learning focus', required: false, filled: chosenFocus.length > 0 || !!config.learning_notes.trim(), content: <>
@@ -180,12 +240,6 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
     <div className="focus-chips">{focuses.map(([value, label]) => <label key={value} className={`focus-chip${config.learning_focus.includes(value) ? ' on' : ''}`}><input type="checkbox" checked={config.learning_focus.includes(value)} onChange={e => update({ learning_focus: e.target.checked ? [...config.learning_focus, value] : config.learning_focus.filter(f => f !== value) })} />{label}</label>)}</div>
     <label className="settings-field"><span>Anything else about how you like to learn?</span><textarea maxLength={1000} value={config.learning_notes} onChange={e => update({ learning_notes: e.target.value })} /></label>
    </div>}
-  </> },
-  { name: 'Blackout days and times', required: false, filled: config.blackouts.length > 0, content: <>
-   <p className="road-clause">{config.blackouts.length ? 'and I can’t study during these times.' : 'and I can’t study on'} <button type="button" className="token token-button empty" aria-label="Add blackout" disabled={config.blackouts.length >= 366} onClick={() => update({ blackouts: [...config.blackouts, weeklyBlackout(start)] })}><span aria-hidden="true">+ </span>{config.blackouts.length ? 'add another' : 'add blackout'}</button>{!config.blackouts.length && '.'} <span className="small">Optional</span></p>
-   <BlackoutRules rules={config.blackouts} update={blackouts => update({ blackouts })} />
-   {blackoutPeriods.map(period => <p className="small" key={period.start_date}>You saved no availability from {period.start_date} to {period.end_date}. <button type="button" className="settings-link" onClick={() => update({ blackouts: [...config.blackouts, dailyBlackout(period.start_date, period.end_date)] })}>Add as blackout</button></p>)}
-   {reduced.map(period => <p className="small" key={period.start_date}>You saved {period.weekly_hours} hours a week from {period.start_date} to {period.end_date}. This isn’t applied automatically, so adjust your budget or blackouts if needed.</p>)}
   </> },
  ];
  // The road is travelled up to the first required detail still missing. Filling that in moves it on.
@@ -198,14 +252,14 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
    <div className="use-chips">
     <span className="use-chip goal">{planner.inputs.goal?.role || 'No career goal yet'}</span>
     {planner.inputs.goal?.company && <span className="use-chip">{planner.inputs.goal.company}</span>}
-    {!!planner.inputs.goal?.skills?.length && <details className="use-chip-menu"><summary className="use-chip">{count(planner.inputs.goal.skills.length, 'skill')} in this goal</summary><div className="use-panel"><ul>{planner.inputs.goal.skills.map(skill => <li key={skill.name}><strong>{skill.name}</strong></li>)}</ul></div></details>}
+    {!!planner.inputs.goal?.skills?.length && <UseMenu label={`${count(planner.inputs.goal.skills.length, 'skill')} in this goal`}><ul className="use-tags">{planner.inputs.goal.skills.map(skill => <li key={skill.name}>{skill.name}</li>)}</ul></UseMenu>}
     {planner.inputs.cv?.name && <span className="use-chip">{planner.inputs.cv.name}</span>}
-    <details className="use-chip-menu"><summary className="use-chip">Skills profile · {count(planner.inputs.skills.length, 'skill')}, {count(planner.inputs.experience.length, 'experience')}</summary><div className="use-panel">
+    <UseMenu label={`Skills profile · ${count(planner.inputs.skills.length, 'skill')}, ${count(planner.inputs.experience.length, 'experience')}`}>
      {!planner.inputs.skills.length && !planner.inputs.experience.length && <p className="small">No skills evidence is available yet.</p>}
-     {groups.map(group => <div key={group.name}><h3>{group.name}</h3><ul>{group.items.map(skill => <li key={skill.ref}><strong>{skill.name}</strong>{skill.text && <span>{skill.text.slice(0, 160)}</span>}</li>)}</ul></div>)}
-     {!!planner.inputs.experience.length && <div><h3>Experience</h3><ul>{planner.inputs.experience.map(item => <li key={item.ref}><strong>{item.name}</strong></li>)}</ul></div>}
-     <Link href="/cv">Update your Skills Profile</Link>
-    </div></details>
+     {groups.map(group => <div className="use-group" key={group.name}><h3>{group.name}</h3><ul className="use-tags">{group.items.map(skill => <li key={skill.ref} title={skill.text || undefined}>{skill.name}</li>)}</ul></div>)}
+     {!!planner.inputs.experience.length && <div className="use-group"><h3>Experience</h3><ul className="use-tags">{planner.inputs.experience.map(item => <li key={item.ref}>{item.name}</li>)}</ul></div>}
+     <Link className="use-panel-link" href="/cv">Update your Skills Profile</Link>
+    </UseMenu>
    </div>
   </section>
 
@@ -245,7 +299,9 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
      {context.ready && !validResearch && <label className="settings-check"><input type="checkbox" disabled={frozen} checked={partial} onChange={e => setPartial(e.target.checked)} />Continue with available evidence. Interview research is {context.research_coverage || 'unavailable'}; the comparison will be labelled partial.</label>}
      <div className="plan-actions">
       <button type="button" className="btn primary" disabled={blocked || frozen} onClick={generate}>{planner.active ? 'Preview updated roadmap' : 'Generate roadmap'}</button>
-      {settings.dirty && <button type="button" className="btn ghost" disabled={frozen || !!settings.previewError} onClick={save}>Save settings</button>}
+      {settings.dirty && autosave === 'failed' && <button type="button" className="btn ghost" disabled={frozen || !!settings.previewError} onClick={save}>Save settings</button>}
+      {autosave === 'saving' && <span className="small plan-saved">Saving…</span>}
+      {autosave === 'saved' && !settings.dirty && <span className="small plan-saved">All changes saved</span>}
       {returnToReview && <button type="button" className="btn ghost" onClick={returnToReview}>Return to roadmap</button>}
      </div>
     </section>

@@ -7,6 +7,7 @@ from app.domain.errors import Conflict
 from app.repositories.conversations import ConversationRepository, MemoryConversationRepository
 from app.repositories.admission import AdmissionLedger, MemoryAdmissionLedger
 from app.repositories.model_usage import ModelUsageStore, MemoryModelUsageStore
+from app.repositories.extraction_state import ExtractionStateStore, MemoryExtractionStateStore
 
 
 SUMMARY_FIELDS = {'_id': 1, 'file_name': 1, 'display_name': 1, 'file_type': 1, 'operation': 1,
@@ -21,6 +22,7 @@ class CvRepository:
         self.conversations = ConversationRepository(database)
         self.admission = AdmissionLedger(database)
         self.model_usage = ModelUsageStore(database)
+        self.extraction_states = ExtractionStateStore(database)
         self.collection = database.cvs
         self.selections = database.cv_selections
         self.collection.create_index([('user_id', ASCENDING), ('upload_key', ASCENDING)], unique=True)
@@ -74,7 +76,7 @@ class CvRepository:
         return deepcopy(document)
 
     def candidates(self, now, after=None):
-        query = {'$or': [{'operation.status': 'queued'},
+        query = {'$or': [{'operation.status': 'queued', 'operation.retry_at': {'$not': {'$gt': now}}},
             {'operation.status': 'processing', 'operation.lease_until': {'$lte': now}}]}
         if after is not None: query['_id'] = {'$gt': after}
         return list(self.collection.find(query, {'_id': 1, 'user_id': 1}).sort('_id', 1).limit(10))
@@ -115,6 +117,7 @@ class MemoryCvRepository:
         self.conversations = MemoryConversationRepository()
         self.admission = MemoryAdmissionLedger()
         self.model_usage = MemoryModelUsageStore()
+        self.extraction_states = MemoryExtractionStateStore()
         self.documents, self.selections = {}, {}
         self.lock = RLock()
 
@@ -179,7 +182,7 @@ class MemoryCvRepository:
     def candidates(self, now, after=None):
         with self.lock:
             return [{'_id': doc['_id'], 'user_id': doc['user_id']} for doc in sorted(self.documents.values(), key=lambda doc: doc['_id'])
-                if (after is None or doc['_id'] > after) and (doc['operation']['status'] == 'queued' or
+                if (after is None or doc['_id'] > after) and ((doc['operation']['status'] == 'queued' and doc['operation'].get('retry_at', 0) <= now) or
                 (doc['operation']['status'] == 'processing' and doc['operation']['lease_until'] <= now))][:10]
 
     def cleanup_candidates(self, now, after=None):

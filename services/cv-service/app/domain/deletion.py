@@ -35,6 +35,7 @@ class CvDeletion:
         if record['deletion']['state'] == 'pending':
             self.files.remove(identifier)
             self.repository.conversations.delete_for_cv(owner, identifier)
+            self.repository.extraction_states.delete(identifier)
             self.repository.clear_selection(owner, identifier)
             complete = deepcopy(record)
             complete['deletion']['state'] = 'complete'

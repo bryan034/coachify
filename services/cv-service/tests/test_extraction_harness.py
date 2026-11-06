@@ -13,7 +13,13 @@ from app.clients.extraction_schema import extraction_schema
 from app.domain.extraction_feedback import feedback_for
 from app.domain.service import now
 from app.schemas.cv import Extraction, ExtractedItem, SourceExcerpt
+from app.repositories.extraction_state import MemoryExtractionStateStore
+from app.workflows.checkpoints import LatestStateSaver
 from app.workflows.extraction import ExtractionHarness
+
+
+def saver():
+    return LatestStateSaver(MemoryExtractionStateStore(), 'synthetic-cv', 'owner-a')
 from tests.conftest import docx, upload
 from tests.test_extraction_failures import provider
 from tests.test_model_usage import count
@@ -81,7 +87,7 @@ def test_schema_contains_decoding_constraints_and_no_optional_object_fields():
     assert schema['properties']['items']['minItems'] == 1
     assert schema['properties']['items']['maxItems'] == 160
     assert item['properties']['evidence']['maxItems'] == 6
-    assert item['properties']['evidence']['items']['properties']['excerpt']['maxLength'] == 500
+    assert 'maxLength' not in item['properties']['evidence']['items']['properties']['excerpt']
     assert item['properties']['explicit']['type'] == 'boolean'
     assert item['properties']['kind']['enum'] == ['education', 'experience', 'project', 'skill']
     assert {'type': 'null'} in item['properties']['end_date']['anyOf']
@@ -93,7 +99,7 @@ def test_repair_recovers_overlong_quotes_and_conflicting_dates(harness, monkeypa
     with caplog.at_level(logging.WARNING): app.state.worker.run_once()
     result = read_result(client, queued)
     assert result['status'] == 'ready' and result['error'] is None
-    assert result['extraction']['workflow_version'] == 'cv-extraction-4'
+    assert result['extraction']['workflow_version'] == 'cv-extraction-5'
     assert result['extraction']['repair_attempts'] == 1
     assert result['extraction']['response_mode'] == 'json_schema'
     assert result['extraction_version'] == 1 and len(result['items']) == 2
@@ -227,8 +233,8 @@ def test_graph_disables_tracing_even_under_enabled_parent(monkeypatch):
         tracing.append(get_tracing_context()['enabled'])
     graph = ExtractionHarness('synthetic-id',
         lambda original: {'blocks': [{'id': f'b{i+1}', 'text': text, 'location': 'Synthetic'} for i, text in enumerate(SOURCES)]},
-        lambda *args: (valid, {}), observe)
-    assert graph.graph.checkpointer is None
+        lambda *args: (valid, {}), observe, checkpointer=saver(), thread_id='operation:1')
+    assert isinstance(graph.graph.checkpointer, LatestStateSaver)
     with tracing_context(enabled=True): result = graph.run(b'synthetic')
     assert stages == ['document_parse', 'model_request', 'extraction_validation']
     assert all(value is False for value in tracing) and result['repair_attempts'] == 0
@@ -301,7 +307,7 @@ def test_failed_reprocessing_preserves_other_information(harness, monkeypatch):
 def test_gemini_simple_schema_keeps_all_backend_constraints(harness, monkeypatch, defect):
     _, invalid = candidates()
     if defect == 'items_count': invalid['items'] *= 81
-    elif defect == 'citation_count': invalid['items'][0]['evidence'] = [{'block_id': 'b1', 'excerpt': 'A' * 501}] * 4
+    elif defect == 'citation_count': invalid['items'][0]['evidence'] = [{'block_id': 'b1', 'excerpt': 'A'}] * 7
     elif defect == 'duration': invalid['items'][0]['experience_months'] = -1
     elif defect == 'other_count': invalid['other_information'] = [{'block_id': 'b1', 'excerpt': 'A'}] * 161
     elif defect == 'extra': invalid['items'][0]['invented_field'] = 'untrusted'
@@ -318,27 +324,23 @@ def test_gemini_simple_schema_keeps_all_backend_constraints(harness, monkeypatch
 
 
 @pytest.mark.parametrize('other', [False, True])
-def test_overlong_quote_feedback_is_source_scoped_and_keeps_content_private(other):
+def test_long_evidence_passes_the_schema_and_empty_evidence_gets_private_guidance(other):
     _, candidate = candidates()
     private_quote = 'PRIVATE_SYNTHETIC_QUOTATION_' * 21
-    ref = {'block_id': 'b1', 'excerpt': private_quote}
-    if other:
-        candidate['other_information'] = [ref]
-        expected = 'other_information[0].excerpt'
-    else:
-        candidate['items'][0]['evidence'] = [ref]
-        expected = 'items[0].evidence[0].excerpt'
+    def with_excerpt(text):
+        value = deepcopy(candidate)
+        ref = {'block_id': 'b1', 'excerpt': text}
+        if other: value['other_information'] = [ref]
+        else: value['items'][0]['evidence'] = [ref]
+        return value
+    Extraction.model_validate(with_excerpt(private_quote))
     with pytest.raises(ValidationError) as caught:
-        Extraction.model_validate(candidate)
+        Extraction.model_validate(with_excerpt(''))
     feedback = feedback_for(caught.value)
-    assert len(feedback) == 1 and feedback[0]['field'] == expected
-    guidance = feedback[0]['guidance']
-    assert 'same source block' in guidance and 'personal/team attribution' in guidance
-    assert 'fewer than 400' in guidance and 'hard limit is 500' in guidance
+    assert len(feedback) == 1
+    assert feedback[0]['field'] == ('other_information[0].excerpt' if other else 'items[0].evidence[0].excerpt')
+    assert 'supported by the cited source block' in feedback[0]['guidance']
     assert private_quote not in json.dumps(feedback)
-    if other:
-        assert 'separate other_information entries' in guidance
-        assert 'six evidence' not in guidance
 
 
 def test_source_verified_long_quotations_publish_without_model_repair(harness, monkeypatch):
@@ -351,9 +353,8 @@ def test_source_verified_long_quotations_publish_without_model_repair(harness, m
     assert result['status'] == 'ready' and len(calls) == 1
     assert result['extraction']['repair_attempts'] == 0
     evidence = result['items'][0]['evidence']
-    assert len(evidence) == 2 and all(1 <= len(ref['excerpt']) <= 500 for ref in evidence)
-    assert ''.join(ref['excerpt'] for ref in evidence) == SOURCES[0]
-    assert ''.join(ref['excerpt'] for ref in result['other_information']) == 'A' * 510
+    assert [ref['excerpt'] for ref in evidence] == [SOURCES[0]]
+    assert [ref['excerpt'] for ref in result['other_information']] == ['A' * 510]
 
 
 def test_graph_prepares_clarification_context_after_grounded_extraction():
@@ -372,11 +373,11 @@ def test_graph_prepares_clarification_context_after_grounded_extraction():
         calls.append(args)
         return candidate, {'provider': 'synthetic', 'model': 'fixture', 'prompt_version': '1', 'schema_version': '1'}
     graph = ExtractionHarness('synthetic-cv', lambda _: {'blocks': [{'id': 'b1', 'text': source, 'location': 'Paragraph 1'}]},
-                              model, lambda _: None,
+                              model, lambda _: None, checkpointer=saver(), thread_id='operation:1',
                               verify_evidence=lambda _, refs: frozenset((r['block_id'], r['excerpt']) for r in refs))
     result = graph.run(b'synthetic')
     assert 'prepare_review' in graph.graph.nodes
     assert len(calls) == 1
     assert result['items'][0]['uncertainties'] == ['proficiency']
     assert result['items'][0]['review_evidence'] == facts
-    assert result['metadata']['workflow_version'] == 'cv-extraction-4'
+    assert result['metadata']['workflow_version'] == 'cv-extraction-5'

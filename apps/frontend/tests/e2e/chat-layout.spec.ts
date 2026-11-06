@@ -1,8 +1,8 @@
 import {expect, test} from '@playwright/test';
 import {clarificationState, emptyDeclarations, policy, savedCv} from '../fixtures/cv';
 
-for (const viewport of [{width:1280,height:900},{width:390,height:844}]) {
- test(`CV chat keeps question actions in the transcript at ${viewport.width}px`, async ({page}, testInfo) => {
+for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:390,height:844}]) {
+ test(`CV chat keeps question actions in the transcript at ${viewport.width}x${viewport.height}`, async ({page}, testInfo) => {
   await page.setViewportSize(viewport);
   await page.addInitScript(() => {
    localStorage.setItem('elo.access-epoch','1');
@@ -45,6 +45,8 @@ for (const viewport of [{width:1280,height:900},{width:390,height:844}]) {
   const input=await page.getByRole('textbox',{name:'Message elo'}).boundingBox();
   const history=await page.locator('.cv-chat-messages').boundingBox();
   expect(input!.y-(history!.y+history!.height)).toBeLessThan(24);
+  expect(history!.height/viewport.height).toBeGreaterThanOrEqual(.7);
+  await expect(page.getByRole('textbox',{name:'Message elo'})).toBeInViewport();
   const actions=await page.locator('.cv-chat-inline-actions').boundingBox();
   expect(input!.y-(actions!.y+actions!.height)).toBeLessThan(64);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

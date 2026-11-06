@@ -96,6 +96,8 @@ explicit synthetic verdicts; it does not establish live model quality.
 
 Saved-title tests cover validation, owner isolation, persistence/list projections, stale/replayed writes, queued-source renaming and unchanged source/evidence/history. Mongo cases require the disposable test database described above.
 
+Saved graph state checks in `test_extraction_state.py` cover resuming after a crash or provider failure, automatic retries and their limits, the failure reason sent to the model, replacement, lease fencing and erasure on deletion. `test_long_evidence.py` covers evidence with no length limit.
+
 Agent-led CV interview checks in `test_cv_interview.py` cover durable memory on both
 repositories, rich/partial evidence, scoped skips, side questions, user stops,
 known-field suppression, unproductive probing, coverage/estimate guards, topic relevance/schema

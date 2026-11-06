@@ -11,9 +11,12 @@ from app.domain.service import bump, now, PROCESSING_STAGES
 from app.domain.storage import UploadCapacity
 from app.domain.model_usage import ModelUsage, ModelAdmissionError
 from app.domain.extraction_errors import ExtractionFailure, StaleExtraction
+from app.domain.extraction_feedback import feedback_for
+from app.domain.extraction_retry import REJECTED_OUTPUT, failure_for_model, should_auto_retry
 from app.domain.reconciliation import candidate_for, affected_sources
 from app.parsing.process import isolated_parse
-from app.workflows.extraction import ExtractionHarness
+from app.workflows.checkpoints import LatestStateSaver
+from app.workflows.extraction import ExtractionHarness, WORKFLOW_VERSION
 from app.domain.deletion import CvDeletion
 
 logger = logging.getLogger(__name__)
@@ -29,6 +32,8 @@ _ERROR_TYPES = frozenset({'missing', 'extra_forbidden', 'literal_error', 'model_
     'bool_type', 'int_type', 'float_type', 'greater_than_equal', 'less_than_equal',
     'finite_number', 'too_short', 'too_long', 'value_error'})
 _MAX_DIAGNOSTIC_ERRORS = 16
+# The saved state itself may be the cause, so these retries start from the document.
+_RESTART_AFTER = frozenset({'unexpected_error'})
 
 
 def _diagnostic_path(location, error_type):
@@ -82,18 +87,29 @@ class IngestionWorker:
             bump(document, operational=True)
             try: self.repository.replace(candidate, document)
             except Conflict: pass
+            # Repeated interruptions may come from the saved state, so a retry starts clean.
+            self.repository.extraction_states.discard(document['_id'])
             return None
+        operation.pop('retry_at', None)
         operation.update(status='processing', stage='source_read', attempt=operation['attempt'] + 1,
                          lease_token=str(uuid4()), lease_until=now() + self.settings.lease_seconds, error=None)
         bump(document, operational=True)
         try: return self.repository.replace(candidate, document)
         except Conflict: return None
 
+    def _erase_state_if_deleted(self, claimed):
+        # The last save of a stale worker can land after the CV's deletion finished.
+        if not self.repository.get(claimed['user_id'], claimed['_id']):
+            self.repository.extraction_states.delete(claimed['_id'])
+
     def process(self, claimed):
         token = claimed['operation']['lease_token']
         stage = 'source_read'
         harness = None
         deadline = time.monotonic() + max(0, claimed['operation']['lease_until'] - now())
+        previous_failure = claimed['operation'].get('last_failure')
+        told = {'previous_failure': previous_failure} if previous_failure else {}
+        issues = []
 
         def observe(value):
             nonlocal stage
@@ -116,6 +132,10 @@ class IngestionWorker:
                 except Conflict: continue
             raise StaleExtraction()
 
+        def holds_lease():
+            current = self.repository.get(claimed['user_id'], claimed['_id'])
+            return bool(current and current['operation']['lease_token'] == token and current['operation']['status'] == 'processing')
+
         def remaining_time():
             current = self.repository.get(claimed['user_id'], claimed['_id'])
             if (not current or current['operation']['lease_token'] != token
@@ -133,8 +153,8 @@ class IngestionWorker:
             def invoke():
                 timeout = remaining_time()  # Revalidate after admission/concurrency I/O.
                 if feedback is not None:
-                    return self.extractor.repair(blocks, candidate, feedback, timeout_seconds=timeout)
-                return self.extractor.extract(blocks, timeout_seconds=timeout)
+                    return self.extractor.repair(blocks, candidate, feedback, timeout_seconds=timeout, **told)
+                return self.extractor.extract(blocks, timeout_seconds=timeout, **told)
             return self.model_usage.run(claimed['user_id'], invoke,
                 configured=getattr(self.extractor, 'configured', True))
 
@@ -152,16 +172,22 @@ class IngestionWorker:
             original = self.files.read(claimed['_id'])
             harness = ExtractionHarness(claimed['_id'],
                 lambda data: self.parser(data, '.' + claimed['file_type'], self.settings.max_file_bytes),
-                call_model, observe, verify_evidence=verify_evidence)
+                call_model, observe, verify_evidence=verify_evidence,
+                checkpointer=LatestStateSaver(self.repository.extraction_states, claimed['_id'], claimed['user_id'], holds_lease),
+                # A retry keeps the operation and resumes. A reupload or new workflow version starts fresh.
+                thread_id=f"{claimed['operation']['id']}:{WORKFLOW_VERSION}",
+                rewind_rejected=bool(previous_failure and previous_failure['category'] in REJECTED_OUTPUT))
             result = harness.run(original)
             parsed, items, metadata = result['parsed'], result['items'], result['metadata']
             observe('publication')
             error = None
         except StaleExtraction:
+            self._erase_state_if_deleted(claimed)
             return False
         except ValidationError as exc:
             _log_invalid_extraction(exc, claimed, bool(harness and harness.repair_attempted))
             items, metadata, parsed = None, None, {}
+            issues = feedback_for(exc)
             error = {'code': 'invalid_extraction', 'message': 'The model returned an invalid extraction. Retry this saved upload.', 'retryable': True,
                      'failure_stage': stage, 'failure_category': 'schema_validation'}
         except ExtractionFailure as exc:
@@ -178,6 +204,7 @@ class IngestionWorker:
         except ValueError as exc:
             items, metadata, parsed = None, None, {}
             message = str(exc)
+            if stage == 'extraction_validation': issues = feedback_for(exc)
             category = {'source_read': 'source_unavailable', 'document_parse': 'invalid_document',
                         'extraction_validation': 'evidence_validation'}.get(stage, 'unexpected_error')
             error = {'code': 'extraction_failed', 'message': message if len(message) <= 500 else 'CV extraction failed. Retry this saved upload.', 'retryable': True,
@@ -191,7 +218,10 @@ class IngestionWorker:
         # Re-read to apply retained overlays; only the currently live lease can publish.
         current = self.repository.get(claimed['user_id'], claimed['_id'])
         if not current or current['operation']['lease_token'] != token or current['operation']['status'] != 'processing' or current['operation']['lease_until'] <= now():
+            self._erase_state_if_deleted(claimed)
             return False
+        if error and error.get('failure_category') in _RESTART_AFTER:
+            self.repository.extraction_states.discard(claimed['_id'])
         document = deepcopy(current)
         operation = document['operation']
         if not error:
@@ -217,7 +247,21 @@ class IngestionWorker:
                 document['reconciliation'] = []
                 if before != effective_fingerprint(document): document['effective_version'] += 1
                 operation.update(status='ready', error=None)
-        if error: operation.update(status='failed', error=error)
+                for field in ('last_failure', 'auto_retries', 'auto_retry_limit', 'retry_reason'):
+                    operation.pop(field, None)
+        if error:
+            told_model = failure_for_model(error, issues)
+            if told_model: operation['last_failure'] = told_model
+            used = operation.get('auto_retries', 0)
+            if should_auto_retry(error) and used < self.settings.extraction_auto_retries:
+                delays = self.settings.extraction_retry_delays
+                # Back to the queue with the saved state intact; the next run continues from it.
+                operation.update(status='queued', error=None, attempt=0, auto_retries=used + 1,
+                                 auto_retry_limit=self.settings.extraction_auto_retries,
+                                 retry_reason=error.get('failure_category'),
+                                 retry_at=now() + delays[min(used, len(delays) - 1)])
+            else:
+                operation.update(status='failed', error=error)
         operation.update(lease_token=None, lease_until=0)
         try:
             # Extraction/candidate/history content never consumes bookkeeping space.
@@ -228,7 +272,7 @@ class IngestionWorker:
                 error={'code': 'history_capacity', 'message': 'The extracted result exceeds this CV’s saved history capacity. Previous evidence is safe; keep this source for history and upload a new CV.', 'retryable': False,
                        'failure_stage': 'publication', 'failure_category': 'history_capacity', 'repair_attempted': repair_attempted})
             bump(document, operational=True)
-        failure = document['operation'].get('error')
+        failure = document['operation'].get('error') or error
         if failure and failure.get('failure_category') != 'schema_validation':
             # Never log exception strings, prompts, provider bodies, URLs or CV text.
             logger.warning('CV extraction failed cv_id=%s operation_id=%s stage=%s category=%s provider_status_code=%s repair_attempted=%s provider_reason=%s provider_parameter=%s',

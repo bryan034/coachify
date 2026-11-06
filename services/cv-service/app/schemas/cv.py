@@ -106,12 +106,11 @@ class PrepareMutation(Mutation):
     career_target_selection_version: int | None = Field(default=None, ge=1, strict=True)
 
 
-MAX_EVIDENCE_EXCERPT_CHARACTERS = 500
 
 
 class SourceExcerpt(StrictModel):
     block_id: str = Field(min_length=1, max_length=20)
-    excerpt: str = Field(min_length=1, max_length=MAX_EVIDENCE_EXCERPT_CHARACTERS, description='Source-supported quotation or faithful summary; exact original formatting is not required.')
+    excerpt: str = Field(min_length=1, description='Source-supported quotation or faithful summary; exact original formatting is not required.')
 
 
 class ExtractedItem(StrictModel):

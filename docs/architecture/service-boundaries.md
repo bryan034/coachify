@@ -3,7 +3,7 @@
 | Service | Story groups | Owned data |
 |---|---|---|
 | Profile | P01-P16; C07 manual declarations | Existing accounts/email verification/revocable sessions, canonical onboarding and education, declared deadline/capacity/temporary availability, profile versions; account-embedded manual capability declarations and their own revision |
-| CV | C01-C09, with C07 composition | Saved CVs, ingestion state, extracted facts/skills and bounded evidence, CV-specific correction/removal overlays, clarification questions/answers, processing operations, explicit saved-CV selection and private resumable CV conversations |
+| CV | C01-C09, with C07 composition | Saved CVs, ingestion state, the latest extraction graph state per CV, extracted facts/skills and bounded evidence, CV-specific correction/removal overlays, clarification questions/answers, processing operations, explicit saved-CV selection and private resumable CV conversations |
 | Career | J01–J13; G01–G07; SCRUM-282/310 | Canonical career_goals, one career_state workspace and CV confirmation stamp, public interview/opportunity research, workflow checkpoints and read-only assessment input exports; raw JD text stays transient |
 | Assessment | G01–G07 | Private immutable skill_gap_analyses, captured evidence/version vectors, comparison checkpoints and current result |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Study settings, consumed planning-input snapshots, milestones, timed sessions, progress history, self-reported outcomes and confirmations, proposed/applied revisions |
@@ -39,7 +39,7 @@ owner context. This slice does not introduce that separate credential protocol.
 
 ## CV extraction runtime
 
-CV runs a transient LangGraph for parse/extract/validate/prepare-review and at most one source-grounded repair. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Extraction/repair and conditional semantic-evidence checks request schema-constrained output by default; formatting equivalence passes locally, and paraphrases need model approval against cited source blocks under the same budget/lease; backend evidence/date/length checks remain authoritative. Graph state has no checkpointer, external tracing or new collection. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
+CV runs a LangGraph for parse/extract/validate/prepare-review and at most one source-grounded repair, saving each state change so an interrupted run resumes. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Extraction/repair and conditional semantic-evidence checks request schema-constrained output by default; formatting equivalence passes locally, and paraphrases need model approval against cited source blocks under the same budget/lease; backend evidence/date/length checks remain authoritative. Graph state has no checkpointer, external tracing or new collection. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
 
 ## Saved CV deletion
 
