@@ -10,7 +10,7 @@ from elo_shared.runtime import Problem
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from app.normalise import query_terms
+from app.normalise import job_link, plain_text, query_terms
 
 CLOSE_AFTER_MISSED_SYNCS = 3
 MAX_APPLICATIONS_PER_OWNER = 500
@@ -150,7 +150,8 @@ class JobsStore:
 
     # Applications
     def _application_view(self, row, statuses):
-        return {'id': row['_id'], 'posting_status': statuses.get(row['posting_id'], 'unknown' if self.live else 'removed'),
+        fallback = 'unknown' if self.live or row.get('source') == 'link' else 'removed'
+        return {'id': row['_id'], 'posting_status': statuses.get(row['posting_id'], fallback),
                 **{k: v for k, v in row.items() if k not in ('_id', 'user_id')}}
 
     def list_applications(self, owner):
@@ -179,6 +180,30 @@ class JobsStore:
         except DuplicateKeyError:
             row = self.applications.find_one({'_id': identifier, 'user_id': owner})
         return self._application_view(row, {posting_id: posting['status']})
+
+    def save_link(self, owner, body, now):
+        """Save a job found elsewhere. Saving the same link twice, or a listing already saved, returns that record."""
+        url = job_link(body.url)
+        if not url:
+            raise Problem('Paste the full https:// link to the job.', 422, 'validation')
+        title, company, location = (plain_text(value) for value in (body.title, body.company, body.location))
+        if not title or not company:
+            raise Problem('Add the job title and the employer.', 422, 'validation')
+        existing = self.applications.find_one({'user_id': owner, 'snapshot.listing_url': url})
+        if existing:
+            return self._application_view(existing, {})
+        if self.applications.count_documents({'user_id': owner}) >= MAX_APPLICATIONS_PER_OWNER:
+            raise Problem('You have reached the saved job limit. Remove a saved job and retry.', 413, 'application_capacity')
+        identifier = hashlib.sha256(f'{owner}:link:{url}'.encode()).hexdigest()[:32]
+        row = {'_id': identifier, 'user_id': owner, 'posting_id': hashlib.sha256(f'link:{url}'.encode()).hexdigest()[:32],
+               'source': 'link', 'version': 1, 'status': 'saved',
+               'snapshot': {'title': title, 'company': company, 'location': location, 'job_type': body.job_type, 'listing_url': url, 'apply_url': url},
+               'history': [{'status': 'saved', 'at': now}], 'created_at': now, 'updated_at': now}
+        try:
+            self.applications.insert_one(row)
+        except DuplicateKeyError:
+            row = self.applications.find_one({'_id': identifier, 'user_id': owner})
+        return self._application_view(row, {})
 
     def update_application(self, owner, identifier, expected_version, status, now):
         row = self.applications.find_one_and_update(

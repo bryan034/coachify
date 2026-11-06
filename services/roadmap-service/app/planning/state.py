@@ -53,6 +53,30 @@ def plan_review(plan,now):
     return {'next_assignment_id':upcoming[0]['id'] if upcoming else None,'missed_assignment_ids':missed,
         'remaining':capacity.report(allow_past_start=True),'milestones':milestones}
 
+def learning_view(plan,now):
+    """Each skill the active roadmap works on, most important first, with its own progress and next session."""
+    if not plan:return {'has_roadmap':False,'roadmap_id':None,'skills_total':0,'skills_started':0,'skills_done':0,'steps':[]}
+    review=plan_review(plan,now);missed=set(review['missed_assignment_ids'])
+    milestones={m['key']:m for m in plan['milestones']}
+    steps=[]
+    for gap in sorted(plan['gaps'],key=lambda g:(g['priority'],g['name'].casefold())):
+        def belongs(session):
+            # A session names one skill, or else it serves every skill of its milestone.
+            if session.get('gap_id'):return session['gap_id']==gap['id']
+            return gap['id'] in (milestones.get(session['milestone_key']) or {}).get('gap_ids',[])
+        sessions=sorted((a for a in plan['assignments'] if belongs(a)),key=lambda a:(str(a['date']),a['start_time']))
+        done=[a for a in sessions if a['status']=='completed'];open_sessions=[a for a in sessions if a['status']=='scheduled']
+        upcoming=next((a for a in open_sessions if a['id'] not in missed),None)
+        state='not_scheduled' if not sessions else 'done' if len(done)==len(sessions) else 'in_progress' if done else 'not_started'
+        steps.append({'gap_id':gap['id'],'name':gap['name'],'status':gap['status'],'state':state,'priority':gap['priority'],'rationale':gap['rationale'],
+            'milestones':[m['title'] for m in plan['milestones'] if gap['id'] in m['gap_ids']],
+            'sessions_total':len(sessions),'sessions_completed':len(done),'sessions_missed':sum(a['id'] in missed for a in open_sessions),
+            'completed_minutes':sum(a['duration_minutes'] for a in done),'remaining_minutes':sum(a['duration_minutes'] for a in open_sessions),
+            'next_session':upcoming and {'id':upcoming['id'],'date':str(upcoming['date']),'start_time':upcoming['start_time'],'duration_minutes':upcoming['duration_minutes'],
+                'task':upcoming['task'],'completion_criterion':upcoming['completion_criterion']}})
+    return {'has_roadmap':True,'roadmap_id':plan['id'],'skills_total':len(steps),'skills_started':sum(s['state'] in ('in_progress','done') for s in steps),
+        'skills_done':sum(s['state']=='done' for s in steps),'steps':steps}
+
 def candidate_blockers(state,source,now):
     """Reasons the current preview can no longer be applied as shown."""
     candidate=state['candidate'];active=state['active'];blockers=[]

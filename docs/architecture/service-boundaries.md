@@ -7,7 +7,7 @@
 | Career | J01–J13; G01–G07; SCRUM-282/310 | Canonical career_goals, one career_state workspace and CV confirmation stamp, public interview/opportunity research, workflow checkpoints and read-only assessment input exports; raw JD text stays transient |
 | Assessment | G01–G07 | Private immutable skill_gap_analyses, captured evidence/version vectors, comparison checkpoints and current result |
 | Roadmap | R01-R09; E01-E07; T01-T06; A02-A04 | Study settings, consumed planning-input snapshots, milestones, timed sessions, progress history, self-reported outcomes and confirmations, proposed/applied revisions |
-| Jobs | No Jira stories yet | Live public Singapore listings from employer boards; private self-reported application snapshots |
+| Jobs | No Jira stories yet | Live public Singapore listings from employer boards; private self-reported application snapshots, including user-supplied job links that Jobs never fetches |
 | Dashboard | D01-D06 | No persistent domain records; aggregate responses |
 | Review | A01 orchestration; S01-S06 | Manual/scheduled review state, pace analysis, schedules, approval preferences |
 

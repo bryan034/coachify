@@ -49,10 +49,9 @@ function Rule({ rule, number, change, remove }: { rule: BlackoutRule; number: nu
  </div>;
 }
 
-export function BlackoutRules({ rules, startDate, update }: { rules: BlackoutRule[]; startDate: string; update: (rules: BlackoutRule[]) => void }) {
+export function BlackoutRules({ rules, update }: { rules: BlackoutRule[]; update: (rules: BlackoutRule[]) => void }) {
  return <>
   <p className="small">Days or times you can’t study. Study blocks that overlap them are removed from your runway.</p>
   <div className="settings-tiles">{rules.map((rule, index) => <Rule key={index} rule={rule} number={index + 1} change={next => update(rules.map((r, i) => i === index ? next : r))} remove={() => update(rules.filter((_, i) => i !== index))} />)}</div>
-  <button type="button" className="btn ghost" disabled={rules.length >= 366} onClick={() => update([...rules, weeklyBlackout(startDate)])}>Add blackout</button>
  </>;
 }

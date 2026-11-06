@@ -12,13 +12,13 @@ const required: { code: string; label: string; question: string; hint: string; s
  { code: 'no_blocks', label: 'recurring study blocks', question: 'Which days and times do you usually study?', hint: 'I’ll turn your answer into recurring study blocks.', starters: ['I can study on weekday evenings and Saturday mornings.'] },
 ];
 
-export function AdviserChat({ workspace, runway, text, setText, partial, setPartial, showPartial, busy, running, frozen, editing, send, retry, close }: {
+export function AdviserChat({ workspace, runway, text, setText, partial, setPartial, showPartial, busy, running, frozen, editing, takeFocus, send, retry, close }: {
  workspace: Workspace; runway: Runway | null; text: string; setText: (value: string) => void; partial: boolean; setPartial: (value: boolean) => void; showPartial: boolean;
- busy: boolean; running: boolean; frozen: boolean; editing: boolean; send: () => void; retry: () => void; close: () => void;
+ busy: boolean; running: boolean; frozen: boolean; editing: boolean; takeFocus: boolean; send: () => void; retry: () => void; close: () => void;
 }) {
  const { transcript, showJump, jumpToLatest, scrollProps } = useChatScroll();
  const input = useRef<HTMLTextAreaElement>(null);
- useEffect(() => { input.current?.focus(); }, []);
+ useEffect(() => { if (takeFocus) input.current?.focus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
  const { context } = workspace;
  const validResearch = ['available', 'no_findings'].includes(context.research_coverage || '');
  const failed = workspace.operation?.status === 'failed';
@@ -39,7 +39,7 @@ export function AdviserChat({ workspace, runway, text, setText, partial, setPart
    {showPartial && !validResearch && context.ready && <label className="roadmap-partial"><input type="checkbox" checked={partial} onChange={event => setPartial(event.target.checked)} />Continue with available evidence. Interview research is {context.research_coverage || 'unavailable'}; the comparison will be labelled partial.</label>}
    {!showPartial && needsChoice && context.ready && <p className="small">Tick “Continue with available evidence” in the planner before asking for plan changes.</p>}
    {!context.model_available && <p className="small">Your helper is unavailable. Your saved plan remains available, and you can still fill in the planner yourself.</p>}
-   <label htmlFor="adviser-message">{editing ? 'Ask for a change' : 'Answer here'}</label><textarea ref={input} id="adviser-message" rows={3} maxLength={4000} value={text} disabled={!context.ready} onChange={event => setText(event.target.value)} placeholder={editing ? 'Move Thursday’s session to Saturday morning…' : 'I can do six hours a week, mostly on Saturdays…'} />
+   <label htmlFor="adviser-message">{editing ? 'Ask for a change' : 'Answer here'}</label><textarea ref={input} id="adviser-message" rows={2} maxLength={4000} value={text} disabled={!context.ready} onChange={event => setText(event.target.value)} placeholder={editing ? 'Move Thursday’s session to Saturday morning…' : 'I can do six hours a week, mostly on Saturdays…'} />
    <div><span className="small">{editing ? 'Changes appear as a preview first.' : 'Everything I fill in stays yours to change.'}</span><button className="btn primary" disabled={!text.trim() || !context.ready || !context.model_available || frozen || needsChoice}>Send message</button></div>
   </form>
  </section>;

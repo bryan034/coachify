@@ -46,24 +46,24 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
 
  await page.goto('/roadmap');
  await expect(page.getByRole('heading', { name: 'What elo will use' })).toBeVisible();
- await expect(page.getByRole('heading', { name: 'Your chat helper' })).toHaveCount(0);
- const beside = async () => (await page.getByRole('region', { name: 'Your runway' }).boundingBox())!.x > (await page.locator('legend', { hasText: 'Timeline' }).boundingBox())!.x + 200;
+ await expect(page.getByRole('heading', { name: 'Your chat helper' })).toBeVisible();
+ await expect(page.getByRole('textbox', { name: 'Answer here' })).not.toBeFocused();
+ const beside = async () => (await page.getByRole('region', { name: 'Chat helper' }).boundingBox())!.x > (await page.locator('.plan-road').boundingBox())!.x + 200;
  await page.setViewportSize({ width: 1920, height: 1080 });
- expect(await page.locator('.roadmap-main').evaluate(el => innerWidth - el.getBoundingClientRect().right)).toBeLessThanOrEqual(64);
+ expect(await page.locator('.roadmap-workspace').evaluate(el => innerWidth - el.getBoundingClientRect().right)).toBeLessThanOrEqual(64);
  expect(await beside()).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-planner-wide.png'), fullPage: true });
  await page.setViewportSize({ width: 1280, height: 900 });
  expect(await beside()).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-planner.png'), fullPage: true });
+ await expect(page.locator('.road-stop[aria-current="step"]')).toContainText('and finish by');
  await page.setViewportSize({ width: 390, height: 844 });
  expect(await noOverflow(page)).toBe(true);
  await page.setViewportSize({ width: 1280, height: 900 });
  await expect(page.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
  expect(generations).toBe(0);
 
- await page.getByRole('button', { name: 'Start chat helper' }).click();
  await expect(page.getByRole('heading', { name: 'When would you like to be ready?' })).toBeVisible();
- expect(await beside()).toBe(false);
  await expect(page.getByRole('button', { name: 'Send message' })).toBeInViewport({ ratio: 1 });
  await page.getByRole('textbox', { name: 'Answer here' }).fill('Five hours a week until 27 January, with Sunday as backup.');
  await page.getByRole('button', { name: 'Send message' }).click();
@@ -71,6 +71,10 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await expect(page.getByLabel('Target date')).toHaveValue('2030-01-27');
  await page.screenshot({ path: test.info().outputPath('roadmap-helper.png'), fullPage: false });
  await page.setViewportSize({ width: 390, height: 844 });
+ await expect(page.getByRole('region', { name: 'Chat helper' })).toHaveCount(0);
+ expect(await noOverflow(page)).toBe(true);
+ await page.getByRole('button', { name: 'Continue with chat helper' }).click();
+ await expect(page.getByRole('region', { name: 'Chat helper' })).toBeVisible();
  expect(await noOverflow(page)).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-helper-mobile.png') });
  await page.getByRole('button', { name: 'Close chat helper' }).click();
@@ -111,10 +115,24 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await page.getByRole('button', { name: 'Accept plan' }).click();
  await expect(page.getByText('Your active roadmap')).toBeVisible();
 
- await page.getByText('Mark session complete').click();
+ const toDo = page.getByRole('region', { name: 'To-do list' });
+ await page.screenshot({ path: test.info().outputPath('roadmap-week.png'), fullPage: true });
+ await toDo.getByRole('button', { name: 'Daily' }).click();
+ await expect(toDo.getByRole('heading', { name: 'Today' })).toBeVisible();
+ await page.screenshot({ path: test.info().outputPath('roadmap-day.png') });
+ await toDo.getByRole('button', { name: 'Monthly' }).click();
+ await expect(toDo.getByRole('heading', { name: 'January 2030' })).toBeVisible();
+ await page.screenshot({ path: test.info().outputPath('roadmap-month.png') });
+ await page.setViewportSize({ width: 390, height: 844 });
+ expect(await noOverflow(page)).toBe(true);
+ await page.screenshot({ path: test.info().outputPath('roadmap-month-mobile.png'), fullPage: true });
+ await page.setViewportSize({ width: 1280, height: 900 });
+ await toDo.getByRole('button', { name: /^Open week of 7 Jan 2030/ }).click();
+ await toDo.getByRole('checkbox', { name: 'Mark complete: Write one tested Python endpoint.' }).check();
+ await expect(toDo.getByRole('checkbox', { name: 'Mark complete: Write one tested Python endpoint.' })).toBeChecked();
+ await toDo.getByText('Add what you produced').click();
  await page.getByRole('textbox', { name: 'What did you produce? (optional)' }).fill('The endpoint test passes.');
- await page.getByRole('button', { name: 'Complete session' }).click();
- await expect(page.getByRole('heading', { name: 'Completed sessions' })).toBeVisible();
+ await page.getByRole('button', { name: 'Save note' }).click();
  await expect(page.getByText('Your note: The endpoint test passes.')).toBeVisible();
  await expect(timeline).toContainText('Outcome not yet demonstrated.');
 

@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from .base import Contract, Mutation, Text
-from .roadmap import PlannerView
+from .roadmap import OperationView, PlannerView, SavedRecord
 
 class Message(Mutation):
     message:Text
@@ -81,14 +81,20 @@ class Plan(Contract):
     preferences:Preferences
     schedule:Schedule
     exclusions:list[dict]
+class ChatMessage(SavedRecord):
+    id:str
+    role:Literal['user','assistant']
+    content:str
+    created_at:str|None=None
 class Workspace(Contract):
+    """assessment and context come from the Assessment service, so they stay open objects here."""
     version:int
-    messages:list[dict]
+    messages:list[ChatMessage]
     draft:Plan|None
     active:Plan|None
     assessment:dict|None
-    operation:dict|None
+    operation:OperationView|None
     context:dict
     stale:bool
-    retry_request:dict|None=None
+    retry_request:Message|None=None
     planner:PlannerView

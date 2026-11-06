@@ -1,5 +1,6 @@
 from datetime import timedelta
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
@@ -207,3 +208,76 @@ def test_storage_must_be_configured(database):
     with TestClient(app) as test_client:
         response = test_client.get('/api/v1/jobs/applications', headers=OWNER)
     assert response.status_code == 503 and response.json()['code'] == 'storage'
+
+
+LINK = {'url': 'https://careers.example.com/roles/42?utm_source=mail&ref=a#apply', 'title': ' Markets Intern ', 'company': 'Example Bank', 'job_type': 'internship'}
+
+
+def test_a_pasted_link_is_saved_cleaned_and_tracked_like_any_other_job(client):
+    response = client.post('/api/v1/jobs/applications/link', json=LINK, headers=OWNER)
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved['source'] == 'link' and saved['status'] == 'saved' and saved['posting_status'] == 'unknown'
+    assert saved['snapshot'] == {'title': 'Markets Intern', 'company': 'Example Bank', 'location': '', 'job_type': 'internship',
+                                 'listing_url': 'https://careers.example.com/roles/42?ref=a', 'apply_url': 'https://careers.example.com/roles/42?ref=a'}
+    assert [item['id'] for item in client.get('/api/v1/jobs/applications', headers=OWNER).json()['items']] == [saved['id']]
+    moved = client.patch(f"/api/v1/jobs/applications/{saved['id']}", json={'expected_version': 1, 'status': 'applied'}, headers=OWNER)
+    assert moved.status_code == 200 and moved.json()['posting_status'] == 'unknown'
+    assert client.delete(f"/api/v1/jobs/applications/{saved['id']}?expected_version=2", headers=OWNER).status_code == 204
+
+
+def test_saving_the_same_link_again_returns_the_record_and_keeps_owners_apart(client):
+    first = client.post('/api/v1/jobs/applications/link', json=LINK, headers=OWNER).json()
+    client.patch(f"/api/v1/jobs/applications/{first['id']}", json={'expected_version': 1, 'status': 'applied'}, headers=OWNER)
+    again = client.post('/api/v1/jobs/applications/link', json={**LINK, 'url': 'https://CAREERS.example.com/roles/42?ref=a'}, headers=OWNER).json()
+    assert again['id'] == first['id'] and again['status'] == 'applied'
+    other = client.post('/api/v1/jobs/applications/link', json=LINK, headers=OTHER).json()
+    assert other['id'] != first['id'] and other['status'] == 'saved'
+    assert len(client.get('/api/v1/jobs/applications', headers=OTHER).json()['items']) == 1
+
+
+def test_a_link_matching_a_saved_listing_returns_that_listing(client):
+    posting = client.get('/api/v1/jobs/search', headers=OWNER).json()['items'][0]
+    saved = client.post('/api/v1/jobs/applications', json={'posting_id': posting['id']}, headers=OWNER).json()
+    pasted = client.post('/api/v1/jobs/applications/link', json={**LINK, 'url': posting['listing_url']}, headers=OWNER).json()
+    assert pasted['id'] == saved['id'] and pasted['source'] == 'listing'
+
+
+@pytest.mark.parametrize('url', ['http://careers.example.com/a', 'javascript:alert(1)', 'https://user:pw@example.com/a', 'https://example.com:8443/a',
+                                 'https://localhost/a', 'https://127.0.0.1/a', 'https://[::1]/a', 'https://printer.local/a', 'not a link'])
+def test_unsafe_links_are_refused(client, url):
+    assert client.post('/api/v1/jobs/applications/link', json={**LINK, 'url': url}, headers=OWNER).status_code == 422
+    assert client.get('/api/v1/jobs/applications', headers=OWNER).json()['items'] == []
+
+
+@pytest.mark.parametrize('change', [{'title': '   '}, {'company': '<b></b>'}, {'title': 'x' * 201}, {'job_type': 'gig'}, {'owner': 'someone'}])
+def test_incomplete_or_unexpected_link_details_are_refused(client, change):
+    assert client.post('/api/v1/jobs/applications/link', json={**LINK, **change}, headers=OWNER).status_code == 422
+
+
+def test_saved_links_count_towards_the_limit(client, monkeypatch):
+    monkeypatch.setattr('app.store.MAX_APPLICATIONS_PER_OWNER', 1)
+    assert client.post('/api/v1/jobs/applications/link', json=LINK, headers=OWNER).status_code == 200
+    assert client.post('/api/v1/jobs/applications/link', json={**LINK, 'url': 'https://careers.example.com/b'}, headers=OWNER).status_code == 413
+
+
+def test_external_searches_encode_only_the_keywords(client):
+    response = client.get('/api/v1/jobs/external-searches', params={'q': '  C++ & SQL #1  '}, headers=OWNER)
+    assert response.status_code == 200
+    sites = {item['name']: urlsplit(item['url']) for item in response.json()['items']}
+    assert list(sites) == ['Prosple', 'Huzzle', 'LinkedIn', 'Indeed']
+    assert all(site.scheme == 'https' for site in sites.values())
+    assert parse_qs(sites['Prosple'].query)['keywords'] == ['C++ & SQL #1']
+    assert parse_qs(sites['Huzzle'].query) == {'search': ['C++ & SQL #1'], 'type': ['jobs']}
+    assert parse_qs(sites['LinkedIn'].query) == {'keywords': ['C++ & SQL #1'], 'location': ['Singapore']}
+    assert parse_qs(sites['Indeed'].query) == {'q': ['C++ & SQL #1'], 'l': ['Singapore']}
+
+
+@pytest.mark.parametrize('params', [{}, {'q': '   '}, {'q': 'x' * 121}])
+def test_external_searches_need_keywords(client, params):
+    assert client.get('/api/v1/jobs/external-searches', params=params, headers=OWNER).status_code == 422
+
+
+def test_new_routes_require_a_session(client):
+    assert client.post('/api/v1/jobs/applications/link', json=LINK).status_code == 401
+    assert client.get('/api/v1/jobs/external-searches', params={'q': 'sql'}).status_code == 401

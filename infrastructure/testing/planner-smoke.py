@@ -126,6 +126,22 @@ def main():
             state=read();assert state['planner']['active']==completed and state['planner']['active']['assignments'][0]['evidence_note']=='Explanation written.' and len(state['messages'])==2
             assert http.get('/api/v1/roadmaps/history/'+completed['id']).json()['schema_version']=='roadmap-v2'
             assert http.get('/api/v1/roadmaps/history/'+completed['id'],headers={'Authorization':'Bearer synthetic-other'}).status_code==404
+            # Old settings written by earlier versions are removed from storage on the next start.
+            old={'buffer_percent':20,'checkin_day':4,'checkin_time':'18:00'}
+            before=read()
+            database=client[prefix+'_roadmap'];saved=database.workspaces.find_one({'planner.active.id':completed['id']})
+            rules=saved['planner']['config']['blackouts']
+            database.workspaces.update_one({'_id':saved['_id']},{'$set':{**{f'planner.config.{k}':v for k,v in old.items()},**{f'planner.active.config.{k}':v for k,v in old.items()},
+                'planner.config.blackout_dates':[rule['start_date'] for rule in rules]},'$unset':{'planner.config.blackouts':''}})
+            database.roadmaps.update_one({'_id':completed['id']},{'$set':{f'config.{k}':v for k,v in old.items()}})
+            roadmap=processes[-1];roadmap.terminate();roadmap.wait(timeout=10);start(ROADMAP,'roadmap',roadmap_port)
+            cleaned=database.workspaces.find_one({'_id':saved['_id']})
+            removed={*old,'blackout_dates'}
+            assert not removed&cleaned['planner']['config'].keys() and not removed&cleaned['planner']['active']['config'].keys()
+            assert not removed&database.roadmaps.find_one({'_id':completed['id']})['config'].keys()
+            assert cleaned['version']==saved['version'] and [r['start_date'] for r in cleaned['planner']['config']['blackouts']]==[r['start_date'] for r in rules]
+            state=read();assert state['planner']['active']['assignments']==completed['assignments'] and state['version']==before['version']
+            assert http.get('/api/v1/roadmaps/history/'+completed['id']).status_code==200
             print(json.dumps({'status':'passed','checks':['real cross-service HTTP snapshots','separate Assessment comparison','explicit partial research','chat-collected settings','calculated runway','validated timed plan','reviewed acceptance','idempotent lost-response retry','session completion and evidence','restart persistence','owner isolation','no external provider calls']}))
     finally:
         for process in processes:

@@ -8,7 +8,7 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 from html.parser import HTMLParser
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 EXCERPT_LENGTH = 280
 MAX_TERMS = 3000
@@ -139,6 +139,18 @@ def safe_url(value):
     if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or port not in (None, 443):
         return None
     return value
+
+
+def job_link(value):
+    """A link the user pasted. It is stored and shown, never fetched, so no request ever goes to this host."""
+    if not safe_url(value):
+        return None
+    parsed = urlsplit(value.strip())
+    host = parsed.hostname.lower()
+    if '.' not in host or host.endswith(('.local', '.internal', '.localhost')) or host.replace('.', '').isdigit() or ':' in host:
+        return None
+    query = urlencode([(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if not k.lower().startswith('utm_')])
+    return urlunsplit(('https', host, parsed.path or '/', query, ''))
 
 
 def timestamp(value):

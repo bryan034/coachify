@@ -1,5 +1,5 @@
 # ui
 
-Reusable visual primitives. `SkillCategoryNav` gives Career Goal and Skills Profile
-the same jump links to skill categories. `JourneyVisual` and `PathMark` are retained
-as unused primitives; decorative path graphics no longer appear on application pages.
+Reusable visual primitives. `SkillCategoryNav` gives Skills Profile jump links to its
+skill categories. `JourneyVisual` is the illustration on the signed-out entry page. `PathMark`
+is retained as an unused primitive; decorative path graphics do not appear on workspace pages.

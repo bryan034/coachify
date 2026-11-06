@@ -128,7 +128,6 @@ def test_blackout_rule_fields_are_range_checked():
     for bad in ({'frequency':'hourly'},{'interval':0},{'weekdays':[7]},{'start_time':'25:00','end_time':'26:00'}):
         with pytest.raises(ValidationError):config(blackouts=[{'frequency':'once','start_date':'2030-01-15',**bad}])
 
-def test_saved_blackout_dates_are_read_as_one_off_rules():
-    saved=PlannerConfig.model_validate({'time_zone':'Asia/Singapore','blackout_dates':['2030-01-12','2030-01-13']})
-    assert [(r.frequency,r.start_date.isoformat()) for r in saved.blackouts]==[('once','2030-01-12'),('once','2030-01-13')]
-    assert 'blackout_dates' not in saved.model_dump()
+@pytest.mark.parametrize('old',[{'buffer_percent':20},{'checkin_day':4},{'checkin_time':'18:00'},{'blackout_dates':['2030-01-12']}])
+def test_settings_cannot_hold_removed_fields(old):
+    with pytest.raises(ValidationError):PlannerConfig.model_validate({'time_zone':'Asia/Singapore',**old})
