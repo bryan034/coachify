@@ -1,12 +1,13 @@
 "use client";
 import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from 'react';
 import Link from 'next/link';
-import {PageTitle} from '@/components/ui/workspace-ui';
 import {Icon} from '@/components/ui/icon';
 import {useProfile} from '@/features/profile/profile-provider';
-import {JobsError,listApplications,readJobFilters,removeApplication,saveApplication,searchJobs,updateApplication,
- type Application,type ApplicationStatus,type FilterOption,type FilterOptions,type JobFilters,type Posting} from '@/lib/api/jobs';
+import {JobsError,externalSearches,listApplications,readJobFilters,removeApplication,saveApplication,saveJobLink,searchJobs,updateApplication,
+ type Application,type ApplicationStatus,type ExternalSearch,type FilterOption,type FilterOptions,type JobFilters,type JobLink,type JobType,type Posting} from '@/lib/api/jobs';
+import {loadGoal,useSection} from '@/lib/api/workspace-summary';
 import {APPLICATION_RECORDED,noteApplyVisit} from './application-check';
+import '@/styles/jobs.css';
 
 const JOB_TYPES:Record<string,string>={internship:'Internship',graduate:'Graduate programme',full_time:'Full-time',part_time:'Part-time',contract:'Contract',temporary:'Temporary',unknown:'Not stated'};
 const WORKPLACES:Record<string,string>={onsite:'On-site',hybrid:'Hybrid',remote:'Remote',unknown:'Not stated'};
@@ -22,14 +23,6 @@ const label=(names:Record<string,string>,value:string)=>names[value]??value;
 const explanation=(error:unknown)=>error instanceof JobsError?error.message:'The job service is temporarily unavailable. Retry shortly.';
 const day=(value:string)=>new Intl.DateTimeFormat('en-SG',{day:'numeric',month:'short',year:'numeric',timeZone:'Asia/Singapore'}).format(new Date(value));
 const httpsOnly=(url:string)=>url.startsWith('https://')?url:undefined;
-
-function boardSearches(keywords:string){
- const linkedin=new URL('https://www.linkedin.com/jobs/search/');
- linkedin.searchParams.set('keywords',keywords);linkedin.searchParams.set('location','Singapore');
- const indeed=new URL('https://sg.indeed.com/jobs');
- indeed.searchParams.set('q',keywords);indeed.searchParams.set('l','Singapore');
- return [{name:'LinkedIn',url:linkedin.href},{name:'Indeed',url:indeed.href}];
-}
 
 function toFilters(q:string,choices:Choices):JobFilters{
  return {q:q||undefined,job_type:choices.jobTypes,industry:choices.industries,
@@ -56,6 +49,8 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
  const [retry,setRetry]=useState(0);
  const filters=useMemo(()=>toFilters(keywords,choices),[keywords,choices]);
  const latest=useRef(0);
+ const goal=useSection(loadGoal,token);
+ const [sites,setSites]=useState<ExternalSearch[]>([]);
 
  useEffect(()=>{
   const controller=new AbortController();
@@ -76,6 +71,14 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
   });
   return ()=>controller.abort();
  },[token,filters,retry]);
+
+ useEffect(()=>{
+  if(!keywords){setSites([]);return;}
+  const controller=new AbortController();
+  // These links are optional, so a failure only hides them and never interrupts the search.
+  externalSearches(token,keywords,controller.signal).then(setSites).catch(()=>{if(!controller.signal.aborted)setSites([]);});
+  return ()=>controller.abort();
+ },[token,keywords]);
 
  async function loadMore(){
   if(!cursor)return;
@@ -119,23 +122,32 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
  }
  function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setKeywords(draft.trim());setRetry(value=>value+1);}
  function change(next:Partial<Choices>){setChoices(current=>({...current,...next}));}
+ function tryTerm(term:string){setDraft(term);setKeywords(term);setTab('search');setRetry(value=>value+1);}
  function clear(){setDraft('');setKeywords('');setChoices(NO_CHOICES);}
+ const goalTerms=goal.state.status==='ready'&&goal.state.data.goal?[goal.state.data.goal.role,...goal.state.data.goal.skills.filter(skill=>skill.priority==='required').map(skill=>skill.name),...goal.state.data.goal.skills.filter(skill=>skill.priority!=='required').map(skill=>skill.name)].slice(0,4):[];
  const filtered=Boolean(keywords)||JSON.stringify(choices)!==JSON.stringify(NO_CHOICES);
 
  return <section className="page on job-search-page">
-  <PageTitle title="Search Jobs"/>
-  <p className="job-search-intro">Find jobs and internships in Singapore, then apply on the employer&rsquo;s own site. Elo tracks your progress and sends nothing to employers.</p>
+  <div className="job-hero">
+   <h1>Search Jobs</h1>
+   <p className="job-search-intro">Find jobs and internships in Singapore, then apply on the employer&rsquo;s own site. Elo tracks your progress and sends nothing to employers.</p>
+   <form className="job-search-form" onSubmit={submit}>
+    <label htmlFor="job-keywords"><Icon name="search"/><span className="cv-visually-hidden">Job title or keywords</span><input id="job-keywords" name="keywords" value={draft} maxLength={120} placeholder="Job title or keywords" onChange={event=>setDraft(event.target.value)}/></label>
+    <span className="job-search-place"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 21s7-6.1 7-11.5a7 7 0 1 0-14 0C5 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Singapore</span>
+    <button className="btn job-find">Search</button>
+   </form>
+   {goalTerms.length>0&&<div className="job-try"><span>From your goal</span>{goalTerms.map(term=><button type="button" key={term} onClick={()=>tryTerm(term)}>{term}</button>)}</div>}
+   {sites.length>0&&<div className="job-open-on" aria-label="Search other job sites" role="group"><span>Open on</span>{sites.filter(site=>httpsOnly(site.url)).map(site=><a key={site.name} href={site.url} target="_blank" rel="noopener noreferrer">{site.name}<span aria-hidden="true"> ↗</span><span className="cv-visually-hidden">Opens in a new tab</span></a>)}</div>}
+   {sites.length>0&&<p className="job-hero-note">Only your search terms leave elo when you open a site, and your CV stays here. A site may ask you to sign in.</p>}
+  </div>
   <div className="job-tabs" role="group" aria-label="Job views">
    <button type="button" className="btn ghost" aria-pressed={tab==='search'} onClick={()=>setTab('search')}>Find jobs</button>
    <button type="button" className="btn ghost" aria-pressed={tab==='tracker'} onClick={()=>setTab('tracker')}>My applications ({applications.length})</button>
   </div>
   {trackerError&&<p className="small" role="alert">{trackerError}</p>}
-  {tab==='tracker'?<Tracker items={applications} onStatus={changeStatus} onRemove={remove}/>:<>
-   <div className="job-search-panel">
-    <form className="job-search-form" onSubmit={submit}>
-     <label htmlFor="job-keywords">Job title or keywords<input id="job-keywords" name="keywords" value={draft} maxLength={120} placeholder="e.g. Software engineer or Python" onChange={event=>setDraft(event.target.value)}/></label>
-     <button className="btn pri"><Icon name="search"/>Search</button>
-    </form>
+  {tab==='tracker'?<Tracker items={applications} onStatus={changeStatus} onRemove={remove} onSaveLink={link=>saveJobLink(token,link)} onSaved={remember}/>:<div className="job-find-layout">
+   <div className="job-search-panel" aria-label="Filters" role="group">
+    <h2>Filters</h2>
     <div className="job-filters">
      <CheckGroup legend="Job type" options={options?.job_types} names={JOB_TYPES} selected={choices.jobTypes} onChange={jobTypes=>change({jobTypes})}/>
      <CheckGroup legend="Industry" options={options?.industries} names={INDUSTRIES} selected={choices.industries} onChange={industries=>change({industries})}/>
@@ -162,7 +174,7 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
    </div>
    <div className="job-results">
     <div className="job-results-summary" aria-live="polite">
-     <span>{loading?'Searching…':error?'':`${total} ${total===1?'job':'jobs'} in Singapore`}</span>
+     <span><strong>{loading?'Searching…':error?'':`${total} ${total===1?'job':'jobs'} in Singapore`}</strong>{!loading&&!error&&options?.last_synced_at&&<small> Employer boards last read {day(options.last_synced_at)}</small>}</span>
      {filtered&&<button type="button" className="btn ghost" onClick={clear}>Clear filters</button>}
     </div>
     {error&&<div role="alert"><p>{error}</p><button type="button" className="btn ghost" onClick={()=>setRetry(value=>value+1)}>Retry</button></div>}
@@ -172,14 +184,9 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
      {items.map(posting=><JobCard key={posting.id} posting={posting} item={tracked.get(posting.id)} onSave={()=>save(posting)} onApply={()=>visitEmployer(posting)}/>)}
     </ul>
     {cursor&&!loading&&<button type="button" className="btn ghost" disabled={more} onClick={loadMore}>{more?'Loading…':'Show more jobs'}</button>}
-    {keywords&&<section className="job-search-links" aria-labelledby="job-search-links-title">
-     <h2 id="job-search-links-title">Search other job sites</h2>
-     <div className="job-search-destinations">{boardSearches(keywords).map(site=><a key={site.name} className="btn ghost" href={site.url} target="_blank" rel="noopener noreferrer">{site.name}<span className="small">Opens in a new tab</span></a>)}</div>
-     <p className="small">Only your search terms are sent when you open a site. A site may ask you to sign in.</p>
-    </section>}
    </div>
-   <p className="job-search-handoff">Found a role you like? <Link className="text-link" href="/career-goal?new=1">Use its job description to set your Career Goal.</Link></p>
-  </>}
+  </div>}
+  <div className="job-handoff"><p><strong>Found a role you like?</strong> <Link href="/career-goal?new=1">Use its job description to set your Career Goal.</Link></p><Link className="btn pri" href="/career-goal?new=1" aria-hidden="true" tabIndex={-1}>Set as Career Goal</Link></div>
  </section>;
 }
 
@@ -214,29 +221,69 @@ function JobCard({posting,item,onSave,onApply}:{posting:Posting;item?:Applicatio
  </li>;
 }
 
-function Tracker({items,onStatus,onRemove}:{items:Application[];onStatus:(item:Application,status:ApplicationStatus)=>void;onRemove:(item:Application)=>void}){
- if(!items.length)return <p>You haven&rsquo;t saved any jobs yet. Jobs you save or confirm you applied to will appear here.</p>;
- return <ul className="job-list job-results">
-  {items.map(item=>{
-   const link=httpsOnly(item.snapshot.listing_url);
-   return <li className="job-card" key={item.id}>
-    <h3>{item.snapshot.title}</h3>
-    <div>{item.snapshot.company}</div>
-    <div className="job-card-meta">
-     <span>{label(JOB_TYPES,item.snapshot.job_type)}</span><span>{item.snapshot.location}</span>
-     <span>Updated {day(item.updated_at)}</span>
-     {item.posting_status==='unknown'?<span>Check employer site for availability</span>:item.posting_status!=='open'&&<span>No longer listed</span>}
-    </div>
-    <div className="job-card-actions">
-     <label className="job-status-control">Status
-      <select value={item.status} onChange={event=>onStatus(item,event.target.value as ApplicationStatus)}>
-       {Object.entries(STATUSES).map(([value,name])=><option key={value} value={value}>{name}</option>)}
-      </select>
-     </label>
-     {link&&<a className="btn ghost" href={link} target="_blank" rel="noopener noreferrer">View job</a>}
-     <button type="button" className="btn ghost" aria-label={`Remove ${item.snapshot.title}`} onClick={()=>onRemove(item)}>Remove</button>
-    </div>
-   </li>;
-  })}
- </ul>;
+const COLUMNS:{name:string;statuses:ApplicationStatus[]}[]=[{name:'Saved',statuses:['saved']},{name:'Applied',statuses:['applied']},{name:'Interviewing',statuses:['interviewing']},{name:'Offer',statuses:['offer']},{name:'Closed',statuses:['rejected','withdrawn']}];
+
+function SaveLinkForm({onSubmit,onCancel}:{onSubmit:(link:JobLink)=>Promise<void>;onCancel:()=>void}){
+ const [link,setLink]=useState<JobLink>({url:'',title:'',company:'',location:'',job_type:'unknown'});
+ const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+ const change=(next:Partial<JobLink>)=>setLink(current=>({...current,...next}));
+ async function submit(event:FormEvent<HTMLFormElement>){
+  event.preventDefault();setBusy(true);setError('');
+  try{await onSubmit(link);}catch(problem){setError(explanation(problem));setBusy(false);}
+ }
+ return <form className="job-link-form" aria-label="Save a job from a link" onSubmit={event=>void submit(event)}>
+  <label className="job-link-url">Job link<input type="url" required autoFocus maxLength={2000} placeholder="https://" value={link.url} onChange={event=>change({url:event.target.value})}/></label>
+  <label>Job title<input required maxLength={200} value={link.title} onChange={event=>change({title:event.target.value})}/></label>
+  <label>Employer<input required maxLength={120} value={link.company} onChange={event=>change({company:event.target.value})}/></label>
+  <label>Location (optional)<input maxLength={120} value={link.location} onChange={event=>change({location:event.target.value})}/></label>
+  <label>Job type<select value={link.job_type} onChange={event=>change({job_type:event.target.value as JobType})}>{Object.entries(JOB_TYPES).map(([value,name])=><option key={value} value={value}>{name}</option>)}</select></label>
+  <p className="small">Elo saves these details and doesn&rsquo;t open the link, so add the title and employer yourself.</p>
+  {error&&<p className="small" role="alert">{error}</p>}
+  <div className="job-link-actions"><button className="btn pri" disabled={busy}>{busy?'Saving…':'Save job'}</button><button type="button" className="btn ghost" disabled={busy} onClick={onCancel}>Cancel</button></div>
+ </form>;
+}
+
+function Tracker({items,onStatus,onRemove,onSaveLink,onSaved}:{items:Application[];onStatus:(item:Application,status:ApplicationStatus)=>void;onRemove:(item:Application)=>void;onSaveLink:(link:JobLink)=>Promise<Application>;onSaved:(item:Application)=>void}){
+ const [adding,setAdding]=useState(false);const [message,setMessage]=useState('');
+ const opener=useRef<HTMLButtonElement>(null);
+ function close(){setAdding(false);requestAnimationFrame(()=>opener.current?.focus());}
+ async function saveLink(link:JobLink){
+  const item=await onSaveLink(link);
+  setMessage(items.some(other=>other.id===item.id)?`${item.snapshot.title} is already in your saved jobs.`:`Saved ${item.snapshot.title}.`);
+  onSaved(item);close();
+ }
+ const columns=COLUMNS.filter(column=>column.name!=='Closed'||items.some(item=>column.statuses.includes(item.status)));
+ return <section className="job-board" aria-labelledby="job-board-title">
+  <header><h2 id="job-board-title">Saved jobs</h2><span>{items.length} tracked</span><button ref={opener} type="button" className="btn pri" aria-expanded={adding} onClick={()=>{setMessage('');setAdding(value=>!value);}}>+ Save a job</button></header>
+  {message&&<p className="small job-link-message" role="status">{message}</p>}
+  {adding&&<SaveLinkForm onSubmit={saveLink} onCancel={close}/>}
+  <div className="job-board-columns" style={{gridTemplateColumns:`repeat(${columns.length},minmax(210px,1fr))`}}>{columns.map((column,index)=>{
+   const members=items.filter(item=>column.statuses.includes(item.status));
+   return <section className={`job-column job-column-${index+1}`} key={column.name} aria-label={column.name}>
+    <h3>{column.name}<span>{members.length}</span></h3>
+    {members.length?<ul className="job-list">{members.map(item=>{
+     const link=httpsOnly(item.snapshot.listing_url);
+     return <li className="job-card" key={item.id}>
+      <h3>{item.snapshot.title}</h3>
+      <div>{item.snapshot.company}</div>
+      <div className="job-card-meta">
+       <span>{label(JOB_TYPES,item.snapshot.job_type)}</span>{item.snapshot.location&&<span>{item.snapshot.location}</span>}
+       {item.source==='link'&&<span>Added from a link</span>}
+       <span>Updated {day(item.updated_at)}</span>
+       {item.posting_status==='unknown'?<span>Check employer site for availability</span>:item.posting_status!=='open'&&<span>No longer listed</span>}
+      </div>
+      <div className="job-card-actions">
+       <label className="job-status-control">Status
+        <select value={item.status} onChange={event=>onStatus(item,event.target.value as ApplicationStatus)}>
+         {Object.entries(STATUSES).map(([value,name])=><option key={value} value={value}>{name}</option>)}
+        </select>
+       </label>
+       {link&&<a className="btn ghost" href={link} target="_blank" rel="noopener noreferrer">View job</a>}
+       <button type="button" className="btn ghost" aria-label={`Remove ${item.snapshot.title}`} onClick={()=>onRemove(item)}>Remove</button>
+      </div>
+     </li>;
+    })}</ul>:<div className="job-column-empty">{index===0&&<div>{!items.length&&<p>You haven&rsquo;t saved any jobs yet. Jobs you save or confirm you applied to will appear here.</p>}{!adding&&<button type="button" className="job-paste" onClick={()=>{setMessage('');setAdding(true);}}>Paste a job link</button>}</div>}</div>}
+   </section>;
+  })}</div>
+ </section>;
 }

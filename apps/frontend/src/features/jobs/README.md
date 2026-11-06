@@ -8,4 +8,6 @@ Each listing shows an excerpt and links to the employer's site for the full job 
 
 **My applications** lists saved jobs with a self-reported status. Listings stay readable from their saved copy. Their current availability is unknown until checked on the employer site. A change made in another session shows a message and reloads the saved state instead of overwriting it.
 
-After a keyword search, LinkedIn and Indeed links offer a wider search, sending only the keywords and Singapore as the location. A separate link lets users bring a chosen job description into Career Goal intake. Links open with `noopener noreferrer`, and listing links render only when they use HTTPS.
+The search bar stays above both views and suggests the current Career Goal's role and skills, read from the Career service. **My applications** is a board with Saved, Applied, Interviewing and Offer columns, plus Closed for rejected or withdrawn jobs when there are any.
+
+**+ Save a job** adds a job found elsewhere from its link, title and employer. Elo doesn't open the link. After a keyword search, the Jobs service's `GET /external-searches` supplies links to Prosple, Huzzle, LinkedIn and Indeed, sending only the keywords, plus Singapore where the site supports a location. A separate link lets users bring a chosen job description into Career Goal intake. Links open with `noopener noreferrer`, and listing links render only when they use HTTPS.

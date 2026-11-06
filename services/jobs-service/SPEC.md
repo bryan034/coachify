@@ -28,6 +28,14 @@ The Jobs-owned `elo_jobs` database stores only `job_applications`: private owner
 
 Application lists and updates make no provider calls and report `posting_status: unknown`, so a provider outage or missing catalogue never falsely labels a saved job removed. The UI directs users to check the employer site. Existing snapshots remain valid; legacy `job_postings` and `job_sources` collections are ignored and never destructively migrated. Legacy catalogue helpers/tests remain for compatibility, but are not used by the deployed API.
 
+## Pasted job links
+
+`POST /applications/link` saves a job the user found elsewhere. The user supplies the link, title and employer; elo never fetches the link, so no private address or third-party page is reached and no listing content is copied. Links must be HTTPS on a public-looking host, without credentials or a non-default port. Fragments and `utm_` parameters are dropped so the same job is one record per owner. A link already saved, including one matching a saved listing, returns that record. These records use `source: link`, report `posting_status: unknown` and share the 500-record limit.
+
+## External search links
+
+`GET /external-searches` builds links to Prosple, Huzzle, LinkedIn and Indeed from fixed addresses. They are outbound links only, not listing sources. Huzzle has no location parameter, so its results are not limited to Singapore.
+
 ## Commercial terms
 
 Checked on 5 November 2026; not legal advice. The Greenhouse, Lever and Ashby terms that could be read bind their customers. They neither clearly permit nor clearly prohibit an outside company's commercial use of public listings, and job content appears to belong to employers. This design therefore limits exposure by storing and showing an excerpt rather than the full description, crediting the employer and provider, linking to the employer's site, and supporting per-employer removal.
@@ -36,4 +44,4 @@ Before launch, get written confirmation from each provider and review each provi
 
 ## Known limits
 
-Coverage is limited to configured employer boards, with an emphasis on technology and finance. This is not a search across the entire web, LinkedIn, Indeed or MyCareersFuture. External search links remain separate. Industry is assigned per employer in the registry. Many providers omit employment type, work arrangement and posting dates. Live reads increase latency and depend on provider availability; synthetic tests do not establish production throughput or provider permission.
+Coverage is limited to configured employer boards, with an emphasis on technology and finance. This is not a search across the entire web, LinkedIn, Indeed or MyCareersFuture. External search links are separate and their results are not part of elo's search. Industry is assigned per employer in the registry. Many providers omit employment type, work arrangement and posting dates. Live reads increase latency and depend on provider availability; synthetic tests do not establish production throughput or provider permission.

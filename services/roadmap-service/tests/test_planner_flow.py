@@ -1,6 +1,7 @@
 """Configure, generate, review and revise through the HTTP API, with scripted model output."""
 import copy
 import time
+from datetime import timedelta
 from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
@@ -8,7 +9,8 @@ from pydantic import ValidationError
 from elo_shared.runtime import MemoryStore, Problem
 from planner_fixtures import NOW, OWNER, CleanableStore, assessment, assignment, draft, gap, milestone, settings
 from app.main import create_app
-from app.schemas.roadmap import ChatTurn, PlanDraft, PlannedRoadmap
+from app.planning.state import learning_view
+from app.schemas.roadmap import ChatTurn, LearningPlan, PlanDraft, PlannedRoadmap
 
 H={'Authorization':'Bearer synthetic'}
 class Sources:
@@ -540,3 +542,43 @@ def test_owner_isolation_for_settings_and_plans():
         other=read(client)
         assert other['planner']['active'] is None and other['planner']['config_saved'] is False
         assert other['version']==0
+
+def test_learning_steps_need_an_active_roadmap_and_make_no_upstream_or_model_calls():
+    sources=Sources();model=Scripted([])
+    with client_for(model,sources) as client:
+        assert client.get('/api/v1/roadmaps/learning').status_code==401
+        response=client.get('/api/v1/roadmaps/learning',headers=H);assert response.status_code==200,response.text
+        assert response.json()=={'has_roadmap':False,'roadmap_id':None,'skills_total':0,'skills_started':0,'skills_done':0,'steps':[]}
+    assert sources.reads==[] and sources.writes==[] and model.contexts==[]
+
+def test_learning_steps_follow_the_active_roadmap_through_the_api():
+    with client_for(Scripted([draft()])) as client:
+        state=accepted(client);plan=state['planner']['active'];session=plan['assignments'][0]
+        body=client.get('/api/v1/roadmaps/learning',headers=H).json()
+        assert (body['has_roadmap'],body['roadmap_id'],body['skills_total'],body['skills_started'])==(True,plan['id'],1,0)
+        assert body['steps'][0]['next_session']['id']==session['id'] and body['steps'][0]['state']=='not_started'
+        post(client,'/assignments/status',state,assignment_id=session['id'],status='completed')
+        body=client.get('/api/v1/roadmaps/learning',headers=H).json()
+    step=body['steps'][0]
+    assert (body['skills_started'],body['skills_done'],step['state'],step['sessions_completed'],step['next_session'])==(1,1,'done',1,None)
+
+def learning_plan():
+    def session(key,**changes):return {**assignment(key,**changes),'id':key,'status':changes.get('status','scheduled')}
+    return {'id':'plan1','config':settings(),'gaps':[gap('sql',name='SQL',priority=2),gap('python'),gap('rust',name='Rust',status='unknown',priority=3)],
+        'milestones':[{**milestone(gap_ids=['python','sql']),'id':'m1'}],
+        'assignments':[session('a1',status='completed'),session('a2',gap_id='sql',date='2030-01-14',task='Write a join.'),session('a3',gap_id='python',date='2030-01-15',task='Add a route.')]}
+
+def test_learning_steps_report_each_skills_progress_in_priority_order():
+    body=learning_view(learning_plan(),NOW)
+    python,sql,rust=body['steps']
+    assert [python['name'],sql['name'],rust['name']]==['Python','SQL','Rust']
+    assert (body['skills_total'],body['skills_started'],body['skills_done'])==(3,2,0)
+    assert (python['state'],python['sessions_total'],python['sessions_completed'],python['completed_minutes'],python['remaining_minutes'])==('in_progress',2,1,60,60)
+    assert python['next_session']['task']=='Add a route.' and sql['next_session']['task']=='Write a join.'
+    assert python['milestones']==['Build a Python API'] and rust['milestones']==[]
+    assert (rust['state'],rust['sessions_total'],rust['next_session'])==('not_scheduled',0,None)
+    LearningPlan.model_validate(body)
+
+def test_a_passed_session_is_missed_rather_than_next():
+    step=learning_view(learning_plan(),NOW+timedelta(days=30))['steps'][1]
+    assert (step['name'],step['sessions_missed'],step['next_session'],step['state'])==('SQL',1,None,'in_progress')

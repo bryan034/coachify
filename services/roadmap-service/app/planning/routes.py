@@ -4,13 +4,18 @@ from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, authenticated, begin, launch, operation_view, stamp
 from app.planning.capacity import Capacity, normalized
 from app.planning.generator import PLANNING_SECONDS
-from app.planning.state import candidate_blockers, completed_sessions, planner_state, saved_config
-from app.schemas.roadmap import (AssignmentStatus, ExperienceConfirmation, GeneratePlan, OperationAccepted, Runway, MilestoneOutcome,
+from app.planning.state import candidate_blockers, completed_sessions, learning_view, planner_state, saved_config
+from app.schemas.roadmap import (AssignmentStatus, ExperienceConfirmation, GeneratePlan, LearningPlan, OperationAccepted, Runway, MilestoneOutcome,
     PlannerConfig, RunwayRequest, SaveConfig)
 from app.schemas.planner import Mutation, Workspace
 
 def register_planner(app,context,mutate,worker):
     prefix='/api/v1/roadmaps/planner'
+    @app.get('/api/v1/roadmaps/learning',response_model=LearningPlan)
+    async def learning(request:Request,account=Depends(authenticated)):
+        row=await thread(app.state.store.load,account['id'])
+        return learning_view(planner_state(row)['active'],app.state.clock())
+
     @app.post(prefix+'/runway',response_model=Runway)
     async def runway(body:RunwayRequest,request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id']);state=planner_state(row)

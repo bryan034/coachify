@@ -77,6 +77,8 @@ class StatusChange(BaseModel):
 class Application(BaseModel):
     id: str
     posting_id: str
+    # 'link' records were pasted by the user and match no listing elo read itself.
+    source: Literal['listing', 'link'] = 'listing'
     version: int
     status: ApplicationStatus
     posting_status: PostingStatus | Literal['removed', 'unknown']
@@ -92,6 +94,23 @@ class ApplicationList(BaseModel):
 
 class CreateApplication(Strict):
     posting_id: str = Field(pattern=IDENTIFIER)
+
+
+class SaveJobLink(Strict):
+    url: str = Field(min_length=1, max_length=2000)
+    title: str = Field(min_length=1, max_length=200)
+    company: str = Field(min_length=1, max_length=120)
+    location: str = Field(default='', max_length=120)
+    job_type: JobType = 'unknown'
+
+
+class ExternalSearch(BaseModel):
+    name: str
+    url: str
+
+
+class ExternalSearchList(BaseModel):
+    items: list[ExternalSearch]
 
 
 class UpdateApplication(Strict):

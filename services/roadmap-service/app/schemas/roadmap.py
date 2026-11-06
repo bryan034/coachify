@@ -248,6 +248,34 @@ class MilestoneProgress(Contract):
     sessions_total:int
     sessions_completed:int
     completed_minutes:int
+class LearningSession(Contract):
+    id:str
+    date:str
+    start_time:str
+    duration_minutes:int
+    task:str
+    completion_criterion:str
+class LearningStep(Contract):
+    gap_id:str
+    name:str
+    status:Literal['confirmed_gap','unknown']
+    state:Literal['not_scheduled','not_started','in_progress','done']
+    priority:int
+    rationale:str
+    milestones:list[str]
+    sessions_total:int
+    sessions_completed:int
+    sessions_missed:int
+    completed_minutes:int
+    remaining_minutes:int
+    next_session:LearningSession|None
+class LearningPlan(Contract):
+    has_roadmap:bool
+    roadmap_id:str|None
+    skills_total:int
+    skills_started:int
+    skills_done:int
+    steps:list[LearningStep]
 class PlanGap(DraftGap):
     pass
 class PlanMilestone(DraftMilestone):

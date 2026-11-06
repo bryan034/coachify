@@ -1,5 +1,5 @@
 "use client";
-import {type ReactNode} from 'react';
+import {useState, type ReactNode} from 'react';
 import {groupSkills} from '@/lib/skill-groups';
 import {SkillCategoryNav, categoryAnchor} from '@/components/ui/skill-category-nav';
 import type {CvDetail, Declarations, SkillEstimate, SkillsProfile} from './types';
@@ -85,11 +85,23 @@ function LevelMeter({skill}: {skill: Skill}) {
  </span>;
 }
 
-function SkillRow({skill}: {skill: Skill}) {
- return <li className="skill-row"><details>
+function SkillRow({skill, collapsed = false}: {skill: Skill; collapsed?: boolean}) {
+ return <li className={`skill-row${skill.established ? ' is-levelled' : ''}${skill.sources.length ? ' has-source' : ''}`} hidden={collapsed}><details>
   <summary>{skill.name}<LevelMeter skill={skill}/>{skill.sources.length > 0 && <span className="skill-row-from">{skill.sources.join(' · ')}</span>}</summary>
   <div className="skill-row-details">{skill.details}</div>
  </details></li>;
+}
+
+const COLLAPSED = 8;
+/** Long categories start short. Every skill stays in the page so its evidence stays findable. */
+function SkillGroupCard({name, items}: {name: string; items: Skill[]}) {
+ const [expanded, setExpanded] = useState(false);
+ const hidden = items.length - COLLAPSED;
+ return <section className="skill-group" id={categoryAnchor('have', name)} aria-label={name}>
+  <header><h3>{name}</h3><span>{items.length}</span></header>
+  <ul>{items.map((skill, index) => <SkillRow key={skill.key} skill={skill} collapsed={!expanded && index >= COLLAPSED}/>)}</ul>
+  {hidden > 0 && <button type="button" className="skill-group-more" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'Show fewer' : `+${hidden} more`}</button>}
+ </section>;
 }
 
 /** Within a card the strongest evidence comes first. */
@@ -103,15 +115,14 @@ export function SkillProfile({skills, categories}: {skills: Skill[]; categories:
  const groups = groupSkills(byStrength(skills), skill => skill.name, categories);
  return <>
   <div className="skill-profile-overview">
-   <p><strong>{skills.length} {skills.length === 1 ? 'skill' : 'skills'}</strong> in {groups.length} {groups.length === 1 ? 'category' : 'categories'}, <strong>{skills.filter(skill => skill.established).length}</strong> with an established level</p>
+   <p className="cv-visually-hidden"><strong>{skills.length} {skills.length === 1 ? 'skill' : 'skills'}</strong> in {groups.length} {groups.length === 1 ? 'category' : 'categories'}, <strong>{skills.filter(skill => skill.established).length}</strong> with an established level</p>
    <dl className="skill-level-legend" aria-label="What the levels mean">
     {Object.values(levels).map(level => <div key={level!.label}><dt>{level!.label}</dt><dd>{level!.step === 1 ? 'You applied it with support' : level!.step === 2 ? 'You applied it on your own' : 'Independent, on complex problems'}</dd></div>)}
    </dl>
   </div>
+  <div className="skill-share" aria-hidden="true">{groups.map(group => <i key={group.name} style={{flexGrow: group.items.length}} title={`${group.name}: ${group.items.length}`}/>)}</div>
   <SkillCategoryNav groups={groups} prefix="have" label="Categories of your skills"/>
-  <div className="skill-group-grid">{groups.map(group => <section className="skill-group" id={categoryAnchor('have', group.name)} key={group.name} aria-label={group.name}>
-   <header><h3>{group.name}</h3><span>{group.items.length}</span></header>
-   <ul>{group.items.map(skill => <SkillRow key={skill.key} skill={skill}/>)}</ul>
-  </section>)}</div>
+  <p className="skill-key"><span className="skill-key-source">From your experience</span><span className="skill-key-level">Level set</span></p>
+  <div className="skill-group-grid">{groups.map(group => <SkillGroupCard key={group.name} name={group.name} items={group.items}/>)}</div>
  </>;
 }

@@ -1,0 +1,116 @@
+/* Career Goal: the role is the headline; everything else serves it. */
+.career-briefing .briefing-target{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px 32px;align-items:center;padding:32px 36px;margin-bottom:16px;border:1px solid color-mix(in srgb,var(--mint) 40%,transparent);border-radius:24px;background:linear-gradient(120deg,color-mix(in srgb,var(--mint) 26%,var(--white)),var(--mint-mist) 55%,var(--white))}
+.career-briefing .briefing-target .briefing-eyebrow{margin-bottom:6px;font-size:13px;font-weight:500;color:var(--ink)}
+.career-briefing .briefing-target h1{margin:0 0 14px;font-size:clamp(34px,4vw,56px);font-weight:500;line-height:1.06;letter-spacing:-.045em;overflow-wrap:anywhere}
+.career-briefing .briefing-target-meta{display:flex;flex-wrap:wrap;gap:6px;list-style:none}
+.career-briefing .briefing-target-meta li{padding:4px 12px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-size:12.5px;color:var(--ink)}
+.career-briefing .briefing-target-meta li:first-letter{text-transform:uppercase}
+.career-briefing .briefing-target-actions{grid-column:1;display:flex;flex-wrap:wrap;gap:8px;margin:0}
+.career-briefing .briefing-target-actions .btn{border-radius:999px}
+.career-briefing .briefing-target-actions .btn.pri{border:1px solid var(--ink)}
+.goal-ring{grid-column:2;grid-row:1 / span 2;display:flex;align-items:center;gap:20px;padding:18px 22px;border:1px solid var(--line);border-radius:20px;background:var(--white)}
+.goal-ring-chart{position:relative;width:104px;height:104px;flex:none}
+.goal-ring-chart svg{width:100%;height:100%}
+.goal-ring-chart circle{fill:none;stroke-width:14}
+.goal-ring-chart circle.slice-required{stroke:var(--ink)}
+.goal-ring-chart circle.slice-preferred{stroke:var(--mint)}
+.goal-ring-chart circle.slice-other{stroke:color-mix(in srgb,var(--slate) 38%,var(--white))}
+.goal-ring-chart span{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;font-size:11px;line-height:1.1;color:var(--slate)}
+.goal-ring-chart strong{font-size:24px;font-weight:500;color:var(--ink)}
+.goal-ring figcaption p{margin-bottom:8px;font-size:12.5px;font-weight:600}
+.goal-ring ul{display:grid;gap:6px;list-style:none;font-size:12.5px;color:var(--slate)}
+.goal-ring li{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.goal-ring b{font-weight:600;color:var(--ink)}
+.goal-ring i{width:9px;height:9px;border-radius:50%;flex:none}
+.goal-ring i.slice-required{background:var(--ink)}
+.goal-ring i.slice-preferred{background:var(--mint)}
+.goal-ring i.slice-other{background:color-mix(in srgb,var(--slate) 38%,var(--white))}
+
+.career-briefing .briefing-jump-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:16px;padding:0;border:0}
+.career-briefing .briefing-jump-links a{padding:7px 14px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-size:12.5px;font-weight:500;color:var(--ink)}
+.career-briefing .briefing-jump-links a:hover{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.career-briefing .goal-saved{margin-left:auto;font-size:12px;color:var(--slate)}
+.career-briefing .goal-confirmation{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 20px;align-items:center;margin-bottom:20px;padding:14px 20px;border-radius:16px}
+.career-briefing .goal-confirmation>*{grid-column:1}
+.career-briefing .goal-confirmation>:is(.row,.btn){grid-column:2;grid-row:1 / span 3;margin:0}
+.career-briefing .goal-confirmation h2{position:relative;padding-left:16px;font-size:14px;font-weight:600}
+.career-briefing .goal-confirmation h2::before{content:"";position:absolute;left:0;top:.45em;width:8px;height:8px;border-radius:50%;background:var(--mint)}
+.career-briefing .goal-confirmation>:is(.row,.btn) .btn,.career-briefing .goal-confirmation>.btn{border-radius:999px}
+
+.career-briefing .briefing-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+.career-briefing .briefing-section-heading h2{font-size:clamp(20px,2vw,26px);font-weight:500;letter-spacing:-.03em}
+.career-briefing .briefing-section-heading{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin-bottom:12px}
+.skill-rank-sorted{margin-left:auto;font-size:12px;color:var(--slate)}
+.skill-rank-filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.skill-rank-filters button{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-size:12.5px;font-weight:500;color:var(--ink)}
+.skill-rank-filters button:hover{background:var(--cloud)}
+.skill-rank-filters button span{font-size:12px;color:var(--slate)}
+.skill-rank-filters button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.skill-rank-filters button[aria-pressed=true] span{color:var(--mint)}
+.skill-rank-filters button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.skill-rank-list{display:grid;gap:10px;list-style:none}
+.career-briefing .skill-rank-row,.career-briefing .skill-rank-row+.skill-rank-row{border:1px solid var(--line);border-radius:18px;background:var(--white)}
+.career-briefing .skill-rank-row .skill-row-toggle{display:grid;grid-template-columns:36px minmax(0,1fr) 30px;gap:14px;align-items:center;padding:14px 16px;border-radius:18px}
+.career-briefing .skill-rank-row .skill-row-toggle::after{display:none}
+.skill-rank{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--cloud);font-size:14px;font-weight:600;color:var(--ink)}
+.skill-rank-body{display:grid;gap:4px;min-width:0}
+.skill-rank-head{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px}
+.skill-rank-head>span:first-child{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--ink);overflow-wrap:anywhere}
+.career-briefing .skill-priority{border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:500;background:var(--cloud);color:var(--slate)}
+.career-briefing .skill-priority.priority-required{background:var(--ink);color:var(--mint)}
+.career-briefing .skill-priority.priority-preferred{background:var(--mint-mist);color:var(--ink)}
+.skill-rank-body .skill-row-preview{font-size:13px;font-weight:400;-webkit-line-clamp:1}
+.skill-rank-body .skill-row-from{font-size:12px}
+.skill-rank-category{font-size:12px;font-weight:400;color:var(--slate)}
+.skill-rank-chevron{position:relative;display:block;width:30px;height:30px;border-radius:50%;background:var(--cloud)}
+.skill-rank-chevron::after{content:"";position:absolute;left:11px;top:9px;width:8px;height:8px;border-right:1.5px solid var(--slate);border-bottom:1.5px solid var(--slate);transform:rotate(45deg)}
+.skill-row-toggle[aria-expanded=true] .skill-rank-chevron::after{top:12px;transform:rotate(225deg)}
+.career-briefing .skill-rank-row .skill-row-details{padding:0 60px 16px 66px}
+
+.goal-rail{position:sticky;top:20px;display:grid;gap:12px;min-width:0}
+.career-briefing .briefing-context-banner{margin-bottom:16px}
+.career-briefing .briefing-context-banner .briefing-assessment .btn.pri{width:auto;margin:0}
+.career-briefing .briefing-context-banner .briefing-assessment h2{margin-top:0}
+.career-briefing .briefing-assessment{padding:22px;border:1px solid var(--ink);border-radius:20px;background:var(--ink);color:var(--white)}
+.career-briefing .briefing-assessment h2{margin:12px 0 8px;font-size:18px;font-weight:500;letter-spacing:-.02em;color:var(--white)}
+.career-briefing .briefing-assessment p{color:color-mix(in srgb,var(--white) 74%,transparent);font-size:13px;line-height:1.55}
+.career-briefing .briefing-assessment .briefing-mini-icon{background:color-mix(in srgb,var(--mint) 22%,transparent);color:var(--mint)}
+.career-briefing .briefing-assessment .btn.pri{display:flex;width:100%;margin-top:14px;border-radius:999px;background:var(--mint);color:var(--ink)}
+.career-briefing .briefing-assessment .btn.ghost{margin-top:12px;background:transparent;color:var(--white)}
+.career-briefing .briefing-assessment .briefing-micro{margin-top:12px;font-size:11.5px}
+.goal-rail-card{padding:20px 22px;border:1px solid var(--line);border-radius:20px;background:var(--white)}
+.career-briefing .goal-rail-card h2{margin-bottom:6px;font-size:14px;font-weight:600;letter-spacing:-.01em}
+.goal-rail-card p{font-size:13px;line-height:1.55;color:var(--slate)}
+.goal-rail-card .btn{width:100%;margin-top:12px;border-radius:999px}
+.goal-dates{display:grid;gap:8px;list-style:none;font-size:13px}
+.goal-dates li{display:flex;justify-content:space-between;gap:12px}
+.goal-dates strong{font-weight:500}
+.goal-dates span{color:var(--slate);text-align:right}
+
+.career-briefing .briefing-support{margin-top:28px}
+.career-briefing .briefing-support>h2{font-size:clamp(20px,2vw,26px);font-weight:500;letter-spacing:-.03em}
+.career-briefing .briefing-support details{margin-top:8px;padding:0 18px;border:1px solid var(--line);border-radius:16px;background:var(--white)}
+.career-briefing .briefing-support summary{padding:13px 0;cursor:pointer}
+
+@media (max-width:1100px){
+ .career-briefing .briefing-grid{grid-template-columns:minmax(0,1fr)}
+ .goal-rail{position:static;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+}
+@media (max-width:640px){
+ .career-briefing .skill-rank-row .skill-row-toggle{grid-template-columns:30px minmax(0,1fr) 26px;gap:10px;padding:12px}
+ .skill-rank{width:30px;height:30px;font-size:13px}
+ .skill-rank-chevron{width:26px;height:26px}
+ .skill-rank-chevron::after{left:9px;top:7px}
+ .skill-row-toggle[aria-expanded=true] .skill-rank-chevron::after{top:10px}
+ .skill-rank-body .skill-row-preview{-webkit-line-clamp:2}
+ .career-briefing .skill-rank-row .skill-row-details{padding:0 14px 14px}
+}
+@media (max-width:820px){
+ .career-briefing .briefing-target{grid-template-columns:minmax(0,1fr);padding:24px 20px}
+ .goal-ring{grid-column:1;grid-row:auto;justify-self:start;max-width:100%}
+ .goal-ring figcaption{min-width:0}
+ .goal-ring li{align-items:baseline;white-space:normal}
+ .goal-ring i{align-self:center}
+ .career-briefing .goal-confirmation{grid-template-columns:minmax(0,1fr)}
+ .career-briefing .goal-confirmation>:is(.row,.btn){grid-column:1;grid-row:auto;margin-top:10px}
+}

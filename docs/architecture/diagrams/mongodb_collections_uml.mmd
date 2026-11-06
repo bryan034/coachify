@@ -267,9 +267,10 @@ note for roadmaps "Separate Roadmap-owned database; one database with owner-scop
 %% after up to three distinct question searches; no new collection or raw question is stored.
 
 class job_applications {
-    +String _id [owner and posting hash]
+    +String _id [owner and posting or link hash]
     +String user_id
     +String posting_id
+    +String source [listing or link; absent means listing]
     +Integer version
     +String status [self-reported]
     +JobApplicationSnapshot snapshot

@@ -478,6 +478,119 @@
         ]
       }
     },
+    "/api/v1/roadmaps/learning": {
+      "get": {
+        "summary": "Learning",
+        "operationId": "learning_api_v1_roadmaps_learning_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearningPlan"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/roadmaps/planner/runway": {
       "post": {
         "summary": "Runway",
@@ -2332,6 +2445,187 @@
           "text"
         ],
         "title": "InputSkill"
+      },
+      "LearningPlan": {
+        "properties": {
+          "has_roadmap": {
+            "type": "boolean",
+            "title": "Has Roadmap"
+          },
+          "roadmap_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Id"
+          },
+          "skills_total": {
+            "type": "integer",
+            "title": "Skills Total"
+          },
+          "skills_started": {
+            "type": "integer",
+            "title": "Skills Started"
+          },
+          "skills_done": {
+            "type": "integer",
+            "title": "Skills Done"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/LearningStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "has_roadmap",
+          "roadmap_id",
+          "skills_total",
+          "skills_started",
+          "skills_done",
+          "steps"
+        ],
+        "title": "LearningPlan"
+      },
+      "LearningSession": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "start_time": {
+            "type": "string",
+            "title": "Start Time"
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "title": "Duration Minutes"
+          },
+          "task": {
+            "type": "string",
+            "title": "Task"
+          },
+          "completion_criterion": {
+            "type": "string",
+            "title": "Completion Criterion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "start_time",
+          "duration_minutes",
+          "task",
+          "completion_criterion"
+        ],
+        "title": "LearningSession"
+      },
+      "LearningStep": {
+        "properties": {
+          "gap_id": {
+            "type": "string",
+            "title": "Gap Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed_gap",
+              "unknown"
+            ],
+            "title": "Status"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "not_scheduled",
+              "not_started",
+              "in_progress",
+              "done"
+            ],
+            "title": "State"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "milestones": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Milestones"
+          },
+          "sessions_total": {
+            "type": "integer",
+            "title": "Sessions Total"
+          },
+          "sessions_completed": {
+            "type": "integer",
+            "title": "Sessions Completed"
+          },
+          "sessions_missed": {
+            "type": "integer",
+            "title": "Sessions Missed"
+          },
+          "completed_minutes": {
+            "type": "integer",
+            "title": "Completed Minutes"
+          },
+          "remaining_minutes": {
+            "type": "integer",
+            "title": "Remaining Minutes"
+          },
+          "next_session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LearningSession"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "gap_id",
+          "name",
+          "status",
+          "state",
+          "priority",
+          "rationale",
+          "milestones",
+          "sessions_total",
+          "sessions_completed",
+          "sessions_missed",
+          "completed_minutes",
+          "remaining_minutes",
+          "next_session"
+        ],
+        "title": "LearningStep"
       },
       "Message": {
         "properties": {

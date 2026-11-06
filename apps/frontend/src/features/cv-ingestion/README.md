@@ -127,9 +127,11 @@ UI behavior; they do not establish real model extraction accuracy.
 
 ## Summary-first Skills Profile
 
-Entry now shows `skills-profile-summary.tsx`. Skills come first, in one card per
-category (`skill-cards.tsx`), combining CV skills, skills described in chat and
-manually added capabilities. Each row shows the strongest supported baseline level,
+Entry now shows `skills-profile-summary.tsx`: profile counts, a bar showing each
+category's share, then skills as chips in one card per category
+(`skill-cards.tsx`), combining CV skills, skills described in chat and manually
+added capabilities. Categories over eight skills start collapsed. Experience sits in
+columns by kind. Each opened chip shows the strongest supported baseline level,
 or "Level not established", with its source experience; evidence stays behind the
 row's details. The backend assigns categories (`skill_groups` on each response) and
 the frontend only displays them; a skill missing from the map shows under Other skills.

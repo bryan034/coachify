@@ -9,7 +9,8 @@ No Jira stories exist for this service yet; add the story IDs here once they are
 | Feature | Available endpoints |
 |---|---|
 | Search and filter | `GET /search` accepts `q`, `job_type`, `industry`, `workplace`, `company`, `posted_within_days`, `posted_from`, `posted_to`, `cursor` and `limit`. `GET /filters` returns the available values and counts. `GET /postings/{id}` reads one listing. |
-| Track applications | `GET /applications` lists the owner's saved jobs. `POST /applications` saves a job and is safe to repeat. `PATCH /applications/{id}` changes the self-reported status with `expected_version`. `DELETE /applications/{id}?expected_version=` removes it. |
+| Search elsewhere | `GET /external-searches?q=` returns search links for Prosple, Huzzle, LinkedIn and Indeed. Only the keywords go into the links, and elo reads nothing from those sites. |
+| Track applications | `GET /applications` lists the owner's saved jobs. `POST /applications` saves a listing and is safe to repeat. `POST /applications/link` saves a job from a pasted link with its title and employer, and is also safe to repeat. `PATCH /applications/{id}` changes the self-reported status with `expected_version`. `DELETE /applications/{id}?expected_version=` removes it. |
 
 **Not implemented:** submitting applications from elo, tailored application answers, fit scoring, alerts and setting a listing as the Career Goal automatically.
 

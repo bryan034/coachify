@@ -7,8 +7,9 @@ from elo_shared.runtime import Problem, application, authenticated
 from fastapi import Depends, Path, Query, Request, Response
 from starlette.concurrency import run_in_threadpool as thread
 
-from app.schemas import (Application, ApplicationList, CreateApplication, FilterOptions, Industry, JobType, Posting,
-                         SearchResult, UpdateApplication, Workplace)
+from app.external import external_searches
+from app.schemas import (Application, ApplicationList, CreateApplication, ExternalSearchList, FilterOptions, Industry, JobType,
+                         Posting, SaveJobLink, SearchResult, UpdateApplication, Workplace)
 from app.store import JobsStore, search_filter
 from app.live import LiveJobs
 
@@ -69,6 +70,13 @@ def create_app(store=None, upstream=None, clock=None, catalogue=None):
     async def posting(identifier: Identifier, request: Request, account=Depends(authenticated)):
         return await thread(lambda: catalogue.posting(identifier))
 
+    @app.get('/api/v1/jobs/external-searches', response_model=ExternalSearchList)
+    async def external(request: Request, q: Annotated[str, Query(min_length=1, max_length=120)], account=Depends(authenticated)):
+        keywords = q.strip()
+        if not keywords:
+            raise Problem('Enter a job title or keywords.', 422, 'validation')
+        return {'items': external_searches(keywords)}
+
     @app.get('/api/v1/jobs/applications', response_model=ApplicationList)
     async def applications(request: Request, account=Depends(authenticated)):
         return await thread(lambda: jobs().list_applications(account['id']))
@@ -76,6 +84,10 @@ def create_app(store=None, upstream=None, clock=None, catalogue=None):
     @app.post('/api/v1/jobs/applications', response_model=Application)
     async def create_application(body: CreateApplication, request: Request, account=Depends(authenticated)):
         return await thread(lambda: jobs().create_application(account['id'], body.posting_id, app.state.clock()))
+
+    @app.post('/api/v1/jobs/applications/link', response_model=Application)
+    async def save_link(body: SaveJobLink, request: Request, account=Depends(authenticated)):
+        return await thread(lambda: jobs().save_link(account['id'], body, app.state.clock()))
 
     @app.patch('/api/v1/jobs/applications/{identifier}', response_model=Application)
     async def update_application(identifier: Identifier, body: UpdateApplication, request: Request, account=Depends(authenticated)):

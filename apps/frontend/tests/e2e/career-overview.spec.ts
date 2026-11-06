@@ -129,7 +129,7 @@ test('Opportunity Intelligence preserves partial categories, citations and targe
 });
 
 
-test('compact skill groups support keyboard disclosure, confirmed layout and small screens',async({page})=>{
+test('the numbered skill list supports keyboard disclosure, category filters, confirmed layout and small screens',async({page})=>{
  await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
@@ -147,14 +147,17 @@ test('compact skill groups support keyboard disclosure, confirmed layout and sma
  });
  await page.setViewportSize({width:1440,height:1000});await page.goto('/career-goal');
  await expect(page.locator('.briefing-context-banner')).toBeVisible();
- await expect(page.getByRole('heading',{name:'Product Management',exact:true})).toBeVisible();
- await expect(page.getByRole('heading',{name:'AI',exact:true})).toBeVisible();
+ const filters=page.getByRole('group',{name:'Filter skills by category'});
+ await expect(filters.getByRole('button',{name:/Product Management/})).toBeVisible();
+ await expect(filters.getByRole('button',{name:/AI/})).toBeVisible();
  await expect(page.locator('.skill-priority.priority-required')).toHaveCount(6);
  await expect(page.locator('.skill-priority.priority-preferred')).toHaveCount(3);
- const cards=page.locator('.skill-group');
+ const cards=page.locator('.skill-rank-row');
+ await expect(cards).toHaveCount(9);
+ await expect(cards.nth(0).locator('.skill-rank')).toHaveText('1');await expect(cards.nth(8).locator('.skill-rank')).toHaveText('9');
  const first=await cards.nth(0).boundingBox(),second=await cards.nth(1).boundingBox();
- expect(first!.y).toBe(second!.y);expect(second!.x).toBeGreaterThan(first!.x);
- const next=await page.locator('#opportunity').boundingBox(),focus=await page.locator('#priorities').boundingBox();expect(next!.y-focus!.y).toBeLessThan(700);
+ expect(second!.x).toBe(first!.x);expect(second!.y).toBeGreaterThan(first!.y);
+ const next=await page.locator('#opportunity').boundingBox(),focus=await page.locator('#priorities').boundingBox();expect(next!.y).toBeGreaterThan(focus!.y);
  await page.screenshot({path:test.info().outputPath('learning-focus-desktop.png'),fullPage:true});
  const toggle=page.getByRole('button',{name:longTitle,exact:true});await toggle.focus();await page.keyboard.press('Enter');
  await expect(toggle).toHaveAttribute('aria-expanded','true');
@@ -169,8 +172,10 @@ test('compact skill groups support keyboard disclosure, confirmed layout and sma
  expect((await cards.nth(1).boundingBox())!.y).toBeGreaterThan((await cards.nth(0).boundingBox())!.y);
  await page.screenshot({path:test.info().outputPath('learning-focus-mobile.png'),fullPage:true});
  count=30;await page.reload();
- await expect(page.getByRole('region',{name:'AI',exact:true}).locator('.skill-row')).toHaveCount(15);
  await expect(page.locator('.skill-priority.priority-required')).toHaveCount(6);
  await expect(page.locator('.skill-priority.priority-preferred')).toHaveCount(24);
+ await filters.getByRole('button',{name:/AI/}).click();
+ await expect(cards).toHaveCount(15);
+ await expect(cards.nth(0).locator('.skill-rank')).toHaveText('2');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

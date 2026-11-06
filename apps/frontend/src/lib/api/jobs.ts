@@ -13,7 +13,7 @@ export type SearchResult = { items: Posting[]; total: number; next_cursor: strin
 export type FilterOption = { value: string; count: number };
 export type FilterOptions = { job_types: FilterOption[]; industries: FilterOption[]; workplaces: FilterOption[]; companies: FilterOption[]; last_synced_at: string | null };
 export type Application = {
- id: string; posting_id: string; version: number; status: ApplicationStatus; posting_status: 'open' | 'closed' | 'removed' | 'unknown';
+ id: string; posting_id: string; source?: 'listing' | 'link'; version: number; status: ApplicationStatus; posting_status: 'open' | 'closed' | 'removed' | 'unknown';
  snapshot: { title: string; company: string; location: string; job_type: JobType; listing_url: string; apply_url: string };
  history: { status: ApplicationStatus; at: string }[]; created_at: string; updated_at: string;
 };
@@ -75,6 +75,17 @@ async function application(path: string, token: string, init: RequestInit) {
 
 export const saveApplication = (token: string, postingId: string) =>
  application('/applications', token, { method: 'POST', body: JSON.stringify({ posting_id: postingId }) });
+
+export type JobLink = { url: string; title: string; company: string; location: string; job_type: JobType };
+export const saveJobLink = (token: string, link: JobLink) =>
+ application('/applications/link', token, { method: 'POST', body: JSON.stringify(link) });
+
+export type ExternalSearch = { name: string; url: string };
+export async function externalSearches(token: string, keywords: string, signal?: AbortSignal): Promise<ExternalSearch[]> {
+ const value = await request(`/external-searches?q=${encodeURIComponent(keywords)}`, token, { signal }) as { items: ExternalSearch[] };
+ if (!Array.isArray(value?.items) || !value.items.every(item => typeof item?.name === 'string' && typeof item?.url === 'string')) throw invalid();
+ return value.items;
+}
 
 export const updateApplication = (token: string, item: Application, status: ApplicationStatus) =>
  application(`/applications/${item.id}`, token, { method: 'PATCH', body: JSON.stringify({ expected_version: item.version, status }) });

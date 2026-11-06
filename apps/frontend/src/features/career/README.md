@@ -96,7 +96,7 @@ server activity, repair or quota status and a separate list of observed stages;
 these describe workflow progress, not private model reasoning. Temporary progress
 disappears once the summary arrives.
 
-The saved-goal overview shows skills in one card per category, using the backend's
+The saved-goal overview opens with the role and a ring of skills by the backend's priority. A side rail holds the CV status, comparison status, job dates and a link to Explore careers. Skills form one numbered list sorted by priority, with category filters. Each skill keeps its number when filtered, using the backend's categories in, using the backend's
 `current.skill_groups`. Importance (Required, Preferred and so on) is a label on each
 row, most important first, with any level the job states.
 

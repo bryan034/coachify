@@ -21,6 +21,9 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   if(url.pathname === '/api/v1/jobs/search')return route.fulfill({json:{items:[{id:'0'.repeat(32),title:'Synthetic Data Intern',company:'Synthetic Pay',industry:'fintech',location:'Singapore',department:null,job_type:'internship',workplace:'hybrid',posted_at:'2026-11-01T00:00:00Z',posted_at_estimated:false,application_deadline:null,excerpt:'Support synthetic payments analysis.',listing_url:'https://jobs.example.test/1',apply_url:'https://jobs.example.test/1/apply',provider:'lever',status:'open'}],total:1,next_cursor:null}});
   if(url.pathname.endsWith('/profile/skills-profile'))return route.fulfill({json:{version:0,status:'empty',saved_at:null,areas:{},entries:[]}});
   if(url.pathname.endsWith('/profile/capabilities'))return route.fulfill({json:emptyDeclarations});
+  if(url.pathname === '/api/v1/roadmaps/learning')return route.fulfill({json:{has_roadmap:false,roadmap_id:null,skills_total:0,skills_started:0,skills_done:0,steps:[]}});
+  if(url.pathname === '/api/v1/jobs/external-searches')return route.fulfill({json:{items:[{name:'LinkedIn',url:`https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(url.searchParams.get('q')!).replaceAll('%20','+')}&location=Singapore`},{name:'Indeed',url:'https://sg.indeed.com/jobs?q=x&l=Singapore'}]}});
+  if(url.pathname === '/api/v1/career/goals/current')return route.fulfill({json:{goal:null,selection_version:0,dependent_results_need_review:false}});
   if(url.pathname === '/api/v1/roadmaps/workspace') {
    expect(route.request().method()).toBe('GET');
    return route.fulfill({json:{planner:blankPlanner(),version:0,messages:[],operation:null,active:null,draft:null,assessment:null,stale:false,context:{ready:false,model_available:true,issues:[{source:'cv',message:'Upload, extract and select a CV before planning.',href:'/cv'},{source:'career',message:'Extract a Career goal before planning.',href:'/career-goal'}],planning_defaults:{application_date:null,weekly_hours:null,availability_periods:[]}}}});
@@ -101,7 +104,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.locator('.roadmap-prerequisites a[href="/career-goal"]')).toBeVisible();
  await page.getByRole('tab',{name:'Starting point',exact:true}).click();
  await expect(page.getByRole('tabpanel',{name:'Starting point',exact:true})).toBeVisible();
- expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||p.startsWith('/api/v1/jobs/')||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
+ expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||p==='/api/v1/career/goals/current'||p==='/api/v1/roadmaps/learning'||p.startsWith('/api/v1/jobs/')||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
  expect(apiCalls).toContain('/api/v1/cv/policy');
  // The sidebar stays beside content, and mobile navigation expands on demand.
  const sidebar = await page.locator('.side').boundingBox();
