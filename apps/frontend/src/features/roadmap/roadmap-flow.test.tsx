@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RoadmapPlanner } from './roadmap-planner';
-import type { PlannedRoadmap, Workspace } from './types';
+import type { PlannedRoadmap, Workspace, PlannerConfig } from './types';
 import { blankPlanner, blockedRunway, config, planner, review, roadmap, runway, workspace } from '../../../tests/fixtures/roadmap-workspace';
 
 const session = vi.hoisted(() => ({ account: { id: 'owner-one' }, token: 'synthetic-token' }));
@@ -14,6 +14,7 @@ function serve(state: Workspace, handlers: Record<string, (body: never) => unkno
   const route = path.split('?')[0];
   if (handlers[route]) return Promise.resolve(handlers[route](body));
   if (route === '/planner/runway') return Promise.resolve(runway());
+  if (route === '/planner/config') return Promise.resolve({ ...state, version: state.version + 1, planner: { ...state.planner, config: (body as { config: PlannerConfig }).config, config_saved: true } });
   return Promise.resolve(state);
  });
 }
@@ -34,8 +35,78 @@ it('shows the goal and skills that will be used before any generation', async ()
  const section = heading.closest('section')!;
  expect(within(section).getByText('Backend developer')).toBeVisible();
  expect(within(section).getByText(/1 skill, 1 experience/)).toBeVisible();
- expect(within(section).getByText('Git')).toBeInTheDocument();
+ expect(within(section).queryByText('Git')).not.toBeInTheDocument();
+ fireEvent.click(within(section).getByRole('button', { name: /1 skill, 1 experience/ }));
+ expect(within(section).getByText('Git')).toBeVisible();
  expect(calls('/planner/generate')).toHaveLength(0);
+});
+
+it('closes a What elo will use panel with Escape, returning focus, and with a click elsewhere', async () => {
+ serve(workspace()); render(<RoadmapPlanner />);
+ const section = (await screen.findByRole('heading', { name: 'What elo will use' })).closest('section')!;
+ const menu = within(section).getByRole('button', { name: /1 skill, 1 experience/ });
+ fireEvent.click(menu);
+ expect(menu).toHaveAttribute('aria-expanded', 'true');
+ fireEvent.keyDown(document, { key: 'Escape' });
+ expect(within(section).queryByText('Git')).not.toBeInTheDocument();
+ expect(menu).toHaveFocus();
+ fireEvent.click(menu);
+ fireEvent.pointerDown(within(section).getByText('Git'));
+ expect(within(section).getByText('Git')).toBeVisible();
+ fireEvent.pointerDown(document.body);
+ expect(within(section).queryByText('Git')).not.toBeInTheDocument();
+ expect(menu).toHaveAttribute('aria-expanded', 'false');
+});
+
+it('shows each study block with its start and end, and the end time sets its length', async () => {
+ serve(workspace()); render(<RoadmapPlanner />);
+ const chip = await screen.findByRole('button', { name: /Edit Monday block: 19:00–21:00/ });
+ expect(within(chip).getByText('19:00–21:00')).toBeVisible();
+ fireEvent.click(chip);
+ fireEvent.change(screen.getByLabelText('Block 1 end time'), { target: { value: '22:30' } });
+ await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config.blocks[0].duration_minutes).toBe(210));
+ expect(await screen.findByRole('button', { name: /Edit Monday block: 19:00–22:30/ })).toBeVisible();
+ fireEvent.change(screen.getByLabelText('Block 1 end time'), { target: { value: '19:05' } });
+ expect(screen.getByText('Use 15 minutes to 8 hours')).toBeVisible();
+ expect(screen.getByLabelText('Block 1 minutes')).toHaveValue(210);
+});
+
+it('saves planner changes without being asked, keeping edits made during the save', async () => {
+ const state = workspace();
+ let finish: (value: unknown) => void = () => {};
+ serve(state, { '/planner/config': () => new Promise(resolve => { finish = resolve; }) });
+ render(<RoadmapPlanner />);
+ const session = await screen.findByLabelText('Preferred session in minutes');
+ fireEvent.change(session, { target: { value: '45' } });
+ await waitFor(() => expect(calls('/planner/config')).toHaveLength(1), { timeout: 3000 });
+ expect(calls('/planner/config')[0][2].config.preferred_session_minutes).toBe(45);
+ expect(session).toBeEnabled();
+ fireEvent.change(session, { target: { value: '50' } });
+ finish({ ...state, version: state.version + 1, planner: { ...state.planner, config: calls('/planner/config')[0][2].config } });
+ await waitFor(() => expect(calls('/planner/config')).toHaveLength(2), { timeout: 3000 });
+ expect(session).toHaveValue(50);
+ expect(calls('/planner/config')[1][2].config.preferred_session_minutes).toBe(50);
+ expect(calls('/planner/config')[1][2].expected_version).toBe(state.version + 1);
+ finish({ ...state, version: state.version + 2, planner: { ...state.planner, config: calls('/planner/config')[1][2].config } });
+ expect(await screen.findByText('All changes saved')).toBeVisible();
+});
+
+it('offers Save settings when saving automatically fails, and keeps the change', async () => {
+ serve(workspace(), { '/planner/config': () => Promise.reject(new Error('Synthetic failure')) });
+ render(<RoadmapPlanner />);
+ const session = await screen.findByLabelText('Preferred session in minutes');
+ fireEvent.change(session, { target: { value: '45' } });
+ expect(await screen.findByRole('button', { name: 'Save settings' }, { timeout: 3000 })).toBeVisible();
+ expect(session).toHaveValue(45);
+});
+
+it('sends unsaved changes as the page closes', async () => {
+ serve(workspace()); render(<RoadmapPlanner />);
+ fireEvent.change(await screen.findByLabelText('Preferred session in minutes'), { target: { value: '45' } });
+ fireEvent(window, new Event('pagehide'));
+ const sent = calls('/planner/config').at(-1)!;
+ expect(sent[2].config.preferred_session_minutes).toBe(45);
+ expect(sent[4]).toEqual({ keepalive: true });
 });
 
 it('explains why generation is disabled when dates or study time are missing', async () => {
@@ -99,7 +170,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 it('lays every planner detail along the road, without calling the model', async () => {
  serve(workspace({ planner: blankPlanner() })); render(<RoadmapPlanner />);
  await screen.findByRole('heading', { name: 'Your runway' });
- for (const stop of ['Start', 'Finish', 'Weekly study time', 'Session length', 'Recurring study blocks', 'Backup blocks', 'Learning focus', 'Blackout days and times']) expect(screen.getByRole('group', { name: stop })).toBeVisible();
+ for (const stop of ['Start', 'Finish', 'Weekly study time', 'Session length', 'Recurring study blocks', 'Backup blocks', 'Learning focus']) expect(screen.getByRole('group', { name: stop })).toBeVisible();
  expect(screen.getByText(/I’ll start on/)).toBeVisible();
  expect(screen.getByLabelText('Target date')).toBeEnabled();
  expect(calls('/messages')).toHaveLength(0);
@@ -121,7 +192,7 @@ it('moves along the road as each required detail is filled, ending at Generate',
  serve(workspace()); render(<RoadmapPlanner />);
  await screen.findByRole('heading', { name: 'Your runway' });
  expect(current()).toBeNull();
- expect(document.querySelectorAll('.road-bend.travelled')).toHaveLength(8);
+ expect(document.querySelectorAll('.road-bend.travelled')).toHaveLength(7);
  const road = document.querySelector('.plan-road') as HTMLElement;
  expect(within(road).getByRole('button', { name: 'Generate roadmap' }).closest('li')).toHaveClass('road-end', 'passed');
 });
@@ -225,24 +296,32 @@ it('opens the helper when a saved message failed, so it can be retried', async (
  expect(await screen.findByRole('button', { name: 'Retry saved message' })).toBeVisible();
 });
 
-it('builds a weekly blackout time slot and sends it for the runway', async () => {
+it('adds blocked times to the week as their own blocks and sends them for the runway', async () => {
  serve(workspace({ planner: planner({ config: config({ blackouts: [] }) }) })); render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('button', { name: 'Add blackout' }));
+ fireEvent.click(await screen.findByRole('button', { name: 'Add Blockout Times' }));
  const rule = screen.getByRole('group', { name: 'Blackout 1' });
- expect(within(rule).getByText('Every week on Wed, all day, from 9 Jan 2030')).toBeVisible();
+ expect(within(rule).getByText('Every week on Mon, 18:00–20:00, from 9 Jan 2030')).toBeVisible();
+ const week = document.querySelector('.block-week') as HTMLElement;
+ const monday = within(week).getByRole('button', { name: /Edit blocked time on Monday/ });
+ expect(monday).toHaveClass('blocked');
+ expect(within(monday).getByText('18:00–20:00')).toBeVisible();
+ expect(within(monday).getByText('Blocked')).toBeVisible();
+ fireEvent.click(within(rule).getByRole('checkbox', { name: 'Blackout 1 on Monday' }));
+ fireEvent.click(within(rule).getByRole('checkbox', { name: 'Blackout 1 on Wednesday' }));
  fireEvent.click(within(rule).getByRole('checkbox', { name: 'Blackout 1 on Friday' }));
+ expect(within(week).getByRole('button', { name: /Edit blocked time on Friday/ })).toBeVisible();
  fireEvent.change(within(rule).getByRole('spinbutton', { name: 'Blackout 1 interval' }), { target: { value: '2' } });
- fireEvent.click(within(rule).getByRole('checkbox', { name: 'Blackout 1 all day' }));
  fireEvent.change(within(rule).getByLabelText('Blackout 1 start time'), { target: { value: '12:00' } });
  fireEvent.change(within(rule).getByLabelText('Blackout 1 end date'), { target: { value: '2030-01-27' } });
  expect(within(rule).getByText('Every 2 weeks on Wed, Fri, 12:00–20:00, from 9 Jan 2030 until 27 Jan 2030')).toBeVisible();
  await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config.blackouts).toEqual([{ frequency: 'weekly', start_date: '2030-01-09', end_date: '2030-01-27', interval: 2, weekdays: [2, 4], start_time: '12:00', end_time: '20:00' }]));
 });
 
-it('offers daily, monthly and one-day blackouts, keeping only the fields each one uses', async () => {
+it('offers daily, monthly and one-day blocked times, keeping only the fields each one uses', async () => {
  serve(workspace({ planner: planner({ config: config({ blackouts: [] }) }) })); render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('button', { name: 'Add blackout' }));
+ fireEvent.click(await screen.findByRole('button', { name: 'Add Blockout Times' }));
  const rule = screen.getByRole('group', { name: 'Blackout 1' });
+ fireEvent.click(within(rule).getByRole('checkbox', { name: 'Blackout 1 all day' }));
  const repeats = within(rule).getByRole('combobox', { name: 'Blackout 1 repeats' });
  fireEvent.change(repeats, { target: { value: 'monthly' } });
  fireEvent.change(within(rule).getByLabelText('Blackout 1 start date'), { target: { value: '2030-01-31' } });
@@ -254,6 +333,7 @@ it('offers daily, monthly and one-day blackouts, keeping only the fields each on
  fireEvent.change(repeats, { target: { value: 'once' } });
  expect(within(rule).getByText('31 Jan 2030, all day')).toBeVisible();
  expect(within(rule).queryByLabelText('Blackout 1 end date')).not.toBeInTheDocument();
+ expect(document.querySelector('.block-others .blocked')).toHaveTextContent('31 Jan 2030');
  await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config.blackouts).toEqual([{ frequency: 'once', start_date: '2030-01-31', end_date: null, interval: 1, weekdays: [], start_time: null, end_time: null }]));
  fireEvent.click(within(rule).getByRole('button', { name: 'Remove blackout 1' }));
  expect(screen.queryByRole('group', { name: 'Blackout 1' })).not.toBeInTheDocument();
@@ -262,7 +342,8 @@ it('offers daily, monthly and one-day blackouts, keeping only the fields each on
 it('shows the backend explanation for a blackout that cannot apply and blocks generation', async () => {
  serve(workspace(), { '/planner/runway': () => runway({ can_generate: false, issues: [{ code: 'blackout_invalid', message: 'Blackout 1 must end after it starts on the same day.' }] }) });
  render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('checkbox', { name: 'Blackout 1 all day' }));
+ fireEvent.click(await screen.findByRole('button', { name: /Edit blocked time: 12 Jan 2030/ }));
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Blackout 1 all day' }));
  expect(await screen.findByText('Blackout 1 must end after it starts on the same day.')).toBeVisible();
  expect(screen.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
 });
@@ -334,11 +415,9 @@ it('stays in configuration when saving settings returns the same preview', async
  render(<RoadmapPlanner />);
  fireEvent.click(await screen.findByRole('button', { name: 'Back to configuration' }));
  fireEvent.change(await screen.findByLabelText('Preferred session in minutes'), { target: { value: '45' } });
- const save = await screen.findByRole('button', { name: 'Save settings' });
- await waitFor(() => expect(save).toBeEnabled());
- fireEvent.click(save);
- await waitFor(() => expect(calls('/planner/config')).toHaveLength(1));
- await waitFor(() => expect(screen.queryByRole('button', { name: 'Save settings' })).not.toBeInTheDocument());
+ await waitFor(() => expect(calls('/planner/config')).toHaveLength(1), { timeout: 3000 });
+ expect(await screen.findByText('All changes saved')).toBeVisible();
+ expect(screen.queryByRole('button', { name: 'Save settings' })).not.toBeInTheDocument();
  expect(screen.getByRole('heading', { name: 'Your runway' })).toBeVisible();
  expect(calls('/planner/discard')).toHaveLength(0);
  fireEvent.click(screen.getByRole('button', { name: 'Return to roadmap' }));

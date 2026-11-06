@@ -6,8 +6,8 @@ import { deviceTimeZone } from '@/features/profile/planning-preferences';
 import { roadmapApi, RoadmapError } from '@/lib/api/roadmap';
 import { AdviserChat } from './adviser-chat';
 import { RoadmapReview } from './roadmap-review';
-import { SettingsPanel, useSettingsDraft } from './settings-panel';
-import type { Workspace, MessageRequest, Assessment } from './types';
+import { SettingsPanel, useSettingsDraft, type AutosaveState } from './settings-panel';
+import type { Workspace, MessageRequest, Assessment, PlannerConfig } from './types';
 import '@/styles/roadmap.css';
 
 const explanation = (error: unknown) => error instanceof Error ? error.message : 'Your saved work could not be confirmed. Retry to recover it.';
@@ -32,6 +32,9 @@ function Planner({ token }: { token: string }) {
  const pendingRef = useRef<MessageRequest | null>(null);
  const unknownMutation = useRef<{ path: string; body: unknown } | null>(null); const [unknown, setUnknown] = useState(false);
  const settings = useSettingsDraft(workspace, token);
+ const [autosave, setAutosave] = useState<AutosaveState>('idle');
+ const saving = useRef<Promise<void> | null>(null); const draftRef = useRef<PlannerConfig | null>(null); const unsafeDraft = useRef(false);
+ draftRef.current = settings.draft; unsafeDraft.current = !!settings.previewError;
  useEffect(() => { mounted.current = true; return () => { mounted.current = false; sequence.current++; }; }, []);
  function receive(value: Workspace) {
   if (!mounted.current) return;
@@ -50,6 +53,38 @@ function Planner({ token }: { token: string }) {
  }
  useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); /* account/token remounts this component */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
  const running = workspace?.operation?.status === 'pending' || workspace?.operation?.status === 'running';
+ const settled = !busy && !running && !error && !unknown && !pending && !workspace?.operation?.retry_after;
+ // Saves quietly, without freezing the form, so a refresh always shows the latest settings.
+ function persist(draft: PlannerConfig) {
+  const previous = saving.current;
+  const task = (async () => {
+   await previous;
+   if (!mounted.current || !latest.current) return;
+   setAutosave('saving'); sequence.current++;
+   try {
+    const value = await roadmapApi<Workspace>('/planner/config', token, { config: draft, expected_version: latest.current.version, mutation_id: crypto.randomUUID() });
+    if (mounted.current) { receive(value); settings.clearIf(draft); setAutosave('saved'); }
+   } catch { if (mounted.current) setAutosave('failed'); }
+  })();
+  saving.current = task;
+  return task.finally(() => { if (saving.current === task) saving.current = null; });
+ }
+ useEffect(() => {
+  const draft = settings.draft;
+  if (!draft || settings.calculating || settings.previewError || !settled) return;
+  const timer = setTimeout(() => void persist(draft), 400);
+  return () => clearTimeout(timer);
+ }, [settings.draft, settings.calculating, settings.previewError, settled]); // eslint-disable-line react-hooks/exhaustive-deps
+ // Edits still waiting on that delay are sent as the page closes or the user moves to another page.
+ useEffect(() => {
+  const flush = () => {
+   const draft = draftRef.current;
+   if (!draft || !latest.current || unsafeDraft.current) return;
+   void Promise.resolve(roadmapApi('/planner/config', token, { config: draft, expected_version: latest.current.version, mutation_id: crypto.randomUUID() }, undefined, { keepalive: true })).catch(() => {});
+  };
+  window.addEventListener('pagehide', flush);
+  return () => { window.removeEventListener('pagehide', flush); flush(); };
+ }, [token]);
  useEffect(() => {
   if (!running && !(workspace?.operation?.retry_after && workspace.operation.retry_after > 0)) return;
   const timer = setTimeout(async () => {
@@ -99,9 +134,10 @@ function Planner({ token }: { token: string }) {
  }
  // Settings are saved first so the model and the panel always share one confirmed record.
  async function saveSettings() {
-  const planner = latest.current?.planner; if (!settings.config || !planner) return false;
-  if (!settings.dirty && planner.config_saved) return true;
-  const saved = await change('/planner/config', { config: settings.config });
+  await saving.current;
+  const planner = latest.current?.planner; const config = draftRef.current || settings.config; if (!config || !planner) return false;
+  if (!draftRef.current && planner.config_saved) return true;
+  const saved = await change('/planner/config', { config });
   if (saved) settings.clear();
   return saved;
  }
@@ -159,7 +195,7 @@ function Planner({ token }: { token: string }) {
     reopen={session => change('/planner/assignments/status', { assignment_id: session.id, status: 'scheduled' })}
     recordOutcome={(milestone, demonstrated, note) => void change('/planner/milestones/outcome', { milestone_id: milestone.id, demonstrated, note: note || null })}
     confirm={(gap, answer) => void change('/planner/confirmations', { gap_id: gap.id, answer })} />
-   : <SettingsPanel workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} returnToReview={plan ? () => setConfiguring(false) : null} />}
+   : <SettingsPanel workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} autosave={autosave} returnToReview={plan ? () => setConfiguring(false) : null} />}
   </div>
   <div id="assessment-panel" role="tabpanel" aria-labelledby="assessment-tab" hidden={tab !== 'assessment'}>{starting}</div>
   {!!legacy && <details className="plan-explanation earlier-plan"><summary>Earlier plan without session times</summary><p className="small">This plan was made before timed roadmaps. It stays here for reference and isn’t part of your current roadmap.</p><ul>{legacy.tasks.filter(task => !task.removed).map(task => <li key={task.id}>{task.title} · {task.status.replaceAll('_', ' ')}</li>)}</ul></details>}

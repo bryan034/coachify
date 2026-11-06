@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "elo CV API",
-    "description": "C01\u2013C09 saved CV upload, review, source corrections, clarification and explicit versioned selection.",
+    "description": "C01–C09 saved CV upload, review, source corrections, clarification and explicit versioned selection.",
     "version": "0.1.0"
   },
   "paths": {
@@ -6846,7 +6846,6 @@
           },
           "quote": {
             "type": "string",
-            "maxLength": 500,
             "minLength": 1,
             "title": "Quote"
           }

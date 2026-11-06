@@ -5,6 +5,7 @@ from threading import BoundedSemaphore
 from uuid import NAMESPACE_URL, uuid4, uuid5
 from bson import BSON
 from app.domain.capabilities import digest, effective_items, effective_fingerprint, skills_for, skill_id, normalized_name
+from app.domain.extraction_retry import retrying_message, waiting_message
 from app.domain.errors import Conflict, CvError, Missing
 from app.schemas.cv import validate_item_dates
 from app.domain.attachments import source_fingerprint
@@ -52,6 +53,10 @@ def processing_progress(operation):
     status = operation['status']
     stage = status if status in {'queued', 'ready'} else operation.get('stage', 'source_read')
     percent, message = PROCESSING_STAGES.get(stage, PROCESSING_STAGES['source_read'])
+    if status == 'queued' and operation.get('retry_at'):
+        message = waiting_message(operation)
+    elif status == 'processing' and operation.get('auto_retries'):
+        message = retrying_message(operation, message)
     return {'stage': stage, 'percent': percent,
             'message': 'Processing paused. Retry to continue.' if status == 'failed' else message}
 
@@ -281,7 +286,9 @@ class CvService:
         if not previous['original_available'] or not self.files.exists(previous['_id']):
             raise CvError('The private original has expired. Reupload the same file to this CV to preserve its corrections.', 409)
         document = deepcopy(previous)
-        document['operation'].update(status='queued', attempt=0, lease_until=0, lease_token=None, error=None)
+        document['operation'].update(status='queued', attempt=0, lease_until=0, lease_token=None, error=None, auto_retries=0)
+        document['operation'].pop('retry_at', None)
+        document['operation'].pop('retry_reason', None)
         document['receipts'][key] = fingerprint
         bump(document)
         return self.repository.replace(previous, document)

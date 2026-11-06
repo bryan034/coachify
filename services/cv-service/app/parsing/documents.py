@@ -1,4 +1,4 @@
-"""Bounded source blocks; parsed document text never enters persistent records."""
+"""Bounded source blocks. Only the extraction graph's saved state keeps this text."""
 from io import BytesIO
 from zipfile import ZipFile
 from defusedxml import ElementTree

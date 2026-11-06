@@ -102,7 +102,7 @@ class Generation(Contract):
 
 class CvSourceEvidence(Contract):
     id: Text
-    excerpt: Annotated[str, StringConstraints(min_length=1, max_length=4000)]
+    excerpt: Annotated[str, StringConstraints(min_length=1)]
     location: CvText
 
 

@@ -10,7 +10,7 @@ EvidenceStatus = Literal['supported', 'partial', 'unknown', 'conflicting', 'skip
 class ReviewQuote(BaseModel):
     model_config = ConfigDict(extra='forbid')
     source_id: str = Field(min_length=1, max_length=120)
-    quote: str = Field(min_length=1, max_length=500)
+    quote: str = Field(min_length=1)
 
 
 class ReviewFact(BaseModel):

@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 import unicodedata
-from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates, date_bounds, MAX_EVIDENCE_EXCERPT_CHARACTERS
+from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates, date_bounds
 from app.domain.extraction_errors import EvidenceValidationError
 from app.schemas.interview_evidence import ReviewFact, fact_key, fact_statement
 from pydantic import ValidationError
@@ -62,58 +62,8 @@ def evidence_requiring_semantic_check(payload, blocks):
     return pending
 
 
-def normalize_extraction_evidence(payload, blocks, semantic_support=frozenset()):
-    """Split source-supported evidence; preserve every character of each quotation or summary.
-
-    Count/shape limits still belong to Extraction. A split that needs too many
-    citations is rejected for model repair rather than silently losing evidence.
-    """
-    if not isinstance(payload, dict):
-        return payload
-    limit = MAX_EVIDENCE_EXCERPT_CHARACTERS
-    result = deepcopy(payload)
-    source = {block['id']: block['text'] for block in blocks}
-
-    def split(refs):
-        if not isinstance(refs, list):
-            return refs
-        output = []
-        for ref in refs:
-            if not isinstance(ref, dict):
-                output.append(ref)
-                continue
-            text, block_id = ref.get('excerpt'), ref.get('block_id')
-            if (not isinstance(text, str) or len(text) <= limit
-                    or not isinstance(block_id, str) or block_id not in source):
-                output.append(ref)
-                continue
-            if not evidence_matches(text, source[block_id]) and (block_id, text) not in semantic_support:
-                # Require support for the ENTIRE text before splitting; a valid
-                # prefix cannot hide an unsupported suffix.
-                raise EvidenceValidationError('The model returned unsupported source evidence. Retry this upload.', 'source_excerpt')
-            while len(text) > limit:
-                # Prefer a word/line boundary near the end, retaining whitespace
-                # so concatenating the parts reconstructs the exact original.
-                boundaries = list(re.finditer(r'\s', text[limit // 2:limit]))
-                end = limit // 2 + boundaries[-1].end() if boundaries else limit
-                output.append({**ref, 'excerpt': text[:end]})
-                text = text[end:]
-            if text:
-                output.append({**ref, 'excerpt': text})
-        return output
-
-    items = result.get('items')
-    if isinstance(items, list):
-        for item in items:
-            if isinstance(item, dict) and 'evidence' in item:
-                item['evidence'] = split(item['evidence'])
-    if 'other_information' in result:
-        result['other_information'] = split(result['other_information'])
-    return result
-
-
 def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
-    extraction = Extraction.model_validate(normalize_extraction_evidence(payload, blocks, semantic_support))
+    extraction = Extraction.model_validate(payload)
     source = {block['id']: block for block in blocks}
     validate_other_information(extraction.other_information, blocks, semantic_support)
     items = []

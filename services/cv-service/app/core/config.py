@@ -8,10 +8,11 @@ class Settings:
     max_file_bytes: int = 10 * 1024 * 1024
     max_text_chars: int = 100_000
     max_items: int = 160
-    max_evidence_chars: int = 500
     original_retention_hours: int = 24
     lease_seconds: int = 180
     max_attempts: int = 3
+    extraction_auto_retries: int = 2
+    extraction_retry_delays: tuple[int, ...] = (20, 40)
     storage_path: str = '/tmp/elo-cv'
     max_saved_cvs_per_owner: int = 50
     max_saved_cvs_global: int = 10_000

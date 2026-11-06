@@ -1,8 +1,8 @@
 const base = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 export class RoadmapError extends Error { constructor(message: string, public status: number, public code: string) { super(message); } }
-export async function roadmapApi<T>(path: string, token: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+export async function roadmapApi<T>(path: string, token: string, body?: unknown, signal?: AbortSignal, init?: RequestInit): Promise<T> {
  const response = await fetch(`${base}/roadmaps${path}`, { method: body === undefined ? 'GET' : 'POST', cache: 'no-store', signal,
-  headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), ...init });
  const value = await response.json().catch(() => ({}));
  if (!response.ok) {
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired', { detail: token }));

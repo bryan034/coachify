@@ -296,7 +296,6 @@
           "type": "string"
         },
         "excerpt": {
-          "maxLength": 4000,
           "minLength": 1,
           "title": "Excerpt",
           "type": "string"

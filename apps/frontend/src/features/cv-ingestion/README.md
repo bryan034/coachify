@@ -127,6 +127,8 @@ UI behavior; they do not establish real model extraction accuracy.
 
 ## Summary-first Skills Profile
 
+The full-screen CV chat gives the conversation at least 70% of the screen height.
+
 Entry now shows `skills-profile-summary.tsx`: profile counts, a bar showing each
 category's share, then skills as chips in one card per category
 (`skill-cards.tsx`), combining CV skills, skills described in chat and manually

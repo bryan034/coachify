@@ -41,6 +41,14 @@ describe('CV preparation progress', () => {
   expect(bar).toHaveAttribute('aria-valuenow', '100');
   expect(bar).not.toHaveClass('is-active');
  });
+ it('announces an error and the retry while the job waits and while it runs again', () => {
+  const cv = extracting();
+  const view = render(<CvProcessingProgress cv={{...cv, status: 'queued', processing_progress: {stage: 'queued', percent: 0, message: 'Hit an error: the model took too long to respond. Retrying shortly (retry 1 of 2).'}}}/>);
+  expect(screen.getByRole('status')).toHaveTextContent('Hit an error: the model took too long to respond. Retrying shortly (retry 1 of 2).');
+  expect(screen.getByRole('progressbar')).toHaveClass('is-active');
+  view.rerender(<CvProcessingProgress cv={{...cv, processing_progress: {...cv.processing_progress, message: 'Retry 1 of 2: Identifying your experience and skills.'}}}/>);
+  expect(screen.getByRole('status')).toHaveTextContent('Retry 1 of 2: Identifying your experience and skills.');
+ });
  it('stops estimated progress and activity animation when processing fails', () => {
   vi.useFakeTimers();
   const cv = extracting();

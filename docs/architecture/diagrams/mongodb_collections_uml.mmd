@@ -173,6 +173,20 @@ class cv_model_usage {
     +Map owners [bounded_hashed_account_counts]
 }
 
+class cv_extraction_states {
+    <<private>>
+    +String _id [CV id, one per CV]
+    +String user_id
+    +String thread_id [operation and workflow version]
+    +String checkpoint_id
+    +Object checkpoint [serialized graph state with parsed CV text]
+    +Object metadata
+    +Object[] writes
+    +Boolean discarded?
+    +Number updated_at
+}
+cvs "1" --> "0..1" cv_extraction_states : latest graph state, erased with the CV
+
 class cv_conversations {
     <<operational>>
     +String _id [opaque UUID]

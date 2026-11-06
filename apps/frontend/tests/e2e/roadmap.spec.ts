@@ -78,10 +78,9 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  expect(await noOverflow(page)).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-helper-mobile.png') });
  await page.getByRole('button', { name: 'Close chat helper' }).click();
- await page.getByRole('button', { name: 'Add blackout' }).click();
+ await page.getByRole('button', { name: 'Add Blockout Times' }).click();
  const blackout = page.getByRole('group', { name: 'Blackout 2' });
  await blackout.getByLabel('Blackout 2 repeats').selectOption('monthly');
- await blackout.getByLabel('Blackout 2 all day').uncheck();
  await expect(blackout).toContainText('18:00–20:00');
  expect(await noOverflow(page)).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-blackout-mobile.png'), fullPage: true });
@@ -140,7 +139,11 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await expect(page.getByText('Your active roadmap')).toBeVisible();
  await page.getByRole('button', { name: 'Change settings' }).click();
  await page.getByLabel('Weekly budget in hours').fill('4');
- await expect(page.getByRole('button', { name: 'Save settings' })).toBeVisible();
+ await expect(page.getByText('All changes saved')).toBeVisible();
+ await page.reload();
+ await expect(page.getByText('Your active roadmap')).toBeVisible();
+ await page.getByRole('button', { name: 'Change settings' }).click();
+ await expect(page.getByLabel('Weekly budget in hours')).toHaveValue('4');
  await page.getByRole('button', { name: 'Preview updated roadmap' }).click();
  const changes = page.getByRole('region', { name: 'What this preview changes' });
  await expect(changes).toContainText('1 completed session stays exactly as recorded.');
@@ -155,4 +158,27 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await page.setViewportSize({ width: 390, height: 844 });
  expect(await noOverflow(page)).toBe(true);
  expect(generations).toBe(2);
+});
+
+test('a date field stays inside its border while editing, and a date problem shows only the field', async ({ page }) => {
+ await page.setViewportSize({ width: 1280, height: 900 });
+ await signIn(page);
+ const state = workspace({ planner: { ...blankPlanner(), config: config({ start_date: '2030-01-09' }), runway: runway({ can_generate: false, issues: [{ code: 'start_in_past', message: 'Choose a start date from today onwards.' }] }) } });
+ await page.route('**/api/v1/roadmaps/**', route => route.fulfill({ json: new URL(route.request().url()).pathname.endsWith('/planner/runway') ? state.planner.runway : state }));
+ await page.goto('/roadmap');
+ const field = page.getByLabel('Start date');
+ const token = page.locator('.date-token').first();
+ await field.focus();
+ await expect(token).toHaveClass(/warn/);
+ const [inner, outer] = [await field.boundingBox(), await token.boundingBox()];
+ expect(inner!.x).toBeGreaterThanOrEqual(outer!.x);
+ expect(inner!.y).toBeGreaterThanOrEqual(outer!.y);
+ expect(inner!.x + inner!.width).toBeLessThanOrEqual(outer!.x + outer!.width + .5);
+ expect(inner!.y + inner!.height).toBeLessThanOrEqual(outer!.y + outer!.height + .5);
+ const content = page.locator('.road-stop[aria-current="step"] .road-content');
+ if (await content.count()) await expect(content).toHaveCSS('box-shadow', 'none');
+ await page.screenshot({ path: test.info().outputPath('date-focus.png') });
+ await page.getByRole('button', { name: /Skills profile/ }).click();
+ await page.keyboard.press('Escape');
+ await expect(page.locator('.use-panel')).toHaveCount(0);
 });

@@ -32,7 +32,7 @@ class FakeExtractor:
     failure = None
     payload = None
 
-    def extract(self, blocks, *, timeout_seconds=None):
+    def extract(self, blocks, *, timeout_seconds=None, previous_failure=None):
         if self.failure: raise ValueError(self.failure)
         items = [{'kind': 'education', 'title': 'Example University', 'description': blocks[0]['text'],
                   'explicit': True, 'evidence': [{'block_id': blocks[0]['id'], 'excerpt': blocks[0]['text']}]}]
@@ -50,7 +50,7 @@ class FakeExtractor:
         # Synthetic negative default; semantic-positive tests provide explicit verdicts.
         return frozenset()
 
-    def repair(self, blocks, candidate, feedback, *, timeout_seconds=None):
+    def repair(self, blocks, candidate, feedback, *, timeout_seconds=None, previous_failure=None):
         # Deliberately preserve configured invalid responses so recovery cannot
         # turn existing negative tests into synthetic successes.
         return self.extract(blocks, timeout_seconds=timeout_seconds)
@@ -142,7 +142,7 @@ def harness(tmp_path, repository):
     extractor, targets, transport = FakeExtractor(), FakeTargets(), ProfileTransport()
     profile = httpx.AsyncClient(transport=httpx.MockTransport(transport), base_url='http://profile')
     app = create_app(repository=repository, profile_client=profile, extractor=extractor, interpreter=FakeInterpreter(),
-                     target_provider=targets, settings=Settings(storage_path=str(tmp_path)), start_worker=False)
+                     target_provider=targets, settings=Settings(storage_path=str(tmp_path), extraction_auto_retries=0), start_worker=False)
     with TestClient(app) as client:
         client.headers['Authorization'] = 'Bearer owner-a'
         yield client, app, extractor, targets, transport
