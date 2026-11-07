@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 import httpx
 from httpx import Client
 from elo_shared.model_sdk import sync_model_response
+from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
 from app.clients.extractor import Extractor
 from app.schemas.conversation import ConversationRoute
 from app.schemas.intake import IntakeEvaluation
@@ -69,10 +70,14 @@ class ConversationRouter(Extractor):
                         if time.monotonic() > deadline: raise ValueError('Chat interpretation timed out. Your message is saved; retry.')
                         data.extend(part)
                         if len(data) > 256 * 1024: raise ValueError('Chat interpretation exceeded its limit. Your message is saved; retry.')
-            result = json.loads(data)['choices'][0]
+            envelope = json.loads(data)
+            raise_for_completion_error(envelope)
+            result = envelope['choices'][0]
             if result.get('finish_reason') != 'stop': raise ValueError('Chat interpretation was incomplete. Your message is saved; retry.')
             output = schema.model_validate_json(result['message']['content'])
             return output, {'provider': urlparse(self.base_url).hostname, 'model': self.model,
                             'prompt_version': 'cv-interview-11' if context.get('task', '').startswith('cv_interview_') else 'cv-conversation-2', 'schema_version': '1'}
+        except ModelResponseError:
+            raise ValueError('The model provider could not complete chat interpretation. Your message is saved; retry after provider access or capacity is restored.') from None
         except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise ValueError('Chat interpretation is unavailable. Your message is saved; retry.') from exc

@@ -29,6 +29,7 @@ from app.ai.context_contracts import ContextPlan,CONTEXT_PROMPT
 from app.ai.research_planning import ResearchPlan,ResearchAssessment,PLAN_PROMPT,ASSESS_PROMPT,planning_input
 from app.ai.config import AISettings
 from app.ai.sdk import model_client, completion_response
+from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
 from app.ai.discovery_config import EXTRACTION_OUTPUT_TOKENS
 from app.ai.usage import input_tokens
 from app.ai.rejections import classify,safe_diagnostic
@@ -891,13 +892,14 @@ class AIAdapter:
                         if len(data) > 128 * 1024:
                             raise AIError('output_limit', True)
                     record_usage(bytes(data), stage, attempt, provider_attempt + 1)
-                    return self._content(bytes(data))
+                    return self._content(bytes(data), retry_after=response.headers.get('retry-after'))
             await self.sleep(delay)
         raise AIError('unavailable', True)
 
-    def _content(self, raw):
+    def _content(self, raw, *, retry_after=None):
         try:
             data = json.loads(raw, object_pairs_hook=strict_object)
+            raise_for_completion_error(data)
             if data.get('object')=='response':
                 if data.get('status')!='completed':raise AIError('incomplete_output',True)
                 texts=[]
@@ -924,6 +926,29 @@ class AIAdapter:
             json.loads(content, object_pairs_hook=strict_object,
                        parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
             return content
+        except ModelResponseError as error:
+            code = {
+                'authentication_failed': 'provider_auth', 'permission_denied': 'provider_auth',
+                'not_found': 'model_unavailable', 'schema_too_complex': 'provider_schema',
+                'schema_rejected': 'provider_schema', 'structured_output_unsupported': 'provider_schema',
+                'unsupported_parameter': 'provider_parameter', 'invalid_request': 'provider_configuration',
+                'rate_limit_or_quota': 'rate_limited',
+            }.get(error.reason, 'unavailable')
+            if error.quota_exhausted:
+                code = 'provider_access'
+            try:
+                cooldown = float(retry_after)
+                cooldown = min(max(cooldown, 1), 3600) if math.isfinite(cooldown) else 30
+            except (ValueError, TypeError):
+                cooldown = 30
+            # This is a body-level failure under HTTP 200. Do not call its
+            # embedded code an HTTP status, or feed it into output repair.
+            diagnostic = {'provider': self.settings.provider, 'http_status': 200,
+                          'fields': [error.parameter] if error.parameter else []}
+            raise AIError(code, code in ('rate_limited', 'unavailable'),
+                          limit_scope='provider' if code == 'rate_limited' else None,
+                          retry_after=cooldown if code == 'rate_limited' else None,
+                          provider=self.settings.provider, provider_error=diagnostic) from None
         except (KeyError, TypeError, ValueError, AttributeError, RecursionError):
             raise AIError('invalid_output', True, reason='json_syntax') from None
 

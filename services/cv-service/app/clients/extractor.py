@@ -6,10 +6,11 @@ from urllib.parse import urlparse
 import httpx
 from httpx import Client
 from elo_shared.model_sdk import sync_model_response
+from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
 from app.schemas.cv import Extraction
 from app.domain.extraction_errors import ExtractionFailure
 from app.clients.extraction_schema import extraction_schema
-from app.clients.provider_errors import provider_failure
+from app.clients.provider_errors import provider_failure, classified_provider_failure
 
 PROMPT_VERSION = 'cv-extraction-8'
 SCHEMA_VERSION = '4'
@@ -183,6 +184,7 @@ class Extractor:
                             raise ExtractionFailure('The model response exceeded the safe processing limit. Retry this upload.', stage, 'response_too_large')
             stage = 'response_decode'
             result = json.loads(data)
+            raise_for_completion_error(result)
             if not isinstance(result, dict):
                 raise ExtractionFailure(unavailable, stage, 'invalid_response')
             choice = result['choices'][0]
@@ -198,6 +200,8 @@ class Extractor:
             return content, {'provider': urlparse(self.base_url).hostname, 'model': self.model,
                              'prompt_version': PROMPT_VERSION, 'schema_version': SCHEMA_VERSION,
                              'response_mode': self.response_mode}
+        except ModelResponseError as exc:
+            raise classified_provider_failure(exc.reason, exc.parameter, stage) from None
         except httpx.HTTPStatusError as exc:
             raise provider_failure(exc.response, stage) from None
         except httpx.TimeoutException:

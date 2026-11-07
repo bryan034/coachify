@@ -69,7 +69,7 @@ clearing after a successful retry. All responses and documents are synthetic.
 Provider-rejection cases additionally cover fixed HTTP 400 schema/format/parameter
 reasons, quota/authentication recovery messages, malformed/oversized rejection
 bodies and exclusion of provider prose/arbitrary parameter names from saved API
-responses and logs. Requests are not automatically retried or downgraded.
+responses and logs. HTTP-200 error envelopes (including nested provider details and errors alongside apparently completed content) are rejected before repair, survive polling/list reads safely, and clear after a successful explicit retry. Chat and clarification use the same shared guard. Requests are not automatically retried or downgraded.
 
 The real LangGraph harness is exercised with synthetic HTTP responses: first-pass
 success, overlong evidence/conflicting dates repaired once, schema/evidence failure
