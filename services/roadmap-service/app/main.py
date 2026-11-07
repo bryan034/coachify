@@ -12,6 +12,9 @@ from app.planning.generator import PLANNING_SECONDS,chat_turn,prepare_plan
 from app.planning.retired_settings import remove_retired_settings
 from app.planning.routes import register_planner
 from app.planning.state import planner_state,planner_view,retry_body
+from app.planning.state import plan_review
+from app.planning.tasks import ensure_tasks,project_assignments,task_readiness
+from app.schemas.roadmap import DashboardSource
 
 def create_app(store=None,upstream=None,model=None,clock=None):
     app=application('elo Roadmap Adviser API','ROADMAP',store=store,upstream=upstream,model=model)
@@ -76,6 +79,18 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return {'version':row['version'],'operation':operation_view(row)}
 
+    @app.get('/api/v1/roadmaps/dashboard-source',response_model=DashboardSource)
+    async def dashboard_source(request:Request,account=Depends(authenticated)):
+        # Unlike workspace and progress, this read never resumes pending work or
+        # queries other source services. Existing snapshots are projected in memory.
+        row=await thread(app.state.store.load,account['id'])
+        active=copy.deepcopy(planner_state(row)['active'])
+        if not active:return {'version':row['version'],'active':None,'active_review':None,'task_readiness':{}}
+        tasks=ensure_tasks(active)
+        project_assignments(active)
+        readiness={task['id']:task_readiness(task,tasks,active) for task in tasks if not task.get('removed')}
+        return {'version':row['version'],'active':active,'active_review':plan_review(active,app.state.clock()),'task_readiness':readiness}
+
     @app.post('/api/v1/roadmaps/messages',status_code=202,response_model=OperationAccepted)
     async def message(body:Message,request:Request,account=Depends(authenticated)):
         source=await context(account)
@@ -84,10 +99,17 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return {'version':row['version'],'operation':operation_view(row)}
 
-    async def mutate(body,account,action):
-        row=await thread(app.state.store.load,account['id']);payload=body.model_dump(mode='json');key=payload['mutation_id'];fingerprint=digest(payload)
+    async def mutate(body,account,action,operation=None,mark_baseline=False):
+        row=await thread(app.state.store.load,account['id']);payload=body.model_dump(mode='json');key=payload['mutation_id']
+        # Existing receipts retain their original fingerprint. New task actions
+        # include their operation so a key cannot replay a different endpoint.
+        fingerprint=digest({'operation':operation,'payload':payload}) if operation else digest(payload)
         prior=next((r for r in row['receipts'] if r['id']==key),None)
         if prior:
+            # Earlier accept/discard receipts stored only a body hash. Their
+            # identical request bodies cannot establish which action succeeded.
+            if operation in ('preview.accept','preview.discard') and prior['hash']==digest(payload):
+                raise Problem('This earlier preview request cannot be identified safely. Reload the roadmap and use a new request key.',409,'legacy_preview_retry_ambiguous')
             if prior['hash']!=fingerprint:raise Problem('This request key was used for a different change.')
             return visible(row,await context(account,tolerate_unavailable=True))
         if row.get('pending'):raise Problem('Wait for the current adviser response before applying a change.')
@@ -104,6 +126,7 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         accepted=planner_state(updated)['active']
         if accepted and accepted!=planner_state(row)['active']:
             accepted['id']=str(uuid5(NAMESPACE_URL,account['id']+':roadmap:'+key))
+            if mark_baseline:accepted['pace_baseline_id']=accepted['id']
             accepted['updated_at']=stamp()
             accepted['request_hash']=fingerprint
             updated['planner']['active']=await thread(app.state.store.save_result,account['id'],accepted)

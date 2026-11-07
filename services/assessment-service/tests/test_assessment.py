@@ -164,3 +164,100 @@ def test_or_routes_preserve_partial_support_but_every_proven_unmet_route_confirm
     items=[{'match_status':'partial','components':[{'status':'supported'},{'status':remainder}]},
         {'match_status':'confirmed_shortfall','components':[{'status':'confirmed_shortfall'}]}]
     assert group_outcome(items,'any')==expected
+PATH='/api/v1/assessments/dashboard-source'
+
+
+def create_result(client):
+    response=client.post('/api/v1/assessments',headers=H,json={
+        'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True})
+    assert response.status_code==202
+    state=finish(client)
+    assert state['result']
+    return state
+
+
+def test_dashboard_read_does_not_resume_pending_operation_or_write():
+    store=MemoryStore();model=Interpreter();sources=Sources()
+    begin(store,OWNER,Generate(expected_version=0,mutation_id=uuid4(),allow_partial=True),'assessment')
+    before=store.load(OWNER)
+    with TestClient(create_app(store,sources,model)) as client:
+        response=client.get(PATH,headers=H)
+        assert response.status_code==200,response.text
+        result=response.json()
+        assert result['freshness']=='missing' and result['ready'] is True
+        assert result['operation']['status']=='pending'
+        assert model.calls==0 and store.load(OWNER)==before
+
+
+def test_source_reports_current_stale_and_owner_isolation():
+    store=MemoryStore();model=Interpreter();sources=Sources()
+    with TestClient(create_app(store,sources,model)) as client:
+        saved=create_result(client)
+        current=client.get(PATH,headers=H).json()
+        assert current['freshness']=='current' and current['result']['id']==saved['result']['id']
+        assert current['input_hash']==saved['result']['input_hash']
+        assert current['inputs']['goal_id']==sources.goal['_id']
+        assert current['workspace_updated_at'] and current['result']['created_at']
+        sources.goal['version']+=1
+        stale=client.get(PATH,headers=H).json()
+        assert stale['freshness']=='stale' and stale['result']['id']==saved['result']['id']
+        sources.owner='22222222-2222-4222-8222-222222222222'
+        other=client.get(PATH,headers=H).json()
+        assert other['freshness']=='missing' and other['result'] is None
+        assert client.get(PATH).status_code==401
+        assert model.calls==1
+
+
+def test_unready_inputs_are_not_reported_as_current():
+    sources=Sources();store=MemoryStore()
+    with TestClient(create_app(store,sources,Interpreter())) as client:
+        create_result(client)
+        old_read=sources.read
+        async def unready(service,path,token,params=None):
+            if service=='career':return {'ready':False,'goal':None}
+            return await old_read(service,path,token,params)
+        sources.read=unready
+        response=client.get(PATH,headers=H)
+        assert response.status_code==200,response.text
+        view=response.json()
+        assert view['freshness']=='not_ready' and view['ready'] is False and view['result']
+        assert view['input_hash'] is None
+
+
+@pytest.mark.parametrize('status,expected',[(503,'unavailable'),(409,'conflict')])
+def test_unavailable_or_racing_sources_keep_saved_result_but_not_freshness(status,expected):
+    sources=Sources();store=MemoryStore()
+    with TestClient(create_app(store,sources,Interpreter())) as client:
+        saved=create_result(client)
+        async def fail(*args,**kwargs):raise Problem('Synthetic failure.',status,'upstream')
+        sources.read=fail
+        response=client.get(PATH,headers=H)
+        assert response.status_code==200,response.text
+        view=response.json()
+        assert view['freshness']==expected and view['ready'] is None
+        assert view['result']['id']==saved['result']['id'] and view['input_hash'] is None
+
+
+def test_source_change_during_capture_returns_conflict(monkeypatch):
+    import app.main as main
+    store=MemoryStore();sources=Sources();real_capture=main.capture
+    with TestClient(create_app(store,sources,Interpreter())) as client:
+        create_result(client)
+        async def changing(upstream,account):
+            snapshot=await real_capture(upstream,account)
+            row=store.load(OWNER)
+            row['result']=copy.deepcopy(row['result']);row['result']['id']='new-result'
+            store.cas(OWNER,row['version'],row)
+            return snapshot
+        monkeypatch.setattr(main,'capture',changing)
+        response=client.get(PATH,headers=H)
+        assert response.status_code==409 and response.json()['code']=='source_changed'
+
+
+@pytest.mark.parametrize('status',[401,403])
+def test_dashboard_source_does_not_hide_revoked_access(status):
+    sources=Sources();store=MemoryStore()
+    with TestClient(create_app(store,sources,Interpreter())) as client:
+        async def fail(*args,**kwargs):raise Problem('Sign in again.',status,'session')
+        sources.read=fail
+        assert client.get(PATH,headers=H).status_code==status

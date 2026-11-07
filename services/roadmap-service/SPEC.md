@@ -61,7 +61,25 @@ The model owns gaps, priorities, prerequisite order, effort, milestones, assignm
 
 A candidate pins its base active plan, settings and inputs. Accept is rejected if the active plan, settings or inputs changed, or a session has passed. Completed sessions and their evidence notes are copied unchanged into each revision and keep their time slots.
 
-Session completion, self-reported milestone outcomes and experience confirmations stay in Roadmap and never write to Profile, CV or Assessment. None of them establishes proficiency. Factual corrections belong in Skills Profile.
+Task completion, self-reported milestone outcomes and experience confirmations stay in Roadmap and never write to Profile, CV or Assessment. None of them establishes proficiency. Factual corrections belong in Skills Profile.
+
+### Editable tasks and compatibility
+
+The active timed roadmap owns `editable_tasks`. A task has a stable ID, instructions, completion outcome, estimated minutes, optional assessment requirement references and milestone, prerequisite task IDs, zero or more dated segments, status, history, and a removal record. A personal task needs neither a requirement nor a schedule. Requirements refer to the assessment snapshot; a link is not evidence of coverage. Task reads flag references absent from the current snapshot or carried from a different assessment ID or input hash, and report whether the source is stale or unavailable. Explicitly selecting links again records the current assessment context.
+
+Task mutations use the existing authenticated workspace revision, payload-bound mutation receipt and immutable active-plan snapshot. An exact retry is safe; stale versions and reused keys with different content fail. Edits and removals retain history; dependent tasks and edges remain. A changed completion outcome on a completed task requires a fresh completion confirmation before it counts for readiness. Starting a blocked task and completing directly are allowed; reopening chooses `not_started` or `in_progress`. Each new completion records its definition, time and estimated minutes at that moment. Earlier completion events without an estimate remain unchanged and must not be inferred.
+
+`GET /planner/tasks` accepts inclusive `start_date` and `end_date` for day, week or month queries; a task with unscheduled effort remains visible outside its scheduled segments. It reports readiness reasons and unscheduled minutes. Planned dates do not establish prerequisite completion. Milestone prerequisites require an explicitly recorded, current self-reported outcome as well as valid completed member tasks; first-week sessions alone cannot establish that the projected milestone is complete. A changed milestone outcome definition requires a new confirmation. Valid manual schedules are saved even if they conflict; warnings are returned on task and workspace reads. They do not silently reschedule other work.
+
+Task reads report `freshness` as `current`, `stale`, `not_ready` or `unavailable`. A plan is current only when its inputs are ready and the captured input hash matches. The legacy `stale` and `source_unavailable` booleans retain their earlier meanings for compatibility; clients needing to distinguish missing inputs should use `freshness`.
+
+Adding, removing or moving milestone tasks, or accepting a revision with changed membership, marks an existing demonstrated milestone outcome for review while preserving the earlier self-report. Reconfirmation retains the previous outcome in history. A `calendar_unavailable` warning means an extreme saved date could not be checked against available study windows; the date remains readable and editable.
+
+Existing `roadmap-v2` assignments are converted in memory for reads, with no migration on read; the first substantive task mutation saves the canonical tasks. Scheduled tasks linked to milestones project to the existing assignment shape. The older assignment-status endpoint updates the corresponding canonical task for single-segment sessions; split tasks require the task-status endpoint. Earlier untimed plans remain read-only. Existing clients need the new task endpoints to display unscheduled or in-progress work.
+
+Split-session compatibility keys are generated without colliding with primary assignment keys. Task and session IDs remain stable; secondary assignment keys may change on projection, including for old snapshots. No stored snapshot is migrated by a read.
+
+Revisions retain student-created, edited, started, completed and removed tasks and related dependency records. Model-generated keys do not establish semantic identity. A preview flags new work that might repeat student-created, removed, edited, started or completed work, including reused protected keys; `/planner/tasks/reconcile` records an explicit keep/discard decision before acceptance. A changed active plan invalidates an earlier preview. This conservative review can include work that is actually unrelated.
 
 ## Reading a generated roadmap
 
@@ -75,6 +93,10 @@ Saved settings cannot hold the removed `buffer_percent`, `checkin_day`, `checkin
 
 `workspaces` is a private operational owner document holding chat, `planner` (config, candidate, active, confirmations), receipts and one leased operation. Each accepted or progressed plan is saved as an immutable `roadmaps` snapshot before the pointer CAS. UUID mutation IDs plus expected workspace revisions protect edits, retries and lost responses. Failed operations retain their exact request for retry, without duplicating a user message.
 
+New preview accept and discard receipts include the action in their fingerprint, so reusing a request key for the other action is rejected. Older receipts did not record which of those two identical request bodies succeeded; retries of those ambiguous receipts return `legacy_preview_retry_ambiguous` rather than claiming success. Reload the roadmap and use a new request key for any still-needed action. Other existing receipt formats keep their previous retry behavior.
+
+`GET /dashboard-source` is an authenticated passive read of the current active plan, workspace version, milestone review and task readiness. It does not launch a pending operation, query other sources or save legacy projections. At each new acceptance, `pace_baseline_id` is set to the exact immutable snapshot ID written for that acceptance; ordinary task and status edits retain it. A later acceptance replaces it with the new accepted snapshot. Older plans with no recorded baseline report null; the service does not infer one from generation pointers or current edits. The owner-scoped history endpoint reads a known baseline. Source consumers can compare successive workspace versions and active IDs for bounded race detection, but that does not create a cross-service transaction.
+
 Messages save before model work. Compact `/progress` polling reads only revision and operation metadata. Provider retry delays persist. Expired leases resume on authenticated reconnect, and bearer tokens never enter MongoDB. Source and session checks fence publication. If source freshness is unavailable, saved chat and plans stay readable and progress can be recorded, but new plans and accepting a preview wait. History is bounded to 300 messages, 1,000 operation receipts and 4 MiB per workspace.
 
 ## Earlier untimed plans
@@ -87,4 +109,4 @@ See setup for required service-scoped credentials. All model calls go through th
 
 ## Remaining scope
 
-No external calendar or course integrations, automatic revision without a user request, E05 manual session editing, scheduled reviews, dashboard projections, actual-time recording, conversation continuation or modelled non-zero reduced periods. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.
+No external calendar or course integrations, automatic revision without a user request, scheduled reviews, actual-time recording, conversation continuation or modelled non-zero reduced periods. Task editing, period views, review decisions and recovery still need frontend implementation. The dashboard backend provides read-only projections; its frontend remains unimplemented. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.

@@ -1,4 +1,5 @@
 """Read projections and change detection for the timed roadmap. No model calls happen here."""
+import copy
 from elo_shared.runtime import digest
 from elo_shared.skill_groups import skill_groups
 from app.planning.capacity import Capacity, to_minute
@@ -22,7 +23,16 @@ def settings_differ(plan,state):
     """Compares current forms, so a saved plan's older settings format never reads as a change."""
     return config_digest(PlannerConfig.model_validate(plan['config']))!=config_digest(saved_config(state))
 def completed_sessions(plan):
-    return [a for a in (plan or {}).get('assignments',[]) if a['status']=='completed']
+    if not plan:return []
+    if isinstance(plan.get('editable_tasks'),list):
+        # Historical snapshots may contain the old, collision-prone projection.
+        # Rebuild from canonical tasks in memory without mutating the snapshot.
+        from app.planning.tasks import project_assignments
+        projection={'editable_tasks':plan['editable_tasks'],'milestones':plan.get('milestones',[])}
+        assignments=project_assignments(projection)
+    else:
+        assignments=plan.get('assignments',[])
+    return [a for a in assignments if a['status']=='completed']
 def session_has_passed(session,capacity):
     day=str(session['date']);today=capacity.today.isoformat()
     return day<today or (day==today and to_minute(session['start_time'])<capacity.now_minute)
@@ -49,13 +59,24 @@ def plan_review(plan,now):
     for milestone in plan['milestones']:
         members=[a for a in plan['assignments'] if a['milestone_key']==milestone['key']]
         done=[a for a in members if a['status']=='completed']
-        milestones[milestone['id']]={'sessions_total':len(members),'sessions_completed':len(done),'completed_minutes':sum(a['duration_minutes'] for a in done)}
+        tasks=[t for t in plan.get('editable_tasks',[]) if t.get('milestone_key')==milestone['key']]
+        current=[t for t in tasks if not t.get('removed')]
+        milestones[milestone['id']]={'sessions_total':len(members),'sessions_completed':len(done),'completed_minutes':sum(a['duration_minutes'] for a in done),
+            'tasks_total':len(current),'tasks_completed':sum(t['status']=='completed' and not t.get('definition_review_required') for t in current),
+            'review_needed':not current or (milestone.get('outcome') or {}).get('definition_review_required',False) or any(t.get('removed') or t.get('definition_review_required') for t in tasks)}
     return {'next_assignment_id':upcoming[0]['id'] if upcoming else None,'missed_assignment_ids':missed,
         'remaining':capacity.report(allow_past_start=True),'milestones':milestones}
 
 def learning_view(plan,now):
     """Each skill the active roadmap works on, most important first, with its own progress and next session."""
     if not plan:return {'has_roadmap':False,'roadmap_id':None,'skills_total':0,'skills_started':0,'skills_done':0,'steps':[]}
+    # The read-only session view is a compatibility projection of editable
+    # tasks. Rebuild it on a copy so stale projections cannot affect progress.
+    canonical=isinstance(plan.get('editable_tasks'),list)
+    if canonical:
+        from app.planning.tasks import project_assignments
+        plan=copy.deepcopy(plan)
+        project_assignments(plan)
     review=plan_review(plan,now);missed=set(review['missed_assignment_ids'])
     milestones={m['key']:m for m in plan['milestones']}
     steps=[]
@@ -68,6 +89,21 @@ def learning_view(plan,now):
         done=[a for a in sessions if a['status']=='completed'];open_sessions=[a for a in sessions if a['status']=='scheduled']
         upcoming=next((a for a in open_sessions if a['id'] not in missed),None)
         state='not_scheduled' if not sessions else 'done' if len(done)==len(sessions) else 'in_progress' if done else 'not_started'
+        if canonical:
+            def task_belongs(task):
+                source=task.get('source_assignment') or {}
+                explicitly_linked=bool(gap.get('requirement_ref') and gap['requirement_ref'] in task.get('requirement_refs',[]))
+                if source.get('gap_id'):
+                    return source['gap_id']==gap['id'] or explicitly_linked
+                return explicitly_linked or gap['id'] in (milestones.get(task.get('milestone_key')) or {}).get('gap_ids',[])
+            related=[task for task in plan['editable_tasks'] if task_belongs(task)]
+            active=[task for task in related if not task.get('removed')]
+            removed=any(task.get('removed') for task in related)
+            finished=bool(active) and all(task['status']=='completed' and not task.get('definition_review_required') for task in active)
+            started=any(task['status'] in ('in_progress','completed') for task in active)
+            if finished and not removed:state='done'
+            elif started:state='in_progress'
+            else:state='not_started' if sessions else 'not_scheduled'
         steps.append({'gap_id':gap['id'],'name':gap['name'],'status':gap['status'],'state':state,'priority':gap['priority'],'rationale':gap['rationale'],
             'milestones':[m['title'] for m in plan['milestones'] if gap['id'] in m['gap_ids']],
             'sessions_total':len(sessions),'sessions_completed':len(done),'sessions_missed':sum(a['id'] in missed for a in open_sessions),
@@ -90,8 +126,13 @@ def candidate_blockers(state,source,now):
         add('inputs_changed','Your CV or Career goal changed after this preview was prepared. Generate a fresh plan.')
     if settings_differ(candidate,state):
         add('settings_changed','Your settings changed after this preview was prepared. Generate a fresh plan.')
+    if candidate.get('revision_review'):
+        add('revision_review_required','Review proposed tasks that may duplicate saved or removed work before accepting this roadmap.')
     capacity=Capacity(PlannerConfig.model_validate(candidate['config']),now)
-    if any(a['status']=='scheduled' and session_has_passed(a,capacity) for a in candidate['assignments']):
+    # Student-retained sessions may already be in the past; their timing is an
+    # explicit saved choice. Only newly proposed sessions can expire the preview.
+    prior_ids={a['id'] for a in (active or {}).get('assignments',[])}
+    if any(a['status']=='scheduled' and a['id'] not in prior_ids and session_has_passed(a,capacity) for a in candidate['assignments']):
         add('plan_expired','A session in this preview has already passed. Generate a fresh plan.')
     return blockers
 
@@ -125,11 +166,19 @@ def retry_body(row,kind):
 
 def planner_view(row,source,now,default_zone=None):
     state=planner_state(row)
-    active,candidate=state['active'],state['candidate']
+    # Legacy snapshots are converted only in the response. A read never saves an
+    # upgrade; the next explicit task mutation persists the canonical task data.
+    from app.planning.tasks import ensure_tasks, project_assignments, schedule_warnings
+    active,candidate=copy.deepcopy(state['active']),copy.deepcopy(state['candidate'])
+    for plan in (active,candidate):
+        if plan is not None:
+            ensure_tasks(plan)
+            project_assignments(plan)
     config=saved_config(state,default_zone)
     capacity=Capacity(config,now,completed_sessions(active))
     return {'config':config.model_dump(mode='json'),'config_saved':state['config'] is not None,
         'runway':capacity.report(allow_past_start=bool(active)),'inputs':plan_inputs(source),
         'candidate':candidate,'candidate_review':plan_review(candidate,now),'candidate_blockers':candidate_blockers(state,source,now),
-        'active':active,'active_review':plan_review(active,now),'confirmations':state['confirmations'],
+        'active':active,'active_review':plan_review(active,now),
+        'task_warnings':schedule_warnings(active,now) if active else [],'confirmations':state['confirmations'],
         'signals':revision_signals(state,source,now),'retry_generate':retry_body(row,'generate')}

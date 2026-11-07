@@ -254,6 +254,9 @@ class roadmaps {
     +Object[] gaps? [roadmap-v2]
     +Object[] milestones? [roadmap-v2]
     +Object[] assignments? [roadmap-v2]
+    +Object[] editable_tasks? [canonical tasks and removals]
+    +String pace_baseline_id? [latest accepted immutable snapshot]
+    +Object[] revision_review? [unresolved proposed work]
     +Object deadline_outcome? [roadmap-v2]
     +Object[] beyond_deadline? [roadmap-v2]
 }
@@ -274,7 +277,7 @@ users --> roadmap_workspaces : owner API
 roadmap_workspaces --> roadmaps : reviewed activation and history
 roadmaps --> skill_gap_analyses : Assessment API snapshot
 note for skill_gap_analyses "New Assessment-owned database. UUID results use assessment-v1; old analysis-v1 Career contracts/records remain legacy with no automatic migration."
-note for roadmaps "Separate Roadmap-owned database; one database with owner-scoped records, not a database per user. roadmap-v2 revisions hold dated, timed first-week sessions and projected milestones. Earlier records hold daily workloads without clock slots."
+note for roadmaps "Separate Roadmap-owned database with owner-scoped immutable snapshots. Editable tasks retain student changes, status and removals; assignments are a compatibility projection. Earlier records remain readable."
 
 %% Saved-goal question research reuses immutable interview_research.question_findings snapshots.
 %% Owner/goal-version/focus question_result pointers in research_contexts append public evidence

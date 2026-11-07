@@ -245,8 +245,18 @@ does not end baseline review: missing personal skill application/support remains
 a reason for targeted questions, within the project’s own three-question budget. It preserves discussed-topic progress and the three-question maximum.
 Sources with a complete supported baseline need no repeated questions. Old unvisited optional-only
 topics and obsolete active prompts retire through conversation reconciliation.
-Extraction prompt provenance is `cv-extraction-8`; graph provenance is
-`cv-extraction-4`. The change adds no model call or persisted factual projection.
+Extraction prompt provenance is `cv-extraction-10`; graph provenance is
+`cv-extraction-5`. The prompt and existing bounded repair identify duplicate
+interview evidence fields and instruct the model to retain supported details.
+The validator rejects duplicate fields, but a model repair cannot guarantee every
+detail in a rejected candidate survives. No new model call is added.
+
+Review quotations must match their cited original block, allowing case, whitespace
+and Unicode presentation differences. Extraction checks these anchors before
+semantic verification and gives indexed repair guidance for a missing source ID
+or a nonmatching quotation. Semantic approval applies to factual interpretations
+and ordinary source summaries; it cannot approve a paraphrase as a review quote.
+The existing single-repair limit and final quotation guard remain in place.
 
 ## Baseline skill review per project
 

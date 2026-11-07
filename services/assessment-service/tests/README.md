@@ -2,4 +2,6 @@
 
 Run this service separately with the shared package installed or on `PYTHONPATH`. Synthetic cases cover canonical aliases, captured revisions, AND/OR outcomes, declared limitations versus unknowns, complete requirement/component coverage, evidence references, partial research, owner isolation, stale input rejection, idempotency, restart recovery and checkpointed batch retry.
 
+Dashboard source coverage checks passive reads with pending work, missing, stale, unavailable and conflicting sources, owner isolation, and a workspace change during capture. No dashboard read invokes a model.
+
 `fixtures/labelled-comparisons.json` is a small synthetic semantic diagnostic set for the separately opt-in `../evaluate.py`. The normal test suite does not call a live model or measure semantic accuracy. See [testing guidance](../../../docs/testing.md#assessment-and-roadmap-adviser).

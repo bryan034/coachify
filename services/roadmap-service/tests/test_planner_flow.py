@@ -245,6 +245,11 @@ def test_schedule_change_after_completion_previews_a_revision_and_preserves_comp
         preview=state['planner']['candidate']
         assert preview['assignments'][0]==done and [a['key'] for a in preview['assignments']]==['a1','a2']
         assert preview['changes']['completed_preserved']==1 and preview['changes']['assignments_removed'] and preview['changes']['assignments_added']
+        review=preview['revision_review']
+        assert len(review)==1 and done['id'] in review[0]['related_task_ids']
+        assert 'revision_review_required' in {item['code'] for item in state['planner']['candidate_blockers']}
+        state=post(client,'/tasks/reconcile',state,candidate_id=preview['id'],
+            decisions=[{'task_id':review[0]['task_id'],'decision':'keep'}])
         state=post(client,'/accept',state)
         assert state['planner']['active']['assignments'][0]==done and state['planner']['active']['summary']=='Moved to Thursday evenings.'
         assert sources.writes==[]
@@ -423,6 +428,10 @@ def test_every_change_works_on_a_plan_cleaned_of_old_settings():
         state=generate(client,state)
         assert state['operation']['status']=='succeeded',state['operation']
         assert not any(s['kind']=='settings' for s in state['planner']['signals'])
+        review=state['planner']['candidate']['revision_review']
+        assert review and any(blocker['code']=='revision_review_required' for blocker in state['planner']['candidate_blockers'])
+        state=post(client,'/tasks/reconcile',state,candidate_id=state['planner']['candidate']['id'],
+                   decisions=[{'task_id':entry['task_id'],'decision':'keep'} for entry in review])
         state=post(client,'/accept',state)
         statuses={a['key']:a['status'] for a in state['planner']['active']['assignments']}
         assert statuses=={'a1':'completed','a2':'scheduled'}
@@ -454,7 +463,9 @@ def test_a_generated_roadmap_returns_only_declared_fields_through_the_frontend_f
         assert candidate.keys()<=declared_keys(PlannedRoadmap)
         assert candidate['generation']=={'prompt_version':'roadmap-plan-v1','attempts':1}
         assert candidate['milestones'][0]['outcome'].keys()=={'demonstrated','note','recorded_at','source'}
-        assert planner['candidate_review']['milestones']['m1'].keys()=={'sessions_total','sessions_completed','completed_minutes'}
+        assert planner['candidate_review']['milestones']['m1']=={
+            'sessions_total':1,'sessions_completed':0,'completed_minutes':0,
+            'tasks_total':1,'tasks_completed':0,'review_needed':False}
         assert state['messages']==[] and planner['inputs']['experience'][0].keys()>={'ref','name','kind','text','start_date','end_date','ongoing'}
         state=post(client,'/accept',state)
         assert state['planner']['active'].keys()<=declared_keys(PlannedRoadmap)
@@ -482,6 +493,8 @@ def test_a_generated_roadmap_can_drive_a_daily_weekly_and_monthly_to_do_list():
         done=post(client,'/assignments/status',state,assignment_id=session['id'],status='completed')
         change=done['planner']['active']['assignments'][0]['history'][0]
         assert (change['from'],change['to'])==('scheduled','completed')
+        task_change=done['planner']['active']['editable_tasks'][0]['history'][0]
+        assert (task_change['from'],task_change['to'])==('not_started','completed')
         assert done['planner']['active_review']['milestones']['m1']['sessions_completed']==1
         reopened=post(client,'/assignments/status',done,assignment_id=session['id'],status='scheduled')
         assert reopened['planner']['active']['assignments'][0]['status']=='scheduled'

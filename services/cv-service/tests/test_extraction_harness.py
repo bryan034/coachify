@@ -154,6 +154,93 @@ def test_evidence_failure_also_receives_source_specific_repair(harness, monkeypa
     assert feedback[0]['field'] == 'items[1]' and feedback[0]['issue'] == 'literal_skill'
 
 
+def duplicate_review_candidates():
+    _, valid = candidates()
+    fact = {'field': 'skill_use', 'skill_name': 'Python', 'status': 'supported',
+            'value': 'Used Python', 'evidence': [{'source_id': 'b2', 'quote': 'used Python'}]}
+    valid['items'][1]['review_evidence'] = [fact]
+    invalid = deepcopy(valid)
+    invalid['items'][1]['review_evidence'].append({**deepcopy(fact), 'skill_name': '  PYTHON  '})
+    return invalid, valid
+
+
+def review_graph(responses):
+    calls = []
+    blocks = [{'id': f'b{i+1}', 'text': text, 'location': 'Synthetic'} for i, text in enumerate(SOURCES)]
+    def model(_blocks, candidate, feedback):
+        calls.append((deepcopy(candidate), deepcopy(feedback)))
+        return deepcopy(responses[len(calls)-1]), {}
+    def verify(_blocks, pending):
+        return frozenset((ref['block_id'], ref['excerpt']) for ref in pending)
+    graph = ExtractionHarness('synthetic-id', lambda _: {'blocks': blocks}, model, lambda _: None, checkpointer=saver(), thread_id='synthetic-quote-test', verify_evidence=verify)
+    return graph, calls
+
+
+def test_duplicate_review_evidence_gets_indexed_repair_and_preserves_supported_fact():
+    invalid, valid = duplicate_review_candidates()
+    graph, calls = review_graph([invalid, valid])
+    result = graph.run(b'synthetic')
+    assert result['repair_attempts'] == 1 and len(calls) == 2
+    feedback = calls[1][1]
+    assert len(feedback) == 1 and feedback[0]['field'] == 'items[1]'
+    assert feedback[0]['issue'] == 'duplicate_review_evidence'
+    assert 'normalized skill_name' in feedback[0]['guidance']
+    assert 'conflicting or uncertain' in feedback[0]['guidance']
+    assert 'Project Finch' not in json.dumps(feedback)
+    assert len(result['items'][1]['review_evidence']) == 1
+    assert result['items'][1]['review_evidence'][0]['value'] == 'Used Python'
+
+
+def test_repeated_duplicate_review_evidence_still_fails_after_one_repair():
+    invalid, _ = duplicate_review_candidates()
+    graph, calls = review_graph([invalid, invalid])
+    with pytest.raises(ValueError, match='Duplicate interview evidence fields'):
+        graph.run(b'synthetic')
+    assert graph.repair_attempted and len(calls) == 2
+
+
+def review_quote_candidates():
+    _, valid = duplicate_review_candidates()
+    invalid = deepcopy(valid)
+    invalid['items'][1]['review_evidence'][0]['evidence'][0]['quote'] = 'Applied Python'
+    return invalid, valid
+
+
+def test_review_quote_repair_uses_exact_anchor_and_preserves_fact(harness, monkeypatch):
+    invalid, valid = review_quote_candidates()
+    client, app, queued, calls = setup_provider(
+        harness, monkeypatch, [invalid, valid, {'supported': [0]}])
+    app.state.worker.run_once()
+    result = read_result(client, queued)
+    assert result['status'] == 'ready' and result['error'] is None
+    assert result['extraction']['repair_attempts'] == 1
+    assert len(calls) == count(app.state.repository) == 3
+    feedback = json.loads(calls[1]['messages'][1]['content'])['validation_feedback']
+    assert feedback[0]['field'] == 'items[1].review_evidence[0].evidence[0].quote'
+    assert feedback[0]['issue'] == 'review_quote'
+    assert 'exact' in feedback[0]['guidance'].lower()
+    assert 'Applied Python' not in json.dumps(feedback)
+    assert 'Project Finch' not in json.dumps(feedback)
+    review_fact = result['items'][1]['review_evidence'][0]
+    assert review_fact['value'] == 'Used Python'
+    assert review_fact['evidence'] == [{'source_id': 'b2', 'quote': 'used Python'}]
+    verification = json.loads(calls[2]['messages'][1]['content'])
+    assert len(verification['summaries']) == 1
+    assert 'skill_use' in verification['summaries'][0]['excerpt']
+
+
+def test_repeated_nonexact_review_quote_fails_without_publishing(harness, monkeypatch):
+    invalid, _ = review_quote_candidates()
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, invalid])
+    app.state.worker.run_once()
+    result = read_result(client, queued)
+    assert result['status'] == 'failed' and result['error']['repair_attempted']
+    assert result['error']['failure_stage'] == 'extraction_validation'
+    assert result['error']['failure_category'] == 'evidence_validation'
+    assert result['items'] == [] and result['extraction_version'] == 0
+    assert len(calls) == count(app.state.repository) == 2
+
+
 def test_provider_failure_during_repair_keeps_status_and_stage(harness, monkeypatch):
     invalid, _ = candidates()
     client, app, queued, calls = setup_provider(harness, monkeypatch,

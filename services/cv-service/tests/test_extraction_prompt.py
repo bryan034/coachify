@@ -37,7 +37,7 @@ def test_prompt_example_survives_adapter_and_evidence_validation(monkeypatch):
     assert items[1]['provenance'] == 'inferred'
     assert items[1]['supporting_item_ids'] == [items[0]['id']]
     assert items[-1]['proficiency'] == 'native'
-    assert metadata['prompt_version'] == PROMPT_VERSION == 'cv-extraction-9'
+    assert metadata['prompt_version'] == PROMPT_VERSION == 'cv-extraction-10'
     assert json.dumps(EXAMPLE) in captured[0]['messages'][0]['content']
     assert json.loads(captured[0]['messages'][1]['content']) == {'source_blocks': blocks}
     assert len(captured) == 1

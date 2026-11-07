@@ -1,16 +1,22 @@
 """Timed-roadmap endpoints. Writes reuse the workspace's version and receipt protection."""
 from fastapi import Depends, Request
+from uuid import NAMESPACE_URL, uuid5
+import copy
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, authenticated, begin, launch, operation_view, stamp
 from app.planning.capacity import Capacity, normalized
 from app.planning.generator import PLANNING_SECONDS
+from app.planning.milestone_membership import mark_plan_membership_changes
 from app.planning.state import candidate_blockers, completed_sessions, learning_view, planner_state, saved_config
+from app.planning.tasks import change_status, ensure_tasks, project_assignments
+from app.planning.task_routes import register_task_routes
 from app.schemas.roadmap import (AssignmentStatus, ExperienceConfirmation, GeneratePlan, LearningPlan, OperationAccepted, Runway, MilestoneOutcome,
     PlannerConfig, RunwayRequest, SaveConfig)
 from app.schemas.planner import Mutation, Workspace
 
 def register_planner(app,context,mutate,worker):
     prefix='/api/v1/roadmaps/planner'
+    register_task_routes(app,context,mutate)
     @app.get('/api/v1/roadmaps/learning',response_model=LearningPlan)
     async def learning(request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id'])
@@ -51,16 +57,17 @@ def register_planner(app,context,mutate,worker):
             if not state['candidate']:raise Problem('There is no previewed roadmap to accept.')
             blockers=candidate_blockers(state,source,app.state.clock())
             if blockers:raise Problem(blockers[0]['message'],409,blockers[0]['code'])
+            mark_plan_membership_changes(state['active'],state['candidate'])
             state['active']=state['candidate'];state['candidate']=None
             return row
-        return await mutate(body,account,apply)
+        return await mutate(body,account,apply,operation='preview.accept',mark_baseline=True)
 
     @app.post(prefix+'/discard',response_model=Workspace)
     async def discard(body:Mutation,request:Request,account=Depends(authenticated)):
         def apply(row,source):
             planner_state(row)['candidate']=None
             return row
-        return await mutate(body,account,apply)
+        return await mutate(body,account,apply,operation='preview.discard')
 
     def active_plan(row):
         plan=planner_state(row)['active']
@@ -70,14 +77,17 @@ def register_planner(app,context,mutate,worker):
     @app.post(prefix+'/assignments/status',response_model=Workspace)
     async def assignment_status(body:AssignmentStatus,request:Request,account=Depends(authenticated)):
         def apply(row,source):
-            session=next((a for a in active_plan(row)['assignments'] if a['id']==body.assignment_id),None)
-            if not session:raise Problem('This session was not found.',404,'not_found')
-            note=body.evidence_note.strip() if body.evidence_note else None
-            if session['status']==body.status and (body.status!='completed' or session.get('evidence_note')==note):return row
-            session['history'].append({'at':stamp(),'from':session['status'],'to':body.status,'evidence_note':session.get('evidence_note')})
-            session['status']=body.status
-            session['completed_at']=stamp() if body.status=='completed' else None
-            session['evidence_note']=note if body.status=='completed' else None
+            plan=active_plan(row)
+            tasks=ensure_tasks(copy.deepcopy(plan))
+            task=next((t for t in tasks if not t.get('removed') and (t['id']==body.assignment_id or any(str(uuid5(NAMESPACE_URL,t['id']+':slot:'+str(i)))==body.assignment_id for i in range(1,len(t['schedule']))))),None)
+            if not task:raise Problem('This session was not found.',404,'not_found')
+            if len(task['schedule'])!=1:raise Problem('This task has multiple sessions. Update its status using the task endpoint.',409,'task_status_required')
+            desired='completed' if body.status=='completed' else 'not_started'
+            note=(body.evidence_note or '').strip() or None
+            if task['status']==desired and (desired!='completed' or task.get('evidence_note')==note) and not task.get('definition_review_required'):return row
+            task=next(t for t in ensure_tasks(plan) if t['id']==task['id'])
+            change_status(task,desired,body.evidence_note)
+            project_assignments(plan)
             return row
         return await mutate(body,account,apply)
 
@@ -88,7 +98,12 @@ def register_planner(app,context,mutate,worker):
             if not milestone:raise Problem('This milestone was not found.',404,'not_found')
             note=(body.note or '').strip()
             if body.demonstrated and not note:raise Problem('Describe how you demonstrated this outcome.',422,'validation')
+            prior=milestone.get('outcome') or {}
+            history=copy.deepcopy(prior.get('history',[]))
+            if prior.get('recorded_at'):
+                history.append({k:copy.deepcopy(v) for k,v in prior.items() if k!='history'})
             milestone['outcome']={'demonstrated':body.demonstrated,'note':note or None,'recorded_at':stamp(),'source':'self_reported'}
+            if history:milestone['outcome']['history']=history
             return row
         return await mutate(body,account,apply)
 

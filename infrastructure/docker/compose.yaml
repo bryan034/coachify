@@ -4,7 +4,7 @@ services:
     image: nginx:1.28-alpine
     ports: ["127.0.0.1:${GATEWAY_PORT:-8080}:80"]
     volumes: ["../gateway/nginx.conf:/etc/nginx/nginx.conf:ro"]
-    depends_on: [frontend, profile-service, career-service, cv-service, assessment-service, roadmap-service, jobs-service]
+    depends_on: [frontend, profile-service, career-service, cv-service, assessment-service, roadmap-service, dashboard-service, jobs-service]
     networks: [web, backend]
   frontend:
     build:
@@ -57,6 +57,7 @@ services:
       CAREER_LLM_TOKEN_PARAMETER: ${CAREER_LLM_TOKEN_PARAMETER:-max_tokens}
       CAREER_LLM_MODEL: ${CAREER_LLM_MODEL:-gemini-3.5-flash-lite}
       CAREER_LLM_API_KEY: ${CAREER_LLM_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       DISCOVERY_TARGET_LISTINGS: ${DISCOVERY_TARGET_LISTINGS:-10}
       DISCOVERY_MAX_LISTINGS: ${DISCOVERY_MAX_LISTINGS:-20}
       DISCOVERY_TARGET_EMPLOYERS: ${DISCOVERY_TARGET_EMPLOYERS:-5}
@@ -114,6 +115,7 @@ services:
       CV_LLM_MODEL: ${CV_LLM_MODEL:-gemini-3.5-flash-lite}
       CV_LLM_RESPONSE_MODE: ${CV_LLM_RESPONSE_MODE:-json_schema}
       CV_LLM_API_KEY: ${CV_LLM_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       CV_LLM_ALLOW_HTTP: ${CV_LLM_ALLOW_HTTP:-false}
     depends_on:
       profile-service:
@@ -156,6 +158,7 @@ services:
       MONGODB_URI: mongodb://elo_assessment:${ASSESSMENT_DB_PASSWORD:?Set ASSESSMENT_DB_PASSWORD}@mongodb:27017/elo_assessment
       MONGODB_DATABASE: elo_assessment
       ASSESSMENT_LLM_API_KEY: ${ASSESSMENT_LLM_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       ASSESSMENT_LLM_MODEL: ${ASSESSMENT_LLM_MODEL:-gemini-3.5-flash-lite}
       ASSESSMENT_LLM_BASE_URL: ${ASSESSMENT_LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
       ASSESSMENT_LLM_TOKEN_PARAMETER: ${ASSESSMENT_LLM_TOKEN_PARAMETER:-max_tokens}
@@ -183,6 +186,7 @@ services:
       MONGODB_URI: mongodb://elo_roadmap:${ROADMAP_DB_PASSWORD:?Set ROADMAP_DB_PASSWORD}@mongodb:27017/elo_roadmap
       MONGODB_DATABASE: elo_roadmap
       ROADMAP_LLM_API_KEY: ${ROADMAP_LLM_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       ROADMAP_LLM_MODEL: ${ROADMAP_LLM_MODEL:-gemini-3.5-flash-lite}
       ROADMAP_LLM_BASE_URL: ${ROADMAP_LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
       ROADMAP_LLM_TOKEN_PARAMETER: ${ROADMAP_LLM_TOKEN_PARAMETER:-max_tokens}
@@ -191,6 +195,23 @@ services:
       mongodb-planning-init:
         condition: service_completed_successfully
     networks: [backend, database]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=0700,uid=10001,gid=10001"]
+    mem_limit: 512m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  dashboard-service:
+    build:
+      context: ../..
+      dockerfile: services/dashboard-service/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      PROFILE_SERVICE_URL: http://profile-service:8000
+      ROADMAP_SERVICE_URL: http://roadmap-service:8000
+      ASSESSMENT_SERVICE_URL: http://assessment-service:8000
+    depends_on: [profile-service, roadmap-service, assessment-service]
+    networks: [backend]
     read_only: true
     tmpfs: ["/tmp:size=32m,mode=0700,uid=10001,gid=10001"]
     mem_limit: 512m

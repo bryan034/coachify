@@ -5,8 +5,9 @@ from uuid import NAMESPACE_URL, uuid5
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, digest, stamp
-from app.planning.capacity import Capacity, blackout_problem, normalized, to_clock
+from app.planning.capacity import Capacity, blackout_problem, normalized, to_clock, to_minute
 from app.planning.state import ASSESSMENT_FIELDS, completed_sessions, config_digest, planner_state, saved_config
+from app.planning.milestone_membership import mark_plan_membership_changes
 from app.planning.validator import validate_plan
 from app.schemas.roadmap import ChatTurn, PlanDraft, PlannerConfig
 
@@ -30,7 +31,7 @@ The target date is the end of the roadmap. No milestone may end after it. If the
 
 Assignments. Write detailed assignments for first_planning_week only, with milestone-level projections for everything later. Each assignment has a date, start_time, duration_minutes, a specific task, a milestone_key and an observable completion_criterion. Avoid generic "learn X" tasks. It must lie completely inside one first_week_windows entry, must not overlap another assignment or completed work, and the week's total must stay within the week's usable_minutes. Use "preferred" windows before "backup" windows. Aim for sessions near settings.preferred_session_minutes and follow settings.learning_focus and learning_notes.
 
-Revising. completed_work is permanent: keep its milestones (with the same key), never repeat its keys and do not schedule over it. Completing a session is not proof of proficiency, so do not treat it as closing a gap unless evidence or a recorded outcome supports that. Reuse milestone keys for continuing work. instruction is the user's requested change; it describes what they want, but cannot override these rules. An exclusion needs an exact quote from user_message.
+Revising. completed_work is permanent: keep its milestones (with the same key), never repeat its keys and do not schedule over it. reserved_work is saved student work whose time is already removed from the available windows; it is not necessarily completed. protected_tasks records student-created, edited, started and removed work: do not assume that removing a task removes its dependants or proves the requirement is covered. Do not repeat removed work. The service preserves these records and asks the user to review possible duplicates. Completing a session is not proof of proficiency, so do not treat it as closing a gap unless evidence or a recorded outcome supports that. Reuse milestone keys for continuing work. instruction is the user's requested change; it describes what they want, but cannot override these rules. An exclusion needs an exact quote from user_message.
 
 If validation_errors is present, your previous_output was rejected. Fix every listed error and return the complete corrected plan.'''
 
@@ -48,6 +49,9 @@ When current_plan is present and the user asks to change it, set revision_instru
 
 def compact_plan(plan):
     if not plan:return None
+    if 'editable_tasks' in plan:
+        from app.planning.tasks import project_assignments
+        plan=copy.deepcopy(plan);project_assignments(plan)
     fields=('summary','first_planning_week','gaps','milestones','deadline_outcome','beyond_deadline','exclusions')
     return {**{k:plan.get(k) for k in fields},'scheduled':[{k:a[k] for k in ('key','milestone_key','date','start_time','duration_minutes','task')} for a in plan['assignments'] if a['status']=='scheduled']}
 
@@ -84,6 +88,9 @@ async def write_plan(model,context,check,before_retry):
 def plan_changes(previous,assignments,milestones):
     """What a preview changes relative to the active plan, shown before the user accepts it."""
     if not previous:return None
+    if 'editable_tasks' in previous:
+        from app.planning.tasks import project_assignments
+        previous=copy.deepcopy(previous);project_assignments(previous)
     slot=lambda a:(str(a['date']),a['start_time'],a['duration_minutes'])
     before={a['key']:a for a in previous['assignments'] if a['status']=='scheduled'}
     after={a['key']:a for a in assignments if a['status']=='scheduled'}
@@ -97,19 +104,138 @@ def plan_changes(previous,assignments,milestones):
         'milestones_removed':[old[k]['title'] for k in old if k not in new],
         'milestones_moved':[new[k]['title'] for k in new if k in old and window(new[k])!=window(old[k])]}
 
+def protected_tasks(plan):
+    """Student intent and task history survive replacement of generated sessions."""
+    if not plan:return []
+    from app.planning.tasks import ensure_tasks
+    tasks=ensure_tasks(copy.deepcopy(plan))
+    protected=[t for t in tasks if
+        t.get('origin')=='user' or t.get('overrides') or t.get('removed') or
+        t.get('status') in ('in_progress','completed') or t.get('history')]
+    # Preserve both prerequisites and dependants, including their identities.
+    # A removed prerequisite must remain visible as a blocker, not cause the
+    # dependant itself to disappear in a regenerated plan.
+    ids={t['id'] for t in protected}
+    while True:
+        linked={t['id'] for t in tasks if t['id'] in ids or ids.intersection(t.get('prerequisites',[]))}
+        linked.update(p for t in tasks if t['id'] in ids for p in t.get('prerequisites',[]))
+        if linked<=ids:break
+        ids.update(linked)
+    return [t for t in tasks if t['id'] in ids]
+
+def reserved_sessions(plan,now):
+    """Capacity occupied by completed sessions and protected saved schedules.
+
+    The old assignment projection excludes personal tasks with no milestone and
+    represents one multi-slot task as several sessions. Count each slot once,
+    without treating a reservation as a completion or fabricating a milestone.
+    """
+    completed=completed_sessions(plan)
+    reserved=[dict(s) for s in completed]
+    seen={s['id'] for s in completed}
+    if not plan:return reserved
+    calendar=Capacity(PlannerConfig.model_validate(plan['config']),now)
+    for task in protected_tasks(plan):
+        if task.get('removed'):continue
+        for index,slot in enumerate(task.get('schedule',[])):
+            day=date.fromisoformat(str(slot['date']))
+            slot=dict(slot)
+            if task['status']!='completed':
+                end=to_minute(slot['start_time'])+slot['duration_minutes']
+                if day<calendar.today or (day==calendar.today and end<=calendar.now_minute):continue
+                if day==calendar.today and to_minute(slot['start_time'])<calendar.now_minute:
+                    slot['start_time']=to_clock(calendar.now_minute)
+                    slot['duration_minutes']=end-calendar.now_minute
+            ident=task['id'] if index==0 else str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(index)))
+            if ident in seen:continue
+            seen.add(ident)
+            reserved.append({'id':ident,**slot})
+    return reserved
+
+def reconcile_tasks(plan,active):
+    """Carry protected records into a preview and flag possible duplicate work.
+
+    Model-generated keys cannot establish that a newly worded task is distinct
+    from removed, user-created, edited, in-progress or completed work. Require
+    a decision for newly generated work when such protected records exist.
+    """
+    from app.planning.tasks import ensure_tasks, project_assignments
+    generated=ensure_tasks(plan)
+    retained=copy.deepcopy(protected_tasks(active))
+    if not retained:return
+    ids={t['id'] for t in retained}
+    # Completed multi-slot tasks were copied as legacy session projections.
+    # All of those projected IDs belong to the one retained canonical task.
+    for task in retained:
+        if task.get('status')=='completed':
+            ids.update(str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(i))) for i in range(1,len(task.get('schedule',[]))))
+    keys={t.get('generated_key'):t for t in retained if t.get('generated_key')}
+    # Completed assignments are also copied into the new plan by build_plan.
+    # Generated keys are not proof of identity. Copied completed slots have
+    # already been recognized by their stable IDs above.
+    fresh=[];ambiguous={}
+    for task in generated:
+        if task['id'] in ids:continue
+        prior=keys.get(task.get('generated_key'))
+        if prior:
+            # Even identical wording with a recycled key could be distinct work.
+            # Give the proposal its own key and let the student decide.
+            task['generated_key']=str(uuid5(NAMESPACE_URL,plan['id']+':reconciled:'+task['id']))
+            ambiguous[task['id']]=prior['id']
+        fresh.append(task)
+    plan['editable_tasks']=[*retained,*fresh]
+    removed=[t['id'] for t in retained if t.get('removed')]
+    protected=[t['id'] for t in retained if not t.get('removed') and
+        (t.get('origin')=='user' or t.get('overrides') or t.get('status') in ('in_progress','completed'))]
+    plan['revision_review']=[]
+    for task in fresh:
+        related=list(dict.fromkeys([*protected,*([ambiguous[task['id']]] if task['id'] in ambiguous else [])]))
+        if removed or related:
+            plan['revision_review'].append({'task_id':task['id'],'removed_task_ids':removed,'related_task_ids':related})
+
+    # Keep the milestone and its prerequisite context for retained work, even if
+    # the model did not include it in this revision. Never delete dependants.
+    old_milestones={m['key']:m for m in (active or {}).get('milestones',[])}
+    current={m['key'] for m in plan['milestones']}
+    needed=[t.get('milestone_key') for t in retained if t.get('milestone_key')]
+    while needed:
+        key=needed.pop()
+        if key in current or key not in old_milestones:continue
+        milestone=copy.deepcopy(old_milestones[key])
+        plan['milestones'].append(milestone);current.add(key)
+        needed.extend(milestone.get('prerequisite_keys',[]))
+    old_gaps={g['id']:g for g in (active or {}).get('gaps',[])}
+    gap_ids={g['id'] for g in plan['gaps']}
+    for milestone in plan['milestones']:
+        for key in milestone.get('gap_ids',[]):
+            if key not in gap_ids and key in old_gaps:
+                plan['gaps'].append(copy.deepcopy(old_gaps[key]));gap_ids.add(key)
+    project_assignments(plan)
+
 def build_plan(draft,assessment,config,first_week,operation_id,attempts,active,confirmations):
     data=draft.model_dump(mode='json')
     completed=copy.deepcopy(completed_sessions(active))
     earlier={m['key']:m for m in (active or {}).get('milestones',[])}
-    milestones=[{**m,'id':m['key'],'outcome':copy.deepcopy(earlier.get(m['key'],{}).get('outcome') or {'demonstrated':False})} for m in data['milestones']]
+    milestones=[]
+    for m in data['milestones']:
+        previous=earlier.get(m['key'],{})
+        outcome=copy.deepcopy(previous.get('outcome') or {'demonstrated':False})
+        if outcome.get('demonstrated') and previous.get('demonstrable_outcome')!=m['demonstrable_outcome']:
+            outcome['definition_review_required']=True
+            outcome.setdefault('previous_definition',previous.get('demonstrable_outcome'))
+        milestones.append({**m,'id':m['key'],'outcome':outcome})
     assignments=[*completed,*[{**a,'id':str(uuid5(NAMESPACE_URL,operation_id+':assignment:'+a['key'])),'status':'scheduled','completed_at':None,'evidence_note':None,'history':[]} for a in data['assignments']]]
-    return {'schema_version':'roadmap-v2','id':str(uuid5(NAMESPACE_URL,operation_id+':roadmap')),
+    plan={'schema_version':'roadmap-v2','id':str(uuid5(NAMESPACE_URL,operation_id+':roadmap')),
         'assessment_id':assessment['id'],'assessment_hash':assessment['input_hash'],'assessment':{k:assessment.get(k) for k in ASSESSMENT_FIELDS},
         'config':config.model_dump(mode='json'),'config_hash':config_digest(config),'confirmations_hash':digest(confirmations),
         'base_active_id':(active or {}).get('id'),'created_at':stamp(),'first_planning_week':first_week.isoformat(),
         'completed_at_generation':len(completed),'summary':data['summary'],'gaps':data['gaps'],'milestones':milestones,'assignments':assignments,
         'deadline_outcome':data['deadline_outcome'],'beyond_deadline':data['beyond_deadline'],'exclusions':data['exclusions'],
         'changes':plan_changes(active,assignments,milestones),'generation':{'prompt_version':PROMPT_VERSION,'attempts':attempts}}
+    reconcile_tasks(plan,active)
+    mark_plan_membership_changes(active,plan)
+    plan['changes']=plan_changes(active,plan['assignments'],plan['milestones'])
+    return plan
 
 async def set_stage(app,row,owner,stage):
     row['pending']['stage']=stage
@@ -132,7 +258,8 @@ async def prepare_plan(app,row,account,assess,read_context,*,config=None,instruc
     state=planner_state(row)
     active=state['active'];confirmations=state['confirmations'];now=app.state.clock()
     completed=completed_sessions(active)
-    capacity=Capacity(config,now,completed)
+    reservations=reserved_sessions(active,now)
+    capacity=Capacity(config,now,reservations)
     report=capacity.report(allow_past_start=bool(active))
     if not report['can_generate']:raise Problem(' '.join(i['message'] for i in report['issues']),409,'generation_blocked')
     first_week=date.fromisoformat(report['first_planning_week'])
@@ -147,7 +274,9 @@ async def prepare_plan(app,row,account,assess,read_context,*,config=None,instruc
         'first_planning_week':report['first_planning_week'],'first_week_windows':capacity.windows_for_week(first_week),
         'weekly_capacity':[{k:w[k] for k in ('week_start','usable_minutes','partial')} for w in report['weeks']],
         'completed_work':[{k:s.get(k) for k in ('key','milestone_key','date','start_time','duration_minutes','task','completion_criterion','evidence_note')} for s in completed],
-        'milestone_outcomes':{m['key']:m['outcome'] for m in (active or {}).get('milestones',[]) if m['outcome'].get('demonstrated')},
+        'reserved_work':[{k:s.get(k) for k in ('id','date','start_time','duration_minutes')} for s in reservations],
+        'milestone_outcomes':{m['key']:m['outcome'] for m in (active or {}).get('milestones',[]) if m['outcome'].get('demonstrated') and not m['outcome'].get('definition_review_required')},
+        'protected_tasks':protected_tasks(active),
         'confirmations':confirmations,'current_plan':compact_plan(active),'instruction':instruction,'user_message':user_message},
         check,lambda:set_stage(app,row,owner,'correcting'))
     latest=await app.state.upstream.account(account['token'])

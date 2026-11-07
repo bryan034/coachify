@@ -30,6 +30,7 @@ class StaleExtraction(Exception):
 
 
 class EvidenceValidationError(ValueError):
-    def __init__(self, message, rule, item_index=None):
+    def __init__(self, message, rule, item_index=None, *, review_index=None, quote_index=None):
         super().__init__(message)
         self.rule, self.item_index = rule, item_index
+        self.review_index, self.quote_index = review_index, quote_index
