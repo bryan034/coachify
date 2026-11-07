@@ -4251,6 +4251,21 @@
             "type": "string",
             "title": "Id"
           },
+          "skill_gap_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Gap Ids",
+            "description": "Exactly one known skill gap, or an empty list when no unambiguous link is available. Null indicates a legacy assignment without a projected link."
+          },
           "status": {
             "type": "string",
             "enum": [

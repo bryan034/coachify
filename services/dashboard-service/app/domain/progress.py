@@ -2,6 +2,7 @@
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
+from elo_shared.milestone_review import removal_needs_review
 
 
 def period_bounds(kind, focus, zone, now):
@@ -65,9 +66,9 @@ def milestone_progress(plan,review,readiness):
             progress['completed_scheduled_minutes_estimate']=progress.pop('completed_minutes')
         review_reasons=[]
         if not members:review_reasons.append({'code':'no_active_tasks','message':'This milestone has no active tasks.'})
-        if any(t.get('removed') for t in all_members):review_reasons.append({'code':'removed_work','message':'Some milestone work was removed and needs review.'})
-        if any(t.get('definition_review_required') for t in all_members):review_reasons.append({'code':'task_definition_changed','message':'A task completion definition needs review.'})
         outcome=m.get('outcome') or {}
+        if any(removal_needs_review(t,outcome,bool(members)) for t in all_members):review_reasons.append({'code':'removed_work','message':'Some milestone work was removed and needs review.'})
+        if any(t.get('definition_review_required') for t in members):review_reasons.append({'code':'task_definition_changed','message':'A task completion definition needs review.'})
         if outcome.get('membership_review_required'):review_reasons.append({'code':'membership_changed','message':'The milestone tasks changed and its outcome needs review.'})
         elif outcome.get('definition_review_required'):review_reasons.append({'code':'outcome_definition_changed','message':'The milestone outcome changed and needs review.'})
         if not (m.get('outcome') or {}).get('demonstrated'):review_reasons.append({'code':'outcome_unconfirmed','message':'The milestone outcome has not been confirmed; detailed tasks may not cover all remaining work.'})
@@ -108,6 +109,7 @@ def parse_timestamp(value):
         result=datetime.fromisoformat(value.replace('Z','+00:00'))
         return result if result.tzinfo else None
     except (TypeError,ValueError):return None
+
 
 def baseline_tasks(baseline):
     """Project timed legacy assignments without changing the immutable source."""

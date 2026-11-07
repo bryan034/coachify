@@ -73,7 +73,7 @@ Task mutations use the existing authenticated workspace revision, payload-bound 
 
 Task reads report `freshness` as `current`, `stale`, `not_ready` or `unavailable`. A plan is current only when its inputs are ready and the captured input hash matches. The legacy `stale` and `source_unavailable` booleans retain their earlier meanings for compatibility; clients needing to distinguish missing inputs should use `freshness`.
 
-Adding, removing or moving milestone tasks, or accepting a revision with changed membership, marks an existing demonstrated milestone outcome for review while preserving the earlier self-report. Reconfirmation retains the previous outcome in history. A `calendar_unavailable` warning means an extreme saved date could not be checked against available study windows; the date remains readable and editable.
+Adding, removing or moving milestone tasks, or accepting a revision with changed membership, marks an existing demonstrated milestone outcome for review while preserving the earlier self-report. Reconfirmation retains the previous outcome in history. A later valid self-report acknowledges earlier removals when active tasks remain; missing or ambiguous timestamps continue to require review, and removing the final task never proves completion. A `calendar_unavailable` warning means an extreme saved date could not be checked against available study windows; the date remains readable and editable.
 
 Existing `roadmap-v2` assignments are converted in memory for reads, with no migration on read; the first substantive task mutation saves the canonical tasks. Scheduled tasks linked to milestones project to the existing assignment shape. The older assignment-status endpoint updates the corresponding canonical task for single-segment sessions; split tasks require the task-status endpoint. Earlier untimed plans remain read-only. Existing clients need the new task endpoints to display unscheduled or in-progress work.
 
@@ -85,7 +85,7 @@ Revisions retain student-created, edited, started, completed and removed tasks a
 
 `POST /planner/generate` returns `{version, operation}` straight away. Poll `GET /progress` until `operation.status` is `succeeded` or `failed`, then read `GET /workspace`: the preview is `planner.candidate`, with `planner.candidate_review` and `planner.candidate_blockers`. `POST /planner/accept` makes it `planner.active`. `roadmap.yaml` and `models/roadmap-plan.schema.json` publish these shapes.
 
-Each `assignments` item is one to-do: `date`, `start_time`, `duration_minutes`, `task`, `completion_criterion` and `status`, changed with `POST /planner/assignments/status`. Its skills are found through `milestone_key` → `milestones[].gap_ids` → `gaps[].name`. Only `first_planning_week` has dated sessions. Later work exists only as milestones with `projected_start` and `projected_end`, until the user plans the next week.
+Each `assignments` item is one to-do: `date`, `start_time`, `duration_minutes`, `task`, `completion_criterion` and `status`, changed with `POST /planner/assignments/status`. `skill_gap_ids` contains a single unambiguous current skill ID or an empty list when an explicit link is absent, stale or ambiguous; older responses without this field can use an unambiguous legacy gap or milestone association. Student changes take precedence over generated source links. Only `first_planning_week` has dated sessions. Later work exists only as milestones with `projected_start` and `projected_end`, until the user plans the next week.
 
 ## Persistence and recovery
 

@@ -1,5 +1,7 @@
 """Membership changes invalidate milestone self-reports without erasing history."""
 from uuid import uuid4
+import copy
+import pytest
 
 from planner_fixtures import assignment, draft, milestone
 from test_planner_flow import H, Scripted, accepted, client_for, generate, post
@@ -104,3 +106,53 @@ def test_discarding_new_revision_work_restores_unchanged_membership_without_fals
         assert restored['demonstrated'] and restored['note']=='Current scope'
         assert not restored.get('membership_review_required')
         assert not restored.get('definition_review_required')
+
+
+def test_removal_requires_later_confirmation_without_losing_tombstone():
+    with client_for(Scripted([draft()])) as client:
+        state=accepted(client)
+        original=state['planner']['active']['editable_tasks'][0]
+        state=save(client,'status',state,task_id=original['id'],status='completed')
+        state=save(client,'add',state,task=definition(title='Removed work',milestone_key='m1',requirement_refs=['job:python']))
+        removed=by_title(state,'Removed work')
+        state=post(client,'/milestones/outcome',state,milestone_id='m1',demonstrated=True,note='Earlier outcome')
+        state=save(client,'remove',state,task_id=removed['id'],reason='Scope changed')
+        assert state['planner']['active_review']['milestones']['m1']['review_needed']
+        tombstone=copy.deepcopy(next(t for t in state['planner']['active']['editable_tasks'] if t['id']==removed['id']))
+        assert tombstone['removed'] and tombstone['removal']['reason']=='Scope changed'
+        assert client.get('/api/v1/roadmaps/learning',headers=H).json()['skills_done']==0
+        state=post(client,'/milestones/outcome',state,milestone_id='m1',demonstrated=False,note='Reviewed but not demonstrated')
+        assert not state['planner']['active_review']['milestones']['m1']['review_needed']
+        assert not outcome(state)['demonstrated']
+        assert next(t for t in state['planner']['active']['editable_tasks'] if t['id']==removed['id'])==tombstone
+        assert client.get('/api/v1/roadmaps/learning',headers=H).json()['skills_done']==0
+        state=post(client,'/milestones/outcome',state,milestone_id='m1',demonstrated=True,note='Reviewed remaining work')
+        assert not state['planner']['active_review']['milestones']['m1']['review_needed']
+        assert next(t for t in state['planner']['active']['editable_tasks'] if t['id']==removed['id'])==tombstone
+        assert client.get('/api/v1/roadmaps/learning',headers=H).json()['skills_done']==1
+        state=save(client,'remove',state,task_id=original['id'],reason='Last task removed')
+        state=post(client,'/milestones/outcome',state,milestone_id='m1',demonstrated=True,note='Reviewed empty milestone')
+        assert state['planner']['active_review']['milestones']['m1']['review_needed']
+        assert client.get('/api/v1/roadmaps/learning',headers=H).json()['skills_done']==0
+
+
+@pytest.mark.parametrize('removed_at,reviewed_at,source,demonstrated,active,expected',[
+    ('2030-01-01T00:00:00Z','2030-01-02T00:00:00+00:00','self_reported',True,True,False),
+    ('2030-01-01T00:00:00+00:00','2030-01-01T08:00:00+08:00','self_reported',True,True,True),
+    ('2030-01-02T00:00:00Z','2030-01-01T00:00:00Z','self_reported',True,True,True),
+    (None,'2030-01-02T00:00:00Z','self_reported',True,True,True),
+    ('invalid','2030-01-02T00:00:00Z','self_reported',True,True,True),
+    ('2030-01-01T00:00:00','2030-01-02T00:00:00Z','self_reported',True,True,True),
+    ('2030-01-01T00:00:00Z',None,'self_reported',True,True,True),
+    ('2030-01-01T00:00:00Z','2030-01-02T00:00:00Z','generated',True,True,True),
+    ('2030-01-01T00:00:00Z','2030-01-02T00:00:00Z','self_reported',False,True,False),
+    ('2030-01-01T00:00:00Z','2030-01-02T00:00:00Z','self_reported',None,True,True),
+    ('2030-01-01T00:00:00Z','2030-01-02T00:00:00Z','self_reported',True,False,True),
+])
+def test_removal_acknowledgement_requires_a_later_reliable_self_report(removed_at,reviewed_at,source,demonstrated,active,expected):
+    from elo_shared.milestone_review import removal_needs_review
+    task={'removed':True,'removal':{'at':removed_at}}
+    outcome={'recorded_at':reviewed_at,'source':source,'demonstrated':demonstrated}
+    assert removal_needs_review(task,outcome,active) is expected
+    outcome['membership_review_required']=True
+    assert removal_needs_review(task,outcome,active)

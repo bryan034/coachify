@@ -39,7 +39,7 @@ owner context. This slice does not introduce that separate credential protocol.
 
 ## CV extraction runtime
 
-CV runs a LangGraph for parse/extract/validate/prepare-review and at most one source-grounded repair, saving each state change so an interrupted run resumes. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Extraction/repair and conditional semantic-evidence checks request schema-constrained output by default; formatting equivalence passes locally, and paraphrases need model approval against cited source blocks under the same budget/lease; backend evidence/date/length checks remain authoritative. Graph state has no checkpointer, external tracing or new collection. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
+CV runs a LangGraph for parse/extract/validate/prepare-review and at most one source-grounded repair, saving each state change in a CV-owned checkpoint so an interrupted run resumes. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Extraction/repair and conditional semantic-evidence checks request schema-constrained output by default; formatting equivalence passes locally, and paraphrases need model approval against cited source blocks under the same budget/lease; backend evidence and date checks remain authoritative. Graph state is not streamed or sent to external tracing. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
 
 ## Saved CV deletion
 

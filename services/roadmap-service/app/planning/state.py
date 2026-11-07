@@ -2,6 +2,7 @@
 import copy
 from uuid import NAMESPACE_URL, uuid5
 from elo_shared.runtime import digest
+from elo_shared.milestone_review import removal_needs_review
 from elo_shared.skill_groups import skill_groups
 from app.planning.capacity import Capacity, to_minute
 from app.schemas.roadmap import PlannerConfig
@@ -64,7 +65,7 @@ def plan_review(plan,now):
         current=[t for t in tasks if not t.get('removed')]
         milestones[milestone['id']]={'sessions_total':len(members),'sessions_completed':len(done),'completed_minutes':sum(a['duration_minutes'] for a in done),
             'tasks_total':len(current),'tasks_completed':sum(t['status']=='completed' and not t.get('definition_review_required') for t in current),
-            'review_needed':not current or (milestone.get('outcome') or {}).get('definition_review_required',False) or any(t.get('removed') or t.get('definition_review_required') for t in tasks)}
+            'review_needed':not current or (milestone.get('outcome') or {}).get('definition_review_required',False) or (milestone.get('outcome') or {}).get('membership_review_required',False) or any(t.get('definition_review_required') for t in current) or any(removal_needs_review(t,milestone.get('outcome'),bool(current)) for t in tasks)}
     return {'next_assignment_id':upcoming[0]['id'] if upcoming else None,'missed_assignment_ids':missed,
         'remaining':capacity.report(allow_past_start=True),'milestones':milestones}
 
@@ -75,7 +76,7 @@ def learning_view(plan,now):
     # tasks. Rebuild it on a copy so stale projections cannot affect progress.
     canonical=isinstance(plan.get('editable_tasks'),list)
     if canonical:
-        from app.planning.tasks import project_assignments
+        from app.planning.tasks import legacy_inference_source_is_safe, project_assignments, task_link_source_is_current
         plan=copy.deepcopy(plan)
         project_assignments(plan)
     review=plan_review(plan,now);missed=set(review['missed_assignment_ids'])
@@ -85,16 +86,25 @@ def learning_view(plan,now):
         if canonical:
             def task_belongs(task):
                 source=task.get('source_assignment') or {}
-                explicitly_linked=bool(gap.get('requirement_ref') and gap['requirement_ref'] in (task.get('requirement_refs') or []))
+                refs=task.get('requirement_refs') or []
+                explicitly_linked=bool(refs and task_link_source_is_current(plan,task) and gap.get('requirement_ref') and gap['requirement_ref'] in refs)
                 # An explicit relink or unlink replaces the source assignment's
                 # old gap association, including any inferred milestone link.
                 if 'requirement_refs' in (task.get('overrides') or []):return explicitly_linked
                 # A manually created task's chosen requirements are explicit
                 # even before any edit has populated its overrides list.
-                if task.get('origin')=='user' and task.get('requirement_refs'):return explicitly_linked
+                # A personal task without a requirement link does not inherit
+                # a skill merely because it was placed under a milestone.
+                if task.get('origin')=='user':return explicitly_linked
+                # An explicit requirement cannot be inferred into the current
+                # assessment when its saved provenance is missing or stale.
+                if refs:return explicitly_linked
+                if not legacy_inference_source_is_safe(plan,task):return False
                 if source.get('gap_id'):
                     return source['gap_id']==gap['id'] or explicitly_linked
-                return explicitly_linked or gap['id'] in (milestones.get(task.get('milestone_key')) or {}).get('gap_ids',[])
+                milestone_gaps=set((milestones.get(task.get('milestone_key')) or {}).get('gap_ids',[]))
+                matched=[item['id'] for item in plan['gaps'] if item['id'] in milestone_gaps]
+                return len(matched)==1 and matched[0]==gap['id']
             related=[task for task in plan['editable_tasks'] if task_belongs(task)]
             active=[task for task in related if not task.get('removed')]
             # A task can span several legacy sessions. Match every projected
@@ -112,10 +122,22 @@ def learning_view(plan,now):
         upcoming=next((a for a in open_sessions if a['id'] not in missed),None)
         state='not_scheduled' if not sessions else 'done' if len(done)==len(sessions) else 'in_progress' if done else 'not_started'
         if canonical:
-            removed=any(task.get('removed') for task in related)
+            def still_needs_review(task):
+                # Requirement-only work has no milestone outcome to review.
+                if not task.get('milestone_key'):return False
+                milestone=milestones.get(task.get('milestone_key'))
+                has_active_members=any(not member.get('removed') and member.get('milestone_key')==task.get('milestone_key') for member in plan['editable_tasks'])
+                return removal_needs_review(task,(milestone or {}).get('outcome'),has_active_members)
+            removed=any(still_needs_review(task) for task in related)
             finished=bool(active) and all(task['status']=='completed' and not task.get('definition_review_required') for task in active)
+            # A self-report of "not demonstrated" acknowledges the removed
+            # work, but cannot itself make its learning outcome complete.
+            reviewed_as_not_demonstrated=any(
+                task.get('removed') and task.get('milestone_key') and not still_needs_review(task)
+                and not ((milestones.get(task.get('milestone_key')) or {}).get('outcome') or {}).get('demonstrated')
+                for task in related)
             started=any(task['status'] in ('in_progress','completed') for task in active)
-            if finished and not removed:state='done'
+            if finished and not removed and not reviewed_as_not_demonstrated:state='done'
             elif started:state='in_progress'
             else:state='not_started' if sessions else 'not_scheduled'
         steps.append({'gap_id':gap['id'],'name':gap['name'],'status':gap['status'],'state':state,'priority':gap['priority'],'rationale':gap['rationale'],

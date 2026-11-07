@@ -289,6 +289,7 @@ class PlanMilestone(DraftMilestone):
 class PlanAssignment(DraftAssignment):
     model_config=ConfigDict(extra='forbid')
     id:str
+    skill_gap_ids:list[str]|None=Field(default=None,description='Exactly one known skill gap, or an empty list when no unambiguous link is available. Null indicates a legacy assignment without a projected link.')
     status:Literal['scheduled','completed']
     completed_at:str|None=None
     evidence_note:str|None=None

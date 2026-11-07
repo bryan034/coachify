@@ -1,6 +1,7 @@
 """Synthetic dashboard reads; no database, provider or private environment."""
 import copy
 from datetime import datetime, timezone
+import pytest
 from fastapi.testclient import TestClient
 from elo_shared.runtime import Problem
 from app.main import create_app
@@ -93,6 +94,43 @@ def test_empty_plan_ratio_is_unknown_and_removed_last_task_never_completes_miles
         assert data['state']=='empty' and data['progress']['overall']['completion_ratio'] is None
         assert data['milestones'][0]['progress']['review_needed'] is True
         assert {'no_active_tasks','removed_work'} <= {r['code'] for r in data['milestones'][0]['review_reasons']}
+
+
+@pytest.mark.parametrize('recorded_at,source,active,expected',[
+    ('2030-01-09T00:00:00Z','self_reported',True,False),
+    ('2030-01-08T00:00:00Z','self_reported',True,True),
+    ('2030-01-07T00:00:00Z','self_reported',True,True),
+    ('invalid','self_reported',True,True),
+    (None,'self_reported',True,True),
+    ('2030-01-09T00:00:00Z','generated',True,True),
+    ('2030-01-09T00:00:00Z','self_reported',False,True),
+])
+def test_removal_warning_clears_only_after_explicit_review_with_active_work(recorded_at,source,active,expected):
+    fake=Fake()
+    plan=fake.roadmap['active']
+    plan['milestones'][0]['outcome']={'demonstrated':True,'source':source,'recorded_at':recorded_at}
+    if not active:plan['editable_tasks']=[t for t in plan['editable_tasks'] if t['removed']]
+    before=copy.deepcopy(plan)
+    with client(fake) as c:
+        milestone=c.get('/api/v1/dashboard',headers=H).json()['milestones'][0]
+    codes={r['code'] for r in milestone['review_reasons']}
+    assert ('removed_work' in codes) is expected
+    if not active:assert 'no_active_tasks' in codes
+    assert plan==before
+
+
+def test_explicit_not_demonstrated_acknowledges_removal_but_keeps_outcome_unconfirmed():
+    fake=Fake()
+    plan=fake.roadmap['active']
+    plan['milestones'][0]['outcome']={'demonstrated':False,'source':'self_reported',
+                                     'recorded_at':'2030-01-09T00:00:00Z'}
+    fake.roadmap['active_review']['milestones']['m1']['review_needed']=False
+    before=copy.deepcopy(plan)
+    with client(fake) as c:
+        milestone=c.get('/api/v1/dashboard',headers=H).json()['milestones'][0]
+    codes={r['code'] for r in milestone['review_reasons']}
+    assert 'removed_work' not in codes and 'outcome_unconfirmed' in codes
+    assert not milestone['outcome']['demonstrated'] and plan==before
 
 
 def test_period_boundaries_follow_plan_zone_and_do_not_duplicate_split_task():

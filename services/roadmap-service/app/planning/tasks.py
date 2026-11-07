@@ -29,6 +29,20 @@ def ensure_tasks(plan):
     return plan['editable_tasks']
 
 
+def task_link_source_is_current(plan,task):
+    """A requirement link is current only with complete matching provenance."""
+    old_hash=task.get('requirement_source_hash');old_id=task.get('requirement_source_id')
+    new_hash=plan.get('assessment_hash');new_id=plan.get('assessment_id')
+    return bool(old_hash and old_id and new_hash and new_id and old_hash==new_hash and old_id==new_id)
+
+
+def legacy_inference_source_is_safe(plan,task):
+    """Permit genuinely provenance-free legacy inference, never stale metadata."""
+    if not task.get('requirement_source_hash') and not task.get('requirement_source_id'):
+        return True
+    return task_link_source_is_current(plan,task)
+
+
 def project_assignments(plan):
     """Build old-format sessions with unique keys and stable session IDs.
 
@@ -68,6 +82,26 @@ def project_assignments(plan):
     output=[]
     for task in tasks:
         source=task.get('source_assignment') or {}
+        refs=task.get('requirement_refs') or []
+        explicit=task.get('origin')=='user' or 'requirement_refs' in (task.get('overrides') or [])
+        current_link=task_link_source_is_current(plan,task)
+        gaps=plan.get('gaps',[])
+        if refs:
+            matched=[gap['id'] for gap in gaps if gap.get('requirement_ref')==refs[0]] if len(refs)==1 and current_link else []
+        elif not explicit and legacy_inference_source_is_safe(plan,task) and source.get('gap_id'):
+            matched=[gap['id'] for gap in gaps if gap['id']==source['gap_id']]
+        elif not explicit and legacy_inference_source_is_safe(plan,task):
+            # Legacy sessions without a direct requirement may infer a skill
+            # from their milestone only when exactly one current gap matches.
+            milestone=next((item for item in plan.get('milestones',[]) if item['key']==task['milestone_key']),{})
+            milestone_gaps=set(milestone.get('gap_ids',[]))
+            matched=[gap['id'] for gap in gaps if gap['id'] in milestone_gaps]
+        else:
+            matched=[]
+        skill_gap_ids=matched if len(matched)==1 else []
+        # Reflect an explicit choice in the older gap_id field as well; leave
+        # the historical null on an inherited milestone-only relationship.
+        gap_id=skill_gap_ids[0] if skill_gap_ids and (explicit or refs or source.get('gap_id')) else None
         # The legacy session API exposes only scheduled/completed. Keep the
         # original task-level statuses in editable_tasks; translate a copy for
         # callers reading the older assignment history representation.
@@ -80,7 +114,7 @@ def project_assignments(plan):
             ident=task['id'] if i==0 else str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(i)))
             key=primary[task['id']] if i==0 else split[(task['id'],i)]
             output.append({'id':ident,'key':key,'milestone_key':task['milestone_key'],
-                'gap_id':source.get('gap_id'),'kind':source.get('kind','study'),**slot,
+                'gap_id':gap_id,'skill_gap_ids':skill_gap_ids,'kind':source.get('kind','study'),**slot,
                 'task':task['instructions'],'completion_criterion':task['completion_outcome'],
                 'status':'completed' if task['status']=='completed' else 'scheduled',
                 'completed_at':task.get('completed_at'),'evidence_note':task.get('evidence_note'),

@@ -12,7 +12,11 @@ const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? 
 
 export function skillsFor(session: PlanAssignment, plan: PlannedRoadmap) {
  const milestone = plan.milestones.find(item => item.key === session.milestone_key);
- const ids = session.gap_id ? [session.gap_id] : milestone?.gap_ids || [];
+ // Empty projected links explicitly suppress fallback. Older saved sessions
+ // may lack the marker and can infer only a single unambiguous milestone gap.
+ const fallback = session.gap_id ? [session.gap_id] : milestone?.gap_ids || [];
+ const ids = session.skill_gap_ids ?? (fallback.length === 1 ? fallback : []);
+ if (ids.length !== 1) return [];
  return plan.gaps.filter(gap => ids.includes(gap.id)).map(gap => gap.name);
 }
 
