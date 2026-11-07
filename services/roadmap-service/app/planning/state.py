@@ -1,5 +1,6 @@
 """Read projections and change detection for the timed roadmap. No model calls happen here."""
 import copy
+from uuid import NAMESPACE_URL, uuid5
 from elo_shared.runtime import digest
 from elo_shared.skill_groups import skill_groups
 from app.planning.capacity import Capacity, to_minute
@@ -81,23 +82,33 @@ def learning_view(plan,now):
     milestones={m['key']:m for m in plan['milestones']}
     steps=[]
     for gap in sorted(plan['gaps'],key=lambda g:(g['priority'],g['name'].casefold())):
-        def belongs(session):
-            # A session names one skill, or else it serves every skill of its milestone.
-            if session.get('gap_id'):return session['gap_id']==gap['id']
-            return gap['id'] in (milestones.get(session['milestone_key']) or {}).get('gap_ids',[])
-        sessions=sorted((a for a in plan['assignments'] if belongs(a)),key=lambda a:(str(a['date']),a['start_time']))
-        done=[a for a in sessions if a['status']=='completed'];open_sessions=[a for a in sessions if a['status']=='scheduled']
-        upcoming=next((a for a in open_sessions if a['id'] not in missed),None)
-        state='not_scheduled' if not sessions else 'done' if len(done)==len(sessions) else 'in_progress' if done else 'not_started'
         if canonical:
             def task_belongs(task):
                 source=task.get('source_assignment') or {}
-                explicitly_linked=bool(gap.get('requirement_ref') and gap['requirement_ref'] in task.get('requirement_refs',[]))
+                explicitly_linked=bool(gap.get('requirement_ref') and gap['requirement_ref'] in (task.get('requirement_refs') or []))
+                # An explicit relink or unlink replaces the source assignment's
+                # old gap association, including any inferred milestone link.
+                if 'requirement_refs' in (task.get('overrides') or []):return explicitly_linked
                 if source.get('gap_id'):
                     return source['gap_id']==gap['id'] or explicitly_linked
                 return explicitly_linked or gap['id'] in (milestones.get(task.get('milestone_key')) or {}).get('gap_ids',[])
             related=[task for task in plan['editable_tasks'] if task_belongs(task)]
             active=[task for task in related if not task.get('removed')]
+            # A task can span several legacy sessions. Match every projected
+            # session to its authoritative task rather than its stale gap_id.
+            session_ids={task['id'] if i==0 else str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(i)))
+                         for task in active for i,_ in enumerate(task.get('schedule') or [])}
+            sessions=sorted((a for a in plan['assignments'] if a['id'] in session_ids),key=lambda a:(str(a['date']),a['start_time']))
+        else:
+            def belongs(session):
+                # A session names one skill, or else it serves every skill of its milestone.
+                if session.get('gap_id'):return session['gap_id']==gap['id']
+                return gap['id'] in (milestones.get(session['milestone_key']) or {}).get('gap_ids',[])
+            sessions=sorted((a for a in plan['assignments'] if belongs(a)),key=lambda a:(str(a['date']),a['start_time']))
+        done=[a for a in sessions if a['status']=='completed'];open_sessions=[a for a in sessions if a['status']=='scheduled']
+        upcoming=next((a for a in open_sessions if a['id'] not in missed),None)
+        state='not_scheduled' if not sessions else 'done' if len(done)==len(sessions) else 'in_progress' if done else 'not_started'
+        if canonical:
             removed=any(task.get('removed') for task in related)
             finished=bool(active) and all(task['status']=='completed' and not task.get('definition_review_required') for task in active)
             started=any(task['status'] in ('in_progress','completed') for task in active)

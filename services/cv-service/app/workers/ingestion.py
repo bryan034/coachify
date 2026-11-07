@@ -165,6 +165,7 @@ class IngestionWorker:
             return self.model_usage.run(claimed['user_id'], invoke,
                 configured=getattr(self.extractor, 'configured', True))
 
+        auto_retry_allowed = True
         try:
             remaining_time()
             if not claimed['original_available'] or not self.files.exists(claimed['_id']):
@@ -191,6 +192,7 @@ class IngestionWorker:
             error = {'code': 'invalid_extraction', 'message': 'The model returned an invalid extraction. Retry this saved upload.', 'retryable': True,
                      'failure_stage': stage, 'failure_category': 'schema_validation'}
         except ExtractionFailure as exc:
+            auto_retry_allowed = exc.auto_retry_allowed
             items, metadata, parsed = None, None, {}
             error = {'code': 'extraction_failed', 'message': str(exc), 'retryable': True,
                      'failure_stage': 'model_repair' if stage == 'model_repair' and exc.stage == 'model_request' else exc.stage,
@@ -253,7 +255,7 @@ class IngestionWorker:
             told_model = failure_for_model(error, issues)
             if told_model: operation['last_failure'] = told_model
             used = operation.get('auto_retries', 0)
-            if should_auto_retry(error) and used < self.settings.extraction_auto_retries:
+            if auto_retry_allowed and should_auto_retry(error) and used < self.settings.extraction_auto_retries:
                 delays = self.settings.extraction_retry_delays
                 # Back to the queue with the saved state intact; the next run continues from it.
                 operation.update(status='queued', error=None, attempt=0, auto_retries=used + 1,

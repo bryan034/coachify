@@ -3,7 +3,7 @@ import copy
 
 from app.planning.state import learning_view
 from app.planning.tasks import change_status, ensure_tasks, project_assignments
-from planner_fixtures import NOW, draft
+from planner_fixtures import NOW, assignment, draft, gap
 from test_editable_tasks import definition, save
 from test_planner_flow import H, Scripted, accepted, client_for, learning_plan, post
 
@@ -92,3 +92,69 @@ def test_unscheduled_requirement_link_blocks_done_without_a_milestone():
     assert learning_view(plan,NOW)['steps'][0]['state']=='in_progress'
     personal['status']='completed'
     assert learning_view(plan,NOW)['steps'][0]['state']=='done'
+
+
+def test_relink_and_unlink_move_completed_split_sessions_to_the_current_requirement():
+    plan=learning_plan()
+    plan['gaps']=[gap(),gap('sql',name='SQL',priority=2,requirement_ref='job:sql')]
+    plan['milestones'][0]['gap_ids']=['python','sql']
+    plan['assignments']=plan['assignments'][:1]
+    plan['assignments'][0]['gap_id']='python'
+    task=ensure_tasks(plan)[0]
+    task['schedule'].append({'date':'2030-01-15','start_time':'18:00','duration_minutes':30})
+
+    def by_gap():
+        return {step['gap_id']:step for step in learning_view(plan,NOW)['steps']}
+
+    initial=by_gap()
+    assert (initial['python']['state'],initial['python']['sessions_completed'])==('done',2)
+    assert (initial['sql']['state'],initial['sql']['sessions_total'])==('not_scheduled',0)
+
+    # The immutable source assignment still points at Python; the user's edit
+    # is authoritative for both task state and session-based progress.
+    task['requirement_refs']=['job:sql']
+    task['overrides']=['requirement_refs']
+    before=copy.deepcopy(plan)
+    relinked=by_gap()
+    assert (relinked['python']['state'],relinked['python']['sessions_completed'],
+            relinked['python']['completed_minutes'])==('not_scheduled',0,0)
+    assert (relinked['sql']['state'],relinked['sql']['sessions_completed'],
+            relinked['sql']['completed_minutes'])==('done',2,90)
+    assert plan==before
+
+    task['requirement_refs']=[]
+    unlinked=by_gap()
+    assert all((step['state'],step['sessions_total'],step['completed_minutes'])==('not_scheduled',0,0)
+               for step in unlinked.values())
+
+
+def test_inferred_gap_without_requirement_retains_legacy_link_until_explicit_unlink():
+    plan=learning_plan()
+    plan['gaps']=[gap('inferred',name='Inferred',requirement_ref=None,source='inferred',inference_reason='Synthetic')]
+    plan['milestones'][0]['gap_ids']=['inferred']
+    plan['assignments']=plan['assignments'][:1]
+    plan['assignments'][0]['gap_id']='inferred'
+    # A legacy saved plan has no canonical tasks and must retain its progress.
+    assert learning_view(plan,NOW)['steps'][0]['state']=='done'
+    task=ensure_tasks(plan)[0]
+    assert learning_view(plan,NOW)['steps'][0]['state']=='done'
+    task['overrides']=['requirement_refs']
+    task['requirement_refs']=[]
+    step=learning_view(plan,NOW)['steps'][0]
+    assert (step['state'],step['sessions_total'],step['completed_minutes'])==('not_scheduled',0,0)
+
+
+def test_saved_unlink_updates_learning_status_and_session_counts_through_api():
+    model=Scripted([draft(assignments=[assignment('a1',gap_id='python')])])
+    with client_for(model) as client:
+        state=accepted(client)
+        task=state['planner']['active']['editable_tasks'][0]
+        assert task['source_assignment']['gap_id']=='python'
+        state=save(client,'status',state,task_id=task['id'],status='completed')
+        assert client.get('/api/v1/roadmaps/learning',headers=H).json()['steps'][0]['state']=='done'
+        state=save(client,'edit',state,task_id=task['id'],changes={'requirement_refs':[]})
+        assert 'requirement_refs' in state['planner']['active']['editable_tasks'][0]['overrides']
+        result=client.get('/api/v1/roadmaps/learning',headers=H)
+        assert result.status_code==200
+        step=result.json()['steps'][0]
+        assert (step['state'],step['sessions_total'],step['completed_minutes'])==('not_scheduled',0,0)

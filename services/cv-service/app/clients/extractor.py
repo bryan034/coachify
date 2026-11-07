@@ -204,7 +204,11 @@ class Extractor:
                              'prompt_version': PROMPT_VERSION, 'schema_version': SCHEMA_VERSION,
                              'response_mode': self.response_mode}
         except ModelResponseError as exc:
-            raise classified_provider_failure(exc.reason, exc.parameter, stage) from None
+            failure = classified_provider_failure(exc.reason, exc.parameter, stage)
+            # Permanent credit exhaustion cannot recover via the worker's
+            # temporary-rate-limit retry loop. This flag stays in memory.
+            failure.auto_retry_allowed = not exc.quota_exhausted
+            raise failure from None
         except httpx.HTTPStatusError as exc:
             raise provider_failure(exc.response, stage) from None
         except httpx.TimeoutException:
