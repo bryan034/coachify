@@ -21,3 +21,21 @@ services, including Career's existing adapter. It disables SDK retries, prevents
 redirects, bounds rejection bodies to 16 KiB and leaves injected HTTP clients open.
 Services retain their own successful-response limits, validation and retry policy.
 Vendor extensions use `extra_body`; local requests omit Authorization.
+
+## Model response errors
+
+`model_errors.raise_for_completion_error` checks an already-decoded provider envelope
+for top-level or selected-choice errors before content is trusted. CV, Career,
+Assessment and Roadmap call it after their existing bounded response reads.
+It performs no I/O, retry or output repair. Actual transport status remains distinct
+from a validated embedded error code. Only fixed reason/parameter labels and a
+validated numeric code leave the helper; private provider prose, CV/JD text and
+arbitrary metadata are discarded. `error: null` in successful Responses API
+results is allowed. Bounded OpenRouter `metadata.raw` is classified one level deep.
+
+This handles [OpenRouter errors delivered inside HTTP 200](https://openrouter.ai/docs/api_reference/errors-and-debugging),
+which otherwise look like missing completion fields. Synthetic coverage includes
+privacy, malformed/oversized error details, unchanged successful output, and
+provider failures bypassing schema-correction retries. Permanent payment/quota failures
+do not enter Career's cooldown loop; temporary rate limits retain the bounded
+provider `Retry-After` value.

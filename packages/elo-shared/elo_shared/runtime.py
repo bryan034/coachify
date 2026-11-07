@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from elo_shared.model_sdk import async_model_response, resolve_model_api_key
+from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
 from bson import BSON
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -128,9 +129,16 @@ class Model:
                         data.extend(chunk)
                         if len(data)>512*1024: raise Problem('The adviser response exceeded its limit.',502,'model_output')
                     envelope=json.loads(data)
+                    raise_for_completion_error(envelope)
                 choice=envelope['choices'][0]
                 if choice.get('finish_reason')!='stop': raise Problem('The adviser response was incomplete. Retry the saved request.',502,'model_output')
                 return schema.model_validate_json(choice['message']['content'])
+            except ModelResponseError as exc:
+                if exc.reason == 'rate_limit_or_quota' and not exc.quota_exhausted:
+                    delay = response.headers.get('retry-after', '30')
+                    delay = int(delay) if delay.isdigit() else 30
+                    raise Problem('The adviser is waiting for provider capacity. Retry this saved operation.',429,'model_quota',min(max(delay,1),3600)) from None
+                raise Problem('The adviser provider could not complete this request. Your saved work is retained.',503,'model_provider') from None
             except ValidationError:
                 messages.append({'role':'user','content':'The output failed local schema validation. Return a complete valid object with the same supplied evidence and allowed references.'})
             except (ValueError, KeyError, TypeError, IndexError):

@@ -87,6 +87,62 @@ def test_provider_reason_is_saved_and_logged_without_response_prose(harness, mon
     assert 'provider_reason=schema_too_complex provider_parameter=schema' in caplog.text
 
 
+@pytest.mark.parametrize('choice_error', [False, True])
+def test_http_success_with_provider_error_is_saved_without_repair(harness, monkeypatch, caplog, choice_error):
+    client, app, *_ = harness
+    calls = []
+    error = {'code': 400, 'message': 'Provider rejected the request. ' + PRIVATE,
+             'metadata': {'raw': json.dumps({'error': {'message': 'Invalid schema: unsupported keyword. ' + PRIVATE,
+                                                       'param': 'response_format'}})}}
+    body = {'error': error}
+    if choice_error:
+        body = {'choices': [{'finish_reason': 'stop', 'message': {'content': '{"items":[]}'}, 'error': error}]}
+    def reject(request):
+        calls.append(request)
+        return httpx.Response(200, json=body)
+    app.state.worker.extractor = provider(monkeypatch, reject)
+    queued = upload(client).json()
+    with caplog.at_level(logging.WARNING): app.state.worker.run_once()
+    result = client.get('/api/v1/cv/operations/' + queued['operation_id']).json()
+    saved_error = result['error']
+    assert result['status'] == 'failed' and result['extraction_version'] == 0
+    assert saved_error['failure_stage'] == 'response_decode'
+    assert saved_error['failure_category'] == 'provider_http_error'
+    assert saved_error['provider_status_code'] is None  # Actual HTTP status was 200.
+    assert saved_error['provider_reason'] == 'schema_rejected'
+    assert not saved_error['repair_attempted'] and len(calls) == 1
+    assert PRIVATE not in caplog.text + json.dumps(result)
+    assert client.get('/api/v1/cv').json()['cvs'][0]['error'] == saved_error
+    assert client.post('/api/v1/cv/operations/' + queued['operation_id'] + '/retry',
+                       json=mutation(result['version'])).status_code == 200
+    app.state.worker.extractor = harness[2]
+    app.state.worker.run_once()
+    recovered = client.get('/api/v1/cv/' + result['id']).json()
+    assert recovered['status'] == 'ready' and recovered['error'] is None
+
+
+@pytest.mark.parametrize('operation', ['route', 'interpret'])
+def test_cv_chat_and_interpretation_reject_embedded_errors(monkeypatch, operation):
+    from app.clients.conversation import ConversationRouter
+    from app.clients.interpretation import Interpreter
+    calls = []
+    def reject(request):
+        calls.append(request)
+        return httpx.Response(200, json={'error': {'code': 429, 'message': PRIVATE}})
+    provider(monkeypatch, reject)
+    original = httpx.Client
+    for name in ('conversation', 'interpretation'):
+        monkeypatch.setattr('app.clients.' + name + '.Client',
+                            lambda **kwargs: original(transport=httpx.MockTransport(reject), **kwargs))
+    with pytest.raises(ValueError, match='model provider') as caught:
+        if operation == 'route':
+            ConversationRouter().route({'message': 'Synthetic question'})
+        else:
+            Interpreter().interpret({'id': 'item-1'}, {'id': 'q1', 'uncertainty': 'proficiency',
+                'question': 'Synthetic question'}, 'Synthetic answer', 1)
+    assert PRIVATE not in str(caught.value) and len(calls) == 1
+
+
 @pytest.mark.parametrize('exception,category', [
     (httpx.ReadTimeout, 'timeout'), (httpx.ConnectTimeout, 'timeout'),
     # The SDK wraps failures during send as connection errors.

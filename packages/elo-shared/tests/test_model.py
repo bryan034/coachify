@@ -9,6 +9,40 @@ from elo_shared.runtime import Model
 class Answer(BaseModel):
     reply:str
 
+
+@pytest.mark.parametrize('prefix', ['ASSESSMENT', 'ROADMAP'])
+@pytest.mark.parametrize('embedded_status,code,status', [(429, 'model_quota', 429), (402, 'model_provider', 503),
+    (401, 'model_provider', 503), (400, 'model_provider', 503), (503, 'model_provider', 503)])
+def test_embedded_provider_errors_do_not_spend_schema_retries(monkeypatch, prefix, embedded_status, code, status):
+    from elo_shared.runtime import Problem
+    monkeypatch.setenv(prefix + '_LLM_API_KEY', 'synthetic-key')
+    async def run():
+        calls = []
+        def handler(request):
+            calls.append(request)
+            return httpx.Response(200, json={'error': {'code': embedded_status, 'message': 'PRIVATE provider prose'}})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(Problem) as caught:
+                await Model(client, prefix).generate(Answer, 'Answer.', {})
+        assert caught.value.code == code and caught.value.status == status
+        assert caught.value.retry_after == (30 if embedded_status == 429 else None)
+        assert 'PRIVATE' not in caught.value.detail and len(calls) == 1
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('prefix', ['ASSESSMENT', 'ROADMAP'])
+def test_embedded_rate_limit_keeps_provider_cooldown(monkeypatch, prefix):
+    from elo_shared.runtime import Problem
+    monkeypatch.setenv(prefix + '_LLM_API_KEY', 'synthetic-key')
+    async def run():
+        def handler(request):
+            return httpx.Response(200, headers={'retry-after': '600'}, json={'error': {'code': 429}})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(Problem) as caught:
+                await Model(client, prefix).generate(Answer, 'Answer.', {})
+        assert caught.value.code == 'model_quota' and caught.value.retry_after == 600
+    asyncio.run(run())
+
 @pytest.mark.parametrize('prefix',['ASSESSMENT','ROADMAP'])
 @pytest.mark.parametrize('provider',['local','gemini','deepseek'])
 def test_model_endpoint_json_contract_and_credential_isolation(monkeypatch,prefix,provider):

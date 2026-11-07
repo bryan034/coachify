@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 import httpx
 from httpx import Client
 from elo_shared.model_sdk import sync_model_response
+from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
 from app.clients.extractor import Extractor
 from app.schemas.cv import InterpretationOutput
 
@@ -47,9 +48,12 @@ class Interpreter(Extractor):
                         data.extend(chunk)
                         if len(data) > 256 * 1024: raise ValueError('Interpretation exceeded the response limit. Your answer is saved; retry interpretation.')
             response = json.loads(data)
+            raise_for_completion_error(response)
             choice = response['choices'][0]
             if choice.get('finish_reason') != 'stop': raise ValueError('Interpretation was incomplete. Your answer is saved; retry interpretation.')
             return json.loads(choice['message']['content']), {'provider': urlparse(self.base_url).hostname,
                 'model': self.model, 'prompt_version': PROMPT_VERSION, 'schema_version': SCHEMA_VERSION}
+        except ModelResponseError:
+            raise ValueError('The model provider could not complete interpretation. Your answer is saved; retry after provider access or capacity is restored.') from None
         except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise ValueError('Interpretation is temporarily unavailable or returned an invalid result. Your answer is saved; retry interpretation.') from exc

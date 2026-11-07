@@ -373,3 +373,8 @@ reach validated editing before either question router, including location/salary
 shortcuts, while unrelated task execution is refused. The MongoDB-backed
 `test_goal_edit_chat.py` retains multi-turn clarification, version, provenance and
 idempotent replay coverage.
+
+HTTP-200 provider-error regressions cover top-level and selected-choice failures,
+authentication/configuration/quota/outage mapping, private-prose exclusion and
+no output-correction or immediate provider retries. The actual HTTP status remains
+200 in diagnostics; the embedded provider code is not relabelled as transport status.

@@ -524,3 +524,10 @@ an explicitly supplied disposable MongoDB. CV tests cover target-independent bas
 review, manual field order, source/version changes, semantic positive/negative
 verdicts and safe legacy-conversation upgrades. Semantic tests use synthetic provider
 responses; no live-provider quality or job-fit accuracy is inferred.
+
+Shared response-envelope regressions cover error-only HTTP 200 and errors alongside
+partial/completed content. CV keeps errors safe in saved operations and clears them
+after an explicit successful retry. Career, Assessment and Roadmap reject these
+provider failures without treating them as schema corrections. Existing per-service
+transfer limits and transport timeouts remain in force. Tests use synthetic errors;
+a live saved-CV retry is separate evidence of the configured provider workflow.
