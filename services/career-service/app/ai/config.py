@@ -3,6 +3,7 @@ import os
 from typing import Literal
 from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from elo_shared.model_sdk import resolve_model_api_key
 
 
 REASONING_MODEL='gemini-3.5-flash-lite'
@@ -46,8 +47,10 @@ class AISettings(BaseModel):
         if provider not in defaults:raise ValueError('Invalid CAREER_LLM_PROVIDER. Use local, deepseek, compatible or gemini.')
         base,model,mode=defaults[provider]
         key=os.getenv('CAREER_LLM_API_KEY',os.getenv('GEMINI_API_KEY','') if provider=='gemini' else '').strip()
+        configured_base=os.getenv('CAREER_LLM_BASE_URL','').strip() or base
+        if provider != 'local':key=resolve_model_api_key(configured_base,key)
         values={'api_key':key,'enabled':os.getenv('AI_ENABLED','true' if key else 'false'),
-                'provider':provider,'base_url':os.getenv('CAREER_LLM_BASE_URL','').strip() or base,
+                'provider':provider,'base_url':configured_base,
                 'model':os.getenv('CAREER_LLM_MODEL',model).strip(),
                 'response_mode':os.getenv('CAREER_LLM_RESPONSE_MODE','').strip() or mode,
                 'token_parameter':os.getenv('CAREER_LLM_TOKEN_PARAMETER','max_tokens').strip(),

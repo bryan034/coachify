@@ -43,16 +43,21 @@ def provider_failure(response, stage):
         # Malformed/oversized/HTML bodies and unread streams retain a safe
         # status-only classification. Never log parsing exceptions or the body.
         pass
+    return classified_provider_failure(reason, parameter, stage, status)
+
+
+def classified_provider_failure(reason, parameter, stage, status=None):
+    """Reuse fixed recovery text; embedded errors do not invent an HTTP status."""
     messages = {
         'schema_too_complex': 'The model provider rejected the extraction schema as too complex. Your upload is saved; the schema request needs adjustment before retrying.',
         'schema_rejected': 'The model provider rejected the extraction schema. Your upload is saved; review the provider schema compatibility before retrying.',
         'structured_output_unsupported': 'The model provider does not support the requested structured-output format. Your upload is saved; use a compatible model/endpoint or explicitly configure JSON-object compatibility mode.',
         'unsupported_parameter': 'The model provider rejected an unsupported request parameter. Your upload is saved; review model compatibility before retrying.',
-        'invalid_request': 'The model provider rejected the extraction request (HTTP 400). Your upload is saved; review model and schema compatibility before retrying.',
+        'invalid_request': 'The model provider rejected the extraction request. Your upload is saved; review model and schema compatibility before retrying.',
         'authentication_failed': 'The model provider rejected authentication. Your upload is saved; check the server-side CV model credentials before retrying.',
         'permission_denied': 'The model provider denied access. Your upload is saved; check the configured model permissions before retrying.',
         'not_found': 'The model provider could not find the requested resource. Your upload is saved; check the configured model and endpoint before retrying.',
-        'rate_limit_or_quota': 'The model provider rate limit or quota was exceeded (HTTP 429). Your upload is saved; check provider usage and retry after capacity is available.',
+        'rate_limit_or_quota': 'The model provider rate limit or quota was exceeded. Your upload is saved; check provider usage and retry after capacity is available.',
         'provider_unavailable': 'The model provider is temporarily unavailable. Your upload is saved; retry later.',
         'http_error': 'The model provider rejected the extraction request. Your upload is saved; review the provider configuration before retrying.',
     }

@@ -87,3 +87,14 @@ class Current(Contract):
     stale:bool
     ready:bool
     issues:list[dict]
+
+class DashboardSource(Contract):
+    version:int
+    workspace_updated_at:str|None=None
+    operation:dict|None=None
+    result:Result|None=None
+    freshness:Literal['current','stale','missing','unavailable','not_ready','conflict']
+    ready:bool|None=None
+    issues:list[dict]=Field(default_factory=list)
+    input_hash:str|None=None
+    inputs:InputVersions|None=None

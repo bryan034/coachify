@@ -161,7 +161,7 @@ no API key or download.
 
 ## Career goal and CV confirmation
 
-Career supports temporary text/URL/PDF/DOCX/TXT previews without model calls or persisted raw sources. Explicit JD extraction and conversational discovery use configured Gemini/Brave and save structured canonical goals/research. The current goal and chat appear at `/career-goal`; successful goal saves are automatic, while a new JD preserves the old goal until validated replacement. Provider failures retain saved progress. See the [Career service](../services/career-service/README.md).
+Career supports temporary text/URL/PDF/DOCX/TXT previews without model calls or persisted raw sources. Explicit JD extraction and conversational discovery use the configured model and separate public-research provider and save structured canonical goals/research. The current goal and chat appear at `/career-goal`; successful goal saves are automatic, while a new JD preserves the old goal until validated replacement. Provider failures retain saved progress. See the [Career service](../services/career-service/README.md).
 
 Before using that goal for target-relevant CV clarification, review the saved goal and explicitly confirm its current revision for CV review. Career stores acknowledgement of the exact goal ID/version/selection, not a second target record. Editing or replacing the goal requires confirmation again. Previously saved CV answers remain source-bound. Old reviewed-target snapshots are retained historical data rather than another active selection screen.
 
@@ -179,19 +179,7 @@ to allow multipart overhead. PDF/DOCX parsing is bounded; OCR is not included.
 Originals use the private `cv_uploads` volume for the documented retry window.
 Only structured extraction and bounded evidence are saved in MongoDB.
 
-Configure `CV_LLM_MODEL` and `CV_LLM_API_KEY` yourself in private settings to enable structured extraction, text routing and clarification-answer interpretation.
-`CV_LLM_BASE_URL` defaults to
-`https://generativelanguage.googleapis.com/v1beta/openai`. The public template
-selects `gemini-3.5-flash-lite` through the OpenAI SDK with schema-constrained
-extraction/repair (`CV_LLM_RESPONSE_MODE=json_schema`, the default). A transient
-LangGraph validates output and allows one repair before reporting failure.
-Chat and clarification interpretation retain JSON-object output. The server
-validates schema, string lengths, dates and cited evidence before publication;
-constrained decoding does not guarantee semantic correctness or provider-enforced
-string lengths. See the [CV harness](../services/cv-service/SPEC.md#extraction-runtime-harness).
-Keys stay on the server. Missing configuration is an actionable processing error,
-never a synthetic successful extraction. No provider calls are needed for
-automated tests. See [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai).
+Configure the model and key using [OpenRouter setup](#career-model-and-search-configuration) to enable structured extraction, text routing and clarification-answer interpretation. The public template configures `CV_LLM_BASE_URL` for OpenRouter and `CV_LLM_MODEL` from the shared model setting. `CV_LLM_RESPONSE_MODE=json_schema` requests schema-constrained extraction and repair; selected providers/models must support it. A transient LangGraph validates output and allows one repair before reporting failure. Chat and clarification interpretation retain JSON-object output. The server validates schema, string lengths, dates and cited evidence before publication; constrained decoding does not guarantee semantic correctness. See the [CV harness](../services/cv-service/SPEC.md#extraction-runtime-harness). Missing model configuration is a processing error, never a synthetic successful extraction. Automated tests do not call providers.
 
 For DeepSeek, use `CV_LLM_BASE_URL=https://api.deepseek.com`,
 `CV_LLM_MODEL=deepseek-flash`, `CV_LLM_RESPONSE_MODE=json_object` and your private
@@ -236,17 +224,51 @@ chat, summaries and edits. Model inference and public search are configured inde
 Apply the following settings yourself in the existing private `infrastructure/docker/.env`,
 preserving other settings and credentials. Agents do not read or edit that file.
 
-The public template selects Gemini through the OpenAI Python SDK for Career, CV,
-Assessment and Roadmap. No Google/Gemini SDK is required. Model requests use
-[Gemini's OpenAI-compatible endpoint](https://ai.google.dev/gemini-api/docs/openai)
-and the SDK's streaming HTTP response interface so application response limits
-still apply. SDK retries are disabled; each service retains its existing retry,
-quota, timeout and validation policy. Profile, Dashboard and Review make no model calls.
+The public template selects OpenRouter through the OpenAI-compatible API for Career, CV, Assessment and Roadmap. Their shared key remains server-side. Career's public search uses a separate provider and credential, such as Brave; OpenRouter model inference does not replace it.
 
-Apply these values yourself in `infrastructure/docker/.env`, preserving unrelated
-settings. Agents never read or edit that private file. Supply a Gemini API key to
-each service's separate `*_LLM_API_KEY` setting (you may explicitly use the same
-Gemini key for all four). A blank key keeps model-backed work unavailable.
+For a new installation, copy the public template as described above and privately fill `OPENROUTER_API_KEY`. For an existing installation, edit the existing private `infrastructure/docker/.env` yourself rather than copying over its database passwords or other settings. Set the following entries, replacing existing entries of the same names instead of adding duplicates:
+
+```dotenv
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-4o-mini
+AI_ENABLED=true
+CAREER_LLM_PROVIDER=compatible
+CAREER_LLM_BASE_URL=https://openrouter.ai/api/v1
+CAREER_LLM_MODEL=${OPENROUTER_MODEL}
+CAREER_LLM_RESPONSE_MODE=json_schema_strict
+CAREER_LLM_TOKEN_PARAMETER=max_tokens
+CV_LLM_BASE_URL=https://openrouter.ai/api/v1
+CV_LLM_MODEL=${OPENROUTER_MODEL}
+CV_LLM_RESPONSE_MODE=json_schema
+CV_LLM_ALLOW_HTTP=false
+ASSESSMENT_LLM_BASE_URL=https://openrouter.ai/api/v1
+ASSESSMENT_LLM_MODEL=${OPENROUTER_MODEL}
+ASSESSMENT_LLM_TOKEN_PARAMETER=max_tokens
+ASSESSMENT_LLM_ALLOW_HTTP=false
+ROADMAP_LLM_BASE_URL=https://openrouter.ai/api/v1
+ROADMAP_LLM_MODEL=${OPENROUTER_MODEL}
+ROADMAP_LLM_TOKEN_PARAMETER=max_tokens
+ROADMAP_LLM_ALLOW_HTTP=false
+```
+
+Enter your OpenRouter key only in the private file. With `AI_ENABLED=true`, Career requires a configured model key to start; until you add the key, set `AI_ENABLED=false` if you need to start Career without model inference. Clear any existing `CAREER_LLM_API_KEY`, `CV_LLM_API_KEY`, `ASSESSMENT_LLM_API_KEY`, and `ROADMAP_LLM_API_KEY` values when you want the shared key: a non-empty service-specific key takes precedence and would otherwise be sent to OpenRouter. Shared-key fallback is restricted to HTTPS `openrouter.ai` on the default port or port 443; it is never sent to another endpoint. A service can still use its own key with another configured provider. Direct Python processes use their individual model/base settings; the `OPENROUTER_MODEL` interpolation shown above is provided by Compose, not by Python environment readers.
+
+The sample model is a starting point, not a guarantee of output quality or availability. To switch models from the OpenRouter dashboard, create an [OpenRouter preset](https://openrouter.ai/blog/tutorials/presets/) and set `OPENROUTER_MODEL=@preset/your-preset-slug` in the private file, then recreate the services once. Subsequent changes to that preset can select a different model without changing the application configuration. If you instead use a fixed model ID, change the setting and recreate the services to switch. Service-specific model values can override the shared selection. Request-level settings may override corresponding preset options. Select models/providers that support the JSON response modes used by the services; `CV_LLM_RESPONSE_MODE=json_object` is an explicit compatibility opt-out when schema decoding is unavailable. Domain validation and bounded retries still apply. Live model quality is not established by synthetic tests.
+
+The sample `openai/gpt-4o-mini` has a [16,384-token output limit](https://openrouter.ai/openai/gpt-4o-mini?tab=parameters), while Roadmap generation requests up to 24,000 tokens. Compatibility with that request has not been verified against OpenRouter; the provider could reject or truncate it. Choose a compatible model for Roadmap if needed. No provider call was made to test this setting.
+
+Configure [OpenRouter BYOK routing](https://openrouter.ai/docs/guides/overview/auth/byok) in your OpenRouter account if you want to use your own provider keys. OpenRouter can otherwise fall back to shared capacity and charge credits, depending on account and provider routing settings. Restrict other providers as needed if you intend to use only your own keys.
+
+After updating private settings, build and recreate the four services using your normal Compose files, then restart the gateway. A container restart alone does not apply new environment values. Shared-package changes require rebuilding the images. With the supporting stack already running, use these commands from the repository root (add the development override if you normally use it):
+
+```sh
+docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up --build -d --no-deps career-service cv-service assessment-service roadmap-service
+docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
+```
+
+Existing deployments retain their configured providers until their private settings are updated; the plain Compose fallback without the public template remains Gemini.
+
+For a Gemini deployment instead, use the following settings and supply each service's own Gemini key. OpenRouter fallback does not apply to Gemini's host:
 
 ```dotenv
 CAREER_LLM_PROVIDER=gemini
@@ -265,12 +287,7 @@ ROADMAP_LLM_MODEL=gemini-3.5-flash-lite
 ROADMAP_LLM_ALLOW_HTTP=false
 ```
 
-Keep `AI_ENABLED=true` for Career inference. Brave remains independently configured
-for public search; switching inference to Gemini does not replace the search API.
-Existing private local/DeepSeek overrides take precedence until you change them.
-Rebuild/recreate `career-service`, `cv-service`, `assessment-service` and
-`roadmap-service` after configuring keys and models. Synthetic tests verify transport
-and contracts; live model availability and quality require configured provider access.
+Keep `AI_ENABLED=true` for Career inference and configure public search independently. SDK retries are disabled; each service retains its own retry, quota, timeout and validation policy.
 
 For optional local testing, select an Ollama-compatible server on the Docker host
 and keep Brave LLM Context for search:
@@ -515,7 +532,7 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
 ```
 
-For Career interpretation/research, configure `AI_ENABLED`, `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY` yourself. Without those settings, temporary import previews and saved reads remain available; model-backed extraction, discovery and research report their unavailable state. Use the implemented Resume & Tracker upload/review for durable CV context, or deliberately continue Career without a CV. Temporary Career attachments are not durable CV extraction. Structured goals save through the canonical workspace; explicit CV confirmation does not claim job readiness or completed analysis.
+For Career interpretation/research, configure `AI_ENABLED`, an OpenRouter key or `CAREER_LLM_API_KEY`, and the separate `CAREER_RESEARCH_API_KEY` yourself. Without those settings, temporary import previews and saved reads remain available; model-backed extraction, discovery and research report their unavailable state. Use the implemented Resume & Tracker upload/review for durable CV context, or deliberately continue Career without a CV. Temporary Career attachments are not durable CV extraction. Structured goals save through the canonical workspace; explicit CV confirmation does not claim job readiness or completed analysis.
 
 ## Docker hot reload
 
@@ -530,26 +547,26 @@ or inspect your environment files. Dependencies/image changes still need rebuild
 
 Rebuild the Career image once after installing the new LangGraph/checkpointer/tokenizer dependencies. Subsequent source edits use the existing Docker hot reload setup. No LangSmith account or additional database server is required.
 
-Use `AI_ENABLED=true`, `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY`. Chat output stays
+Use `AI_ENABLED=true`, a configured OpenRouter key or `CAREER_LLM_API_KEY`, and the separate `CAREER_RESEARCH_API_KEY`. Chat output stays
 bounded at 1,024 tokens, interview synthesis at 2,048 and JD extraction at 4,096;
 `AI_MAX_OUTPUT_TOKENS` remains the overall ceiling. `AI_TIMEOUT_SECONDS`,
 `AI_RETRIES` and `AI_CONTEXT_TOKENS` retain their task limits. Production imposes no local token-per-minute admission limit; provider quotas and bounded requests still apply.
-Google/Brave HTTP 429 responses still pause unfinished work using the provider's
+Model/search provider HTTP 429 responses still pause unfinished work using the provider's
 retry delay. Saved goals and completed research steps survive a wait.
 
 Every Brave retrieval uses `/llm/context` with the fuller-content parameters in the
 [Career contract](../services/career-service/ANALYSIS_CONTRACTS.md).
 All model stages, including public query planning and usefulness assessment, use
-Gemini 3.5 Flash Lite. Research keeps the six-query/three-useful-source bound and exact
+the configured Career model. Research keeps the six-query/three-useful-source bound and exact
 citation checks; no Google grounding or additional credential is introduced.
 Rebuild/recreate Career after applying these code/configuration changes.
 
 ### Opportunity Intelligence
 
 The saved goal researches interviews, internship experience and company context
-using Gemini 3.5 Flash Lite for both coordination and reasoning, plus Brave LLM Context.
-`OPPORTUNITY_ENABLED=true` enables this research when the Gemini/Brave credentials
-and Career storage are available. All model stages share the configured Gemini client. Existing JSON fields and immutable saved models are retained.
+using the configured Career model for coordination and reasoning and the selected public-research provider.
+`OPPORTUNITY_ENABLED=true` enables this research when model and research credentials
+and Career storage are available. All model stages share the configured Career client. Existing JSON fields and immutable saved models are retained.
 Explicit guidance maps evidence into each allowed field; missing evidence stays missing.
 
 Compose passes `OPPORTUNITY_ENABLED` (true), max searches (2), follow-ups (1),
@@ -566,7 +583,7 @@ restarting an existing image alone does not install edited code.
 
 ### Conversational career discovery
 
-The existing Gemini/Brave keys also support the new discovery route.
+The configured Career model and research credentials also support the discovery route.
 Optional `DISCOVERY_*` sample/freshness limits and rebuild instructions are described
 in [Career Discovery](../services/career-service/CAREER_DISCOVERY.md). Rebuild both
 Career and frontend after source changes; production containers do not mount source.
@@ -577,12 +594,13 @@ There is no new five-minute inactivity lock. Recoverable session checks preserve
 
 Startup/configuration commands in this guide are for the user to run with private settings. Agents may read/edit the public `infrastructure/docker/.env.example` template and validate it against Compose. Agents must not read or load private environment files. Automated verification uses isolated resources and explicit synthetic settings. Existing recordings from before an integration demonstrate that earlier build, not the newly merged application.
 
-Career key migration: rename `GEMINI_API_KEY` to `CAREER_LLM_API_KEY` and
-`BRAVE_API_KEY` to `CAREER_RESEARCH_API_KEY` yourself in private settings, preserving
-their values. Legacy names are fallback aliases only when new names are absent; an
-explicitly blank new key takes precedence. The key rename does not change providers
-or the existing `CAREER_LLM_MODEL` setting. CV uses its separate `CV_LLM_*`
-settings from the same infrastructure configuration.
+When retaining Gemini or Brave, migrate `GEMINI_API_KEY` to `CAREER_LLM_API_KEY`
+and `BRAVE_API_KEY` to `CAREER_RESEARCH_API_KEY` in private settings. Legacy names
+are fallback aliases only when the corresponding new name is absent. An explicitly
+blank new name suppresses the legacy alias; for an OpenRouter endpoint the blank
+model key still permits the shared `OPENROUTER_API_KEY` fallback. Follow the
+[OpenRouter migration instructions](#career-model-and-search-configuration) when
+changing providers, including clearing old per-service model keys.
 
 ## Jobs service
 
@@ -630,13 +648,13 @@ ROADMAP_LLM_MODEL=gemini-3.5-flash-lite
 
 For a completely fresh installation only, generate each of `MONGO_ROOT_PASSWORD`, `PROFILE_DB_PASSWORD`, `CAREER_DB_PASSWORD` and `CV_DB_PASSWORD` separately with `openssl rand -hex 24`, and generate `OTP_HASH_SECRET` once with `openssl rand -hex 32`. Never regenerate these merely to rebuild an existing stack.
 
-The model credential may be the same provider key applied explicitly to both service settings. Neither service borrows Career's credential implicitly. Empty model settings leave saved data readable with a clear unavailable-adviser state. Use strong distinct database passwords compatible with the existing Compose Mongo URI interpolation (URI-safe characters). The planning initializer creates missing users and checks existing credentials without resetting them. Preserve credentials for existing database users.
+Both services can use `OPENROUTER_API_KEY` with the OpenRouter endpoint, or their own service-specific provider keys. Neither borrows Career's credential. Empty model settings leave saved data readable with a clear unavailable-adviser state. Use strong distinct database passwords compatible with the existing Compose Mongo URI interpolation (URI-safe characters). The planning initializer creates missing users and checks existing credentials without resetting them. Preserve credentials for existing database users.
 
 Rebuild using the existing Compose workflow after applying configuration. Profile/CV/Career Docker build contexts now use the repository root so all install the same `packages/elo-shared` registry package. New services expose no host ports and access foreign data only through owner-authenticated APIs. Do not rebuild the user's running stack as part of a test. Shared package or dependency changes require image rebuilds.
 
 For direct Python development, install `packages/elo-shared` before installing a service. Assessment and Roadmap each use their own `MONGODB_URI`/`MONGODB_DATABASE`; defaults are `elo_assessment` and `elo_roadmap`. Internal URLs are `PROFILE_SERVICE_URL`, `CV_SERVICE_URL`, `CAREER_SERVICE_URL` and `ASSESSMENT_SERVICE_URL`. The gateway exposes `/api/v1/assessments` and `/api/v1/roadmaps`; the UI stays at `/roadmap`.
 
-To use a real model for Roadmap, set `ASSESSMENT_LLM_API_KEY` and `ROADMAP_LLM_API_KEY` in your private `.env`, because generating a roadmap runs Assessment first. CV and Career also need keys to create the CV and goal it uses. Keep the template's Gemini URLs and model, or for OpenAI set each service's `*_LLM_BASE_URL=https://api.openai.com/v1`, an OpenAI model and, where the model requires it, `*_LLM_TOKEN_PARAMETER=max_completion_tokens`. Rebuild with `docker compose --env-file .env -f compose.yaml up --build -d assessment-service roadmap-service` from `infrastructure/docker`. Roadmap and Assessment call providers through the OpenAI Python SDK; no Google SDK is needed.
+To use a real model for Roadmap, configure both Assessment and Roadmap, because generating a roadmap runs Assessment first. With the OpenRouter template they share `OPENROUTER_API_KEY`; CV and Career can use that same key for creating the CV and goal. For direct OpenAI, set each service's `*_LLM_BASE_URL=https://api.openai.com/v1`, its own OpenAI key and an OpenAI model; where required set `*_LLM_TOKEN_PARAMETER=max_completion_tokens`. Rebuild with `docker compose --env-file .env -f compose.yaml up --build -d assessment-service roadmap-service` from `infrastructure/docker`. Roadmap and Assessment call providers through the OpenAI Python SDK; no Google SDK is needed.
 
 Older extracted goals will not gain job dates automatically because their raw JDs are not retained. The adviser can discuss a user-selected preparation target; a new JD extraction can capture sourced application/interview/start wording. Existing CV skill keys and manual attachments are preserved. A null new canonical ID means unresolved mapping, not missing capability.
 

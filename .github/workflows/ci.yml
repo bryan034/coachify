@@ -79,7 +79,7 @@ jobs:
       - run: python -m pip install -e ../../packages/elo-shared -e '.[test]'
       - name: Verify shared API contracts and model transport
         if: matrix.service == 'assessment'
-        run: python -m pytest ../../packages/elo-shared/tests/test_api_contract.py ../../packages/elo-shared/tests/test_model.py ../../packages/elo-shared/tests/test_model_sdk.py ../../packages/elo-shared/tests/test_skill_groups.py
+        run: python -m pytest ../../packages/elo-shared/tests/test_api_contract.py ../../packages/elo-shared/tests/test_model.py ../../packages/elo-shared/tests/test_model_sdk.py ../../packages/elo-shared/tests/test_model_errors.py ../../packages/elo-shared/tests/test_milestone_review.py ../../packages/elo-shared/tests/test_skill_groups.py
       - name: Provision Career tokenizer before test network isolation
         if: matrix.service == 'career'
         run: python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
@@ -88,7 +88,7 @@ jobs:
         run: |
           status=0
           python -m pytest || status=$?
-          if [ "$status" -eq 5 ] && [[ '${{ matrix.service }}' =~ ^(dashboard|review)$ ]]; then
+          if [ "$status" -eq 5 ] && [[ '${{ matrix.service }}' =~ ^review$ ]]; then
             echo "No pytest tests collected; passing this service."
             exit 0
           fi

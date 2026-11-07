@@ -28,7 +28,7 @@
 - Roadmap -> Assessment: source assessment ID/hash and freshness; immutable evidence remains addressable through the Assessment API.
 - Jobs -> Profile: validate the account/session and completed onboarding. Jobs reads no other service's data, and no service calls Jobs yet.
 - Planned Roadmap -> Review: verify the current automatic-application policy.
-- Planned Dashboard -> Roadmap/Career/Review: current progress and dated pace analysis.
+- Dashboard -> Roadmap/Assessment: passive owner-scoped progress and assessment snapshots, with bounded version rechecks; no cross-service database access.
 - Planned Review -> Profile/Career/Roadmap: read inputs, request a revision, request authorised application.
 
 Records are read through APIs, never another service's collections. Public endpoints
@@ -39,7 +39,7 @@ owner context. This slice does not introduce that separate credential protocol.
 
 ## CV extraction runtime
 
-CV runs a LangGraph for parse/extract/validate/prepare-review and at most one source-grounded repair, saving each state change so an interrupted run resumes. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Extraction/repair and conditional semantic-evidence checks request schema-constrained output by default; formatting equivalence passes locally, and paraphrases need model approval against cited source blocks under the same budget/lease; backend evidence/date/length checks remain authoritative. Graph state has no checkpointer, external tracing or new collection. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
+CV runs a LangGraph for parse/extract/validate/prepare-review and at most one source-grounded repair, saving each state change in a CV-owned checkpoint so an interrupted run resumes. The existing ingestion worker owns durable jobs, leases, model budgets, final CAS publication and reconciliation. Extraction/repair and conditional semantic-evidence checks request schema-constrained output by default; formatting equivalence passes locally, and paraphrases need model approval against cited source blocks under the same budget/lease; backend evidence and date checks remain authoritative. Graph state is not streamed or sent to external tracing. Conversation routing and clarification interpretation remain separate. See the [CV harness specification](../../services/cv-service/SPEC.md#extraction-runtime-harness).
 
 ## Saved CV deletion
 

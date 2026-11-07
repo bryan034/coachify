@@ -707,6 +707,22 @@ class RoadmapAssignment {
     +String evidence_note?
     +Object[] history
 }
+class EditableRoadmapTask {
+    +String id
+    +String title
+    +String instructions
+    +String completion_outcome
+    +Integer estimated_minutes
+    +String[] requirement_refs
+    +String[] prerequisites
+    +String milestone_key?
+    +Object[] schedule
+    +String status [not_started|in_progress|completed]
+    +Boolean removed
+    +Object removal?
+    +Object[] history
+    +String[] overrides
+}
 class RoadmapGap {
     +String id
     +String requirement_ref?
@@ -720,8 +736,10 @@ PlannerConfig *-- StudyBlock
 PlannerConfig *-- BlackoutRule
 roadmaps *-- RoadmapMilestone
 roadmaps *-- RoadmapAssignment
+roadmaps *-- EditableRoadmapTask
 roadmaps *-- RoadmapGap
-note for RoadmapAssignment "Detailed for the first planning week only. Completed sessions and evidence notes copy unchanged into revisions. Completion is not proficiency and writes nothing to Profile, CV or Assessment."
+note for RoadmapAssignment "Compatibility projection of scheduled milestone-linked tasks; generated detail initially covers the first planning week. Completion is not proficiency."
+note for EditableRoadmapTask "Canonical task data includes unscheduled work, student edits and removal history. Protected work survives revisions; ambiguous regenerated work needs review."
 
 class JobApplicationSnapshot {
     +String title

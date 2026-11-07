@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from .base import Contract, Mutation, Text
+from .tasks import EditableTask, RevisionReview, TaskReadiness
 
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
 Key=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
@@ -248,6 +249,9 @@ class MilestoneProgress(Contract):
     sessions_total:int
     sessions_completed:int
     completed_minutes:int
+    tasks_total:int
+    tasks_completed:int
+    review_needed:bool
 class LearningSession(Contract):
     id:str
     date:str
@@ -285,6 +289,7 @@ class PlanMilestone(DraftMilestone):
 class PlanAssignment(DraftAssignment):
     model_config=ConfigDict(extra='forbid')
     id:str
+    skill_gap_ids:list[str]|None=Field(default=None,description='Exactly one known skill gap, or an empty list when no unambiguous link is available. Null indicates a legacy assignment without a projected link.')
     status:Literal['scheduled','completed']
     completed_at:str|None=None
     evidence_note:str|None=None
@@ -300,6 +305,7 @@ class PlannedRoadmap(Contract):
     config_hash:str
     confirmations_hash:str
     base_active_id:str|None
+    pace_baseline_id:str|None=None
     created_at:str
     updated_at:str|None=None
     request_hash:str|None=None
@@ -309,6 +315,8 @@ class PlannedRoadmap(Contract):
     gaps:list[PlanGap]
     milestones:list[PlanMilestone]
     assignments:list[PlanAssignment]
+    editable_tasks:list[EditableTask]|None=None
+    revision_review:list[RevisionReview]=Field(default_factory=list)
     deadline_outcome:DeadlineOutcome
     beyond_deadline:list[DraftBeyond]
     exclusions:list[DraftExclusion]
@@ -319,6 +327,11 @@ class PlanReview(Contract):
     missed_assignment_ids:list[str]
     remaining:Runway
     milestones:dict[str,MilestoneProgress]
+class DashboardSource(Contract):
+    version:int
+    active:PlannedRoadmap|None
+    active_review:PlanReview|None
+    task_readiness:dict[str,TaskReadiness]
 class Signal(Contract):
     kind:Literal['settings','evidence','progress','next_week']
     message:str
@@ -354,6 +367,7 @@ class PlannerView(Contract):
     candidate_blockers:list[RunwayIssue]
     active:PlannedRoadmap|None
     active_review:PlanReview|None
+    task_warnings:list[dict]=Field(default_factory=list)
     confirmations:dict[str,ConfirmationRecord]
     signals:list[Signal]
     retry_generate:GeneratePlan|None=None

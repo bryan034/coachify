@@ -43,9 +43,17 @@ def test_public_example_covers_every_active_compose_input_without_real_secrets()
     compose=(ROOT/'infrastructure/docker/compose.yaml').read_text()
     inputs=set(re.findall(r'\$\{([A-Z][A-Z0-9_]*)',compose))
     aliases={'GEMINI_API_KEY','BRAVE_API_KEY'}
-    assert inputs-aliases==keys
     values=dict(pairs)
-    for name in ('CAREER_LLM_API_KEY','CAREER_RESEARCH_API_KEY','CV_LLM_API_KEY',
+    # Template inputs can feed other template values (e.g. OPENROUTER_MODEL
+    # expands into each service model). Trace those references from Compose.
+    used=inputs-aliases
+    while True:
+        expanded=used | {reference for name in used for reference in
+            re.findall(r'\$\{([A-Z][A-Z0-9_]*)', values.get(name,''))}
+        if expanded==used:break
+        used=expanded
+    assert used==keys
+    for name in ('OPENROUTER_API_KEY','CAREER_LLM_API_KEY','CAREER_RESEARCH_API_KEY','CV_LLM_API_KEY',
                  'SMTP_PASSWORD','OTP_HASH_SECRET','MONGO_ROOT_PASSWORD',
                  'PROFILE_DB_PASSWORD','CAREER_DB_PASSWORD','CV_DB_PASSWORD',
                  'ASSESSMENT_DB_PASSWORD','ROADMAP_DB_PASSWORD',
@@ -61,6 +69,22 @@ def test_public_example_covers_every_active_compose_input_without_real_secrets()
     other_services=compose.replace(career,'')
     assert '      CAREER_LLM_API_KEY:' not in other_services
     assert '      CAREER_RESEARCH_API_KEY:' not in other_services
+
+
+@pytest.mark.parametrize('base,override,expected', [
+    ('https://openrouter.ai/api/v1', '', 'synthetic-shared'),
+    ('https://openrouter.ai/api/v1', 'synthetic-specific', 'synthetic-specific'),
+    ('https://api.openai.com/v1', '', ''),
+])
+def test_career_openrouter_shared_key_is_provider_scoped(monkeypatch,base,override,expected):
+    monkeypatch.setenv('CAREER_LLM_PROVIDER','compatible')
+    monkeypatch.setenv('CAREER_LLM_BASE_URL',base)
+    monkeypatch.setenv('CAREER_LLM_API_KEY',override)
+    monkeypatch.setenv('CAREER_LLM_MODEL','@preset/synthetic')
+    monkeypatch.setenv('OPENROUTER_API_KEY','synthetic-shared')
+    settings=AISettings.from_env()
+    assert settings.api_key.get_secret_value()==expected
+    assert settings.model=='@preset/synthetic'
 
 
 @pytest.mark.parametrize('configured', ['synthetic-model', '  synthetic-model  '])

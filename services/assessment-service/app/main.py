@@ -2,7 +2,7 @@ from uuid import uuid5, NAMESPACE_URL
 from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import application, authenticated, Problem, begin, launch, operation_view, stamp
-from app.schemas import Generate, Batch, Result, Context, Current
+from app.schemas import Generate, Batch, Result, Context, Current, DashboardSource
 from app.inputs import capture
 from app.domain import INSTRUCTIONS, validate_batch, group_outcome
 
@@ -74,6 +74,36 @@ def create_app(store=None,upstream=None,model=None):
         result=row.get('result'); snapshot=await capture(app.state.upstream,account)
         return {'version':row['version'],'operation':operation_view(row),'result':result,
             'stale':bool(result and result['input_hash']!=snapshot.get('input_hash')),'ready':snapshot['ready'],'issues':snapshot['issues']}
+
+    @app.get('/api/v1/assessments/dashboard-source',response_model=DashboardSource)
+    async def dashboard_source(request:Request,account=Depends(authenticated)):
+        """Read the saved result and freshness without resuming an operation."""
+        owner=account['id']
+        row=await thread(app.state.store.load,owner)
+        snapshot=None;failure=None
+        try:
+            snapshot=await capture(app.state.upstream,account)
+        except Problem as error:
+            if error.status in (401,403):raise
+            failure='conflict' if error.status==409 else 'unavailable'
+        latest=await thread(app.state.store.load,owner)
+        if latest['version']!=row['version'] or (latest.get('result') or {}).get('id')!=(row.get('result') or {}).get('id'):
+            raise Problem('Assessment changed while preparing dashboard data. Retry.',409,'source_changed')
+        result=row.get('result')
+        if failure:
+            freshness=failure
+        elif not result:
+            freshness='missing'
+        elif not snapshot['ready']:
+            freshness='not_ready'
+        else:
+            freshness='current' if result['input_hash']==snapshot.get('input_hash') else 'stale'
+        return {'version':row['version'],'workspace_updated_at':row.get('updated_at'),
+            'operation':operation_view(row),'result':result,'freshness':freshness,
+            'ready':snapshot.get('ready') if snapshot else None,
+            'issues':snapshot.get('issues',[]) if snapshot else [],
+            'input_hash':snapshot.get('input_hash') if snapshot else None,
+            'inputs':snapshot.get('inputs') if snapshot else None}
 
     @app.post('/api/v1/assessments',status_code=202)
     async def generate(body:Generate,request:Request,account=Depends(authenticated)):

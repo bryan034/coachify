@@ -2,6 +2,12 @@
 from dataclasses import replace
 import json
 import pytest
+from pydantic import ValidationError
+from app.domain.capabilities import evidence_requiring_semantic_check, validate_extraction
+from app.domain.extraction_errors import EvidenceValidationError
+from app.domain.extraction_feedback import feedback_for
+from app.schemas.cv import Extraction
+from app.schemas.interview_evidence import fact_statement
 from tests.test_extraction_harness import candidates, setup_provider, read_result
 
 
@@ -31,6 +37,83 @@ def test_formatting_differences_need_no_semantic_model_call(harness, monkeypatch
     app.state.worker.run_once()
     result = read_result(client, queued)
     assert result['status'] == 'ready' and len(calls) == 1
+
+
+def review_evidence_candidate():
+    text = 'Project Finch: used Python to clean tables.'
+    fact = {'field': 'skill_use', 'skill_name': 'Python', 'status': 'supported',
+            'value': 'Used Python', 'evidence': [{'source_id': 'b1', 'quote': 'used Python'}]}
+    blocks = [{'id': 'b1', 'text': text, 'location': 'Synthetic'},
+              {'id': 'b2', 'text': 'Unrelated synthetic education.', 'location': 'Synthetic'}]
+    value = {'items': [{'kind': 'project', 'title': 'Project Finch', 'description': text,
+        'explicit': True, 'skill_names': ['Python'],
+        'evidence': [{'block_id': 'b1', 'excerpt': text}], 'review_evidence': [fact]}]}
+    return value, blocks
+
+
+@pytest.mark.parametrize('source_id,quote,rule,field', [
+    ('missing', 'used Python', 'review_source', 'source_id'),
+    ('b2', 'used Python', 'review_quote', 'quote'),
+    ('b1', 'Applied Python', 'review_quote', 'quote'),
+])
+def test_review_anchor_errors_are_specific_and_do_not_leak_cv_text(source_id, quote, rule, field):
+    value, blocks = review_evidence_candidate()
+    value['items'][0]['review_evidence'][0]['evidence'][0] = {'source_id': source_id, 'quote': quote}
+    with pytest.raises(EvidenceValidationError) as caught:
+        evidence_requiring_semantic_check(value, blocks)
+    feedback = feedback_for(caught.value)
+    assert feedback[0]['issue'] == rule
+    assert feedback[0]['field'] == f'items[0].review_evidence[0].evidence[0].{field}'
+    assert quote not in json.dumps(feedback)
+    assert 'Project Finch' not in json.dumps(feedback)
+    assert 'Unrelated synthetic education' not in json.dumps(feedback)
+
+
+def test_semantic_approval_cannot_make_nonexact_review_anchor_valid():
+    value, blocks = review_evidence_candidate()
+    fact = value['items'][0]['review_evidence'][0]
+    fact['evidence'][0]['quote'] = 'Applied Python'
+    support = frozenset({('b1', 'Applied Python'), ('b1', fact_statement(fact))})
+    with pytest.raises(EvidenceValidationError) as caught:
+        validate_extraction(value, blocks, 'synthetic-cv', support)
+    assert caught.value.rule == 'review_quote'
+
+
+@pytest.mark.parametrize('quote', ['USED  PYTHON', 'used\nPython', 'ｕｓｅｄ Ｐｙｔｈｏｎ'])
+def test_review_quotes_keep_case_spacing_and_unicode_tolerance(quote):
+    value, blocks = review_evidence_candidate()
+    value['items'][0]['review_evidence'][0]['evidence'][0]['quote'] = quote
+    pending = evidence_requiring_semantic_check(value, blocks)
+    fact = value['items'][0]['review_evidence'][0]
+    assert pending == [{'block_id': 'b1', 'excerpt': fact_statement(fact)}]
+    support = frozenset((ref['block_id'], ref['excerpt']) for ref in pending)
+    items = validate_extraction(value, blocks, 'synthetic-cv', support)
+    assert items[0]['review_evidence'][0]['evidence'][0]['quote'] == quote
+
+
+@pytest.mark.parametrize('field,text', [('quote', ''), ('source_id', '')])
+def test_review_anchor_schema_feedback_matches_its_quotation_rule(field, text):
+    value, _ = review_evidence_candidate()
+    value['items'][0]['review_evidence'][0]['evidence'][0][field] = text
+    with pytest.raises(ValidationError) as caught:
+        Extraction.model_validate(value)
+    feedback = feedback_for(caught.value)
+    issue = next(issue for issue in feedback if issue['field'].endswith('.' + field))
+    assert issue['field'] == f'items[0].review_evidence[0].evidence[0].{field}'
+    assert 'paraphrasing is allowed' not in issue['guidance'].lower()
+    assert ('exact' if field == 'quote' else 'source_id') in issue['guidance'].lower()
+    assert 'Project Finch' not in json.dumps(feedback)
+
+
+@pytest.mark.parametrize('review_evidence', [None, 'invalid', {}, [None], [
+    {'field': 'skill_use', 'status': 'supported', 'value': 'Used Python', 'evidence': None}
+]])
+def test_malformed_review_evidence_reaches_schema_validation(review_evidence):
+    value, blocks = review_evidence_candidate()
+    value['items'][0]['review_evidence'] = review_evidence
+    assert evidence_requiring_semantic_check(value, blocks) == []
+    with pytest.raises(ValidationError):
+        Extraction.model_validate(value)
 
 
 @pytest.mark.parametrize('summary', ['The project never used Python.', 'The project lasted 99 years.',

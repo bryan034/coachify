@@ -3,7 +3,7 @@
 ## Current state
 
 The profile slice has component, browser and API tests plus real MongoDB integration.
-Career has preview/AI/contract/workflow tests; CV has parser, saved-operation, interpretation, owner/mutation, conversation and handoff tests. Only the unimplemented Roadmap, Dashboard and Review services may pass with empty suites. Implemented services must collect tests.
+Career has preview/AI/contract/workflow tests; CV has parser, saved-operation, interpretation, owner/mutation, conversation and handoff tests. Only the unimplemented Review service may pass with an empty suite. Implemented services must collect tests.
 See [application setup](setup.md) and the affected service README for setup and service details.
 
 ## Suite maintenance
@@ -524,3 +524,10 @@ an explicitly supplied disposable MongoDB. CV tests cover target-independent bas
 review, manual field order, source/version changes, semantic positive/negative
 verdicts and safe legacy-conversation upgrades. Semantic tests use synthetic provider
 responses; no live-provider quality or job-fit accuracy is inferred.
+
+Shared response-envelope regressions cover error-only HTTP 200 and errors alongside
+partial/completed content. CV keeps errors safe in saved operations and clears them
+after an explicit successful retry. Career, Assessment and Roadmap reject these
+provider failures without treating them as schema corrections. Existing per-service
+transfer limits and transport timeouts remain in force. Tests use synthetic errors;
+a live saved-CV retry is separate evidence of the configured provider workflow.

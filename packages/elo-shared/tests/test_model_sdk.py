@@ -105,3 +105,26 @@ def test_compressed_rejection_is_not_decoded_twice(asynchronous):
         with httpx.Client(transport=httpx.MockTransport(handler)) as http:
             with sync_model_response(http, BASE, 'synthetic-secret', 12, PAYLOAD) as response:
                 assert response.content == raw
+@pytest.mark.parametrize('url,expected', [
+    ('https://openrouter.ai/api/v1', 'synthetic-shared'),
+    ('https://OPENROUTER.AI:443/api/v1', 'synthetic-shared'),
+    ('https://openrouter.ai:8443/api/v1', ''),
+    ('http://openrouter.ai/api/v1', ''),
+    ('https://openrouter.ai.example/api/v1', ''),
+    ('https://example.test/openrouter.ai/api/v1', ''),
+    ('https://user@openrouter.ai/api/v1', ''),
+    ('https://openrouter.ai/api/v1?x=y', ''),
+    ('https://openrouter.ai/api/v1#fragment', ''),
+    ('https://api.openai.com/v1', ''),
+])
+def test_shared_openrouter_key_only_applies_to_trusted_origin(monkeypatch, url, expected):
+    from elo_shared.model_sdk import resolve_model_api_key
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'synthetic-shared')
+    assert resolve_model_api_key(url, '') == expected
+    assert resolve_model_api_key(url, 'synthetic-specific') == 'synthetic-specific'
+
+
+def test_shared_openrouter_key_can_be_left_blank(monkeypatch):
+    from elo_shared.model_sdk import resolve_model_api_key
+    monkeypatch.delenv('OPENROUTER_API_KEY', raising=False)
+    assert resolve_model_api_key('https://openrouter.ai/api/v1', '') == ''

@@ -12,7 +12,9 @@ The active Compose stack contains the Next.js frontend, NGINX, Profile, saved CV
 
 ## Configuration
 
-The public [`.env.example`](.env.example) lists all active deployment inputs, grouped by service: gateway/auth/email, scoped database passwords, Career LLM/research and limits, CV model/storage/usage settings, separate Assessment/Roadmap database passwords and Gemini model keys, and the Jobs database password. Keep every user-configurable deployment value in the single ignored `infrastructure/docker/.env`; do not add per-service environment files. Agents may maintain the public template. Configure private values yourself, preserving existing database passwords. Agents must not inspect private environment files. Career uses `AI_ENABLED`, `CAREER_LLM_PROVIDER`, `CAREER_LLM_BASE_URL`, `CAREER_LLM_RESPONSE_MODE`, `CAREER_LLM_MODEL`, `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_PROVIDER` and `CAREER_RESEARCH_API_KEY`. The public template selects Gemini inference through the OpenAI Python SDK for all four AI services, plus Brave search. Local and DeepSeek configurations remain optional. See [model/search setup](../../docs/setup.md#career-model-and-search-configuration). CV has a separate configurable OpenAI SDK adapter using `CV_LLM_BASE_URL`, `CV_LLM_MODEL` and `CV_LLM_API_KEY`. Missing model configuration is an actionable unavailable state, not synthetic success.
+The public [`.env.example`](.env.example) lists deployment inputs. Keep private values in the single ignored `infrastructure/docker/.env`; preserve existing database passwords and never commit real keys. The template configures Career, CV, Assessment and Roadmap for OpenRouter with one `OPENROUTER_API_KEY` and `OPENROUTER_MODEL`. Career public research uses its own provider and key. See [model and search setup](../../docs/setup.md#career-model-and-search-configuration), including migration for existing private files. With `AI_ENABLED=true`, Career requires a model key to start; set it to false until the key is configured if starting without inference.
+
+The shared OpenRouter credential is injected only into the four services that use it. Each service uses its own non-empty `*_LLM_API_KEY` first; the shared key is used only for HTTPS `openrouter.ai` on the default port or port 443. Future model-backed services should explicitly inject `OPENROUTER_API_KEY` only when needed, use `resolve_model_api_key(base_url, service_key)` from `packages/elo-shared/elo_shared/model_sdk.py` before creating the model client, and test that credentials cannot be sent to other endpoints. Do not inject it into the frontend, unrelated services or images. Configuration is not automatically inherited by new features.
 
 The local profile uses `elo-deepseek-r1:1.5b` (an Ollama alias with 16,384 context
 tokens), `AI_CONTEXT_TOKENS=16384`, `CAREER_LOCAL_TIMEOUT_SECONDS=45` and
@@ -22,16 +24,15 @@ values using the setup guide above, then rebuild/recreate Career and restart the
 gateway for its 610-second Career model-route read timeout. Alias creation reuses
 existing weights and does not run inference.
 
-Career credentials are now named `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY`.
+Career service-specific credentials are named `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY`.
 Rename the previous `GEMINI_API_KEY` / `BRAVE_API_KEY` entries yourself, preserving
 values when retaining Gemini / Brave. Compose requires these canonical names; it no
 longer relabels a legacy credential when providers change. Direct non-Compose
 processes still support each legacy alias only for its own provider and only when
-the canonical key is absent. An explicitly blank canonical key disables that credential. Each credential is injected into Career only, never the frontend or CV.
+the canonical key is absent. An explicitly blank canonical key suppresses the old provider alias; when Career uses OpenRouter, a blank model key can still fall back to `OPENROUTER_API_KEY`. The research key remains exclusive to Career; the shared OpenRouter key is explicitly injected only into the four model services.
 CV extraction/repair defaults to schema-constrained decoding with `CV_LLM_RESPONSE_MODE=json_schema`. Rebuild the CV image to install its LangGraph runtime, then retry saved uploads. Only providers that support schema output should use this mode; DeepSeek Chat Completions requires explicitly setting `CV_LLM_RESPONSE_MODE=json_object` yourself, which opts out of constrained decoding. The runtime allows one validated repair within the existing worker lease and shared model budgets.
 
-CV keeps its independent `CV_LLM_API_KEY`; no service-specific `.env` file is needed
-for Compose. Fixed internal API URLs/database wiring and the CV volume path remain
+CV may use the shared OpenRouter key or its own `CV_LLM_API_KEY` override; no service-specific `.env` file is needed for Compose. Fixed internal API URLs/database wiring and the CV volume path remain
 in Compose. Code-level constants and scaffold services do not gain unused variables.
 
 After applying private setting changes, recreate the affected containers with
@@ -147,7 +148,7 @@ The active stack now includes separately scoped Assessment and Roadmap services/
 
 The all-service local profile points Career, CV, Assessment and Roadmap at the same
 1.5B Ollama alias. Assessment/Roadmap receive only their own model endpoint and
-HTTP-permission settings plus APP_ENV; keys remain service-scoped. HTTP is explicitly
+HTTP-permission settings plus APP_ENV; local requests do not use the shared cloud credential. HTTP is explicitly
 development-only and local requests omit cloud credentials. Profile, Dashboard and
 Review have no active model calls. See the setup guide for switching back to HTTPS.
 

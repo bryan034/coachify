@@ -333,6 +333,30 @@ def test_failures_a_retry_cannot_fix_do_not_retry_automatically(harness, failure
     assert status(client, cv['id'])['status'] == 'failed'
 
 
+@pytest.mark.parametrize('code,expected', [(402, 'failed'), ('insufficient_quota', 'failed'),
+                                           (429, 'queued'), (503, 'queued')])
+def test_embedded_provider_quota_respects_worker_auto_retry_policy(harness, monkeypatch, code, expected):
+    import httpx
+    from tests.test_extraction_failures import provider, PRIVATE
+    client, app, *_ = harness
+    calls = []
+    def reject(request):
+        calls.append(request)
+        return httpx.Response(200, json={'error': {'code': code, 'message': PRIVATE}})
+    app.state.worker.extractor = provider(monkeypatch, reject)
+    worker = auto_retrying(app)
+    cv = upload(client).json()
+    worker.run_once()
+    result = status(client, cv['id'])
+    assert result['status'] == expected and len(calls) == 1
+    if expected == 'failed':
+        assert result['error']['provider_status_code'] is None
+        assert result['error']['provider_reason'] == 'rate_limit_or_quota'
+        assert PRIVATE not in json.dumps(result)
+    else:
+        assert app.state.repository.get('owner-a', cv['id'])['operation']['auto_retries'] == 1
+
+
 @pytest.mark.parametrize('failure,auto', [
     ({'failure_category': 'schema_validation'}, True), ({'failure_category': 'incomplete_output'}, True),
     ({'failure_category': 'provider_http_error', 'provider_reason': 'rate_limit_or_quota'}, True),

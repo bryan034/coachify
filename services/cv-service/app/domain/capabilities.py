@@ -27,24 +27,35 @@ def evidence_matches(excerpt, source):
     return excerpt in source or normalized_name(excerpt) in normalized_name(source)
 
 
+def _validate_review_quote(ref, source, item_index, review_index, quote_index):
+    indexes = {'review_index': review_index, 'quote_index': quote_index}
+    if ref['source_id'] not in source:
+        raise EvidenceValidationError('Interview evidence cited an unknown CV passage. Retry this upload.',
+                                      'review_source', item_index, **indexes)
+    if not evidence_matches(ref['quote'], source[ref['source_id']]):
+        raise EvidenceValidationError('An interview evidence quotation does not match its cited CV passage. Retry this upload.',
+                                      'review_quote', item_index, **indexes)
+
+
 def evidence_requiring_semantic_check(payload, blocks):
     if not isinstance(payload, dict): return []
     source = {block['id']: block['text'] for block in blocks}
     refs = []
     items = payload.get('items', [])
     if isinstance(items, list):
-        for item in items:
+        for item_index, item in enumerate(items):
             if isinstance(item, dict) and isinstance(item.get('evidence'), list):
                 refs.extend(item['evidence'])
-                for fact in item.get('review_evidence', []):
+                review_facts = item.get('review_evidence', [])
+                for review_index, fact in enumerate(review_facts if isinstance(review_facts, list) else []):
                     try:
                         fact = ReviewFact.model_validate(fact).model_dump(mode='json')
                     except ValidationError:
                         continue  # Ordinary schema validation/repair handles malformed facts.
-                    for ref in fact.get('evidence', []):
-                        if isinstance(ref, dict): refs.append({'block_id': ref.get('source_id'), 'excerpt': ref.get('quote')})
+                    for quote_index, ref in enumerate(fact['evidence']):
+                        _validate_review_quote(ref, source, item_index, review_index, quote_index)
                     if fact.get('evidence'):
-                        # Check the factual interpretation as well as the quoted anchor.
+                        # The factual interpretation still needs semantic support.
                         refs.append({'block_id': fact['evidence'][0].get('source_id'), 'excerpt': fact_statement(fact)})
     if isinstance(payload.get('other_information'), list): refs.extend(payload['other_information'])
     pending = []
@@ -65,6 +76,7 @@ def evidence_requiring_semantic_check(payload, blocks):
 def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
     extraction = Extraction.model_validate(payload)
     source = {block['id']: block for block in blocks}
+    source_text = {key: block['text'] for key, block in source.items()}
     validate_other_information(extraction.other_information, blocks, semantic_support)
     items = []
     # Item IDs depend on source evidence and section, never display names or model order.
@@ -98,17 +110,16 @@ def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
                 for ref in evidence):
             item.ongoing = False
         review_facts = [fact.model_dump(mode='json') for fact in item.review_evidence]
-        for fact in review_facts:
+        for review_index, fact in enumerate(review_facts):
             if fact.get('skill_name') and skill_id(fact['skill_name']) not in names_by_id:
                 raise ValueError('Skill evidence must refer to a skill on that exact source.')
-            for ref in fact['evidence']:
-                if ref['source_id'] not in source or not evidence_matches(ref['quote'], source[ref['source_id']]['text']):
-                    raise EvidenceValidationError('Interview evidence cited an unavailable CV passage.', 'source_excerpt', index)
+            for quote_index, ref in enumerate(fact['evidence']):
+                _validate_review_quote(ref, source_text, index, review_index, quote_index)
             first = fact['evidence'][0]['source_id']
             if (first, fact_statement(fact)) not in semantic_support and not evidence_matches(fact_statement(fact), source[first]['text']):
                 raise EvidenceValidationError('Interview evidence is not supported by the CV.', 'source_excerpt', index)
         if len({fact_key(f) for f in review_facts}) != len(review_facts):
-            raise ValueError('Duplicate interview evidence fields.')
+            raise EvidenceValidationError('Duplicate interview evidence fields.', 'duplicate_review_evidence', index)
         items.append({'review_evidence': review_facts, 'id': identity, 'kind': item.kind, 'title': item.title, 'description': item.description,
                       'provenance': 'explicit' if item.explicit else 'inferred', 'evidence': evidence,
                       'skill_ids': [skill_id(name) for name in names], 'skill_names': names,

@@ -272,6 +272,206 @@
       "title": "Duration",
       "type": "object"
     },
+    "EditableTask": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "instructions": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Instructions",
+          "type": "string"
+        },
+        "completion_outcome": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Completion Outcome",
+          "type": "string"
+        },
+        "estimated_minutes": {
+          "maximum": 60000,
+          "minimum": 1,
+          "title": "Estimated Minutes",
+          "type": "integer"
+        },
+        "requirement_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requirement Refs",
+          "type": "array"
+        },
+        "requirement_source_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirement Source Hash"
+        },
+        "requirement_source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirement Source Id"
+        },
+        "prerequisites": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prerequisites",
+          "type": "array"
+        },
+        "milestone_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Milestone Key"
+        },
+        "schedule": {
+          "items": {
+            "$ref": "#/$defs/TaskSlot"
+          },
+          "title": "Schedule",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "not_started",
+            "in_progress",
+            "completed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "evidence_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Note"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/TaskHistory"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "removed": {
+          "default": false,
+          "title": "Removed",
+          "type": "boolean"
+        },
+        "definition_review_required": {
+          "default": false,
+          "title": "Definition Review Required",
+          "type": "boolean"
+        },
+        "removal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskRemoval"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "generated_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generated Key"
+        },
+        "origin": {
+          "enum": [
+            "generated",
+            "user"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "overrides": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Overrides",
+          "type": "array"
+        },
+        "source_assignment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceAssignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "instructions",
+        "completion_outcome",
+        "estimated_minutes",
+        "status",
+        "origin"
+      ],
+      "title": "EditableTask",
+      "type": "object"
+    },
     "MilestoneOutcomeRecord": {
       "additionalProperties": true,
       "properties": {
@@ -391,6 +591,22 @@
         "id": {
           "title": "Id",
           "type": "string"
+        },
+        "skill_gap_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exactly one known skill gap, or an empty list when no unambiguous link is available. Null indicates a legacy assignment without a projected link.",
+          "title": "Skill Gap Ids"
         },
         "status": {
           "enum": [
@@ -841,6 +1057,212 @@
       "title": "PlannerConfig",
       "type": "object"
     },
+    "RevisionReview": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "removed_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Removed Task Ids",
+          "type": "array"
+        },
+        "related_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Related Task Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "title": "RevisionReview",
+      "type": "object"
+    },
+    "SourceAssignment": {
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "milestone_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Milestone Key"
+        },
+        "gap_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gap Id"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Time"
+        },
+        "duration_minutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Minutes"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task"
+        },
+        "completion_criterion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completion Criterion"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "evidence_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Note"
+        },
+        "history": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TaskHistory"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "History"
+        }
+      },
+      "title": "SourceAssignment",
+      "type": "object"
+    },
     "StudyBlock": {
       "additionalProperties": false,
       "properties": {
@@ -877,6 +1299,318 @@
         "duration_minutes"
       ],
       "title": "StudyBlock",
+      "type": "object"
+    },
+    "TaskHistory": {
+      "additionalProperties": true,
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "At"
+        },
+        "from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "From"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "To"
+        },
+        "event": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event"
+        },
+        "fields": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fields"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskPrevious"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "evidence_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Note"
+        },
+        "new_evidence_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Evidence Note"
+        },
+        "completion_definition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completion Definition"
+        },
+        "estimated_minutes_at_completion": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimated Minutes At Completion"
+        }
+      },
+      "title": "TaskHistory",
+      "type": "object"
+    },
+    "TaskPrevious": {
+      "additionalProperties": true,
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "instructions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instructions"
+        },
+        "completion_outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completion Outcome"
+        },
+        "estimated_minutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimated Minutes"
+        },
+        "requirement_refs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirement Refs"
+        },
+        "prerequisites": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prerequisites"
+        },
+        "milestone_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Milestone Key"
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TaskSlot"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schedule"
+        }
+      },
+      "title": "TaskPrevious",
+      "type": "object"
+    },
+    "TaskRemoval": {
+      "additionalProperties": true,
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "At"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "title": "TaskRemoval",
+      "type": "object"
+    },
+    "TaskSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "start_time": {
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Start Time",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "maximum": 480,
+          "minimum": 1,
+          "title": "Duration Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "date",
+        "start_time",
+        "duration_minutes"
+      ],
+      "title": "TaskSlot",
       "type": "object"
     }
   },
@@ -925,6 +1659,18 @@
         }
       ],
       "title": "Base Active Id"
+    },
+    "pace_baseline_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pace Baseline Id"
     },
     "created_at": {
       "title": "Created At",
@@ -986,6 +1732,28 @@
         "$ref": "#/$defs/PlanAssignment"
       },
       "title": "Assignments",
+      "type": "array"
+    },
+    "editable_tasks": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/EditableTask"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Editable Tasks"
+    },
+    "revision_review": {
+      "items": {
+        "$ref": "#/$defs/RevisionReview"
+      },
+      "title": "Revision Review",
       "type": "array"
     },
     "deadline_outcome": {

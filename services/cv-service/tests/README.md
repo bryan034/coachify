@@ -18,7 +18,12 @@ Interpretation cases cover personal/team/guided/observed/denied contribution, ex
 
 Semantic-evidence cases use explicit synthetic verdicts to cover paraphrase/formatting acceptance, unsupported/malformed verdict rejection, source scoping and shared daily admission. They do not measure live semantic accuracy.
 
-Extraction regressions cover lossless splitting of source-verified long quotations, invented-suffix rejection, retained explicit-skill/count checks, source-checked uncategorised content, persistence/API output and nonfatal unclear/invalid/unsupported dates. Frontend checks cover the Other information section.
+Review quotation regressions keep exact anchors distinct from ordinary summaries:
+unknown sources and nonmatching quotations receive indexed repair guidance before
+semantic verification, semantic approval cannot bypass the final quotation guard,
+and repeated invalid quotations still fail after the single bounded repair.
+
+Extraction regressions cover retaining source-verified long quotations as single citations, invented-suffix rejection, retained explicit-skill/count checks, source-checked uncategorised content, persistence/API output and nonfatal unclear/invalid/unsupported dates. Frontend checks cover the Other information section.
 
 No live provider or real CV is used. These tests validate contracts and storage/failure behavior; they do not validate model quality against human labels or J/G gap analysis implementation.
 
@@ -69,7 +74,7 @@ clearing after a successful retry. All responses and documents are synthetic.
 Provider-rejection cases additionally cover fixed HTTP 400 schema/format/parameter
 reasons, quota/authentication recovery messages, malformed/oversized rejection
 bodies and exclusion of provider prose/arbitrary parameter names from saved API
-responses and logs. Requests are not automatically retried or downgraded.
+responses and logs. HTTP-200 error envelopes (including nested provider details and errors alongside apparently completed content) are rejected before repair, survive polling/list reads safely, and clear after a successful explicit retry. Chat and clarification use the same shared guard. Requests are not automatically retried or downgraded.
 
 The real LangGraph harness is exercised with synthetic HTTP responses: first-pass
 success, overlong evidence/conflicting dates repaired once, schema/evidence failure

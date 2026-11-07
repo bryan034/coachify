@@ -9,6 +9,40 @@ from elo_shared.runtime import Model
 class Answer(BaseModel):
     reply:str
 
+
+@pytest.mark.parametrize('prefix', ['ASSESSMENT', 'ROADMAP'])
+@pytest.mark.parametrize('embedded_status,code,status', [(429, 'model_quota', 429), (402, 'model_provider', 503),
+    (401, 'model_provider', 503), (400, 'model_provider', 503), (503, 'model_provider', 503)])
+def test_embedded_provider_errors_do_not_spend_schema_retries(monkeypatch, prefix, embedded_status, code, status):
+    from elo_shared.runtime import Problem
+    monkeypatch.setenv(prefix + '_LLM_API_KEY', 'synthetic-key')
+    async def run():
+        calls = []
+        def handler(request):
+            calls.append(request)
+            return httpx.Response(200, json={'error': {'code': embedded_status, 'message': 'PRIVATE provider prose'}})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(Problem) as caught:
+                await Model(client, prefix).generate(Answer, 'Answer.', {})
+        assert caught.value.code == code and caught.value.status == status
+        assert caught.value.retry_after == (30 if embedded_status == 429 else None)
+        assert 'PRIVATE' not in caught.value.detail and len(calls) == 1
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('prefix', ['ASSESSMENT', 'ROADMAP'])
+def test_embedded_rate_limit_keeps_provider_cooldown(monkeypatch, prefix):
+    from elo_shared.runtime import Problem
+    monkeypatch.setenv(prefix + '_LLM_API_KEY', 'synthetic-key')
+    async def run():
+        def handler(request):
+            return httpx.Response(200, headers={'retry-after': '600'}, json={'error': {'code': 429}})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(Problem) as caught:
+                await Model(client, prefix).generate(Answer, 'Answer.', {})
+        assert caught.value.code == 'model_quota' and caught.value.retry_after == 600
+    asyncio.run(run())
+
 @pytest.mark.parametrize('prefix',['ASSESSMENT','ROADMAP'])
 @pytest.mark.parametrize('provider',['local','gemini','deepseek'])
 def test_model_endpoint_json_contract_and_credential_isolation(monkeypatch,prefix,provider):
@@ -104,4 +138,34 @@ def test_token_parameter_can_be_selected_for_models_that_require_it(monkeypatch)
             monkeypatch.setenv('ROADMAP_LLM_TOKEN_PARAMETER','temperature')
             with pytest.raises(ValueError):Model(client,'ROADMAP')
         assert calls[0]['max_completion_tokens']==24000 and 'max_tokens' not in calls[0]
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('prefix',['ASSESSMENT','ROADMAP'])
+@pytest.mark.parametrize('base,override,expected',[
+    ('https://openrouter.ai/api/v1','','synthetic-shared'),
+    ('https://openrouter.ai/api/v1','synthetic-specific','synthetic-specific'),
+    ('https://api.openai.com/v1','',''),
+])
+def test_adviser_models_use_shared_key_only_for_openrouter(monkeypatch,prefix,base,override,expected):
+    monkeypatch.setenv(prefix+'_LLM_BASE_URL',base)
+    monkeypatch.setenv(prefix+'_LLM_MODEL','@preset/synthetic')
+    monkeypatch.setenv(prefix+'_LLM_API_KEY',override)
+    monkeypatch.setenv('OPENROUTER_API_KEY','synthetic-shared')
+    async def run():
+        calls=[]
+        def handler(request):
+            calls.append(request)
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{"reply":"OK"}'}}]})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            model=Model(client,prefix)
+            assert model.configured is bool(expected)
+            if expected:
+                await model.generate(Answer,'Answer.',{})
+                assert calls[0].headers['authorization']=='Bearer '+expected
+                assert json.loads(calls[0].content)['model']=='@preset/synthetic'
+            else:
+                from elo_shared.runtime import Problem
+                with pytest.raises(Problem):await model.generate(Answer,'Answer.',{})
+                assert calls==[]
     asyncio.run(run())

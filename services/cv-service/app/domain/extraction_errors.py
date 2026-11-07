@@ -18,11 +18,12 @@ class ExtractionFailure(ValueError):
     def __init__(self, message: str, stage: FailureStage, category: FailureCategory,
                  provider_status_code: int | None = None, *,
                  provider_reason: ProviderReason | None = None,
-                 provider_parameter: ProviderParameter | None = None):
+                 provider_parameter: ProviderParameter | None = None, auto_retry_allowed: bool = True):
         super().__init__(message)
         self.stage, self.category = stage, category
         self.provider_status_code = provider_status_code
         self.provider_reason, self.provider_parameter = provider_reason, provider_parameter
+        self.auto_retry_allowed = auto_retry_allowed
 
 
 class StaleExtraction(Exception):
@@ -30,6 +31,7 @@ class StaleExtraction(Exception):
 
 
 class EvidenceValidationError(ValueError):
-    def __init__(self, message, rule, item_index=None):
+    def __init__(self, message, rule, item_index=None, *, review_index=None, quote_index=None):
         super().__init__(message)
         self.rule, self.item_index = rule, item_index
+        self.review_index, self.quote_index = review_index, quote_index
