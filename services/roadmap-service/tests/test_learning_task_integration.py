@@ -158,3 +158,31 @@ def test_saved_unlink_updates_learning_status_and_session_counts_through_api():
         assert result.status_code==200
         step=result.json()['steps'][0]
         assert (step['state'],step['sessions_total'],step['completed_minutes'])==('not_scheduled',0,0)
+
+
+def test_new_user_task_explicit_requirement_takes_precedence_over_milestone():
+    plan=learning_plan()
+    plan['gaps']=[gap(),gap('sql',name='SQL',priority=2,requirement_ref='job:sql')]
+    plan['milestones'][0]['gap_ids']=['python']
+    plan['assignments']=plan['assignments'][:1]
+    task=ensure_tasks(plan)[0]
+    task.update(origin='user',source_assignment=None,requirement_refs=['job:sql'],overrides=[])
+    task['schedule'].append({'date':'2030-01-15','start_time':'18:00','duration_minutes':30})
+    before=copy.deepcopy(plan)
+    result={step['gap_id']:step for step in learning_view(plan,NOW)['steps']}
+    assert (result['python']['state'],result['python']['sessions_total'],
+            result['python']['completed_minutes'])==('not_scheduled',0,0)
+    assert (result['sql']['state'],result['sql']['sessions_completed'],
+            result['sql']['completed_minutes'])==('done',2,90)
+    assert plan==before
+
+
+def test_user_task_without_requirement_can_still_serve_an_inferred_milestone():
+    plan=learning_plan()
+    plan['gaps']=[gap('inferred',name='Inferred',requirement_ref=None,source='inferred',inference_reason='Synthetic')]
+    plan['milestones'][0]['gap_ids']=['inferred']
+    plan['assignments']=plan['assignments'][:1]
+    task=ensure_tasks(plan)[0]
+    task.update(origin='user',source_assignment=None,requirement_refs=[],overrides=[])
+    step=learning_view(plan,NOW)['steps'][0]
+    assert (step['state'],step['sessions_completed'],step['completed_minutes'])==('done',1,60)

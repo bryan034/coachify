@@ -89,6 +89,9 @@ def learning_view(plan,now):
                 # An explicit relink or unlink replaces the source assignment's
                 # old gap association, including any inferred milestone link.
                 if 'requirement_refs' in (task.get('overrides') or []):return explicitly_linked
+                # A manually created task's chosen requirements are explicit
+                # even before any edit has populated its overrides list.
+                if task.get('origin')=='user' and task.get('requirement_refs'):return explicitly_linked
                 if source.get('gap_id'):
                     return source['gap_id']==gap['id'] or explicitly_linked
                 return explicitly_linked or gap['id'] in (milestones.get(task.get('milestone_key')) or {}).get('gap_ids',[])
