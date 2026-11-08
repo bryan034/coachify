@@ -174,7 +174,9 @@ class Extractor:
                 raise ExtractionFailure('CV extraction timed out. Your upload is saved; retry later.', stage, 'timeout')
             deadline = time.monotonic() + timeout
             request_timeout = httpx.Timeout(timeout, connect=min(10, timeout))
-            with Client(timeout=request_timeout, follow_redirects=False, trust_env=False) as client:
+            # Cloud requests need the deployment's proxy and CA trust. Keep
+            # local model traffic direct, including when NO_PROXY is absent.
+            with Client(timeout=request_timeout, follow_redirects=False, trust_env=not self.local) as client:
                 with sync_model_response(client, self.base_url, self.api_key,
                                          request_timeout, payload, local=self.local) as response:
                     response.raise_for_status()

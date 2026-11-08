@@ -237,13 +237,16 @@ def application(title,prefix,*,store=None,upstream=None,model=None):
     @asynccontextmanager
     async def lifespan(app):
         mongo=None
-        async with httpx.AsyncClient(trust_env=False,follow_redirects=False) as client:
+        async with httpx.AsyncClient(trust_env=False,follow_redirects=False) as client, \
+                   httpx.AsyncClient(trust_env=True,follow_redirects=False) as cloud_client:
             if store is not None: app.state.store=store
             else:
                 if os.getenv('MONGODB_URI'):
                     mongo=MongoClient(os.environ['MONGODB_URI'],tz_aware=True,serverSelectionTimeoutMS=5000)
                 app.state.store=Store(mongo[os.getenv('MONGODB_DATABASE','elo_'+prefix.lower())] if mongo is not None else None, 'skill_gap_analyses' if prefix=='ASSESSMENT' else 'roadmaps')
-            app.state.upstream=upstream or Upstream(client); app.state.model=model or Model(client,prefix)
+            app.state.upstream=upstream or Upstream(client)
+            app.state.model=model or Model(cloud_client,prefix)
+            if model is None and app.state.model.local: app.state.model.client=client
             app.state.tasks={}; app.state.slots=asyncio.Semaphore(3)
             yield
             tasks=list(app.state.tasks.values())

@@ -61,7 +61,7 @@ class ConversationRouter(Extractor):
         try:
             timeout=self._request_timeout(20)
             deadline = time.monotonic() + timeout + 5
-            with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=False) as client:
+            with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=not self.local) as client:
                 with sync_model_response(client, self.base_url, self.api_key,
                                          httpx.Timeout(timeout, connect=5), payload, local=self.local) as response:
                     response.raise_for_status()

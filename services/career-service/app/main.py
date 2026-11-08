@@ -92,9 +92,11 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
             except PyMongoError:
                 if mongo is not None: mongo.close()
                 raise RuntimeError('Career storage could not connect. Check database setup.') from None
-        async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as ai_client:
+        # Model egress needs the deployment proxy/CA; internal API clients below
+        # stay direct. Explicit local inference keeps its direct transport.
+        gemini=AISettings.from_env() if ai is None else None
+        async with httpx.AsyncClient(trust_env=gemini is None or gemini.provider!='local', follow_redirects=False) as ai_client:
             # One configured model serves every reasoning/extraction/chat stage.
-            gemini=AISettings.from_env() if ai is None else None
             primary=ai or AIAdapter(gemini,ai_client)
             context=primary if ai is None else context_ai
             app.state.ai=ModelRouter(primary,context) if context is not None else primary
