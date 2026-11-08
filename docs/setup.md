@@ -179,7 +179,44 @@ to allow multipart overhead. PDF/DOCX parsing is bounded; OCR is not included.
 Originals use the private `cv_uploads` volume for the documented retry window.
 Only structured extraction and bounded evidence are saved in MongoDB.
 
-Configure the model and key using [OpenRouter setup](#career-model-and-search-configuration) to enable structured extraction, text routing and clarification-answer interpretation. The public template configures `CV_LLM_BASE_URL` for OpenRouter and `CV_LLM_MODEL` from the shared model setting. `CV_LLM_RESPONSE_MODE=json_schema` requests schema-constrained extraction and repair; selected providers/models must support it. A transient LangGraph validates output and allows one repair before reporting failure. Chat and clarification interpretation retain JSON-object output. The server validates schema, string lengths, dates and cited evidence before publication; constrained decoding does not guarantee semantic correctness. See the [CV harness](../services/cv-service/SPEC.md#extraction-runtime-harness). Missing model configuration is a processing error, never a synthetic successful extraction. Automated tests do not call providers.
+Configure the model and key using [OpenRouter setup](#career-model-and-search-configuration) to enable structured extraction, text routing and clarification-answer interpretation. The public template configures `CV_LLM_BASE_URL` for OpenRouter and `CV_LLM_MODEL` from the shared model setting. `CV_LLM_RESPONSE_MODE=json_schema` requests schema-constrained extraction and repair; selected providers/models must support it. A durable LangGraph validates output and allows one repair before reporting failure. Chat and clarification interpretation retain JSON-object output. The server validates schema, string lengths, dates and cited evidence before publication; constrained decoding does not guarantee semantic correctness. See the [CV harness](../services/cv-service/SPEC.md#extraction-runtime-harness). Missing model configuration is a processing error, never a synthetic successful extraction. Automated tests do not call providers.
+
+### CV extraction configuration troubleshooting
+
+CV upload shows progress, then displays classified results when `ready`.
+Review CV explicitly starts guided questions; they are optional for displaying
+extracted information.
+
+For OpenRouter, use `https://openrouter.ai/api/v1` for all four model endpoints
+and select your model or preset, for example `@preset/your-preset-slug`.
+Use `CAREER_LLM_PROVIDER=compatible`. Each service uses its non-empty
+`*_LLM_API_KEY` first, otherwise `OPENROUTER_API_KEY` for the exact OpenRouter
+HTTPS host. Clear obsolete service-specific keys when using the shared key.
+Compose supplies this fallback, and direct processes use the same host-restricted
+fallback in the shared model adapter. Compose expands `${OPENROUTER_MODEL}`;
+direct service processes need each resolved `*_LLM_MODEL` value. See the full
+[OpenRouter configuration](#career-model-and-search-configuration).
+
+`not_configured` is reported before a provider request. The service process needs
+`CV_LLM_MODEL` and a usable key; it does not load `.env` files automatically.
+`GET /api/v1/cv/policy` reports `extraction_configured` without returning a
+credential. This confirms settings are present, not provider access or schema
+compatibility.
+
+For a managed cloud environment, bind the model key securely and allow its
+selected provider host. An existing secret restricted to
+`generativelanguage.googleapis.com` needs its allowed destination changed to
+`openrouter.ai` in environment settings when switching providers. Changing only
+`CV_LLM_BASE_URL` does not update a secret's destination restriction. Apply the
+settings and restart the service; extraction, routing and interpretation read
+configuration at startup. For Compose, recreate the service as shown below.
+
+Cloud model requests use the process's proxy and CA settings with TLS
+verification enabled. Diagnose `connection_error` separately from absent
+configuration, provider credential rejections and schema/evidence failures.
+Local model traffic remains direct and omits cloud credentials. After resolving
+the cause, retry the saved upload and poll its operation until `ready`;
+HTTP 202 means saved for processing, not extracted.
 
 For DeepSeek, use `CV_LLM_BASE_URL=https://api.deepseek.com`,
 `CV_LLM_MODEL=deepseek-flash`, `CV_LLM_RESPONSE_MODE=json_object` and your private

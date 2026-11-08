@@ -40,7 +40,7 @@ Dates are optional hints during extraction. The prompt asks for an unambiguous n
 
 The CV worker runs a LangGraph with `parse → extract → validate → prepare_review` and a conditional `repair → validate` branch. Validation failure allows exactly one repair call; a second failure is terminal for that worker attempt. Parsing failures, missing configuration, provider rejection, transport/timeout errors, malformed/incomplete provider envelopes and invalid content JSON stop immediately and retain the existing explicit retry path. The application never strips fences, clips evidence or invents dates to force success.
 
-Workflow version 3 gathers evidence that is neither an exact nor a formatting-equivalent passage of its cited block. Case, Unicode presentation and whitespace/line-wrap changes pass locally while meaningful punctuation and words remain intact. Unknown block IDs fail before semantic inference. Remaining unique `(block_id, excerpt)` pairs are checked in one bounded model request per candidate, sending only referenced blocks and summaries. The verifier must reject added/contradicted facts, altered identities/numbers/dates/durations, lost negation/conditions or inflated attribution. Only explicitly approved indexes are accepted; malformed, duplicated, out-of-range or missing approvals cannot authorize other text. All source/summary content is untrusted. At most 1,120 unique semantic references are admitted in one candidate, including quoted evidence and any shared review-field interpretations. Review fields require exact quote anchors and semantic support for their meanings and ownership attribution; a field naming a skill must refer to a skill on that source. This is model-based semantic assessment and may make mistakes; synthetic tests do not establish live accuracy.
+Extraction gathers evidence that is neither an exact nor a formatting-equivalent passage of its cited block. Case, Unicode presentation and whitespace/line-wrap changes pass locally while meaningful punctuation and words remain intact. Unknown block IDs fail before semantic inference. Remaining unique `(block_id, excerpt)` pairs are checked in one bounded model request per candidate, sending only referenced blocks and summaries. The verifier must reject added/contradicted facts, altered identities/numbers/dates/durations, lost negation/conditions or inflated attribution. Only explicitly approved indexes are accepted; malformed, duplicated, out-of-range or missing approvals cannot authorize other text. All source/summary content is untrusted. At most 1,120 unique semantic references are admitted in one candidate, including quoted evidence and any shared review-field interpretations. Review fields require exact quote anchors and semantic support for their meanings and ownership attribution; a field naming a skill must refer to a skill on that source. This is model-based semantic assessment and may make mistakes; synthetic tests do not establish live accuracy.
 
 Evidence has no character limit. A quotation or summary of any length is stored whole as one citation, and the six-citation and 160-entry limits, skill provenance, dates and relationship checks remain enforced. Other fields keep their limits. The 12,000-token output allowance and 1 MiB response limit still bound a whole response. Approval sets are transient and never apply to a changed repair candidate.
 
@@ -56,7 +56,7 @@ Each graph state change is saved before the next step starts, in the private `cv
 
 An interrupted worker, expired lease or retried failure continues from the first unfinished step, so finished steps are not repeated or paid for again. A run that finished but was not published returns its saved result without a model call. Saved state only applies to the same operation and workflow version, so a reupload or new workflow version starts again and replaces it. If output is still rejected after repair, the next attempt keeps the parsed document and asks the model again. If processing fails unexpectedly or interruptions reach the attempt limit, the state is marked discarded and the next retry starts from the document. Workers only save while they hold the lease. Deleting a CV erases its state, including a save that lands after deletion. Saved state outlives the 24-hour original retention, and resuming still requires the original file to be available.
 
-There is no state streaming or external tracing; LangSmith tracing and inherited callbacks are disabled during invocation. Successful metadata adds `workflow_version=cv-extraction-5`, `response_mode` and `repair_attempts` (0 or 1). Terminal errors add `repair_attempted`, indicating the repair branch was entered even if local budget/time checks prevented a provider call; older records without these fields return null. The graph never writes another service or starts an assessment/roadmap.
+There is no state streaming or external tracing; LangSmith tracing and inherited callbacks are disabled during invocation. Successful metadata adds `workflow_version=cv-extraction-6`, `response_mode` and `repair_attempts` (0 or 1). Terminal errors add `repair_attempted`, indicating the repair branch was entered even if local budget/time checks prevented a provider call; older records without these fields return null. The graph never writes another service or starts an assessment/roadmap.
 
 ### Automatic retries
 
@@ -183,13 +183,33 @@ Model settings are `CV_MODEL_CALLS_PER_OWNER_PER_DAY` (120), `CV_MODEL_CALLS_GLO
 
 The additive `/{id}/assessment-input` export applies the selected-source/version/declarations guard from capability-input and rejects unfinished interpretation. Assessment separately binds the full Career target and revalidates all sources. This differs from the explicitly confirmed-target analysis-input envelope used by earlier consumers; it does not acknowledge a target for clarification or write any capability facts. Public skills resolve `canonical_skill_id`/`skill_registry_version` through the shared bundled package while retaining their original name-based skill keys and source histories.
 
+## Distinct extraction facts
+
+Each item can contain several source-grounded review facts with the same field
+and skill name. Distinct responsibilities, tasks and contributions retain their
+own values, quotes and personal/shared attribution. Only identical facts are
+deduplicated. Review readers group facts without keeping only the last entry;
+an unresolved member cannot be hidden by a supported member. Contradictory
+assistance evidence cannot establish an independent skill baseline.
+
+Unknown ownership is stored as unknown and makes no ownership assertion in
+semantic verification. Supported task descriptions are still checked, as are
+every exact quote and known ownership claim. Failed review interpretations identify
+the precise item and review-fact index in bounded repair feedback. This does not
+relax validation of unsupported claims or quotes.
+
 ## Skills Profile entry and guided intake
 
 The `/cv` page opens on an evidence summary with Upload your CV and Build through
 chat actions. It does not open/create a conversation on page entry. Uploading
 preserves source selection and immediately opens the full-page CV review screen.
-Processing/failed files show status and recovery there; usable extraction automatically
-opens the saved conversation and begins guided clarification. Existing ready CVs
+Processing/failed files show status and recovery there. Once extraction is ready,
+the page displays the classified results and opens their detailed summary without
+starting a model conversation. The upload URL includes `uploaded=1` so reloading
+while processing preserves this results-first behavior.
+The results URL uses `cv=<id>` so reloading retains the viewed extraction without
+changing the active baseline. Guided clarification starts
+only when the user chooses Review CV. Existing ready CVs
 can also be reopened through Review CV. The existing detailed correction, reconciliation and declaration
 controls remain available under disclosures.
 
