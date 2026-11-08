@@ -15,7 +15,7 @@ from app.domain.review_context import clarification_context
 from app.domain.service import now
 from app.schemas.cv import Mutation
 from app.schemas.interview import InterviewTurn
-from app.schemas.interview_evidence import fact_key
+from app.schemas.interview_evidence import fact_key, fact_groups, fact_group_value
 from app.conversation.interview_memory import build_context, reconcile_memory, progress, evidence_for, target_key, topic_question_count, topic_ids, MAX_TOPIC_QUESTIONS, MAX_TARGET_ATTEMPTS
 from app.conversation.presentation import review_reply
 from app.conversation.interview_policy import validate_decision, DecisionRejected
@@ -380,10 +380,10 @@ class InterviewHarness:
             active = {'id': key(route['id'] + ':interview-question'), 'item_id': decision.item_id,
                       'title': context['focused_source']['title'], 'question': decision.reply}
             targets = [t.model_dump(mode='json') for t in decision.targets]
-            facts = {fact_key(f): f for f in evidence_for(context['focused_source'])}
+            facts = fact_groups(evidence_for(context['focused_source']))
             for target in targets:
                 identity = target_key(decision.item_id, target['field'], target.get('skill_name'))
-                fact = facts.get((target['field'], normalized_name(target.get('skill_name') or '')))
+                fact = fact_group_value(facts.get((target['field'], normalized_name(target.get('skill_name') or '')), []))
                 signature = digest(fact) if fact else 'missing'
                 previous = memory['attempts'].get(identity, {})
                 memory['attempts'][identity] = {'signature': signature, 'count': previous.get('count', 0) + 1

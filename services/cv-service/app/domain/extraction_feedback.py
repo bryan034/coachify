@@ -9,10 +9,11 @@ RULES = {
     'review_source': 'Use a source_id from the supplied original CV blocks for this review evidence citation. Its quote must copy text from that same block. Never invent an ID or attach a quotation to a different passage.',
     'review_quote': 'Replace this review evidence quote with a quotation copied from its cited source_id block. Case, whitespace and Unicode presentation differences are tolerated, but do not paraphrase, join non-contiguous passages or change punctuation. Preserve the supported fact and choose an exact quotation that supports it; never fabricate evidence.',
     'literal_skill': 'Explicit skill labels must occur in this item\'s cited original source blocks. Keep inferred skills separate and source-linked.',
+    'review_skill': 'Each review_evidence skill_name must refer to a skill on this exact item. Add a source-supported skill_names entry or leave skill_name null for a general fact. Preserve distinct facts in the same field, with their own values, attribution and quotes.',
+    'review_support': 'This review_evidence interpretation was not supported. Recheck this exact fact against its quotes and the source block. Preserve supported task details using faithful source wording; do not invent personal ownership, independence or proficiency. Unknown attribution makes no ownership claim. Keep other supported facts unchanged.',
     'date_precision': 'Dates must occur in the cited source with the same year/month/day precision. Never invent precision.',
     'ongoing_status': 'Set ongoing only if the cited source explicitly states it; ongoing items have no end_date.',
     'duplicate_claim': 'Separate same-kind claims need distinct truthful evidence; do not fabricate evidence for uniqueness.',
-    'duplicate_review_evidence': 'Within this item, include at most one review_evidence fact for each field and normalized skill_name (including absent skill_name). Combine supported details and citations into that fact, preserving conflicting or uncertain information; do not invent evidence or silently discard supported details.',
     'source_relationship': 'supporting_items must reference existing, different items using final zero-based array indexes.',
     'circular_relationship': 'Remove circular supporting_items relationships while retaining supported claims.',
 }
