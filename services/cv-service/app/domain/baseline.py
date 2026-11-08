@@ -10,7 +10,9 @@ def skill_facts(item, name):
 
 def estimate_skill(item, claim):
     facts = skill_facts(item, claim['name'])
-    supported = {f['field']: f for f in facts if f['status'] == 'supported'}
+    supported = {}
+    for fact in facts:
+        if fact['status'] == 'supported': supported.setdefault(fact['field'], []).append(fact)
     conflicts = any(f['status'] == 'conflicting' and f['field'] in
                     {'personal_contribution', 'assistance', 'skill_use'} for f in facts)
     ordered = sorted(facts, key=lambda f: (f['field'] not in {'personal_contribution', 'assistance', 'skill_use', 'complexity', 'problem_solving'}, f['status'] != 'supported'))
@@ -21,18 +23,20 @@ def estimate_skill(item, claim):
     assistance = claim.get('assistance', 'unknown')
     # Typed ownership and exact assistance values in source-validated review facts
     # may establish the same rubric as the structured claim attributes.
-    use = supported.get('skill_use')
-    if claim.get('attribution', 'unknown') == 'unknown' and use and use.get('skill_name'):
-        personal = use.get('attribution') == 'personal'
-    help_fact = supported.get('assistance')
-    if assistance == 'unknown' and help_fact and help_fact.get('value') in {'independent', 'assisted', 'supervised'}:
-        assistance = help_fact['value']
+    use = [f for f in supported.get('skill_use', []) if f.get('skill_name')]
+    if claim.get('attribution', 'unknown') == 'unknown' and use:
+        personal = all(f.get('attribution') == 'personal' for f in use)
+    help_values = {f['value'] for f in supported.get('assistance', [])
+                   if f.get('value') in {'independent', 'assisted', 'supervised'}}
+    conflicts |= len(help_values) > 1
+    if assistance == 'unknown' and len(help_values) == 1:
+        assistance = next(iter(help_values))
     required = {'personal_contribution', 'assistance', 'skill_use'} <= supported.keys()
     level = 'insufficient_evidence'
     if personal and required and not conflicts:
         if assistance in {'assisted', 'supervised'}: level = 'guided_application'
         elif assistance == 'independent':
-            complex_skill = all(field in supported and normalized_name(supported[field].get('skill_name') or '') == normalized_name(claim['name'])
+            complex_skill = all(any(normalized_name(f.get('skill_name') or '') == normalized_name(claim['name']) for f in supported.get(field, []))
                                 for field in ('complexity', 'problem_solving'))
             level = 'complex_application' if complex_skill else 'independent_application'
     explanation = {

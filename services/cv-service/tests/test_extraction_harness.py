@@ -99,7 +99,7 @@ def test_repair_recovers_overlong_quotes_and_conflicting_dates(harness, monkeypa
     with caplog.at_level(logging.WARNING): app.state.worker.run_once()
     result = read_result(client, queued)
     assert result['status'] == 'ready' and result['error'] is None
-    assert result['extraction']['workflow_version'] == 'cv-extraction-5'
+    assert result['extraction']['workflow_version'] == 'cv-extraction-6'
     assert result['extraction']['repair_attempts'] == 1
     assert result['extraction']['response_mode'] == 'json_schema'
     assert result['extraction_version'] == 1 and len(result['items']) == 2
@@ -154,13 +154,13 @@ def test_evidence_failure_also_receives_source_specific_repair(harness, monkeypa
     assert feedback[0]['field'] == 'items[1]' and feedback[0]['issue'] == 'literal_skill'
 
 
-def duplicate_review_candidates():
+def repeated_review_candidates():
     _, valid = candidates()
     fact = {'field': 'skill_use', 'skill_name': 'Python', 'status': 'supported',
             'value': 'Used Python', 'evidence': [{'source_id': 'b2', 'quote': 'used Python'}]}
     valid['items'][1]['review_evidence'] = [fact]
     invalid = deepcopy(valid)
-    invalid['items'][1]['review_evidence'].append({**deepcopy(fact), 'skill_name': '  PYTHON  '})
+    invalid['items'][1]['review_evidence'].append({**deepcopy(fact), 'skill_name': '  PYTHON  ', 'value': 'Applied Python'})
     return invalid, valid
 
 
@@ -176,31 +176,28 @@ def review_graph(responses):
     return graph, calls
 
 
-def test_duplicate_review_evidence_gets_indexed_repair_and_preserves_supported_fact():
-    invalid, valid = duplicate_review_candidates()
-    graph, calls = review_graph([invalid, valid])
+def test_distinct_review_evidence_shares_normalized_field_without_repair():
+    repeated, _ = repeated_review_candidates()
+    graph, calls = review_graph([repeated])
     result = graph.run(b'synthetic')
-    assert result['repair_attempts'] == 1 and len(calls) == 2
-    feedback = calls[1][1]
-    assert len(feedback) == 1 and feedback[0]['field'] == 'items[1]'
-    assert feedback[0]['issue'] == 'duplicate_review_evidence'
-    assert 'normalized skill_name' in feedback[0]['guidance']
-    assert 'conflicting or uncertain' in feedback[0]['guidance']
-    assert 'Project Finch' not in json.dumps(feedback)
+    assert result['repair_attempts'] == 0 and len(calls) == 1
+    facts = result['items'][1]['review_evidence']
+    assert [fact['value'] for fact in facts] == ['Used Python', 'Applied Python']
+    assert all(fact['evidence'] == [{'source_id': 'b2', 'quote': 'used Python'}] for fact in facts)
+
+
+def test_identical_review_evidence_is_removed_without_repair():
+    _, valid = repeated_review_candidates()
+    valid['items'][1]['review_evidence'].append(deepcopy(valid['items'][1]['review_evidence'][0]))
+    graph, calls = review_graph([valid])
+    result = graph.run(b'synthetic')
+    assert result['repair_attempts'] == 0 and len(calls) == 1
     assert len(result['items'][1]['review_evidence']) == 1
     assert result['items'][1]['review_evidence'][0]['value'] == 'Used Python'
 
 
-def test_repeated_duplicate_review_evidence_still_fails_after_one_repair():
-    invalid, _ = duplicate_review_candidates()
-    graph, calls = review_graph([invalid, invalid])
-    with pytest.raises(ValueError, match='Duplicate interview evidence fields'):
-        graph.run(b'synthetic')
-    assert graph.repair_attempted and len(calls) == 2
-
-
 def review_quote_candidates():
-    _, valid = duplicate_review_candidates()
+    _, valid = repeated_review_candidates()
     invalid = deepcopy(valid)
     invalid['items'][1]['review_evidence'][0]['evidence'][0]['quote'] = 'Applied Python'
     return invalid, valid
@@ -467,4 +464,4 @@ def test_graph_prepares_clarification_context_after_grounded_extraction():
     assert len(calls) == 1
     assert result['items'][0]['uncertainties'] == ['proficiency']
     assert result['items'][0]['review_evidence'] == facts
-    assert result['metadata']['workflow_version'] == 'cv-extraction-5'
+    assert result['metadata']['workflow_version'] == 'cv-extraction-6'

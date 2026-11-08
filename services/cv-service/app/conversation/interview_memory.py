@@ -7,7 +7,7 @@ from app.domain.attachments import source_fingerprint
 from app.domain.review_context import clarification_context, evidence_for, review_target_skipped
 from app.domain.baseline import baseline_estimates
 from app.schemas.interview import InterviewProgress
-from app.schemas.interview_evidence import fact_key, ReviewField
+from app.schemas.interview_evidence import fact_key, ReviewField, fact_groups, facts_closed, fact_group_value
 
 MAX_CONTEXT_BYTES = 96 * 1024
 MAX_TARGET_ATTEMPTS = 2
@@ -49,10 +49,10 @@ def target_availability(item, memory, field, skill_name=None, *, max_attempts=MA
     """One target-admission policy shared by planner context and validation."""
     if review_target_skipped(item, field, skill_name): return 'declined'
     if topic_question_count(memory, item['id']) >= MAX_TOPIC_QUESTIONS: return 'topic_limit'
-    facts = {fact_key(f): f for f in evidence_for(item)}
-    fact = facts.get((field, normalized_name(skill_name or '')))
-    if fact and fact['status'] in {'supported', 'unknown', 'skipped', 'not_applicable'}:
+    facts = fact_groups(evidence_for(item)).get((field, normalized_name(skill_name or '')), [])
+    if facts_closed(facts):
         return 'closed'
+    fact = fact_group_value(facts)
     attempt = memory['attempts'].get(target_key(item['id'], field, skill_name), {})
     if attempt.get('declined'): return 'declined'
     if attempt.get('signature') == (digest(fact) if fact else 'missing') and attempt.get('count', 0) >= max_attempts:

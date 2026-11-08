@@ -642,7 +642,7 @@ class CvProcessingOperation {
 cvs *-- CvProcessingOperation : operation
 note for CvProcessingOperation "CV worker persists stage under the current lease/CAS. Public processing_progress derives fixed stage messages and 0-100 percent; model reasoning is not stored. No new collection."
 
-note for ReviewFact "replication_confidence records self-reported confidence in repeating a task, with support needs and uncertainty. It is not an assessed skill level. Internal evidence IDs stay structured and are omitted from assistant prose."
+note for ReviewFact "Multiple distinct facts may share a field and skill_name. Values, attribution and quotes remain separate; only identical facts are deduplicated. Unknown attribution asserts no ownership. replication_confidence records self-reported confidence in repeating a task, with support needs and uncertainty. It is not an assessed skill level. Internal evidence IDs stay structured and are omitted from assistant prose."
 
 note for InterviewMemory "Clarification targets rebuild from current CV facts. Missing optional fields alone do not create topics; clear sources can need zero questions. Extraction prepare_review removes superseded ambiguity flags without new stored facts or collections."
 

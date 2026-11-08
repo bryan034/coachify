@@ -36,10 +36,38 @@ def fact_key(fact):
     return fact['field'], normalized_name(fact.get('skill_name') or '')
 
 
+def unique_facts(facts):
+    """Retain distinct claims, including different attribution or citations."""
+    result = []
+    for fact in facts:
+        if fact not in result:
+            result.append(fact)
+    return result
+
+
+def fact_groups(facts):
+    groups = {}
+    for fact in unique_facts(facts):
+        groups.setdefault(fact_key(fact), []).append(fact)
+    return groups
+
+
+def facts_closed(facts):
+    return bool(facts) and all(f['status'] in {'supported', 'unknown', 'skipped', 'not_applicable'} for f in facts)
+
+
+def fact_group_value(facts):
+    # Preserve existing attempt signatures for a single saved fact.
+    return facts[0] if len(facts) == 1 else facts if facts else None
+
+
 def fact_statement(fact):
     subject = f"For the user's {fact['skill_name']} work" if fact.get('skill_name') else 'For this experience'
     statement = f"{subject}, {fact['field']} is {fact['value']}" if fact['value'] is not None else f"{subject}, the user says {fact['field']} is {fact['status']}."
-    if fact.get('attribution'):
+    # Unknown attribution is an absence of an ownership claim. Asking the
+    # verifier to prove that the CV declares it unknown rejects valid task
+    # descriptions whose ownership simply has not been established.
+    if fact.get('attribution') not in (None, 'unknown'):
         statement += f" Attribution is {fact['attribution']}; personal/shared means the user personally performed the stated work, team means teammates only, observed means watching only."
     return statement
 

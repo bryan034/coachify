@@ -6,7 +6,7 @@ import re
 import unicodedata
 from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates, date_bounds
 from app.domain.extraction_errors import EvidenceValidationError
-from app.schemas.interview_evidence import ReviewFact, fact_key, fact_statement
+from app.schemas.interview_evidence import ReviewFact, fact_key, fact_statement, unique_facts
 from pydantic import ValidationError
 
 
@@ -112,14 +112,15 @@ def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
         review_facts = [fact.model_dump(mode='json') for fact in item.review_evidence]
         for review_index, fact in enumerate(review_facts):
             if fact.get('skill_name') and skill_id(fact['skill_name']) not in names_by_id:
-                raise ValueError('Skill evidence must refer to a skill on that exact source.')
+                raise EvidenceValidationError('Skill evidence must refer to a skill on that exact source.',
+                                              'review_skill', index, review_index=review_index)
             for quote_index, ref in enumerate(fact['evidence']):
                 _validate_review_quote(ref, source_text, index, review_index, quote_index)
             first = fact['evidence'][0]['source_id']
             if (first, fact_statement(fact)) not in semantic_support and not evidence_matches(fact_statement(fact), source[first]['text']):
-                raise EvidenceValidationError('Interview evidence is not supported by the CV.', 'source_excerpt', index)
-        if len({fact_key(f) for f in review_facts}) != len(review_facts):
-            raise EvidenceValidationError('Duplicate interview evidence fields.', 'duplicate_review_evidence', index)
+                raise EvidenceValidationError('Interview evidence is not supported by the CV.',
+                                              'review_support', index, review_index=review_index)
+        review_facts = unique_facts(review_facts)
         items.append({'review_evidence': review_facts, 'id': identity, 'kind': item.kind, 'title': item.title, 'description': item.description,
                       'provenance': 'explicit' if item.explicit else 'inferred', 'evidence': evidence,
                       'skill_ids': [skill_id(name) for name in names], 'skill_names': names,
@@ -452,12 +453,12 @@ def interpretation_semantic_checks(payload, question, item=None):
             'reference_context': {'source_title': (item or {}).get('title'), 'question': question.get('question')}})
         refs.append({'block_id': block_id, 'excerpt': fact_statement(data)})
         fields.append(('review', fact_key(data)))
-        previous = next((f for f in (item or {}).get('review_evidence', []) if fact_key(f) == fact_key(data)), None)
-        if previous and previous['status'] == 'supported' and fact.status == 'supported' and previous.get('value') != fact.value:
+        previous = [f for f in (item or {}).get('review_evidence', []) if fact_key(f) == fact_key(data) and f['status'] == 'supported']
+        if any(f.get('value') != fact.value for f in previous) and fact.status == 'supported':
             # A quotation proving the new claim is not permission to silently
             # erase an incompatible earlier claim. Check their relationship too.
             block_id = str(len(blocks))
-            blocks.append({'id': block_id, 'text': 'Earlier supported account: ' + str(previous.get('value')) +
+            blocks.append({'id': block_id, 'text': 'Earlier supported account: ' + '\n'.join(str(f.get('value')) for f in previous) +
                 '\nLatest user statement: ' + '\n'.join(ref.quote for ref in fact.evidence)})
             refs.append({'block_id': block_id, 'excerpt': 'The latest statement refines the earlier account without contradiction, or explicitly corrects that earlier account.'})
             fields.append(('review-consistency', fact_key(data)))
@@ -482,7 +483,7 @@ def validate_review_interpretation(payload, item, question):
     facts = [fact_key(f.model_dump(mode='json')) for f in result.review_evidence]
     if len(set(facts)) != len(facts):
         raise ValueError('Interview evidence duplicated a field.')
-    if len({fact_key(f) for f in item.get('review_evidence', [])} | set(facts)) > 240:
+    if len([f for f in item.get('review_evidence', []) if fact_key(f) not in set(facts)]) + len(facts) > 240:
         raise ValueError('This experience has reached its review evidence limit.')
     if set(result.resolved_uncertainties) & set(result.remaining_uncertainties):
         raise ValueError('Interpretation returned conflicting uncertainty states.')
@@ -531,7 +532,8 @@ def validate_interpretation(payload, item, question, semantic_support=frozenset(
             if not excerpt or (not re.search(indicators[claim.assistance], normalized_name(excerpt))
                                and (claim.skill_id, 'assistance') not in semantic_support):
                 raise ValueError('Assistance or independence must be stated, not inferred.')
-    if len({fact_key(f) for f in item.get('review_evidence', [])} | {fact_key(f.model_dump(mode='json')) for f in result.review_evidence}) > 240:
+    changed_fact_keys = {fact_key(f.model_dump(mode='json')) for f in result.review_evidence}
+    if len([f for f in item.get('review_evidence', []) if fact_key(f) not in changed_fact_keys]) + len(result.review_evidence) > 240:
         raise ValueError('This experience has reached its review evidence limit. Existing answers are retained; use a new saved source for more evidence.')
     seen = set()
     for fact in result.review_evidence:
@@ -545,8 +547,8 @@ def validate_interpretation(payload, item, question, semantic_support=frozenset(
             raise ValueError('Interview evidence cited a different answer.')
         if ('review', identity) not in semantic_support:
             raise ValueError('Interview evidence requires semantic support.')
-        previous = next((f for f in item.get('review_evidence', []) if fact_key(f) == identity), None)
-        if previous and previous['status'] == 'supported' and fact.status == 'supported' and previous.get('value') != fact.value and ('review-consistency', identity) not in semantic_support:
+        previous = [f for f in item.get('review_evidence', []) if fact_key(f) == identity and f['status'] == 'supported']
+        if any(f.get('value') != fact.value for f in previous) and fact.status == 'supported' and ('review-consistency', identity) not in semantic_support:
             raise ValueError('A conflicting earlier account must be retained or explicitly corrected.')
     resolved, remaining = set(result.resolved_uncertainties), set(result.remaining_uncertainties)
     if resolved & remaining or len(resolved) != len(result.resolved_uncertainties) or len(remaining) != len(result.remaining_uncertainties):

@@ -10,7 +10,7 @@ from app.domain.model_usage import ModelAdmissionError
 from app.domain.extraction_feedback import feedback_for
 from app.domain.review_context import prepare_review_items
 
-WORKFLOW_VERSION = 'cv-extraction-5'
+WORKFLOW_VERSION = 'cv-extraction-6'
 
 
 class ExtractionState(TypedDict, total=False):

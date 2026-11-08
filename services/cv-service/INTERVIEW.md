@@ -245,11 +245,13 @@ does not end baseline review: missing personal skill application/support remains
 a reason for targeted questions, within the project’s own three-question budget. It preserves discussed-topic progress and the three-question maximum.
 Sources with a complete supported baseline need no repeated questions. Old unvisited optional-only
 topics and obsolete active prompts retire through conversation reconciliation.
-Extraction prompt provenance is `cv-extraction-10`; graph provenance is
-`cv-extraction-5`. The prompt and existing bounded repair identify duplicate
-interview evidence fields and instruct the model to retain supported details.
-The validator rejects duplicate fields, but a model repair cannot guarantee every
-detail in a rejected candidate survives. No new model call is added.
+Extraction prompt provenance is `cv-extraction-11`; graph provenance is
+`cv-extraction-6`. Distinct review facts may share a field and normalized skill
+name. Each retains its value, attribution and source quotations; only identical
+facts are deduplicated. Review readers keep the whole group, including unresolved
+or conflicting facts. Unknown attribution does not assert ownership. A new
+workflow version starts a fresh extraction rather than reusing an older saved
+candidate. No extra model call is added.
 
 Review quotations must match their cited original block, allowing case, whitespace
 and Unicode presentation differences. Extraction checks these anchors before
