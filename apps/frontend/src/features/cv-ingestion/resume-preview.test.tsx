@@ -154,7 +154,7 @@ describe('saved CV workspace',()=>{
    fireEvent.click(screen.getByRole('button',{name:'Return to current conversation'}));expect(await screen.findByRole('textbox',{name:'Message elo'})).toHaveValue('My unsent experience.');
   }finally{confirm.mockRestore();}
  });
- it('uploads after draft discard is confirmed and opens its review automatically',async()=>{
+ it('uploads after draft discard is confirmed and displays results',async()=>{
   const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);vi.mocked(cvApi.upload).mockResolvedValue(savedCv('new-cv'));
   try{
    renderWorkspace();fireEvent.click(screen.getByRole('button',{name:/Build through chat/}));
@@ -163,9 +163,9 @@ describe('saved CV workspace',()=>{
    fireEvent.change(screen.getByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});
    fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
    await waitFor(()=>expect(cvApi.upload).toHaveBeenCalledTimes(1));
-   await waitFor(()=>expect(cvApi.openConversation).toHaveBeenLastCalledWith(expect.objectContaining({cv_id:'new-cv',purpose:'skills_profile'}),'synthetic-session',expect.any(AbortSignal)));
+   await screen.findByRole('heading',{name:'Review extracted information'});expect(cvApi.openConversation).toHaveBeenCalledTimes(1);
    expect(confirm).toHaveBeenCalledTimes(1);expect(cvApi.select).not.toHaveBeenCalled();
-   expect(await screen.findByRole('textbox',{name:'Message elo'})).toHaveValue('');
+   fireEvent.click(screen.getByRole('button',{name:/Build through chat/}));expect(await screen.findByRole('textbox',{name:'Message elo'})).toHaveValue('');
   }finally{confirm.mockRestore();}
  });
  it('clears private drafts and ignores late results across accounts',async()=>{const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);try{let resolve!:(value:CvDetail)=>void;vi.mocked(cvApi.upload).mockImplementation(()=>new Promise(r=>resolve=r));const view=renderWorkspace();fireEvent.change(await screen.findByRole('textbox',{name:'Capability name'}),{target:{value:'Private owner A'}});fireEvent.change(await screen.findByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));session.account={id:'owner-b'};session.token='owner-b-token';view.rerender(<ResumePreview/>);fireEvent.click(screen.getByText('Your CV summary',{selector:'summary span'}));await act(async()=>resolve(savedCv('owner-a-cv')));expect(await screen.findByRole('textbox',{name:'Capability name'})).toHaveValue('');expect(screen.queryByText(/owner-a-cv/)).not.toBeInTheDocument();}finally{confirm.mockRestore();}});
@@ -206,16 +206,16 @@ describe('manual capability matches',()=>{
  it('requires an explicit attach or distinct choice for same-name CV evidence',async()=>{const cv=savedCv();vi.mocked(cvApi.addDeclaration).mockResolvedValue({...emptyDeclarations,version:1});render(<CapabilityDeclarations data={emptyDeclarations} selectedCv={cv} token="token" signal={new AbortController().signal} onSaved={vi.fn()} refresh={vi.fn()}/>);fireEvent.change(screen.getByRole('textbox',{name:'Capability name'}),{target:{value:'  python  '}});fireEvent.change(screen.getByRole('textbox',{name:'Capability description'}),{target:{value:'I used pandas for cleaning.'}});expect(screen.getByRole('button',{name:'Add capability'})).toBeDisabled();fireEvent.click(screen.getByRole('radio',{name:/Attach to CV evidence/}));fireEvent.click(screen.getByRole('button',{name:'Add capability'}));await waitFor(()=>expect(cvApi.addDeclaration).toHaveBeenCalled());expect(vi.mocked(cvApi.addDeclaration).mock.calls[0][0]).toMatchObject({mode:'attach',cv_match:{cv_id:cv.id,item_id:cv.items[1].id,cv_version:1}});});
 });
 
-it('opens the uploaded CV review immediately and starts questions only when extraction is ready',async()=>{
+it('opens upload progress then displays ready results before optional questions',async()=>{
  const source={...savedCv('processing-upload'),status:'processing' as const};let complete=false;
  vi.mocked(cvApi.upload).mockResolvedValue(source);
  vi.mocked(cvApi.get).mockImplementation(async()=>complete?{...source,status:'ready'}:source);
  renderWorkspace();fireEvent.change(await screen.findByLabelText('CV document'),{target:{files:[new File(['synthetic'],'resume.pdf')]}});fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
  await screen.findByRole('heading',{name:'Preparing your CV for review'});
- expect(window.location.search).toBe('?review=processing-upload');expect(screen.getByRole('region',{name:'CV review progress'})).toBeVisible();expect(cvApi.openConversation).not.toHaveBeenCalled();expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument();
+ expect(window.location.search).toBe('?review=processing-upload&uploaded=1');expect(screen.getByRole('region',{name:'CV review progress'})).toBeVisible();expect(cvApi.openConversation).not.toHaveBeenCalled();expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument();
  complete=true;fireEvent.click(screen.getByRole('button',{name:'Refresh saved status'}));
- await waitFor(()=>expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:source.id,purpose:'skills_profile'}),'synthetic-session',expect.any(AbortSignal)));
- await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('conversation',expect.objectContaining({command:'review'}),'synthetic-session',expect.any(AbortSignal)));expect(cvApi.select).not.toHaveBeenCalled();
+ await screen.findByRole('heading',{name:'Review extracted information'});
+ expect(window.location.search).toBe('?cv=processing-upload');expect(cvApi.openConversation).not.toHaveBeenCalled();expect(cvApi.sendMessage).not.toHaveBeenCalled();expect(cvApi.select).not.toHaveBeenCalled();
 });
 it('warns before selecting an unreviewed baseline and respects cancellation',async()=>{
  const source=savedCv('unreviewed');vi.mocked(cvApi.list).mockResolvedValue({cvs:[source],selection:{cv_id:null,version:1}});vi.mocked(cvApi.select).mockResolvedValue({cv_id:source.id,version:2});

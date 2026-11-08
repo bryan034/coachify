@@ -46,15 +46,14 @@ it('opens manual intake explicitly and preserves the unsent draft when returning
  expect(cvApi.openConversation).toHaveBeenCalledTimes(1);
 });
 
-it('accepts a dropped CV and immediately starts guided review',async()=>{
- const cv=savedCv('uploaded');vi.mocked(cvApi.upload).mockResolvedValue(cv);
+it('accepts a dropped CV and displays extracted results without starting guided review',async()=>{
+ const cv=savedCv('uploaded');vi.mocked(cvApi.upload).mockResolvedValue(cv);vi.mocked(cvApi.get).mockResolvedValue(cv);
  render(<ResumePreview/>);fireEvent.click(await screen.findByRole('button',{name:/Upload your CV/}));
  await screen.findByLabelText('CV document');
  fireEvent.drop(screen.getByText('Drop your CV here, or choose a file below.').parentElement!,{dataTransfer:{files:[new File(['synthetic CV'],'profile.pdf')]}});
  fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
- await waitFor(()=>expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:cv.id,purpose:'skills_profile'}),'synthetic-token',expect.any(AbortSignal)));
- await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat',expect.objectContaining({command:'review'}),'synthetic-token',expect.any(AbortSignal)));
- expect(cvApi.select).not.toHaveBeenCalled();
+ await screen.findByRole('heading',{name:'Review extracted information'});
+ expect(cvApi.openConversation).not.toHaveBeenCalled();expect(cvApi.sendMessage).not.toHaveBeenCalled();expect(cvApi.select).not.toHaveBeenCalled();
 });
 
 it('shows a saved partial profile and its uncertainty without inventing a skill level',async()=>{

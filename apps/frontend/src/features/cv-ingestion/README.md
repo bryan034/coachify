@@ -6,8 +6,9 @@ It uploads CVs, extracts potential skills and retains the existing evidence/revi
 workflow. Search Jobs has its own navigation tab, which also holds application tracking. Target confirmation and gap analysis remain separate.
 
 `resume-preview.tsx` coordinates the policy, saved CVs, explicit selection and
-recoverable upload/processing states. The initial experience is the skills summary; upload or explicit review opens the text
-conversation in `cv-conversation.tsx`. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, Set as active baseline and Delete CV. Original filenames and source versions remain under File details;
+recoverable upload/processing states. Upload opens progress, then displays classified
+results when ready. Explicit Review CV opens the optional text conversation in
+`cv-conversation.tsx`. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, Set as active baseline and Delete CV. Original filenames and source versions remain under File details;
 **Your CV summary** exposes the effective evidence, detailed corrections,
 reconciliation and manual declarations when needed. Uploading never changes selection. The
 active baseline is identified separately from the CV currently being
@@ -140,7 +141,7 @@ the frontend only displays them; a skill missing from the map shows under Other 
 Experience and clarifications, then the
 upload form and saved CVs, follow below, with links to jump between sections.
 Upload your CV / Build through chat remain explicit choices. Upload supports drag/drop as well as
-keyboard file selection. An accepted upload opens the full-page review immediately, shows processing/recovery status, and starts chat automatically once extraction is ready. It does not change the analysis selection.
+keyboard file selection. An accepted upload shows processing/recovery status, then opens the detailed extracted results when ready. It starts no chat or clarification call automatically and does not change the analysis selection.
 Review CV starts/resumes basic guided review only after extraction is ready;
 failed/processing files expose View processing status instead.
 
@@ -170,9 +171,14 @@ The library retains pagination and bounded internal scrolling on mobile.
 
 The upload panel and CV library share the same desktop row height, while only the
 library contents scroll. On mobile they stack with independent natural/bounded heights.
-After an upload is accepted, `/cv?review=<cv_id>` opens immediately with processing,
-retry and failure states. Conversation creation and automatic clarification wait
-until the CV is ready. Returning to Skills Profile does not alter the active baseline.
+After an upload is accepted, `/cv?review=<cv_id>&uploaded=1` opens immediately with
+processing, retry and failure states. This mode survives reload and returns to
+classified results when ready. Review CV remains the explicit entry into guided
+clarification. Returning to Skills Profile does not alter the active baseline.
+
+Review evidence can contain multiple distinct facts in the same field. Rendering
+uses complete fact identities and labels personal/shared attribution, retaining
+all values and quotes through updates.
 
 **Set as active baseline** warns when the current `effective_version` does not match
 `profile_reviewed_effective_version`. The warning explains that AI interpretation

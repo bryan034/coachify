@@ -33,7 +33,7 @@ test('saved CV upload, explicit selection, correction, declaration and reload',a
  });
  await page.goto('/cv');await openCvReviewTools(page);await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
  await page.getByLabel('CV document',{exact:true}).setInputFiles({name:'resume.pdf',mimeType:'application/pdf',buffer:Buffer.from('synthetic fixture; API mocked')});await page.getByRole('button',{name:'Upload CV',exact:true}).click();
- await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();await page.getByRole('button',{name:'Back to Skills Profile'}).click();
+ await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
  await expect(page.getByLabel('CV cv-two',{exact:true})).toBeVisible();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
  page.once('dialog',async dialog=>{expect(dialog.message()).toContain('If any roles or responsibilities are not clearly stated in your CV details');await dialog.dismiss();});await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'Set as active baseline'}).click();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
  page.once('dialog',dialog=>dialog.accept());await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'Set as active baseline'}).click();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-two');
@@ -74,7 +74,7 @@ test('confirmed target prepares relevant questions and preserves answers and ski
  context={...context,id:'target-design',selection_version:2,role:'Design researcher',skill_ids:['research']};await page.getByRole('button',{name:'Refresh clarification context'}).click();await expect(page.getByLabel('Confirmed clarification target')).toContainText('Design researcher');await expect(page.getByRole('textbox',{name:'Your explanation'})).toHaveCount(0);await expect(page.getByRole('region',{name:'CV review',exact:true}).getByText('I cleaned the Python data. A teammate designed the dashboard.',{exact:true})).toBeVisible();await expect(page.getByText(/No relevant clarification questions are pending for this target/)).toBeVisible();
 });
 
-test('Skills Profile opens the uploaded CV review immediately and starts clarification after processing',async({page},testInfo)=>{
+test('Skills Profile displays extracted results and starts clarification only on request',async({page},testInfo)=>{
  await workspace(page);
  await page.route('**/api/v1/profile/capabilities',route=>route.fulfill({json:emptyDeclarations}));
  let source:CvDetail|null=null,opens=0,reviewStarts=0;
@@ -104,9 +104,18 @@ test('Skills Profile opens the uploaded CV review immediately and starts clarifi
  await expect(page).toHaveURL(/review=uploaded-profile-cv/);
  await expect(page.getByRole('heading',{name:'Preparing your CV for review'})).toBeVisible();
  expect(opens).toBe(0);expect(reviewStarts).toBe(0);
+ await page.reload();
+ await expect(page.getByRole('heading',{name:'Preparing your CV for review'})).toBeVisible();
+ expect(opens).toBe(0);expect(reviewStarts).toBe(0);
  source={...source!,status:'ready'};
  await page.getByRole('button',{name:'Refresh saved status'}).click();
  await page.setViewportSize({width:390,height:844});
+ await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
+ expect(opens).toBe(0);expect(reviewStarts).toBe(0);
+ await page.reload();
+ await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
+ expect(opens).toBe(0);expect(reviewStarts).toBe(0);
+ await page.getByRole('article',{name:'CV uploaded-profile-cv',exact:true}).getByRole('button',{name:'Review CV',exact:true}).click();
  await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  await expect(page.getByRole('list',{name:'Saved conversation messages'}).getByText('Which parts of the dashboard did you personally build?',{exact:true})).toBeVisible();
  expect(opens).toBe(1);expect(reviewStarts).toBe(1);
