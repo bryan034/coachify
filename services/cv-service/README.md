@@ -27,6 +27,12 @@ See [SPEC.md](SPEC.md) for semantics, [OpenAPI](../../contracts/api/cv.yaml) for
 
 The running service uses MongoDB and private originals. Model calls use the OpenAI Python SDK; the public deployment template selects OpenRouter for all four model-backed services. SDK retries are disabled and response/time limits remain enforced. Configure `CV_LLM_BASE_URL` and `CV_LLM_MODEL` for extraction, clarification interpretation and conversational routing. The Compose template uses `OPENROUTER_API_KEY` for OpenRouter, with an optional `CV_LLM_API_KEY` override; direct processes may supply either key. Missing configuration preserves the upload/answer/message and offers retry; runtime never substitutes synthetic output. Chat responses distinguish durable messages, pending work, proposed changes and saved facts. History is owner-scoped, bounded and retained for resume. `CAREER_SERVICE_URL` supplies confirmed skill and qualification/date context. Assessment admission, stale-result tracking and gap/roadmap generation remain outside this service. Tests use synthetic responses and do not establish live-model accuracy.
 
+Cloud model calls honour the process's HTTP(S) proxy and CA settings, including
+`HTTPS_PROXY`, `NO_PROXY` and `SSL_CERT_FILE`; TLS verification and redirect
+blocking remain enabled. Explicit local model calls bypass these proxy settings
+and do not send preserved cloud credentials. Internal service requests remain
+direct. See [configuration troubleshooting](../../docs/setup.md#cv-extraction-configuration-troubleshooting).
+
 CV model requests share configurable daily attempt budgets and per-account/global concurrency across service instances. Admission failures preserve saved inputs and explain when to retry. Original storage quotas and model budgets are separate; the specification documents their limits, private-volume assumptions and recovery.
 
 For DeepSeek Chat Completions, set `CV_LLM_BASE_URL=https://api.deepseek.com`, `CV_LLM_MODEL=deepseek-flash`, `CV_LLM_RESPONSE_MODE=json_object` and your private `CV_LLM_API_KEY`. This explicitly opts out of schema-constrained decoding because that endpoint documents JSON-object output only. The harness still validates and can repair once. Requests to the exact `api.deepseek.com` host automatically disable thinking for extraction, chat routing and clarification interpretation; other provider hosts keep their existing options. See [DeepSeek's request format](https://api-docs.deepseek.com/api/create-chat-completion/).
@@ -42,8 +48,11 @@ Extraction and repair timeouts are capped by the remaining 180-second worker lea
 
 Saved-CV detail responses include `skill_groups`, mapping each skill name to its display category. It is derived on read and never stored.
 
-Skills Profile opens on a summary. Uploading opens the full-page review immediately;
-the review screen opens immediately after upload, waits for extraction and then starts guided questions automatically. Manual guided entry uses Profile-owned structured
+Skills Profile opens on a summary. Uploading opens progress immediately;
+successful extraction displays classified results before any optional guided questions.
+Distinct responsibilities and contributions retain their own source quotes and
+attribution even when they share a category. Review CV explicitly starts guided review.
+Manual guided entry uses Profile-owned structured
 background and per-experience skill evidence. Basic CV review works without a
 Career target; target-specific questions retain their existing confirmation rules.
 `POST /api/v1/cv/{cv_id}/profile-review` saves a version-bound review stamp from
