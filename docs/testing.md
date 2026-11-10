@@ -21,8 +21,16 @@ The goal-confirmation browser journey holds the concurrent workspace refresh whi
 checking the stale-revision guard, then releases it after the explicit reload.
 This preserves the guard assertions without racing the normal focus refresh.
 
+Full-stack onboarding journeys finish on `/getting-started` and use Go to Home
+to reach the dashboard. Saved background assertions live on My profile. Career
+requirements are reviewed under About the role. Baseline Profile planning defaults
+are tested through the standalone `/profile/edit` route; the profile summary links
+to Roadmap’s separate planner settings.
+
 Full-stack CV chat journeys enter guided review from a fresh upload or reopen a
-saved CV from Skills Profile. Manual intake starts from Build through chat. The
+saved CV from the Your CV card on Skills Profile. Detailed correction journeys
+open Upload new CV and Manage saved CVs, waiting for the saved selection to load
+before toggling the library disclosure. Manual intake starts from Build through chat. The
 synthetic provider serves guided questions, manual
 intake and a finite set of labelled semantic-evidence verdicts; unsupported claims
 and unrelated source blocks are rejected. Manual intake stays a draft until Save

@@ -95,7 +95,11 @@ test('planning preferences persist, detect conflicts, prorate capacity and never
  expect(workspace.context.planning_defaults.availability_periods).toHaveLength(2);
  await expect(page.getByRole('button',{name:'Use saved 6 hours a week',exact:true})).toBeVisible();
  await page.getByRole('link',{name:/My profile/}).click();
- await page.getByRole('link',{name:'Planning preferences ↗'}).click();
+ await expect(page.getByText('Saved course',{exact:true})).toBeVisible();
+ // Baseline planning defaults remain on the standalone editor; the profile
+ // summary now links to the Roadmap planner and its separate settings.
+ await page.goto('/profile/edit');
+ await expect(prefs).toBeVisible();
  for(const d of [future(3),future(5)]){
   await prefs.getByRole('button',{name:`Delete period ${d}`,exact:true}).click();
   await expect(prefs.getByRole('button',{name:`Delete period ${d}`,exact:true})).toHaveCount(0);

@@ -33,9 +33,11 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  const target=await seedCanonicalGoal(account,{role:'Synthetic data analyst internship',field:'Data analytics',skills:[{name:'Python',evidence:'Build reports using Python.'},{name:'SQL',evidence:'Query data using SQL.'}],conditions:[{description:qualification,evidence:qualification,category:'Qualifications'}]});
  const targetId=target.id;
  await page.goto('/career-goal');
- await page.locator('summary').filter({hasText:/^Eligibility & commitment\b/}).click();
+ await page.getByRole('link',{name:'About the role',exact:true}).click();
+ await page.locator('summary').filter({hasText:/^Eligibility and commitment\b/}).click();
  await chapter('1. Review the target requirements', 'The test account uses a pre-seeded synthetic canonical goal. The displayed skills and diploma requirement are saved by Career; this walkthrough does not evaluate live extraction.', page.getByRole('heading',{name:'Synthetic data analyst internship',exact:true}));
  await expect(page.getByText(qualification,{exact:true}).first()).toBeVisible();
+ await page.getByRole('link',{name:'Skills needed',exact:true}).click();
  await chapter('2. Confirm this goal for CV review', 'Automatic saving is separate from explicit confirmation. Review the displayed requirements, then acknowledge this exact goal version before CV questions use it.',page.getByRole('region',{name:'Goal confirmation for CV review'}));
  const context=await confirmCanonicalGoal(page,account,target);
  expect(context.conditions).toEqual(expect.arrayContaining([expect.objectContaining({description:qualification,evidence:qualification})]));

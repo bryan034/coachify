@@ -27,8 +27,8 @@ test('P09–P12 register, switch A/B, restore history, revoke and protect back/r
  await page.getByLabel('Password',{exact:true}).fill(a.password);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await expect(page).toHaveURL(/\/dashboard$/);
- await expect(page.locator('[aria-label="Saved background"]')).toContainText('Synthetic A school');
  await page.getByRole('link',{name:'My profile'}).click();
+ await expect(page.getByText('Synthetic A school',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Edit profile',exact:false}).click();
  await expect(page.getByRole('textbox',{name:'What course did you study?'})).toHaveValue('Synthetic A course');
  await expect(page.getByText('Synthetic account B',{exact:true})).toHaveCount(0);
@@ -91,9 +91,11 @@ test('P13/P14 partial setup stays guarded and another tab observes completion',a
  await other.evaluate(value=>sessionStorage.setItem('elo.session',value!),stored);
  await other.goto('/onboarding');await expect(other.getByRole('button',{name:'Enter elo'})).toBeEnabled();
  await page.bringToFront();await expect(page.getByRole('button',{name:'Enter elo'})).toBeEnabled();
- await page.getByRole('button',{name:'Enter elo'}).click();await expect(page).toHaveURL(/\/dashboard$/);
- await other.bringToFront();await expect(other).toHaveURL(/\/dashboard$/);
- await other.goto('/onboarding');await expect(other).toHaveURL(/\/dashboard$/);
+ await page.getByRole('button',{name:'Enter elo'}).click();await expect(page).toHaveURL(/\/getting-started$/);
+ await other.bringToFront();await expect(other).toHaveURL(/\/getting-started$/);
+ await other.goto('/onboarding');await expect(other).toHaveURL(/\/getting-started$/);
+ await other.getByRole('link',{name:'Go to Home',exact:true}).click();
+ await expect(other).toHaveURL(/\/dashboard$/);
  const saved=await(await api.get('/api/v1/profile')).json();expect(saved.onboarding_complete).toBe(true);
  expect(saved.weekly_hours).toBeNull();expect(saved.application_date).toBeNull();
 });

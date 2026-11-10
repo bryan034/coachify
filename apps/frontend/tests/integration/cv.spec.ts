@@ -129,7 +129,7 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  page.once('dialog', dialog => dialog.accept());
  await page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Delete CV',exact:true}).click();
  await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true})).toHaveCount(0);
- await expect(page.getByLabel('Selected CV', {exact:true})).toContainText('No CV selected');
+ await expect(page.getByLabel('Selected CV', {exact:true})).toContainText('No active CV yet.');
  expect((await account.get(`/api/v1/cv/${cvId}`)).status()).toBe(404);
  for (const chat of conversationList.conversations) expect((await account.get(`/api/v1/cv/conversations/${chat.id}`)).status()).toBe(404);
  expect((await (await account.get('/api/v1/profile/capabilities')).json()).declarations).toHaveLength(2);

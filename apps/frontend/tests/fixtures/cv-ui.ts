@@ -21,10 +21,11 @@ export async function mockEmptyConversation(page: Page) {
   });
 }
 
-/** Existing review tools now live behind explicit disclosures in the chat workspace. */
 /** Saved CVs sit under a disclosure below the CV card; open it before working with the list. */
 export async function openCvLibrary(page: Page) {
+  await expect(page.getByLabel('Selected CV', {exact:true})).toContainText(/No active CV yet|Active CV:/);
   const library = page.locator('details.cv-library-disclosure');
+  await expect(library).toBeVisible();
   if (await library.getAttribute('open') === null) await library.locator(':scope > summary').click();
   await expect(page.getByRole('heading', {name:'Your CVs', exact:true})).toBeVisible();
 }
@@ -40,6 +41,8 @@ export async function openCvReviewTools(page: Page) {
     }
     await page.getByRole('button', {name:review === 'manual' ? 'Back to Skills Profile' : 'Save and review later', exact:true}).click();
   }
+  await page.getByRole('button', {name:'Upload new CV', exact:true}).click();
+  await expect(page.getByLabel('CV document', {exact:true})).toBeVisible();
   await openCvLibrary(page);
   await expect(page.getByText('Loading saved CVs…', {exact: true})).toHaveCount(0);
   for (const label of ['CV details and corrections']) {

@@ -25,8 +25,10 @@ test('local UI saves to MongoDB and restores after reload without Google', async
   const write = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/profile/onboarding/complete'));
   await page.getByRole('button', { name: 'Enter elo' }).click();
   expect((await write).status()).toBe(200);
+  await expect(page).toHaveURL(/\/getting-started$/);
+  await page.getByRole('link', {name:'Go to Home', exact:true}).click();
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByRole('heading',{name:'Welcome to elo'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:/^Welcome back/})).toBeVisible();
   await page.getByRole('link',{name:'My profile'}).click();
   await expect(page).toHaveURL(/\/profile$/);
   await expect(page.getByText('Computing & Design',{exact:true})).toBeVisible();

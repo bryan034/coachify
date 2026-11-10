@@ -7,6 +7,8 @@ test('employed summary persists work details and development preview never chang
   await fillCurrentEmployment(page);
   await page.getByRole('button', { name: 'No applicable previous education' }).click();
   await page.getByRole('button', { name: 'Enter elo', exact: true }).click();
+  await expect(page).toHaveURL(/\/getting-started$/);
+  await page.getByRole('link', {name:'Go to Home', exact:true}).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.getByRole('link', { name: 'My profile', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'Current employment' })).toBeVisible();
@@ -87,6 +89,8 @@ for (const previouslyEmployed of [true, false]) {
     await expect(page.getByRole('heading', { name: 'Your last education path.' })).toBeVisible();
     await page.getByRole('button', { name: 'No applicable previous education' }).click();
     await page.getByRole('button', { name: 'Enter elo', exact: true }).click();
+    await expect(page).toHaveURL(/\/getting-started$/);
+    await page.getByRole('link', {name:'Go to Home', exact:true}).click();
     await expect(page).toHaveURL(/\/dashboard$/);
     await page.goto('/profile');
     const saved = await (await api.get('/api/v1/profile')).json();
@@ -124,6 +128,8 @@ test('never-employed graduate saves graduation year to MongoDB and can edit it a
   expect((await (await api.get('/api/v1/profile')).json()).education.graduation_year).toBe(2024);
   await page.getByRole('button', { name: 'No applicable named course / Skip', exact: true }).click();
   await page.getByRole('button', { name: 'Enter elo', exact: true }).click();
+  await expect(page).toHaveURL(/\/getting-started$/);
+  await page.getByRole('link', {name:'Go to Home', exact:true}).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.goto('/profile');
   await expect(page.getByText('Year of graduation', { exact: true })).toBeVisible();

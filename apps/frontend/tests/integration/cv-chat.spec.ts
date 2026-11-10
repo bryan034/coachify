@@ -58,7 +58,7 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   const {account, cvId} = await setupChatScenario(page);
   const cv = async () => (await account.get(`/api/v1/cv/${cvId}`)).json();
   await page.goto('/cv');
-  await page.getByRole('region', {name: 'Skills profile summary', exact: true}).getByRole('button', {name: 'Review CV', exact: true}).click();
+  await page.getByRole('region', {name: 'Your CV', exact: true}).getByRole('button', {name: /^(Continue review|Refine)$/, exact: true}).click();
   await expect(page.getByRole('list',{name:'Saved conversation messages'})).toContainText('Team dashboard');
   expect((await readChat(account,cvId)).active_question?.title).toBe('Team dashboard');
   const before = await cv();
