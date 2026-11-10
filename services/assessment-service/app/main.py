@@ -27,8 +27,20 @@ def create_app(store=None,upstream=None,model=None):
             live=await capture(app.state.upstream,verified)
             if live.get('input_hash')!=snapshot['input_hash']:raise Problem('Your inputs changed before the next comparison step.',409,'inputs_changed')
             requirements=snapshot['requirements'][start:start+8]
-            output=await app.state.model.generate(Batch,INSTRUCTIONS,{'requirements':requirements,'evidence':snapshot['evidence']})
-            outcomes.extend(validate_batch(output,requirements,snapshot['evidence']))
+            model_context={'requirements':requirements,'evidence':snapshot['evidence']}
+            for attempt in range(2):
+                output=await app.state.model.generate(Batch,INSTRUCTIONS,model_context)
+                try:
+                    validated=validate_batch(output,requirements,snapshot['evidence'])
+                    break
+                except Problem as error:
+                    if error.code!='assessment_output' or attempt:
+                        raise
+                    # Only fixed local validation guidance is sent back. Provider
+                    # failures do not enter repair, and no rejected batch is saved.
+                    model_context={**model_context,'validation_feedback':error.detail,
+                                   'previous_output':output.model_dump(mode='json')}
+            outcomes.extend(validated)
             row['pending']['checkpoint']['outcomes']=outcomes
             row['pending']['stage']='assessed_'+str(len(outcomes))
             await thread(app.state.store.checkpoint,account['id'],row)
