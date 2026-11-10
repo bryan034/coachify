@@ -142,3 +142,55 @@
  .home-columns{grid-auto-flow:row;grid-template-columns:repeat(3,minmax(0,1fr))}
  .home-next ul{grid-template-columns:minmax(0,1fr)}
 }
+
+/* ---- Redesign: goal match, roadmap countdown, this week, coming up, skills ---- */
+.home-grid-top,.home-grid-bottom{margin-top:24px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
+.home-grid-top{grid-template-columns:minmax(0,2fr) minmax(300px,1fr)}
+.home-board .home-card{min-height:0;border-radius:16px}
+.home-board .home-card h2{font-size:17px;font-weight:600}
+.home-eyebrow{margin:0;font-size:13px;font-weight:600;color:var(--slate)}
+.home-board .home-match h2{margin:6px 0 0;font-size:22px;font-weight:500}
+.home-big{font-size:40px;font-weight:600;letter-spacing:-.03em;margin-right:4px}
+.home-block{display:block;font-size:48px;line-height:1;margin:0 0 4px}
+.home-match>header{align-items:flex-start;flex-wrap:wrap}
+.home-match-bar{display:flex;gap:2px;height:12px;margin:20px 0 10px;border-radius:6px;overflow:hidden}
+.home-match-bar .is-have,.home-match-legend i.is-have{background:var(--forest)}
+.home-match-bar .is-partial,.home-match-legend i.is-partial{background:#60a5fa}
+.home-match-bar .is-gap,.home-match-legend i.is-gap{background:#f97316}
+.home-match-bar .is-unknown,.home-match-legend i.is-unknown{background:#cbd5e1}
+.home-match-legend{display:flex;flex-wrap:wrap;gap:16px;margin:0;padding:0;list-style:none;font-size:13px;color:var(--slate)}
+.home-match-legend li{display:flex;align-items:center;gap:6px}
+.home-match-legend i{width:10px;height:10px;border-radius:3px}
+.home-match hr{height:1px;margin:22px 0 16px;border:0;background:var(--line)}
+.home-gaps{margin:10px 0 18px;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.home-gaps li{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.home-gap-rank{width:16px;font-weight:600;color:var(--slate)}
+.home-gap-name{flex:1 1 240px;font-weight:500}
+.home-chip{display:inline-flex;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;background:#e5e7eb;color:var(--ink)}
+.home-chip.importance-required{background:var(--ink);color:var(--white)}
+.home-chip.match-confirmed_shortfall{background:var(--gap-bg);color:var(--gap-ink)}
+.home-chip.match-partial{background:var(--partial-bg);color:var(--partial-ink)}
+.home-match-compare{margin-top:16px;padding:0;border:0}
+.home-board .home-roadmap{color:var(--ink);background:var(--white);border-color:var(--line);gap:12px}
+.home-board .home-roadmap h2{margin:0;font-size:18px;font-weight:500;line-height:1.3;color:var(--ink)}
+.home-board .home-roadmap .home-muted{color:var(--slate)}
+.home-board .home-roadmap .home-progress{height:6px;margin:0;border-radius:3px;background:var(--cloud);overflow:hidden}
+.home-board .home-roadmap .home-progress i{display:block;height:6px;border-radius:3px;background:var(--forest)}
+.home-today{margin-top:auto;padding:14px 16px;border-radius:12px;background:var(--mint-mist)}
+.home-today .home-eyebrow{color:var(--forest-ink)}
+.home-today p{margin:4px 0 0}
+.home-week ul,.home-upcoming ul{margin:14px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}
+.home-week li{display:flex;gap:10px;align-items:flex-start}
+.home-week li.is-done>span:nth-child(2){color:var(--slate);text-decoration:line-through}
+.home-tick{display:grid;place-items:center;flex:none;width:18px;height:18px;margin-top:2px;border:1.5px solid rgb(71 85 105 / .5);border-radius:5px}
+.home-week li.is-done .home-tick{background:var(--forest);border-color:var(--forest);color:var(--white)}
+.home-tick svg{width:12px;height:12px}
+.home-upcoming li{display:flex;gap:14px;align-items:center}
+.home-upcoming li>span:last-child{display:flex;flex-direction:column;min-width:0}
+.home-upcoming li .home-muted{font-size:13px}
+.home-date{flex:none;width:48px;padding:4px 0;border:1px solid rgb(71 85 105 / .25);border-radius:10px;text-align:center}
+.home-date small{display:block;font-size:11px;font-weight:600;color:var(--gap-ink)}
+.home-date b{display:block;font-size:18px;font-weight:600;line-height:1.1}
+.home-stat-big{margin:10px 0 0;font-size:28px;font-weight:600;letter-spacing:-.02em}
+.home-board .home-card .home-link{margin-top:16px;align-self:flex-start;font-weight:600;color:var(--forest)}
+@media (max-width:980px){.home-grid-top{grid-template-columns:minmax(0,1fr)}}

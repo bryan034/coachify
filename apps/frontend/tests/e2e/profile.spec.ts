@@ -67,7 +67,7 @@ test('save, reload, browse international schools, switch status and retry', asyn
   await expect(page.getByText('Profile saved.')).toBeVisible();
   // Client-side workspace navigation preserves the in-memory Google identity.
   await page.getByRole('link', { name: 'Home', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome to elo' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Welcome back/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out' }).first()).toBeVisible();
   await page.getByRole('link', { name: 'My profile' }).click();
   await page.goto('/profile/edit');

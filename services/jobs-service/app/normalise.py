@@ -79,6 +79,10 @@ def bounded(value, limit):
 
 
 def excerpt(text):
+    # Prefer role-specific sections over employer introductions. Preserve the original
+    # visible wording rather than generating requirements not supplied by the board.
+    section = re.search(r'(?im)(?:^|[.!?]\s+)(?:what you(?:’|\x27)ll do|what you will do|responsibilities|requirements|qualifications|about (?:the|this) role)\s*[:\n]', text)
+    if section: text = text[section.start():].lstrip()
     text = PHONE.sub('[phone removed]', EMAIL.sub('[email removed]', text))
     if len(text) <= EXCERPT_LENGTH:
         return text

@@ -91,9 +91,9 @@ describe('Search Jobs',()=>{
   const card=(await screen.findByRole('heading',{name:'Data Intern'})).closest('li')!;
   expect(within(card).getByText('Internship')).toBeVisible();
   expect(within(card).getByText('Fintech')).toBeVisible();
-  expect(within(card).getByText('Posted 1 Nov 2026')).toBeVisible();
+  expect(within(card).getByText('Posted Sun, 1 Nov 2026')).toBeVisible();
   expect(screen.getByText('Posting date not supplied')).toBeVisible();
-  expect(screen.getByText('Closes 1 Dec 2026')).toBeVisible();
+  expect(screen.getByText('Closes Tue, 1 Dec 2026')).toBeVisible();
   expect(screen.getByText('2 jobs in Singapore')).toBeVisible();
   const headers=(vi.mocked(fetch).mock.calls[0][1] as RequestInit).headers as Record<string,string>;
   expect(headers.Authorization).toBe('Bearer synthetic-token');
@@ -114,7 +114,8 @@ describe('Search Jobs',()=>{
   fireEvent.change(screen.getByRole('combobox',{name:'Date posted'}),{target:{value:'7'}});
   await waitFor(()=>expect(lastSearch().get('posted_within_days')).toBe('7'));
   fireEvent.click(screen.getByRole('button',{name:'Clear filters'}));
-  await waitFor(()=>expect([...lastSearch().keys()]).toEqual([]));
+  // Sort is a display order, not a filter: clearing filters keeps the chosen order.
+  await waitFor(()=>expect([...lastSearch().entries()]).toEqual([['sort','recommended']]));
  });
  it('supports a custom posted date range',async()=>{
   render(<SearchJobs/>);
@@ -148,7 +149,6 @@ describe('Search Jobs',()=>{
   expect(screen.getByRole('link',{name:/Huzzle/})).toBeVisible();
   expect(screen.queryByRole('link',{name:/Unsafe/})).toBeNull();
   expect(storage).not.toHaveBeenCalled();
-  expect(screen.getByRole('link',{name:/Use its job description/})).toHaveAttribute('href','/career-goal?new=1');
  });
  it('records nothing for an employer visit and asks only once the user returns',async()=>{
   renderWithCheck();
@@ -273,6 +273,14 @@ describe('Search Jobs',()=>{
   expect(screen.getByRole('heading',{name:'Data Intern'})).toBeVisible();
   expect(lastSearch().get('cursor')).toBe('next-page');
   expect(screen.queryByRole('button',{name:'Show more jobs'})).toBeNull();
+ });
+ it('offers each HTTPS listing as a career goal through the review intake',async()=>{
+  search=()=>json({items:[posting('a','Data Intern')],total:1,next_cursor:null});
+  render(<SearchJobs/>);
+  const card=(await screen.findByRole('heading',{name:'Data Intern'})).closest('li')!;
+  const use=within(card).getByRole('link',{name:'Use as career goal'});
+  expect(new URLSearchParams(use.getAttribute('href')!.split('?')[1]).get('job_url')).toMatch(/^https:\/\//);
+  expect(use.getAttribute('href')).toMatch(/^\/career-goal\?new=1&/);
  });
  it('never renders a non-HTTPS link from a listing',async()=>{
   search=()=>json({items:[posting('a','Unsafe Role',{apply_url:'javascript:alert(1)',listing_url:'http://jobs.example.test/a'})],total:1,next_cursor:null});

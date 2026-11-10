@@ -27,7 +27,7 @@ test('Career Goal supports three temporary inputs, recovery and responsive navig
  });
  await page.goto('/career-goal');
  await expect(page.getByRole('heading',{level:1,name:'Career Goal',exact:true})).toBeVisible();
- const labels=await page.getByRole('navigation').getByRole('link').allTextContents();expect(labels.slice(0,3)).toEqual(['Home','Career Goal','Roadmap']);
+ const labels=await page.getByRole('navigation').getByRole('link').allTextContents();expect(labels.slice(0,5)).toEqual(['Home','Career Goal','Skills Profile','Roadmap','Search Jobs']);
  await expect(page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true})).toHaveAttribute('aria-current','page');
  const pasted='Analyst 🧭\n\n• Research & SQL\n';
  await page.getByRole('textbox',{name:'Job description',exact:true}).fill(pasted);

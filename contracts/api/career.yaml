@@ -6,13 +6,55 @@
     "version": "0.2.0"
   },
   "paths": {
+    "/api/v1/career/assessment-input": {
+      "get": {
+        "tags": [
+          "Assessment handoff"
+        ],
+        "summary": "Assessment Input",
+        "operationId": "assessment_input_api_v1_career_assessment_input_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/career/discoveries/current": {
       "get": {
         "tags": [
           "Career discovery"
         ],
         "summary": "Current",
+        "description": "Restore the owner's latest saved chat; empty chats include display-only copy.\n\nThe legacy fresh flag returns display-only copy without changing the saved chat.\nNo model or research calls are made by this read.",
         "operationId": "current_api_v1_career_discoveries_current_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "fresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Fresh"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -34,25 +76,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "fresh",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Fresh"
-            }
-          }
-        ],
-        "description": "Restore the owner's latest saved chat; empty chats include display-only copy.\n\nThe legacy fresh flag returns display-only copy without changing the saved chat.\nNo model or research calls are made by this read."
+        }
       }
     },
     "/api/v1/career/discoveries": {
@@ -61,6 +85,7 @@
           "Career discovery"
         ],
         "summary": "Start",
+        "description": "Persist a distinct empty chat immediately; retries with the same key reuse it.",
         "operationId": "start_api_v1_career_discoveries_post",
         "security": [
           {
@@ -109,8 +134,135 @@
               }
             }
           }
+        }
+      },
+      "get": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Sessions",
+        "operationId": "sessions_api_v1_career_discoveries_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/discoveries/{session_id}/publish": {
+      "post": {
+        "tags": [
+          "Career discovery"
+        ],
+        "summary": "Publish",
+        "operationId": "publish_api_v1_career_discoveries__session_id__publish_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishDiscovery"
+              }
+            }
+          }
         },
-        "description": "Persist a distinct empty chat immediately; retries with the same key reuse it."
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/career/discoveries/{session_id}": {
@@ -166,6 +318,7 @@
           "Career discovery"
         ],
         "summary": "Message",
+        "description": "Converse/refine; completed validated synthesis automatically updates the current goal.",
         "operationId": "message_api_v1_career_discoveries__session_id__messages_post",
         "security": [
           {
@@ -223,8 +376,7 @@
               }
             }
           }
-        },
-        "description": "Converse/refine; completed validated synthesis automatically updates the current goal."
+        }
       }
     },
     "/api/v1/career/discoveries/{session_id}/research": {
@@ -1533,7 +1685,7 @@
     "/api/v1/career/jd/extract": {
       "post": {
         "tags": [
-          "J02\u2013J04 extraction and chat"
+          "J02–J04 extraction and chat"
         ],
         "summary": "Extract",
         "operationId": "extract_api_v1_career_jd_extract_post",
@@ -1590,7 +1742,7 @@
     "/api/v1/career/jd/messages": {
       "post": {
         "tags": [
-          "J02\u2013J04 extraction and chat"
+          "J02–J04 extraction and chat"
         ],
         "summary": "Message",
         "operationId": "message_api_v1_career_jd_messages_post",
@@ -1823,7 +1975,7 @@
     "/api/v1/career/goals/{goal_id}": {
       "get": {
         "tags": [
-          "J02\u2013J04 requirement review"
+          "J02–J04 requirement review"
         ],
         "summary": "Read",
         "operationId": "read_api_v1_career_goals__goal_id__get",
@@ -1870,7 +2022,7 @@
     "/api/v1/career/goals/{goal_id}/review": {
       "patch": {
         "tags": [
-          "J02\u2013J04 requirement review"
+          "J02–J04 requirement review"
         ],
         "summary": "Save",
         "operationId": "save_api_v1_career_goals__goal_id__review_patch",
@@ -1992,7 +2144,7 @@
             }
           },
           "413": {
-            "description": "Content Too Large",
+            "description": "Request Entity Too Large",
             "content": {
               "application/json": {
                 "schema": {
@@ -2012,7 +2164,7 @@
             }
           },
           "422": {
-            "description": "Unprocessable Content",
+            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
@@ -2118,7 +2270,7 @@
             }
           },
           "413": {
-            "description": "Content Too Large",
+            "description": "Request Entity Too Large",
             "content": {
               "application/json": {
                 "schema": {
@@ -2138,7 +2290,7 @@
             }
           },
           "422": {
-            "description": "Unprocessable Content",
+            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
@@ -2190,30 +2342,6 @@
                 "schema": {
                   "$ref": "#/components/schemas/Preview"
                 }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/career/assessment-input": {
-      "get": {
-        "tags": [
-          "Assessment handoff"
-        ],
-        "summary": "Assessment Input",
-        "operationId": "assessment_input_api_v1_career_assessment_input_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
               }
             }
           }
@@ -2305,6 +2433,14 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "job_dates": {
+            "items": {
+              "$ref": "#/components/schemas/JobDate"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Job Dates"
           },
           "discovery": {
             "anyOf": [
@@ -2598,14 +2734,6 @@
               }
             ],
             "title": "Source Profile Version"
-          },
-          "job_dates": {
-            "items": {
-              "$ref": "#/components/schemas/JobDate"
-            },
-            "type": "array",
-            "maxItems": 8,
-            "title": "Job Dates"
           }
         },
         "additionalProperties": false,
@@ -3222,6 +3350,50 @@
         ],
         "title": "Direction"
       },
+      "DiscoveryAnswer": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unanswered",
+              "known",
+              "unsure",
+              "skipped"
+            ],
+            "title": "Status",
+            "default": "unanswered"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DiscoveryAnswer"
+      },
       "DiscoveryEvidence": {
         "properties": {
           "research_id": {
@@ -3553,6 +3725,180 @@
         ],
         "title": "DiscoverySession"
       },
+      "DiscoverySource": {
+        "properties": {
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "employer",
+              "reddit",
+              "glassdoor",
+              "other"
+            ],
+            "title": "Platform"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "reported_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Date"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "role_match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "related",
+              "unknown"
+            ],
+            "title": "Role Match",
+            "default": "unknown"
+          },
+          "reliability": {
+            "type": "string",
+            "enum": [
+              "official",
+              "anecdotal",
+              "unverified"
+            ],
+            "title": "Reliability",
+            "default": "unverified"
+          },
+          "report_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Group"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "platform",
+          "url"
+        ],
+        "title": "DiscoverySource"
+      },
+      "DiscoveryUnderstanding": {
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "role_family_or_work": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "interest": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "other_interests": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "career_stage": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "location": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "avoided_activities": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "work_preferences": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          },
+          "skill_ambiguity": {
+            "$ref": "#/components/schemas/DiscoveryAnswer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DiscoveryUnderstanding"
+      },
       "DiscoveryView": {
         "properties": {
           "available": {
@@ -3686,6 +4032,14 @@
       },
       "GoalContent": {
         "properties": {
+          "job_dates": {
+            "items": {
+              "$ref": "#/components/schemas/JobDate"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Job Dates"
+          },
           "role": {
             "anyOf": [
               {
@@ -3866,14 +4220,6 @@
             },
             "type": "object",
             "title": "Metadata Origins"
-          },
-          "job_dates": {
-            "items": {
-              "$ref": "#/components/schemas/JobDate"
-            },
-            "type": "array",
-            "maxItems": 8,
-            "title": "Job Dates"
           }
         },
         "additionalProperties": false,
@@ -3918,6 +4264,14 @@
       },
       "JDExtraction": {
         "properties": {
+          "job_dates": {
+            "items": {
+              "$ref": "#/components/schemas/JobDate"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Job Dates"
+          },
           "role": {
             "anyOf": [
               {
@@ -4044,14 +4398,6 @@
             "type": "array",
             "maxItems": 60,
             "title": "Skills"
-          },
-          "job_dates": {
-            "items": {
-              "$ref": "#/components/schemas/JobDate"
-            },
-            "type": "array",
-            "maxItems": 8,
-            "title": "Job Dates"
           }
         },
         "additionalProperties": false,
@@ -4227,6 +4573,120 @@
           "text"
         ],
         "title": "JDSource"
+      },
+      "JobDate": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "application_deadline",
+              "interview",
+              "job_start"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Evidence"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "text",
+          "evidence"
+        ],
+        "title": "JobDate"
+      },
+      "LearningItem": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Item Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "importance": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Importance"
+          },
+          "importance_origin": {
+            "type": "string",
+            "enum": [
+              "stated",
+              "inferred"
+            ],
+            "title": "Importance Origin"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "source_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Source Urls"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item_id",
+          "name",
+          "importance",
+          "importance_origin",
+          "reason"
+        ],
+        "title": "LearningItem"
       },
       "MarketSummary": {
         "properties": {
@@ -5096,6 +5556,32 @@
             "type": "string",
             "format": "date-time",
             "title": "Last Verified At"
+          },
+          "round_number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Number"
+          },
+          "round_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Name"
           }
         },
         "additionalProperties": false,
@@ -5225,6 +5711,73 @@
           "url"
         ],
         "title": "PublicSource"
+      },
+      "PublishDiscovery": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "expected_selection_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Selection Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "expected_version",
+          "expected_selection_version"
+        ],
+        "title": "PublishDiscovery"
+      },
+      "QuestionResearchView": {
+        "properties": {
+          "research_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "title": "Research Id"
+          },
+          "research_version": {
+            "type": "integer",
+            "title": "Research Version"
+          },
+          "focus": {
+            "type": "string",
+            "title": "Focus"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/PublicFinding"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Findings"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/PublicSource"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Sources"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "research_id",
+          "research_version",
+          "focus",
+          "updated_at"
+        ],
+        "title": "QuestionResearchView"
       },
       "RecommendedSkill": {
         "properties": {
@@ -5702,6 +6255,30 @@
       },
       "ReviewSkill": {
         "properties": {
+          "learning_items": {
+            "items": {
+              "$ref": "#/components/schemas/LearningItem"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Learning Items"
+          },
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "skill_registry_version": {
+            "type": "string",
+            "title": "Skill Registry Version",
+            "default": "skills-v2"
+          },
           "item_id": {
             "anyOf": [
               {
@@ -5885,22 +6462,6 @@
               "market_research"
             ],
             "title": "Origin"
-          },
-          "canonical_skill_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Canonical Skill Id"
-          },
-          "skill_registry_version": {
-            "type": "string",
-            "title": "Skill Registry Version",
-            "default": "skills-v2"
           }
         },
         "additionalProperties": false,
@@ -6432,6 +6993,30 @@
       },
       "TargetSkill": {
         "properties": {
+          "learning_items": {
+            "items": {
+              "$ref": "#/components/schemas/LearningItem"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Learning Items"
+          },
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "skill_registry_version": {
+            "type": "string",
+            "title": "Skill Registry Version",
+            "default": "skills-v2"
+          },
           "skill_id": {
             "anyOf": [
               {
@@ -6615,22 +7200,6 @@
             "type": "array",
             "maxItems": 10,
             "title": "Source Urls"
-          },
-          "canonical_skill_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Canonical Skill Id"
-          },
-          "skill_registry_version": {
-            "type": "string",
-            "title": "Skill Registry Version",
-            "default": "skills-v2"
           }
         },
         "additionalProperties": false,
@@ -7163,315 +7732,6 @@
           "exploration_id"
         ],
         "title": "WorkspaceView"
-      },
-      "DiscoverySource": {
-        "properties": {
-          "retrieved_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Retrieved At"
-          },
-          "source_id": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Source Id"
-          },
-          "platform": {
-            "type": "string",
-            "enum": [
-              "employer",
-              "reddit",
-              "glassdoor",
-              "other"
-            ],
-            "title": "Platform"
-          },
-          "url": {
-            "type": "string",
-            "title": "Url"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          },
-          "evidence": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 8000,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evidence"
-          },
-          "reported_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reported Date"
-          },
-          "published_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Published Date"
-          },
-          "role_match": {
-            "type": "string",
-            "enum": [
-              "exact",
-              "related",
-              "unknown"
-            ],
-            "title": "Role Match",
-            "default": "unknown"
-          },
-          "reliability": {
-            "type": "string",
-            "enum": [
-              "official",
-              "anecdotal",
-              "unverified"
-            ],
-            "title": "Reliability",
-            "default": "unverified"
-          },
-          "report_group": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Report Group"
-          },
-          "company": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Company"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "source_id",
-          "platform",
-          "url"
-        ],
-        "title": "DiscoverySource"
-      },
-      "DiscoveryAnswer": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "unanswered",
-              "known",
-              "unsure",
-              "skipped"
-            ],
-            "title": "Status",
-            "default": "unanswered"
-          },
-          "value": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 160,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Value"
-          },
-          "evidence": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 600,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evidence"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "DiscoveryAnswer"
-      },
-      "DiscoveryUnderstanding": {
-        "properties": {
-          "field": {
-            "$ref": "#/components/schemas/DiscoveryAnswer"
-          },
-          "role_family_or_work": {
-            "$ref": "#/components/schemas/DiscoveryAnswer"
-          },
-          "interest": {
-            "$ref": "#/components/schemas/DiscoveryAnswer"
-          },
-          "other_interests": {
-            "$ref": "#/components/schemas/DiscoveryAnswer"
-          },
-          "career_stage": {
-            "$ref": "#/components/schemas/DiscoveryAnswer"
-          },
-          "location": {
-            "$ref": "#/components/schemas/DiscoveryAnswer"
-          },
-          "avoided_activities": {
-            "$ref": "#/components/schemas/DiscoveryAnswer"
-          },
-          "work_preferences": {
-            "$ref": "#/components/schemas/DiscoveryAnswer"
-          },
-          "skill_ambiguity": {
-            "$ref": "#/components/schemas/DiscoveryAnswer"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "DiscoveryUnderstanding"
-      },
-      "JobDate": {
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "application_deadline",
-              "interview",
-              "job_start"
-            ],
-            "title": "Kind"
-          },
-          "text": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Text"
-          },
-          "evidence": {
-            "type": "string",
-            "maxLength": 600,
-            "minLength": 1,
-            "title": "Evidence"
-          },
-          "date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Date"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "kind",
-          "text",
-          "evidence"
-        ],
-        "title": "JobDate"
-      },
-      "QuestionResearchView": {
-        "properties": {
-          "research_id": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{24}$",
-            "title": "Research Id"
-          },
-          "research_version": {
-            "type": "integer",
-            "title": "Research Version"
-          },
-          "focus": {
-            "type": "string",
-            "title": "Focus"
-          },
-          "findings": {
-            "items": {
-              "$ref": "#/components/schemas/PublicFinding"
-            },
-            "type": "array",
-            "maxItems": 12,
-            "title": "Findings"
-          },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/PublicSource"
-            },
-            "type": "array",
-            "maxItems": 12,
-            "title": "Sources"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "research_id",
-          "research_version",
-          "focus",
-          "updated_at"
-        ],
-        "title": "QuestionResearchView"
       }
     },
     "securitySchemes": {

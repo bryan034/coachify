@@ -24,6 +24,19 @@ def group_outcome(items,operator):
         statuses.append(status)
     return aggregate(statuses,operator)
 
+def planning_estimate(requirement,outcome,evidence):
+    """Evidence-relative planning estimate; unknown is never numeric zero."""
+    levels={'guided_application':3,'independent_application':6,'complex_application':9}
+    required={'beginner':3,'intermediate':6,'advanced':9}.get(requirement.get('required_proficiency'))
+    refs={ref for component in outcome.components for ref in component.evidence_refs}
+    records=[evidence[ref] for ref in refs if ref in evidence and evidence[ref].get('attribution')=='personal' and not evidence[ref].get('support_uncertain')]
+    observed=max((levels.get(record.get('application_level'),0) for record in records),default=0)
+    score=min(10,int(10*observed/required+0.5)) if observed and required else None
+    relevance={'required':'high','preferred':'medium','suggested':'low','unspecified':'low'}.get(requirement.get('priority')) if outcome.mapping_method!='unresolved' else None
+    return {'relevance':relevance,'competence_score':score,'score_status':'estimated' if score is not None else 'insufficient_evidence' if any(record.get('reviewed') for record in records) or required is None else 'not_reviewed',
+            'score_explanation':f'Planning estimate: evidence {observed}/9 compared with role level {required}/9. This is not tested mastery.' if score is not None else 'An explicit evidence application level and required role level are both needed.',
+            'scoring_rubric_version':'application-ratio-v1'}
+
 def validate_batch(output,requirements,evidence):
     expected={r['ref']:r for r in requirements}
     refs=[o.requirement_ref for o in output.outcomes]
@@ -60,6 +73,7 @@ def validate_batch(output,requirements,evidence):
                 raise Problem('Canonical mapping must resolve to the same supplied registry identity.',502,'assessment_output')
         status=aggregate([c.status for c in outcome.components])
         results.append({**requirement, 'match_status':status,'components':[c.model_dump() for c in outcome.components],
+            **planning_estimate(requirement,outcome,evidence),
             'recommendation':outcome.recommendation,'mapping_method':outcome.mapping_method,'mapping_reason':outcome.mapping_reason})
     return results
 

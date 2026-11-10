@@ -9,7 +9,7 @@ from app.planning.state import planner_state
 from app.planning.milestone_membership import mark_membership_review, mark_plan_membership_changes
 from app.planning.tasks import change_status, ensure_tasks, find_task, project_assignments, requirement_ids, schedule_warnings, task_readiness, validate_links
 from app.schemas.planner import Workspace
-from app.schemas.tasks import AddTask, EditTask, RemoveTask, ChangeTaskStatus, ReconcileTasks, TaskList
+from app.schemas.tasks import AddTask, EditTask, RemoveTask, ChangeTaskStatus, ReconcileTasks, SaveTaskNotes, TaskList
 
 
 def register_task_routes(app,context,mutate):
@@ -97,6 +97,17 @@ def register_task_routes(app,context,mutate):
             mark_membership_review(plan,[task.get('milestone_key')])
             project_assignments(plan);return row
         return await mutate(body,account,apply,operation='tasks.remove')
+
+    @app.post(prefix+'/notes',response_model=Workspace)
+    async def notes(body:SaveTaskNotes,request:Request,account=Depends(authenticated)):
+        """Save the task's notes document. Notes never change status, evidence or the schedule."""
+        def apply(row,source):
+            plan=active(row);task=find_task(plan,body.task_id)
+            document=body.notes.model_dump(mode='json')
+            if task.get('notes')==document:return row
+            task['notes']=document;task['notes_updated_at']=stamp()
+            return row
+        return await mutate(body,account,apply,operation='tasks.notes')
 
     @app.post(prefix+'/status',response_model=Workspace)
     async def status(body:ChangeTaskStatus,request:Request,account=Depends(authenticated)):

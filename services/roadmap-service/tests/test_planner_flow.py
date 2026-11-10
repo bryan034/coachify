@@ -69,8 +69,9 @@ def test_runway_is_shown_before_any_model_call_and_generation_is_gated():
     model=Scripted()
     with client_for(model) as client:
         state=read(client)
+        assert state['planner']['config']['allow_overflow'] is True
         assert state['planner']['config_saved'] is False and not state['planner']['runway']['can_generate']
-        assert {i['code'] for i in state['planner']['runway']['issues']}>={'missing_target','no_budget','no_blocks'}
+        assert {i['code'] for i in state['planner']['runway']['issues']}>={'missing_target','no_budget'}
         response=client.post('/api/v1/roadmaps/planner/runway',headers=H,json={'config':settings()})
         assert response.status_code==200 and response.json()['study']=={'preferred_minutes':690,'backup_extra_minutes':120,'usable_minutes':690}
         response=client.post('/api/v1/roadmaps/planner/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
@@ -461,7 +462,7 @@ def test_a_generated_roadmap_returns_only_declared_fields_through_the_frontend_f
         assert progress['operation']['status']=='succeeded' and progress['operation']['stage']=='complete'
         planner=state['planner'];candidate=planner['candidate']
         assert candidate.keys()<=declared_keys(PlannedRoadmap)
-        assert candidate['generation']=={'prompt_version':'roadmap-plan-v1','attempts':1}
+        assert candidate['generation']=={'prompt_version':'roadmap-plan-v2','attempts':1}
         assert candidate['milestones'][0]['outcome'].keys()=={'demonstrated','note','recorded_at','source'}
         assert planner['candidate_review']['milestones']['m1']=={
             'sessions_total':1,'sessions_completed':0,'completed_minutes':0,

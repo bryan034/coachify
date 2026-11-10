@@ -172,6 +172,77 @@
       "title": "JobDate",
       "type": "object"
     },
+    "LearningItem": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Item Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "importance": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "title": "Importance",
+          "type": "string"
+        },
+        "importance_origin": {
+          "enum": [
+            "stated",
+            "inferred"
+          ],
+          "title": "Importance Origin",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence"
+        },
+        "source_urls": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Source Urls",
+          "type": "array"
+        }
+      },
+      "required": [
+        "item_id",
+        "name",
+        "importance",
+        "importance_origin",
+        "reason"
+      ],
+      "title": "LearningItem",
+      "type": "object"
+    },
     "NonSkillRequirement": {
       "additionalProperties": false,
       "properties": {
@@ -351,6 +422,14 @@
     "TargetSkill": {
       "additionalProperties": false,
       "properties": {
+        "learning_items": {
+          "items": {
+            "$ref": "#/$defs/LearningItem"
+          },
+          "maxItems": 12,
+          "title": "Learning Items",
+          "type": "array"
+        },
         "canonical_skill_id": {
           "anyOf": [
             {

@@ -5,8 +5,9 @@ import { Icon } from '@/components/ui/icon';
 import { useProfile } from '@/features/profile/profile-provider';
 import { addDays, addMonths, clockRange, fullDate, monthKey, monthTitle, monthWeeks, shortDate, weekDates } from '@/features/roadmap/roadmap-calendar';
 import type { PlanAssignment } from '@/features/roadmap/types';
-import { loadGoal, loadRoadmap, useSection } from '@/lib/api/workspace-summary';
+import { loadGoal, loadRoadmap, loadApplications, useSection } from '@/lib/api/workspace-summary';
 import '@/styles/calendar.css';
+import { PageSkeleton } from '@/components/ui/workspace-ui';
 
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const views = ['Day', 'Week', 'Month'] as const;
@@ -28,7 +29,7 @@ function SessionBlock({ item, top, height }: { item: PlanAssignment; top: number
 function TimeGrid({ days, today, sessions, marks }: { days: string[]; today: string; sessions: PlanAssignment[]; marks: DatedMark[] }) {
  const visible = sessions.filter(item => days.includes(item.date));
  const start = Math.min(8 * 60, ...visible.map(item => Math.floor(toMinutes(item.start_time) / 60) * 60));
- const end = Math.max(21 * 60, ...visible.map(item => Math.ceil((toMinutes(item.start_time) + item.duration_minutes) / 60) * 60));
+ const end = Math.max(24 * 60, ...visible.map(item => Math.ceil((toMinutes(item.start_time) + item.duration_minutes) / 60) * 60));
  const span = end - start;
  const hours = Array.from({ length: Math.floor(span / 120) + 1 }, (_, index) => start + index * 120).filter(value => value < end);
  const hasMarks = days.some(day => marks.some(mark => mark.date === day));
@@ -59,35 +60,40 @@ function MiniMonth({ focus, today, onPick }: { focus: string; today: string; onP
 
 export function CalendarPreview() {
  const { token } = useProfile();
+ const applications=useSection(loadApplications,token);
  const [view, setView] = useState<View>('Week');
  const [today, setToday] = useState<string | null>(null);
  const [focus, setFocus] = useState<string | null>(null);
  useEffect(() => { const now = localToday(); setToday(now); setFocus(now); if (window.innerWidth < 640) setView('Day'); }, []);
  const roadmap = useSection(loadRoadmap, token), goal = useSection(loadGoal, token);
  const plan = roadmap.state.status === 'ready' ? roadmap.state.data.planner.active : null;
- const sessions = useMemo(() => plan?.assignments ?? [], [plan]);
+ const sessions = useMemo(() => [
+  ...(plan?.assignments??[]),
+  ...(roadmap.state.status==='ready'?(roadmap.state.data.planner.runway.windows??[]).filter(window=>window.kind!=='overflow'&&!(plan?.assignments??[]).some(item=>item.date===window.date&&item.start_time===window.start_time)).map((window,index)=>({id:`block-${index}`,key:`block-${index}`,milestone_key:'',gap_id:null,kind:'study' as const,date:window.date,start_time:window.start_time,duration_minutes:window.minutes,task:window.kind==='preferred'?'Preferred study time':'Backup study time',completion_criterion:'',status:'scheduled' as const,completed_at:null,evidence_note:null})):[])
+ ], [plan,roadmap.state]);
  const jobDates = useMemo(() => goal.state.status === 'ready' ? (goal.state.data.goal?.job_dates ?? []).filter(item => item.date) : [], [goal.state]);
  const role = goal.state.status === 'ready' ? goal.state.data.goal?.role : undefined;
  const target = roadmap.state.status === 'ready' ? roadmap.state.data.planner.runway.resolved.target_date : null;
  const marks = useMemo<DatedMark[]>(() => [
+  ...(applications.state.status==='ready'?applications.state.data.filter(item=>item.deadline).map(item=>({date:item.deadline!,label:`${item.snapshot.title} deadline`,kind:'deadline' as const})):[]),
   ...jobDates.map(item => ({ date: item.date!, label: dateKinds[item.kind] ?? item.kind, kind: 'deadline' as const })),
   ...(target ? [{ date: target, label: 'Roadmap target date', kind: 'deadline' as const }] : []),
   ...(plan?.milestones ?? []).map(item => ({ date: item.projected_end, label: item.title, kind: 'milestone' as const })),
- ], [jobDates, target, plan]);
- if (!today || !focus) return <section className="page on calendar-page"><h1>Calendar &amp; Events</h1><p role="status">Loading calendar…</p></section>;
+ ], [jobDates, target, plan,applications.state]);
+ if (!today || !focus) return <section className="page on calendar-page"><h1>Calendar</h1><PageSkeleton label="Loading calendar…"/></section>;
  const step = (direction: number) => setFocus(view === 'Day' ? addDays(focus, direction) : view === 'Week' ? addDays(focus, direction * 7) : addMonths(focus, direction));
  const horizon = addDays(today, DEADLINE_DAYS);
  const deadlines = marks.filter(mark => mark.kind === 'deadline' && mark.date >= today && mark.date <= horizon).sort((a, b) => a.date.localeCompare(b.date));
- const remaining = sessions.filter(item => item.status === 'scheduled' && item.date >= today).sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
+ const remaining = sessions.filter(item => !item.id.startsWith('block-') && item.status === 'scheduled' && item.date >= today).sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
  const dueToday = remaining.filter(item => item.date === today).length;
  const milestones = (plan?.milestones ?? []).filter(item => !item.outcome.demonstrated).sort((a, b) => a.projected_end.localeCompare(b.projected_end));
  const failure = [roadmap, goal].find(section => section.state.status === 'error');
  return <section className="page on calendar-page">
   <div className="cal-title">
-   <div className="cal-title-name"><h1>Calendar &amp; Events</h1></div>
+   <div className="cal-title-name"><h1>Calendar</h1></div>
    <div className="cal-controls">
     <div className="cal-views" role="group" aria-label="Calendar view">{views.map(name => <button key={name} type="button" className={view === name ? 'on' : ''} aria-pressed={view === name} onClick={() => setView(name)}>{name}</button>)}</div>
-    <button type="button" className="btn pri" disabled title="Coming soon">+ Add</button>
+
    </div>
   </div>
   {failure && <div className="cal-failure" role="alert"><p>{failure === roadmap ? 'Your roadmap sessions could not be loaded, so some dates may be missing.' : 'Your job dates could not be loaded, so some dates may be missing.'}</p><button type="button" className="btn ghost sm" onClick={failure.retry}>Retry loading</button></div>}
@@ -102,11 +108,7 @@ export function CalendarPreview() {
      </div>
      {roadmap.state.status === 'ready' && !plan && <p className="cal-hint">Your study sessions appear here once you have a roadmap. <Link href="/roadmap">Plan your roadmap</Link></p>}
     </section>
-    <section className="cal-events" aria-labelledby="cal-events-title">
-     <header><h2 id="cal-events-title">Events &amp; development</h2><span className="pill n">Coming soon</span></header>
-     <p className="feature-notice"><span className="pill n">Coming soon</span>Events and development programmes built around your skill gaps are not available yet.</p>
-     <div>{['Short term', 'Long term'].map(term => <article key={term}><span className="cal-row-icon is-live"><Icon name="cal"/></span><span><strong>Opportunities on the horizon</strong><small>{term}</small></span><button type="button" disabled title="Coming soon">View event</button></article>)}</div>
-    </section>
+    <section className="cal-events"><h2>Events</h2><p className="small">Event discovery is coming soon.</p></section>
    </div>
    <aside className="cal-rail">
     <MiniMonth focus={focus} today={today} onPick={setFocus}/>

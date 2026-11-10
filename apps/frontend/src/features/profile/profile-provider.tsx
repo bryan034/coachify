@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { ApiError, profileApi } from '@/lib/api/profile';
 import type { Category, Profile } from './types';
+import { errorText } from '@/lib/errors';
 export type Account = { id: string; name: string; email?: string; email_verified?: boolean; provider: 'google' | 'local_test' | 'email'; expires_at?: string };
 type Access = { flow_id: string; attempt_id: string; session_token: string; nonce: string; epoch: string };
 type Mode = 'google' | 'email' | 'local_test';
@@ -196,8 +197,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
      if (!controller.signal.aborted && id === operation.current && (!latestProfile.current || saved.version >= latestProfile.current.version)
          && !(latestProfile.current?.onboarding_complete && !saved.onboarding_complete)) { latestProfile.current = saved; setProfile(saved); }
      else if (!controller.signal.aborted && id === operation.current && latestProfile.current) setProfile(latestProfile.current);
-    } catch (error) { if (!controller.signal.aborted && id === operation.current) setLoadError(error instanceof Error ? error.message : 'Profile unavailable. Retry loading.'); }
-   } catch (error) { if (!controller.signal.aborted && id === operation.current) setConfigError(error instanceof Error ? error.message : 'Account access unavailable. Please retry.'); }
+    } catch (error) { if (!controller.signal.aborted && id === operation.current) setLoadError(errorText(error, 'Profile unavailable. Retry loading.')); }
+   } catch (error) { if (!controller.signal.aborted && id === operation.current) setConfigError(errorText(error, 'Account access unavailable. Please retry.')); }
    finally { if (!controller.signal.aborted) setLoading(false); }
   }
   void load(); return () => controller.abort();

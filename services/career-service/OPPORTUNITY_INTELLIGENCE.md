@@ -406,3 +406,16 @@ never silently shortened after numbering to fit a model request.
 Persisted findings, compact public responses and lazy evidence endpoints keep their
 existing shapes. Historical reports remain readable, and no data migration, new
 configuration, provider fallback or additional model/retrieval call is introduced.
+
+## Interview research by round — 10 November 2026
+
+Interview research covers every round the sources describe; jobs differ, so the number of
+rounds is whatever the evidence supports and is never padded to a typical count. Each
+interview finding may carry `round_number` (1 = first round, in reported order) and a short
+`round_name` copied from its passage; process-wide facts (total rounds, overall timeline,
+difficulty) leave both null. The new `round_format` field describes what one round consists of.
+A round is kept only when its selected passage names it (or states its number with
+"round", "stage" or "interview"); an unsupported round is dropped and the finding is kept.
+Other categories cannot carry rounds, and their decoding schema omits the fields. The same
+fact in two rounds stays two findings. Prompt version `opportunity-structured-findings-v4`.
+Saved reports without rounds remain valid and display as process-wide facts until refreshed.

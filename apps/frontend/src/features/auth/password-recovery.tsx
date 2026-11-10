@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRef, useState, type FormEvent } from 'react';
 import { profileApi } from '@/lib/api/profile';
 import { AccessFrame } from './access-screen';
+import { errorText } from '@/lib/errors';
 
 export function PasswordRecovery() {
  const [email, setEmail] = useState('');
@@ -27,7 +28,7 @@ export function PasswordRecovery() {
     const receipt = await profileApi<{challenge_id: string; message: string}>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
     setChallenge(receipt.challenge_id); setMessage(receipt.message);
    }
-  } catch (e) { setError(e instanceof Error ? e.message : 'Could not reset your password. Please retry.'); }
+  } catch (e) { setError(errorText(e, 'Could not reset your password. Please retry.')); }
   finally { locked.current = false; setBusy(false); }
  }
  return <AccessFrame><p className="k">Account recovery</p><h2>{done ? 'Password reset.' : 'Forgot your password?'}</h2>

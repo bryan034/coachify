@@ -18,7 +18,7 @@ The new pipeline uses `assessment-v1`; Career's older `analysis-v1` contracts/re
 
 ## Inputs and identity
 
-The owner must have a selected ready CV and a generated Career goal containing at least one skill/condition. Read-only GETs do not create assessments. Missing optional proficiency, skipped clarification and missing planning preferences do not block comparison. Pending/failed factual interpretation or CV reconciliation does block source admission; it is not capability uncertainty.
+The owner must have a generated Career goal containing at least one skill/condition, and either a selected ready CV or saved Profile declarations when no CV is selected. Read-only GETs do not create assessments. Missing optional proficiency, skipped clarification and missing planning preferences do not block comparison. Pending/failed factual interpretation or CV reconciliation does block source admission; it is not capability uncertainty.
 
 Career exports `/api/v1/career/assessment-input`, containing its exact current goal/selection and current owner-linked research. CV exports `/{id}/assessment-input`, reusing its versioned capability snapshot and rejecting unfinished interpretations. Unlike CV's target-confirmed clarification envelope, this source export does not acknowledge a goal for factual clarification. Assessment separately binds and revalidates the full Career target; no confirmation stamp is silently created.
 
@@ -58,3 +58,21 @@ quota failures bypass this correction. Existing schema-level retries remain sepa
 ## Remaining boundaries
 
 G05 factual corrections use the existing CV/Profile review entry points; adviser chat itself does not mutate capability evidence. Inferred dependency ranking, result-specific roadmap notifications and migration of any old Career analysis records remain unimplemented. Tests establish contracts/workflow with synthetic models, not live-model quality.
+
+## Phase 2 comparison sources and reserved scoring fields
+
+Comparison can run independently of Roadmap using the existing versioned command.
+When no CV is selected, saved Profile capability declarations (including published
+manual intake) are sufficient. Draft intake is excluded. A selected pending/failed
+CV still blocks admission; it never silently falls back to manual evidence.
+`inputs.source_mode` distinguishes `cv_and_profile` from `profile_only`. CV identity,
+extraction and effective versions are nullable in the latter; selection, declarations,
+Profile, goal and research revisions still participate in staleness/publication checks.
+Historical input vectors without source_mode remain readable with the CV default.
+
+Each outcome reserves nullable `relevance`, `competence_score` (0–10),
+`score_explanation` and `scoring_rubric_version`, plus `score_status`.
+No scoring rubric has been approved: relevance/scores/rubric stay null, with an
+explicit explanation. Existing evidence statuses remain the implemented comparison;
+CV source-specific application levels remain unchanged. These fields do not claim
+measured mastery. Future score population requires rubric review.

@@ -1,7 +1,8 @@
 "use client";
-import {useState, type ReactNode} from 'react';
+import type { Assessment } from '@/features/roadmap/types';
+import {useState,type ReactNode} from 'react';
 import {groupSkills} from '@/lib/skill-groups';
-import {SkillCategoryNav, categoryAnchor} from '@/components/ui/skill-category-nav';
+import {categoryAnchor} from '@/components/ui/skill-category-nav';
 import type {CvDetail, Declarations, SkillEstimate, SkillsProfile} from './types';
 
 // Steps follow the backend's evidence rubric. They are not a score or a test result.
@@ -20,7 +21,7 @@ function strongestLevel(estimates: SkillEstimate[] = [], skill: string) {
   .reduce<{label: string; step: number} | undefined>((best, level) => level && (!best || level.step > best.step) ? level : best, undefined);
 }
 
-type Skill = {key: string; name: string; label: string; step: number; established: boolean; sources: string[]; details: ReactNode[]};
+type Skill = {canonicalId?:string|null; key: string; name: string; label: string; step: number; established: boolean; sources: string[]; details: ReactNode[]};
 
 function cvSkills(cv: CvDetail | null): Skill[] {
  if (!cv) return [];
@@ -28,7 +29,7 @@ function cvSkills(cv: CvDetail | null): Skill[] {
   const titled = skill.sources?.map(source => ({source, item: cv.items.find(item => item.id === source.item_id)})) ?? [];
   const level = strongestLevel(cv.skill_estimates, skill.name);
   return {
-   key: `cv:${skill.skill_id}`, name: skill.name,
+   canonicalId:skill.canonical_skill_id,key: `cv:${skill.skill_id}`, name: skill.name,
    label: level?.label ?? skill.proficiency ?? 'Level not established', step: level?.step ?? 0, established: Boolean(level ?? skill.proficiency),
    sources: titled.filter(({item}) => item && item.kind !== 'skill').map(({item}) => item!.title),
    details: titled.map(({source, item}) => <div className="skill-row-source" key={`cv:${source.item_id}`}>
@@ -43,7 +44,7 @@ function cvSkills(cv: CvDetail | null): Skill[] {
 function profileSkills(profile: SkillsProfile | null): Skill[] {
  if (!profile) return [];
  return profile.entries.flatMap(entry => entry.skills.map(skill => ({
-  key: `profile:${entry.id}:${skill.name}`, name: skill.name,
+  canonicalId:skill.canonical_skill_id,key: `profile:${entry.id}:${skill.name}`, name: skill.name,
   label: profile.status === 'draft' ? 'Proposed — review before saving' : 'Described by you', step: 0, established: false, sources: [entry.title],
   details: [<div className="skill-row-source" key={`profile:${entry.id}`}>
    <p>{skill.description}</p>
@@ -56,7 +57,7 @@ function profileSkills(profile: SkillsProfile | null): Skill[] {
 
 function declaredSkills(declarations: Declarations | null): Skill[] {
  return declarations?.declarations.map(declaration => ({
-  key: `declaration:${declaration.id}`, name: declaration.name,
+  canonicalId:declaration.canonical_skill_id,key: `declaration:${declaration.id}`, name: declaration.name,
   label: 'Added by you', step: 0, established: false, sources: [],
   details: [<div className="skill-row-source" key={`declaration:${declaration.id}`}><p>{declaration.description}</p></div>],
  })) ?? [];
@@ -66,7 +67,7 @@ function declaredSkills(declarations: Declarations | null): Skill[] {
 function merged(skills: Skill[]) {
  const byName = new Map<string, Skill>();
  for (const skill of skills) {
-  const key = skill.name.trim().toLowerCase(), existing = byName.get(key);
+  const key = skill.canonicalId || skill.name.trim().toLowerCase(), existing = byName.get(key);
   if (!existing) { byName.set(key, {...skill, sources: [...new Set(skill.sources)]}); continue; }
   const stronger = skill.established && (!existing.established || skill.step > existing.step);
   byName.set(key, {...existing, ...(stronger ? {label: skill.label, step: skill.step, established: true} : {}),
@@ -78,30 +79,62 @@ function merged(skills: Skill[]) {
 export const profileSkillList = (cv: CvDetail | null, profile: SkillsProfile | null, declarations: Declarations | null) =>
  merged([...cvSkills(cv), ...profileSkills(profile), ...declaredSkills(declarations)]);
 
-function LevelMeter({skill}: {skill: Skill}) {
- return <span className={`skill-level${skill.established ? ' established' : ''}`}>
-  {skill.step > 0 && <span className="skill-level-meter" aria-hidden="true">{Array.from({length: MAX_STEP}, (_, index) => <span key={index} className={index < skill.step ? 'on' : ''}/>)}</span>}
-  <span className="skill-level-label">{skill.label}</span>
- </span>;
+type Relevance='high'|'medium'|'low'|'none';
+type Status={relevance:Relevance|null;state:'score'|'not_needed'|'not_recorded'|'unknown'|'not_compared';score?:number;explanation?:string|null};
+/** Exactly one competence state per skill, read from the saved goal comparison. Nothing is scored here. */
+export function skillStatus(skill:Skill,comparison?:Assessment|null):Status{
+ if(!comparison)return {relevance:null,state:'not_compared'};
+ const related=comparison.job_skill_gaps.filter(outcome=>skill.canonicalId&&outcome.canonical_skill_id===skill.canonicalId || outcome.components.some(component=>component.evidence_refs.some(ref=>comparison.evidence?.[ref]?.name?.trim().toLowerCase()===skill.name.trim().toLowerCase())));
+ if(!related.length)return {relevance:'none',state:'not_needed'};
+ const order:Relevance[]=['high','medium','low','none'];
+ const relevance=related.map(outcome=>outcome.relevance).filter((value):value is Relevance=>!!value).sort((a,b)=>order.indexOf(a)-order.indexOf(b))[0]??null;
+ const scored=related.find(outcome=>outcome.competence_score!=null);
+ if(scored)return {relevance,state:'score',score:scored.competence_score!,explanation:scored.score_explanation};
+ return {relevance,state:related.some(outcome=>outcome.score_status==='insufficient_evidence')?'unknown':'not_recorded'};
+}
+const stateText={not_needed:'Not needed for your current goal.',not_recorded:'Competence not recorded yet.',unknown:'Level unknown from your CV review.',not_compared:'Compare with your Career Goal to see how this skill counts for it.'};
+const relevanceLabels:Record<Relevance,string>={high:'High relevance',medium:'Medium relevance',low:'Low relevance',none:'Not needed'};
+
+function SkillPanel({skill,status,close}:{skill:Skill;status:Status;close:()=>void}){
+ return <aside className="card skill-panel" aria-labelledby="skill-panel-title">
+  <div className="skill-panel-head"><h2 id="skill-panel-title">{skill.name}</h2><button type="button" className="btn ghost sm" aria-label="Close skill panel" onClick={close}>✕</button></div>
+  <p className="briefing-detail-label">Used in</p>
+  {skill.sources.length?<ul className="skill-panel-used">{skill.sources.map(source=><li key={source}>{source}</li>)}</ul>:<p className="small">Added through your Skills Profile.</p>}
+  <div className="skill-panel-state">
+   {status.state==='score'?<><div className="skill-panel-score"><p className="briefing-detail-label">Competence for your goal</p><p><strong>{status.score}</strong><span> / 10</span></p></div>
+    <div className="competence-bar" role="img" aria-label={`${status.score} out of 10 for your goal`}><span className={`competence-fill score-${status.score!>=8.5?'ready':status.score!>=6?'growing':'build'}`} style={{width:`${status.score!*10}%`}}/><span className="competence-target"/></div>
+    <p className="small">Planning estimate. 10 means your evidence meets the level your goal states.{status.explanation?` ${status.explanation}`:''}</p></>
+   :<p>{stateText[status.state]}</p>}
+  </div>
+ </aside>;
 }
 
-function SkillRow({skill, collapsed = false}: {skill: Skill; collapsed?: boolean}) {
- return <li className={`skill-row${skill.established ? ' is-levelled' : ''}${skill.sources.length ? ' has-source' : ''}`} hidden={collapsed}><details>
-  <summary>{skill.name}<LevelMeter skill={skill}/>{skill.sources.length > 0 && <span className="skill-row-from">{skill.sources.join(' · ')}</span>}</summary>
-  <div className="skill-row-details">{skill.details}</div>
- </details></li>;
-}
-
-const COLLAPSED = 8;
-/** Long categories start short. Every skill stays in the page so its evidence stays findable. */
-function SkillGroupCard({name, items}: {name: string; items: Skill[]}) {
- const [expanded, setExpanded] = useState(false);
- const hidden = items.length - COLLAPSED;
- return <section className="skill-group" id={categoryAnchor('have', name)} aria-label={name}>
-  <header><h3>{name}</h3><span>{items.length}</span></header>
-  <ul>{items.map((skill, index) => <SkillRow key={skill.key} skill={skill} collapsed={!expanded && index >= COLLAPSED}/>)}</ul>
-  {hidden > 0 && <button type="button" className="skill-group-more" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'Show fewer' : `+${hidden} more`}</button>}
- </section>;
+/** One combined panel: a row per category (and sub-category), skills as chips coloured by goal relevance. */
+export function SkillProfile({skills, categories, comparison, subcategories={}}: {subcategories?:Record<string,string>;skills: Skill[]; comparison?: Assessment | null; categories: Record<string, string>}) {
+ const [picked,setPicked]=useState<string|null>(null),[sort,setSort]=useState<'category'|'relevance'>('category');
+ const groups = groupSkills(byStrength(skills), skill => skill.name, categories);
+ const status=new Map(skills.map(skill=>[skill.key,skillStatus(skill,comparison)]));
+ const chip=(skill:Skill)=>{const value=status.get(skill.key)!;return <li key={skill.key}><button type="button" className={`skill-chip relevance-${value.relevance??'unknown'}`} aria-pressed={picked===skill.key} onClick={()=>setPicked(picked===skill.key?null:skill.key)}>{skill.name}{value.relevance&&<span className="cv-visually-hidden">, {relevanceLabels[value.relevance]}</span>}</button></li>;};
+ const rows=sort==='category'
+  ? groups.flatMap(group=>[...new Set(group.items.map(skill=>subcategories[skill.name]||''))].map((sub,index)=>({key:`${group.name}:${sub}`,title:index===0?group.name:'',sub,items:group.items.filter(skill=>(subcategories[skill.name]||'')===sub)})))
+  : (['high','medium','low','none'] as Relevance[]).map(level=>({key:level,title:relevanceLabels[level],sub:level==='high'?'Core to your goal':level==='medium'?'Helpful for your goal':level==='low'?'Nice to have':'Not used by your goal',items:skills.filter(skill=>status.get(skill.key)!.relevance===level)})).filter(row=>row.items.length);
+ const selected=skills.find(skill=>skill.key===picked);
+ return <>
+  <p className="skills-count-line">{skills.length} {skills.length===1?'skill':'skills'} in {groups.length} {groups.length===1?'category':'categories'}</p>
+  <div className={`skills-board${selected?' has-panel':''}`}>
+   <section className="card skills-unified-panel" aria-labelledby="skills-panel-title">
+    <div className="skills-panel-head"><h2 id="skills-panel-title">{sort==='category'?'Skills by category':'Skills by relevance to your goal'}</h2>
+     {comparison&&<div className="skills-sort" role="group" aria-label="Sort skills by"><span>Sort by</span>{(['category','relevance'] as const).map(value=><button key={value} type="button" aria-pressed={sort===value} onClick={()=>setSort(value)}>{value==='category'?'Category':'Relevance to goal'}</button>)}</div>}
+    </div>
+    {comparison&&<ul className="skills-relevance-legend" aria-label="Relevance to your goal"><li>Relevance to your goal:</li>{(['high','medium','low','none'] as Relevance[]).map(level=><li key={level}><i className={`relevance-${level}`} aria-hidden="true"/>{level==='none'?'Not needed':level[0].toUpperCase()+level.slice(1)}</li>)}</ul>}
+    {rows.map(row=><section key={row.key} className="skills-category-row" aria-label={[row.title,row.sub].filter(Boolean).join(' · ')||undefined} id={row.title&&sort==='category'?categoryAnchor('have',row.title):undefined}>
+     <div className="skills-category-name">{row.title&&<h3>{row.title}</h3>}{row.sub&&<p className="small">{row.sub}</p>}</div>
+     <ul className="skill-chips">{row.items.map(chip)}</ul>
+    </section>)}
+   </section>
+   {selected&&<SkillPanel skill={selected} status={status.get(selected.key)!} close={()=>setPicked(null)}/>}
+  </div>
+ </>;
 }
 
 /** Within a card the strongest evidence comes first. */
@@ -110,19 +143,3 @@ const byStrength = (skills: Skill[]) => [...skills].sort((a, b) => b.step - a.st
 /** Each source carries its own map; together they cover every skill shown. */
 export const profileSkillGroups = (cv: CvDetail | null, profile: SkillsProfile | null, declarations: Declarations | null) =>
  ({...declarations?.skill_groups, ...profile?.skill_groups, ...cv?.skill_groups});
-
-export function SkillProfile({skills, categories}: {skills: Skill[]; categories: Record<string, string>}) {
- const groups = groupSkills(byStrength(skills), skill => skill.name, categories);
- return <>
-  <div className="skill-profile-overview">
-   <p className="cv-visually-hidden"><strong>{skills.length} {skills.length === 1 ? 'skill' : 'skills'}</strong> in {groups.length} {groups.length === 1 ? 'category' : 'categories'}, <strong>{skills.filter(skill => skill.established).length}</strong> with an established level</p>
-   <dl className="skill-level-legend" aria-label="What the levels mean">
-    {Object.values(levels).map(level => <div key={level!.label}><dt>{level!.label}</dt><dd>{level!.step === 1 ? 'You applied it with support' : level!.step === 2 ? 'You applied it on your own' : 'Independent, on complex problems'}</dd></div>)}
-   </dl>
-  </div>
-  <div className="skill-share" aria-hidden="true">{groups.map(group => <i key={group.name} style={{flexGrow: group.items.length}} title={`${group.name}: ${group.items.length}`}/>)}</div>
-  <SkillCategoryNav groups={groups} prefix="have" label="Categories of your skills"/>
-  <p className="skill-key"><span className="skill-key-source">From your experience</span><span className="skill-key-level">Level set</span></p>
-  <div className="skill-group-grid">{groups.map(group => <SkillGroupCard key={group.name} name={group.name} items={group.items}/>)}</div>
- </>;
-}

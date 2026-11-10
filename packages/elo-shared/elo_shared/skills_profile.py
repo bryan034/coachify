@@ -2,7 +2,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
-from elo_shared.skill_groups import skill_groups
+from elo_shared.skill_groups import skill_groups, skill_subgroups
 
 Area = Literal['work', 'project', 'education', 'interest']
 Status = Literal['answered', 'unknown', 'skipped', 'not_applicable']
@@ -51,7 +51,11 @@ class IntakeField(Strict):
         return self
 
 
+from elo_shared.skills import resolve, MAPPING_VERSION
+
 class ProfileSkill(Strict):
+    canonical_skill_id:str|None=None
+    skill_registry_version:str=MAPPING_VERSION
     name: Annotated[str, Field(min_length=1, max_length=120)]
     description: Text
     evidence: list[ProfileEvidence] = Field(min_length=1, max_length=4)
@@ -59,6 +63,8 @@ class ProfileSkill(Strict):
 
     @model_validator(mode='after')
     def skill_dimensions(self):
+        self.canonical_skill_id=resolve(self.name)
+        self.skill_registry_version=MAPPING_VERSION
         if set(self.dimensions) - set(SKILL_FIELDS):
             raise ValueError('Use skill evidence dimensions only.')
         return self
@@ -87,10 +93,12 @@ class SkillsProfile(Strict):
     entries: list[ProfileEntry] = Field(default_factory=list, max_length=40)
     # Display categories by skill name, derived on read and never stored; see skill_groups.
     skill_groups: dict[str, str] = Field(default_factory=dict)
+    skill_subgroups: dict[str,str] = Field(default_factory=dict)
 
     @model_validator(mode='after')
     def display_groups(self):
         self.skill_groups = skill_groups((skill.name, None) for entry in self.entries for skill in entry.skills)
+        self.skill_subgroups = skill_subgroups((skill.name,None) for entry in self.entries for skill in entry.skills)
         return self
 
     @model_validator(mode='after')

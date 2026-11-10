@@ -32,3 +32,17 @@ describe('session skill labels', () => {
   expect(within(list).getByText('Build a Python API')).toBeVisible();
  });
 });
+
+describe('session notes', () => {
+ it('opens saved notes on the active roadmap and never offers them on a preview', () => {
+  const base = roadmap();
+  const notes = { blocks: [{ type: 'paragraph' as const, runs: [{ text: 'Followed the testing guide.' }] }] };
+  const plan = roadmap({ assignments: [{ ...base.assignments[0], task_id: 'task-1' }], editable_tasks: [{ id: 'task-1', notes }] });
+  const { unmount } = render(<TaskPlanner plan={plan} review={review(plan)} frozen={false} complete={null} reopen={null} saveNotes={async () => true} />);
+  expect(screen.getByText('Notes')).toBeVisible();
+  expect(screen.getByRole('textbox', { name: `Notes for ${plan.assignments[0].task}` })).toHaveTextContent('Followed the testing guide.');
+  unmount();
+  render(<TaskPlanner plan={plan} review={review(plan)} frozen={false} complete={null} reopen={null} saveNotes={null} />);
+  expect(screen.queryByText('Notes')).not.toBeInTheDocument();
+ });
+});

@@ -296,3 +296,76 @@ def test_evidence_repair_is_bounded_and_never_publishes_rejected_batch(repair_su
     else:
         assert state['operation']['status'] == 'failed' and state['result'] is None
         assert state['operation']['error']['code'] == 'assessment_output'
+
+
+def test_manual_only_snapshot_uses_published_declarations_and_tracks_revision():
+    class ManualSources(Sources):
+        revision=2
+        async def read(self,service,path,token,params=None):
+            if path=='/api/v1/cv':return {'selection':{'cv_id':None,'version':3}}
+            if path=='/api/v1/profile/capabilities':return {'version':self.revision,'declarations':[{'id':'manual1','name':'Python','description':'I used Python myself.','contributions':[]}]}
+            if service=='cv':raise AssertionError('Manual-only comparison must not read a CV')
+            return await super().read(service,path,token,params)
+    source=ManualSources()
+    account=asyncio.run(source.account('synthetic'))
+    snapshot=asyncio.run(capture(source,account))
+    assert snapshot['ready'] and snapshot['cv'] is None
+    assert snapshot['inputs']['source_mode']=='profile_only'
+    assert snapshot['inputs']['cv_id'] is None
+    assert snapshot['evidence']['declaration:manual1']['attribution']=='personal'
+    source.revision+=1
+    assert asyncio.run(capture(source,account))['input_hash']!=snapshot['input_hash']
+
+
+def test_score_remains_unknown_without_explicit_evidence_and_required_levels():
+    sources=Sources()
+    snapshot=asyncio.run(capture(sources,asyncio.run(sources.account('synthetic'))))
+    output=asyncio.run(Interpreter().generate(Batch,'',snapshot))
+    outcome=validate_batch(output,snapshot['requirements'],snapshot['evidence'])[0]
+    assert outcome['competence_score'] is None
+    assert outcome['relevance']=='high'
+    assert outcome['scoring_rubric_version']=='application-ratio-v1'
+    assert outcome['score_status']=='insufficient_evidence'
+
+
+def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
+    class ManualSources(Sources):
+        async def read(self,service,path,token,params=None):
+            if path=='/api/v1/cv':return {'selection':{'cv_id':None,'version':1}}
+            if path=='/api/v1/profile/capabilities':return {'version':2,'declarations':[{'id':'m','name':'Python','description':'I used Python myself.','contributions':[]}]}
+            return await super().read(service,path,token,params)
+    class ManualModel(Interpreter):
+        async def generate(self,schema,instructions,context):
+            output=await super().generate(schema,instructions,context)
+            for outcome in output.outcomes:
+                outcome.components[0].evidence_refs=['declaration:m']
+            return output
+    with TestClient(create_app(MemoryStore(),ManualSources(),ManualModel())) as client:
+        response=client.post('/api/v1/assessments',headers=H,json={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True})
+        assert response.status_code==202
+        state=finish(client)
+        assert state['operation']['status']=='succeeded',state
+        assert not state['stale']
+        assert state['result']['inputs']['cv_id'] is None
+        assert state['result']['job_skill_gaps'][0]['competence_score'] is None
+
+
+def test_selected_failed_cv_does_not_fall_back_to_saved_declarations():
+    class FailedSources(Sources):
+        async def read(self,service,path,token,params=None):
+            if path=='/api/v1/profile/capabilities':return {'version':1,'declarations':[{'id':'m','name':'Python','description':'Saved evidence.'}]}
+            if path=='/api/v1/cv/cv1':return {'status':'failed','id':'cv1'}
+            return await super().read(service,path,token,params)
+    sources=FailedSources()
+    result=asyncio.run(capture(sources,asyncio.run(sources.account('synthetic'))))
+    assert not result['ready'] and result['cv']['status']=='failed'
+
+
+def test_reserved_score_contract_rejects_out_of_range_values():
+    from pydantic import ValidationError
+    from app.schemas import Outcome
+    sources=Sources()
+    snapshot=asyncio.run(capture(sources,asyncio.run(sources.account('synthetic'))))
+    output=asyncio.run(Interpreter().generate(Batch,'',snapshot))
+    outcome=validate_batch(output,snapshot['requirements'],snapshot['evidence'])[0]
+    with pytest.raises(ValidationError):Outcome.model_validate({**outcome,'competence_score':11})

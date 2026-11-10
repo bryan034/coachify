@@ -3,6 +3,7 @@
 import Markdown from 'react-markdown';
 import {sourceLink} from './source-links';
 import {useEffect,useState} from 'react';
+import {humaniseText} from '@/lib/format';
 
 /** Model text is Markdown, never executable HTML or remote images. */
 export function AgentMarkdown({children}:{children:string}){
@@ -12,7 +13,7 @@ export function AgentMarkdown({children}:{children:string}){
    if(source)return <a className="agent-citation" href={source.url} title={source.url} target="_blank" rel="noopener noreferrer">{source.domain}</a>;
    return href&&/^(\/(?!\/)|#)/.test(href)?<a href={href}>{children}</a>:<span>{children}</span>;
   },
- }}>{children}</Markdown></div>;
+ }}>{humaniseText(children)}</Markdown></div>;
 }
 
 /** Observable work only: no simulated reasoning, timers or invented tool results. */

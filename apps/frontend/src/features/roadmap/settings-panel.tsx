@@ -7,10 +7,14 @@ import { roadmapApi } from '@/lib/api/roadmap';
 import { BlockedTimeEditor, blockedHours, blockedOn, blockedRepeat, dailyBlackout, describeBlackout, newBlockedTime } from './blackout-rules';
 import { fullDate, monthName, monthsBetween } from './roadmap-calendar';
 import type { BlackoutRule, Duration, LearningFocus, PlannerConfig, Runway, StudyBlock, Workspace } from './types';
+import { errorText } from '@/lib/errors';
+import type { Section, SkillsSummary } from '@/lib/api/workspace-summary';
+import { formatDate, formatDuration, formatRunwaySpan } from '@/lib/format';
 
 export const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-export const hours = (minutes: number) => `${Number((minutes / 60).toFixed(2))} h`;
-export const longDate = (value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+/** Durations and dates read the same on every page; see lib/format. */
+export const hours = formatDuration;
+export const longDate = (value: string) => formatDate(value);
 const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? '' : 's'}`;
 const focuses: [LearningFocus, string][] = [['interview_practice', 'Interview practice'], ['portfolio_work', 'Portfolio work'], ['hands_on_projects', 'Hands-on projects'], ['courses_and_reading', 'Courses and reading'], ['certification', 'Certification'], ['networking', 'Networking']];
 
@@ -27,7 +31,7 @@ export function useSettingsDraft(workspace: Workspace | null, token: string) {
   const timer = setTimeout(() => {
    roadmapApi<Runway>('/planner/runway', token, { config: draft }, controller.signal)
     .then(runway => { setPreview({ source: draft, runway }); setPreviewError(''); })
-    .catch(failure => { if (!controller.signal.aborted) setPreviewError(failure instanceof Error ? failure.message : 'Your runway could not be calculated.'); });
+    .catch(failure => { if (!controller.signal.aborted) setPreviewError(errorText(failure, 'Your runway could not be calculated.')); });
   }, 250);
   return () => { clearTimeout(timer); controller.abort(); };
  }, [draft, token]);
@@ -122,7 +126,7 @@ function StudyWeek({ blocks, blackouts, startDate, setBlocks, setBlackouts }: { 
     </div>
    </div>;
   })}</div>
-  {others.length > 0 && <div className="block-others">{others.map(({ item, index }) => <button type="button" key={index} className="block-chip blocked" aria-expanded={isOpen('blocked', index)} aria-label={`Edit blocked time: ${describeBlackout(item)}`} onClick={() => toggle('blocked', index)}><Hours text={blockedHours(item)} /><span>{describeBlackout(item).split(',')[0]}</span><span className="block-kind">Blocked</span></button>)}</div>}
+  {others.length > 0 && <div className="block-others">{others.map(({ item, index }) => <button type="button" key={index} className="block-chip blocked" aria-expanded={isOpen('blocked', index)} aria-label={`Edit blocked time: ${describeBlackout(item)}`} onClick={() => toggle('blocked', index)}><Hours text={blockedHours(item)} /><span>{describeBlackout(item).split(', ').filter(part => !/^(all day|\d{1,2}:\d{2}|from |until )/.test(part)).join(', ')}</span><span className="block-kind">Blocked</span></button>)}</div>}
   {block && editing && <BlockRow block={block} index={editing.index} change={patch => setBlocks(blocks.map((b, i) => i === editing.index ? { ...b, ...patch } : b))} remove={() => { setBlocks(blocks.filter((_, i) => i !== editing.index)); setEditing(null); }} close={() => setEditing(null)} />}
   {rule && editing && <BlockedTimeEditor rule={rule} number={editing.index + 1} change={next => setBlackouts(blackouts.map((r, i) => i === editing.index ? next : r))} remove={() => { setBlackouts(blackouts.filter((_, i) => i !== editing.index)); setEditing(null); }} close={() => setEditing(null)} />}
   <div className="road-adds">
@@ -174,9 +178,9 @@ function Road({ index, travelled }: { index: number; travelled: boolean }) {
 type StopSpec = { name: string; filled: boolean; required: boolean; content: ReactNode };
 
 export type AutosaveState = 'idle' | 'saving' | 'saved' | 'failed';
-export function SettingsPanel({ workspace, settings, partial, setPartial, frozen, generate, save, autosave, returnToReview }: {
+export function SettingsPanel({ workspace, settings, partial, setPartial, frozen, generate, save, autosave, returnToReview, profileSkills }: {
  workspace: Workspace; settings: ReturnType<typeof useSettingsDraft>; partial: boolean; setPartial: (value: boolean) => void; frozen: boolean;
- generate: () => void; save: () => void; autosave: AutosaveState; returnToReview: (() => void) | null;
+ generate: () => void; save: () => void; autosave: AutosaveState; returnToReview: (() => void) | null; profileSkills?: Section<SkillsSummary>;
 }) {
  const { context, planner } = workspace;
  const { config, runway, update } = settings;
@@ -196,7 +200,6 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
   ...runway.issues.map(issue => issue.message),
   ...(settings.previewError ? [settings.previewError] : []),
   ...(context.model_available ? [] : ['Your adviser is unavailable right now.']),
-  ...(context.ready && !validResearch && !partial ? ['Interview research is incomplete. Tick “Continue with available evidence” below to proceed.'] : []),
  ];
  const blocked = reasons.length > 0 || settings.calculating;
  const groups = groupSkills(planner.inputs.skills, skill => skill.name ?? '', planner.inputs.skill_groups);
@@ -204,20 +207,16 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
  const blackoutPeriods = defaults.availability_periods.filter(period => period.weekly_hours === 0);
  const reduced = defaults.availability_periods.filter(period => period.weekly_hours > 0);
  const jobDates = (context.goal?.job_dates || []).filter(date => date.date && date.date > runway.resolved.today);
- const chosenFocus = focuses.filter(([value]) => config.learning_focus.includes(value)).map(([, label]) => label);
+ const themes = [...new Set(Object.values(planner.inputs.skill_groups))].filter(Boolean).slice(0,12);
+ // Themes come from the Skills Profile; earlier saved generic focuses still show until removed.
+ const chosenFocus = [...(config.learning_topics ?? []), ...focuses.filter(([value]) => config.learning_focus.includes(value)).map(([, label]) => label)];
  const showFocus = choosingFocus || !!config.learning_notes.trim();
 
  const stops: StopSpec[] = [
   { name: 'Start', required: true, filled: !issues.has('start_in_past'), content: <p className="road-clause">I’ll start on <DateToken name="Start date" required value={start} shown={fullDate(start)} warn={issues.has('start_in_past')} onChange={value => { if (value) update({ start_date: value }); }} /></p> },
   { name: 'Finish', required: true, filled: !!target && !targetProblem, content: <>
    <p className="road-clause">and finish by <DateToken name="Target date" value={target || ''} shown={target ? longDate(target) : 'choose a date'} warn={targetProblem} onChange={value => update({ target_date: value || null, duration: null })} />, that’s{' '}
-    <span className={`token${duration || runway.calendar ? '' : ' empty'}${!duration && runway.calendar ? ' calculated' : ''}`} role="group" aria-label="Duration">
-     {!duration && runway.calendar && <span className="token-shown" aria-hidden="true">{runway.calendar.label}</span>}
-     <span className="token-edit">
-      <FittedInput aria-label="Duration length" min={1} max={52} value={duration?.value ?? ''} onChange={e => { const value = Math.round(Number(e.target.value)); update(value >= 1 ? { duration: { value, unit: duration?.unit || 'weeks' }, target_date: null } : { duration: null }); }} />
-      <select aria-label="Duration unit" value={duration?.unit || 'weeks'} onChange={e => update({ duration: { value: duration?.value || 1, unit: e.target.value as Duration['unit'] }, target_date: null })}><option value="weeks">weeks</option><option value="months">months</option></select>
-     </span>
-    </span>.
+    <span className="road-derived" aria-label="Duration">{runway.calendar ? formatRunwaySpan(runway.calendar.weeks, runway.calendar.extra_days) : 'set by your finish date'}</span>.
    </p>
    {(defaults.application_date || jobDates.length > 0) && <div className="settings-suggestions">{defaults.application_date && <button type="button" className="chip sm" onClick={() => update({ target_date: defaults.application_date, duration: null })}>Use saved application date ({defaults.application_date})</button>}{jobDates.map(date => <button type="button" className="chip sm" key={`${date.kind}${date.date}`} onClick={() => update({ target_date: date.date, duration: null })}>Use {date.kind.replaceAll('_', ' ')} ({date.date})</button>)}</div>}
   </> },
@@ -228,16 +227,17 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
   { name: 'Session length', required: true, filled: config.preferred_session_minutes > 0, content: <p className="road-clause">in <NumberToken name="Preferred session in minutes" min={15} max={480} step={5} value={config.preferred_session_minutes} suffix="-minute" attached onChange={value => update({ preferred_session_minutes: Math.round(Number(value)) })} /> sessions,</p> },
   { name: 'Recurring study blocks', required: true, filled: config.blocks.length > 0, content: <>
    <p className="road-clause">on these days each week:</p>
-   <p className="small road-hint">Time outside these blocks is treated as unavailable, and blocked times remove any study time they overlap.</p>
+   <p className="small road-hint">These are your preferred study times. elo fills them first, then uses the overflow window if enabled. Blocked-out times are never used.</p>
+   <div className="settings-field"><label><input type="checkbox" checked={!!config.allow_overflow} onChange={e=>update({allow_overflow:e.target.checked,overflow_start:config.overflow_start||'08:00',overflow_end:config.overflow_end||'22:00'})}/> Use extra time outside my preferred blocks</label>{config.allow_overflow&&<div className="row"><label>Overflow starts<input type="time" value={config.overflow_start||'08:00'} onChange={e=>update({overflow_start:e.target.value})}/></label><label>Overflow ends<input type="time" value={config.overflow_end||'22:00'} onChange={e=>update({overflow_end:e.target.value})}/></label></div>}</div>
    <StudyWeek blocks={config.blocks} blackouts={config.blackouts} startDate={start} setBlocks={blocks => update({ blocks })} setBlackouts={blackouts => update({ blackouts })} />
    {blackoutPeriods.map(period => <p className="small road-note" key={period.start_date}>You saved no availability from {period.start_date} to {period.end_date}. <button type="button" className="settings-link" onClick={() => update({ blackouts: [...config.blackouts, dailyBlackout(period.start_date, period.end_date)] })}>Add as blackout</button></p>)}
    {reduced.map(period => <p className="small road-note" key={period.start_date}>You saved {period.weekly_hours} hours a week from {period.start_date} to {period.end_date}. This isn’t applied automatically, so adjust your budget or blocked times if needed.</p>)}
   </> },
-  { name: 'Backup blocks', required: false, filled: config.use_backup, content: <p className="road-clause">Backup blocks are <label className={`token toggle-token${config.use_backup ? '' : ' off'}`}><input type="checkbox" aria-label="Allow backup blocks when preferred time runs out" checked={config.use_backup} onChange={e => update({ use_backup: e.target.checked })} /><span aria-hidden="true">{config.use_backup ? 'allowed' : 'not allowed'}</span></label> when preferred time runs out.</p> },
+  { name: 'Backup blocks', required: false, filled: config.use_backup, content: <><p className="road-clause">Backup blocks are <label className={`token toggle-token${config.use_backup ? '' : ' off'}`}><input type="checkbox" aria-label="Allow backup blocks when preferred time runs out" checked={config.use_backup} onChange={e => update({ use_backup: e.target.checked })} /><span aria-hidden="true">{config.use_backup ? 'allowed' : 'not allowed'}</span></label> when preferred time runs out.</p><p className="small">Backup blocks are extra times elo can use only if your preferred blocks run out. Blocked-out times are never used.</p></> },
   { name: 'Learning focus', required: false, filled: chosenFocus.length > 0 || !!config.learning_notes.trim(), content: <>
    <p className="road-clause">I’d like to focus on <button type="button" className={`token token-button${chosenFocus.length ? '' : ' empty'}`} aria-expanded={showFocus} aria-label="Choose learning focus" onClick={() => setChoosingFocus(!showFocus)}>{chosenFocus.length ? chosenFocus.join(', ') : <><span aria-hidden="true">+ </span>choose focus</>}</button> <span className="small">Optional</span></p>
    {showFocus && <div className="focus-panel">
-    <div className="focus-chips">{focuses.map(([value, label]) => <label key={value} className={`focus-chip${config.learning_focus.includes(value) ? ' on' : ''}`}><input type="checkbox" checked={config.learning_focus.includes(value)} onChange={e => update({ learning_focus: e.target.checked ? [...config.learning_focus, value] : config.learning_focus.filter(f => f !== value) })} />{label}</label>)}</div>
+    <div className="focus-chips">{themes.map(theme=><label key={theme} className="focus-chip"><input type="checkbox" checked={config.learning_topics?.includes(theme)??false} onChange={e=>update({learning_topics:e.target.checked?[...(config.learning_topics??[]),theme]:(config.learning_topics??[]).filter(value=>value!==theme)})}/>{theme}</label>)}{themes.length===0&&<p>Review your Skills Profile to get focus suggestions.</p>}</div>
     <label className="settings-field"><span>Anything else about how you like to learn?</span><textarea maxLength={1000} value={config.learning_notes} onChange={e => update({ learning_notes: e.target.value })} /></label>
    </div>}
   </> },
@@ -254,9 +254,15 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
     {planner.inputs.goal?.company && <span className="use-chip">{planner.inputs.goal.company}</span>}
     {!!planner.inputs.goal?.skills?.length && <UseMenu label={`${count(planner.inputs.goal.skills.length, 'skill')} in this goal`}><ul className="use-tags">{planner.inputs.goal.skills.map(skill => <li key={skill.name}>{skill.name}</li>)}</ul></UseMenu>}
     {planner.inputs.cv?.name && <span className="use-chip">{planner.inputs.cv.name}</span>}
-    <UseMenu label={`Skills profile · ${count(planner.inputs.skills.length, 'skill')}, ${count(planner.inputs.experience.length, 'experience')}`}>
-     {!planner.inputs.skills.length && !planner.inputs.experience.length && <p className="small">No skills evidence is available yet.</p>}
-     {groups.map(group => <div className="use-group" key={group.name}><h3>{group.name}</h3><ul className="use-tags">{group.items.map(skill => <li key={skill.ref} title={skill.text || undefined}>{skill.name}</li>)}</ul></div>)}
+    {/* Counts come from the Skills Profile itself; the roadmap's evidence list repeats a skill once per source. */}
+    <UseMenu label={profileSkills?.status === 'ready' ? `Skills profile · ${count(profileSkills.data.total, 'skill')}, ${count(profileSkills.data.experiences, 'experience')}` : 'Skills profile'}>
+     {profileSkills?.status === 'ready' ? <>
+      {!profileSkills.data.total && <p className="small">No skills are saved in your Skills Profile yet.</p>}
+      {profileSkills.data.groups.map(group => <div className="use-group" key={group.name}><h3>{group.name}</h3><ul className="use-tags">{group.skills.map(name => <li key={name}>{name}</li>)}</ul></div>)}
+     </> : <>
+      {!planner.inputs.skills.length && !planner.inputs.experience.length && <p className="small">No skills evidence is available yet.</p>}
+      {groups.map(group => <div className="use-group" key={group.name}><h3>{group.name}</h3><ul className="use-tags">{group.items.map(skill => <li key={skill.ref} title={skill.text || undefined}>{skill.name}</li>)}</ul></div>)}
+     </>}
      {!!planner.inputs.experience.length && <div className="use-group"><h3>Experience</h3><ul className="use-tags">{planner.inputs.experience.map(item => <li key={item.ref}>{item.name}</li>)}</ul></div>}
      <Link className="use-panel-link" href="/cv">Update your Skills Profile</Link>
     </UseMenu>
@@ -293,10 +299,10 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
       </div>}
      </div>
      <p className="small">Times are in {config.time_zone}.{zone && zone !== config.time_zone && <> Your device uses {zone}. <button type="button" className="settings-link" onClick={() => update({ time_zone: zone })}>Use {zone}</button></>}</p>
-     {runway.calendar && <details><summary>Week by week</summary><ul className="runway-weeks">{runway.weeks.map(week => <li key={week.week_start}><span>Week of {week.week_start}{week.partial ? ' (partial)' : ''}</span><span>{hours(week.usable_minutes)}{week.backup_extra_minutes > 0 && !config.use_backup ? ` · +${hours(week.backup_extra_minutes)} backup` : ''}</span></li>)}</ul></details>}
+
      {settings.calculating && <p role="status" className="small">Recalculating…</p>}
      {reasons.length > 0 && <div className="settings-blockers"><h3>Before you can generate</h3><ul>{reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul></div>}
-     {context.ready && !validResearch && <label className="settings-check"><input type="checkbox" disabled={frozen} checked={partial} onChange={e => setPartial(e.target.checked)} />Continue with available evidence. Interview research is {context.research_coverage || 'unavailable'}; the comparison will be labelled partial.</label>}
+     {context.ready && !validResearch && <p className="small">Using available evidence. Interview research is {context.research_coverage || 'unavailable'}; the comparison will be labelled partial.</p>}
      <div className="plan-actions">
       <button type="button" className="btn primary" disabled={blocked || frozen} onClick={generate}>{planner.active ? 'Preview updated roadmap' : 'Generate roadmap'}</button>
       {settings.dirty && autosave === 'failed' && <button type="button" className="btn ghost" disabled={frozen || !!settings.previewError} onClick={save}>Save settings</button>}

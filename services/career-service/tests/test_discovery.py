@@ -122,7 +122,14 @@ def wait(flow,row,status='review'):
     for _ in range(200):
         response=flow[0].get(f"{BASE}/{row['id']}",headers=headers());assert response.status_code==200,response.text
         value=response.json()['session']
-        if value['status']==status:return value
+        if value['status']==status:
+            if status=='review' and value.get('stage')=='awaiting_goal_confirmation':
+                before=flow[0].get('/api/v1/career/goals/current',headers=headers()).json()
+                assert before['goal']['_id']!=value['review']['current']['goal']['_id']
+                published=flow[0].post(f"{BASE}/{value['id']}/publish",headers=headers(key=str(uuid4())),json={'expected_version':value['version'],'expected_selection_version':before['selection_version']})
+                assert published.status_code==200,published.text
+                return published.json()['session']
+            return value
         if value['status']=='failed' and status!='failed':pytest.fail(str(value))
         time.sleep(.025)
     pytest.fail(str(value))
@@ -163,7 +170,7 @@ def test_unknown_stage_and_location_do_not_block_research(flow):
     assert wait(flow,row)['status']=='review'
 
 
-def test_research_and_chat_refinements_automatically_publish_through_shared_persistence(flow,monkeypatch):
+def test_research_and_reviewed_chat_refinements_publish_through_shared_persistence(flow,monkeypatch):
     seen=[];original=GoalStore.persist_target
     def save(store,goal):seen.append(goal);return original(store,goal)
     monkeypatch.setattr(GoalStore,'persist_target',save)
@@ -187,7 +194,7 @@ def test_research_and_chat_refinements_automatically_publish_through_shared_pers
     assert [skill['name'] for skill in updated['goal']['skills']]==['SQL']
     assert updated['selection_version']==2 and len(seen)==2
     assert flow[1].career_goals.find_one({'_id':ObjectId(goal.id),'user_id':OWNER})
-    # Reload/poll cannot repeat the publication or require a confirmation command.
+    # Reload/poll cannot repeat an explicitly confirmed publication.
     flow[0].get(BASE+'/current',headers=headers())
     flow[0].get(f"{BASE}/{refined['id']}",headers=headers())
     assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()==updated
@@ -209,7 +216,7 @@ def test_empty_sources_and_empty_supported_listings_are_honest(flow):
     assert len(flow[3].calls)==3 and 'alternative employers' in flow[3].calls[-1]
 
 
-def test_refresh_preserves_evidence_snapshot_and_automatically_updates_goal(flow):
+def test_refresh_preserves_evidence_snapshot_and_confirms_goal_replacement(flow):
     row=start(flow);row=wait(flow,row);review=row['review'];calls=len(flow[3].calls)
     research(flow,row,refresh=True);latest=wait(flow,row)
     assert len(flow[3].calls)>calls and latest['review']['current']['goal']['_id']!=review['current']['goal']['_id']

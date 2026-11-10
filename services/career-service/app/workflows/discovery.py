@@ -246,7 +246,7 @@ class DiscoveryEngine:
             social_reply=conversational_reply(body.message,ongoing=bool(messages))
             if social_reply:
                 question=None
-                if not messages and row['status'] in ('conversation','failed') and missing_fields(previous.get('understanding')):
+                if not messages and '?' not in social_reply and row['status'] in ('conversation','failed') and missing_fields(previous.get('understanding')):
                     question=clarification_bundle(previous.get('understanding'))[0].split('. ',1)[1]
                 decision=Decision.model_validate({**previous,'action':'ANSWER',
                     'scope':row.get('scope'),'reply':social_reply,'question':question,'source_ids':[]})
@@ -709,6 +709,17 @@ class DiscoveryEngine:
                 company=None,job_url=None,location=review.content.location,seniority_level=review.content.seniority_level,
                 employment_type=review.content.employment_type,review_id=review.id,expected_review_version=review.version,
                 expected_selection_version=row['publication_selection_version'],replace_current=True)
+            current=self.app.state.goal_store.current(owner).get('goal')
+            # Refining (or replaying) this chat's own goal needs no consent; replacing another goal does.
+            own_goal=current and current.discovery and current.discovery.research_id.split(':')[0]==row['_id']
+            if not own_goal and self.publication_selection(row)!=row['publication_selection_version']:
+                raise GoalError('The current goal changed during discovery. Review this direction again.')
+            if current and not own_goal and not row.get('publication_approved'):
+                changed=self.rows.update_one(query,{'$set':{'summary':summary.model_dump(),'summary_version':row['version'],
+                    'review_id':review.id,'status':'review','aggregate':result,'stage':'awaiting_goal_confirmation',
+                    'researched_at':evidence.researched_at,'error_code':None,'lease_until':now(),'updated_at':now()},
+                    '$push':{'messages':{'role':'assistant','content':message.replace('Your Career Goal has been updated automatically.','This direction is saved. Confirm below before it replaces your current Career Goal.')}}})
+                return bool(changed.matched_count)
             goal=self.app.state.review_store.goal(review,owner,key,command,allow_pending_context=True)
             memory=(row.get('decision') or {}).get('memory',{})
             goal.interests=memory.get('interests',[]);goal.preferences=memory.get('preferences',[])

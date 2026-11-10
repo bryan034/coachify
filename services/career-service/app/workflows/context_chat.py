@@ -1,3 +1,4 @@
+from app.repositories.goals import GoalError
 """Interpret saved context and retrieve public evidence when needed."""
 import json
 from langgraph.graph import StateGraph,START,END
@@ -25,6 +26,9 @@ PUBLIC_FOCUS={'role':'role_details','skills':'role_details','requirements':'elig
 
 
 async def semantic_chat(request,account,row,body):
+    import re
+    if re.search(r'```|(?m:^\s*(?:def |class |function |import |const |let |public static ))',body.message):
+        raise GoalError('Pasted code is not supported here. Ask your career question in plain language.',422)
     repo=request.app.state.workspace_store
     store=QuestionStore(repo,request.app.state.research_store)
     revision=str(body.expected_version)

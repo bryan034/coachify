@@ -1,7 +1,8 @@
 """Small provider schemas: extraction stays traceable and summaries select validated claims."""
 from typing import Annotated
 from pydantic import Field,StringConstraints,PrivateAttr
-from app.schemas.opportunity import Model,Category,Summary,Text,Confidence,EvidenceType,Scope,FIELDS
+from app.schemas.opportunity import Model,Category,Summary,Text,Confidence,EvidenceType,Scope,FIELDS,RoundName,MAX_ROUNDS
+import re
 
 SearchQuery=Annotated[str,StringConstraints(strip_whitespace=True,min_length=3,max_length=180)]
 
@@ -21,6 +22,8 @@ class Claim(Model):
     evidence_type:EvidenceType
     scope:Scope
     conflict_group:str|None=Field(default=None,max_length=80)
+    round_number:int|None=Field(default=None,ge=1,le=MAX_ROUNDS,strict=True)
+    round_name:RoundName|None=None
 
 class StructuredFindings(Model):
     """Resolved internal findings. The provider does not generate quotes/refs."""
@@ -40,6 +43,8 @@ class ReferencedClaim(Model):
     evidence_type:EvidenceType
     scope:Scope
     conflict_group:str|None=Field(default=None,max_length=80)
+    round_number:int|None=Field(default=None,ge=1,le=MAX_ROUNDS,strict=True)
+    round_name:RoundName|None=None
 
 
 class FindingReferenceError(ValueError):
@@ -67,14 +72,25 @@ class ReferencedFindings(Model):
             if passage is None:
                 issues.append({'field':f'findings.{index}.evidence_ref','issue':'evidence_reference_not_found'})
                 continue
-            findings.append(Claim(**item.model_dump(exclude={'evidence_ref'}),
-                refs=[passage['source_ref']],quotes=[passage['text']]))
+            values=item.model_dump(exclude={'evidence_ref'})
+            if values.get('round_number') is None or not round_supported(category,values,passage['text']):values.update(round_number=None,round_name=None)
+            findings.append(Claim(**values,refs=[passage['source_ref']],quotes=[passage['text']]))
             indexes.append(index)
         result=StructuredFindings(findings=findings,relevant_refs=list(dict.fromkeys(self.relevant_refs)),follow_up_query=self.follow_up_query)
         result._reference_issues=issues
         result._reference_indexes=indexes
         result._passage_bound=True
         return result
+
+
+def round_supported(category,values,passage):
+    """Keep a round only when its passage names it; an unsupported round is dropped, not the finding."""
+    if values.get('round_number') is None:return True
+    if category!='interview_intelligence':return False
+    name=values.get('round_name')
+    text=' '.join(passage.casefold().split())
+    if name and ' '.join(name.casefold().split()) in text:return True
+    return bool(re.search(r'\b(?:round|stage|interview)s?\b',text)) and str(values['round_number']) in text
 
 
 def reference_context(context):
@@ -108,6 +124,8 @@ def findings_schema(context):
     claim['field']['enum']=list(FIELDS[category])
     claim['evidence_ref']['enum']=list(passages)
     schema['properties']['relevant_refs']['items']['enum']=source_refs
+    if category!='interview_intelligence':
+        for key in ('round_number','round_name'):claim.pop(key,None)
     return schema
 
 
@@ -143,7 +161,8 @@ FIELD_GUIDANCE={
   'interview_questions':'Actual reported questions or assessment tasks; never generated practice questions.',
   'difficulty':'Explicitly reported interview difficulty; do not infer from a job title.',
   'application_timeline':'Application windows, recruitment dates or reported response/process duration; not page retrieval time.',
-  'preparation_topics':'Skills or subjects explicitly tested or recommended for this interview.'},
+  'preparation_topics':'Skills or subjects explicitly tested or recommended for this interview.',
+  'round_format':'What one interview round consists of as reported: its format, length, interviewers or tasks.'},
  'internship_insights':{
   'compensation':'Intern salary/stipend, currency and pay period only as stated; do not convert employee pay into intern pay.',
   'benefits':'Reported intern perks, leave, allowances or other non-salary benefits.',
@@ -176,7 +195,7 @@ field, division/programme, company, location and seniority; preserve the meaning
 identity. Use relevant role-specific vocabulary, never default every role to technology.
 For example investment banking may need valuation/accounting/deals, while software
 engineering may need coding/algorithms/APIs. Never mix banking divisions or programmes.
-1 interview_intelligence: candidate experience, recruitment stages, assessments and actual questions asked.
+1 interview_intelligence: every interview round and its order, the format of each round, and actual questions asked in each.
 2 internship_insights: interns' actual work, projects, responsibilities, mentorship and workload.
 3 career_progression: roles/progression after internship and rough full-time conversion salary;
 search graduate pay if conversion pay is unavailable but distinguish it during extraction.
@@ -230,6 +249,13 @@ Conversion percentages require explicit supporting evidence, not anecdotes or es
 Preserve any stated cohort year and offers vs acceptances vs actual conversions.
 Salary must preserve the meaning of stated currency, pay period, base vs bonus and year,
 and whether it is a conversion offer or related graduate pay. Do not require absent details. Separate company-wide and team culture.
+For interview_intelligence, cover every interview round the evidence describes, from the
+first screen or test to the final interview. Jobs differ: some have one round, some many;
+record only the rounds the excerpts support and never pad to a typical count. When a finding
+belongs to one round, set round_number (1 = first round, in the reported order) and a short
+round_name copied from the excerpt, such as "Online assessment" or "Technical interview".
+Keep the same number and name for every finding about that round. Leave both null for
+process-wide facts such as total round count, overall timeline or general difficulty.
 Use publication dates when available; unknown dates remain unknown. Propose at most one
 focused follow_up_query for the most important missing topic, preserving company, role
 and location. Prefer a different source type or narrower topic when current results are

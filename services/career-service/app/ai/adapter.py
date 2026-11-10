@@ -550,6 +550,12 @@ class AIAdapter:
                             if request.stage not in DISCOVERY_OUTPUTS:output = self.output_model(request.stage).model_validate_json(raw)
                             if isinstance(output,LocalJobScope):output=output.to_domain()
                             if isinstance(output, ExtractedJD):
+                                for skill in output.skills:
+                                    for item in skill.learning_items:
+                                        if item.importance_origin=='stated' and item.evidence not in (request.source_text or ''):
+                                            raise AIError('invalid_output',True,reason='provenance',fields=('skills','learning_items','evidence'))
+                                        if any(url not in (request.source_urls or []) for url in item.source_urls):
+                                            raise AIError('invalid_output',True,reason='provenance',fields=('skills','learning_items','source_urls'))
                                 if any(d.evidence not in (request.source_text or '') for d in output.job_dates):
                                     raise AIError('invalid_output', True, reason='provenance')
                                 output = output.to_domain()

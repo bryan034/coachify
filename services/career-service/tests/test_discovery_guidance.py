@@ -257,7 +257,7 @@ def test_social_turns_work_without_model_and_leave_context_intact(conversation,m
     assert 'career' in result['messages'][-1]['content']
     assert result['decision']['understanding']==previous['understanding']
     assert result['scope']==previous['scope'] and result['status']==status
-    assert result['messages'][-1]['content'].count('?')==0
+    assert result['messages'][-1]['content'].count('?')==1
     engine.ai.generate.assert_not_awaited()
     engine.research_values.assert_not_called()
 
@@ -268,7 +268,9 @@ def test_new_chat_hi_works_even_if_model_would_fail(conversation):
     result=send(None,'hi')
     assert result['messages'][0]=={'role':'user','content':'hi'}
     assert result['messages'][-1]['content'].startswith('Hi!')
-    assert 'field' in result['decision']['question'] and 'keep it broad' in result['decision']['question']
+    # The greeting itself asks one concrete question, so no second clarification is stacked on it.
+    assert result['messages'][-1]['content'].count('?')==1 and 'What kind of work interests you' in result['messages'][-1]['content']
+    assert result['decision']['question'] is None
     assert result['decision']['scope'] is None and result['decision']['understanding']['field']['status']=='unanswered'
     engine.ai.generate.assert_not_awaited()
 

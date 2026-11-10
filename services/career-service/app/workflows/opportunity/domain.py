@@ -79,7 +79,7 @@ def validate_claims(output,category,sources,public=None):
         ids=[sources[i].source_id for i in item.refs]
         if values['evidence_type']=='official' and any(sources[i].reliability!='official' and sources[i].platform!='employer' for i in item.refs):values['evidence_type']='third_party'
         if values['confidence']=='high' and any(sources[i].reliability!='official' for i in item.refs):values['confidence']='medium'
-        try:record=Finding(**values,source_ids=ids,finding_id='f'+fingerprint({'category':category,'field':item.field,'value':item.value,'sources':sorted(ids)})[:16],last_verified_at=stamp)
+        try:record=Finding(**values,source_ids=ids,finding_id='f'+fingerprint({'category':category,'field':item.field,'value':item.value,'sources':sorted(ids),**({'round':values['round_number']} if values.get('round_number') else {})})[:16],last_verified_at=stamp)
         except ValidationError as error:
             issues=issues_for(error,Finding)
             raise AIError('invalid_output',True,reason='schema_validation',

@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import { addDays, addMonths, clockRange, dayOfMonth, fullDate, monthKey, monthTitle, monthWeeks, shortDate, weekColumns, weekDates, weekStart, weekdayName } from './roadmap-calendar';
 import { hours, longDate } from './settings-panel';
-import type { PlanAssignment, PlanMilestone, PlanReview, PlannedRoadmap } from './types';
+import type { NotesDocument, PlanAssignment, PlanMilestone, PlanReview, PlannedRoadmap } from './types';
+import { NotesEditor } from './notes-editor';
 
 type View = 'day' | 'week' | 'month';
 const views: [View, string][] = [['day', 'Daily'], ['week', 'Weekly'], ['month', 'Monthly']];
@@ -20,7 +21,8 @@ export function skillsFor(session: PlanAssignment, plan: PlannedRoadmap) {
  return plan.gaps.filter(gap => ids.includes(gap.id)).map(gap => gap.name);
 }
 
-function TaskItem({ session, plan, review, frozen, complete, reopen }: { session: PlanAssignment; plan: PlannedRoadmap; review: PlanReview; frozen: boolean; complete: ((session: PlanAssignment, note: string) => Promise<unknown>) | null; reopen: ((session: PlanAssignment) => Promise<unknown>) | null }) {
+type SaveNotes = ((taskId: string, notes: NotesDocument) => Promise<unknown>) | null;
+function TaskItem({ session, plan, review, frozen, complete, reopen, saveNotes }: { session: PlanAssignment; plan: PlannedRoadmap; review: PlanReview; frozen: boolean; complete: ((session: PlanAssignment, note: string) => Promise<unknown>) | null; reopen: ((session: PlanAssignment) => Promise<unknown>) | null; saveNotes?: SaveNotes }) {
  const [note, setNote] = useState(''); const [ticking, setTicking] = useState<boolean | null>(null);
  // The tick shows at once. The saved status takes over when the request ends, so a failure undoes it.
  const tick = (checked: boolean) => { setTicking(checked); void (checked ? complete!(session, '') : reopen!(session)).finally(() => setTicking(null)); };
@@ -32,7 +34,7 @@ function TaskItem({ session, plan, review, frozen, complete, reopen }: { session
    ? <input className="todo-check" type="checkbox" aria-label={`Mark complete: ${session.task}`} checked={done} disabled={frozen} onChange={event => tick(event.target.checked)} />
    : <span className={`todo-check-static${done ? ' done' : ''}`} aria-hidden="true" />}
   <div className="todo-body">
-   <p className="todo-when"><span>{clockRange(session.start_time, session.duration_minutes)}</span><span>{session.duration_minutes} min</span>
+   <p className="todo-when"><span>{clockRange(session.start_time, session.duration_minutes)}</span><span>{hours(session.duration_minutes)}</span>
     {session.id === review.next_assignment_id && <span className="todo-flag next">Next</span>}
     {review.missed_assignment_ids.includes(session.id) && <span className="todo-flag">Passed</span>}
     {session.kind === 'diagnostic' && <span className="todo-flag">Diagnostic</span>}
@@ -40,6 +42,8 @@ function TaskItem({ session, plan, review, frozen, complete, reopen }: { session
    <p className="todo-task">{session.task}</p>
    <p className="small">Done when: {session.completion_criterion}</p>
    {(skills.length > 0 || milestone) && <div className="todo-tags">{skills.map(skill => <span className="todo-skill" key={skill}>{skill}</span>)}{milestone && <span className="small">{milestone.title}</span>}</div>}
+   {saveNotes && session.task_id && (() => { const task = plan.editable_tasks?.find(item => item.id === session.task_id); const has = !!task?.notes?.blocks.length;
+    return <details className="todo-notes" open={has || undefined}><summary>{has ? 'Notes' : 'Add notes'}</summary><NotesEditor label={`Notes for ${session.task}`} value={task?.notes} disabled={frozen} onSave={doc => saveNotes(session.task_id!, doc)}/></details>; })()}
    {session.evidence_note && <p className="small">Your note: {session.evidence_note}</p>}
    {session.status === 'completed' && !session.evidence_note && complete && <details className="todo-note"><summary>Add what you produced</summary>
     <label>What did you produce? (optional)<textarea maxLength={2000} value={note} onChange={event => setNote(event.target.value)} /></label>
@@ -77,7 +81,7 @@ function MonthView({ cursor, today, plan, review, sessions, open }: { cursor: st
 }
 
 /** The roadmap's working surface: the sessions to tick off, seen by day or week, and each week at a glance by month. */
-export function TaskPlanner({ plan, review, frozen, complete, reopen }: { plan: PlannedRoadmap; review: PlanReview; frozen: boolean; complete: ((session: PlanAssignment, note: string) => Promise<unknown>) | null; reopen: ((session: PlanAssignment) => Promise<unknown>) | null }) {
+export function TaskPlanner({ plan, review, frozen, complete, reopen, saveNotes = null }: { plan: PlannedRoadmap; review: PlanReview; frozen: boolean; complete: ((session: PlanAssignment, note: string) => Promise<unknown>) | null; reopen: ((session: PlanAssignment) => Promise<unknown>) | null; saveNotes?: SaveNotes }) {
  const today = review.remaining.resolved.today;
  const sessions = [...plan.assignments].sort(bySchedule);
  const next = sessions.find(session => session.id === review.next_assignment_id);
@@ -104,7 +108,7 @@ export function TaskPlanner({ plan, review, frozen, complete, reopen }: { plan: 
   : view === 'day' ? (cursor === today ? 'Today' : longDate(cursor))
   : sameWeek ? 'This week' : `Week of ${shortDate(weekStart(cursor))}`;
  const days = [...new Set(shown.map(session => session.date))];
- const item = (session: PlanAssignment) => <TaskItem key={session.id} session={session} plan={plan} review={review} frozen={frozen} complete={complete} reopen={reopen} />;
+ const item = (session: PlanAssignment) => <TaskItem key={session.id} session={session} plan={plan} review={review} frozen={frozen} complete={complete} reopen={reopen} saveNotes={saveNotes} />;
 
  return <section className="task-planner" aria-label="To-do list">
   <header className="task-head">

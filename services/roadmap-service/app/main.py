@@ -58,7 +58,16 @@ def create_app(store=None,upstream=None,model=None,clock=None):
                 return current['result']
         raise Problem('Assessment is still processing. Retry this saved planning message to reconnect.',503,'assessment_processing')
     async def worker(row,account):
-        if row['pending']['kind']=='generate':await prepare_plan(app,row,account,assessment,context)
+        if row['pending']['kind'] in ('generate','roll_forward'):
+            await prepare_plan(app,row,account,assessment,context)
+            if row['pending']['kind']=='roll_forward':
+                from app.planning.state import candidate_blockers
+                from app.planning.milestone_membership import mark_plan_membership_changes
+                state=planner_state(row)
+                blockers=candidate_blockers(state,await context(account),app.state.clock())
+                if blockers:raise Problem('The next week needs review. Your active plan is unchanged.',409,'roll_forward_review')
+                mark_plan_membership_changes(state['active'],state['candidate'])
+                state['active']=state['candidate'];state['candidate']=None
         else:await chat_turn(app,row,account,assessment,context)
         return row
 

@@ -3,7 +3,7 @@ import { MilestoneTimeline, RouteMap } from './milestone-timeline';
 import { clockRange } from './roadmap-calendar';
 import { hours, longDate } from './settings-panel';
 import { TaskPlanner } from './task-planner';
-import type { Confirmation, Issue, PlanAssignment, PlanGap, PlanMilestone, PlanReview, PlannedRoadmap, Planner } from './types';
+import type { Confirmation, Issue, PlanAssignment, PlanGap, PlanMilestone, PlanReview, PlannedRoadmap, Planner, NotesDocument } from './types';
 
 const answers: [Confirmation['answer'], string][] = [['have_experience', 'Yes'], ['some_experience', 'Somewhat'], ['no_experience', 'No'], ['not_sure', 'Not sure']];
 
@@ -39,7 +39,8 @@ function SkillProgress({ plan, review }: { plan: PlannedRoadmap; review: PlanRev
  </section>;
 }
 
-export function RoadmapReview({ plan, review, preview, planner, blockers, frozen, accept, discard, backToSettings, revise, complete, reopen, recordOutcome, confirm }: {
+export function RoadmapReview({ plan, review, preview, planner, blockers, frozen, accept, discard, backToSettings, revise, complete, reopen, recordOutcome, confirm, saveNotes }: {
+ saveNotes?: (taskId: string, notes: NotesDocument) => Promise<unknown>;
  plan: PlannedRoadmap; review: PlanReview; preview: boolean; planner: Planner; blockers: Issue[]; frozen: boolean;
  accept: () => void; discard: () => void; backToSettings: () => void; revise: () => void;
  complete: (session: PlanAssignment, note: string) => Promise<unknown>; reopen: (session: PlanAssignment) => Promise<unknown>;
@@ -83,7 +84,7 @@ export function RoadmapReview({ plan, review, preview, planner, blockers, frozen
   </section>}
 
   <div className="review-work">
-   <TaskPlanner key={plan.id} plan={plan} review={review} frozen={frozen} complete={preview ? null : complete} reopen={preview ? null : reopen} />
+   <TaskPlanner key={plan.id} plan={plan} review={review} frozen={frozen} complete={preview ? null : complete} reopen={preview ? null : reopen} saveNotes={preview ? null : saveNotes ?? null} />
    <div className="review-side">
     <section className="review-now" aria-label="Where you are now">
      <div className="review-next"><h3>Next assignment</h3>{next ? <><p className="review-value">{longDate(next.date)}, <span className="review-time">{clockRange(next.start_time, next.duration_minutes)}</span></p><p>{next.task}</p></> : <p className="small">No upcoming session. Preview an updated roadmap to plan your next week.</p>}</div>

@@ -1,5 +1,5 @@
 from elo_shared.skills import resolve, MAPPING_VERSION
-from elo_shared.skill_groups import skill_groups
+from elo_shared.skill_groups import skill_groups, skill_subgroups
 from app.schemas.interview_evidence import ReviewFact, SkillEstimate
 from app.domain.extraction_errors import FailureStage, FailureCategory, ProviderReason, ProviderParameter
 from typing import Annotated, Literal
@@ -389,9 +389,11 @@ class CvSummary(BaseModel):
 class CvDetail(CvSummary):
     # Display categories by skill name, derived on read; see elo_shared.skill_groups.
     skill_groups: dict[str, str] = Field(default_factory=dict)
+    skill_subgroups: dict[str,str] = Field(default_factory=dict)
     @model_validator(mode='after')
     def display_groups(self):
         self.skill_groups = skill_groups((skill.name, skill.category) for skill in self.skills)
+        self.skill_subgroups = skill_subgroups((skill.name,skill.category) for skill in self.skills)
         return self
     skill_estimates: list[SkillEstimate] = Field(default_factory=list)
     other_information: list[Evidence] = Field(default_factory=list, max_length=160)

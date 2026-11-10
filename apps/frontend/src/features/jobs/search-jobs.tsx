@@ -3,11 +3,12 @@ import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from 'reac
 import Link from 'next/link';
 import {Icon} from '@/components/ui/icon';
 import {useProfile} from '@/features/profile/profile-provider';
-import {JobsError,externalSearches,listApplications,readJobFilters,removeApplication,saveApplication,saveJobLink,searchJobs,updateApplication,
+import {JobsError,externalSearches,listApplications,readJobFilters,removeApplication,saveApplication,saveJobLink,searchJobs,updateApplication,updateApplicationDetails,
  type Application,type ApplicationStatus,type ExternalSearch,type FilterOption,type FilterOptions,type JobFilters,type JobLink,type JobType,type Posting} from '@/lib/api/jobs';
 import {loadGoal,useSection} from '@/lib/api/workspace-summary';
 import {APPLICATION_RECORDED,noteApplyVisit} from './application-check';
 import '@/styles/jobs.css';
+import { formatDate } from '@/lib/format';
 
 const JOB_TYPES:Record<string,string>={internship:'Internship',graduate:'Graduate programme',full_time:'Full-time',part_time:'Part-time',contract:'Contract',temporary:'Temporary',unknown:'Not stated'};
 const WORKPLACES:Record<string,string>={onsite:'On-site',hybrid:'Hybrid',remote:'Remote',unknown:'Not stated'};
@@ -21,7 +22,7 @@ const NO_CHOICES:Choices={jobTypes:[],industries:[],workplace:'',company:'',post
 
 const label=(names:Record<string,string>,value:string)=>names[value]??value;
 const explanation=(error:unknown)=>error instanceof JobsError?error.message:'The job service is temporarily unavailable. Retry shortly.';
-const day=(value:string)=>new Intl.DateTimeFormat('en-SG',{day:'numeric',month:'short',year:'numeric',timeZone:'Asia/Singapore'}).format(new Date(value));
+const day=(value:string)=>formatDate(value);
 const httpsOnly=(url:string)=>url.startsWith('https://')?url:undefined;
 
 function toFilters(q:string,choices:Choices):JobFilters{
@@ -38,7 +39,11 @@ export function SearchJobs(){
 }
 
 function JobSearch({accountId,token}:{accountId:string;token:string}){
- const [tab,setTab]=useState<'search'|'tracker'>('search');
+ const {profile}=useProfile();
+ const [sort,setSort]=useState<'recommended'|'newest'>('recommended');
+ const defaultsApplied=useRef(false),filtersTouched=useRef(false);
+ // ?tab=applications opens the tracker directly, for links from Home.
+ const [tab,setTab]=useState<'search'|'tracker'>(()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('tab')==='applications'?'tracker':'search');
  const [draft,setDraft]=useState('');const [keywords,setKeywords]=useState('');
  const [choices,setChoices]=useState(NO_CHOICES);
  const [options,setOptions]=useState<FilterOptions|null>(null);
@@ -47,7 +52,7 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
  const [loading,setLoading]=useState(true);const [more,setMore]=useState(false);const [error,setError]=useState('');
  const [applications,setApplications]=useState<Application[]>([]);const [trackerError,setTrackerError]=useState('');
  const [retry,setRetry]=useState(0);
- const filters=useMemo(()=>toFilters(keywords,choices),[keywords,choices]);
+ const filters=useMemo(()=>({...toFilters(keywords,choices),sort}),[keywords,choices,sort]);
  const latest=useRef(0);
  const goal=useSection(loadGoal,token);
  const [sites,setSites]=useState<ExternalSearch[]>([]);
@@ -121,13 +126,14 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
   try{await removeApplication(token,item);setApplications(current=>current.filter(other=>other.id!==item.id));}catch(problem){await recover(problem);}
  }
  function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setKeywords(draft.trim());setRetry(value=>value+1);}
- function change(next:Partial<Choices>){setChoices(current=>({...current,...next}));}
+ function change(next:Partial<Choices>){filtersTouched.current=true;setChoices(current=>({...current,...next}));}
  function tryTerm(term:string){setDraft(term);setKeywords(term);setTab('search');setRetry(value=>value+1);}
  function clear(){setDraft('');setKeywords('');setChoices(NO_CHOICES);}
+ useEffect(()=>{if(defaultsApplied.current||goal.state.status!=='ready'||filtersTouched.current)return;defaultsApplied.current=true;const type=goal.state.data.goal?.employment_type;const suggested=type&&type!=='unknown'?type:profile?.occupational_status==='student'?'internship':null;if(suggested)setChoices(current=>({...current,jobTypes:[suggested]}));},[goal.state,profile]);
  const goalTerms=goal.state.status==='ready'&&goal.state.data.goal?[goal.state.data.goal.role,...goal.state.data.goal.skills.filter(skill=>skill.priority==='required').map(skill=>skill.name),...goal.state.data.goal.skills.filter(skill=>skill.priority!=='required').map(skill=>skill.name)].slice(0,4):[];
  const filtered=Boolean(keywords)||JSON.stringify(choices)!==JSON.stringify(NO_CHOICES);
 
- return <section className="page on job-search-page">
+ return <section className={`page on job-search-page${items.length?' has-results':''}`}>
   <div className="job-hero">
    <h1>Search Jobs</h1>
    <p className="job-search-intro">Find jobs and internships in Singapore, then apply on the employer&rsquo;s own site. Elo tracks your progress and sends nothing to employers.</p>
@@ -141,11 +147,11 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
    {sites.length>0&&<p className="job-hero-note">Only your search terms leave elo when you open a site, and your CV stays here. A site may ask you to sign in.</p>}
   </div>
   <div className="job-tabs" role="group" aria-label="Job views">
-   <button type="button" className="btn ghost" aria-pressed={tab==='search'} onClick={()=>setTab('search')}>Find jobs</button>
+   <button type="button" className="btn ghost" aria-pressed={tab==='search'} onClick={()=>setTab('search')}>Search jobs</button>
    <button type="button" className="btn ghost" aria-pressed={tab==='tracker'} onClick={()=>setTab('tracker')}>My applications ({applications.length})</button>
   </div>
   {trackerError&&<p className="small" role="alert">{trackerError}</p>}
-  {tab==='tracker'?<Tracker items={applications} onStatus={changeStatus} onRemove={remove} onSaveLink={link=>saveJobLink(token,link)} onSaved={remember}/>:<div className="job-find-layout">
+  {tab==='tracker'?<Tracker items={applications} onStatus={changeStatus} onRemove={remove} onSaveLink={link=>saveJobLink(token,link)} onSaved={remember} onDetails={async(item,fields)=>{try{remember(await updateApplicationDetails(token,item,fields));}catch(problem){await recover(problem);throw problem;}}}/>:<div className="job-find-layout">
    <div className="job-search-panel" aria-label="Filters" role="group">
     <h2>Filters</h2>
     <div className="job-filters">
@@ -173,7 +179,7 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
     </div>
    </div>
    <div className="job-results">
-    <div className="job-results-summary" aria-live="polite">
+    <div className="job-results-summary" aria-live="polite"><label>Sort results<select value={sort} onChange={event=>setSort(event.target.value as typeof sort)}><option value="recommended">Recommended</option><option value="newest">Newest first</option></select></label>
      <span><strong>{loading?'Searching…':error?'':`${total} ${total===1?'job':'jobs'} in Singapore`}</strong>{!loading&&!error&&options?.last_synced_at&&<small> Employer boards last read {day(options.last_synced_at)}</small>}</span>
      {filtered&&<button type="button" className="btn ghost" onClick={clear}>Clear filters</button>}
     </div>
@@ -186,7 +192,7 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
     {cursor&&!loading&&<button type="button" className="btn ghost" disabled={more} onClick={loadMore}>{more?'Loading…':'Show more jobs'}</button>}
    </div>
   </div>}
-  <div className="job-handoff"><p><strong>Found a role you like?</strong> <Link href="/career-goal?new=1">Use its job description to set your Career Goal.</Link></p><Link className="btn pri" href="/career-goal?new=1" aria-hidden="true" tabIndex={-1}>Set as Career Goal</Link></div>
+
  </section>;
 }
 
@@ -211,17 +217,19 @@ function JobCard({posting,item,onSave,onApply}:{posting:Posting;item?:Applicatio
    <span>{posting.posted_at_estimated?'Posting date not supplied':`Posted ${day(posting.posted_at)}`}</span>
    {posting.application_deadline&&<span>Closes {day(posting.application_deadline)}</span>}
   </div>
+  {posting.matched_skills&&<p className="small" title={posting.match_basis??undefined}>{posting.matched_skills.length} profile skill names in this listing{posting.matched_skills.length?`: ${posting.matched_skills.join(', ')}`:''}</p>}
   {posting.excerpt&&<p>{posting.excerpt}</p>}
   <div className="job-card-actions">
-   {apply&&<a className="btn pri" href={apply} target="_blank" rel="noopener noreferrer" onClick={onApply}>Apply on employer site<span className="small">Opens in a new tab</span></a>}
-   {listing&&<a className="btn ghost" href={listing} target="_blank" rel="noopener noreferrer">View full job</a>}
+   {apply&&<a className="btn pri" href={apply} target="_blank" rel="noopener noreferrer" onClick={onApply}>Apply on employer site<span aria-hidden="true"> ↗</span><span className="small">Opens in a new tab</span></a>}
+   {listing&&<a className="btn ghost" href={listing} target="_blank" rel="noopener noreferrer">View full job<span aria-hidden="true"> ↗</span></a>}
+   {listing&&<Link className="btn ghost" href={`/career-goal?new=1&job_url=${encodeURIComponent(listing)}`}>Use as career goal</Link>}
    {item?<span className="small">{STATUSES[item.status]} in My applications</span>:<button type="button" className="btn ghost" onClick={onSave}>Save job</button>}
   </div>
-  <p className="small">Listed through {label(PROVIDERS,posting.provider)}. Details and applications are handled by {posting.company}.</p>
+  <span className="small" title={`Listed through ${label(PROVIDERS,posting.provider)}. Details and applications are handled by ${posting.company}.`}>Listing source ⓘ</span>
  </li>;
 }
 
-const COLUMNS:{name:string;statuses:ApplicationStatus[]}[]=[{name:'Saved',statuses:['saved']},{name:'Applied',statuses:['applied']},{name:'Interviewing',statuses:['interviewing']},{name:'Offer',statuses:['offer']},{name:'Closed',statuses:['rejected','withdrawn']}];
+const COLUMNS:{name:string;statuses:ApplicationStatus[]}[]=[{name:'Saved',statuses:['saved']},{name:'Applied',statuses:['applied']},{name:'Interviewing',statuses:['interviewing']},{name:'Offer',statuses:['offer']},{name:'Rejected or closed',statuses:['rejected','withdrawn']}];
 
 function SaveLinkForm({onSubmit,onCancel}:{onSubmit:(link:JobLink)=>Promise<void>;onCancel:()=>void}){
  const [link,setLink]=useState<JobLink>({url:'',title:'',company:'',location:'',job_type:'unknown'});
@@ -243,7 +251,7 @@ function SaveLinkForm({onSubmit,onCancel}:{onSubmit:(link:JobLink)=>Promise<void
  </form>;
 }
 
-function Tracker({items,onStatus,onRemove,onSaveLink,onSaved}:{items:Application[];onStatus:(item:Application,status:ApplicationStatus)=>void;onRemove:(item:Application)=>void;onSaveLink:(link:JobLink)=>Promise<Application>;onSaved:(item:Application)=>void}){
+function Tracker({items,onStatus,onRemove,onSaveLink,onSaved,onDetails}:{onDetails:(item:Application,fields:{applied_at:string|null;deadline:string|null;follow_up_at:string|null;notes:string})=>Promise<void>;items:Application[];onStatus:(item:Application,status:ApplicationStatus)=>void;onRemove:(item:Application)=>void;onSaveLink:(link:JobLink)=>Promise<Application>;onSaved:(item:Application)=>void}){
  const [adding,setAdding]=useState(false);const [message,setMessage]=useState('');
  const opener=useRef<HTMLButtonElement>(null);
  function close(){setAdding(false);requestAnimationFrame(()=>opener.current?.focus());}
@@ -252,20 +260,20 @@ function Tracker({items,onStatus,onRemove,onSaveLink,onSaved}:{items:Application
   setMessage(items.some(other=>other.id===item.id)?`${item.snapshot.title} is already in your saved jobs.`:`Saved ${item.snapshot.title}.`);
   onSaved(item);close();
  }
- const columns=COLUMNS.filter(column=>column.name!=='Closed'||items.some(item=>column.statuses.includes(item.status)));
+ const columns=COLUMNS;
  return <section className="job-board" aria-labelledby="job-board-title">
-  <header><h2 id="job-board-title">Saved jobs</h2><span>{items.length} tracked</span><button ref={opener} type="button" className="btn pri" aria-expanded={adding} onClick={()=>{setMessage('');setAdding(value=>!value);}}>+ Save a job</button></header>
+  <header><h2 id="job-board-title">My applications</h2><span>{items.length} tracked · Drag a card to move it.</span><button ref={opener} type="button" className="btn pri" aria-expanded={adding} onClick={()=>{setMessage('');setAdding(value=>!value);}}>+ Save a job</button></header>
   {message&&<p className="small job-link-message" role="status">{message}</p>}
   {adding&&<SaveLinkForm onSubmit={saveLink} onCancel={close}/>}
   <div className="job-board-columns" style={{gridTemplateColumns:`repeat(${columns.length},minmax(210px,1fr))`}}>{columns.map((column,index)=>{
    const members=items.filter(item=>column.statuses.includes(item.status));
-   return <section className={`job-column job-column-${index+1}`} key={column.name} aria-label={column.name}>
+   return <section className={`job-column job-column-${index+1}`} key={column.name} aria-label={column.name} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();const item=items.find(item=>item.id===event.dataTransfer.getData('text/plain'));if(item&&!column.statuses.includes(item.status))onStatus(item,column.statuses[0]);}}>
     <h3>{column.name}<span>{members.length}</span></h3>
     {members.length?<ul className="job-list">{members.map(item=>{
      const link=httpsOnly(item.snapshot.listing_url);
-     return <li className="job-card" key={item.id}>
+     return <li className="job-card" key={item.id} draggable onDragStart={event=>event.dataTransfer.setData('text/plain',item.id)}>
       <h3>{item.snapshot.title}</h3>
-      <div>{item.snapshot.company}</div>
+      <div>{item.snapshot.company}</div><ApplicationDetails key={`${item.id}:${item.version}`} item={item} save={fields=>onDetails(item,fields)}/>
       <div className="job-card-meta">
        <span>{label(JOB_TYPES,item.snapshot.job_type)}</span>{item.snapshot.location&&<span>{item.snapshot.location}</span>}
        {item.source==='link'&&<span>Added from a link</span>}
@@ -278,7 +286,7 @@ function Tracker({items,onStatus,onRemove,onSaveLink,onSaved}:{items:Application
          {Object.entries(STATUSES).map(([value,name])=><option key={value} value={value}>{name}</option>)}
         </select>
        </label>
-       {link&&<a className="btn ghost" href={link} target="_blank" rel="noopener noreferrer">View job</a>}
+       {link&&<a className="btn ghost" href={link} target="_blank" rel="noopener noreferrer">View job<span aria-hidden="true"> ↗</span></a>}
        <button type="button" className="btn ghost" aria-label={`Remove ${item.snapshot.title}`} onClick={()=>onRemove(item)}>Remove</button>
       </div>
      </li>;
@@ -286,4 +294,12 @@ function Tracker({items,onStatus,onRemove,onSaveLink,onSaved}:{items:Application
    </section>;
   })}</div>
  </section>;
+}
+
+function ApplicationDetails({item,save}:{item:Application;save:(fields:{applied_at:string|null;deadline:string|null;follow_up_at:string|null;notes:string})=>Promise<void>}){
+ const [fields,setFields]=useState({applied_at:item.applied_at??null,deadline:item.deadline??null,follow_up_at:item.follow_up_at??null,notes:item.notes??''});
+ const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ return <details><summary>Dates and notes</summary><form onSubmit={async event=>{event.preventDefault();setBusy(true);setError('');try{await save(fields);}catch{setError('These details could not be saved. Reload and try again.');}finally{setBusy(false);}}}>
+ {(['applied_at','deadline','follow_up_at'] as const).map(key=><label key={key}>{({applied_at:'Applied date',deadline:'Deadline',follow_up_at:'Follow-up date'})[key]}<input type="date" value={fields[key]??''} onChange={event=>setFields({...fields,[key]:event.target.value||null})}/></label>)}
+ <label>Notes<textarea maxLength={4000} value={fields.notes} onChange={event=>setFields({...fields,notes:event.target.value})}/></label>{error&&<p role="alert">{error}</p>}<button className="btn ghost" disabled={busy}>Save details</button></form></details>;
 }

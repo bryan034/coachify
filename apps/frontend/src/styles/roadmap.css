@@ -430,3 +430,29 @@
  .helper-open .adviser-composer textarea{min-height:56px}
  .helper-open .adviser-composer>div{margin-top:8px}
 }
+
+/* Session notes: a Word-like page with a formatting toolbar at the top. */
+.todo-notes{margin-top:10px}
+.todo-notes>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--forest)}
+.notes-editor{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--white);overflow:hidden}
+.notes-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--snow)}
+.notes-tool-group{display:flex;gap:2px;padding-right:10px;border-right:1px solid var(--line)}
+.notes-tool-group:last-of-type{border-right:0}
+.notes-toolbar button{min-width:36px;min-height:36px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.notes-toolbar button:hover{background:var(--cloud)}
+.notes-toolbar button:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.notes-toolbar button[aria-label="Italic"]{font-style:italic}
+.notes-toolbar button[aria-label="Underline"]{text-decoration:underline}
+.notes-page{min-height:140px;padding:16px 18px;font-size:14px;line-height:1.6;outline:none}
+.notes-page:focus-visible{box-shadow:inset 0 0 0 2px var(--ink)}
+.notes-page p,.notes-page h3,.notes-page ul,.notes-page ol{margin:0 0 8px}
+.notes-page h3{font-size:16px;font-weight:600}
+.notes-page ul,.notes-page ol{padding-left:22px}
+.note-check{display:flex;align-items:flex-start;gap:10px;margin:0 0 6px}
+.note-check input{margin-top:4px;width:16px;height:16px;accent-color:var(--forest)}
+.note-check span{flex:1;min-width:0}
+.note-choice{margin:4px 0 10px;padding:10px 14px;border:1px solid var(--line);border-radius:10px}
+.note-choice legend{padding:0 4px;font-weight:600}
+.note-choice label{display:flex;align-items:center;gap:8px;min-height:32px}
+.note-choice input{accent-color:var(--forest)}
+.notes-status{margin:0;padding:6px 18px 10px}

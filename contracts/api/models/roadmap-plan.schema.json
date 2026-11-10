@@ -146,6 +146,105 @@
       "title": "BlackoutRule",
       "type": "object"
     },
+    "CheckboxBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "checkbox",
+          "title": "Type",
+          "type": "string"
+        },
+        "checked": {
+          "default": false,
+          "title": "Checked",
+          "type": "boolean"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/Run"
+          },
+          "maxItems": 100,
+          "title": "Runs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "CheckboxBlock",
+      "type": "object"
+    },
+    "ChoiceBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "choice",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "question": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Question",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/ChoiceOption"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "Options",
+          "type": "array"
+        },
+        "selected": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "options"
+      ],
+      "title": "ChoiceBlock",
+      "type": "object"
+    },
+    "ChoiceOption": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 200,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "ChoiceOption",
+      "type": "object"
+    },
     "DeadlineOutcome": {
       "additionalProperties": false,
       "properties": {
@@ -393,6 +492,29 @@
           "default": null,
           "title": "Evidence Note"
         },
+        "notes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotesDocument"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "notes_updated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes Updated At"
+        },
         "history": {
           "items": {
             "$ref": "#/$defs/TaskHistory"
@@ -523,6 +645,42 @@
       "title": "MilestoneOutcomeRecord",
       "type": "object"
     },
+    "NotesDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "bullet": "#/$defs/TextBlock",
+                "checkbox": "#/$defs/CheckboxBlock",
+                "choice": "#/$defs/ChoiceBlock",
+                "heading": "#/$defs/TextBlock",
+                "numbered": "#/$defs/TextBlock",
+                "paragraph": "#/$defs/TextBlock"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextBlock"
+              },
+              {
+                "$ref": "#/$defs/CheckboxBlock"
+              },
+              {
+                "$ref": "#/$defs/ChoiceBlock"
+              }
+            ]
+          },
+          "maxItems": 300,
+          "title": "Blocks",
+          "type": "array"
+        }
+      },
+      "title": "NotesDocument",
+      "type": "object"
+    },
     "PlanAssignment": {
       "additionalProperties": false,
       "properties": {
@@ -646,6 +804,19 @@
           },
           "title": "History",
           "type": "array"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The editable task this session is a slot of; null on sessions saved before tasks existed.",
+          "title": "Task Id"
         }
       },
       "required": [
@@ -1016,6 +1187,23 @@
           "title": "Use Backup",
           "type": "boolean"
         },
+        "allow_overflow": {
+          "default": false,
+          "title": "Allow Overflow",
+          "type": "boolean"
+        },
+        "overflow_start": {
+          "default": "08:00",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Overflow Start",
+          "type": "string"
+        },
+        "overflow_end": {
+          "default": "22:00",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Overflow End",
+          "type": "string"
+        },
         "blackouts": {
           "items": {
             "$ref": "#/$defs/BlackoutRule"
@@ -1052,6 +1240,16 @@
           "maxLength": 1000,
           "title": "Learning Notes",
           "type": "string"
+        },
+        "learning_topics": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 12,
+          "title": "Learning Topics",
+          "type": "array"
         }
       },
       "title": "PlannerConfig",
@@ -1083,6 +1281,36 @@
         "task_id"
       ],
       "title": "RevisionReview",
+      "type": "object"
+    },
+    "Run": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "maxLength": 2000,
+          "title": "Text",
+          "type": "string"
+        },
+        "bold": {
+          "default": false,
+          "title": "Bold",
+          "type": "boolean"
+        },
+        "italic": {
+          "default": false,
+          "title": "Italic",
+          "type": "boolean"
+        },
+        "underline": {
+          "default": false,
+          "title": "Underline",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "Run",
       "type": "object"
     },
     "SourceAssignment": {
@@ -1611,6 +1839,34 @@
         "duration_minutes"
       ],
       "title": "TaskSlot",
+      "type": "object"
+    },
+    "TextBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "paragraph",
+            "heading",
+            "bullet",
+            "numbered"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/Run"
+          },
+          "maxItems": 100,
+          "title": "Runs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "TextBlock",
       "type": "object"
     }
   },

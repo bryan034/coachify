@@ -1,6 +1,6 @@
 """Authenticated live job search and private application tracking."""
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Annotated
+from typing import Annotated,Literal
 from zoneinfo import ZoneInfo
 
 from elo_shared.runtime import Problem, application, authenticated
@@ -49,7 +49,8 @@ def create_app(store=None, upstream=None, clock=None, catalogue=None):
                      posted_within_days: Annotated[int | None, Query(ge=1, le=365)] = None,
                      posted_from: date | None = None,
                      posted_to: date | None = None,
-                     cursor: Annotated[str | None, Query(max_length=200)] = None,
+                     sort: Literal['newest','recommended'] = 'newest',
+                     cursor: Annotated[str | None, Query(max_length=2000)] = None,
                      limit: Annotated[int, Query(ge=1, le=50)] = 20,
                      account=Depends(authenticated)):
         if posted_from and posted_to and posted_from > posted_to:
@@ -60,6 +61,26 @@ def create_app(store=None, upstream=None, clock=None, catalogue=None):
             earliest = max(earliest, recent) if earliest else recent
         query = search_filter(q, job_type or (), industry or (), workplace or (), company or (), earliest,
                               start_of_day(posted_to + timedelta(days=1)) if posted_to else None)
+        if sort=='recommended':
+            import asyncio
+            results=await asyncio.gather(app.state.upstream.read('career','/api/v1/career/goals/current',account['token']),
+                app.state.upstream.read('profile','/api/v1/profile/capabilities',account['token']),
+                app.state.upstream.read('cv','/api/v1/cv',account['token']),return_exceptions=True)
+            if any(isinstance(value,Problem) and value.status in (401,403) for value in results):
+                raise next(value for value in results if isinstance(value,Problem) and value.status in (401,403))
+            career,manual,listing=[value if isinstance(value,dict) else {} for value in results]
+            goal=career.get('goal') or {}
+            names=[item['name'] for item in manual.get('declarations',[])]
+            cv_id=(listing.get('selection') or {}).get('cv_id')
+            if cv_id:
+                try:
+                    cv=await app.state.upstream.read('cv','/api/v1/cv/'+cv_id,account['token'])
+                    names.extend(item['name'] for item in cv.get('skills',[]))
+                except Problem as error:
+                    if error.status in (401,403):raise
+                    listing={}
+            ranking={'role':goal.get('role',''),'skills':sorted(set(names)),'skills_available':isinstance(results[1],dict) and isinstance(results[2],dict) and bool(listing)}
+            return await thread(lambda: catalogue.search(query,cursor,limit,ranking=ranking))
         return await thread(lambda: catalogue.search(query, cursor, limit))
 
     @app.get('/api/v1/jobs/filters', response_model=FilterOptions)
@@ -91,7 +112,7 @@ def create_app(store=None, upstream=None, clock=None, catalogue=None):
 
     @app.patch('/api/v1/jobs/applications/{identifier}', response_model=Application)
     async def update_application(identifier: Identifier, body: UpdateApplication, request: Request, account=Depends(authenticated)):
-        return await thread(lambda: jobs().update_application(account['id'], identifier, body.expected_version, body.status, app.state.clock()))
+        return await thread(lambda: jobs().update_application(account['id'], identifier, body.expected_version, body.status, app.state.clock(), body.model_dump(mode='json',exclude_unset=True,exclude={'expected_version','status'})))
 
     @app.delete('/api/v1/jobs/applications/{identifier}', status_code=204)
     async def delete_application(identifier: Identifier, expected_version: Annotated[int, Query(ge=1)], request: Request, account=Depends(authenticated)):

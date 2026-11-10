@@ -293,6 +293,20 @@
             }
           },
           {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "newest",
+                "recommended"
+              ],
+              "type": "string",
+              "default": "newest",
+              "title": "Sort"
+            }
+          },
+          {
             "name": "cursor",
             "in": "query",
             "required": false,
@@ -300,7 +314,7 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "maxLength": 200
+                  "maxLength": 2000
                 },
                 {
                   "type": "null"
@@ -1413,6 +1427,47 @@
     "schemas": {
       "Application": {
         "properties": {
+          "applied_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "follow_up_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up At"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -1727,6 +1782,31 @@
       },
       "Posting": {
         "properties": {
+          "matched_skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Skills"
+          },
+          "match_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Basis"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -1991,6 +2071,48 @@
       },
       "UpdateApplication": {
         "properties": {
+          "applied_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "follow_up_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up At"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Notes",
+            "default": ""
+          },
           "expected_version": {
             "type": "integer",
             "minimum": 1.0,

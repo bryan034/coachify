@@ -1,5 +1,7 @@
 # Workspace UI
 
+The November 2026 redesign follows the "elo — Redesigned Screens" design canvas. It adds a deep green (`--forest` #116149) for importance and relevance, and status colours (ready, getting there, to build, gap, partial) that differ in lightness as well as hue. Career Goal uses a dark goal header and tab pages; Skills Profile uses relevance-coloured skill chips. See the [frontend README](../../apps/frontend/README.md#redesign-alignment--10-november-2026).
+
 ## Current visual system
 
 The October 2026 revision uses the user-supplied Elo SVG and palette, drawing its
@@ -22,8 +24,23 @@ and career briefings share the visual language without changing their APIs.
 
 Inter remains bundled locally. Display headings use regular/medium weights and
 tight spacing. Dark green (`#116149`) is an accessible text companion to mint;
-error and warning colours keep their semantic meaning. Desktop navigation uses a persistent left sidebar. Mobile navigation expands
-from a Menu button above the page; selecting a link or pressing Escape closes it. Keyboard focus and reduced-motion support are preserved.
+error and warning colours keep their semantic meaning. Desktop navigation uses a persistent left sidebar ordered by the journey
+(Home, Career Goal, Skills Profile, Roadmap, Search Jobs), with coming-soon pages below a divider. Mobile navigation expands
+from a Menu button beside the logo and current page title; selecting a link or pressing Escape closes it. Keyboard focus and reduced-motion support are preserved.
+
+### Shared conventions
+
+- **Errors:** `src/lib/errors.ts` turns failures into one actionable line. Aborted
+  requests show nothing; model and validation codes (for example `assessment_output`)
+  get plain wording, and the original message is logged to the console only.
+- **Loading:** `Skeleton`, `CardSkeleton`, `PageSkeleton` and `ChatSkeleton` in
+  `src/components/ui/workspace-ui.tsx` replace "Loading…" text with placeholders shaped
+  like the final content. Counts and empty states appear only after data loads.
+- **Caveats:** each page keeps its disclaimers in one `InfoTip` (the **i** beside the
+  page title), not in sentences repeated across cards.
+- **Dates and durations:** `src/lib/format.ts` writes "Tue, 4 May 2027" and "10 hours"
+  everywhere, including ISO dates and minute counts inside chat replies.
+- **Arrows:** ↗ marks only links that leave elo, such as applying on an employer's site.
 
 `apps/frontend/public/brand/elo-logo.svg` contains the supplied artwork with its
 non-rendering provenance metadata removed and whitespace cropped via its viewBox.
@@ -81,3 +98,13 @@ change `--font-heading` in `src/styles/globals.css` (under `apps/frontend`).
 The `/career-goal` overview follows the supplied career-briefing reference while
 retaining live saved data and shared workspace navigation. See the
 [data map, implemented limits and proposed database extensions](career-briefing.md).
+
+
+Home uses a state-based next action, goal match and confirmed gaps instead of the
+skill-count chart and coming-soon tiles. Shared comparison panels distinguish loading,
+missing, stale, running, partial and failed states. Have / Partial / Gap / Unknown
+refer to evidence; missing evidence never becomes a gap. OR alternatives retain a
+separate label. Skills Profile shades evidence referenced by the current comparison;
+relevance ratings and numerical scores remain unavailable pending an approved rubric.
+CV confirmation expands within the transcript so it preserves the conversation area.
+Roadmap shows a partial-research note and refreshes idle context without replacing drafts.

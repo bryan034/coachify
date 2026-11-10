@@ -13,6 +13,9 @@ from elo_shared.skills import REGISTRY
     ('Stakeholder communication', 'Communication & leadership'), ('Technical writing', 'Communication & leadership'),
     ('Financial modelling', 'Business & finance'),
     ('English (native)', 'Languages'),
+    ('LLMs', 'AI & ML'), ('RAG', 'AI & ML'), ('Retrieval-augmented generation', 'AI & ML'), ('Vector search', 'AI & ML'),
+    ('Vector databases', 'AI & ML'), ('MCP', 'AI & ML'), ('LangChain', 'AI & ML'), ('LangGraph', 'AI & ML'),
+    ('Agentic frameworks', 'AI & ML'), ('Prompt engineering', 'AI & ML'), ('Machine learning', 'AI & ML'), ('PyTorch', 'AI & ML'),
     ('Basket weaving', OTHER_SKILLS),
 ])
 def test_name_decides_the_group_when_no_category_is_saved(name, expected):
@@ -23,6 +26,13 @@ def test_names_are_matched_whole_and_ignore_case_and_spacing():
     assert skill_group('  PYTHON ') == 'Technical coding'
     assert skill_group('Going to market') == OTHER_SKILLS  # "go" only counts as the whole name.
     assert skill_group('Crust baking') == OTHER_SKILLS  # "rust" must not match inside a word.
+    assert skill_group('Email marketing') == 'Business & finance'  # "ai" must not match inside "email".
+    assert skill_group('Data cleaning') == 'Data & analytics'
+
+
+def test_ai_category_hint_is_a_fallback():
+    assert skill_group('Model evaluation', 'AI') == 'AI & ML'
+    assert skill_group('Model evaluation', 'Machine Learning') == 'AI & ML'
 
 
 def test_category_is_only_a_fallback():

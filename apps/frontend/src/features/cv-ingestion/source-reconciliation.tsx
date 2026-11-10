@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { cvApi, CvApiError } from '@/lib/api/cv';
 import type { CvDetail, CvList, Reconciliation, ReconciliationInput } from './types';
 import { EvidenceList } from './cv-review';
+import { errorText } from '@/lib/errors';
 
 export function SourceReconciliation({detail,list,token,signal,onSaved,refresh}:{detail:CvDetail;list:CvList|null;token:string;signal:AbortSignal;onSaved:(value:CvDetail)=>void|Promise<void>;refresh:()=>Promise<void>}) {
  const [candidate,setCandidate]=useState<Reconciliation|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false),[choices,setChoices]=useState<Record<string,string>>({}),[source,setSource]=useState(''),[sourceVersion,setSourceVersion]=useState<number|null>(null),[base,setBase]=useState<{version:number;candidateId:string}|null>(null),[compareVersion,setCompareVersion]=useState(detail.version);
@@ -14,7 +15,7 @@ export function SourceReconciliation({detail,list,token,signal,onSaved,refresh}:
   const controller=new AbortController();setError('');
   if(!candidateId){setCandidate(null);setBase(null);setChoices({});return()=>controller.abort();}
   setLoading(true);
-  void (async()=>{try{const value=await cvApi.reconciliation(detail.id,token,AbortSignal.any([signal,controller.signal]));if(signal.aborted||controller.signal.aborted)return;setCandidate(value);if(!Object.keys(choicesRef.current).length)setBase(value?{version:value.cv_version,candidateId:value.candidate_id}:null);}catch(cause){if(!signal.aborted&&!controller.signal.aborted)setError(cause instanceof Error?cause.message:'Could not load the changed evidence.');}finally{if(!signal.aborted&&!controller.signal.aborted)setLoading(false);}})();
+  void (async()=>{try{const value=await cvApi.reconciliation(detail.id,token,AbortSignal.any([signal,controller.signal]));if(signal.aborted||controller.signal.aborted)return;setCandidate(value);if(!Object.keys(choicesRef.current).length)setBase(value?{version:value.cv_version,candidateId:value.candidate_id}:null);}catch(cause){if(!signal.aborted&&!controller.signal.aborted)setError(errorText(cause, 'Could not load the changed evidence.'));}finally{if(!signal.aborted&&!controller.signal.aborted)setLoading(false);}})();
   return()=>controller.abort();
  },[detail.id,detail.version,candidateId,token,signal]);
  const stale=Boolean(candidate&&base&&(base.version!==detail.version||base.version!==candidate.cv_version||base.candidateId!==candidate.candidate_id));
@@ -28,14 +29,14 @@ export function SourceReconciliation({detail,list,token,signal,onSaved,refresh}:
   if(new Set(targets).size!==targets.length){setError('Choose a different new source for each saved item, or keep that statement in history.');return;}
   const body={expected_version:base.version,candidate_id:candidate.candidate_id,action,choices:decisions};setBusy(true);setError('');
   try{const value=await cvApi.resolveReconciliation(detail.id,{...body,mutation_id:key(body)},token,signal);if(!signal.aborted){setChoices({});await onSaved(value);}}
-  catch(cause){if(!signal.aborted){setError(cause instanceof Error?cause.message:'Could not apply the reconciliation choice.');if(cause instanceof CvApiError&&cause.status===409)await refresh();}}
+  catch(cause){if(!signal.aborted){setError(errorText(cause, 'Could not apply the reconciliation choice.'));if(cause instanceof CvApiError&&cause.status===409)await refresh();}}
   finally{if(!signal.aborted)setBusy(false);}
  }
  async function compare(){
   if(busy||!source||sourceVersion===null||compareStale)return;
   const body={expected_version:compareVersion,source_cv_id:source,source_version:sourceVersion};setBusy(true);setError('');
   try{const value=await cvApi.compareReconciliation(detail.id,{...body,mutation_id:key(body)},token,signal);if(!signal.aborted){setSource('');setSourceVersion(null);await onSaved(value);}}
-  catch(cause){if(!signal.aborted){setError(cause instanceof Error?cause.message:'Could not compare the saved sources.');if(cause instanceof CvApiError&&cause.status===409)await refresh();}}
+  catch(cause){if(!signal.aborted){setError(errorText(cause, 'Could not compare the saved sources.'));if(cause instanceof CvApiError&&cause.status===409)await refresh();}}
   finally{if(!signal.aborted)setBusy(false);}
  }
  if(!candidateId&&detail.status!=='ready')return null;
@@ -54,7 +55,7 @@ export function SourceReconciliation({detail,list,token,signal,onSaved,refresh}:
    <div className="row cv-actions"><button type="button" className="btn pri sm" disabled={busy||loading||stale||!complete} onClick={()=>void resolve('accept_candidate')}>Accept reviewed extraction</button><button type="button" className="btn ghost sm" disabled={busy||loading||stale} onClick={()=>void resolve('keep_previous')}>{candidate.source_cv_id===detail.id?'Keep previous extraction':'Keep this CV unchanged'}</button></div><p className="small">Reapplied explanations keep their original history and must be interpreted against the new evidence. This does not select a different CV for analysis.</p>
   </div>:!candidateId?<form className="cv-form" data-unsaved={Boolean(source)} aria-busy={busy} onSubmit={event=>{event.preventDefault();void compare();}}>
    <p className="small">If this is a replacement for an earlier saved CV, explicitly compare their evidence before carrying statements forward. Each CV keeps its own history.</p><label>Previous saved CV<select value={source} disabled={busy} onChange={event=>{setSource(event.target.value);setSourceVersion(readySources.find(cv=>cv.id===event.target.value)?.version??null);setCompareVersion(detail.version);}}><option value="">Choose a ready saved CV</option>{readySources.map(cv=><option key={cv.id} value={cv.id}>{cv.file_name} · {cv.id}</option>)}</select></label>{compareStale&&<p className="cv-warning">A saved CV changed. Select the previous source again after reviewing its latest version.</p>}<button className="btn ghost sm" disabled={busy||!source||compareStale}>Compare saved evidence</button>
-  </form>:!loading&&!error?<p className="small">This comparison is no longer available. Refresh saved status.</p>:null}
+  </form>:!loading&&!error?<p className="small">This comparison is no longer available.</p>:null}
   {error&&<p role="alert" className="cv-error">{error} Your existing extraction and statements are retained.</p>}
  </section>;
 }

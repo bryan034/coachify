@@ -1,4 +1,5 @@
 "use client";
+import { InlineGoalConfirmation } from '@/features/career/inline-goal-confirmation';
 import { reviewText } from './review-text';
 import { BrandLogo } from '@/components/ui/brand-logo';
 
@@ -6,6 +7,9 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type Dispatch, type SetStateAction } from 'react';
 import { cvApi, CvApiError } from '@/lib/api/cv';
 import type { ConversationAction, ConversationDecision, ConversationInput, ConversationMessage, CvConversation, CvDetail } from './types';
+import { errorText } from '@/lib/errors';
+import { humaniseText, formatDate } from '@/lib/format';
+import { ChatSkeleton } from '@/components/ui/workspace-ui';
 
 const statusLabel: Record<ConversationAction['status'], string> = {
  awaiting_confirmation: 'Review before saving', needs_source: 'Choose the right source', pending: 'Processing',
@@ -31,7 +35,7 @@ function ActionCard({action, busy, readOnly, decide, review = false}: {review?: 
  if (review && action.status === 'pending' && ['clarify','skip','route'].includes(action.kind)) return <p className="cv-chat-working cv-chat-action-pending" role="status">Reviewing your answer…</p>;
  if (review && ['clarify','skip','route'].includes(action.kind) && !['awaiting_confirmation','needs_source'].includes(action.status)) {
   if (action.status !== 'failed' && action.status !== 'stale') return null;
-  return <div className="cv-chat-recovery" role="status"><p>{action.status==='stale'?'This experience changed. Please send your clarification again using the latest details.':'Your answer is saved. We couldn’t finish processing it.'}</p>{!readOnly && action.status==='failed' && <button type="button" className="btn ghost sm" disabled={busy} onClick={() => decide(action.id, {decision: 'retry'})}>Try again</button>}</div>;
+  return <div className="cv-chat-recovery" role="status"><p>{action.status==='stale'?'This experience changed. Please send your clarification again using the latest details.':'We couldn’t process your answer. It’s saved, so you can try again.'}</p>{!readOnly && action.status==='failed' && <button type="button" className="btn ghost sm" disabled={busy} onClick={() => decide(action.id, {decision: 'retry'})}>Try again</button>}</div>;
  }
  if (action.kind === 'route' && action.status === 'saved') return null;
  if (action.kind === 'route' && action.status === 'pending') return <p className="cv-chat-working cv-chat-action-pending">Your message is saved. Understanding it now…</p>;
@@ -48,6 +52,12 @@ function ActionCard({action, busy, readOnly, decide, review = false}: {review?: 
   {!readOnly && action.status === 'failed' && <div className="row cv-chat-action-buttons"><button type="button" className="btn ghost sm" disabled={busy} onClick={() => decide(action.id, {decision: 'retry'})}>Retry this action</button><button type="button" className="btn ghost sm" disabled={busy} onClick={() => decide(action.id, {decision: 'cancel'})}>Cancel change</button></div>}
   {action.status === 'stale' && <p className="small">This proposal cannot change the newer saved details. Explain the correction again using the current source.</p>}
  </article>;
+}
+
+/** An assistant reply that only repeats the failure shown by its recovery card. */
+const FAILURE_REPLY = /^(your answer is saved\. we couldn’t finish processing it|chat interpretation is unavailable)/i;
+function failureReply(message: CvConversation['messages'][number]) {
+ return FAILURE_REPLY.test(message.text.trim()) && message.actions.some(action => action.status === 'failed' || action.status === 'stale');
 }
 
 export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSummary, onReviewLater = onOpenSummary, unavailable = false, hidden = false, purpose, autoReview = false, onActivityChanged, draft: persistedDraft, onDraftChange}: {
@@ -110,7 +120,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    const value = await cvApi.openConversation({cv_id: cvId, mutation_id: openKey.current, ...(purpose?{purpose}:{})}, token, controller.signal);
    if (controller.signal.aborted) return;
    newestId.current = value.id; displayedId.current = value.id; accept(value, true); await syncLoadedActions(value);
-  } catch (cause) {if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not open your saved conversation.');}
+  } catch (cause) {if (!controller.signal.aborted) setError(errorText(cause, 'Could not open your saved conversation.'));}
   finally {if (!controller.signal.aborted) setLoading(false);}
  }, [cvId, token, purpose, accept, syncLoadedActions]);
  useEffect(() => {if (lifetime.current.signal.aborted) lifetime.current = new AbortController(); void open(); return () => lifetime.current.abort();}, [open]);
@@ -189,7 +199,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    setUnconfirmedMessage(null);
    if (uploadedReview) setBusy('refreshing-message');
    setAnnouncement(currentSegment ? command === 'skip' ? 'Skipped. Unclarified details remain uncertain; the review can continue.' : 'Your message is saved. Review the response for any changes or actions needing attention.' : 'Your earlier message is saved in the previous conversation.');
-   if (currentSegment) await syncLoadedActions(value).catch(cause => setError(cause instanceof Error ? cause.message : 'Could not refresh earlier actions. Check saved messages again.'));
+   if (currentSegment) await syncLoadedActions(value).catch(cause => setError(errorText(cause, 'Could not refresh earlier actions. Check saved messages again.')));
    await onChangedRef.current().catch(cause => {
     if (!uploadedReview) throw cause;
     if (!lifetime.current.signal.aborted) setError('Your message is saved. Could not refresh Skills Profile.');
@@ -199,7 +209,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
     if (uploadedReview && !(cause instanceof CvApiError && [400,401,403,404,409,413,422].includes(cause.status))) {
      setUnconfirmedMessage(attempt.body);
     } else {
-     setError(`${cause instanceof Error ? cause.message : 'The response was interrupted.'} Your draft is still here. Check saved messages before retrying.`);
+     setError(`${errorText(cause, 'The response was interrupted.')} Your draft is still here. Check saved messages before retrying.`);
      if (uploadedReview || cause instanceof CvApiError && cause.status === 409) {
       messageAttempts.current.delete(signature);
       setUnconfirmedMessage(null);
@@ -223,9 +233,9 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    const value = await cvApi.conversationAction(active.id, actionId, body, token, lifetime.current.signal);
    if (lifetime.current.signal.aborted || displayedId.current !== active.id) return;
    accept(value); actionAttempts.current.delete(actionId); setAnnouncement(decision.decision === 'cancel' ? 'Change cancelled.' : 'Action checked. Its current saved status is shown in the conversation.');
-   await syncLoadedActions(value).catch(cause => setError(cause instanceof Error ? cause.message : 'Could not refresh earlier actions. Check saved messages again.'));
+   await syncLoadedActions(value).catch(cause => setError(errorText(cause, 'Could not refresh earlier actions. Check saved messages again.')));
    await onChangedRef.current();
-  } catch (cause) {if (!lifetime.current.signal.aborted) {setError(cause instanceof Error ? cause.message : 'Could not complete that action.'); if (cause instanceof CvApiError && cause.status === 409) {actionAttempts.current.delete(actionId); await refresh().catch(() => {});}}}
+  } catch (cause) {if (!lifetime.current.signal.aborted) {setError(errorText(cause, 'Could not complete that action.')); if (cause instanceof CvApiError && cause.status === 409) {actionAttempts.current.delete(actionId); await refresh().catch(() => {});}}}
   finally {if (!lifetime.current.signal.aborted) setBusy('');}
  }
  async function history(id?: string) {
@@ -241,7 +251,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    if (id) {displayedId.current = id; accept(value, true); if (area) area.scrollTop = 0; await syncLoadedActions(value);}
    else if (!accept(value, false, true)) throw new Error('The conversation changed while loading earlier messages. Try again.');
    requestAnimationFrame(() => {if (area && !id) area.scrollTop += area.scrollHeight - previousHeight;});
-  } catch (cause) {if (!lifetime.current.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load earlier messages.');}
+  } catch (cause) {if (!lifetime.current.signal.aborted) setError(errorText(cause, 'Could not load earlier messages.'));}
   finally {if (!lifetime.current.signal.aborted) setHistoryLoading(false);}
  }
  function submit(event: FormEvent) {event.preventDefault(); void send(draft);}
@@ -299,16 +309,18 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
     {Array.from({length:progress.total_items},(_,index)=>{const topic=progress.topics?.[index];const covered=topic?['reviewed','reviewed_with_gaps','deferred'].includes(topic.status):index<progress.reviewed_items;return <span key={topic?.id??index} title={topic?`${topic.title}: ${topic.status.replaceAll('_',' ')}`:undefined} className={covered?'covered':topic?.status==='current'?'current':''}/>;})}
    </div>}
   </div>}
-<div className="cv-chat-context">{conversation?.context_error ? <><span>{conversation.context_error}</span><button type="button" className="text-link" onClick={() => void refresh().catch(cause => setError(cause instanceof Error?cause.message:'Could not refresh the career context.'))}>Retry career context</button></> : conversation?.context ? <><span>Reviewing for <strong>{conversation.context.role}</strong></span><Link href="/career-goal" className="text-link">Open Career Goal</Link></> : <><span>You can review your experience now. A confirmed target helps focus the questions.</span><Link href="/career-goal" className="text-link">Open Career Goal</Link></>}</div>
+<div className="cv-chat-context">{conversation?.context_error ? <><span>{conversation.context_error}</span><button type="button" className="text-link" onClick={() => void refresh().catch(cause => setError(errorText(cause, 'Could not refresh the career context.')))}>Retry career context</button></> : conversation?.context ? <><span>Reviewing for <strong>{conversation.context.role}</strong></span><Link href="/career-goal" className="text-link">Open Career Goal</Link></> : <><span>You can review your experience now. A confirmed target helps focus the questions.</span><Link href="/career-goal" className="text-link">Open Career Goal</Link></>}</div>
   {historical && <div className="cv-chat-history-banner"><span>Earlier conversation · read only</span><button className="btn ghost sm" type="button" disabled={Boolean(busy) || historyLoading} onClick={() => void history(newestId.current!)}>Return to current conversation</button></div>}
   <div ref={scrollArea} className="cv-chat-messages" onScroll={() => {const area = scrollArea.current; if (area) nearBottom.current = area.scrollHeight - area.scrollTop - area.clientHeight < 90;}}>
-   {loading && <p className="cv-chat-loading" role="status">Opening your saved conversation…</p>}
-   {resumeBlocked && !error && <p className="cv-chat-loading" role="status">Checking your saved review…</p>}
+   {conversation && !conversation.context && <details className="cv-inline-confirmation"><summary>Focus questions on my goal</summary><InlineGoalConfirmation token={token} onConfirmed={() => { void refresh().catch(() => {}); }}/></details>}
+   {progress?.topics&&<aside className="cv-topic-checklist" aria-label="Review topics"><h3>Your experience</h3><ol>{progress.topics.map(topic=><li key={topic.id} aria-current={topic.status==='current'?'step':undefined}><span aria-hidden="true">{['reviewed','reviewed_with_gaps','deferred'].includes(topic.status)?'✓':topic.status==='current'?'●':'○'}</span> {topic.title}<span className="cv-visually-hidden"> · {topic.status.replaceAll('_',' ')}</span></li>)}</ol></aside>}
+   {loading && <ChatSkeleton label="Opening your saved conversation…"/>}
+   {resumeBlocked && !error && <ChatSkeleton label="Checking your saved review…"/>}
    {!loading && !conversation && <div className="cv-chat-welcome"><h3>Your conversation will be here.</h3><p>Retry to restore your messages. Your saved CV details are still available in the summary.</p><button className="btn ghost" type="button" onClick={() => void open()}>Retry conversation</button></div>}
    {conversation && <>
     <div className="cv-chat-history-controls">{conversation.next_before !== null && <button className="btn ghost sm" type="button" disabled={historyLoading || Boolean(busy)} onClick={() => void history()}>Show earlier messages</button>}{conversation.previous_conversation_id && <button className="btn ghost sm" type="button" disabled={historyLoading || Boolean(busy)} onClick={() => void history(conversation.previous_conversation_id!)}>Previous conversation</button>}</div>
     {!conversation.messages.length && <div className="cv-chat-welcome"><div className="cv-chat-mark" aria-hidden="true"><BrandLogo compact decorative/></div><h3>Your experience has a story.</h3><p>{cvId ? 'We’ll work through the details that matter, one question at a time. You can add context, correct something or ask a question whenever you like.' : 'Tell me about a capability you want to include, or upload a CV to start from what you already have.'}</p>{cvId && !purpose && <button className="btn pri" type="button" disabled={blocked} onClick={() => void send('Review my CV with me.', 'review')}>Review with me</button>}</div>}
-    <ol className="cv-chat-transcript" aria-label="Saved conversation messages">{conversation.messages.map(message => <li key={message.id} className={`cv-chat-message cv-chat-message-${message.role}`}><div className="cv-chat-speaker">{message.role === 'user' ? 'You' : 'elo'}<time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'})}</time></div><div className="cv-chat-bubble"><p>{message.role === 'assistant' ? reviewText(message.text, sourceIds) : message.text}</p>{message.actions.map(action => <ActionCard key={`${action.id}:${action.status}`} action={action} busy={Boolean(busy)} readOnly={historical} review={Boolean(purpose)} decide={(id, decision) => void decide(id, decision)}/>)}</div></li>)}</ol>
+    <ol className="cv-chat-transcript" aria-label="Saved conversation messages">{conversation.messages.map((message,index) => <li key={message.id} className={`cv-chat-message cv-chat-message-${message.role}`}>{(index===0||message.created_at.slice(0,10)!==conversation.messages[index-1].created_at.slice(0,10))&&<p className="cv-chat-day">{formatDate(message.created_at.slice(0,10))}</p>}<div className="cv-chat-speaker">{message.role === 'user' ? 'You' : 'elo'}<time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'})}</time></div><div className="cv-chat-bubble">{!(purpose && message.role === 'assistant' && failureReply(message)) && <p>{message.role === 'assistant' ? humaniseText(reviewText(message.text, sourceIds)) : message.text}</p>}{message.actions.map(action => <ActionCard key={`${action.id}:${action.status}`} action={action} busy={Boolean(busy)} readOnly={historical} review={Boolean(purpose)} decide={(id, decision) => void decide(id, decision)}/>)}</div></li>)}</ol>
    </>}
    <div className="cv-chat-inline-actions">
    {conversation?.interview&&conversation.interview.status!=='reviewing'&&<p className="small" role="status">{conversation.interview.status==='paused'?'Review paused. Continue whenever you’re ready.':conversation.interview.status==='reviewed_with_gaps'?'Review complete with some details still uncertain.':'Experience review complete.'}</p>}
@@ -327,11 +339,12 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    {busy === 'message' && <p className="cv-chat-working" role="status">{uploadedReview && !hasReviewHistory ? 'Preparing your first question…' : 'Checking your message…'}</p>}
   </div>
   <div className="cv-chat-composer-wrap">
-   {(error || unconfirmedMessage) && <div role="alert" className="cv-error"><p>{unconfirmedMessage ? 'We couldn’t confirm whether your message was saved. Retry the same send to check.' : error}</p>
-    {unconfirmedMessage && <button type="button" className="btn ghost sm" disabled={Boolean(busy) || unavailable || historical || resumeBlocked} onClick={() => void send(unconfirmedMessage.text, unconfirmedMessage.command)}>Retry sending</button>}
-    {conversation && <button type="button" className="btn ghost sm" disabled={Boolean(busy)} onClick={() => uploadedReview ? void checkSavedReview() : void refresh().then(() => setError('')).catch(cause => setError(cause instanceof Error ? cause.message : 'Could not refresh saved messages.'))}>Check saved messages</button>}
+   {(error || unconfirmedMessage) && <div role="alert" className="cv-error"><p>{unconfirmedMessage ? 'We couldn’t confirm your last message was sent.' : error}</p>
+    {/* One action per failure. Resending reuses the same message ID, so it also confirms a send that did arrive. */}
+    {unconfirmedMessage ? <button type="button" className="btn ghost sm" disabled={Boolean(busy) || unavailable || historical || resumeBlocked} onClick={() => void send(unconfirmedMessage.text, unconfirmedMessage.command)}>Try again</button>
+    : conversation && <button type="button" className="btn ghost sm" disabled={Boolean(busy)} onClick={() => uploadedReview ? void checkSavedReview() : void refresh().then(() => setError('')).catch(cause => setError(errorText(cause, 'Could not refresh saved messages.')))}>Check saved messages</button>}
    </div>}
-   {conversation?.read_only && !historical ? <div className="cv-chat-limit"><p>This part of your conversation is full. Its messages will stay available when you continue.{conversation.next_before !== null ? ' Checking earlier messages for outstanding actions.' : unfinished && ' Finish or cancel the outstanding actions above first.'}</p><button className="btn pri" type="button" disabled={Boolean(busy) || loading || historyLoading || conversation.next_before !== null || unfinished} onClick={() => {openKey.current = crypto.randomUUID(); void open();}}>Continue in a new conversation</button></div> : !historical && <form className="cv-chat-composer" onSubmit={submit} aria-busy={Boolean(busy)}><label className="cv-visually-hidden" htmlFor={`cv-chat-input-${cvId ?? 'manual'}`}>Message elo</label><textarea id={`cv-chat-input-${cvId ?? 'manual'}`} ref={composer} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyboard} placeholder="Add context, ask a question, or correct something…" rows={2} disabled={blocked} aria-invalid={count > limit} aria-describedby="cv-chat-input-help"/><div className="cv-chat-composer-footer"><p id="cv-chat-input-help">{count > limit * 0.8 ? `${count} / ${limit} characters` : 'Enter to send · Shift + Enter for a new line'}</p><button type="submit" className="btn pri" disabled={blocked || pending || !draft.trim() || count > limit} aria-label="Send message">{busy === 'message' ? 'Sending…' : 'Send'}<span aria-hidden="true">↑</span></button></div></form>}
+   {conversation?.read_only && !historical ? <div className="cv-chat-limit"><p>This part of your conversation is full. Its messages will stay available when you continue.{conversation.next_before !== null ? ' Checking earlier messages for outstanding actions.' : unfinished && ' Finish or cancel the outstanding actions above first.'}</p><button className="btn pri" type="button" disabled={Boolean(busy) || loading || historyLoading || conversation.next_before !== null || unfinished} onClick={() => {openKey.current = crypto.randomUUID(); void open();}}>Continue in a new conversation</button></div> : !historical && <form className="cv-chat-composer" onSubmit={submit} aria-busy={Boolean(busy)}><label className="cv-visually-hidden" htmlFor={`cv-chat-input-${cvId ?? 'manual'}`}>Message elo</label><textarea id={`cv-chat-input-${cvId ?? 'manual'}`} ref={composer} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyboard} placeholder="Add context, ask a question, or correct something…" rows={2} disabled={blocked} aria-invalid={count > limit} aria-describedby="cv-chat-input-help"/><div className="cv-chat-composer-footer">{conversation?.active_question&&<div className="cv-quick-replies">{["I didn't do this",'Not sure'].map(reply=><button type="button" className="chip" key={reply} disabled={blocked} onClick={()=>setDraft(reply)}>{reply}</button>)}</div>}<p id="cv-chat-input-help" className={conversation?.active_question && count <= limit * 0.8 ? 'cv-visually-hidden' : undefined}>{count > limit * 0.8 ? `${count} / ${limit} characters` : 'Enter to send · Shift + Enter for a new line'}</p><button type="submit" className="btn pri" disabled={blocked || pending || !draft.trim() || count > limit} aria-label="Send message">{busy === 'message' ? 'Sending…' : 'Send'}<span aria-hidden="true">↑</span></button></div></form>}
    <p className="cv-chat-footnote">{uploadedReview ? 'Sent answers save automatically. You can return to this CV from Skills Profile.' : 'Only what you share is used. Unknown details can stay unknown.'}</p>
   </div>
   <p className="cv-visually-hidden" role="status" aria-live="polite">{announcement}</p>

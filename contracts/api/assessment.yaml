@@ -1208,20 +1208,57 @@
             ],
             "title": "As Of Date"
           },
-          "cv_id": {
+          "source_mode": {
             "type": "string",
+            "enum": [
+              "cv_and_profile",
+              "profile_only"
+            ],
+            "title": "Source Mode",
+            "default": "cv_and_profile"
+          },
+          "cv_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Cv Id"
           },
           "cv_version": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Cv Version"
           },
           "extraction_version": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Extraction Version"
           },
           "effective_version": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Effective Version"
           },
           "cv_selection_version": {
@@ -1365,6 +1402,68 @@
           "mapping_reason": {
             "type": "string",
             "title": "Mapping Reason"
+          },
+          "relevance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low",
+                  "none"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relevance"
+          },
+          "competence_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competence Score"
+          },
+          "score_status": {
+            "type": "string",
+            "enum": [
+              "estimated",
+              "not_reviewed",
+              "insufficient_evidence"
+            ],
+            "title": "Score Status",
+            "default": "insufficient_evidence"
+          },
+          "score_explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Explanation"
+          },
+          "scoring_rubric_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scoring Rubric Version"
           }
         },
         "additionalProperties": true,

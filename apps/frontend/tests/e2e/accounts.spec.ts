@@ -47,7 +47,8 @@ test('P09–P16 Google entry, OTP verification, initial setup, reload and logout
  await page.getByRole('button',{name:'Continue',exact:true}).click();
  await page.getByRole('button',{name:'No applicable previous education'}).click();
  await page.getByRole('button',{name:'Enter elo',exact:true}).click();
- await expect(page).toHaveURL(/\/dashboard$/);
+ // Finished setup offers the optional goal and CV steps first.
+ await expect(page).toHaveURL(/\/getting-started$/);
  expect(completed).toBe(1);
  await page.getByRole('button',{name:'Menu',exact:true}).click();
  await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();

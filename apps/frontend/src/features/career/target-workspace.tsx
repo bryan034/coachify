@@ -5,6 +5,7 @@ import { targetApi } from '@/lib/api/career-targets';
 import { ApiError } from '@/lib/api/profile';
 import type { CareerTarget, CreateTargetInput, TargetList, TargetType } from './target-types';
 import {ConditionFields,ConditionSummary,conditionTerms,conditionValid,type ConditionDraft} from './condition-fields';
+import { errorText } from '@/lib/errors';
 
 type SkillDraft={id:string;name:string;evidence:string;context:string};
 const emptySkill=():SkillDraft=>({id:crypto.randomUUID(),name:'',evidence:'',context:''});
@@ -19,19 +20,19 @@ export function TargetWorkspace({token,sourceText,sourceUrl,onDraftChange}:{toke
  const refresh=useCallback(async()=>{
   const seq=++sequence.current;listController.current?.abort();const controller=new AbortController();listController.current=controller;setLoading(true);setPageLoading(false);setPageError('');
   try{const value=await targetApi.list(token,AbortSignal.any([lifetime.current.signal,controller.signal]));if(!lifetime.current.signal.aborted&&seq===sequence.current){setData(value);setLoadError('');}}
-  catch(cause){if(!lifetime.current.signal.aborted&&seq===sequence.current)setLoadError(cause instanceof Error?cause.message:'Could not load saved targets.');}
+  catch(cause){if(!lifetime.current.signal.aborted&&seq===sequence.current)setLoadError(errorText(cause, 'Could not load saved targets.'));}
   finally{if(!lifetime.current.signal.aborted&&seq===sequence.current)setLoading(false);}
  },[token]);
  useEffect(()=>{if(lifetime.current.signal.aborted)lifetime.current=new AbortController();void refresh();return()=>{lifetime.current.abort();listController.current?.abort();sequence.current++;};},[refresh]);
  async function loadMore(){
   if(!data?.next_cursor||loading||pageLoading||busy)return;const cursor=data.next_cursor,seq=++sequence.current;listController.current?.abort();const controller=new AbortController();listController.current=controller;setPageLoading(true);setPageError('');
   try{const page=await targetApi.list(token,AbortSignal.any([lifetime.current.signal,controller.signal]),cursor);if(lifetime.current.signal.aborted||controller.signal.aborted||seq!==sequence.current)return;setData(current=>{if(!current)return current;const targets=new Map(current.targets.map(target=>[target.id,target]));for(const target of page.targets){const existing=targets.get(target.id);if(!existing||existing.version<=target.version)targets.set(target.id,target);}return {...page,targets:[...targets.values()]};});}
-  catch(cause){if(!lifetime.current.signal.aborted&&!controller.signal.aborted&&seq===sequence.current)setPageError(cause instanceof Error?cause.message:'Could not load more saved targets.');}
+  catch(cause){if(!lifetime.current.signal.aborted&&!controller.signal.aborted&&seq===sequence.current)setPageError(errorText(cause, 'Could not load more saved targets.'));}
   finally{if(!lifetime.current.signal.aborted&&seq===sequence.current)setPageLoading(false);}
  }
  const mutationId=(action:string,body:unknown)=>{const text=JSON.stringify(body);let receipt=receipts.current.get(action);if(receipt?.body!==text){receipt={body:text,id:crypto.randomUUID()};receipts.current.set(action,receipt);}return receipt!.id;};
  function changedSkill(id:string,change:Partial<SkillDraft>){setSkills(current=>current.map(skill=>skill.id===id?{...skill,...change}:skill));}
- async function failed(cause:unknown){setError(cause instanceof Error?cause.message:'Could not save this target.');if(cause instanceof ApiError&&cause.status===409)await refresh();}
+ async function failed(cause:unknown){setError(errorText(cause, 'Could not save this target.'));if(cause instanceof ApiError&&cause.status===409)await refresh();}
  const sourceValid=Boolean(sourceText.trim())&&Array.from(sourceText).length<=20_000;
  const valid=Boolean(role.trim()&&field.trim()&&(skills.length+conditions.length)>0&&skills.every(skill=>skill.name.trim()&&(type==='career_exploration'||(skill.evidence.trim()&&sourceText.includes(skill.evidence.trim()))))&&conditions.every(condition=>conditionValid(condition,type,sourceText))&&(type==='career_exploration'||sourceValid));
  async function create(event:FormEvent){

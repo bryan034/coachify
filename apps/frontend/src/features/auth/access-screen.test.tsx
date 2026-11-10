@@ -64,3 +64,14 @@ test('registration allows eight characters and blocks seven before submission',a
  fireEvent.click(screen.getByRole('button',{name:/^Create account/}));
  await waitFor(()=>expect(access.completeAccess).toHaveBeenCalledWith({name:'',email:'synthetic@example.test',password:'Test1234'}));
 });
+
+test('the header offers the other way in instead of repeating the page’s own action',()=>{
+ const view=render(<AccessScreen intent="login"/>);
+ const header=view.container.querySelector('.access-header') as HTMLElement;
+ expect(within(header).queryByRole('link',{name:'Sign in'})).not.toBeInTheDocument();
+ expect(within(header).getByRole('link',{name:'Create account'})).toHaveAttribute('href','/register');
+ view.unmount();
+ navigation.pathname='/register';
+ const register=render(<AccessScreen intent="register"/>);
+ expect(within(register.container.querySelector('.access-header') as HTMLElement).getByRole('link',{name:'Sign in'})).toHaveAttribute('href','/login');
+});

@@ -14,13 +14,20 @@ async def capture(upstream,account):
     selection=listing.get('selection') or {}; cv_id=selection.get('cv_id')
     issues=[]
     if not career.get('ready'):issues.append({'source':'career','message':career.get('reason') or 'Extract and review a Career goal first.','href':'/career-goal'})
-    if not cv_id: issues.append({'source':'cv','message':'Upload, extract and select a CV before planning.','href':'/cv'})
+    if not cv_id and not manual.get('declarations'): issues.append({'source':'cv','message':'Upload, extract and select a CV before planning.','href':'/cv'})
     if issues:return {'ready':False,'issues':issues,'goal':career.get('goal'),'cv':None}
-    cv=await upstream.read('cv','/api/v1/cv/'+cv_id,token)
-    if cv.get('status')!='ready':return {'ready':False,'issues':[{'source':'cv','message':'Finish or retry the selected CV extraction.','href':'/cv'}],'goal':career.get('goal'),'cv':{'id':cv_id,'status':cv.get('status')}}
-    source=await upstream.read('cv','/api/v1/cv/'+cv_id+'/assessment-input',token,params={
-        'expected_version':cv['version'],'expected_selection_version':selection['version'],
-        'expected_declarations_version':manual['version']})
+    if cv_id:
+        cv=await upstream.read('cv','/api/v1/cv/'+cv_id,token)
+        if cv.get('status')!='ready':return {'ready':False,'issues':[{'source':'cv','message':'Finish or retry the selected CV extraction.','href':'/cv'}],'goal':career.get('goal'),'cv':{'id':cv_id,'status':cv.get('status')}}
+        source=await upstream.read('cv','/api/v1/cv/'+cv_id+'/assessment-input',token,params={
+            'expected_version':cv['version'],'expected_selection_version':selection['version'],
+            'expected_declarations_version':manual['version']})
+    else:
+        cv=None
+        # Saved intake publishes through Profile's declaration authority. Draft intake is never evidence.
+        source={'items':[], 'declarations':manual['declarations'], 'cv_version':None,
+                'extraction_version':None,'effective_version':None,'selection_version':selection['version'],
+                'declarations_version':manual['version']}
     goal=career['goal']; research=career.get('research')
     coverage='unavailable'
     if research:
@@ -46,7 +53,9 @@ async def capture(upstream,account):
         for index,claim in enumerate(item.get('skill_claims',[])):
             key=ref+':claim:'+str(index)
             evidence[key]={'ref':key,'kind':'skill','name':claim['name'],'text':'\n'.join(e['excerpt'] for e in claim.get('evidence',[])),
-                **{k:claim.get(k) for k in ('attribution','assistance','proficiency','experience_months','support_uncertain','evidence_type')},**identity(claim['name'])}
+                **{k:claim.get(k) for k in ('attribution','assistance','proficiency','experience_months','support_uncertain','evidence_type')},
+                'application_level':next((estimate['level'] for estimate in (cv or {}).get('skill_estimates',[]) if estimate.get('item_id')==item['id'] and estimate.get('skill_name','').casefold()==claim['name'].casefold()),None),
+                'reviewed':bool(cv and cv.get('profile_reviewed_effective_version')==cv.get('effective_version')),**identity(claim['name'])}
     for declaration in source['declarations']:
         ref='declaration:'+declaration['id']
         evidence[ref]={'ref':ref,'kind':'user_declaration','name':declaration['name'],
@@ -75,12 +84,12 @@ async def capture(upstream,account):
             requirements.append({**f,'ref':'interview:'+str(f.get('finding_id') or index),'kind':'interview_preparation',
                 'name':name,'priority':'suggested','origin':'interview_research',**identity(name)})
     time_sensitive=bool(goal.get('non_skill_requirements') or any(item.get('ongoing') for item in source['items']))
-    vector={'as_of_date':datetime.now(ZoneInfo('Asia/Singapore')).date().isoformat() if time_sensitive else None,'cv_id':cv_id,'cv_version':source['cv_version'],'extraction_version':source['extraction_version'],
+    vector={'source_mode':'cv_and_profile' if cv_id else 'profile_only','as_of_date':datetime.now(ZoneInfo('Asia/Singapore')).date().isoformat() if time_sensitive else None,'cv_id':cv_id,'cv_version':source['cv_version'],'extraction_version':source['extraction_version'],
         'effective_version':source['effective_version'],'cv_selection_version':source['selection_version'],
         'declarations_version':source['declarations_version'],'profile_version':account['profile']['version'],
         'goal_id':goal['_id'],'goal_version':goal['version'],'goal_selection_version':career['selection_version'],
         'research_id':research['_id'] if research else None,'research_version':research['version'] if research else None,
         'research_coverage':coverage,'registry_version':MAPPING_VERSION}
-    return {'ready':True,'issues':[],'goal':goal,'cv':{'id':cv_id,'name':cv['file_name']},'inputs':vector,
+    return {'ready':True,'issues':[],'goal':goal,'cv':{'id':cv_id,'name':cv['file_name']} if cv else None,'inputs':vector,
         'input_hash':digest(vector),'requirements':requirements,'evidence':evidence,
         'source_snapshot':{'capabilities':source,'goal':goal,'research':research,'education':education},'research_coverage':coverage}

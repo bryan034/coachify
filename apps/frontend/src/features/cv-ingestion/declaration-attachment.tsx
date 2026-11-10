@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react';
 import { cvApi, CvApiError } from '@/lib/api/cv';
 import type { CvDetail, Declaration, DeclarationLink, Declarations } from './types';
+import { errorText } from '@/lib/errors';
 
 export function DeclarationAttachment({declaration,link,linkError,data,selectedCv,token,signal,onSaved,refresh}:{declaration:Declaration;link?:DeclarationLink;linkError:string;data:Declarations;selectedCv:CvDetail|null;token:string;signal:AbortSignal;onSaved:(value:Declarations)=>void;refresh:()=>Promise<void>}) {
  const [editing,setEditing]=useState(false),[choice,setChoice]=useState(''),[version,setVersion]=useState(data.version),[sourceVersion,setSourceVersion]=useState<number|null>(null),[sourceId,setSourceId]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -19,7 +20,7 @@ export function DeclarationAttachment({declaration,link,linkError,data,selectedC
   const signature=JSON.stringify(body);if(receipt.current?.body!==signature)receipt.current={body:signature,id:crypto.randomUUID()};
   setBusy(true);setError('');
   try{const value=await cvApi.updateAttachment({...body,mutation_id:receipt.current.id},token,signal);if(!signal.aborted){onSaved(value);setEditing(false);setChoice('');}}
-  catch(cause){if(!signal.aborted){setError(cause instanceof Error?cause.message:'Could not save the link choice.');if(cause instanceof CvApiError&&cause.status===409)await refresh();}}
+  catch(cause){if(!signal.aborted){setError(errorText(cause, 'Could not save the link choice.'));if(cause instanceof CvApiError&&cause.status===409)await refresh();}}
   finally{if(!signal.aborted)setBusy(false);}
  }
  return <div className="cv-attachment"><p className={status==='current'||status==='standalone'?'small':'cv-warning'}>{label}</p>{declaration.attached_to&&<p className="small">Saved source: {declaration.attached_to.cv_id} · {declaration.attached_to.item_id}{link&&!link.selected?' · This is a different CV from your selected analysis source.':''}</p>}{declaration.attached_to&&linkError&&<p className="small">{linkError}</p>}

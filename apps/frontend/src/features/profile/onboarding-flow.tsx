@@ -8,6 +8,7 @@ import { EmploymentSuggestions } from './employment-suggestions';
 import { SchoolBrowser, suggestedCountry } from './school-browser';
 import { editorFrom, graduationYear, type EducationEditor } from './education-fields';
 import { educationQuestions, statuses, studyYearLabel, type EducationDraft, type OccupationalStatus, type Profile, type SchoolCategory } from './types';
+import { errorText } from '@/lib/errors';
 
 type Step = 'status' | 'previous' | 'employer' | 'role' | 'industry' | 'pathway' | 'school' | 'graduation' | 'course' | 'year' | 'review';
 const labels: Record<Step, string> = { status: 'Your starting point', previous: 'Your work history', industry: 'Your industry', employer: 'Your workplace', role: 'Your role', pathway: 'Education path', school: 'Your school', graduation: 'Graduation year', course: 'Your course', year: 'Study year', review: 'Ready to begin' };
@@ -118,7 +119,7 @@ export function OnboardingFlow({ preview = false }: { preview?: boolean }) {
       }
       if (!alive.current) return;
       setConflict(e instanceof ApiError && e.status === 409);
-      setError(e instanceof Error ? e.message : 'Your answer could not be saved. Please retry.');
+      setError(errorText(e, 'Your answer could not be saved. Please retry.'));
     } finally { lock.current = false; if (alive.current) setBusy(false); }
   }
   async function reconcile() {
@@ -192,7 +193,7 @@ export function OnboardingFlow({ preview = false }: { preview?: boolean }) {
           <h1 id="setup-question" ref={heading} tabIndex={-1}>{titles[step]}</h1>
           <p className="onboarding-description">{descriptions[step]}</p>
           <fieldset disabled={busy || conflict || changing} className="onboarding-fields" aria-label={labels[step]}>
-            {step === 'status' && <div className="onboarding-choices">{statuses.map((s, i) => <button type="button" className={`onboarding-choice ${status === s.id ? 'chosen' : ''}`} key={s.id} aria-label={s.label} onClick={() => chooseStatus(s.id)}><span className="onboarding-choice-icon" aria-hidden="true">{['01', '02', '03', '04'][i]}</span><span><strong>{s.label}</strong><small>{statusNotes[s.id]}</small></span><span className="onboarding-arrow" aria-hidden="true">↗</span></button>)}</div>}
+            {step === 'status' && <div className="onboarding-choices">{statuses.map((s, i) => <button type="button" className={`onboarding-choice ${status === s.id ? 'chosen' : ''}`} key={s.id} aria-label={s.label} onClick={() => chooseStatus(s.id)}><span className="onboarding-choice-icon" aria-hidden="true">{['01', '02', '03', '04'][i]}</span><span><strong>{s.label}</strong><small>{statusNotes[s.id]}</small></span></button>)}</div>}
             {step === 'previous' && <div className="onboarding-choices">{[true, false].map(answer => <button type="button" key={String(answer)} className="onboarding-choice" onClick={() => { setPreviouslyEmployed(answer); void save({ previously_employed: answer }, answer ? 'employer' : 'pathway'); }}><strong>{answer ? 'Yes, I have' : 'No, not yet'}</strong><span aria-hidden="true">→</span></button>)}</div>}
             {step === 'employer' && <form onSubmit={e => { e.preventDefault(); if (employer.trim()) void save({ employment: { employer: employer.trim() } }, 'role'); }}>
               <EmploymentSuggestions id="setup-employer" kind="companies" label={status === 'unemployed' ? 'Previous employer' : 'Place of employment'} value={employer} onChange={setEmployer} />

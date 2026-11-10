@@ -3,12 +3,13 @@ import { useEffect, useState, useRef, type FormEvent } from 'react';
 import { ApiError, profileApi } from '@/lib/api/profile';
 import { PlanningPreferences } from './planning-preferences';
 import { useProfile } from './profile-provider';
-import { PageTitle } from '@/components/ui/workspace-ui';
+import { PageSkeleton, PageTitle } from '@/components/ui/workspace-ui';
 import { EmploymentSuggestions } from './employment-suggestions';
 import { SchoolBrowser } from './school-browser';
 import { EducationFields, editorFrom, educationPayload, type EducationEditor } from './education-fields';
 import type { Institution } from './types';
 import { educationQuestions, statuses, type Category, type OccupationalStatus, type Profile, type SchoolCategory } from './types';
+import { errorText } from '@/lib/errors';
 
 export function ProfileForm({ initialSetup = false, onSaved, onCancel }: {
   initialSetup?: boolean; onSaved?: () => void; onCancel?: () => void;
@@ -87,7 +88,7 @@ export function ProfileForm({ initialSetup = false, onSaved, onCancel }: {
         try {const latest=await profileApi<Profile>('',{},token);if(latest.onboarding_complete&&setProfile(latest)){return;}}catch{ /* Keep the current account's draft and retry key. */ }
       }
       setConflict(e instanceof ApiError&&e.status===409);
-      setError(e instanceof Error?e.message:'Saving failed. Your selections are retained; please retry.');
+      setError(errorText(e, 'Saving failed. Your selections are retained; please retry.'));
     } finally {setSaving(false);}
   }
   // Loading the profile and populating the editor commit separately. Keep edits
@@ -101,7 +102,7 @@ export function ProfileForm({ initialSetup = false, onSaved, onCancel }: {
     <PageTitle title={initialSetup ? "Finish your setup" : "Edit profile"} />
     <p className="profile-editor-description">Keep your background up to date. Make your changes below, then save when you’re ready.</p>
     {(configError || loadError) && <p role="alert" className="error">{configError || loadError}</p>}
-    {loading && <p role="status">Loading your profile…</p>}
+    {loading && <PageSkeleton label="Loading your profile…"/>}
     <form onSubmit={event => void save(event)}>
       <fieldset className="profile-editor-section" disabled={disabled}>
         <legend>About you</legend>

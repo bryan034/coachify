@@ -235,3 +235,9 @@ Roadmap runs Configure → Generate → Review. Assessment's `GET /context` addi
 ## Job search
 
 Jobs owns live public board aggregation and private application snapshots in its own `elo_jobs` database. Searches call configured Greenhouse, Lever and Ashby boards at request time and filter transient normalised results; no listing catalogue or scheduled worker is used. Only application snapshots and user-reported status history persist. Partial provider failures are visible; saved listings have unknown current availability until checked on the employer site. Career's single-job URL intake remains separate. See the [Jobs specification](../../services/jobs-service/SPEC.md).
+
+Phase 2 allows Assessment to capture saved Profile declarations without a selected
+CV. Its source-mode and nullable CV revisions distinguish that snapshot from the
+CV-plus-Profile path; a selected invalid CV never silently falls back. Goal-relative
+comparison/scoring belongs to Assessment. The additive score fields remain null
+pending an approved rubric; CV continues owning goal-independent source estimates.

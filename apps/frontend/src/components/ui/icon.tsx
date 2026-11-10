@@ -13,6 +13,15 @@ const paths: Record<string, ReactNode> = {
  bolt: <path d="M13 2L4 14h7l-1 8 9-12h-7z"/>,
  user: <><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></>,
  up: <path d="M12 16V4M6 10l6-6 6 6M4 20h16"/>,
+ building: <path d="M4 21V5h10v16M14 9h6v12M8 9h2M8 13h2M8 17h2"/>,
+ pin: <path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12zM12 7a2 2 0 1 0 0 4a2 2 0 1 0 0-4"/>,
+ flag: <path d="M5 21V4M5 4h11l-2 4 2 4H5"/>,
+ check: <path d="M9 12l2 2 4-4M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18"/>,
+ code: <path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/>,
+ money: <path d="M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6"/>,
+ people: <path d="M9 11a3 3 0 1 0 0-6a3 3 0 1 0 0 6M3 20a6 6 0 0 1 12 0M17 11a2.5 2.5 0 1 0 0-5M21 19a5 5 0 0 0-4-5"/>,
+ chevron: <path d="M6 9l6 6 6-6"/>,
+ warn: <path d="M12 3l10 18H2zM12 10v5M12 18h.01"/>,
 };
 export function Icon({ name, style }: { name: string; style?: CSSProperties }) {
  return <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>{paths[name] || paths.doc}</svg>;

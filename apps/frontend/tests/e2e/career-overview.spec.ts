@@ -3,7 +3,7 @@ import {mockEmptyConversation} from '../fixtures/cv-ui';
 import {policy,emptyDeclarations} from '../fixtures/cv';
 import {test,expect} from '@playwright/test';
 
-test('saved briefing accordions, guided refinement, replacement and CV handoff on desktop and mobile',async({page})=>{
+test('saved briefing accordions, guided refinement, replacement and CV handoff on desktop and mobile',async({page},testInfo)=>{
  await mockEmptyConversation(page);
  await page.route('**/api/v1/profile/capabilities',route=>route.fulfill({json:emptyDeclarations}));
  await page.route('**/api/v1/cv{,/**}',route=>{
@@ -34,20 +34,23 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
   return route.fulfill({json:careerFixture(route.request().url(),state())});
  });
  await page.goto('/career-goal');
+ await expect(page.getByRole('heading',{level:1,name:'Backend Software Engineer'})).toBeVisible();
+ for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.screenshot({path:testInfo.outputPath(`career-goal-${width}.png`),fullPage:true});}
+ await page.setViewportSize({width:1280,height:900});
  await expect(page.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Skills this role needs'})).toBeVisible();
  await expect(page.getByText('Python',{exact:true})).toBeVisible();
  await page.getByText('Teamwork',{exact:true}).click();
- await expect(page.getByText('No further detail was saved for this skill.',{exact:false})).toBeVisible();
- await page.getByText('Eligibility & commitment',{exact:false}).click();
- await expect(page.locator('.briefing-conditions p').filter({hasText:'Degree in a related discipline'})).toBeVisible();
- await expect(page.locator('.briefing-conditions blockquote')).toHaveText('Degree in a related discipline');
+ await expect(page.locator('.goal-skill-details:visible').getByText('Compare with your skills to see where you stand.',{exact:true})).toBeVisible();
  await expect(page.getByRole('status').filter({hasText:'Researching opportunity information'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
  await expect(page.getByRole('link',{name:/Upload my CV/})).toHaveAttribute('href','/cv');
+ await page.getByRole('navigation',{name:'Career goal pages'}).getByRole('link',{name:'About the role'}).click();
+ await page.getByText('Eligibility and commitment',{exact:true}).click();
+ await expect(page.getByText('Degree in a related discipline',{exact:false}).first()).toBeVisible();
  researching=false;
- await page.getByText('Interviews & company research',{exact:false}).click();
- await expect(page.locator('details.intelligence-section').filter({has:page.getByText('Interview Intelligence',{exact:true})})).toContainText('Technical interview');
+ await page.getByRole('navigation',{name:'Career goal pages'}).getByRole('link',{name:'Interview preparation'}).click();
+ await expect(page.locator('#interview-preparation')).toContainText('Technical interview');
  await page.screenshot({path:test.info().outputPath('goal-overview-desktop.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -74,12 +77,12 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.getByRole('heading',{name:'Skills Profile',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveCount(0);
- await page.getByRole('button',{name:/Upload your CV/}).click();
+ await page.getByRole('button',{name:'Upload new CV'}).click();
  await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
  await expect(page.getByLabel('CV document',{exact:true})).toBeEnabled();
 });
 
-test('Opportunity Intelligence preserves partial categories, citations and targeted refresh on mobile',async({page})=>{
+test('research tabs keep partial results, citations and refresh on mobile',async({page})=>{
  await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
@@ -105,31 +108,26 @@ test('Opportunity Intelligence preserves partial categories, citations and targe
  const cvSkills=page.getByRole('region',{name:'Your CV skills'});
  await expect(cvSkills.getByRole('heading',{name:'CV skills available'})).toBeVisible();
  await expect(cvSkills).not.toContainText(/assessed|assessment|evaluated/iu);
- await page.getByText('Interviews & company research',{exact:false}).click();
- await expect(page.getByRole('heading',{name:'Opportunity Intelligence'})).toBeVisible();
- await expect(page.getByText('This category could not finish. Other results are preserved; refresh this section to retry.')).toBeVisible();
- await page.getByText('Internship Insights',{exact:true}).click();
- const internships=page.locator('details.intelligence-section').filter({has:page.getByText('Internship Insights',{exact:true})});
- await expect(internships).toContainText('SGD 1500 per month');await expect(internships).toContainText('low confidence');
- await internships.getByText('Evidence and sources',{exact:true}).click();
- await expect(internships.getByRole('link',{name:'Public intern report ↗'})).toHaveAttribute('href','https://example.test/report');
- await expect(internships).toContainText('Published: Unknown');
- await internships.getByRole('button',{name:'Refresh this section'}).click();
- await expect.poll(()=>refreshed).toBe('internship_insights');
- await page.getByText('Career Progression',{exact:true}).click();
- await expect(page.locator('details.intelligence-section').filter({has:page.getByText('Career Progression',{exact:true})})).toContainText('SGD 5000 monthly base salary, 2025');
- await page.getByText('Historical Conversion Rates',{exact:true}).click();
- const conversions=page.locator('details.intelligence-section').filter({has:page.getByText('Historical Conversion Rates',{exact:true})});
- await expect(conversions).toContainText('Information pertaining to this category was not found');
- await conversions.getByRole('button',{name:'Refresh this section'}).click();
- await expect.poll(()=>refreshed).toBe('conversion_outcomes');
- await expect(page.getByText('Company and Team Culture',{exact:true})).toBeVisible();
+ const tabs=page.getByRole('navigation',{name:'Career goal pages'});
+ await tabs.getByRole('link',{name:'Interview preparation'}).click();
+ await expect(page).toHaveURL(/\/career-goal\/interview$/);
+ await expect(page.getByText('Part of this research could not finish. Other results are preserved; refresh to retry.')).toBeVisible();
+ await tabs.getByRole('link',{name:'About the role'}).click();
+ const salary=page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Salary',exact:true})});
+ await expect(salary).toContainText('SGD 1500 per month');await expect(salary).toContainText('low confidence');
+ await expect(salary.getByRole('link',{name:'Public intern report ↗'})).toHaveAttribute('href','https://example.test/report');
+ await expect(page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Full-time salary'})})).toContainText('SGD 5000 monthly base salary, 2025');
+ await expect(page.getByRole('heading',{name:'Conversion rate'})).toHaveCount(0);
+ await expect(page.getByText('Fields elo couldn’t find are hidden.')).toBeVisible();
+ await expect(page.getByRole('note')).toContainText('may be inaccurate or out of date');
+ await page.getByRole('button',{name:'Refresh research'}).click();
+ await expect.poll(()=>refreshed).toBe(null);
  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:test.info().outputPath('opportunity-intelligence-mobile.png'),fullPage:true});
 });
 
 
-test('the numbered skill list supports keyboard disclosure, category filters, confirmed layout and small screens',async({page})=>{
+test('the grouped skill list supports keyboard disclosure, long lists, confirmed layout and small screens',async({page})=>{
  await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{
   const path=new URL(route.request().url()).pathname;
@@ -147,35 +145,30 @@ test('the numbered skill list supports keyboard disclosure, category filters, co
  });
  await page.setViewportSize({width:1440,height:1000});await page.goto('/career-goal');
  await expect(page.locator('.briefing-context-banner')).toBeVisible();
- const filters=page.getByRole('group',{name:'Filter skills by category'});
- await expect(filters.getByRole('button',{name:/Product Management/})).toBeVisible();
- await expect(filters.getByRole('button',{name:/AI/})).toBeVisible();
- await expect(page.locator('.skill-priority.priority-required')).toHaveCount(6);
- await expect(page.locator('.skill-priority.priority-preferred')).toHaveCount(3);
- const cards=page.locator('.skill-rank-row');
- await expect(cards).toHaveCount(9);
- await expect(cards.nth(0).locator('.skill-rank')).toHaveText('1');await expect(cards.nth(8).locator('.skill-rank')).toHaveText('9');
- const first=await cards.nth(0).boundingBox(),second=await cards.nth(1).boundingBox();
+ // Skills sit under category headings, most important group first, coloured by importance.
+ const rows=page.locator('.goal-skill-row');
+ await expect(rows).toHaveCount(9);
+ await expect(page.locator('.goal-skill-category h3')).toHaveText(['Product Management','AI']);
+ await expect(page.locator('.goal-skill-importance',{hasText:'Essential'})).toHaveCount(6);
+ await expect(page.locator('.goal-skill-importance',{hasText:'Important'})).toHaveCount(3);
+ const first=await rows.nth(0).boundingBox(),second=await rows.nth(1).boundingBox();
  expect(second!.x).toBe(first!.x);expect(second!.y).toBeGreaterThan(first!.y);
- const next=await page.locator('#opportunity').boundingBox(),focus=await page.locator('#priorities').boundingBox();expect(next!.y).toBeGreaterThan(focus!.y);
  await page.screenshot({path:test.info().outputPath('learning-focus-desktop.png'),fullPage:true});
  const toggle=page.getByRole('button',{name:longTitle,exact:true});await toggle.focus();await page.keyboard.press('Enter');
  await expect(toggle).toHaveAttribute('aria-expanded','true');
- await expect(page.getByText('Learn from user feedback.',{exact:true}).first()).toBeVisible();
- expect((await cards.nth(1).boundingBox())!.height).toBe(second!.height);
+ await expect(page.locator(`#${await toggle.getAttribute('aria-controls')}`)).toBeVisible();
+ expect((await rows.nth(1).boundingBox())!.height).toBe(second!.height);
  await page.keyboard.press('Space');await expect(toggle).toHaveAttribute('aria-expanded','false');
  for(const width of [360,390,768]){
   await page.setViewportSize({width,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  }
  await page.setViewportSize({width:360,height:844});
- expect((await cards.nth(1).boundingBox())!.y).toBeGreaterThan((await cards.nth(0).boundingBox())!.y);
+ expect((await rows.nth(1).boundingBox())!.y).toBeGreaterThan((await rows.nth(0).boundingBox())!.y);
  await page.screenshot({path:test.info().outputPath('learning-focus-mobile.png'),fullPage:true});
  count=30;await page.reload();
- await expect(page.locator('.skill-priority.priority-required')).toHaveCount(6);
- await expect(page.locator('.skill-priority.priority-preferred')).toHaveCount(24);
- await filters.getByRole('button',{name:/AI/}).click();
- await expect(cards).toHaveCount(15);
- await expect(cards.nth(0).locator('.skill-rank')).toHaveText('2');
+ await expect(rows).toHaveCount(10);
+ await page.getByRole('button',{name:/^Show 20 more skills/}).click();
+ await expect(rows).toHaveCount(30);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

@@ -10,6 +10,7 @@ import {sourceCitations} from './source-links';
 import {careerOperation,type CareerOperation} from '@/lib/api/career-operation';
 import {retryCareerRead} from '@/lib/api/career-polling';
 import {careerApi,refreshWorkspace,type OpportunityView,type CareerWorkspace} from '@/lib/api/career';
+import { errorText } from '@/lib/errors';
 
 type QueuedMessage={id:string;input:string;key:string;body?:string;session?:string|null};
 function researchPending(workspace:CareerWorkspace){
@@ -45,6 +46,7 @@ export function JobReviewChat(){
  const {token}=useProfile(),session=useCareerSession(),router=useRouter();
  const [research,setResearch]=useState<OpportunityView>();
  const [researchRetry,setResearchRetry]=useState(0);
+ const [refinementDone,setRefinementDone]=useState(false);
  const [summary,setSummary]=useState<{key:string;reply:string}>();
  const [summaryRetry,setSummaryRetry]=useState(0);
  const [summaryOperation,setSummaryOperation]=useState<CareerOperation|null>(null);
@@ -62,7 +64,7 @@ export function JobReviewChat(){
   setOperation(job);setRetryAt(job.status==='waiting_quota'?Date.now()+(job.retry_after||1)*1000:null);
  }
  function reportError(cause:unknown,fallback:string){
-  setError(cause instanceof Error?cause.message:fallback);setCode(errorCode(cause));
+  setError(errorText(cause,fallback));setCode(errorCode(cause));
   setRetryAt(cause instanceof Error&&'retryAt' in cause&&typeof cause.retryAt==='number'&&Number.isFinite(cause.retryAt)?cause.retryAt:null);
  }
  useEffect(()=>{
@@ -161,12 +163,14 @@ export function JobReviewChat(){
   // Build queued turns only when dispatched, after any preceding edit/reply.
   job.body??=JSON.stringify({session_id:workspace.session_id,expected_version:goal.version,message:job.input,mode:refining.current?'refine':'question',conversation:turnsRef.current.filter(turn=>turn.reply!==null).slice(-1).flatMap(turn=>[{role:'user',content:turn.message},{role:'assistant',content:turn.reply}])});
   void careerOperation<{reply:string;workspace?:CareerWorkspace;edit_status?:string}>('/workspace/messages',token,{method:'POST',signal:abort.signal,headers:{'Idempotency-Key':job.key},body:job.body},operationProgress)
-   .then(result=>{if(!abort.signal.aborted){if(result.workspace)receive(result.workspace,true);setResearchRetry(value=>value+1);setTurns(current=>current.map(turn=>turn.id===job.id?{...turn,reply:result.reply,failed:false}:turn));setRetryAt(null);failedJobs.current.delete(job.id);failedTurn.current=null;}})
+   .then(result=>{if(!abort.signal.aborted){if(refining.current&&result.edit_status==='saved')setRefinementDone(true);if(result.workspace)receive(result.workspace,true);setResearchRetry(value=>value+1);setTurns(current=>current.map(turn=>turn.id===job.id?{...turn,reply:result.reply,failed:false}:turn));setRetryAt(null);failedJobs.current.delete(job.id);failedTurn.current=null;}})
    .catch(cause=>{if(!abort.signal.aborted){failedJobs.current.set(job.id,job);failedTurn.current=job.id;setFailedMessage(job.input);setTurns(current=>current.map(turn=>turn.id===job.id?{...turn,failed:true}:turn));setMessage(current=>current||job.input);reportError(cause,'Could not answer. Your message is retained.');}})
    .finally(()=>{sending.current=false;if(!abort.signal.aborted){setBusy(false);setPendingMessage(null);setPendingTurn(null);setOperation(null);setQueueRevision(value=>value+1);}});
  },[token,workspace,busy,queueRevision,chatCooldown]);
  return <section className="page on career-agent-page">
-  <header className="agent-page-header"><div><p className="small">Your direction, one conversation</p><h1>Career Goal</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>{if(!dirty.current||window.confirm('Leave and discard unsent edits? Your saved goal stays current.'))router.push('/career-goal');}}>← Career Goal</button></header>
+  <header className="agent-page-header"><div><p className="small">Your direction, one conversation</p><h1>Goal conversation</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>{if(!dirty.current||window.confirm('Leave and discard unsent edits? Your saved goal stays current.'))router.push('/career-goal');}}>← Career Goal</button></header>
+  {refining.current&&<p className="notice">Your saved progress is kept as you refine this goal. You can leave and return to the saved refinement.</p>}
+  {refinementDone&&<div className="refinement-complete" role="dialog" aria-modal="true" aria-label="Goal updated"><h2>Your goal is updated</h2><p>Your changes are saved. You can review the updated goal now.</p><button className="btn pri" autoFocus onClick={()=>router.push('/career-goal')}>Return to Career Goal</button><button className="btn ghost" onClick={()=>setRefinementDone(false)}>Keep chatting</button></div>}
   <div className="agent-workspace"><div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true"><BrandLogo compact decorative/></span><div><strong>elo agent</strong><p className="small">{goal?.role||'Understanding your career goal'}</p></div></div><button className="btn ghost sm" disabled={!detailsReady} onClick={()=>setDetails(v=>!v)}>{details?'Hide details':'Role and research details'}</button></div>
    {workspace?.phase==='empty'&&<p role="status">No job description is available. Import a JD from Career Goal or explore a direction.</p>}
    {details&&detailsReady&&goal&&<aside className="agent-details"><h2>{goal.role}</h2><p>{goal.company||'General career direction'} · v{goal.version} · Saved automatically</p>
@@ -179,6 +183,7 @@ export function JobReviewChat(){
     {connectionIssue&&<p role="status" className="small">Connection interrupted. Reconnecting to task updates…</p>}
     {!ready&&<AgentProgress steps={[...extractionSteps,...(activeOperation?.activities||[]),...(workspace?.activities||[])]}/>}
     <div className="agent-message assistant" key="initial-answer"><span className="agent-message-label">elo</span>
+     {ready&&<details className="agent-completed-progress"><summary>✓ Goal and research saved</summary><p>✓ Goal extracted · ✓ Research completed · ✓ Overview prepared</p></details>}
      {ready&&<AgentReply onProgress={followReply}>{refining.current?'What would you like to refine in your career goal? We can work through your role, location, skills, qualifications or responsibilities. Tell me what feels different, and I’ll ask for any details needed before saving the update.':summary!.reply}</AgentReply>}{<>
       {(!workspace||researchPending(workspace)||loadingResearch||researchReady&&!ready)&&!error&&<AgentActivity step
        label={activeOperation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?waitLabel:activeOperation?.status==='repairing'?'Refining the response…':activeOperation?observedActivity(activeOperation.activities)||(source.current?'Extracting your career goal…':'Preparing your career-goal summary…'):researchReady&&!ready?'Preparing your career-goal summary…':workspace&&researchPending(workspace)?observedActivity(workspace?.activities)||'Researching interview expectations…':loadingResearch?'Loading your saved research…':source.current?'Extracting your career goal…':'Opening your career goal…'}
@@ -192,6 +197,7 @@ export function JobReviewChat(){
     {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||chatCooldown} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(failedMessage)void send(failedMessage);else if(goal&&message.trim())void send();else if(researchReady&&!ready)setSummaryRetry(v=>v+1);else if(loadingResearch)setResearchRetry(v=>v+1);else void retry();}}/>}
    </div>
    <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
+   {ready&&!refining.current&&<div className="agent-starter-prompts">{['What should I learn first?','How do I prepare for this interview?','Is my timeline realistic?'].map(prompt=><button type="button" className="chip" key={prompt} onClick={()=>setMessage(prompt)}>{prompt}</button>)}</div>}
    <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message elo" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={!token||!message.trim()}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
   </div>
  </section>;

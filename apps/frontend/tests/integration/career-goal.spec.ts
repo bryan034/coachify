@@ -6,6 +6,8 @@ test('Career previews validate real sessions, read a document and discard source
  await fillCurrentEmployment(page);
  await page.getByRole('button',{name:'No applicable previous education'}).click();
  await page.getByRole('button',{name:'Enter elo',exact:true}).click();
+ await expect(page).toHaveURL(/\/getting-started$/);
+ await page.getByRole('link', {name:'Go to Home', exact:true}).click();
  await expect(page).toHaveURL(/\/dashboard$/);
  await page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true}).click();
  await page.getByRole('tab',{name:'Upload document'}).click();

@@ -16,7 +16,10 @@ class ExtractedJobDate(Contract):
         description='An exact source excerpt that contains text verbatim, including its date wording.')
 
 
+from app.schemas.analysis import LearningItem
+
 class ExtractedSkill(Contract):
+    learning_items: list[LearningItem] = Field(default_factory=list,max_length=12,description="Concrete things to learn, such as pytest unit tests. Keep stated items grounded in exact source evidence. Mark inferred preparation as inferred with a reason; never invent employer criteria.")
     name: Text
     category: Text
     priority: Priority

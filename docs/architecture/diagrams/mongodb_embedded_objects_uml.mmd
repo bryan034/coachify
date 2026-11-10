@@ -757,3 +757,6 @@ job_applications *-- JobApplicationSnapshot
 job_applications *-- JobStatusChange
 
 %% JobApplicationSnapshot persists independently of live job-provider results; availability is unknown on tracker reads.
+
+%% Assessment InputVersions: source_mode=cv_and_profile|profile_only; CV id/extraction/effective versions nullable for profile_only.
+%% Assessment outcomes reserve nullable relevance/competence_score/score_explanation/scoring_rubric_version; scores unpopulated pending approved rubric.

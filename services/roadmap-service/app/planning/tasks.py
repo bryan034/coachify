@@ -118,7 +118,7 @@ def project_assignments(plan):
                 'task':task['instructions'],'completion_criterion':task['completion_outcome'],
                 'status':'completed' if task['status']=='completed' else 'scheduled',
                 'completed_at':task.get('completed_at'),'evidence_note':task.get('evidence_note'),
-                'history':copy.deepcopy(history)})
+                'history':copy.deepcopy(history),'task_id':task['id']})
     plan['assignments']=output
     return output
 
