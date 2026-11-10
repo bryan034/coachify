@@ -22,12 +22,15 @@ test('P13 uses canonical completion, guards deep links and distinguishes profile
  await page.reload();
  await expect(page).toHaveURL(/\/onboarding$/);
  complete=true;
+ // Completing setup offers the optional goal and CV steps before the workspace.
  await page.reload();
- await expect(page).toHaveURL(/\/dashboard$/);
+ await expect(page).toHaveURL(/\/getting-started$/);
  await page.goto('/onboarding');
+ await expect(page).toHaveURL(/\/getting-started$/);
+ await page.goto('/dashboard');
  await expect(page).toHaveURL(/\/dashboard$/);
  outage=true;
- await expect(page.getByRole('heading',{name:'Welcome to elo'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:/Welcome back/})).toBeVisible();
  await page.goto('/profile');
  await expect(page).toHaveURL(/\/profile$/);
  await expect(page.getByRole('main').getByRole('alert')).toContainText('Synthetic profile outage');

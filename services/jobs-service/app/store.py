@@ -174,6 +174,7 @@ class JobsStore:
             raise Problem('You have reached the saved job limit. Remove a saved job and retry.', 413, 'application_capacity')
         row = {'_id': identifier, 'user_id': owner, 'posting_id': posting_id, 'version': 1, 'status': 'saved',
                'snapshot': {k: posting[k] for k in ('title', 'company', 'location', 'job_type', 'listing_url', 'apply_url')},
+               'deadline':posting.get('application_deadline').date().isoformat() if posting.get('application_deadline') else None,
                'history': [{'status': 'saved', 'at': now}], 'created_at': now, 'updated_at': now}
         try:
             self.applications.insert_one(row)
@@ -205,10 +206,10 @@ class JobsStore:
             row = self.applications.find_one({'_id': identifier, 'user_id': owner})
         return self._application_view(row, {})
 
-    def update_application(self, owner, identifier, expected_version, status, now):
+    def update_application(self, owner, identifier, expected_version, status, now, metadata=None):
         row = self.applications.find_one_and_update(
             {'_id': identifier, 'user_id': owner, 'version': expected_version},
-            {'$set': {'status': status, 'updated_at': now}, '$inc': {'version': 1},
+            {'$set': {'status': status, 'updated_at': now, **(metadata or {})}, '$inc': {'version': 1},
              '$push': {'history': {'$each': [{'status': status, 'at': now}], '$slice': -MAX_HISTORY}}},
             return_document=ReturnDocument.AFTER)
         if row:

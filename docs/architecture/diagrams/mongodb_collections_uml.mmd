@@ -299,3 +299,5 @@ users "1" --> "0..*" job_applications : tracks
 note for job_applications "Private and owner-scoped. Snapshot keeps the record readable after a listing closes or is removed. Applied means the user reported it; Elo never submits applications."
 
 %% Public job results are fetched live and remain transient; legacy catalogue collections are ignored.
+
+%% Assessment skill_gap_analyses may capture Profile-only declarations with null CV identities; exact selection/declaration/goal/research versions remain pinned.

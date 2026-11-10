@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { cvApi, CvApiError } from '@/lib/api/cv';
 import type { CvDetail, DeclarationInput, DeclarationLinks, Declarations } from './types';
 import { DeclarationAttachment } from './declaration-attachment';
+import { errorText } from '@/lib/errors';
 const normalized=(value:string)=>value.normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
 export function CapabilityDeclarations({data,selectedCv,token,signal,onSaved,refresh}:{data:Declarations;selectedCv:CvDetail|null;token:string;signal:AbortSignal;onSaved:(v:Declarations)=>void;refresh:()=>Promise<void>}) {
  const [name,setName]=useState(''),[description,setDescription]=useState(''),[choice,setChoice]=useState(''),[sourceVersion,setSourceVersion]=useState<{id:string;version:number}|null>(null),[version,setVersion]=useState(data.version),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[conflict,setConflict]=useState(false);
@@ -11,7 +12,7 @@ export function CapabilityDeclarations({data,selectedCv,token,signal,onSaved,ref
  const hasLinks=data.declarations.some(declaration=>declaration.attached_to);
  useEffect(()=>{
   const controller=new AbortController();setLinks(null);setLinkError('');
-  if(hasLinks)void (async()=>{try{const value=await cvApi.declarationLinks(token,AbortSignal.any([signal,controller.signal]));if(!controller.signal.aborted&&!signal.aborted)setLinks(value);}catch{if(!controller.signal.aborted&&!signal.aborted)setLinkError('Refresh saved status to retry checking CV links.');}})();
+  if(hasLinks)void (async()=>{try{const value=await cvApi.declarationLinks(token,AbortSignal.any([signal,controller.signal]));if(!controller.signal.aborted&&!signal.aborted)setLinks(value);}catch{if(!controller.signal.aborted&&!signal.aborted)setLinkError('Try again in a moment to recheck CV links.');}})();
   return()=>controller.abort();
  },[hasLinks,data.version,selectedCv?.id,selectedCv?.version,token,signal]);
  const manualMatches=data.declarations.filter(d=>normalized(d.name)===normalized(name));
@@ -30,7 +31,7 @@ export function CapabilityDeclarations({data,selectedCv,token,signal,onSaved,ref
   const serialized=JSON.stringify(body);if(receipt.current?.body!==serialized)receipt.current={body:serialized,id:crypto.randomUUID()};
   setBusy(true);setError('');setNotice('');
   try{const value=await cvApi.addDeclaration({...body,mutation_id:receipt.current!.id},token,signal);if(!signal.aborted){onSaved(value);setVersion(value.version);setName('');setDescription('');setChoice('');setSourceVersion(null);setNotice('Capability saved. It stays with your account across CV changes.');}}
-  catch(cause){if(!signal.aborted){setError(cause instanceof Error?cause.message:'Could not save this capability.');if(cause instanceof CvApiError&&cause.status===409){setConflict(true);await refresh();}}}
+  catch(cause){if(!signal.aborted){setError(errorText(cause, 'Could not save this capability.'));if(cause instanceof CvApiError&&cause.status===409){setConflict(true);await refresh();}}}
   finally{if(!signal.aborted)setBusy(false);}
  }
  return <section className="card pad cv-declarations" aria-label="Manual capabilities"><h2>Add what your CV leaves out</h2><p className="small">Describe a capability in your own words. A CV or proof is not required. Your declaration stays with your account when you change CVs.</p>

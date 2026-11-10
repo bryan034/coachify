@@ -22,3 +22,5 @@ Local testing can use the shared 1.5B Ollama alias through this service's own
 `*_LLM_BASE_URL`, `*_LLM_MODEL` and explicit development `*_LLM_ALLOW_HTTP` flag.
 Local requests omit stored cloud credentials; cloud requests retain authentication.
 JSON/domain validation stays mandatory. See [all-service local setup](../../docs/setup.md#career-model-and-search-configuration).
+
+Standalone comparison is available before a roadmap exists. Without a selected CV, saved Profile declarations can supply the evidence. Selected incomplete CVs still block comparison. Assessment reserves goal-relative relevance/scoring fields; scores remain null pending rubric approval. See [SPEC](SPEC.md#phase-2-comparison-sources-and-reserved-scoring-fields).

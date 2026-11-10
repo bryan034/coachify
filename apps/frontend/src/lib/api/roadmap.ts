@@ -8,6 +8,6 @@ export async function roadmapApi<T>(path: string, token: string, body?: unknown,
   if (response.status === 401) window.dispatchEvent(new CustomEvent('elo:expired', { detail: token }));
   throw new RoadmapError(typeof value.detail === 'string' ? value.detail : 'Your plan could not be loaded or saved. Retry to recover your saved work.', response.status, value.code || 'request_failed');
  }
- if (path !== '/planner/runway' && path !== '/learning' && (!Number.isInteger(value.version) || (!['/messages','/progress','/planner/generate'].includes(path) && (!Array.isArray(value.messages) || typeof value.context?.ready !== 'boolean')))) throw new RoadmapError('The saved workspace could not be confirmed. Reload to recover it.', 502, 'invalid_response');
+ if (path !== '/planner/runway' && path !== '/learning' && path !== '/planner/evidence-proposals' && (!Number.isInteger(value.version) || (!['/messages','/progress','/planner/generate','/planner/roll-forward'].includes(path) && (!Array.isArray(value.messages) || typeof value.context?.ready !== 'boolean')))) throw new RoadmapError('The saved workspace could not be confirmed. Reload to recover it.', 502, 'invalid_response');
  return value as T;
 }

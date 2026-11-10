@@ -8,10 +8,10 @@ workflow. Search Jobs has its own navigation tab, which also holds application t
 `resume-preview.tsx` coordinates the policy, saved CVs, explicit selection and
 recoverable upload/processing states. Upload opens guided review immediately and
 shows progress until the first question is ready. `cv-conversation.tsx` saves the
-conversation for later. **View extracted results** opens the detailed classified CV. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, View extracted results, Set as active baseline and Delete CV. Original filenames and source versions remain under File details;
+conversation for later. **View extracted results** opens the detailed classified CV. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, View extracted results, Make active and Delete CV. Original filenames and source versions remain under File details;
 **Your CV summary** exposes the effective evidence, detailed corrections,
 reconciliation and manual declarations when needed. Uploading never changes selection. The
-active baseline is identified separately from the CV currently being
+active CV is identified separately from the CV currently being
 reviewed, including when filenames repeat. Same-source re-upload sends the original
 CV ID/version and preserves backend corrections; changed bytes require a separate
 new upload. Failed or expired originals offer source resupply. **Delete CV** is
@@ -150,7 +150,7 @@ classified results without starting a review. Upload leaves the analysis selecti
 
 Manual chat and CV review use `purpose: skills_profile`. Backend field selection,
 semantic evidence checking and source-bound interpretation drive their questions.
-The summary has explicit Save profile / Save CV profile actions; partial profiles
+The summary has explicit Save profile / Save to Skills Profile actions; partial profiles
 retain uncertainty. Returning to the summary preserves an unsent chat draft in page
 memory. An upload/source switch retains the existing discard-confirmation behavior.
 The old per-capability editor is retained as an advanced declaration control, not
@@ -185,7 +185,7 @@ Review evidence can contain multiple distinct facts in the same field. Rendering
 uses complete fact identities and labels personal/shared attribution, retaining
 all values and quotes through updates.
 
-**Set as active baseline** warns when the current `effective_version` does not match
+**Make active** warns when the current `effective_version` does not match
 `profile_reviewed_effective_version`. The warning explains that AI interpretation
 may infer skills or experience inaccurately when any roles or responsibilities are
 not clearly stated in the CV, so the baseline may not reflect current skills,
@@ -270,3 +270,15 @@ answer and advances/completes with gaps. It is not offered for unrelated evidenc
 failures or unknown source focus; ownership uncertainty is not graded as competence.
 
 Skills Profile lists the skills you have with the same category layout and jump links as the saved Career Goal.
+
+
+Skills Profile shows the shared current Assessment with an explicit comparison
+action. Saved manual Profile declarations can be compared without selecting a CV;
+a selected incomplete CV still blocks admission. Only evidence actually referenced
+by the current result is highlighted, and its component explanations remain visible.
+This highlight is not an inferred relevance rating. Goal-relative scores stay null
+pending rubric approval; existing CV application levels remain unchanged.
+
+CV chat offers **Focus questions on my goal** inside its scrollable transcript.
+Confirmation uses the same goal/selection version checks as Career Goal and then
+refreshes conversation context. It does not clear the composer draft.

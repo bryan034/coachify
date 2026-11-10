@@ -4,28 +4,13 @@ import { expect, test, vi } from 'vitest';
 import { HomeDashboard, journeyStates } from './home';
 import { ProfileProvider } from '@/features/profile/profile-provider';
 
-test.each([
- { status: 'student', currentYear: 6, expected: 'Computing & Design · Year 6' },
- { status: 'employed', currentYear: null, expected: 'Computing & Design' },
-])('Home shows independent education fields for $status without inventing a current year', async ({status,currentYear,expected})=>{
- vi.stubGlobal('fetch',vi.fn(async(url:string)=>new Response(JSON.stringify(
-  url.endsWith('/auth/session') ? {id:'synthetic',name:'Synthetic',provider:'local_test',onboarding_complete:false} : url.endsWith('/auth-config') ? {mode:'local_test'} : url.endsWith('/school-categories') ? [] : {
-   version:1,occupational_status:status,school_category:'university',current_study_year:currentYear,
-   education_review_required:false,education:{course:'Computing & Design',study_year:6},
-  }
- ))));
- render(<ProfileProvider><HomeDashboard/></ProfileProvider>);
- const detail=await screen.findByText(expected,{exact:true});
- expect(detail).toBeInTheDocument();
- if(!currentYear) expect(screen.queryByText(/Year 6/)).not.toBeInTheDocument();
- expect(screen.queryByText('Ethan')).not.toBeInTheDocument();
-});
-
-const liveData=(url:string)=>{
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const liveData=(url:string):any=>{
  if(url.endsWith('/auth/session'))return {id:'synthetic',name:'Synthetic Person',provider:'local_test',onboarding_complete:true};
  if(url.endsWith('/auth-config'))return {mode:'local_test'};
  if(url.endsWith('/school-categories'))return [];
  if(url.endsWith('/career/goals/current'))return {goal:{_id:'g',version:1,target_type:'career_exploration',role:'Synthetic Analyst',field:'Data',employment_type:'internship',company:null,location:null,seniority_level:null,job_url:null,skills:[{name:'SQL',category:'x',priority:'required',origin:'employer'},{name:'Excel',category:'x',priority:'preferred',origin:'employer'}],interests:[],preferences:[],readiness:'ready',exploration_draft_id:null,exploration_draft_version:null},selection_version:1,dependent_results_need_review:false,skill_groups:{SQL:'Data & analytics',Excel:'Data & analytics'}};
+ if(url.includes('/assessments/'))return {version:0,stale:false,ready:true,model_available:true,result:null,operation:null,issues:[]};
  if(url.endsWith('/profile/skills-profile'))return {version:0,status:'empty',saved_at:null,areas:{},entries:[]};
  if(url.endsWith('/profile/capabilities'))return {version:1,declarations:[{id:'d1',name:'Python',description:'Synthetic.',skill_id:'python',provenance:'user_declared',created_at:'2026-01-01T00:00:00Z',updated_at:'2026-01-01T00:00:00Z'}],limits:{name:120,description:2000},skill_groups:{Python:'Technical coding'}};
  if(url.endsWith('/api/v1/cv'))return {cvs:[],selection:{cv_id:null,version:0}};
@@ -37,28 +22,38 @@ const liveData=(url:string)=>{
 test('Home reads each service and names the first unfinished stop on the path',async()=>{
  vi.stubGlobal('fetch',vi.fn(async(url:string)=>new Response(JSON.stringify(liveData(url)))));
  render(<ProfileProvider><HomeDashboard/></ProfileProvider>);
- expect(await screen.findByRole('heading',{level:1,name:'Welcome to elo, Synthetic.'})).toBeVisible();
- expect(await screen.findByText('Synthetic Analyst')).toBeVisible();
- expect(screen.getByText('2 skills this role needs')).toBeVisible();
- expect((await screen.findByRole('list',{name:'Skills per category'})).textContent).toContain('Technical coding');
- expect(await screen.findByText(/days to Tue, 4 May 2027/)).toHaveTextContent('179 days to');
- expect(screen.getByText('10 hrs a week')).toBeVisible();
- expect(screen.getByText('2-hr sessions')).toBeVisible();
- expect(await screen.findByRole('link',{name:'Plan your roadmap'})).toHaveAttribute('href','/roadmap');
+ expect(await screen.findByRole('heading',{level:1,name:'Welcome back, Synthetic.'})).toBeVisible();
+ const match=await screen.findByRole('region',{name:/skills this role needs/});
+ expect(within(match).getByText('Goal match · Synthetic Analyst')).toBeVisible();
+ expect(await screen.findByText(/until your target date/)).toHaveTextContent('179 days until your target date');
+ expect(await screen.findByRole('link',{name:'Compare my skills'})).toHaveAttribute('href','/career-goal');
+ expect(screen.getByText('Next: compare your skills with your career goal.')).toBeVisible();
  expect(screen.getByText('3 of 5 steps done')).toBeVisible();
- expect(screen.getByRole('link',{name:'Generate roadmap'})).toHaveAttribute('href','/roadmap');
- const learning=await screen.findByRole('region',{name:'Learning & skills'});
- expect(within(learning).getByText('Synthetic SQL')).toBeVisible();
- expect(within(learning).getByText('1 of 4 sessions done, 1 missed')).toBeVisible();
- expect(within(learning).getByText('Next on 14 Jan: Write a synthetic join.')).toBeVisible();
- expect(within(learning).getByRole('progressbar',{name:'Synthetic SQL sessions done'})).toHaveAttribute('aria-valuenow','1');
- expect(screen.getByRole('link',{name:/Learning & skills.*1 of 1 skill started/})).toHaveAttribute('href','#home-learning');
+ expect(screen.getByRole('link',{name:'Plan your roadmap'})).toHaveAttribute('href','/roadmap');
+ const skills=screen.getByRole('region',{name:'Skills Profile'});
+ expect(within(skills).getByText('1 skill')).toBeVisible();
+ expect(screen.getByRole('region',{name:'Coming up'})).toHaveTextContent('No deadlines or follow-ups coming up.');
+ expect(screen.queryByText(/Soon/)).not.toBeInTheDocument();
+});
+test('Goal match counts the saved comparison and lists the top gaps, essential first',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
+  if(url.endsWith('/career/goals/current'))return new Response(JSON.stringify({...liveData(url),goal:{...liveData(url).goal,skills:[{item_id:'a',name:'SQL',category:'x',priority:'preferred',origin:'employer'},{item_id:'b',name:'Testing',category:'x',priority:'required',origin:'employer'},{item_id:'c',name:'Excel',category:'x',priority:'preferred',origin:'employer'}]}}));
+  if(url.includes('/assessments/')&&url.endsWith('/current'))return new Response(JSON.stringify({version:1,stale:false,ready:true,model_available:true,operation:null,issues:[],result:{groups:[],job_skill_gaps:[{ref:'job:a',match_status:'confirmed_shortfall'},{ref:'job:b',match_status:'confirmed_shortfall'},{ref:'job:c',match_status:'supported'}]}}));
+  return new Response(JSON.stringify(liveData(url)));
+ }));
+ render(<ProfileProvider><HomeDashboard/></ProfileProvider>);
+ const match=await screen.findByRole('region',{name:/skills you already have/});
+ expect(within(match).getByRole('img',{name:'Have 1, partial 0, gap 2, unknown 0'})).toBeInTheDocument();
+ const gaps=within(match).getAllByRole('listitem').filter(item=>item.querySelector('.home-gap-name'));
+ expect(gaps.map(item=>item.querySelector('.home-gap-name')!.textContent)).toEqual(['Testing','SQL']);
+ expect(within(gaps[0]).getByText('Essential')).toBeVisible();
+ expect(within(match).getByRole('link',{name:'Close these gaps in your roadmap'})).toHaveAttribute('href','/roadmap');
 });
 test('A failed service is reported where it belongs and never counted as done or as next',async()=>{
  vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/career/goals/current')?new Response(JSON.stringify({detail:'Career service unavailable.'}),{status:503}):new Response(JSON.stringify(liveData(url)))));
  render(<ProfileProvider><HomeDashboard/></ProfileProvider>);
  expect(await screen.findByRole('button',{name:'Retry career goal'})).toBeVisible();
- expect(await screen.findByRole('link',{name:'Plan your roadmap'})).toBeVisible();
+ expect(await screen.findByRole('link',{name:'Compare my skills'})).toBeVisible();
  expect(screen.queryByText(/of 5 steps done/)).not.toBeInTheDocument();
  expect(screen.getByRole('link',{name:/Career goal.*Not available/})).toHaveAttribute('href','/career-goal');
 });
@@ -67,9 +62,13 @@ test('journey states wait for every stop before naming the next one',()=>{
  expect(journeyStates([true,'error',false,false])).toEqual(['done','unavailable','next','later']);
  expect(journeyStates([true,true])).toEqual(['done','done']);
 });
-test('Learning & skills invites a roadmap until one exists',async()=>{
- vi.stubGlobal('fetch',vi.fn(async(url:string)=>new Response(JSON.stringify(url.endsWith('/roadmaps/learning')?{has_roadmap:false,roadmap_id:null,skills_total:0,skills_started:0,skills_done:0,steps:[]}:liveData(url)))));
+test('Coming up lists saved-job deadlines and follow-ups in date order',async()=>{
+ const job=(id:string,extra:object)=>({id,posting_id:id,version:1,status:'saved',posting_status:'open',snapshot:{title:`Intern ${id}`,company:'Synthetic Co',location:'Singapore',job_type:'internship',listing_url:'https://example.test',apply_url:'https://example.test'},history:[],created_at:'2026-11-01T00:00:00Z',updated_at:'2026-11-01T00:00:00Z',...extra});
+ vi.stubGlobal('fetch',vi.fn(async(url:string)=>new Response(JSON.stringify(url.endsWith('/jobs/applications')?{items:[job('b',{status:'applied',follow_up_at:'2026-11-20'}),job('a',{deadline:'2026-11-10'}),job('c',{deadline:'2026-10-01'})]}:liveData(url)))));
  render(<ProfileProvider><HomeDashboard/></ProfileProvider>);
- expect(await screen.findByRole('link',{name:/Learning & skills.*Personal steps appear once you have a roadmap/})).toHaveAttribute('href','/roadmap');
- expect(screen.queryByRole('region',{name:'Learning & skills'})).not.toBeInTheDocument();
+ const upcoming=await screen.findByRole('region',{name:'Coming up'});
+ await within(upcoming).findByText('Application deadline');
+ expect(within(upcoming).getAllByRole('listitem').map(item=>item.querySelector('strong')!.textContent)).toEqual(['Application deadline','Follow up']);
+ expect(upcoming).toHaveTextContent('Intern a · Synthetic Co · in 4 days');
+ expect(upcoming).not.toHaveTextContent('Intern c');
 });

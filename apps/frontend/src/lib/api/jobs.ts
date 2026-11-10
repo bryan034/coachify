@@ -4,7 +4,7 @@ export type JobType = 'internship' | 'graduate' | 'full_time' | 'part_time' | 'c
 export type Workplace = 'onsite' | 'hybrid' | 'remote' | 'unknown';
 export type ApplicationStatus = 'saved' | 'applied' | 'interviewing' | 'offer' | 'rejected' | 'withdrawn';
 
-export type Posting = {
+export type Posting = {matched_skills?:string[]|null;match_basis?:string|null;
  id: string; title: string; company: string; industry: string; location: string; department: string | null;
  job_type: JobType; workplace: Workplace; posted_at: string; posted_at_estimated: boolean; application_deadline: string | null;
  excerpt: string; listing_url: string; apply_url: string; provider: string; status: 'open' | 'closed';
@@ -12,13 +12,13 @@ export type Posting = {
 export type SearchResult = { items: Posting[]; total: number; next_cursor: string | null; retrieved_at?: string | null; unavailable_sources?: string[] };
 export type FilterOption = { value: string; count: number };
 export type FilterOptions = { job_types: FilterOption[]; industries: FilterOption[]; workplaces: FilterOption[]; companies: FilterOption[]; last_synced_at: string | null };
-export type Application = {
+export type Application = {applied_at?:string|null;deadline?:string|null;follow_up_at?:string|null;notes?:string;
  id: string; posting_id: string; source?: 'listing' | 'link'; version: number; status: ApplicationStatus; posting_status: 'open' | 'closed' | 'removed' | 'unknown';
  snapshot: { title: string; company: string; location: string; job_type: JobType; listing_url: string; apply_url: string };
  history: { status: ApplicationStatus; at: string }[]; created_at: string; updated_at: string;
 };
 export type JobFilters = {
- q?: string; job_type?: string[]; industry?: string[]; workplace?: string[]; company?: string[];
+ sort?: 'newest'|'recommended'; q?: string; job_type?: string[]; industry?: string[]; workplace?: string[]; company?: string[];
  posted_within_days?: number; posted_from?: string; posted_to?: string; cursor?: string;
 };
 
@@ -92,3 +92,5 @@ export const updateApplication = (token: string, item: Application, status: Appl
 
 export const removeApplication = (token: string, item: Application) =>
  request(`/applications/${item.id}?expected_version=${item.version}`, token, { method: 'DELETE' });
+
+export const updateApplicationDetails = (token:string,item:Application,fields:{applied_at:string|null;deadline:string|null;follow_up_at:string|null;notes:string}) => application(`/applications/${item.id}`,token,{method:'PATCH',body:JSON.stringify({expected_version:item.version,status:item.status,...fields})});

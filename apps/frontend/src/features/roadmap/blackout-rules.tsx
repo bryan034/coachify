@@ -1,10 +1,11 @@
 "use client";
 import type { BlackoutFrequency, BlackoutRule } from './types';
+import { formatDate } from '@/lib/format';
 
 const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const frequencies: [BlackoutFrequency, string][] = [['once', 'One day only'], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']];
 const units: Partial<Record<BlackoutFrequency, string>> = { daily: 'day', weekly: 'week', monthly: 'month' };
-const shortDate = (value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const shortDate = (value: string) => formatDate(value);
 const weekdayOf = (value: string) => (new Date(`${value}T12:00:00Z`).getUTCDay() + 6) % 7;
 
 export const newBlockedTime = (start_date: string): BlackoutRule => ({ frequency: 'weekly', start_date, end_date: null, interval: 1, weekdays: [0], start_time: '18:00', end_time: '20:00' });

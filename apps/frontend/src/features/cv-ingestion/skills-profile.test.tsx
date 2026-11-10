@@ -1,4 +1,5 @@
-import {fireEvent,render,screen,waitFor} from '@testing-library/react';
+vi.mock('@/lib/api/assessment', async original => ({...await original<typeof import('@/lib/api/assessment')>(), assessmentApi: vi.fn(async (path: string) => path === '/context' ? {ready:false,model_available:true,issues:[]} : {version:0,stale:false,result:null,operation:null,ready:false,issues:[]})}));
+import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {ResumePreview} from './resume-preview';
 import {cvApi} from '@/lib/api/cv';
@@ -24,7 +25,7 @@ beforeEach(()=>{window.history.replaceState(null,'','/cv');
 it('starts with an informative summary and two intake choices without opening chat',async()=>{
  render(<ResumePreview/>);
  expect(await screen.findByRole('region',{name:'Skills profile summary'})).toBeVisible();
- expect(screen.getByRole('button',{name:/Upload your CV/})).toBeEnabled();
+ expect(screen.getByRole('button',{name:/Upload new CV/})).toBeEnabled();
  expect(screen.getByRole('button',{name:/Build through chat/})).toBeEnabled();
  await screen.findByText(/Start with your CV or a conversation/);
  expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument();
@@ -48,7 +49,7 @@ it('opens manual intake explicitly and preserves the unsent draft when returning
 
 it('accepts a dropped CV and starts guided review automatically',async()=>{
  const cv=savedCv('uploaded');vi.mocked(cvApi.upload).mockResolvedValue(cv);vi.mocked(cvApi.get).mockResolvedValue(cv);
- render(<ResumePreview/>);fireEvent.click(await screen.findByRole('button',{name:/Upload your CV/}));
+ render(<ResumePreview/>);fireEvent.click(await screen.findByRole('button',{name:/Upload new CV/}));
  await screen.findByLabelText('CV document');
  fireEvent.drop(screen.getByText('Drop your CV here, or choose a file below.').parentElement!,{dataTransfer:{files:[new File(['synthetic CV'],'profile.pdf')]}});
  fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
@@ -67,8 +68,9 @@ it('shows a saved partial profile and its uncertainty without inventing a skill 
  expect(screen.getByRole('heading',{name:'Weekly reports'})).toBeVisible();
  // The CV review owns the named regions for these kinds, so the summary columns must not add a second one.
  expect(screen.queryByRole('region',{name:'Work and internships'})).not.toBeInTheDocument();
- fireEvent.click(screen.getByText('Data processing',{selector:'summary'}));
- expect(screen.getByText('unknown',{selector:'dd'})).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:/^Data processing/}));
+ // The skill panel shows one competence state instead of raw dimension fields; nothing is invented.
+ expect(within(screen.getByRole('complementary',{name:'Data processing'})).getByText(/Compare with your Career Goal|Competence not recorded yet/)).toBeVisible();
  expect(screen.queryByText('Advanced')).not.toBeInTheDocument();
  expect(cvApi.openConversation).not.toHaveBeenCalled();
 });
@@ -115,7 +117,7 @@ it('opens Skills Profile with repeated source-block IDs without key collisions o
   render(<ResumePreview/>);
   await waitFor(()=>expect(document.querySelectorAll('.cv-evidence blockquote')).toHaveLength(5));
   for(const evidence of source.items[0].evidence)expect(screen.getByText(evidence.excerpt)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Refresh saved status'}));
+  fireEvent(window,new Event('focus'));
   await waitFor(()=>expect(cvApi.list).toHaveBeenCalledTimes(2));
   await waitFor(()=>expect(document.querySelectorAll('.cv-evidence blockquote')).toHaveLength(5));
   for(const evidence of source.items[0].evidence)expect(screen.getByText(evidence.excerpt)).toBeInTheDocument();

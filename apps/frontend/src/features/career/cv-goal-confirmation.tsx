@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {CareerApiError,type SavedGoal} from '@/lib/api/career';
 import {confirmCvGoal,getCvGoalConfirmation,type ConfirmCvGoal,type CvGoalConfirmation} from '@/lib/api/career-cv-confirmation';
+import { errorText } from '@/lib/errors';
 
 export function CvGoalConfirmationCard({goal,selectionVersion,token,onReload,onConfirmationChange}:{goal:SavedGoal;selectionVersion:number;token:string|undefined;onReload:()=>void;onConfirmationChange?:(confirmed:boolean)=>void}){
  const [state,setState]=useState<CvGoalConfirmation>(),[error,setError]=useState(''),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[stale,setStale]=useState(false);
@@ -14,7 +15,7 @@ export function CvGoalConfirmationCard({goal,selectionVersion,token,onReload,onC
   // Check this request's own signal: the ref may already hold a newer controller after a restart.
   const signal=lifetime.current.signal;
   try{const value=await getCvGoalConfirmation(token,signal);if(signal.aborted)return;setState(value);setStale(!matches(value));}
-  catch(cause){if(!signal.aborted)setError(cause instanceof Error?cause.message:'Could not check this goal’s confirmation.');}
+  catch(cause){if(!signal.aborted)setError(errorText(cause, 'Could not check this goal’s confirmation.'));}
   finally{if(!signal.aborted)setLoading(false);}
  },[token,matches]);
  useEffect(()=>{if(lifetime.current.signal.aborted)lifetime.current=new AbortController();void load();return()=>lifetime.current.abort();},[load]);
@@ -24,18 +25,18 @@ export function CvGoalConfirmationCard({goal,selectionVersion,token,onReload,onC
   attempt.current??={expected_goal_id:goal._id,expected_goal_version:goal.version,expected_selection_version:selectionVersion,mutation_id:crypto.randomUUID()};
   setSaving(true);setError('');
   try{const value=await confirmCvGoal(attempt.current,token,lifetime.current.signal);if(lifetime.current.signal.aborted)return;setState(value);setStale(!matches(value));attempt.current=null;}
-  catch(cause){if(!lifetime.current.signal.aborted){setError(cause instanceof Error?cause.message:'Could not confirm the goal. Check its saved status before retrying.');if(cause instanceof CareerApiError&&cause.status===409){setStale(true);attempt.current=null;}}}
+  catch(cause){if(!lifetime.current.signal.aborted){setError(errorText(cause, 'Could not confirm the goal. Check its saved status before retrying.'));if(cause instanceof CareerApiError&&cause.status===409){setStale(true);attempt.current=null;}}}
   finally{if(!lifetime.current.signal.aborted)setSaving(false);}
  }
  const confirmed=Boolean(state?.confirmed&&!stale),blocked=Boolean(!token||loading||saving||stale||!state||state.reason||goal.requirements_need_review);
  useEffect(()=>{onConfirmationChange?.(confirmed);},[confirmed,onConfirmationChange]);
- return <section className="card pad goal-confirmation" aria-label="Goal confirmation for CV review" aria-busy={loading||saving}>
-  <h2>{confirmed?'Confirmed for CV review':'Review this goal before clarifying your CV'}</h2>
-  <p className="small">Your goal is saved automatically. Confirm the displayed skills and requirements when you are ready to use them to focus CV questions. Changing this goal requires confirmation again.</p>
-  {loading&&<p role="status">Checking your saved confirmation…</p>}
+ return <section className="goal-confirmation" aria-label="Goal confirmation for CV review" aria-busy={loading||saving}>
+  <h2>{confirmed?'Goal confirmed':'Use this goal in your CV review?'}</h2>
+  <p className="small">Confirming lets elo focus CV questions on this role. You’ll be asked again if the goal changes.</p>
+  {loading&&<p role="status">Checking your confirmation…</p>}
   {stale&&<p role="alert">Your saved goal changed. Reload it to review the current requirements before confirming.</p>}
   {!stale&&state?.reason&&<p className="notice">{state.reason}</p>}
   {error&&<p role="alert">{error}</p>}
-  {confirmed?<><p role="status">This version of {goal.role} is confirmed. Your saved CV explanations remain linked to their original sources.</p><Link className="btn pri" href="/cv">Review CV clarifications</Link></>:<div className="row"><button type="button" className="btn pri" disabled={blocked} onClick={()=>void confirm()}>{saving?'Confirming…':'Confirm this goal for CV review'}</button>{stale?<button type="button" className="btn ghost" onClick={onReload}>Reload saved goal</button>:error&&<button type="button" className="btn ghost" disabled={loading||saving} onClick={()=>void load()}>Check confirmation status</button>}</div>}
+  {confirmed?<><p role="status">This version of {goal.role} is confirmed. Your saved CV explanations remain linked to their original sources.</p><Link className="btn pri" href="/cv">Review CV clarifications</Link></>:<div className="row"><button type="button" className="btn pri" disabled={blocked} onClick={()=>void confirm()}>{saving?'Confirming…':'Confirm goal'}</button>{stale?<button type="button" className="btn ghost" onClick={onReload}>Reload saved goal</button>:error&&<button type="button" className="btn ghost" disabled={loading||saving} onClick={()=>void load()}>Check confirmation status</button>}</div>}
  </section>;
 }

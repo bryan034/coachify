@@ -117,3 +117,31 @@ reload/navigation; failed or incomplete research is never presented as completed
 ## Skills needed and skills you have
 
 The saved goal lists the skills a role needs by the backend's categories, with jump links, importance tags and a count per category. When `GET /assessments/current` returns a fresh comparison, each skill also shows its result: in your profile, covered by an alternative, partly in your profile, not clear yet, or to build. This read never starts an analysis. With no fresh comparison, skills stay unmarked and the page points to Roadmap, which runs the comparison. A result reflects saved evidence, not proficiency, and missing proof is never shown as a gap.
+
+
+**Compare with my skills** starts the versioned Assessment operation directly from
+the saved goal. Have / Partial / Gap / Unknown reflect its current evidence outcomes;
+satisfied OR alternatives keep their own label. Stale or mismatched goal revisions
+receive no skill markings. Goal confirmation remains explicit and version-bound,
+and is also available inside CV review.
+
+## Redesigned Career Goal pages — 10 November 2026
+
+Career Goal has three tab pages sharing one dark goal header (role, plain metadata with icons,
+Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview preparation**
+(`/career-goal/interview`) and **About the role** (`/career-goal/role`).
+
+- Skills needed groups skills by the Skills Profile taxonomy, most important group first.
+  Importance is shown by colour (Essential, Important, Nice to have) and marked when elo
+  inferred it. Each row shows the Assessment rubric v1 planning estimate when the comparison
+  scored it (10 means your evidence meets the level the role states), otherwise its Have,
+  Partial, Gap or Unknown status. Expanding a skill shows why it matters, its importance
+  source, the competence bar and the "What you need" learning items. Job-description quotes
+  are not shown in skill cards. Long lists start with ten skills.
+- Interview preparation leads with up to four process-wide headline facts, then one
+  expandable card per researched round with questions to expect, how to prepare and sources.
+  Fewer rounds are shown when sources describe fewer; with no round data it says so.
+- About the role shows eligibility and work from the goal, then one sourced card per field the
+  research found; fields with nothing found are hidden.
+- Both research tabs carry the accuracy warning. The per-finding quote disclosure and the
+  per-category refresh buttons were removed; refresh covers the tab's research.

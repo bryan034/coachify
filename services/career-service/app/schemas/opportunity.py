@@ -6,6 +6,9 @@ from pydantic import BaseModel,ConfigDict,Field,StringConstraints,model_validato
 class Model(BaseModel):
     model_config=ConfigDict(extra='forbid')
 Text=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]
+RoundName=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
+# Interview rounds vary by job; only rounds the evidence supports are recorded.
+MAX_ROUNDS=10
 Confidence=Literal['high','medium','low','insufficient_evidence']
 EvidenceType=Literal['official','candidate_reported','third_party','inferred']
 Scope=Literal['exact','related_role','related_location','related_employment','general']
@@ -17,7 +20,7 @@ LEGACY_FIELDS={
  'company_intelligence':('overview','products_services','tech_stack','recent_developments','career_growth')}
 
 FIELDS={
- 'interview_intelligence':(*LEGACY_FIELDS['interview_intelligence'],'candidate_experience'),
+ 'interview_intelligence':(*LEGACY_FIELDS['interview_intelligence'],'candidate_experience','round_format'),
  'internship_insights':('compensation','benefits','projects','mentorship','work_life_balance'),
  'career_progression':('full_time_role','career_path','conversion_salary'),
  'conversion_outcomes':('conversion_rate','historical_cohort','offer_acceptance'),
@@ -35,6 +38,14 @@ class Finding(Model):
     scope:Scope
     conflict_group:str|None=Field(default=None,max_length=80)
     last_verified_at:datetime
+    # Set only for interview findings tied to one stated round; process-wide facts leave both unset.
+    round_number:int|None=Field(default=None,ge=1,le=MAX_ROUNDS,strict=True)
+    round_name:RoundName|None=None
+
+    @model_validator(mode='after')
+    def round_pair(self):
+        if self.round_name is not None and self.round_number is None:raise ValueError('A round name needs its round number.')
+        return self
 
 class CategoryResult(Model):
     status:Literal['pending','running','completed','partial','failed','not_applicable']='pending'
@@ -79,6 +90,7 @@ class OpportunityReport(Model):
         for category,result in self.categories.items():
             for finding in result.findings:
                 if finding.field not in fields[category] or finding.finding_id in ids:raise ValueError('Invalid or duplicate finding.')
+                if finding.round_number is not None and category!='interview_intelligence':raise ValueError('Only interview findings belong to a round.')
                 ids.add(finding.finding_id)
         if any(ref not in ids for refs in self.summary.model_dump().values() for ref in refs):raise ValueError('Summary must reference validated findings.')
         return self

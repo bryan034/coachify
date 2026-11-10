@@ -1,10 +1,12 @@
 "use client";
+import { InlineGoalConfirmation } from '@/features/career/inline-goal-confirmation';
 import { useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { cvApi, CvApiError } from '@/lib/api/cv';
 import type { Clarification, CvDetail, CvItem, CvPolicy, ItemInput, Questions } from './types';
 import { dateInputError } from './dates';
 import {ReviewEvidence} from './review-evidence';
+import { errorText } from '@/lib/errors';
 
 export const provenanceLabel = {explicit:'Stated in CV',inferred:'Inferred · uncertain',user_corrected:'Your correction',user_clarified:'Your clarification'};
 export function EvidenceList({ item }: { item: CvItem }) {
@@ -29,7 +31,7 @@ export function ItemEditor({ item, detail, policy, token, signal, onSaved, refre
   const body:Omit<ItemInput,'mutation_id'>={expected_version:version,action,...(action==='update'?{title,description,proficiency:proficiency.trim()||null,experience_months:experience,start_date:startDate.trim()||null,end_date:endDate.trim()||null,ongoing}:{})};
   setBusy(true);
   try{const value=await cvApi.edit(detail.id,item.id,{...body,mutation_id:key(body)},token,signal);if(!signal.aborted){await onSaved(value);onCancel();}}
-  catch(cause){if(!signal.aborted){setError(cause instanceof Error?cause.message:'Could not save.');if(cause instanceof CvApiError&&cause.status===409){setConflict(true);await refresh();}}}
+  catch(cause){if(!signal.aborted){setError(errorText(cause, 'Could not save.'));if(cause instanceof CvApiError&&cause.status===409){setConflict(true);await refresh();}}}
   finally{if(!signal.aborted)setBusy(false);}
  }
  return <form className="cv-form cv-editor" data-unsaved={changed} aria-busy={busy} onSubmit={(event:FormEvent)=>{event.preventDefault();void save('update');}} aria-label={`Edit ${item.title}`}>
@@ -52,14 +54,14 @@ function Question({question,detail,policy,token,signal,onSaved,refresh,available
   if(action==='answer'&&(!answer.trim()||count>policy.max_answer_chars)){setError(`Enter an explanation up to ${policy.max_answer_chars} characters, or skip this question.`);return;}
   const body={expected_version:writeVersion,action,...(action==='answer'?{answer}:{})};setBusy(true);setError('');
   try{const value=await cvApi.answer(detail.id,question.id,{...body,mutation_id:key(body)},token,signal);if(!signal.aborted){await onSaved(value);setVersion(value.version);setEditing(false);}}
-  catch(cause){if(!signal.aborted){setError(cause instanceof Error?cause.message:'Could not save.');if(cause instanceof CvApiError&&cause.status===409){setConflict(true);await refresh();}}}
+  catch(cause){if(!signal.aborted){setError(errorText(cause, 'Could not save.'));if(cause instanceof CvApiError&&cause.status===409){setConflict(true);await refresh();}}}
   finally{if(!signal.aborted)setBusy(false);}
  }
  async function retryInterpretation(){
   if(busy||!available||question.reconciliation_required||detail.status!=='ready')return;
   const body={expected_version:detail.version};setBusy(true);setError('');
   try{const value=await cvApi.retryInterpretation(detail.id,question.id,{...body,mutation_id:key({interpretation:true,...body})},token,signal);if(!signal.aborted){await onSaved(value);setVersion(value.version);}}
-  catch(cause){if(!signal.aborted){setError(cause instanceof Error?cause.message:'Could not interpret the saved explanation.');if(cause instanceof CvApiError&&cause.status===409)await refresh();}}
+  catch(cause){if(!signal.aborted){setError(errorText(cause, 'Could not interpret the saved explanation.'));if(cause instanceof CvApiError&&cause.status===409)await refresh();}}
   finally{if(!signal.aborted)setBusy(false);}
  }
  return <article className="cv-question"><p className="small">{source?.title??'Source item'} · {question.kind==='work'?'Work responsibility':question.kind==='project'?'Project contribution':'CV ambiguity'}</p><h3>{question.question}</h3>
@@ -88,7 +90,7 @@ export function CvReview({detail,policy,questions,token,signal,onSaved,refresh,o
    {questions?.context&&<div className="cv-notice" aria-label="Confirmed clarification target"><strong>{questions.context.role}</strong><p className="small">{questions.context.type==='specific_job'?'Specific job':'Career exploration'} · {questions.context.field} · Target version {questions.context.version}</p><Link className="text-link" href="/career-goal">Review or change career target</Link></div>}
    {refreshing&&<p role="status" className="small">Refreshing the CV and its current clarification context…</p>}
    {!questions&&!refreshing&&<div className="cv-warning"><p>Clarification context is unavailable. Saved explanations remain below. Refresh the context to retry.</p><button type="button" className="btn ghost sm" onClick={()=>void refresh()}>Retry clarification context</button></div>}
-   {questions&&!questions.context&&<p className="small">{questions.reason||'Confirm and select a career target to see which uncertainties matter.'} <Link className="text-link" href="/career-goal">Open Career Goal</Link></p>}
+   {questions&&!questions.context&&<><p className="small">{questions.reason}</p><InlineGoalConfirmation token={token} onConfirmed={() => { void refresh().catch(() => {}); }}/></>}
    {questions?.context&&!questions.prepared&&<div><p className="small">Prepare relevant questions for this CV and the confirmed target above. Your existing answers will be reused.</p><button type="button" className="btn pri sm" disabled={!current||detail.status!=='ready'||!onPrepare} onClick={()=>void onPrepare?.()}>{preparing?'Preparing questions…':'Prepare relevant questions'}</button></div>}
    {prepareError&&<p role="alert" className="cv-error">{prepareError} Refresh the context if it changed, then retry.</p>}
    {questions?.context&&questions.prepared&&!questions.deferred&&pending.length===0&&<p className="small">No relevant clarification questions are pending for this target. This does not confirm capability or complete an analysis.</p>}

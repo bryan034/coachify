@@ -17,12 +17,21 @@ def _words(*terms):
 
 # Order matters: the first match wins, so specific groups come before broad ones.
 _GROUPS = (
+    # AI comes first so "vector databases" or "machine learning" are not read as general data skills.
+    ('AI & ML', _words('ai', 'artificial intelligence', 'generative ai', 'gen ?ai', 'llms?', 'large language models?',
+                       'rag', 'retrieval[- ]augmented generation', 'vector (search|databases?|stores?|embeddings?)',
+                       'embeddings?', 'mcp', 'model context protocol', 'langchain', 'langgraph', 'llama ?index',
+                       'crewai', 'autogen', 'agentic[a-z ]*', 'ai agents?', '[a-z ]*agent frameworks?',
+                       'prompt engineering', 'fine[- ]tuning', 'machine learning', 'ml', 'deep learning',
+                       'neural networks?', 'nlp', 'natural language processing', 'computer vision', 'pytorch',
+                       'tensorflow', 'keras', 'scikit[- ]learn', 'hugging ?face', 'transformers', 'openai[a-z ]*'),
+     re.compile(r'\bai\b|artificial intelligence|machine learning|\bml\b')),
     ('Languages', _words('english', 'mandarin', 'chinese', 'malay', 'tamil', 'hindi', 'japanese', 'korean', 'french',
                          'german', 'spanish', 'cantonese', 'arabic', 'bahasa'), None),
     ('Data & analytics', _words('sql', 'structured query language', 'mysql', 'postgresql', 'postgres', 'mongodb', 'nosql', 'databases?', 'excel',
                                 'tableau', 'power ?bi', 'data[a-z -]*', 'statistics', 'statistical', 'analytics',
-                                'machine learning', 'ml', 'deep learning', 'pandas', 'numpy', 'etl', 'spark', 'bigquery',
-                                'forecasting'), re.compile(r'\bdata|analytic')),
+                                'pandas', 'numpy', 'etl', 'spark', 'bigquery', 'forecasting'),
+     re.compile(r'\bdata|analytic')),
     ('Cloud & DevOps', _words('docker', 'kubernetes', 'k8s', 'aws', 'amazon web services', 'azure', 'gcp', 'google cloud', 'cloud[a-z -]*', 'ci/?cd',
                               'devops', 'linux', 'terraform', 'nginx', 'github actions', 'jenkins', 'deployment'),
      re.compile(r'\bcloud|devops|infrastructure')),
@@ -69,3 +78,18 @@ def skill_group(name, category=None):
 def skill_groups(skills):
     """Map each skill's exact displayed name to its group, from (name, category) pairs."""
     return {name: skill_group(name, category) for name, category in skills}
+
+
+def skill_subgroups(skills):
+    """Stable subdivisions only for categories larger than eight unique skills."""
+    from elo_shared.skills import resolve
+    rows=list(skills)
+    grouped={}
+    for name,category in rows:grouped.setdefault(skill_group(name,category),set()).add(name)
+    result={}
+    for name,category in rows:
+        if len(grouped[skill_group(name,category)])<=8:continue
+        identifier=resolve(name,category) or ''
+        prefix=identifier.split('.')[0]
+        result[name]={'language':'Languages','framework':'Frameworks','database':'Data stores','cloud':'Cloud platforms','tool':'Tools'}.get(prefix,'Other applications')
+    return result

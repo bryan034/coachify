@@ -22,3 +22,10 @@ test('unfinished users continue real onboarding instead of previewing', async ()
   await waitFor(() => expect(replace).toHaveBeenCalledWith('/onboarding'));
   expect(screen.queryByText('Preview content')).not.toBeInTheDocument();
 });
+test('inside the workspace shell the check shows a page-shaped placeholder, not a second main region', async () => {
+  const { container } = render(<WorkspaceGuard inShell><p>Preview content</p></WorkspaceGuard>);
+  expect(container.querySelector('main')).toBeNull();
+  expect(screen.getByRole('status', { name: 'Checking your session and setup…' })).toBeInTheDocument();
+  expect(container.querySelector('.skeleton-line')).not.toBeNull();
+  await waitFor(() => expect(replace).toHaveBeenCalledWith('/profile'));
+});

@@ -1,4 +1,5 @@
 "use client";
+import { useComparison, ComparisonPanel } from '@/features/assessment/comparison';
 import {SkillBaseline} from './skill-baseline';
 import {ReviewEvidence} from './review-evidence';
 import {SkillProfile, profileSkillGroups, profileSkillList} from './skill-cards';
@@ -8,51 +9,69 @@ import type { CvDetail, CvSummary, Declarations, SkillsProfile } from './types';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
+import { CardSkeleton } from '@/components/ui/workspace-ui';
+import { formatDate } from '@/lib/format';
 
 const labels: Record<string, string> = {education:'Education',work:'Work and internships',project:'Projects',interest:'Interests'};
 const cvKind = (kind: string) => kind === 'work' ? 'experience' : kind;
 const readable = (value: string) => value.replaceAll('_', ' ');
 
-export function SkillsProfileSummary({title, profile, cv, recentReview, declarations, error, upload, build, review, retry, save, saving, saveCv, savingCv, pending}: {
- title?: ReactNode; profile: SkillsProfile | null; cv: CvDetail | null; declarations: Declarations | null; error: string;
+export function SkillsProfileSummary({token, title, profile, cv, recentReview, declarations, error, upload, build, review, retry, save, saving, saveCv, savingCv, pending, chat, chatOpen=false, cvs=[], activeCvId=null, viewCv, makeActive, removeCv, busy=false}: {
+ chat?:()=>void; chatOpen?: boolean; cvs?: CvSummary[]; activeCvId?: string|null; viewCv?: (id: string) => void; makeActive?: (id: string) => void; removeCv?: (cv: CvSummary) => void; busy?: boolean; token?: string; title?: ReactNode; profile: SkillsProfile | null; cv: CvDetail | null; declarations: Declarations | null; error: string;
  recentReview?: CvSummary;
  upload: () => void; build: () => void; review: (id: string) => void; retry: () => void;
  save: () => void; saving: boolean;
  saveCv: () => void; savingCv: boolean;
  pending: boolean;
 }) {
+ const comparison = useComparison(token, `${cv?.id}:${cv?.effective_version}:${profile?.version}:${declarations?.version}`);
  const skills = profileSkillList(cv, profile, declarations);
  const areas = profile ? Object.entries(labels).filter(([kind]) => !profile.entries.some(entry => entry.kind === kind)) : [];
  const unexplored = areas.filter(([kind]) => !profile?.areas[kind as keyof typeof profile.areas] && !cv?.items.some(item => !item.removed && item.kind === (kind === 'work' ? 'experience' : kind))).map(([, label]) => label);
  const answered = areas.flatMap(([kind, label]) => { const status = profile?.areas[kind as keyof typeof profile.areas]; return status ? [`${label}: ${readable(status)}`] : []; });
  const experience = cv ? cv.items.filter(item => !item.removed && item.kind !== 'skill') : [];
  const hasExperience = experience.length > 0 || Boolean(profile?.entries.length) || answered.length > 0;
- const categories = groupSkills(skills, skill => skill.name, profileSkillGroups(cv, profile, declarations)).length;
  const experiences = experience.length + (profile?.entries.length ?? 0);
- const stats: [number, string][] = [[skills.length, skills.length === 1 ? 'skill' : 'skills'], [categories, categories === 1 ? 'category' : 'categories'], [skills.filter(skill => skill.established).length, 'levelled'], [experiences, experiences === 1 ? 'experience' : 'experiences']];
- const reviewRow = cv && <article className="skills-cv-summary"><div><h3>{(cv.display_name??cv.file_name)}</h3><p className="small">{cv.status !== 'ready' ? 'Processing must finish before review.' : cv.profile_reviewed_effective_version === cv.effective_version ? 'Reviewed CV profile' : 'Ready for guided review. Unanswered details remain uncertain when you save.'}</p></div><div className="skills-cv-actions"><button type="button" className={`btn sm ${cv.status==='ready'&&cv.profile_reviewed_effective_version!==cv.effective_version?'ghost':'pri'}`} disabled={cv.status !== 'ready'} onClick={()=>review(cv.id)}>Review CV</button>{cv.status==='ready'&&cv.profile_reviewed_effective_version!==cv.effective_version&&<button className="btn pri sm" type="button" disabled={savingCv||pending} onClick={saveCv}>{savingCv?'Saving CV profile…':'Save CV profile'}</button>}</div></article>;
+ const goalRole = comparison.context?.goal?.role;
+ // Same file name = versions of one CV, newest first.
+ const families = [...cvs.reduce((map, item) => map.set(item.file_name, [...(map.get(item.file_name) ?? []), item]), new Map<string, CvSummary[]>()).entries()]
+  .map(([name, items]) => [name, [...items].sort((x, y) => y.created_at.localeCompare(x.created_at))] as const);
+ const versionLabel = (item: CvSummary, items: readonly CvSummary[]) => `${item.display_name ?? item.file_name}${items.length > 1 ? ` · version ${items.length - items.indexOf(item)}` : ''} · ${formatDate(item.created_at)}${item.id === activeCvId ? ' (active)' : ''}`;
+ const reviewed = cv ? cv.profile_reviewed_effective_version === cv.effective_version : false;
+ const topCategories = groupSkills(skills, skill => skill.name, profileSkillGroups(cv, profile, declarations)).slice(0, 2).map(group => group.name.toLowerCase());
+ const understood = cv && cv.status === 'ready' ? [
+  experience.length ? `${experience.length} ${experience.length === 1 ? 'experience' : 'experiences'}: ${experience.slice(0, 3).map(item => item.title).join('; ')}${experience.length > 3 ? '; and more' : ''}.` : 'No experiences were found in this CV.',
+  cv.skills.length ? `${cv.skills.length} skills${topCategories.length ? `, mostly ${topCategories.join(' and ')}` : ''}.` : '',
+ ].filter(Boolean).join(' ') : null;
  return <div className="skills-home">
-  <header className="skills-hero"><div className="skills-hero-copy">{title}
-  {skills.length>0&&<ul className="skills-stats" aria-label="Your profile in numbers">{stats.map(([count,label])=><li key={label}><strong>{count}</strong> {label}</li>)}</ul>}
-  <p className="skills-home-intro">What you can do and the experience behind it. elo uses this evidence to assess how your skills match job applications. Unknown details can stay unknown.</p>
-  <div className={`skills-entry-actions${skills.length ? ' compact' : ''}`}>
-   {recentReview && <button type="button" className="skills-entry-action skills-entry-review" onClick={() => review(recentReview.id)}><Icon name="doc"/><span><strong>Review {recentReview.display_name ?? recentReview.file_name}</strong><span>Open this CV to start or continue its review.</span></span></button>}
-   <button type="button" className="skills-entry-action" onClick={upload}><Icon name="up"/><span><strong>Upload your CV</strong><span>Drop a PDF or DOCX to start reviewing your experience and contributions.</span></span></button>
-   <button type="button" className="skills-entry-action" onClick={build}><Icon name="chat"/><span><strong>{profile?.status === 'draft' ? 'Continue building your profile' : profile?.entries.length ? 'Update through chat' : 'Build through chat'}</strong><span>No CV needed. Explore your work, projects, education and interests with guided questions.</span></span></button>
+  <header className="skills-hero skills-hero-compact"><div className="skills-hero-copy">{title}
+   {skills.length > 0 && <p className="skills-hero-line"><strong>{skills.length} {skills.length === 1 ? 'skill' : 'skills'}</strong> from <strong>{experiences} {experiences === 1 ? 'experience' : 'experiences'}</strong>{goalRole ? <> · compared with <Link href="/career-goal">{goalRole}</Link></> : null}</p>}
   </div>
-  </div></header>
-  <nav className="skills-jump-links" aria-label="Skills Profile sections"><a href="#your-skills">Skills you have</a>{hasExperience&&<a href="#your-experience">Experience</a>}<a href="#your-cvs">Your CVs</a></nav>
+  <div className="skills-hero-actions"><button type="button" className="btn ghost" onClick={upload}><Icon name="up"/>Upload new CV</button><button type="button" className="btn pri" aria-expanded={chatOpen} onClick={chat ?? build}>{chatOpen ? 'Close chat' : 'Chat to edit'}</button></div></header>
+  {cv && <section className="card skills-cv-card" aria-label="Your CV">
+   <div className="skills-cv-switch">
+    {cvs.length > 0 ? <label><span>Choose a CV</span><select value={cv.id} disabled={busy} onChange={event => viewCv?.(event.target.value)}>{families.map(([name, items]) => <optgroup key={name} label={name}>{items.map(item => <option key={item.id} value={item.id}>{versionLabel(item, items)}</option>)}</optgroup>)}</select></label> : <strong>{cv.display_name ?? cv.file_name}</strong>}
+    {cv.id === activeCvId && <span className="skills-active-chip">Active</span>}
+    <span className="skills-cv-actions">
+     {makeActive && cv.id !== activeCvId && <button type="button" className="btn ghost sm" disabled={busy || cv.status !== 'ready'} onClick={() => makeActive(cv.id)}>Make active</button>}
+     <button type="button" className={`btn sm ${reviewed ? 'ghost' : 'pri'}`} disabled={cv.status === 'failed'} onClick={() => review(cv.id)}>{reviewed ? 'Refine' : cv.status === 'ready' ? 'Continue review' : 'Open review'}</button>
+     {cv.status === 'ready' && !reviewed && <button className="btn ghost sm" type="button" disabled={savingCv || pending} onClick={saveCv}>{savingCv ? 'Saving…' : 'Save to Skills Profile'}</button>}
+     {removeCv && <button type="button" className="btn ghost sm" disabled={busy} onClick={() => removeCv(cv)}>Delete</button>}
+    </span>
+   </div>
+   {cv.status !== 'ready' ? <p className="small">{cv.status === 'failed' ? 'Processing failed. Manage saved CVs to retry.' : 'Your CV is still processing. Open its review to see progress.'}</p> : understood && <div className="skills-understood"><p className="briefing-detail-label">What elo understood from your CV</p><p>{understood}</p></div>}
+  </section>}
+  {<div className="skills-entry-actions">{recentReview && recentReview.id !== cv?.id && <button type="button" className="btn ghost sm" onClick={() => review(recentReview.id)}>Review {recentReview.display_name ?? recentReview.file_name}</button>}<button type="button" className="btn ghost sm" onClick={build}>{profile?.status === 'draft' ? 'Continue building your profile through chat' : profile?.entries.length ? 'Update through chat' : 'Build through chat, no CV needed'}</button></div>}
+  <ComparisonPanel comparison={comparison}/>
   <section className="skills-summary" id="your-skills" aria-label="Skills profile summary">
-   {reviewRow}
-   <div className="skills-summary-heading"><h2>Skills you have</h2><Link className="small text-link" href="/career-goal">Skills your goal needs</Link><span className="pill n">{profile?.status === 'saved' ? 'Saved profile' : profile?.status === 'draft' ? 'Draft saved' : cv?.profile_reviewed_effective_version === cv?.effective_version && cv ? 'Saved CV profile' : cv ? 'CV available' : 'Not started'}</span></div>
+   {profile && profile.status !== 'empty' && <p className="small skills-saved-state">{profile.status === 'saved' ? 'Saved profile' : 'Draft saved'}</p>}
    {error && <div role="alert" className="cv-error"><p>{error}</p><button type="button" className="btn ghost sm" onClick={retry}>Retry skills profile</button></div>}
    {pending&&<p role="status" className="cv-warning">Finish or cancel the pending conversation updates before saving your profile. You can review your current saved draft below.</p>}
-   {!profile && !error && <p role="status">Loading your skills profile…</p>}
+   {!profile && !error && <CardSkeleton label="Loading your skills profile…"/>}
    {profile && !profile.entries.length && !cv && !declarations?.declarations.length && <p className="skills-empty">Start with your CV or a conversation. Your experience and skills will appear here as you build your profile.</p>}
    {profile?.status === 'draft'&&<div className="skills-profile-save"><p className="small">Review the details below. You can save a partial profile; unknown details stay uncertain.</p><button className="btn pri" type="button" disabled={saving||pending} onClick={save}>{saving?'Saving profile…':'Save profile'}</button></div>}
-   {skills.length>0&&<SkillProfile skills={skills} categories={profileSkillGroups(cv, profile, declarations)}/>}
+   {skills.length>0&&<SkillProfile skills={skills} categories={profileSkillGroups(cv, profile, declarations)} subcategories={{...declarations?.skill_subgroups,...profile?.skill_subgroups,...cv?.skill_subgroups}} comparison={comparison.result?.inputs?.cv_id && comparison.result.inputs.cv_id !== cv?.id ? null : comparison.result}/>}
    {skills.length===0&&cv&&<p className="skills-empty">No skills have been saved from this CV yet. They will appear here once they are available.</p>}
-   {skills.length>0&&<p className="small skills-summary-note">Levels come from your CV and review answers; practical competence has not been tested. A missing detail is uncertain; it does not mean a skill is absent. Job-specific evaluation happens against your chosen role.</p>}
    {hasExperience&&<section className="skills-experience" id="your-experience" aria-labelledby="your-experience-title">
     <h2 id="your-experience-title">Experience behind your skills</h2>
     <div className="skills-experience-columns">{Object.entries(labels).map(([kind,label])=>{
@@ -60,7 +79,7 @@ export function SkillsProfileSummary({title, profile, cv, recentReview, declarat
      const entries=profile?.entries.filter(entry=>entry.kind===kind)??[];
      if(!items.length&&!entries.length)return null;
      return <section className="skills-experience-column" key={kind}><header><h3>{label}</h3><span>{items.length+entries.length}</span></header>
-      {items.map(item=><details className="skills-background" key={item.id}><summary>{item.title}</summary><p className="cv-copy">{item.description}</p><ReviewEvidence facts={item.review_evidence}/><SkillBaseline estimates={cv!.skill_estimates?.filter(estimate=>estimate.item_id===item.id)}/>{cv!.clarifications.filter(q=>q.item_id===item.id&&q.status!=='unanswered'&&!q.reconciliation_required).map(q=><div key={q.id}><p className="small">{q.question}</p><blockquote>{q.answer??'Skipped. This detail remains unknown.'}</blockquote>{q.interpretation_status==='failed'&&<p className="small">Interpretation needs attention before saving this review.</p>}</div>)}</details>)}
+      {items.map(item=><details className="skills-background" key={item.id}><summary>{item.title}</summary><dl className="skills-facts"><div><dt>Role or project</dt><dd><strong>{item.title}</strong></dd></div><div><dt>What you did</dt><dd>{item.description}</dd></div><div><dt>Skills used</dt><dd>{cv!.skills.filter(skill=>skill.item_ids.includes(item.id)).map(skill=>skill.name).join(', ')||'Not recorded'}</dd></div></dl>{cv!.clarifications.filter(q=>q.item_id===item.id&&q.status!=='unanswered'&&!q.reconciliation_required).map(q=><div key={q.id}><p className="small">{q.question}</p><blockquote>{q.answer??'Skipped. This detail remains unknown.'}</blockquote>{q.interpretation_status==='failed'&&<p className="small">Interpretation needs attention before saving this review.</p>}</div>)}</details>)}
       {entries.map(entry=><article className="skills-background" key={entry.id}><h4>{entry.title}</h4><dl className="skills-facts">{Object.entries(entry.fields).map(([field,value])=><div key={field}><dt>{readable(field)}</dt><dd>{value.value ?? readable(value.status)}</dd></div>)}</dl></article>)}
      </section>;
     })}</div>

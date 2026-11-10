@@ -8,6 +8,10 @@ const session = vi.hoisted(() => ({ account: { id: 'owner-one' }, token: 'synthe
 const api = vi.hoisted(() => vi.fn());
 vi.mock('@/features/profile/profile-provider', () => ({ useProfile: () => session }));
 vi.mock('@/lib/api/roadmap', () => ({ roadmapApi: api, RoadmapError: class extends Error { status = 503; } }));
+// The planner shows the Skills Profile's own counts, not its evidence list (which repeats a skill per source).
+const profileSkills = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/api/workspace-summary', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api/workspace-summary')>(), loadSkills: profileSkills }));
+beforeEach(() => profileSkills.mockResolvedValue({ total: 1, experiences: 1, groups: [{ name: 'Technical coding', count: 1, skills: ['Git'] }] }));
 
 function serve(state: Workspace, handlers: Record<string, (body: never) => unknown> = {}) {
  api.mockImplementation((path: string, _token: string, body: never) => {
@@ -34,17 +38,24 @@ it('shows the goal and skills that will be used before any generation', async ()
  const heading = await screen.findByRole('heading', { name: 'What elo will use' });
  const section = heading.closest('section')!;
  expect(within(section).getByText('Backend developer')).toBeVisible();
- expect(within(section).getByText(/1 skill, 1 experience/)).toBeVisible();
+ expect(await within(section).findByText(/1 skill, 1 experience/)).toBeVisible();
  expect(within(section).queryByText('Git')).not.toBeInTheDocument();
  fireEvent.click(within(section).getByRole('button', { name: /1 skill, 1 experience/ }));
  expect(within(section).getByText('Git')).toBeVisible();
  expect(calls('/planner/generate')).toHaveLength(0);
 });
 
+it('counts skills the same way as the Skills Profile, not once per evidence source', async () => {
+ profileSkills.mockResolvedValue({ total: 34, experiences: 15, groups: [{ name: 'Technical coding', count: 1, skills: ['Python'] }] });
+ serve(workspace()); render(<RoadmapPlanner />);
+ const section = (await screen.findByRole('heading', { name: 'What elo will use' })).closest('section')!;
+ expect(await within(section).findByRole('button', { name: 'Skills profile · 34 skills, 15 experiences' })).toBeVisible();
+});
+
 it('closes a What elo will use panel with Escape, returning focus, and with a click elsewhere', async () => {
  serve(workspace()); render(<RoadmapPlanner />);
  const section = (await screen.findByRole('heading', { name: 'What elo will use' })).closest('section')!;
- const menu = within(section).getByRole('button', { name: /1 skill, 1 experience/ });
+ const menu = await within(section).findByRole('button', { name: /1 skill, 1 experience/ });
  fireEvent.click(menu);
  expect(menu).toHaveAttribute('aria-expanded', 'true');
  fireEvent.keyDown(document, { key: 'Escape' });
@@ -123,28 +134,22 @@ it('disables generation when the career goal or CV is missing', async () => {
  expect(screen.getByRole('link', { name: 'Open Career Goal' })).toHaveAttribute('href', '/career-goal');
 });
 
-it('keeps target date and duration synchronised through the backend resolution', async () => {
- serve(workspace(), { '/planner/runway': (body: { config: { duration: unknown; target_date: string } }) => body.config.duration
-  ? runway({ resolved: { today: '2030-01-09', start_date: '2030-01-09', target_date: '2030-03-06', matched_duration: { value: 8, unit: 'weeks' } } })
-  : runway({ resolved: { today: '2030-01-09', start_date: '2030-01-09', target_date: body.config.target_date, matched_duration: body.config.target_date === '2030-02-06' ? { value: 4, unit: 'weeks' } : null } }) });
+it('sets the runway from the finish date and shows its length as display-only text', async () => {
+ serve(workspace(), { '/planner/runway': (body: { config: { target_date: string } }) => runway({ resolved: { today: '2030-01-09', start_date: '2030-01-09', target_date: body.config.target_date, matched_duration: null }, calendar: { days: 168, weeks: 24, extra_days: 0, label: '24 weeks', partial_first_week: false } }) });
  render(<RoadmapPlanner />);
- fireEvent.change(await screen.findByRole('spinbutton', { name: 'Duration length' }), { target: { value: '8' } });
- await waitFor(() => expect(screen.getByLabelText('Target date')).toHaveValue('2030-03-06'));
- expect(within(screen.getByRole('region', { name: 'Your runway' })).getByText('Target · Wed, 6 Mar 2030')).toBeVisible();
- expect(calls('/planner/runway').at(-1)![2].config).toMatchObject({ duration: { value: 8, unit: 'weeks' }, target_date: null });
- fireEvent.change(screen.getByLabelText('Target date'), { target: { value: '2030-02-06' } });
- await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Duration length' })).toHaveValue(4));
- expect(calls('/planner/runway').at(-1)![2].config).toMatchObject({ duration: null, target_date: '2030-02-06' });
- fireEvent.change(screen.getByLabelText('Target date'), { target: { value: '2030-02-07' } });
- await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Duration length' })).toHaveValue(null));
+ const finish = await screen.findByRole('group', { name: 'Finish' });
+ expect(within(finish).queryByRole('spinbutton')).toBeNull();
+ fireEvent.change(screen.getByLabelText('Target date'), { target: { value: '2030-06-26' } });
+ await waitFor(() => expect(calls('/planner/runway').at(-1)![2].config).toMatchObject({ duration: null, target_date: '2030-06-26' }));
+ await waitFor(() => expect(within(finish).getByLabelText('Duration')).toHaveTextContent('24 weeks (5 months + 2 weeks)'));
 });
 
 it('shows calculated runway with the extra capacity from backup blocks', async () => {
  serve(workspace()); render(<RoadmapPlanner />);
  const runwaySection = await screen.findByRole('region', { name: 'Your runway' });
  expect(within(runwaySection).getByText('2 weeks, 5 days')).toBeVisible();
- expect(within(runwaySection).getAllByText('11.5 h')).toHaveLength(2);
- expect(within(runwaySection).getByText('+2 h (not enabled)')).toBeVisible();
+ expect(within(runwaySection).getAllByText('11 hours 30 minutes')).toHaveLength(2);
+ expect(within(runwaySection).getByText('+2 hours (not enabled)')).toBeVisible();
  expect(within(runwaySection).getByText(/first week is partial/)).toBeVisible();
 });
 
@@ -197,33 +202,32 @@ it('moves along the road as each required detail is filled, ending at Generate',
  expect(within(road).getByRole('button', { name: 'Generate roadmap' }).closest('li')).toHaveClass('road-end', 'passed');
 });
 
-it('says how long a target date is when it is not a whole duration, and can still be edited', async () => {
+it('says how long a target date is when it is not a whole number of weeks', async () => {
  serve(workspace()); render(<RoadmapPlanner />);
  const finish = await screen.findByRole('group', { name: 'Finish' });
- expect(within(finish).getByText('2 weeks, 5 days')).toBeVisible();
- expect(within(finish).getByRole('spinbutton', { name: 'Duration length' })).toHaveValue(null);
- fireEvent.change(within(finish).getByRole('spinbutton', { name: 'Duration length' }), { target: { value: '3' } });
- await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config).toMatchObject({ duration: { value: 3, unit: 'weeks' }, target_date: null }));
+ expect(within(finish).getByLabelText('Duration')).toHaveTextContent('2 weeks, 5 days');
+ expect(within(finish).queryByRole('spinbutton', { name: 'Duration length' })).toBeNull();
 });
 
 it('writes settings into the sentence and flags a start date in the past', async () => {
  serve(workspace({ planner: planner({ runway: runway({ can_generate: false, issues: [{ code: 'start_in_past', message: 'Choose a start date of today or later.' }] }) }) })); render(<RoadmapPlanner />);
  const start = await screen.findByRole('group', { name: 'Start' });
- expect(within(start).getByText('9 Jan 2030')).toBeVisible();
+ expect(within(start).getByText('Wed, 9 Jan 2030')).toBeVisible();
  expect(start.querySelector('.token')).toHaveClass('warn');
  expect(screen.getByRole('spinbutton', { name: 'Weekly budget in hours' })).toHaveValue(5);
  fireEvent.click(screen.getByRole('checkbox', { name: 'Allow backup blocks when preferred time runs out' }));
  expect(within(screen.getByRole('group', { name: 'Backup blocks' })).getByText('allowed')).toBeVisible();
 });
 
-it('chooses a learning focus from the sentence and adds a study block from the week', async () => {
+it('offers learning focus themes from the Skills Profile and adds a study block from the week', async () => {
  serve(workspace({ planner: planner({ config: config({ learning_focus: [], learning_notes: '' }) }) })); render(<RoadmapPlanner />);
  fireEvent.click(await screen.findByRole('button', { name: 'Choose learning focus' }));
- fireEvent.click(screen.getByRole('checkbox', { name: 'Certification' }));
- expect(within(screen.getByRole('group', { name: 'Learning focus' })).getByRole('button', { name: 'Choose learning focus' })).toHaveTextContent('Certification');
+ expect(screen.queryByRole('checkbox', { name: 'Certification' })).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Tools' }));
+ expect(within(screen.getByRole('group', { name: 'Learning focus' })).getByRole('button', { name: 'Choose learning focus' })).toHaveTextContent('Tools');
  fireEvent.click(screen.getByRole('button', { name: 'Add study block on Tuesday' }));
  expect(screen.getByRole('combobox', { name: 'Block 4 day' })).toHaveValue('1');
- await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config.learning_focus).toEqual(['certification']));
+ await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config.learning_topics).toEqual(['Tools']));
  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
  expect(screen.queryByRole('combobox', { name: 'Block 4 day' })).not.toBeInTheDocument();
 });
@@ -300,7 +304,7 @@ it('adds blocked times to the week as their own blocks and sends them for the ru
  serve(workspace({ planner: planner({ config: config({ blackouts: [] }) }) })); render(<RoadmapPlanner />);
  fireEvent.click(await screen.findByRole('button', { name: 'Add Blockout Times' }));
  const rule = screen.getByRole('group', { name: 'Blackout 1' });
- expect(within(rule).getByText('Every week on Mon, 18:00–20:00, from 9 Jan 2030')).toBeVisible();
+ expect(within(rule).getByText('Every week on Mon, 18:00–20:00, from Wed, 9 Jan 2030')).toBeVisible();
  const week = document.querySelector('.block-week') as HTMLElement;
  const monday = within(week).getByRole('button', { name: /Edit blocked time on Monday/ });
  expect(monday).toHaveClass('blocked');
@@ -313,7 +317,7 @@ it('adds blocked times to the week as their own blocks and sends them for the ru
  fireEvent.change(within(rule).getByRole('spinbutton', { name: 'Blackout 1 interval' }), { target: { value: '2' } });
  fireEvent.change(within(rule).getByLabelText('Blackout 1 start time'), { target: { value: '12:00' } });
  fireEvent.change(within(rule).getByLabelText('Blackout 1 end date'), { target: { value: '2030-01-27' } });
- expect(within(rule).getByText('Every 2 weeks on Wed, Fri, 12:00–20:00, from 9 Jan 2030 until 27 Jan 2030')).toBeVisible();
+ expect(within(rule).getByText('Every 2 weeks on Wed, Fri, 12:00–20:00, from Wed, 9 Jan 2030 until Sun, 27 Jan 2030')).toBeVisible();
  await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config.blackouts).toEqual([{ frequency: 'weekly', start_date: '2030-01-09', end_date: '2030-01-27', interval: 2, weekdays: [2, 4], start_time: '12:00', end_time: '20:00' }]));
 });
 
@@ -325,15 +329,15 @@ it('offers daily, monthly and one-day blocked times, keeping only the fields eac
  const repeats = within(rule).getByRole('combobox', { name: 'Blackout 1 repeats' });
  fireEvent.change(repeats, { target: { value: 'monthly' } });
  fireEvent.change(within(rule).getByLabelText('Blackout 1 start date'), { target: { value: '2030-01-31' } });
- expect(within(rule).getByText('Every month on day 31 or the month’s last day, all day, from 31 Jan 2030')).toBeVisible();
+ expect(within(rule).getByText('Every month on day 31 or the month’s last day, all day, from Thu, 31 Jan 2030')).toBeVisible();
  expect(within(rule).queryByRole('checkbox', { name: 'Blackout 1 on Monday' })).not.toBeInTheDocument();
  fireEvent.change(repeats, { target: { value: 'daily' } });
- expect(within(rule).getByText('Every day, all day, from 31 Jan 2030')).toBeVisible();
+ expect(within(rule).getByText('Every day, all day, from Thu, 31 Jan 2030')).toBeVisible();
  fireEvent.change(within(rule).getByLabelText('Blackout 1 end date'), { target: { value: '2030-02-02' } });
  fireEvent.change(repeats, { target: { value: 'once' } });
- expect(within(rule).getByText('31 Jan 2030, all day')).toBeVisible();
+ expect(within(rule).getByText('Thu, 31 Jan 2030, all day')).toBeVisible();
  expect(within(rule).queryByLabelText('Blackout 1 end date')).not.toBeInTheDocument();
- expect(document.querySelector('.block-others .blocked')).toHaveTextContent('31 Jan 2030');
+ expect(document.querySelector('.block-others .blocked')).toHaveTextContent('Thu, 31 Jan 2030');
  await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config.blackouts).toEqual([{ frequency: 'once', start_date: '2030-01-31', end_date: null, interval: 1, weekdays: [], start_time: null, end_time: null }]));
  fireEvent.click(within(rule).getByRole('button', { name: 'Remove blackout 1' }));
  expect(screen.queryByRole('group', { name: 'Blackout 1' })).not.toBeInTheDocument();
@@ -342,7 +346,7 @@ it('offers daily, monthly and one-day blocked times, keeping only the fields eac
 it('shows the backend explanation for a blackout that cannot apply and blocks generation', async () => {
  serve(workspace(), { '/planner/runway': () => runway({ can_generate: false, issues: [{ code: 'blackout_invalid', message: 'Blackout 1 must end after it starts on the same day.' }] }) });
  render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('button', { name: /Edit blocked time: 12 Jan 2030/ }));
+ fireEvent.click(await screen.findByRole('button', { name: /Edit blocked time: Sat, 12 Jan 2030/ }));
  fireEvent.click(screen.getByRole('checkbox', { name: 'Blackout 1 all day' }));
  expect(await screen.findByText('Blackout 1 must end after it starts on the same day.')).toBeVisible();
  expect(screen.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
@@ -384,7 +388,7 @@ it('reviews a plan: next assignment, remaining time, timeline, outcome and remai
  const now = screen.getByRole('region', { name: 'Where you are now' });
  expect(now).toHaveTextContent('Wed, 9 Jan 2030, 19:00–20:00');
  expect(within(now).getByText('2 weeks, 5 days')).toBeVisible();
- expect(within(now).getByText('11.5 h of usable study time')).toBeVisible();
+ expect(within(now).getByText('11 hours 30 minutes of usable study time')).toBeVisible();
  const timeline = screen.getByRole('region', { name: 'Milestone timeline' });
  expect(within(timeline).getByText('Sun, 27 Jan 2030')).toBeVisible();
  expect(within(timeline).getByText(/projected Wed, 9 Jan 2030 to Sun, 20 Jan 2030/)).toBeVisible();
@@ -494,7 +498,7 @@ it('leads with this week as a to-do list, with each session showing its skill', 
  const list = await screen.findByRole('region', { name: 'To-do list' });
  expect(within(list).getByRole('heading', { name: 'This week' })).toBeVisible();
  expect(within(list).getByRole('button', { name: 'Weekly' })).toHaveAttribute('aria-pressed', 'true');
- expect(within(list).getByText('1 of 3 sessions done, 2 h left')).toBeVisible();
+ expect(within(list).getByText('1 of 3 sessions done, 2 hours left')).toBeVisible();
  expect(within(list).getAllByRole('checkbox').map(box => box.getAttribute('aria-label'))).toEqual(['Mark complete: Read the framework guide.', taskName, 'Mark complete: Add input validation.']);
  expect(within(list).getAllByText('Python')).toHaveLength(3);
  expect(within(list).getByText('Next')).toBeVisible();
@@ -520,7 +524,7 @@ it('shows the month as a calendar of week summaries that open the week', async (
  expect(within(list).queryByRole('checkbox')).toBeNull();
  const weeks = within(list).getAllByRole('button', { name: /^Open week of/ });
  expect(weeks).toHaveLength(5);
- expect(weeks[1]).toHaveAccessibleName(expect.stringContaining('Open week of 7 Jan 2030. 3 sessions, 1 done'));
+ expect(weeks[1]).toHaveAccessibleName(expect.stringContaining('Open week of Mon, 7 Jan 2030. 3 sessions, 1 done'));
  expect(weeks[1]).toHaveAccessibleName(expect.stringContaining('Build a Python API'));
  expect(weeks[2]).toHaveAccessibleName(expect.stringContaining('Sessions not planned yet'));
  const bars = weeks[1].querySelectorAll('.month-bar');
@@ -622,12 +626,11 @@ it('opens the chat helper from a button for edits on the roadmap page', async ()
  await waitFor(() => expect(calls('/messages')[0][2]).toMatchObject({ message: 'Move Wednesday to Thursday.' }));
 });
 
-it('requires the research choice before the helper can prepare a plan change', async () => {
+it('labels partial research while allowing the helper to prepare a plan change', async () => {
  const state = withActive(); state.context.research_coverage = 'unavailable';
  serve(state); render(<RoadmapPlanner />); await openHelper();
  fireEvent.change(screen.getByRole('textbox', { name: 'Ask for a change' }), { target: { value: 'Move it.' } });
- expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
- fireEvent.click(screen.getByRole('checkbox', { name: /Continue with available evidence/ }));
+ expect(screen.getAllByText(/Using available evidence/).length).toBeGreaterThan(0);
  expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
 });
 

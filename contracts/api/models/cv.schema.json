@@ -1564,6 +1564,13 @@
       "title": "Skill Groups",
       "type": "object"
     },
+    "skill_subgroups": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Skill Subgroups",
+      "type": "object"
+    },
     "skill_estimates": {
       "items": {
         "$ref": "#/$defs/SkillEstimate"

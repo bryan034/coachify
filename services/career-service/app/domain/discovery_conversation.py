@@ -45,13 +45,13 @@ def conversational_reply(message, *, ongoing=False):
     text=re.sub(r'[.!?]+$', '', ' '.join(message.casefold().split())).strip()
     if text in ('hi','hello','hey','hi elo','hello elo','hey elo','good morning','good afternoon','good evening'):
         if ongoing:
-            return 'Hi again! We can carry on exploring your career direction from where we left off.'
-        return 'Hi! I can help you explore career paths, compare roles, and discuss jobs or internships.'
+            return 'Welcome back. Continuing your career exploration where we left off: compare a direction, explore another role, or refine the results?'
+        return 'Hi! I can help explore career paths. What kind of work interests you: building things, solving problems, helping people, or something else?'
     if text in ('how do i use this','how to use this','how does this work','how do i use this chat','what can you do'):
         return ('Start with a career question, an interest, or a kind of work you enjoy. '
             'We can compare directions and build up your interests and preferences together. '
             'Once there is enough context, I’ll research representative roles. '
-            'Your goal updates automatically as we refine it.')
+            'You confirm before replacing an existing goal. What career direction would you like to explore?')
     if text in ('thanks','thank you','thanks elo','thank you elo'):
-        return 'You’re welcome! We can keep exploring your career direction whenever you’re ready.'
+        return 'You’re welcome. For your career, what would help next: choosing skills to learn, comparing roles, or preparing an application?'
     return None

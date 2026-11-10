@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test';
 
 /** An empty saved transcript keeps older boundary journeys focused on their original behavior. */
 export async function mockEmptyConversation(page: Page) {
+  await page.route('**/api/v1/assessments/**', route => route.fulfill({json:{version:0,stale:false,ready:false,model_available:true,result:null,operation:null,issues:[]}}));
   const saved = new Map<string, object>();
   await page.route('**/api/v1/cv/conversations{,/**}', route => {
     const request = route.request(), url = new URL(request.url());
@@ -21,6 +22,13 @@ export async function mockEmptyConversation(page: Page) {
 }
 
 /** Existing review tools now live behind explicit disclosures in the chat workspace. */
+/** Saved CVs sit under a disclosure below the CV card; open it before working with the list. */
+export async function openCvLibrary(page: Page) {
+  const library = page.locator('details.cv-library-disclosure');
+  if (await library.getAttribute('open') === null) await library.locator(':scope > summary').click();
+  await expect(page.getByRole('heading', {name:'Your CVs', exact:true})).toBeVisible();
+}
+
 export async function openCvReviewTools(page: Page) {
   const review = new URL(page.url()).searchParams.get('review');
   if (review) {
@@ -32,9 +40,9 @@ export async function openCvReviewTools(page: Page) {
     }
     await page.getByRole('button', {name:review === 'manual' ? 'Back to Skills Profile' : 'Save and review later', exact:true}).click();
   }
-  await expect(page.getByRole('heading', {name:'Your CVs', exact:true})).toBeVisible();
+  await openCvLibrary(page);
   await expect(page.getByText('Loading saved CVs…', {exact: true})).toHaveCount(0);
-  for (const label of ['Your CV summary']) {
+  for (const label of ['CV details and corrections']) {
     const summary = page.locator('summary').filter({hasText: label});
     await expect(summary).toHaveCount(1);
     const details = summary.locator('..');

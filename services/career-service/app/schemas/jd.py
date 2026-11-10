@@ -1,7 +1,7 @@
 from elo_shared.dates import JobDate
 from elo_shared.skills import resolve, MAPPING_VERSION
 """Transient JD review contracts; candidates are not canonical analysis skills."""
-from app.schemas.analysis import EmploymentType, DiscoveryEvidence
+from app.schemas.analysis import EmploymentType, DiscoveryEvidence, LearningItem
 
 from typing import Annotated, Literal
 from pydantic import Field, StringConstraints, field_validator, model_validator
@@ -10,6 +10,7 @@ from app.schemas.analysis import Contract, Text, Evidence, SourceUrl, Proficienc
 ChatText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
 
 class ReviewSkill(Contract):
+    learning_items: list[LearningItem] = Field(default_factory=list,max_length=12)
     canonical_skill_id: str | None = None
     skill_registry_version: str = MAPPING_VERSION
     @model_validator(mode='after')

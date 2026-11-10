@@ -34,7 +34,7 @@ test('Save progress does not complete onboarding; explicit Finish setup does',as
  await screen.findByText('Profile saved.');expect(saved.onboarding_complete).toBe(false);expect(replace).not.toHaveBeenCalled();
  await waitFor(()=>expect(screen.getByRole('button',{name:'Finish setup'})).toBeEnabled());
  fireEvent.click(screen.getByRole('button',{name:'Finish setup'}));
- await waitFor(()=>expect(replace).toHaveBeenCalledWith('/dashboard'));
+ await waitFor(()=>expect(replace).toHaveBeenCalledWith('/getting-started'));
  expect(saved.no_previous_education).toBe(true);expect(saved.onboarding_complete).toBe(true);
 });
 test('uncommitted finish failure preserves the draft and never redirects',async()=>{
@@ -44,7 +44,7 @@ test('uncommitted finish failure preserves the draft and never redirects',async(
 });
 test('lost committed completion is confirmed by canonical readback',async()=>{
  await form();failure='lost';fireEvent.click(screen.getByRole('button',{name:'Finish setup'}));
- await waitFor(()=>expect(replace).toHaveBeenCalledWith('/dashboard'));
+ await waitFor(()=>expect(replace).toHaveBeenCalledWith('/getting-started'));
  expect(saved.version).toBe(1);expect(saved.onboarding_complete).toBe(true);
  expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url).endsWith('/onboarding/complete'))).toHaveLength(1);
 });

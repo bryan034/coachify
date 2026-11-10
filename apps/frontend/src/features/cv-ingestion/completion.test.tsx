@@ -64,7 +64,7 @@ describe('effective skills and dates',()=>{
  });
  it.each(['focus','online'])('refreshes changed saved facts on %s while retaining an active correction draft',async event=>{
   let detail=savedCv();vi.mocked(cvApi.list).mockImplementation(async()=>({cvs:[detail],selection:{cv_id:detail.id,version:1}}));vi.mocked(cvApi.get).mockImplementation(async()=>detail);vi.mocked(cvApi.questions).mockImplementation(async()=>clarificationState(detail,confirmedTarget,true));
-  render(<ResumePreview/>);fireEvent.click(screen.getByText('Your CV summary',{selector:'summary span'}));fireEvent.click(await screen.findByRole('button',{name:'Edit or remove Team dashboard'}));fireEvent.change(screen.getByRole('textbox',{name:'Description'}),{target:{value:'My unsaved description'}});
+  render(<ResumePreview/>);fireEvent.click(screen.getByText('CV details and corrections',{selector:'summary span'}));fireEvent.click(await screen.findByRole('button',{name:'Edit or remove Team dashboard'}));fireEvent.change(screen.getByRole('textbox',{name:'Description'}),{target:{value:'My unsaved description'}});
   detail={...detail,version:2,items:detail.items.map(item=>({...item,description:'Updated elsewhere'}))};await act(async()=>window.dispatchEvent(new Event(event)));
   await screen.findByText(/This CV changed while you were editing/);expect(screen.getByRole('textbox',{name:'Description'})).toHaveValue('My unsaved description');expect(screen.getByRole('button',{name:'Save correction'})).toBeDisabled();expect(screen.getByText('Latest saved: Updated elsewhere')).toBeVisible();
  });

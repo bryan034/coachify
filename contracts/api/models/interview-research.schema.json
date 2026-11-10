@@ -307,6 +307,34 @@
           "format": "date-time",
           "title": "Last Verified At",
           "type": "string"
+        },
+        "round_number": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Round Number"
+        },
+        "round_name": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Round Name"
         }
       },
       "required": [
@@ -320,8 +348,8 @@
         "scope",
         "last_verified_at"
       ],
-      "title": "Finding",
-      "type": "object"
+      "type": "object",
+      "title": "Finding"
     },
     "Generation": {
       "additionalProperties": false,

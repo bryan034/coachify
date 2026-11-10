@@ -302,7 +302,7 @@ class OpportunityEngine:
         record=InterviewResearch(_id=str(ObjectId()),version=cache['version'],skill_mapping_version=MAPPING_VERSION,created_at=stamp,updated_at=stamp,
             **context.model_dump(),intelligence=report,sources=sources,
             research_status='failed' if failed else 'succeeded' if any(v.findings for v in categories.values()) else 'no_findings',last_researched_at=stamp,
-            generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-structured-findings-v3',generated_at=stamp))
+            generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-structured-findings-v4',generated_at=stamp))
         record=await thread(self.store.research.finish,context,cache['token'],record)
         if not pending:await thread(self.store.rows.update_one,{'_id':identifier,'worker_token':token},{'$addToSet':{'activities':'research_failed' if failed else 'research_partial' if status=='partial' else 'research_complete'}})
         failure=next((v.error_code for v in categories.values() if v.error_code),None)

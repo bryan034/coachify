@@ -80,7 +80,7 @@ def test_async_summary_repairs_only_presentation_and_rechecks_the_goal(caplog,re
         await jobs.jobs[accepted['operation_id']].task
         result=jobs.read('owner',accepted['operation_id'])
         assert result['status']=='succeeded' and '[Source]' in result['result']['reply']
-        assert len(calls)==2 and len(checks)==4
+        assert len(calls)==2 and len(checks)==5
         assert feedback[1]['violations']==[{'field':'blocks' if issue=='missing_research_reference' else 'blocks.0.references','issue':issue}]
         assert calls[0].context==calls[1].context and 'PRIVATE_DISCARDED_VALUE' not in json.dumps(result)
         assert 'PRIVATE_DISCARDED_VALUE' not in caplog.text

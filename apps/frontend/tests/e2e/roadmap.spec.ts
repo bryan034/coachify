@@ -56,8 +56,10 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await page.setViewportSize({ width: 1280, height: 900 });
  expect(await beside()).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-planner.png'), fullPage: true });
+ await page.setViewportSize({width:1440,height:1000}); await page.screenshot({path:test.info().outputPath('roadmap-planner-1440.png'),fullPage:true});
  await expect(page.locator('.road-stop[aria-current="step"]')).toContainText('and finish by');
  await page.setViewportSize({ width: 390, height: 844 });
+ await page.screenshot({path:test.info().outputPath('roadmap-planner-390.png'),fullPage:true});
  expect(await noOverflow(page)).toBe(true);
  await page.setViewportSize({ width: 1280, height: 900 });
  await expect(page.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
@@ -88,9 +90,9 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await page.setViewportSize({ width: 1280, height: 900 });
  const runwaySection = page.getByRole('region', { name: 'Your runway' });
  await expect(runwaySection).toContainText('2 weeks, 5 days');
- await expect(runwaySection).toContainText('+2 h (not enabled)');
+ await expect(runwaySection).toContainText('+2 hours (not enabled)');
  await page.getByRole('checkbox', { name: 'Allow backup blocks when preferred time runs out' }).check();
- await expect(runwaySection).toContainText('13.5 h');
+ await expect(runwaySection).toContainText('13 hours 30 minutes');
  await page.screenshot({ path: test.info().outputPath('roadmap-configure.png'), fullPage: true });
 
  await page.getByRole('button', { name: 'Generate roadmap' }).click();
@@ -126,7 +128,7 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  expect(await noOverflow(page)).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-month-mobile.png'), fullPage: true });
  await page.setViewportSize({ width: 1280, height: 900 });
- await toDo.getByRole('button', { name: /^Open week of 7 Jan 2030/ }).click();
+ await toDo.getByRole('button', { name: /^Open week of Mon, 7 Jan 2030/ }).click();
  await toDo.getByRole('checkbox', { name: 'Mark complete: Write one tested Python endpoint.' }).check();
  await expect(toDo.getByRole('checkbox', { name: 'Mark complete: Write one tested Python endpoint.' })).toBeChecked();
  await toDo.getByText('Add what you produced').click();

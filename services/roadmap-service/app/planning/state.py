@@ -16,9 +16,9 @@ def planner_state(row):
     return state
 def saved_config(state,default_zone=None):
     if state['config'] is None and default_zone:
-        try:return PlannerConfig(time_zone=default_zone)
+        try:return PlannerConfig(time_zone=default_zone,allow_overflow=True)
         except ValueError:pass
-    return PlannerConfig.model_validate(state['config'] or {})
+    return PlannerConfig.model_validate(state['config']) if state['config'] is not None else PlannerConfig(allow_overflow=True)
 def config_digest(config):
     return digest(config.model_dump(mode='json'))
 def settings_differ(plan,state):

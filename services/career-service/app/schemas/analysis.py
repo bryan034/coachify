@@ -144,7 +144,21 @@ class CvSkill(Contract):
     conflicting_fields: list[str] = Field(default_factory=list, max_length=20)
 
 
+class LearningItem(Contract):
+    item_id: Text
+    name: Text
+    importance: Literal['high','medium','low']
+    importance_origin: Literal['stated','inferred']
+    reason: Evidence
+    evidence: Evidence | None = None
+    source_urls: list[SourceUrl] = Field(default_factory=list,max_length=10)
+    @model_validator(mode='after')
+    def grounded_learning(self):
+        if self.importance_origin=='stated' and not self.evidence:raise ValueError('Stated learning detail needs source evidence.')
+        return self
+
 class TargetSkill(Contract):
+    learning_items: list[LearningItem] = Field(default_factory=list,max_length=12)
     canonical_skill_id: str | None = None
     skill_registry_version: str = MAPPING_VERSION
     @model_validator(mode='after')

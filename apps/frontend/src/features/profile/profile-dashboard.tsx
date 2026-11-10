@@ -22,7 +22,7 @@ export function ProfileDashboard() {
   const year = student && !profile.education_review_required && profile.current_study_year && profile.school_category
     ? studyYearLabel(profile.school_category, profile.current_study_year) : null;
   return <section className="page on profile-dashboard">
-    <PageTitle title="My profile"><button type="button" className="btn pri" onClick={edit}>Edit profile <span aria-hidden="true">↗</span></button></PageTitle>
+    <PageTitle title="My profile"><button type="button" className="btn pri" onClick={edit}>Edit profile</button></PageTitle>
     {saved && <p className="success" role="status">Profile updated.</p>}
     <div className="card profile-overview">
       <div className="profile-overview-avatar" aria-hidden="true"><Icon name="user" /></div>
@@ -31,7 +31,7 @@ export function ProfileDashboard() {
     </div>
     <div className="profile-summary-grid">
       <section className="card profile-summary" aria-labelledby="profile-background-title">
-        <div className="profile-summary-title"><span className="profile-summary-icon"><Icon name="book" /></span><div><p className="k">01 / BACKGROUND</p><h2 id="profile-background-title">Your education</h2></div></div>
+        <div className="profile-summary-title"><span className="profile-summary-icon"><Icon name="book" /></span><div><p className="k">Background</p><h2 id="profile-background-title">Your education</h2></div></div>
         <dl>
           <div><dt>Occupation</dt><dd>{occupation}</dd></div>
           <div><dt>{student ? 'Current place of education' : 'Place of last education'}</dt><dd>{noEducation ? 'No previous education' : profile.education.institution?.name || 'Not added'}</dd></div>
@@ -42,12 +42,13 @@ export function ProfileDashboard() {
         {profile.education_review_required && !noEducation && <p className="notice">Your saved education needs review for your current status. <button type="button" className="text-link profile-inline-link" onClick={edit}>Review details</button></p>}
       </section>
       {(employed || previousWork) && <section className="card profile-summary" aria-labelledby="profile-employment-title">
-        <div className="profile-summary-title"><span className="profile-summary-icon employment"><Icon name="brief" /></span><div><p className="k">02 / WORK</p><h2 id="profile-employment-title">{previousWork ? 'Previous employment' : 'Current employment'}</h2></div></div>
+        <div className="profile-summary-title"><span className="profile-summary-icon employment"><Icon name="brief" /></span><div><p className="k">Work</p><h2 id="profile-employment-title">{previousWork ? 'Previous employment' : 'Current employment'}</h2></div></div>
         <dl><div><dt>{previousWork ? 'Previous employer' : 'Place of employment'}</dt><dd>{profile.employment?.employer || 'Not added'}</dd></div><div><dt>Role</dt><dd>{profile.employment?.role || 'Not added'}</dd></div><div><dt>Industry</dt><dd>{profile.employment?.industry || 'Not added'}</dd></div></dl>
         {(!profile.employment?.employer || !profile.employment?.role || !profile.employment?.industry) && <button type="button" className="text-link profile-add-work profile-inline-link" onClick={edit}>Add your employment details →</button>}
       </section>}
     </div>
-    <div className="profile-preferences-link"><span>You can update your background and planning preferences whenever things change.</span><Link className="text-link" href="/profile/edit#planning-preferences">Planning preferences ↗</Link></div>
-    {developmentToolsEnabled && <section className="profile-development" aria-label="Development tools"><div><span className="chip">Development</span><h3>Walk through the welcome experience.</h3><p>Preview every question again. Preview answers won’t change your saved profile.</p></div><Link className="btn ghost" href="/onboarding/preview">Preview onboarding <span aria-hidden="true">↗</span></Link></section>}
+    <div className="profile-preferences-link"><span>Your study schedule lives in the Roadmap planner.</span><Link className="text-link" href="/roadmap">Planning preferences</Link></div>
+    <section className="card pad" aria-label="Account settings"><h2>Account settings</h2><Link className="btn ghost" href="/forgot-password">Change password</Link><p className="small">Use an emailed verification code to reset your password.</p><p>Account deletion and data export are not available yet.</p></section>
+    {developmentToolsEnabled && <section className="profile-development" aria-label="Development tools"><div><span className="chip">Development</span><h3>Walk through the welcome experience.</h3><p>Preview every question again. Preview answers won’t change your saved profile.</p></div><Link className="btn ghost" href="/onboarding/preview">Preview onboarding</Link></section>}
   </section>;
 }

@@ -73,8 +73,8 @@ class LiveJobs:
             row.update(posted_at=EPOCH if estimated else row['posted_at'], posted_at_estimated=estimated, status='open')
         return list(rows.values()), failures, now
 
-    def search(self, query, cursor=None, limit=20):
-        boundary = _decode_cursor(cursor) if cursor else None
+    def search(self, query, cursor=None, limit=20, ranking=None):
+        boundary = _decode_cursor(cursor) if cursor and ranking is None else None
         rows, failures, now = self.read(query)
         def matches(row):
             if any(row[field] not in query[field]['$in'] for field in ('company', 'industry', 'job_type', 'workplace') if field in query):
@@ -86,6 +86,29 @@ class LiveJobs:
             if dates and row['posted_at_estimated']:
                 return False
             return not (('$gte' in dates and row['posted_at'] < dates['$gte']) or ('$lt' in dates and row['posted_at'] >= dates['$lt']))
+        if ranking is not None:
+            import base64,json,hashlib
+            from app.normalise import query_terms
+            role_terms=set(query_terms(ranking.get('role','')))
+            skills=ranking.get('skills',[])
+            def matched(row):return [name for name in skills if query_terms(name) and all(term in row['search_terms'] for term in query_terms(name))]
+            def order(row):
+                title=set(query_terms(row['title']))
+                return (len(title&role_terms)*4+len(matched(row)),row['posted_at'].isoformat(),row['_id'])
+            signature=hashlib.sha256(json.dumps({'ranking':ranking,'query':query},sort_keys=True,default=str).encode()).hexdigest()[:12]
+            rows=sorted((row for row in rows if matches(row)),key=order,reverse=True)
+            total=len(rows)
+            if cursor:
+                try:
+                    decoded=json.loads(base64.urlsafe_b64decode(cursor))
+                    if decoded['v']!=1 or decoded['context']!=signature:raise ValueError
+                    boundary=tuple(decoded['position'])
+                except (ValueError,KeyError,TypeError):raise Problem('The recommended search changed. Start a new search.',409,'search_changed') from None
+                rows=[row for row in rows if order(row)<boundary]
+            page=rows[:limit]
+            items=[{**_posting_view(row),'matched_skills':matched(row) if ranking.get('skills_available',True) else None,'match_basis':'Profile skill names appearing in listing text; not a competence assessment.'} for row in page]
+            next_cursor=base64.urlsafe_b64encode(json.dumps({'v':1,'context':signature,'position':order(page[-1])}).encode()).decode() if len(rows)>limit else None
+            return {'items':items,'total':total,'next_cursor':next_cursor,'unavailable_sources':failures,'retrieved_at':now}
         rows = sorted((r for r in rows if matches(r)), key=lambda r: (r['posted_at'], r['_id']), reverse=True)
         total = len(rows)
         if boundary:

@@ -11,6 +11,8 @@ import {careerApi,importExplorationCV,type CareerContext,type CurrentGoal,type G
 const warning='For more reliable current-skill extraction, use the dedicated CV upload section. This career-goal agent may interpret a CV attached here less accurately.';
 import {AgentMarkdown,AgentActivity,AgentReply,AgentRecovery,errorCode} from './agent-message';
 import {JobReviewChat} from './job-review-chat';
+import { errorText } from '@/lib/errors';
+import { ChatSkeleton } from '@/components/ui/workspace-ui';
 export function CareerChat(){
  const params=useSearchParams(),session=useCareerSession(),{token}=useProfile();
  // Clearing the temporary JD after saving must not replace the active chat.
@@ -18,7 +20,7 @@ export function CareerChat(){
  const [workspace,setWorkspace]=useState<CareerWorkspace>(),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[code,setCode]=useState(''),[loadAttempt,setLoadAttempt]=useState(0);
  useEffect(()=>{if(!token)return;const abort=new AbortController();void careerApi<CareerWorkspace>('/workspace',token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted){setWorkspace(v);setLoaded(true);}}).catch(c=>{if(!abort.signal.aborted){setError(c.message);setCode(errorCode(c));setLoaded(true);}});return()=>abort.abort();},[token,loadAttempt]);
  if(startedWithJD||session.jd||params.get('source')==='jd'||workspace?.current.goal)return <JobReviewChat/>;
- if(!loaded)return <p role="status">Opening your career conversation…</p>;
+ if(!loaded)return <ChatSkeleton label="Opening your career conversation…"/>;
  if(error)return <AgentRecovery message={error} code={code} onRetry={()=>{setError('');setCode('');setLoaded(false);setLoadAttempt(v=>v+1);}}/>;
  return <ExplorationChat initialDraftId={workspace?.exploration_id||null}/>;
 }
@@ -54,7 +56,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
    if(restored){setDraft(restored);draftId.current=restored._id;const attachment=latestSession.current.attachment;
     setCVText(attachment?.draftId===restored._id?attachment.text:'');setCVName(attachment?.draftId===restored._id?attachment.name:'');}
    else{setCVText('');setCVName('');setUseCV(false);}
-  }catch(cause){if(!abort.signal.aborted&&n===seq.current){setCode(errorCode(cause));setError(cause instanceof Error?cause.message:'Could not load the conversation.');}}
+  }catch(cause){if(!abort.signal.aborted&&n===seq.current){setCode(errorCode(cause));setError(errorText(cause, 'Could not load the conversation.'));}}
    finally{if(n===seq.current)setLoading(false);}}
   void load();return()=>{seq.current++;abort.abort();};
  },[token,requested,retry]);
@@ -79,7 +81,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
    setDraft(next);draftId.current=next._id;setMessage('');mutation.current=null;
    // Native history keeps the provider mounted and does not reset consent/composer state.
    if(!requested)window.history.replaceState(null,'','/career-goal/chat');
-  }catch(cause){if(n===seq.current&&!abort.signal.aborted){setCode(errorCode(cause));setError(cause instanceof Error?cause.message:'The agent could not respond. Your message is still here; retry.');}}
+  }catch(cause){if(n===seq.current&&!abort.signal.aborted){setCode(errorCode(cause));setError(errorText(cause, 'The agent could not respond. Your message is still here; retry.'));}}
   finally{if(n===seq.current){setBusy(false);setPending('');}}
  }
  async function upload(file?:File){
@@ -89,7 +91,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
   try{const preview=await importExplorationCV(file,token,abort.signal);if(n!==seq.current||abort.signal.aborted)return;
    setCVText(preview.text);setCVName(preview.source_name);setUseCV(false);
    if(draft)session.setAttachment({draftId:draft._id,text:preview.text,name:preview.source_name});
-  }catch(cause){if(n===seq.current&&!abort.signal.aborted){setCode(errorCode(cause));setError(cause instanceof Error?cause.message:'Could not read the CV.');}}
+  }catch(cause){if(n===seq.current&&!abort.signal.aborted){setCode(errorCode(cause));setError(errorText(cause, 'Could not read the CV.'));}}
   finally{if(n===seq.current)setBusy(false);}
  }
  async function chooseDirection(index:number){
@@ -118,7 +120,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
   <div className="agent-transcript" ref={transcript} {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">
    <div className="agent-message assistant"><span className="agent-message-label">elo</span><p>{initial}</p></div>
    {!draft&&<p className="agent-cv-reminder small">No CV is required to start. {warning} <Link href="/cv">CV upload</Link></p>}
-   {loading&&<p role="status">Opening your conversation…</p>}
+   {loading&&<ChatSkeleton label="Opening your conversation…"/>}
    {draft?.turns.map((turn,index)=><div className="agent-exchange" key={`${draft._id}-${index}`}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.answer.value||'I’m not sure; skip this for now.'}</p></div><div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply animate={index===draft.turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div></div>)}
    {draft&&(draft.total_turns||0)>draft.turns.length&&<p className="small">Earlier messages are summarised in the saved conversation details.</p>}
    {pending&&<div className="agent-message user"><span className="agent-message-label">You</span><p>{pending}</p></div>}

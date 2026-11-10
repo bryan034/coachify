@@ -1,3 +1,4 @@
+import { formatDate } from '@/lib/format';
 /** Calendar arithmetic on plain YYYY-MM-DD dates. Plans hold local dates, so nothing here uses the device time zone. */
 const parse = (value: string) => new Date(`${value}T12:00:00Z`);
 const iso = (date: Date) => date.toISOString().slice(0, 10);
@@ -36,6 +37,7 @@ export const clockRange = (start: string, minutes: number) => {
 export const dayOfMonth = (value: string) => Number(value.slice(8));
 export const weekdayName = (value: string) => format(value, { weekday: 'short' });
 export const shortDate = (value: string) => format(value, { day: 'numeric', month: 'short' });
-export const fullDate = (value: string) => format(value, { day: 'numeric', month: 'short', year: 'numeric' });
+/** Full dates match the rest of elo: "Wed, 9 Jan 2030". */
+export const fullDate = (value: string) => formatDate(value);
 export const monthName = (value: string) => format(value, { month: 'short' });
 export const monthTitle = (value: string) => format(value, { month: 'long', year: 'numeric' });

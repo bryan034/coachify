@@ -3,6 +3,8 @@ import {useEffect,useRef,useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {useProfile} from '@/features/profile/profile-provider';
 import {careerApi,type CurrentGoal,type ResearchView,type SavedReview} from '@/lib/api/career';
+import { errorText } from '@/lib/errors';
+import { formatDate, formatDateTime } from '@/lib/format';
 
 export function CareerTools({current:provided}:{current?:CurrentGoal}={}){
  const {token}=useProfile();const [loaded,setLoaded]=useState<CurrentGoal>();
@@ -21,7 +23,7 @@ function GoalTools({current,token}:{current:CurrentGoal;token:string}){
   try{const result=await careerApi<SavedReview>(`/goals/${goal._id}/guidance`,token,{method:'POST',signal:abort.signal,
    headers:{'Idempotency-Key':key.current},body:JSON.stringify({expected_version:goal.version,expected_selection_version:current.selection_version})});
    if(!abort.signal.aborted)router.push(`/career-goal/chat?source=jd&review=${result.current.goal._id}`);
-  }catch(cause){if(!abort.signal.aborted)setError(cause instanceof Error?cause.message:'Could not generate guidance.');}
+  }catch(cause){if(!abort.signal.aborted)setError(errorText(cause, 'Could not generate guidance.'));}
   finally{if(!abort.signal.aborted)setBusy(false);}
  }
  return <section className="card pad career-tools" aria-label="Selected career goal tools"><p className="k">Your selected direction</p><h2>{goal.role}</h2>
@@ -54,7 +56,7 @@ export function InterviewResearch({current,token}:{current:CurrentGoal;token:str
   if(receipt.current?.signature!==body)receipt.current={signature:body,key:crypto.randomUUID()};
   try{const value=await careerApi<ResearchView>(`/goals/${goal._id}/interview-research`,token,{method:'POST',signal:abort.signal,headers:{'Idempotency-Key':receipt.current.key},body});
    if(!abort.signal.aborted){setResult(value);setRevision('');receipt.current=null;}
-  }catch(cause){if(!abort.signal.aborted){setError(cause instanceof Error?cause.message:'Research is unavailable.');
+  }catch(cause){if(!abort.signal.aborted){setError(errorText(cause, 'Research is unavailable.'));
     try{const saved=await careerApi<ResearchView>(`/goals/${goal._id}/interview-research`,token,{signal:abort.signal});if(!abort.signal.aborted)setResult(saved);}catch{}}
   }finally{if(!abort.signal.aborted)setBusy(false);}
  }
@@ -67,7 +69,7 @@ export function InterviewResearch({current,token}:{current:CurrentGoal;token:str
     {research&&<button className="btn ghost" disabled={busy} onClick={()=>void requestResearch(true)}>Refresh research</button>}
     <button className="btn ghost" disabled={busy} onClick={()=>{setRevision('');setCheck(v=>v+1);}}>Show latest saved version</button></div></>}
   {error&&<p role="alert">{error} Previous successful research is retained.</p>}
-  {research&&<><p className="small">Version {research.version} · Last researched: {new Date(research.last_researched_at).toLocaleString()}</p>
+  {research&&<><p className="small">Version {research.version} · Last researched: {formatDateTime(research.last_researched_at)}</p>
    <a href={`/career-goal?goal=${goalId}&research=${research._id}`}>Link to this research version</a>
    {!!result?.history?.length&&<label>Saved research version<select value={revision||research._id} onChange={e=>setRevision(e.target.value)}>{result.history.map(id=><option value={id} key={id}>{id===research._id?`Version ${research.version}`:id.slice(-8)}</option>)}</select></label>}
    {research.research_status==='no_findings'&&<p>No supported interview topics were found in the retrieved sources. This does not mean there are no interview expectations.</p>}
@@ -78,7 +80,7 @@ export function InterviewResearch({current,token}:{current:CurrentGoal;token:str
     {topic.source_ids.map(id=>{const source=research.sources.find(s=>s.source_id===id);return source?<details key={id}><summary>{source.reliability==='official'?'Official employer guidance':source.reliability==='anecdotal'?'Individual/anecdotal report':'Unverified public guidance'} · {source.title||source.platform}</summary>
      <p><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title||source.url}</a> · {source.platform} · {source.source_id}</p>
      <p className="small">Context match: {source.role_match}. {source.role_match!=='exact'?'Location, seniority or role context may differ.':''}</p><blockquote>{source.evidence||'No excerpt available'}</blockquote>
-     <p className="small">Published: {source.published_date||'Unknown'} · Reported: {source.reported_date||'Unknown'} · Retrieved: {source.retrieved_at?new Date(source.retrieved_at).toLocaleDateString():'Unknown'}</p>
+     <p className="small">Published: {source.published_date||'Unknown'} · Reported: {source.reported_date||'Unknown'} · Retrieved: {source.retrieved_at?formatDate(source.retrieved_at):'Unknown'}</p>
     </details>:<p key={id}>Source {id} is unavailable.</p>;})}</article>)}
    <p className="small">{result?.note}</p></>}
  </section>;

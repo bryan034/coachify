@@ -1,5 +1,6 @@
 """Transient Gemini presentation; canonical goal and research stay unchanged."""
 import json
+import hashlib
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool as thread
 from app.ai.adapter import AIError, Operation
@@ -109,6 +110,12 @@ async def summarize(request, account, body):
         return goal, record
 
     goal, record = await snapshot()
+    cache_key=hashlib.sha256(json.dumps([str(goal.id),goal.version,body.expected_version,str(getattr(record,'id',body.research_id)),getattr(record,'version',0),str(getattr(record,'updated_at',None)),'presentation-v2']).encode()).hexdigest()
+    cache_rows=getattr(repo,'rows',None)
+    cached=await thread(cache_rows.find_one,{'_id':account,'goal_summary.key':cache_key},{'goal_summary':1}) if cache_rows is not None else None
+    if cached and isinstance(cached.get('goal_summary',{}).get('reply'),str):
+        await snapshot()
+        return {'reply':cached['goal_summary']['reply']}
     if record.intelligence.status=='failed':
         result=failed_research_summary(goal,record)
         await snapshot()
@@ -196,4 +203,8 @@ async def summarize(request, account, body):
         citations=source_links(ids,sources)
         point=text+(' '+citations if citations else '')
         points.append('**'+block.label+':** '+point)
-    return {'reply':'## Your career goal\n\n'+'\n\n'.join(points)+'\n\n'+SUMMARY_CLOSING}
+    reply='## Your career goal\n\n'+'\n\n'.join(points)+'\n\n'+SUMMARY_CLOSING
+    await snapshot()
+    if cache_rows is not None:await thread(cache_rows.update_one,{'_id':account,'workspace.session_id':body.session_id,'workspace.revision':body.expected_version},
+        {'$set':{'goal_summary':{'key':cache_key,'reply':reply}}})
+    return {'reply':reply}

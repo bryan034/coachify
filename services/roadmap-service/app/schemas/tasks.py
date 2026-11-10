@@ -3,6 +3,7 @@ from datetime import date
 from typing import Annotated, Literal
 from pydantic import ConfigDict, Field, StringConstraints, model_serializer, model_validator
 from .base import Contract, Mutation, Text
+from .notes import NotesDocument
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
 Key=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
 Title=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160)]
@@ -45,6 +46,9 @@ class EditTask(Mutation):
 class RemoveTask(Mutation):
     task_id:Key
     reason:str|None=Field(default=None,max_length=2000)
+class SaveTaskNotes(Mutation):
+    task_id:Key
+    notes:NotesDocument
 class ChangeTaskStatus(Mutation):
     task_id:Key
     status:Literal['not_started','in_progress','completed']
@@ -129,6 +133,8 @@ class EditableTask(Contract):
     status:Literal['not_started','in_progress','completed']
     completed_at:str|None=None
     evidence_note:str|None=None
+    notes:NotesDocument|None=None
+    notes_updated_at:str|None=None
     history:list[TaskHistory]=Field(default_factory=list)
     removed:bool=False
     definition_review_required:bool=False

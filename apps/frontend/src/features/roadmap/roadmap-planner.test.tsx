@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, act } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest';
 import { RoadmapPlanner } from './roadmap-planner';
 import type { Workspace } from './types';
-import { planner } from '../../../tests/fixtures/roadmap-workspace';
+import { planner, review, roadmap } from '../../../tests/fixtures/roadmap-workspace';
 const session = vi.hoisted(() => ({ account: { id: 'owner-one' }, token: 'synthetic-token' }));
 const api = vi.hoisted(() => vi.fn());
 vi.mock('@/features/profile/profile-provider', () => ({ useProfile: () => session }));
@@ -33,14 +33,13 @@ it('retains the next draft during async advice and sends the exact chosen partia
  await waitFor(() => expect(input).toHaveValue('')); fireEvent.change(input, { target: { value: 'Keep Saturday free.' } });
  await act(async () => resolveSend({ version: 1, operation: { id: 'saved', status: 'pending' } }));
  await waitFor(() => expect(input).toHaveValue('Keep Saturday free.'));
- expect(api.mock.calls.find(call => call[0] === '/messages')?.[2]).toMatchObject({ message: 'I have six hours a week.', allow_partial_assessment: false });
+ expect(api.mock.calls.find(call => call[0] === '/messages')?.[2]).toMatchObject({ message: 'I have six hours a week.', allow_partial_assessment: true });
 });
-it('requires an explicit choice for incomplete interview research before generating', async () => {
+it('labels incomplete research without blocking generation', async () => {
  const value = state(); value.context.research_coverage = 'unavailable'; api.mockResolvedValue(value); render(<RoadmapPlanner />);
  const generate = await screen.findByRole('button', { name: 'Generate roadmap' });
- expect(generate).toBeDisabled(); expect(screen.getByText(/Interview research is incomplete/)).toBeInTheDocument();
- fireEvent.click(screen.getByRole('checkbox', { name: /Continue with available evidence/ }));
- expect(generate).toBeEnabled(); expect(screen.queryByText(/Interview research is incomplete/)).not.toBeInTheDocument();
+ expect(generate).toBeEnabled(); expect(screen.getByText(/Using available evidence/)).toBeVisible();
+ expect(screen.queryByRole('checkbox',{name:/Continue with available evidence/})).not.toBeInTheDocument();
  // Filling in the planner runs no comparison, so the helper needs no choice until a plan exists.
  await openHelper(); fireEvent.change(screen.getByRole('textbox', { name: 'Answer here' }), { target: { value: 'Help me plan.' } });
  expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
@@ -68,6 +67,8 @@ it('explains satisfied alternatives and preserves the original requirement wordi
  const value = state(); value.assessment = { id: 'a', input_hash: 'h', role: 'Developer', research_coverage: 'no_findings', priorities: [], interview_prep_gaps: [], constraints: [],
   groups: [{ id: 'languages', operator: 'any', requirement_refs: ['python', 'sql'], match_status: 'supported', known_shortfall_refs: [] }],
   job_skill_gaps: [{ ref: 'python', name: 'Python', match_status: 'supported', evidence: 'Python or SQL experience is accepted.', priority: 'required', components: [{ dimension: 'capability', status: 'supported', explanation: 'Personal project use.', evidence_refs: [] }] }, { ref: 'sql', name: 'SQL', match_status: 'uncertain', components: [] }] };
+ // Starting point is a view of a generated roadmap; before one exists the planner is the only view.
+ const plan = roadmap({ assessment: value.assessment }); value.planner = planner({ active: plan, active_review: review(plan) });
  api.mockResolvedValue(value); render(<RoadmapPlanner />); await screen.findByRole('tab', { name: 'Starting point' });
  fireEvent.click(screen.getByRole('tab', { name: 'Starting point' }));
  expect(screen.getByText('One supported permitted route satisfies this group. Unused alternatives are not mandatory work.')).toBeInTheDocument();

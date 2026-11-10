@@ -1,2448 +1,3820 @@
-openapi: 3.1.0
-info:
-  title: elo profile API
-  description: Verified email/password accounts, optional Google, and revocable owner-scoped
-    sessions.
-  version: 0.1.0
-paths:
-  /api/v1/profile/auth-config:
-    get:
-      summary: Auth Config
-      operationId: auth_config_api_v1_profile_auth_config_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthConfigView'
-  /api/v1/profile/school-categories:
-    get:
-      summary: School Categories
-      operationId: school_categories_api_v1_profile_school_categories_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                items:
-                  $ref: '#/components/schemas/CategoryView'
-                type: array
-                title: Response School Categories Api V1 Profile School Categories
-                  Get
-  /api/v1/profile/school-countries:
-    get:
-      summary: School Countries
-      operationId: school_countries_api_v1_profile_school_countries_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                items:
-                  $ref: '#/components/schemas/CountryView'
-                type: array
-                title: Response School Countries Api V1 Profile School Countries Get
-  /api/v1/profile/institutions:
-    get:
-      summary: Institutions
-      operationId: institutions_api_v1_profile_institutions_get
-      parameters:
-      - name: category
-        in: query
-        required: true
-        schema:
-          $ref: '#/components/schemas/SchoolCategory'
-      - name: q
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 150
-          default: ''
-          title: Q
-      - name: country
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            pattern: ^[A-Z]{2}$
-          - type: 'null'
-          title: Country
-      - name: offset
-        in: query
-        required: false
-        schema:
-          type: integer
-          minimum: 0
-          default: 0
-          title: Offset
-      - name: limit
-        in: query
-        required: false
-        schema:
-          type: integer
-          maximum: 100
-          minimum: 1
-          default: 25
-          title: Limit
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InstitutionResults'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/companies:
-    get:
-      summary: Companies
-      operationId: companies_api_v1_profile_companies_get
-      parameters:
-      - name: q
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 150
-          default: ''
-          title: Q
-      - name: limit
-        in: query
-        required: false
-        schema:
-          type: integer
-          maximum: 100
-          minimum: 1
-          default: 20
-          title: Limit
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/EmploymentOption'
-                title: Response Companies Api V1 Profile Companies Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/industries:
-    get:
-      summary: Industries
-      operationId: industries_api_v1_profile_industries_get
-      parameters:
-      - name: q
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 150
-          default: ''
-          title: Q
-      - name: limit
-        in: query
-        required: false
-        schema:
-          type: integer
-          maximum: 100
-          minimum: 1
-          default: 20
-          title: Limit
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/EmploymentOption'
-                title: Response Industries Api V1 Profile Industries Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile:
-    get:
-      summary: Get Profile
-      operationId: get_profile_api_v1_profile_get
-      security:
-      - HTTPBearer: []
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileView'
-    patch:
-      summary: Patch Profile
-      operationId: patch_profile_api_v1_profile_patch
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: Idempotency-Key
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            minLength: 1
-            maxLength: 128
-            pattern: ^[A-Za-z0-9_-]+$
-          - type: 'null'
-          title: Idempotency-Key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProfilePatch'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileView'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/onboarding/complete:
-    post:
-      tags:
-      - P13–P14 initial setup
-      summary: Finish Onboarding
-      operationId: finish_onboarding_api_v1_profile_onboarding_complete_post
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: Idempotency-Key
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            minLength: 1
-            maxLength: 128
-            pattern: ^[A-Za-z0-9_-]+$
-          - type: 'null'
-          title: Idempotency-Key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProfilePatch'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileView'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/availability-periods:
-    post:
-      summary: Add Period
-      operationId: add_period_api_v1_profile_availability_periods_post
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: Idempotency-Key
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            minLength: 1
-            maxLength: 128
-            pattern: ^[A-Za-z0-9_-]+$
-          - type: 'null'
-          title: Idempotency-Key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PeriodCreate'
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileView'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/availability-periods/{period_id}:
-    patch:
-      summary: Edit Period
-      operationId: edit_period_api_v1_profile_availability_periods__period_id__patch
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: period_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Period Id
-      - name: Idempotency-Key
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            minLength: 1
-            maxLength: 128
-            pattern: ^[A-Za-z0-9_-]+$
-          - type: 'null'
-          title: Idempotency-Key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PeriodEdit'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileView'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    delete:
-      summary: Delete Period
-      operationId: delete_period_api_v1_profile_availability_periods__period_id__delete
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: period_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Period Id
-      - name: expected_version
-        in: query
-        required: true
-        schema:
-          type: integer
-          minimum: 0
-          title: Expected Version
-      - name: Idempotency-Key
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            minLength: 1
-            maxLength: 128
-            pattern: ^[A-Za-z0-9_-]+$
-          - type: 'null'
-          title: Idempotency-Key
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileView'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/planning-inputs:
-    get:
-      summary: Get Planning Inputs
-      operationId: get_planning_inputs_api_v1_profile_planning_inputs_get
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: time_zone
-        in: query
-        required: true
-        schema:
-          type: string
-          minLength: 1
-          maxLength: 100
-          title: Time Zone
-      - name: start_date
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Start Date
-      - name: end_date
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: End Date
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlanningInputs'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/versions/{version}:
-    get:
-      summary: Get Version
-      operationId: get_version_api_v1_profile_versions__version__get
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: version
-        in: path
-        required: true
-        schema:
-          type: integer
-          title: Version
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileView'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/auth/local-accounts:
-    get:
-      tags:
-      - P09–P16 account access
-      summary: Local Accounts
-      operationId: local_accounts_api_v1_profile_auth_local_accounts_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                items:
-                  $ref: '#/components/schemas/Choice'
-                type: array
-                title: Response Local Accounts Api V1 Profile Auth Local Accounts
-                  Get
-  /api/v1/profile/auth/attempts:
-    post:
-      tags:
-      - P09–P16 account access
-      summary: Begin
-      operationId: begin_api_v1_profile_auth_attempts_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Begin'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Nonce'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/auth/attempts/cancel:
-    post:
-      tags:
-      - P09–P16 account access
-      summary: Cancel
-      operationId: cancel_api_v1_profile_auth_attempts_cancel_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Attempt'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Done'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/auth/forgot-password:
-    post:
-      tags:
-      - P09–P16 account access
-      summary: Forgot Password
-      operationId: forgot_password_api_v1_profile_auth_forgot_password_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ResetRequest'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ResetReceipt'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/auth/reset-password:
-    post:
-      tags:
-      - P09–P16 account access
-      summary: Reset Password
-      operationId: reset_password_api_v1_profile_auth_reset_password_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ResetComplete'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Done'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/auth/complete:
-    post:
-      tags:
-      - P09–P16 account access
-      summary: Complete
-      operationId: complete_api_v1_profile_auth_complete_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Complete'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                anyOf:
-                - $ref: '#/components/schemas/AccountView'
-                - $ref: '#/components/schemas/PendingVerification'
-                title: Response Complete Api V1 Profile Auth Complete Post
-        '401':
-          description: Incorrect password or invalid provider credential.
-        '404':
-          description: No account found. Choose Create new account.
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/auth/verify-email:
-    post:
-      tags:
-      - P09–P16 account access
-      summary: Verify
-      operationId: verify_api_v1_profile_auth_verify_email_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Verify'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AccountView'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/auth/resend-verification:
-    post:
-      tags:
-      - P09–P16 account access
-      summary: Resend
-      operationId: resend_api_v1_profile_auth_resend_verification_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VerificationAccess'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PendingVerification'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profile/auth/session:
-    get:
-      tags:
-      - P09–P16 account access
-      summary: Session
-      operationId: session_api_v1_profile_auth_session_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AccountView'
-      security:
-      - HTTPBearer: []
-  /api/v1/profile/auth/logout:
-    post:
-      tags:
-      - P09–P16 account access
-      summary: Logout
-      operationId: logout_api_v1_profile_auth_logout_post
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Done'
-      security:
-      - HTTPBearer: []
-  /api/v1/profile/capabilities:
-    get:
-      tags:
-      - C07 manual capabilities
-      summary: Get Capabilities
-      operationId: get_capabilities_api_v1_profile_capabilities_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityView'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityError'
-        '503':
-          description: Service Unavailable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityError'
-      security:
-      - HTTPBearer: []
-    post:
-      tags:
-      - C07 manual capabilities
-      summary: Add Capability
-      operationId: add_capability_api_v1_profile_capabilities_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CapabilityCreate'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityView'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityError'
-        '409':
-          description: Conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityError'
-        '503':
-          description: Service Unavailable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityError'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - HTTPBearer: []
-  /api/v1/profile/capabilities/attachment:
-    post:
-      tags:
-      - C07 manual capabilities
-      summary: Reconcile Attachment
-      operationId: reconcile_attachment_api_v1_profile_capabilities_attachment_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CapabilityAttachment'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityView'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityError'
-        '409':
-          description: Conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityError'
-        '503':
-          description: Service Unavailable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityError'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - HTTPBearer: []
-  /api/v1/profile/skills-profile:
-    get:
-      tags:
-      - Skills profile
-      summary: Read
-      operationId: read_api_v1_profile_skills_profile_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SkillsProfile'
-      security:
-      - HTTPBearer: []
-    put:
-      tags:
-      - Skills profile
-      summary: Save
-      operationId: save_api_v1_profile_skills_profile_put
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SkillsProfileWrite'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SkillsProfile'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - HTTPBearer: []
-components:
-  schemas:
-    ResetRequest:
-      properties:
-        email:
-          type: string
-          maxLength: 254
-          title: Email
-      additionalProperties: false
-      type: object
-      required:
-      - email
-      title: ResetRequest
-    ResetComplete:
-      properties:
-        challenge_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Challenge Id
-        code:
-          type: string
-          pattern: ^[0-9]{6}$
-          title: Code
-        password:
-          type: string
-          maxLength: 128
-          minLength: 8
-          title: Password
-      additionalProperties: false
-      type: object
-      required:
-      - challenge_id
-      - code
-      - password
-      title: ResetComplete
-    ResetReceipt:
-      properties:
-        challenge_id:
-          type: string
-          title: Challenge Id
-        message:
-          type: string
-          title: Message
-      type: object
-      required:
-      - challenge_id
-      - message
-      title: ResetReceipt
-    AccountView:
-      properties:
-        id:
-          type: string
-          title: Id
-        name:
-          type: string
-          title: Name
-        email:
-          type: string
-          title: Email
-        email_verified:
-          type: boolean
-          title: Email Verified
-        provider:
-          type: string
-          enum:
-          - google
-          - local_test
-          - email
-          title: Provider
-        expires_at:
-          type: string
-          format: date-time
-          title: Expires At
-      type: object
-      required:
-      - id
-      - name
-      - email
-      - email_verified
-      - provider
-      - expires_at
-      title: AccountView
-    AttachmentHistory:
-      properties:
-        at:
-          type: string
-          format: date-time
-          title: At
-        previous:
-          anyOf:
-          - $ref: '#/components/schemas/CvMatch'
-          - type: 'null'
-        previous_source_fingerprint:
-          anyOf:
-          - type: string
-            pattern: ^[a-f0-9]{64}$
-          - type: 'null'
-          title: Previous Source Fingerprint
-        attached_to:
-          anyOf:
-          - $ref: '#/components/schemas/CvMatch'
-          - type: 'null'
-        attached_source_fingerprint:
-          anyOf:
-          - type: string
-            pattern: ^[a-f0-9]{64}$
-          - type: 'null'
-          title: Attached Source Fingerprint
-      type: object
-      required:
-      - at
-      - previous
-      - attached_to
-      title: AttachmentHistory
-    Attempt:
-      properties:
-        flow_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Flow Id
-        attempt_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Attempt Id
-      additionalProperties: false
-      type: object
-      required:
-      - flow_id
-      - attempt_id
-      title: Attempt
-    AuthConfigView:
-      properties:
-        mode:
-          type: string
-          enum:
-          - google
-          - email
-          - local_test
-          title: Mode
-        email_password_enabled:
-          type: boolean
-          title: Email Password Enabled
-        google_enabled:
-          type: boolean
-          title: Google Enabled
-        email_verification_required:
-          type: boolean
-          title: Email Verification Required
-          default: true
-        development_tools_enabled:
-          type: boolean
-          title: Development Tools Enabled
-          default: false
-      type: object
-      required:
-      - mode
-      - email_password_enabled
-      - google_enabled
-      title: AuthConfigView
-    AvailabilityPeriod:
-      properties:
-        id:
-          type: string
-          title: Id
-        start_date:
-          type: string
-          title: Start Date
-        end_date:
-          type: string
-          title: End Date
-        weekly_hours:
-          type: number
-          maximum: 168.0
-          minimum: 0.0
-          title: Weekly Hours
-      type: object
-      required:
-      - id
-      - start_date
-      - end_date
-      - weekly_hours
-      title: AvailabilityPeriod
-    Begin:
-      properties:
-        flow_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Flow Id
-        attempt_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Attempt Id
-        intent:
-          type: string
-          enum:
-          - login
-          - register
-          title: Intent
-        generation:
-          type: integer
-          maximum: 9007199254740991.0
-          minimum: 1.0
-          title: Generation
-      additionalProperties: false
-      type: object
-      required:
-      - flow_id
-      - attempt_id
-      - intent
-      - generation
-      title: Begin
-    CapabilityAttachment:
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0.0
-          title: Expected Version
-        mutation_id:
-          type: string
-          maxLength: 128
-          minLength: 1
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Mutation Id
-        declaration_id:
-          type: string
-          maxLength: 80
-          minLength: 1
-          title: Declaration Id
-        cv_match:
-          anyOf:
-          - $ref: '#/components/schemas/CvMatch'
-          - type: 'null'
-      additionalProperties: false
-      type: object
-      required:
-      - expected_version
-      - mutation_id
-      - declaration_id
-      - cv_match
-      title: CapabilityAttachment
-    CapabilityCreate:
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0.0
-          title: Expected Version
-        mutation_id:
-          type: string
-          maxLength: 128
-          minLength: 1
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Mutation Id
-        name:
-          type: string
-          maxLength: 120
-          minLength: 1
-          title: Name
-        description:
-          type: string
-          maxLength: 2000
-          minLength: 1
-          title: Description
-        mode:
-          type: string
-          enum:
-          - new
-          - distinct
-          - attach
-          title: Mode
-        attach_to_id:
-          anyOf:
-          - type: string
-            maxLength: 80
-            minLength: 1
-          - type: 'null'
-          title: Attach To Id
-        cv_match:
-          anyOf:
-          - $ref: '#/components/schemas/CvMatch'
-          - type: 'null'
-      additionalProperties: false
-      type: object
-      required:
-      - expected_version
-      - mutation_id
-      - name
-      - description
-      - mode
-      title: CapabilityCreate
-    CapabilityError:
-      properties:
-        detail:
-          type: string
-          title: Detail
-        code:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Code
-        matches:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/Declaration'
-            type: array
-          - type: 'null'
-          title: Matches
-      type: object
-      required:
-      - detail
-      title: CapabilityError
-    CapabilityLimits:
-      properties:
-        max_declarations:
-          type: integer
-          title: Max Declarations
-          default: 100
-        name:
-          type: integer
-          title: Name
-          default: 120
-        description:
-          type: integer
-          title: Description
-          default: 2000
-        max_contributions:
-          type: integer
-          title: Max Contributions
-          default: 10
-      type: object
-      title: CapabilityLimits
-    CapabilityView:
-      properties:
-        user_id:
-          type: string
-          title: User Id
-        version:
-          type: integer
-          title: Version
-        declarations:
-          items:
-            $ref: '#/components/schemas/Declaration'
-          type: array
-          title: Declarations
-        limits:
-          $ref: '#/components/schemas/CapabilityLimits'
-        skill_groups:
-          additionalProperties:
-            type: string
-          type: object
-          title: Skill Groups
-      type: object
-      required:
-      - user_id
-      - version
-      - declarations
-      title: CapabilityView
-    CapacityWindow:
-      properties:
-        start_date:
-          type: string
-          title: Start Date
-        end_date:
-          type: string
-          title: End Date
-        available_hours:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Available Hours
-      type: object
-      required:
-      - start_date
-      - end_date
-      - available_hours
-      title: CapacityWindow
-    CatalogueInstitution:
-      properties:
-        kind:
-          type: string
-          const: catalogue
-          title: Kind
-        id:
-          type: string
-          maxLength: 80
-          minLength: 1
-          title: Id
-      additionalProperties: false
-      type: object
-      required:
-      - kind
-      - id
-      title: CatalogueInstitution
-    CategoryView:
-      properties:
-        id:
-          $ref: '#/components/schemas/SchoolCategory'
-        label:
-          type: string
-          title: Label
-      type: object
-      required:
-      - id
-      - label
-      title: CategoryView
-    Choice:
-      properties:
-        id:
-          type: string
-          title: Id
-        name:
-          type: string
-          title: Name
-        email:
-          type: string
-          title: Email
-      type: object
-      required:
-      - id
-      - name
-      - email
-      title: Choice
-    Complete:
-      properties:
-        flow_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Flow Id
-        attempt_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Attempt Id
-        session_token:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Session Token
-        name:
-          anyOf:
-          - type: string
-            maxLength: 80
-          - type: 'null'
-          title: Name
-        email:
-          anyOf:
-          - type: string
-            maxLength: 254
-          - type: 'null'
-          title: Email
-        password:
-          anyOf:
-          - type: string
-            maxLength: 128
-            minLength: 8
-          - type: 'null'
-          title: Password
-        credential:
-          anyOf:
-          - type: string
-            maxLength: 12000
-          - type: 'null'
-          title: Credential
-      additionalProperties: false
-      type: object
-      required:
-      - flow_id
-      - attempt_id
-      - session_token
-      title: Complete
-    Contribution:
-      properties:
-        id:
-          type: string
-          title: Id
-        description:
-          type: string
-          title: Description
-        created_at:
-          type: string
-          format: date-time
-          title: Created At
-      type: object
-      required:
-      - id
-      - description
-      - created_at
-      title: Contribution
-    CountryView:
-      properties:
-        code:
-          type: string
-          title: Code
-        name:
-          type: string
-          title: Name
-      type: object
-      required:
-      - code
-      - name
-      title: CountryView
-    CustomInstitution:
-      properties:
-        kind:
-          type: string
-          const: custom
-          title: Kind
-        name:
-          type: string
-          maxLength: 300
-          title: Name
-        country_code:
-          anyOf:
-          - type: string
-            pattern: ^[A-Z]{2}$
-          - type: 'null'
-          title: Country Code
-      additionalProperties: false
-      type: object
-      required:
-      - kind
-      - name
-      title: CustomInstitution
-    CvMatch:
-      properties:
-        cv_id:
-          type: string
-          maxLength: 80
-          minLength: 1
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Cv Id
-        item_id:
-          type: string
-          maxLength: 100
-          minLength: 1
-          title: Item Id
-        cv_version:
-          type: integer
-          minimum: 0.0
-          title: Cv Version
-      additionalProperties: false
-      type: object
-      required:
-      - cv_id
-      - item_id
-      - cv_version
-      title: CvMatch
-    Declaration:
-      properties:
-        source_entry_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Source Entry Id
-        canonical_skill_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Canonical Skill Id
-        skill_registry_version:
-          type: string
-          title: Skill Registry Version
-          default: skills-v2
-        id:
-          type: string
-          title: Id
-        name:
-          type: string
-          title: Name
-        description:
-          type: string
-          title: Description
-        skill_id:
-          type: string
-          title: Skill Id
-        provenance:
-          type: string
-          const: user_declared
-          title: Provenance
-        proficiency:
-          type: 'null'
-          title: Proficiency
-        experience_months:
-          type: 'null'
-          title: Experience Months
-        independence:
-          type: 'null'
-          title: Independence
-        contributions:
-          items:
-            $ref: '#/components/schemas/Contribution'
-          type: array
-          title: Contributions
-        attached_to:
-          anyOf:
-          - $ref: '#/components/schemas/CvMatch'
-          - type: 'null'
-        attached_source_fingerprint:
-          anyOf:
-          - type: string
-            pattern: ^[a-f0-9]{64}$
-          - type: 'null'
-          title: Attached Source Fingerprint
-        attachment_history:
-          items:
-            $ref: '#/components/schemas/AttachmentHistory'
-          type: array
-          maxItems: 100
-          title: Attachment History
-        created_at:
-          type: string
-          format: date-time
-          title: Created At
-        updated_at:
-          type: string
-          format: date-time
-          title: Updated At
-      type: object
-      required:
-      - id
-      - name
-      - description
-      - skill_id
-      - provenance
-      - contributions
-      - created_at
-      - updated_at
-      title: Declaration
-    Done:
-      properties:
-        ok:
-          type: boolean
-          title: Ok
-      type: object
-      required:
-      - ok
-      title: Done
-    EducationPatch:
-      properties:
-        institution:
-          anyOf:
-          - oneOf:
-            - $ref: '#/components/schemas/CatalogueInstitution'
-            - $ref: '#/components/schemas/CustomInstitution'
-            discriminator:
-              propertyName: kind
-              mapping:
-                catalogue: '#/components/schemas/CatalogueInstitution'
-                custom: '#/components/schemas/CustomInstitution'
-          - type: 'null'
-          title: Institution
-        course:
-          anyOf:
-          - type: string
-            maxLength: 300
-          - type: 'null'
-          title: Course
-        study_year:
-          anyOf:
-          - type: integer
-            exclusiveMinimum: 0.0
-          - type: 'null'
-          title: Study Year
-        graduation_year:
-          anyOf:
-          - type: integer
-            maximum: 9999.0
-            minimum: 1900.0
-          - type: 'null'
-          title: Graduation Year
-      additionalProperties: false
-      type: object
-      title: EducationPatch
-    EducationView:
-      properties:
-        institution:
-          anyOf:
-          - $ref: '#/components/schemas/SavedInstitution'
-          - type: 'null'
-        course:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Course
-        study_year:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Study Year
-        graduation_year:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Graduation Year
-        study_year_label:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Study Year Label
-        study_year_category:
-          anyOf:
-          - $ref: '#/components/schemas/SchoolCategory'
-          - type: 'null'
-        category:
-          anyOf:
-          - $ref: '#/components/schemas/SchoolCategory'
-          - type: 'null'
-        context:
-          anyOf:
-          - type: string
-            enum:
-            - current
-            - last
-          - type: 'null'
-          title: Context
-      additionalProperties: true
-      type: object
-      title: EducationView
-    EmploymentOption:
-      properties:
-        id:
-          type: string
-          title: Id
-        name:
-          type: string
-          title: Name
-      type: object
-      required:
-      - id
-      - name
-      title: EmploymentOption
-    EmploymentPatch:
-      properties:
-        employer:
-          anyOf:
-          - type: string
-            maxLength: 300
-          - type: 'null'
-          title: Employer
-        role:
-          anyOf:
-          - type: string
-            maxLength: 300
-          - type: 'null'
-          title: Role
-        industry:
-          anyOf:
-          - type: string
-            maxLength: 300
-          - type: 'null'
-          title: Industry
-      additionalProperties: false
-      type: object
-      title: EmploymentPatch
-    EmploymentView:
-      properties:
-        employer:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Employer
-        role:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Role
-        industry:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Industry
-      type: object
-      title: EmploymentView
-    HTTPValidationError:
-      properties:
-        detail:
-          items:
-            $ref: '#/components/schemas/ValidationError'
-          type: array
-          title: Detail
-      type: object
-      title: HTTPValidationError
-    InstitutionResults:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/InstitutionView'
-          type: array
-          title: Items
-        total:
-          type: integer
-          title: Total
-        offset:
-          type: integer
-          title: Offset
-        limit:
-          type: integer
-          title: Limit
-        snapshot_date:
-          type: string
-          title: Snapshot Date
-        coverage_note:
-          type: string
-          title: Coverage Note
-      type: object
-      required:
-      - items
-      - total
-      - offset
-      - limit
-      - snapshot_date
-      - coverage_note
-      title: InstitutionResults
-    InstitutionView:
-      properties:
-        id:
-          type: string
-          title: Id
-        name:
-          type: string
-          title: Name
-        categories:
-          items:
-            $ref: '#/components/schemas/SchoolCategory'
-          type: array
-          title: Categories
-        country_code:
-          type: string
-          title: Country Code
-        country:
-          type: string
-          title: Country
-        domains:
-          items:
-            type: string
-          type: array
-          title: Domains
-        source:
-          type: string
-          title: Source
-      type: object
-      required:
-      - id
-      - name
-      - categories
-      - country_code
-      - country
-      - domains
-      - source
-      title: InstitutionView
-    Nonce:
-      properties:
-        nonce:
-          type: string
-          title: Nonce
-      type: object
-      required:
-      - nonce
-      title: Nonce
-    OccupationalStatus:
-      type: string
-      enum:
-      - student
-      - national_service
-      - unemployed
-      - employed
-      title: OccupationalStatus
-    PendingVerification:
-      properties:
-        verification_required:
-          type: boolean
-          const: true
-          title: Verification Required
-        challenge_id:
-          type: string
-          title: Challenge Id
-        masked_email:
-          type: string
-          title: Masked Email
-        expires_at:
-          type: string
-          format: date-time
-          title: Expires At
-        resend_at:
-          type: string
-          format: date-time
-          title: Resend At
-      type: object
-      required:
-      - verification_required
-      - challenge_id
-      - masked_email
-      - expires_at
-      - resend_at
-      title: PendingVerification
-    PeriodCreate:
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0.0
-          title: Expected Version
-        start_date:
-          type: string
-          title: Start Date
-        end_date:
-          type: string
-          title: End Date
-        weekly_hours:
-          type: number
-          maximum: 168.0
-          minimum: 0.0
-          title: Weekly Hours
-      additionalProperties: false
-      type: object
-      required:
-      - expected_version
-      - start_date
-      - end_date
-      - weekly_hours
-      title: PeriodCreate
-    PeriodEdit:
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0.0
-          title: Expected Version
-        start_date:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Start Date
-        end_date:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: End Date
-        weekly_hours:
-          anyOf:
-          - type: number
-            maximum: 168.0
-            minimum: 0.0
-          - type: 'null'
-          title: Weekly Hours
-      additionalProperties: false
-      type: object
-      required:
-      - expected_version
-      title: PeriodEdit
-    PlanningInputs:
-      properties:
-        profile_version:
-          type: integer
-          title: Profile Version
-        planning_revision:
-          type: integer
-          title: Planning Revision
-        application_date:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Application Date
-        application_time_zone:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Application Time Zone
-        validation_time_zone:
-          type: string
-          title: Validation Time Zone
-        validation_date:
-          type: string
-          title: Validation Date
-        capacity_as_of_date:
-          type: string
-          title: Capacity As Of Date
-        weekly_hours:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Weekly Hours
-        hours_unit:
-          type: string
-          title: Hours Unit
-          default: hours_per_week
-        availability_periods:
-          items:
-            $ref: '#/components/schemas/AvailabilityPeriod'
-          type: array
-          title: Availability Periods
-        capacity_time_zone:
-          type: string
-          title: Capacity Time Zone
-          default: Asia/Singapore
-        week_start:
-          type: string
-          title: Week Start
-          default: Monday
-        week_end:
-          type: string
-          title: Week End
-          default: Sunday
-        period_boundaries:
-          type: string
-          title: Period Boundaries
-          default: inclusive
-        proration:
-          type: string
-          title: Proration
-          default: weekly_hours / 7 per covered calendar date; period rate replaces
-            base rate
-        ready:
-          type: boolean
-          title: Ready
-        issues:
-          items:
-            $ref: '#/components/schemas/PlanningIssue'
-          type: array
-          title: Issues
-        capacity_window:
-          anyOf:
-          - $ref: '#/components/schemas/CapacityWindow'
-          - type: 'null'
-      type: object
-      required:
-      - profile_version
-      - planning_revision
-      - application_date
-      - application_time_zone
-      - validation_time_zone
-      - validation_date
-      - capacity_as_of_date
-      - weekly_hours
-      - availability_periods
-      - ready
-      - issues
-      title: PlanningInputs
-    PlanningIssue:
-      properties:
-        field:
-          type: string
-          title: Field
-        message:
-          type: string
-          title: Message
-        period_ids:
-          items:
-            type: string
-          type: array
-          title: Period Ids
-      type: object
-      required:
-      - field
-      - message
-      title: PlanningIssue
-    ProfilePatch:
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0.0
-          title: Expected Version
-        application_date:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Application Date
-        time_zone:
-          anyOf:
-          - type: string
-            maxLength: 100
-            minLength: 1
-          - type: 'null'
-          title: Time Zone
-        weekly_hours:
-          anyOf:
-          - type: number
-            maximum: 168.0
-            exclusiveMinimum: 0.0
-          - type: 'null'
-          title: Weekly Hours
-        occupational_status:
-          anyOf:
-          - $ref: '#/components/schemas/OccupationalStatus'
-          - type: 'null'
-        school_category:
-          anyOf:
-          - $ref: '#/components/schemas/SchoolCategory'
-          - type: 'null'
-        education:
-          anyOf:
-          - $ref: '#/components/schemas/EducationPatch'
-          - type: 'null'
-        employment:
-          anyOf:
-          - $ref: '#/components/schemas/EmploymentPatch'
-          - type: 'null'
-        previously_employed:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Previously Employed
-        no_previous_education:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: No Previous Education
-        confirm_education_context:
-          type: boolean
-          title: Confirm Education Context
-          default: false
-      additionalProperties: false
-      type: object
-      required:
-      - expected_version
-      title: ProfilePatch
-    ProfileView:
-      properties:
-        version:
-          type: integer
-          title: Version
-        onboarding_complete:
-          type: boolean
-          title: Onboarding Complete
-          default: false
-        onboarding_completed_at:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Onboarding Completed At
-        onboarding_state:
-          type: string
-          enum:
-          - missing
-          - incomplete
-          - legacy_unconfirmed
-          - complete
-          title: Onboarding State
-          default: missing
-        no_previous_education:
-          type: boolean
-          title: No Previous Education
-          default: false
-        previously_employed:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Previously Employed
-        application_date:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Application Date
-        application_time_zone:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Application Time Zone
-        weekly_hours:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Weekly Hours
-        availability_periods:
-          items:
-            $ref: '#/components/schemas/AvailabilityPeriod'
-          type: array
-          title: Availability Periods
-        planning_revision:
-          type: integer
-          title: Planning Revision
-          default: 0
-        occupational_status:
-          anyOf:
-          - $ref: '#/components/schemas/OccupationalStatus'
-          - type: 'null'
-        school_category:
-          anyOf:
-          - $ref: '#/components/schemas/SchoolCategory'
-          - type: 'null'
-        education_context:
-          anyOf:
-          - type: string
-            enum:
-            - current
-            - last
-          - type: 'null'
-          title: Education Context
-        education_review_required:
-          type: boolean
-          title: Education Review Required
-          default: false
-        education:
-          $ref: '#/components/schemas/EducationView'
-        employment:
-          $ref: '#/components/schemas/EmploymentView'
-        current_study_year:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Current Study Year
-      type: object
-      required:
-      - version
-      title: ProfileView
-    SavedInstitution:
-      properties:
-        kind:
-          type: string
-          enum:
-          - catalogue
-          - custom
-          title: Kind
-        id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Id
-        name:
-          type: string
-          title: Name
-        country_code:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Country Code
-        snapshot_date:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Snapshot Date
-      type: object
-      required:
-      - kind
-      - name
-      title: SavedInstitution
-    SchoolCategory:
-      type: string
-      enum:
-      - secondary
-      - ite
-      - polytechnic
-      - junior_college
-      - university
-      title: SchoolCategory
-    ValidationError:
-      properties:
-        loc:
-          items:
-            anyOf:
-            - type: string
-            - type: integer
-          type: array
-          title: Location
-        msg:
-          type: string
-          title: Message
-        type:
-          type: string
-          title: Error Type
-        input:
-          title: Input
-        ctx:
-          type: object
-          title: Context
-      type: object
-      required:
-      - loc
-      - msg
-      - type
-      title: ValidationError
-    VerificationAccess:
-      properties:
-        flow_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Flow Id
-        attempt_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Attempt Id
-        session_token:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Session Token
-      additionalProperties: false
-      type: object
-      required:
-      - flow_id
-      - attempt_id
-      - session_token
-      title: VerificationAccess
-    Verify:
-      properties:
-        flow_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Flow Id
-        attempt_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Attempt Id
-        session_token:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Session Token
-        challenge_id:
-          type: string
-          maxLength: 128
-          minLength: 32
-          pattern: ^[A-Za-z0-9_-]+$
-          title: Challenge Id
-        code:
-          type: string
-          pattern: ^[0-9]{6}$
-          title: Code
-      additionalProperties: false
-      type: object
-      required:
-      - flow_id
-      - attempt_id
-      - session_token
-      - challenge_id
-      - code
-      title: Verify
-    SkillsProfile:
-      properties:
-        version:
-          type: integer
-          minimum: 0.0
-          title: Version
-          default: 0
-        status:
-          type: string
-          enum:
-          - empty
-          - draft
-          - saved
-          title: Status
-          default: empty
-        saved_at:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Saved At
-        areas:
-          additionalProperties:
-            type: string
-            enum:
-            - answered
-            - unknown
-            - skipped
-            - not_applicable
-          propertyNames:
-            enum:
-            - work
-            - project
-            - education
-            - interest
-          type: object
-          maxProperties: 4
-          title: Areas
-        entries:
-          items:
-            $ref: '#/components/schemas/ProfileEntry'
-          type: array
-          maxItems: 40
-          title: Entries
-        skill_groups:
-          additionalProperties:
-            type: string
-          type: object
-          title: Skill Groups
-      additionalProperties: false
-      type: object
-      title: SkillsProfile
-    SkillsProfileWrite:
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0.0
-          title: Expected Version
-        mutation_id:
-          type: string
-          format: uuid
-          title: Mutation Id
-        status:
-          type: string
-          enum:
-          - draft
-          - saved
-          title: Status
-          default: draft
-        areas:
-          additionalProperties:
-            type: string
-            enum:
-            - answered
-            - unknown
-            - skipped
-            - not_applicable
-          propertyNames:
-            enum:
-            - work
-            - project
-            - education
-            - interest
-          type: object
-          maxProperties: 4
-          title: Areas
-        entries:
-          items:
-            $ref: '#/components/schemas/ProfileEntry'
-          type: array
-          maxItems: 40
-          title: Entries
-      additionalProperties: false
-      type: object
-      required:
-      - expected_version
-      - mutation_id
-      title: SkillsProfileWrite
-    ProfileEntry:
-      properties:
-        id:
-          type: string
-          format: uuid
-          title: Id
-        kind:
-          type: string
-          enum:
-          - work
-          - project
-          - education
-          - interest
-          title: Kind
-        title:
-          type: string
-          maxLength: 200
-          minLength: 1
-          title: Title
-        fields:
-          additionalProperties:
-            $ref: '#/components/schemas/IntakeField'
-          propertyNames:
-            enum:
-            - company
-            - location
-            - role
-            - description
-            - dates
-            - contribution
-            - tools
-            - complexity
-            - independence
-            - recency
-            - frequency
-            - outcome
-            - limitations
-            - institution
-            - qualification
-            - completion
-          type: object
-          maxProperties: 16
-          title: Fields
-        skills:
-          items:
-            $ref: '#/components/schemas/ProfileSkill'
-          type: array
-          maxItems: 12
-          title: Skills
-      additionalProperties: false
-      type: object
-      required:
-      - id
-      - kind
-      - title
-      title: ProfileEntry
-    ProfileSkill:
-      properties:
-        name:
-          type: string
-          maxLength: 120
-          minLength: 1
-          title: Name
-        description:
-          type: string
-          maxLength: 2000
-          minLength: 1
-          title: Description
-        evidence:
-          items:
-            $ref: '#/components/schemas/ProfileEvidence'
-          type: array
-          maxItems: 4
-          minItems: 1
-          title: Evidence
-        dimensions:
-          additionalProperties:
-            $ref: '#/components/schemas/IntakeField'
-          propertyNames:
-            enum:
-            - company
-            - location
-            - role
-            - description
-            - dates
-            - contribution
-            - tools
-            - complexity
-            - independence
-            - recency
-            - frequency
-            - outcome
-            - limitations
-            - institution
-            - qualification
-            - completion
-          type: object
-          maxProperties: 8
-          title: Dimensions
-      additionalProperties: false
-      type: object
-      required:
-      - name
-      - description
-      - evidence
-      title: ProfileSkill
-    ProfileEvidence:
-      properties:
-        message_id:
-          type: string
-          maxLength: 150
-          minLength: 1
-          title: Message Id
-        quote:
-          type: string
-          maxLength: 2000
-          minLength: 1
-          title: Quote
-      additionalProperties: false
-      type: object
-      required:
-      - message_id
-      - quote
-      title: ProfileEvidence
-    IntakeField:
-      properties:
-        status:
-          type: string
-          enum:
-          - answered
-          - unknown
-          - skipped
-          - not_applicable
-          title: Status
-        value:
-          anyOf:
-          - type: string
-            maxLength: 2000
-            minLength: 1
-          - type: 'null'
-          title: Value
-        evidence:
-          items:
-            $ref: '#/components/schemas/ProfileEvidence'
-          type: array
-          maxItems: 4
-          title: Evidence
-      additionalProperties: false
-      type: object
-      required:
-      - status
-      title: IntakeField
-  securitySchemes:
-    HTTPBearer:
-      type: http
-      scheme: bearer
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "elo profile API",
+    "description": "Verified email/password accounts, optional Google, and revocable owner-scoped sessions.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/profile/auth-config": {
+      "get": {
+        "summary": "Auth Config",
+        "operationId": "auth_config_api_v1_profile_auth_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfigView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/school-categories": {
+      "get": {
+        "summary": "School Categories",
+        "operationId": "school_categories_api_v1_profile_school_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryView"
+                  },
+                  "type": "array",
+                  "title": "Response School Categories Api V1 Profile School Categories Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/school-countries": {
+      "get": {
+        "summary": "School Countries",
+        "operationId": "school_countries_api_v1_profile_school_countries_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CountryView"
+                  },
+                  "type": "array",
+                  "title": "Response School Countries Api V1 Profile School Countries Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/institutions": {
+      "get": {
+        "summary": "Institutions",
+        "operationId": "institutions_api_v1_profile_institutions_get",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SchoolCategory"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 150,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstitutionResults"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/companies": {
+      "get": {
+        "summary": "Companies",
+        "operationId": "companies_api_v1_profile_companies_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 150,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EmploymentOption"
+                  },
+                  "title": "Response Companies Api V1 Profile Companies Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/industries": {
+      "get": {
+        "summary": "Industries",
+        "operationId": "industries_api_v1_profile_industries_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 150,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EmploymentOption"
+                  },
+                  "title": "Response Industries Api V1 Profile Industries Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile": {
+      "get": {
+        "summary": "Get Profile",
+        "operationId": "get_profile_api_v1_profile_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Patch Profile",
+        "operationId": "patch_profile_api_v1_profile_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/onboarding/complete": {
+      "post": {
+        "tags": [
+          "P13\u2013P14 initial setup"
+        ],
+        "summary": "Finish Onboarding",
+        "operationId": "finish_onboarding_api_v1_profile_onboarding_complete_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/availability-periods": {
+      "post": {
+        "summary": "Add Period",
+        "operationId": "add_period_api_v1_profile_availability_periods_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeriodCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/availability-periods/{period_id}": {
+      "patch": {
+        "summary": "Edit Period",
+        "operationId": "edit_period_api_v1_profile_availability_periods__period_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "period_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Period Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeriodEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Period",
+        "operationId": "delete_period_api_v1_profile_availability_periods__period_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "period_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Period Id"
+            }
+          },
+          {
+            "name": "expected_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Expected Version"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/planning-inputs": {
+      "get": {
+        "summary": "Get Planning Inputs",
+        "operationId": "get_planning_inputs_api_v1_profile_planning_inputs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "time_zone",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "title": "Time Zone"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningInputs"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/versions/{version}": {
+      "get": {
+        "summary": "Get Version",
+        "operationId": "get_version_api_v1_profile_versions__version__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/local-accounts": {
+      "get": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Local Accounts",
+        "operationId": "local_accounts_api_v1_profile_auth_local_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Choice"
+                  },
+                  "type": "array",
+                  "title": "Response Local Accounts Api V1 Profile Auth Local Accounts Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/attempts": {
+      "post": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Begin",
+        "operationId": "begin_api_v1_profile_auth_attempts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Begin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Nonce"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/attempts/cancel": {
+      "post": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Cancel",
+        "operationId": "cancel_api_v1_profile_auth_attempts_cancel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Attempt"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Done"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Forgot Password",
+        "operationId": "forgot_password_api_v1_profile_auth_forgot_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/reset-password": {
+      "post": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Reset Password",
+        "operationId": "reset_password_api_v1_profile_auth_reset_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetComplete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Done"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/complete": {
+      "post": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Complete",
+        "operationId": "complete_api_v1_profile_auth_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Complete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AccountView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PendingVerification"
+                    }
+                  ],
+                  "title": "Response Complete Api V1 Profile Auth Complete Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Incorrect password or invalid provider credential."
+          },
+          "404": {
+            "description": "No account found. Choose Create new account."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/verify-email": {
+      "post": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Verify",
+        "operationId": "verify_api_v1_profile_auth_verify_email_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Verify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/resend-verification": {
+      "post": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Resend",
+        "operationId": "resend_api_v1_profile_auth_resend_verification_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationAccess"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingVerification"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/session": {
+      "get": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Session",
+        "operationId": "session_api_v1_profile_auth_session_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/auth/logout": {
+      "post": {
+        "tags": [
+          "P09\u2013P16 account access"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_api_v1_profile_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Done"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/capabilities": {
+      "get": {
+        "tags": [
+          "C07 manual capabilities"
+        ],
+        "summary": "Get Capabilities",
+        "operationId": "get_capabilities_api_v1_profile_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "C07 manual capabilities"
+        ],
+        "summary": "Add Capability",
+        "operationId": "add_capability_api_v1_profile_capabilities_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapabilityCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/capabilities/attachment": {
+      "post": {
+        "tags": [
+          "C07 manual capabilities"
+        ],
+        "summary": "Reconcile Attachment",
+        "operationId": "reconcile_attachment_api_v1_profile_capabilities_attachment_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapabilityAttachment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/skills-profile": {
+      "get": {
+        "tags": [
+          "Skills profile"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_profile_skills_profile_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillsProfile"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Skills profile"
+        ],
+        "summary": "Save",
+        "operationId": "save_api_v1_profile_skills_profile_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillsProfileWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillsProfile"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ResetRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "ResetRequest"
+      },
+      "ResetComplete": {
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Challenge Id"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "title": "Code"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "challenge_id",
+          "code",
+          "password"
+        ],
+        "title": "ResetComplete"
+      },
+      "ResetReceipt": {
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "title": "Challenge Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "challenge_id",
+          "message"
+        ],
+        "title": "ResetReceipt"
+      },
+      "AccountView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "email_verified": {
+            "type": "boolean",
+            "title": "Email Verified"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "google",
+              "local_test",
+              "email"
+            ],
+            "title": "Provider"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email",
+          "email_verified",
+          "provider",
+          "expires_at"
+        ],
+        "title": "AccountView"
+      },
+      "AttachmentHistory": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CvMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previous_source_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Source Fingerprint"
+          },
+          "attached_to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CvMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attached_source_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attached Source Fingerprint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "previous",
+          "attached_to"
+        ],
+        "title": "AttachmentHistory"
+      },
+      "Attempt": {
+        "properties": {
+          "flow_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Flow Id"
+          },
+          "attempt_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Attempt Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "flow_id",
+          "attempt_id"
+        ],
+        "title": "Attempt"
+      },
+      "AuthConfigView": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "google",
+              "email",
+              "local_test"
+            ],
+            "title": "Mode"
+          },
+          "email_password_enabled": {
+            "type": "boolean",
+            "title": "Email Password Enabled"
+          },
+          "google_enabled": {
+            "type": "boolean",
+            "title": "Google Enabled"
+          },
+          "email_verification_required": {
+            "type": "boolean",
+            "title": "Email Verification Required",
+            "default": true
+          },
+          "development_tools_enabled": {
+            "type": "boolean",
+            "title": "Development Tools Enabled",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "email_password_enabled",
+          "google_enabled"
+        ],
+        "title": "AuthConfigView"
+      },
+      "AvailabilityPeriod": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "weekly_hours": {
+            "type": "number",
+            "maximum": 168.0,
+            "minimum": 0.0,
+            "title": "Weekly Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "start_date",
+          "end_date",
+          "weekly_hours"
+        ],
+        "title": "AvailabilityPeriod"
+      },
+      "Begin": {
+        "properties": {
+          "flow_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Flow Id"
+          },
+          "attempt_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Attempt Id"
+          },
+          "intent": {
+            "type": "string",
+            "enum": [
+              "login",
+              "register"
+            ],
+            "title": "Intent"
+          },
+          "generation": {
+            "type": "integer",
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Generation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "flow_id",
+          "attempt_id",
+          "intent",
+          "generation"
+        ],
+        "title": "Begin"
+      },
+      "CapabilityAttachment": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Mutation Id"
+          },
+          "declaration_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Declaration Id"
+          },
+          "cv_match": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CvMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "declaration_id",
+          "cv_match"
+        ],
+        "title": "CapabilityAttachment"
+      },
+      "CapabilityCreate": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Mutation Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "new",
+              "distinct",
+              "attach"
+            ],
+            "title": "Mode"
+          },
+          "attach_to_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attach To Id"
+          },
+          "cv_match": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CvMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "name",
+          "description",
+          "mode"
+        ],
+        "title": "CapabilityCreate"
+      },
+      "CapabilityError": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "matches": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Declaration"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "CapabilityError"
+      },
+      "CapabilityLimits": {
+        "properties": {
+          "max_declarations": {
+            "type": "integer",
+            "title": "Max Declarations",
+            "default": 100
+          },
+          "name": {
+            "type": "integer",
+            "title": "Name",
+            "default": 120
+          },
+          "description": {
+            "type": "integer",
+            "title": "Description",
+            "default": 2000
+          },
+          "max_contributions": {
+            "type": "integer",
+            "title": "Max Contributions",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "title": "CapabilityLimits"
+      },
+      "CapabilityView": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "declarations": {
+            "items": {
+              "$ref": "#/components/schemas/Declaration"
+            },
+            "type": "array",
+            "title": "Declarations"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/CapabilityLimits"
+          },
+          "skill_groups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Skill Groups"
+          },
+          "skill_subgroups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Skill Subgroups"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "version",
+          "declarations"
+        ],
+        "title": "CapabilityView"
+      },
+      "CapacityWindow": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "available_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_date",
+          "end_date",
+          "available_hours"
+        ],
+        "title": "CapacityWindow"
+      },
+      "CatalogueInstitution": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "catalogue",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "CatalogueInstitution"
+      },
+      "CategoryView": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SchoolCategory"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "CategoryView"
+      },
+      "Choice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email"
+        ],
+        "title": "Choice"
+      },
+      "Complete": {
+        "properties": {
+          "flow_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Flow Id"
+          },
+          "attempt_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Attempt Id"
+          },
+          "session_token": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Session Token"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 254
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "credential": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "flow_id",
+          "attempt_id",
+          "session_token"
+        ],
+        "title": "Complete"
+      },
+      "Contribution": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "created_at"
+        ],
+        "title": "Contribution"
+      },
+      "CountryView": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "CountryView"
+      },
+      "CustomInstitution": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "custom",
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Name"
+          },
+          "country_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "name"
+        ],
+        "title": "CustomInstitution"
+      },
+      "CvMatch": {
+        "properties": {
+          "cv_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Cv Id"
+          },
+          "item_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Item Id"
+          },
+          "cv_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Cv Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cv_id",
+          "item_id",
+          "cv_version"
+        ],
+        "title": "CvMatch"
+      },
+      "Declaration": {
+        "properties": {
+          "source_entry_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Entry Id"
+          },
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "skill_registry_version": {
+            "type": "string",
+            "title": "Skill Registry Version",
+            "default": "skills-v2"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "skill_id": {
+            "type": "string",
+            "title": "Skill Id"
+          },
+          "provenance": {
+            "type": "string",
+            "const": "user_declared",
+            "title": "Provenance"
+          },
+          "proficiency": {
+            "type": "null",
+            "title": "Proficiency"
+          },
+          "experience_months": {
+            "type": "null",
+            "title": "Experience Months"
+          },
+          "independence": {
+            "type": "null",
+            "title": "Independence"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/Contribution"
+            },
+            "type": "array",
+            "title": "Contributions"
+          },
+          "attached_to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CvMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attached_source_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attached Source Fingerprint"
+          },
+          "attachment_history": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentHistory"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Attachment History"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "skill_id",
+          "provenance",
+          "contributions",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Declaration"
+      },
+      "Done": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "Done"
+      },
+      "EducationPatch": {
+        "properties": {
+          "institution": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/CatalogueInstitution"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CustomInstitution"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "kind",
+                  "mapping": {
+                    "catalogue": "#/components/schemas/CatalogueInstitution",
+                    "custom": "#/components/schemas/CustomInstitution"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution"
+          },
+          "course": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course"
+          },
+          "study_year": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Study Year"
+          },
+          "graduation_year": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9999.0,
+                "minimum": 1900.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graduation Year"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "EducationPatch"
+      },
+      "EducationView": {
+        "properties": {
+          "institution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SavedInstitution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "course": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course"
+          },
+          "study_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Study Year"
+          },
+          "graduation_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graduation Year"
+          },
+          "study_year_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Study Year Label"
+          },
+          "study_year_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SchoolCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SchoolCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "last"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "EducationView"
+      },
+      "EmploymentOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "EmploymentOption"
+      },
+      "EmploymentPatch": {
+        "properties": {
+          "employer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employer"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "EmploymentPatch"
+      },
+      "EmploymentView": {
+        "properties": {
+          "employer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employer"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          }
+        },
+        "type": "object",
+        "title": "EmploymentView"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InstitutionResults": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InstitutionView"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "snapshot_date": {
+            "type": "string",
+            "title": "Snapshot Date"
+          },
+          "coverage_note": {
+            "type": "string",
+            "title": "Coverage Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit",
+          "snapshot_date",
+          "coverage_note"
+        ],
+        "title": "InstitutionResults"
+      },
+      "InstitutionView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/SchoolCategory"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "country_code": {
+            "type": "string",
+            "title": "Country Code"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Domains"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "categories",
+          "country_code",
+          "country",
+          "domains",
+          "source"
+        ],
+        "title": "InstitutionView"
+      },
+      "Nonce": {
+        "properties": {
+          "nonce": {
+            "type": "string",
+            "title": "Nonce"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nonce"
+        ],
+        "title": "Nonce"
+      },
+      "OccupationalStatus": {
+        "type": "string",
+        "enum": [
+          "student",
+          "national_service",
+          "unemployed",
+          "employed"
+        ],
+        "title": "OccupationalStatus"
+      },
+      "PendingVerification": {
+        "properties": {
+          "verification_required": {
+            "type": "boolean",
+            "const": true,
+            "title": "Verification Required"
+          },
+          "challenge_id": {
+            "type": "string",
+            "title": "Challenge Id"
+          },
+          "masked_email": {
+            "type": "string",
+            "title": "Masked Email"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "resend_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Resend At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "verification_required",
+          "challenge_id",
+          "masked_email",
+          "expires_at",
+          "resend_at"
+        ],
+        "title": "PendingVerification"
+      },
+      "PeriodCreate": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "weekly_hours": {
+            "type": "number",
+            "maximum": 168.0,
+            "minimum": 0.0,
+            "title": "Weekly Hours"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "start_date",
+          "end_date",
+          "weekly_hours"
+        ],
+        "title": "PeriodCreate"
+      },
+      "PeriodEdit": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "weekly_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 168.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Hours"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "PeriodEdit"
+      },
+      "PlanningInputs": {
+        "properties": {
+          "profile_version": {
+            "type": "integer",
+            "title": "Profile Version"
+          },
+          "planning_revision": {
+            "type": "integer",
+            "title": "Planning Revision"
+          },
+          "application_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Date"
+          },
+          "application_time_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Time Zone"
+          },
+          "validation_time_zone": {
+            "type": "string",
+            "title": "Validation Time Zone"
+          },
+          "validation_date": {
+            "type": "string",
+            "title": "Validation Date"
+          },
+          "capacity_as_of_date": {
+            "type": "string",
+            "title": "Capacity As Of Date"
+          },
+          "weekly_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Hours"
+          },
+          "hours_unit": {
+            "type": "string",
+            "title": "Hours Unit",
+            "default": "hours_per_week"
+          },
+          "availability_periods": {
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityPeriod"
+            },
+            "type": "array",
+            "title": "Availability Periods"
+          },
+          "capacity_time_zone": {
+            "type": "string",
+            "title": "Capacity Time Zone",
+            "default": "Asia/Singapore"
+          },
+          "week_start": {
+            "type": "string",
+            "title": "Week Start",
+            "default": "Monday"
+          },
+          "week_end": {
+            "type": "string",
+            "title": "Week End",
+            "default": "Sunday"
+          },
+          "period_boundaries": {
+            "type": "string",
+            "title": "Period Boundaries",
+            "default": "inclusive"
+          },
+          "proration": {
+            "type": "string",
+            "title": "Proration",
+            "default": "weekly_hours / 7 per covered calendar date; period rate replaces base rate"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/PlanningIssue"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "capacity_window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapacityWindow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile_version",
+          "planning_revision",
+          "application_date",
+          "application_time_zone",
+          "validation_time_zone",
+          "validation_date",
+          "capacity_as_of_date",
+          "weekly_hours",
+          "availability_periods",
+          "ready",
+          "issues"
+        ],
+        "title": "PlanningInputs"
+      },
+      "PlanningIssue": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "period_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Period Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "message"
+        ],
+        "title": "PlanningIssue"
+      },
+      "ProfilePatch": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "application_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Date"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Zone"
+          },
+          "weekly_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 168.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Hours"
+          },
+          "occupational_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OccupationalStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "school_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SchoolCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "education": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EducationPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "employment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmploymentPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previously_employed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previously Employed"
+          },
+          "no_previous_education": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Previous Education"
+          },
+          "confirm_education_context": {
+            "type": "boolean",
+            "title": "Confirm Education Context",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "ProfilePatch"
+      },
+      "ProfileView": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "onboarding_complete": {
+            "type": "boolean",
+            "title": "Onboarding Complete",
+            "default": false
+          },
+          "onboarding_completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onboarding Completed At"
+          },
+          "onboarding_state": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "incomplete",
+              "legacy_unconfirmed",
+              "complete"
+            ],
+            "title": "Onboarding State",
+            "default": "missing"
+          },
+          "no_previous_education": {
+            "type": "boolean",
+            "title": "No Previous Education",
+            "default": false
+          },
+          "previously_employed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previously Employed"
+          },
+          "application_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Date"
+          },
+          "application_time_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Time Zone"
+          },
+          "weekly_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Hours"
+          },
+          "availability_periods": {
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityPeriod"
+            },
+            "type": "array",
+            "title": "Availability Periods"
+          },
+          "planning_revision": {
+            "type": "integer",
+            "title": "Planning Revision",
+            "default": 0
+          },
+          "occupational_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OccupationalStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "school_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SchoolCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "education_context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "last"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Education Context"
+          },
+          "education_review_required": {
+            "type": "boolean",
+            "title": "Education Review Required",
+            "default": false
+          },
+          "education": {
+            "$ref": "#/components/schemas/EducationView"
+          },
+          "employment": {
+            "$ref": "#/components/schemas/EmploymentView"
+          },
+          "current_study_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Study Year"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "ProfileView"
+      },
+      "SavedInstitution": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "catalogue",
+              "custom"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Code"
+          },
+          "snapshot_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "name"
+        ],
+        "title": "SavedInstitution"
+      },
+      "SchoolCategory": {
+        "type": "string",
+        "enum": [
+          "secondary",
+          "ite",
+          "polytechnic",
+          "junior_college",
+          "university"
+        ],
+        "title": "SchoolCategory"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VerificationAccess": {
+        "properties": {
+          "flow_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Flow Id"
+          },
+          "attempt_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Attempt Id"
+          },
+          "session_token": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Session Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "flow_id",
+          "attempt_id",
+          "session_token"
+        ],
+        "title": "VerificationAccess"
+      },
+      "Verify": {
+        "properties": {
+          "flow_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Flow Id"
+          },
+          "attempt_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Attempt Id"
+          },
+          "session_token": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Session Token"
+          },
+          "challenge_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Challenge Id"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "flow_id",
+          "attempt_id",
+          "session_token",
+          "challenge_id",
+          "code"
+        ],
+        "title": "Verify"
+      },
+      "SkillsProfile": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Version",
+            "default": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "empty",
+              "draft",
+              "saved"
+            ],
+            "title": "Status",
+            "default": "empty"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          },
+          "areas": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "answered",
+                "unknown",
+                "skipped",
+                "not_applicable"
+              ]
+            },
+            "propertyNames": {
+              "enum": [
+                "work",
+                "project",
+                "education",
+                "interest"
+              ]
+            },
+            "type": "object",
+            "maxProperties": 4,
+            "title": "Areas"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEntry"
+            },
+            "type": "array",
+            "maxItems": 40,
+            "title": "Entries"
+          },
+          "skill_groups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Skill Groups"
+          },
+          "skill_subgroups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Skill Subgroups"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SkillsProfile"
+      },
+      "SkillsProfileWrite": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "saved"
+            ],
+            "title": "Status",
+            "default": "draft"
+          },
+          "areas": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "answered",
+                "unknown",
+                "skipped",
+                "not_applicable"
+              ]
+            },
+            "propertyNames": {
+              "enum": [
+                "work",
+                "project",
+                "education",
+                "interest"
+              ]
+            },
+            "type": "object",
+            "maxProperties": 4,
+            "title": "Areas"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEntry"
+            },
+            "type": "array",
+            "maxItems": 40,
+            "title": "Entries"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id"
+        ],
+        "title": "SkillsProfileWrite"
+      },
+      "ProfileEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "work",
+              "project",
+              "education",
+              "interest"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/IntakeField"
+            },
+            "propertyNames": {
+              "enum": [
+                "company",
+                "location",
+                "role",
+                "description",
+                "dates",
+                "contribution",
+                "tools",
+                "complexity",
+                "independence",
+                "recency",
+                "frequency",
+                "outcome",
+                "limitations",
+                "institution",
+                "qualification",
+                "completion"
+              ]
+            },
+            "type": "object",
+            "maxProperties": 16,
+            "title": "Fields"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileSkill"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Skills"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title"
+        ],
+        "title": "ProfileEntry"
+      },
+      "ProfileSkill": {
+        "properties": {
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "skill_registry_version": {
+            "type": "string",
+            "title": "Skill Registry Version",
+            "default": "skills-v2"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEvidence"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Evidence"
+          },
+          "dimensions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/IntakeField"
+            },
+            "propertyNames": {
+              "enum": [
+                "company",
+                "location",
+                "role",
+                "description",
+                "dates",
+                "contribution",
+                "tools",
+                "complexity",
+                "independence",
+                "recency",
+                "frequency",
+                "outcome",
+                "limitations",
+                "institution",
+                "qualification",
+                "completion"
+              ]
+            },
+            "type": "object",
+            "maxProperties": 8,
+            "title": "Dimensions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "evidence"
+        ],
+        "title": "ProfileSkill"
+      },
+      "ProfileEvidence": {
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Message Id"
+          },
+          "quote": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Quote"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "message_id",
+          "quote"
+        ],
+        "title": "ProfileEvidence"
+      },
+      "IntakeField": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "unknown",
+              "skipped",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEvidence"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "IntakeField"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

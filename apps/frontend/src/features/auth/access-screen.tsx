@@ -7,10 +7,11 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { useProfile } from '@/features/profile/profile-provider';
 import { ApiError, profileApi } from '@/lib/api/profile';
 import { GoogleSignIn } from '@/lib/auth/google-sign-in';
+import { errorText } from '@/lib/errors';
 export function AccessFrame({ children, entry = false }: { children: ReactNode; entry?: boolean }) {
  return <div className={`access-page${entry ? ' access-entry' : ''}`}>
   <a href="#access-content" className="skip-link">Skip to content</a>
-  <header className="access-header"><Link href="/" className="brand" aria-label="Elo home"><BrandLogo/></Link><span className="access-header-note">Your career, moving forward.</span><Link href="/login" className="btn ghost">Sign in</Link></header>
+  <header className="access-header"><Link href="/" className="brand" aria-label="Elo home"><BrandLogo/></Link><span className="access-header-note">Your career, moving forward.</span><HeaderAction/></header>
   <main id="access-content" className="access-main" tabIndex={-1}>
    <section className="access-intro"><h1>A clearer path<br/>to your next<br/>career move.</h1><p>Bring your experience and ambitions together. Find a direction that feels like you.</p>{entry && <div className="entry-content">{children}</div>}</section>
    {entry ? <JourneyVisual/> : <section className="access-card card">{children}</section>}
@@ -19,6 +20,11 @@ export function AccessFrame({ children, entry = false }: { children: ReactNode; 
   <footer className="access-footer"><span>Your next chapter starts here.</span><span>Built around your ambition.</span></footer>
  </div>;
 }
+/** The header offers the other way in: Create account on the sign-in page, Sign in everywhere else. */
+function HeaderAction() {
+ const pathname = usePathname();
+ return pathname === '/login' ? <Link href="/register" className="btn ghost">Create account</Link> : <Link href="/login" className="btn ghost">Sign in</Link>;
+}
 function AccessStatus() {
  const { logoutError, retryLogout, configError, reload } = useProfile();
  return <>{configError && <div role="alert"><p className="error">Account access unavailable: {configError}</p><button className="btn ghost" onClick={reload}>Retry connection</button></div>}{logoutError && <div role="alert"><p className="error">{logoutError}</p><button className="btn ghost" onClick={retryLogout}>Retry sign-out</button></div>}</>;
@@ -26,7 +32,7 @@ function AccessStatus() {
 export function EntryPage() {
  const session = useProfile(); const router = useRouter(); const pathname=usePathname();
  useEffect(() => { if (pathname==='/' && session.account && session.profile && !session.loading) router.replace(session.profile.onboarding_complete ? '/dashboard' : '/onboarding'); }, [session.account, session.profile, session.loading, pathname, router]);
- return <AccessFrame entry><AccessStatus/>{session.loading ? <p role="status">Checking account access…</p> : session.account ? <><p role="status">{session.loadError || 'Opening your workspace…'}</p>{session.loadError && <button className="btn ghost" onClick={session.reload}>Retry profile</button>}<button className="btn ghost" onClick={session.signOut}>Sign out</button></> : <div className="access-actions"><Link href="/register" className="btn pri">Create account <span aria-hidden="true">↗</span></Link><Link href="/login" className="btn ghost">Sign in to your account</Link></div>}</AccessFrame>;
+ return <AccessFrame entry><AccessStatus/>{session.loading ? <p role="status">Checking account access…</p> : session.account ? <><p role="status">{session.loadError || 'Opening your workspace…'}</p>{session.loadError && <button className="btn ghost" onClick={session.reload}>Retry profile</button>}<button className="btn ghost" onClick={session.signOut}>Sign out</button></> : <div className="access-actions"><Link href="/register" className="btn pri">Create account</Link><Link href="/login" className="btn ghost">Sign in to your account</Link></div>}</AccessFrame>;
 }
 export function AccessScreen({ intent }: { intent: 'login' | 'register' }) {
  const { mode, googleEnabled, verification, account, profile, loading, configError, loadError, beginAccess, completeAccess, cancelAccess, reload, signOut } = useProfile();
@@ -44,7 +50,7 @@ export function AccessScreen({ intent }: { intent: 'login' | 'register' }) {
  const finish = useCallback(async (credential?: string) => {
   if (locked.current) return; locked.current = true; setBusy(true); setError(''); setAccountNotFound(false);
   try { await completeAccess(credential ? { credential } : { ...(intent === 'register' ? { name } : {}), email, password }); setPassword(''); }
-  catch (e) { setError(e instanceof Error ? e.message : 'Could not finish. Please retry.'); setAccountNotFound(intent === 'login' && e instanceof ApiError && e.status === 404); }
+  catch (e) { setError(errorText(e, 'Could not finish. Please retry.')); setAccountNotFound(intent === 'login' && e instanceof ApiError && e.status === 404); }
   finally { locked.current = false; setBusy(false); }
  }, [intent, name, email, password, completeAccess]);
  function submit(event: FormEvent) { event.preventDefault(); void finish(); }
@@ -58,7 +64,7 @@ export function AccessScreen({ intent }: { intent: 'login' | 'register' }) {
  <label htmlFor="account-email">Email address</label><input id="account-email" type="email" autoComplete="email" maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} required disabled={busy}/>
  <label htmlFor="account-password">Password</label><input id="account-password" type="password" autoComplete={intent === 'register' ? 'new-password' : 'current-password'} minLength={8} maxLength={128} value={password} onChange={e=>setPassword(e.target.value)} required disabled={busy}/>
  {intent === 'register' && <p className="small">We’ll email a code to verify your address. Use 8–128 characters for your password. A long, unique passphrase works well.</p>}
- <button className="btn pri" disabled={busy || !nonce || !email || password.length < 8}>{busy ? 'Please wait…' : intent === 'register' ? 'Create account' : 'Sign in'}<span aria-hidden="true">↗</span></button></form>
+ <button className="btn pri" disabled={busy || !nonce || !email || password.length < 8}>{busy ? 'Please wait…' : intent === 'register' ? 'Create account' : 'Sign in'}</button></form>
  {googleEnabled && nonce && <div className="access-google"><p className="small">Or continue with Google</p><GoogleSignIn key={nonce} nonce={nonce} onCredential={credential => { void finish(credential); }}/></div>}
  {intent === 'login' && <Link className="text-link small" href="/forgot-password">Forgot password?</Link>}
  {busy && <p role="status">Finishing account access…</p>}{error && <div role="alert"><p className="error">{error}</p>{accountNotFound ? <Link className="btn pri" href="/register" onClick={cancelAccess}>Create new account</Link> : <button className="btn ghost sm" onClick={() => setRevision(n => n + 1)}>Start again</button>}</div>}

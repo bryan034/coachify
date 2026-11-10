@@ -121,7 +121,8 @@ class Capacity:
         if day==self.today:holes.append((0,self.now_minute))
         preferred=merge([span(b) for b in blocks if b.kind=='preferred'])
         backup=subtract([span(b) for b in blocks if b.kind=='backup'],preferred)
-        return {'preferred':subtract(preferred,holes),'backup':subtract(backup,holes)}
+        overflow=subtract([(to_minute(self.config.overflow_start),to_minute(self.config.overflow_end))], [*preferred,*backup]) if self.config.allow_overflow else []
+        return {'preferred':subtract(preferred,holes),'backup':subtract(backup,holes),'overflow':subtract(overflow,holes)}
     def week_left(self,week):
         return max(0,self.cap-self.completed_by_week.get(week,0))
     def between(self,first,last):
@@ -129,25 +130,26 @@ class Capacity:
         weeks={}
         for day,windows in self.days.items():
             if first<=day<=last:
-                minutes=total(windows['preferred'])+(total(windows['backup']) if self.config.use_backup else 0)
+                minutes=total(windows['preferred'])+total(windows.get('overflow',[]))+(total(windows['backup']) if self.config.use_backup else 0)
                 weeks[week_of(day)]=weeks.get(week_of(day),0)+minutes
         return sum(min(self.week_left(week),minutes) for week,minutes in weeks.items())
     def weeks(self):
         rows={}
         for day,windows in self.days.items():
-            row=rows.setdefault(week_of(day),{'preferred':0,'backup':0})
+            row=rows.setdefault(week_of(day),{'preferred':0,'backup':0,'overflow':0})
             row['preferred']+=total(windows['preferred'])
             row['backup']+=total(windows['backup'])
+            row['overflow']+=total(windows.get('overflow',[]))
         result=[]
         if not self.target or self.target<self.start or not self.days and (self.target-self.start).days>MAX_RUNWAY_DAYS:return result
         week=week_of(self.start)
         while week<=self.target:
-            row=rows.get(week,{'preferred':0,'backup':0})
+            row=rows.get(week,{'preferred':0,'backup':0,'overflow':0})
             left=self.week_left(week)
             preferred=min(left,row['preferred'])
             both=min(left,row['preferred']+row['backup'])
             result.append({'week_start':week.isoformat(),'weekly_cap':self.cap,'completed_minutes':self.completed_by_week.get(week,0),
-                'preferred_minutes':preferred,'backup_extra_minutes':both-preferred,'usable_minutes':both if self.config.use_backup else preferred,
+                'preferred_minutes':preferred,'backup_extra_minutes':both-preferred,'usable_minutes':min(left,(row['preferred']+row['backup'] if self.config.use_backup else row['preferred'])+row.get('overflow',0)),
                 'partial':week<self.start or week+timedelta(days=6)>self.target})
             week+=timedelta(days=7)
         return result
@@ -156,12 +158,12 @@ class Capacity:
         result=[]
         for offset in range(7):
             day=week+timedelta(days=offset)
-            windows=self.days.get(day,{'preferred':[],'backup':[]})
-            kinds=('preferred','backup') if self.config.use_backup else ('preferred',)
+            windows=self.days.get(day,{'preferred':[],'backup':[],'overflow':[]})
+            kinds=('preferred','backup','overflow') if self.config.use_backup else ('preferred','overflow')
             for kind in kinds:
                 for start,end in windows[kind]:
                     result.append({'date':day.isoformat(),'start_time':to_clock(start),'end_time':to_clock(end),'kind':kind,'minutes':end-start})
-        return sorted(result,key=lambda w:(w['date'],w['start_time']))
+        return sorted(result,key=lambda w:({'preferred':0,'backup':1,'overflow':2}[w['kind']],w['date'],w['start_time']))
     def report(self,allow_past_start=False):
         config=self.config;issues=[]
         add=lambda code,message:issues.append({'code':code,'message':message})
@@ -173,7 +175,7 @@ class Capacity:
         elif self.start_date<self.today and not allow_past_start:add('start_in_past','Choose a start date of today or later.')
         else:dates_valid=True
         if not config.weekly_minutes:add('no_budget','Set a weekly study budget above zero.')
-        if not config.blocks:add('no_blocks','Add at least one recurring study block.')
+        if not config.blocks and not config.allow_overflow:add('no_blocks','Add at least one recurring study block.')
         for number,rule in enumerate(config.blackouts,1):
             problem=blackout_problem(rule)
             if problem:add('blackout_invalid',f'Blackout {number} {problem}.')
@@ -181,7 +183,7 @@ class Capacity:
         study={'preferred_minutes':sum(w['preferred_minutes'] for w in weeks),
             'backup_extra_minutes':sum(w['backup_extra_minutes'] for w in weeks),
             'usable_minutes':sum(w['usable_minutes'] for w in weeks)}
-        if dates_valid and config.weekly_minutes and config.blocks and not study['usable_minutes']:
+        if dates_valid and config.weekly_minutes and (config.blocks or config.allow_overflow) and not study['usable_minutes']:
             add('no_usable_time','No usable study time remains between these dates.')
         calendar=None
         if dates_valid:
@@ -191,7 +193,7 @@ class Capacity:
             calendar={'days':days,'weeks':days//7,'extra_days':days%7,'label':', '.join(parts),'partial_first_week':self.start.weekday()!=0}
         first=next((w['week_start'] for w in weeks if w['usable_minutes']),None)
         matched=matched_duration(self.start_date,self.target) if self.target and self.target>self.start_date else None
-        return {'can_generate':not issues,'issues':issues,'calendar':calendar,'study':study,'weeks':weeks,'first_planning_week':first,
+        return {'windows':[window for row in weeks for window in self.windows_for_week(date.fromisoformat(row['week_start']))],'can_generate':not issues,'issues':issues,'calendar':calendar,'study':study,'weeks':weeks,'first_planning_week':first,
             'resolved':{'today':self.today.isoformat(),'start_date':self.start_date.isoformat(),
                 'target_date':self.target.isoformat() if self.target else None,
                 'matched_duration':matched.model_dump() if matched else None}}

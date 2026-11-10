@@ -1,5 +1,5 @@
 from elo_shared.skills import resolve, MAPPING_VERSION
-from elo_shared.skill_groups import skill_groups
+from elo_shared.skill_groups import skill_groups, skill_subgroups
 """Account-level declarations; CV evidence remains in its originating service."""
 from datetime import datetime
 from typing import Annotated, Literal
@@ -109,10 +109,12 @@ class CapabilityView(BaseModel):
     limits: CapabilityLimits = Field(default_factory=CapabilityLimits)
     # Display categories by skill name, derived on read; see elo_shared.skill_groups.
     skill_groups: dict[str, str] = Field(default_factory=dict)
+    skill_subgroups: dict[str,str] = Field(default_factory=dict)
 
     @model_validator(mode='after')
     def display_groups(self):
         self.skill_groups = skill_groups((declaration.name, None) for declaration in self.declarations)
+        self.skill_subgroups = skill_subgroups((declaration.name,None) for declaration in self.declarations)
         return self
 
 

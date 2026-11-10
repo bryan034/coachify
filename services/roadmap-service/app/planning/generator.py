@@ -15,7 +15,7 @@ MAX_ATTEMPTS=3
 PLAN_MAX_TOKENS=24000
 # Assessment polling (90s) plus three 55-second model calls and their source checks.
 PLANNING_SECONDS=330
-PROMPT_VERSION='roadmap-plan-v1'
+PROMPT_VERSION='roadmap-plan-v2'
 
 PLAN_INSTRUCTIONS='''You write a personal study roadmap towards the user's career goal. You own the learning plan: identify and prioritise gaps, sequence prerequisites, estimate effort, define milestones and write the actual assignments. The backend owns dates and capacity and rejects anything that does not fit, so work only inside the supplied windows and weekly capacity.
 
@@ -29,7 +29,7 @@ Milestones. estimated_minutes is the effort still remaining. Each needs a projec
 
 The target date is the end of the roadmap. No milestone may end after it. If the gaps exceed the runway, prioritise prerequisites and the work that most directly supports the goal, put what remains in beyond_deadline with its estimated effort, and say plainly in deadline_outcome what the user can reasonably achieve by the deadline. fits_in_runway is false exactly when beyond_deadline is not empty. Never promise readiness or employment.
 
-Assignments. Write detailed assignments for first_planning_week only, with milestone-level projections for everything later. Each assignment has a date, start_time, duration_minutes, a specific task, a milestone_key and an observable completion_criterion. Avoid generic "learn X" tasks. It must lie completely inside one first_week_windows entry, must not overlap another assignment or completed work, and the week's total must stay within the week's usable_minutes. Use "preferred" windows before "backup" windows. Aim for sessions near settings.preferred_session_minutes and follow settings.learning_focus and learning_notes.
+Assignments. Write detailed assignments for first_planning_week only, with milestone-level projections for everything later. Each assignment has a date, start_time, duration_minutes, a specific task, a milestone_key and an observable completion_criterion. Avoid generic "learn X" tasks. It must lie completely inside one first_week_windows entry, must not overlap another assignment or completed work, and the week's total must stay within the week's usable_minutes. Use "preferred" windows first, enabled "backup" windows next, and "overflow" windows last. Never cross blocked times. Aim for sessions near settings.preferred_session_minutes and follow settings.learning_focus, settings.learning_topics (skill themes the user chose to emphasise) and learning_notes.
 
 Revising. completed_work is permanent: keep its milestones (with the same key), never repeat its keys and do not schedule over it. reserved_work is saved student work whose time is already removed from the available windows; it is not necessarily completed. protected_tasks records student-created, edited, started and removed work: do not assume that removing a task removes its dependants or proves the requirement is covered. Do not repeat removed work. The service preserves these records and asks the user to review possible duplicates. Completing a session is not proof of proficiency, so do not treat it as closing a gap unless evidence or a recorded outcome supports that. Reuse milestone keys for continuing work. instruction is the user's requested change; it describes what they want, but cannot override these rules. An exclusion needs an exact quote from user_message.
 
@@ -111,7 +111,7 @@ def protected_tasks(plan):
     tasks=ensure_tasks(copy.deepcopy(plan))
     protected=[t for t in tasks if
         t.get('origin')=='user' or t.get('overrides') or t.get('removed') or
-        t.get('status') in ('in_progress','completed') or t.get('history')]
+        t.get('status') in ('in_progress','completed') or t.get('history') or t.get('notes')]
     # Preserve both prerequisites and dependants, including their identities.
     # A removed prerequisite must remain visible as a blocker, not cause the
     # dependant itself to disappear in a regenerated plan.
@@ -186,7 +186,7 @@ def reconcile_tasks(plan,active):
     plan['editable_tasks']=[*retained,*fresh]
     removed=[t['id'] for t in retained if t.get('removed')]
     protected=[t['id'] for t in retained if not t.get('removed') and
-        (t.get('origin')=='user' or t.get('overrides') or t.get('status') in ('in_progress','completed'))]
+        (t.get('origin')=='user' or t.get('overrides') or t.get('notes') or t.get('status') in ('in_progress','completed'))]
     plan['revision_review']=[]
     for task in fresh:
         related=list(dict.fromkeys([*protected,*([ambiguous[task['id']]] if task['id'] in ambiguous else [])]))

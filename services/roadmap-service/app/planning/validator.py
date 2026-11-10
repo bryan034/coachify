@@ -31,8 +31,8 @@ def check_assignments(draft,capacity,completed,first_week,milestones):
         if any(begin<high and low<end for low,high in capacity.blackout_windows(item.date)):errors.append(issue('assignment_on_blackout',f"{label} overlaps a blackout."));continue
         if item.date<capacity.today or (item.date==capacity.today and begin<capacity.now_minute):errors.append(issue('assignment_in_past',f"{label} has already passed."));continue
         windows=capacity.days.get(item.date,{'preferred':[],'backup':[]})
-        allowed=merge([*windows['preferred'],*(windows['backup'] if config.use_backup else [])])
-        everything=merge([*windows['preferred'],*windows['backup']])
+        allowed=merge([*windows['preferred'],*windows.get('overflow',[]),*(windows['backup'] if config.use_backup else [])])
+        everything=merge([*windows['preferred'],*windows['backup'],*windows.get('overflow',[])])
         if end>1440 or not any(low<=begin and end<=high for low,high in allowed):
             if not config.use_backup and any(low<=begin and end<=high for low,high in everything):errors.append(issue('backup_not_enabled',f"{label} uses a backup block, but backup blocks are not enabled."))
             else:errors.append(issue('assignment_outside_block',f"{label} for {item.duration_minutes} minutes is not inside an eligible study window."))
@@ -41,7 +41,7 @@ def check_assignments(draft,capacity,completed,first_week,milestones):
             if begin<high and low<end:errors.append(issue('assignment_overlap',f"{label} overlaps '{other}' ({to_clock(low)}-{to_clock(high)})."))
         booked.setdefault(item.date,[]).append((begin,end,item.key))
         week=week_of(item.date);week_minutes[week]=week_minutes.get(week,0)+item.duration_minutes
-        backup_used=sum(max(0,min(end,high)-max(begin,low)) for low,high in windows['backup'])
+        backup_used=sum(max(0,min(end,high)-max(begin,low)) for low,high in [*windows['backup'],*windows.get('overflow',[])])
         if backup_used:backup_sessions.append((item,label))
     for week,minutes in week_minutes.items():
         left=capacity.week_left(week)

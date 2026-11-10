@@ -135,6 +135,14 @@ describe('saved CV conversation', () => {
   expect(await screen.findByRole('button',{name:'Review profile'})).toBeEnabled();
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
  });
+ it('shows one line and one action when an answer could not be processed', async () => {
+  const failed=action({kind:'clarify',status:'failed'});
+  vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',messages:[message('m1','Your answer is saved. We couldn’t finish processing it yet.',[failed])]}));
+  render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
+  expect(await screen.findByText('We couldn’t process your answer. It’s saved, so you can try again.')).toBeVisible();
+  expect(screen.queryByText(/couldn’t finish processing it/)).not.toBeInTheDocument();
+  expect(screen.getAllByRole('button',{name:'Try again'})).toHaveLength(1);
+ });
  it('keeps a saved evidence-alignment failure available for explicit retry', async () => {
   const failed=action({kind:'clarify',status:'failed',error:'Some interpreted skill details are not supported by your answer. Your answer is saved; clarify or retry interpretation.'});
   vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',messages:[message('m1','Your answer is saved.',[failed])]}));
@@ -183,21 +191,20 @@ describe('saved CV conversation', () => {
   vi.mocked(cvApi.sendMessage).mockRejectedValueOnce(new TypeError('Response lost.')).mockResolvedValueOnce(pending);
   let finishRefresh!: () => void;
   const slowRefresh = new Promise<void>(resolve => {finishRefresh = resolve;});
-  const options = {...props(), onChanged:vi.fn().mockResolvedValue(undefined).mockResolvedValueOnce(undefined).mockReturnValueOnce(slowRefresh)};
+  const options = {...props(), onChanged:vi.fn().mockResolvedValue(undefined).mockReturnValueOnce(slowRefresh)};
   const view = render(<CvConversationPanel {...options} purpose="skills_profile" autoReview/>);
   await screen.findByText(question.question);
   const input = screen.getByRole('textbox',{name:'Message elo'});
   const exit = screen.getByRole('button',{name:'Save and review later'});
   fireEvent.change(input,{target:{value:'I built the dashboard.'}});
   fireEvent.click(screen.getByRole('button',{name:'Send message'}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('couldn’t confirm whether your message was saved');
+  expect(await screen.findByRole('alert')).toHaveTextContent('We couldn’t confirm your last message was sent.');
+  expect(screen.getByRole('alert').querySelectorAll('button')).toHaveLength(1);
   expect(screen.getByRole('button',{name:'Review later'})).toBeEnabled();
   expect(screen.queryByRole('button',{name:'Save and review later'})).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Check saved messages'}));
-  await screen.findByText('Reviewing your answer…');
   expect(input).toHaveValue('I built the dashboard.');
   expect(screen.queryByText(/Sent messages saved/)).not.toBeInTheDocument();
-  const retry = screen.getByRole('button',{name:'Retry sending'});
+  const retry = screen.getByRole('button',{name:'Try again'});
   await waitFor(() => expect(retry).toBeEnabled());
   fireEvent.click(retry);
   await waitFor(() => expect(exit).toHaveAccessibleName('Save and review later'));

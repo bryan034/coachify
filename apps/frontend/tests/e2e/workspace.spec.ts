@@ -11,7 +11,9 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  let saved = { version: 0, onboarding_complete:true, occupational_status: null as string | null, school_category: null as string | null, education_context: null as string | null, education_review_required: false, education: {} as Record<string, unknown>, current_study_year: null as number | null };
  await page.route('**/api/**', async route => {
   const url = new URL(route.request().url());
+  if(url.pathname.startsWith('/api/v1/assessments/')) return route.fulfill({json:{version:0,stale:false,ready:false,model_available:true,result:null,operation:null,issues:[]}});
   if (url.pathname.includes('/cv/conversations')) return route.fallback();
+  if (url.pathname === '/api/v1/career/discoveries') return route.fulfill({json:{items:[],next_cursor:null}});
     if (url.pathname.endsWith('/auth/session')) return route.fulfill({json:{id:'synthetic',name:'Synthetic',provider:'local_test',onboarding_complete:false}});
     if (url.pathname.endsWith('/auth/logout')) return route.fulfill({json:{ok:true}}); apiCalls.push(url.pathname);
   if(url.pathname.endsWith('/cv/policy'))return route.fulfill({json:policy});
@@ -28,7 +30,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
    expect(route.request().method()).toBe('GET');
    return route.fulfill({json:{planner:blankPlanner(),version:0,messages:[],operation:null,active:null,draft:null,assessment:null,stale:false,context:{ready:false,model_available:true,issues:[{source:'cv',message:'Upload, extract and select a CV before planning.',href:'/cv'},{source:'career',message:'Extract a Career goal before planning.',href:'/career-goal'}],planning_defaults:{application_date:null,weekly_hours:null,availability_periods:[]}}}});
   }
-  expect(url.pathname.startsWith('/api/v1/profile')).toBe(true);
+  expect(url.pathname.startsWith('/api/v1/profile'),`unexpected request ${url.pathname}`).toBe(true);
   if (url.pathname.endsWith('/planning-inputs')) return route.fulfill({json:{profile_version:saved.version,planning_revision:0,ready:false,issues:[],availability_periods:[]}});
   if(url.pathname.endsWith('/auth-config')) return route.fulfill({json:{mode:'local_test'}});
   if(url.pathname.endsWith('/school-categories')) return route.fulfill({json:categories});
@@ -52,13 +54,13 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.getByRole('spinbutton',{name:/Current study level/}).fill('3');
  await page.getByRole('button',{name:'Save background'}).click();
  await expect(page.getByText('Profile saved.')).toBeVisible();
- await page.getByRole('link',{name:'Home',exact:true}).click();
- await expect(page.locator('[aria-label="Saved background"]')).toContainText('Synthetic College');
- await expect(page.locator('[aria-label="Saved background"]')).toContainText('Design & Computing · Year 3');
+ await page.getByRole('link',{name:'Home',exact:true}).first().click();
+ // The saved background shows beside the account in the sidebar; Home no longer repeats it.
+ await expect(page.locator('.side-bottom .me')).toContainText('Synthetic College');
  await page.reload();
- await expect(page.locator('[aria-label="Saved background"]')).toContainText('Synthetic College');
+ await expect(page.locator('.side-bottom .me')).toContainText('Synthetic College');
  await page.screenshot({path:testInfo.outputPath('home-desktop.png'),fullPage:true});
- for (const [label,heading] of [['Roadmap','Roadmap'],['Skills Profile','Skills Profile'],['Search Jobs','Search Jobs'],['Chats & Socials','Chats & Socials'],['Calendar & Events','Calendar & Events']]) {
+ for (const [label,heading] of [['Roadmap','Roadmap'],['Skills Profile','Skills Profile'],['Search Jobs','Search Jobs'],['Conversations','Conversations'],['Calendar','Calendar']]) {
   const link=page.getByRole('navigation').getByRole('link',{name:label,exact:true});
   await link.click();
   await expect(link).toHaveAttribute('aria-current','page');
@@ -90,14 +92,16 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
    await expect(page.getByRole('heading',{name:'Bring your starting point and direction'})).toBeVisible();
    await expect(page.getByRole('textbox',{name:'Answer here'})).toBeDisabled();
    await expect(page.getByRole('button',{name:'Send message',exact:true})).toBeDisabled();
-  } else await expect(page.locator('.feature-notice')).toContainText('Coming soon');
+  } else if(label==='Conversations') await expect(page.getByRole('heading',{name:'Socials are on the way'})).toBeVisible();
+  else await expect(page.getByText('Event discovery is coming soon.')).toBeVisible();
  }
  await page.getByRole('button',{name:'Month',exact:true}).click();
  await expect(page.getByRole('button',{name:'Month',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('[aria-label="Month calendar"] .dh')).toHaveCount(7);
- await expect(page.getByRole('button',{name:'+ Add',exact:true})).toBeDisabled();
+ // Calendar shows no add or view-event controls until they work.
+ await expect(page.getByRole('button',{name:'+ Add',exact:true})).toHaveCount(0);
  await page.getByRole('navigation').getByRole('link',{name:'Skills Profile'}).click();
- await page.getByRole('button',{name:/Upload your CV/}).click();await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
+ await page.getByRole('button',{name:'Upload new CV'}).click();await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
  await expect(page.getByRole('heading',{name:'What elo will use'})).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();
@@ -119,10 +123,10 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Home',exact:true}).focus();
  await page.keyboard.press('Escape');
  await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeFocused();
- for(const label of ['Home','Skills Profile','Search Jobs','Chats & Socials','Calendar & Events']) {
+ for(const label of ['Home','Skills Profile','Search Jobs','Conversations','Calendar']) {
   await page.getByRole('button',{name:'Menu',exact:true}).click();
   await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();
-  await page.getByRole('navigation').getByRole('link',{name:label,exact:true}).click();
+  await page.locator('#workspace-sidebar').getByRole('link',{name:label,exact:true}).click();
   await expect(page.locator('.nav a[aria-current=page]')).toHaveText(label);
   await expect(page.getByRole('button',{name:'Menu',exact:true})).toHaveAttribute('aria-expanded','false');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);

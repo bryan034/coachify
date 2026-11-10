@@ -4,7 +4,7 @@ import {CareerDiscovery} from './career-discovery';
 import {careerApi} from '@/lib/api/career';
 const push=vi.fn();
 const profileState=vi.hoisted(()=>({token:'synthetic'}));
-vi.mock('next/navigation',()=>({useRouter:()=>({push})}));
+vi.mock('next/navigation',()=>({useRouter:()=>({push}),useSearchParams:()=>new URLSearchParams()}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>profileState}));
 vi.mock('@/lib/api/career',()=>({careerApi:vi.fn()}));
 const introduction='Welcome to Career Discovery. Tell me a field, role or work you enjoy.';

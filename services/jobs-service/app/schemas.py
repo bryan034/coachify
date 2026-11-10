@@ -1,5 +1,5 @@
 """Public response and request models. Listing fields are derived from untrusted provider data."""
-from datetime import datetime
+from datetime import datetime, date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,6 +19,8 @@ class Strict(BaseModel):
 
 
 class Posting(BaseModel):
+    matched_skills: list[str] | None = None
+    match_basis: str | None = None
     id: str
     title: str
     company: str
@@ -75,6 +77,10 @@ class StatusChange(BaseModel):
 
 
 class Application(BaseModel):
+    applied_at: date | None = None
+    deadline: date | None = None
+    follow_up_at: date | None = None
+    notes: str = ''
     id: str
     posting_id: str
     # 'link' records were pasted by the user and match no listing elo read itself.
@@ -114,5 +120,9 @@ class ExternalSearchList(BaseModel):
 
 
 class UpdateApplication(Strict):
+    applied_at: date | None = None
+    deadline: date | None = None
+    follow_up_at: date | None = None
+    notes: str = Field(default='', max_length=4000)
     expected_version: int = Field(ge=1)
     status: ApplicationStatus

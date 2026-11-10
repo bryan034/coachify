@@ -292,10 +292,44 @@ CV-context acknowledgement stays separate.
 
 `/roadmap` opens a planner that writes the goal, study settings and repeating blackout days and times as a sentence travelling down a road to a backend-calculated runway and Generate. The chat helper docks beside it on wide screens, guides the user through the required details and fills in the form. Generation runs Assessment if needed and opens a roadmap page led by a to-do list of sessions, viewed by day, week or a monthly calendar of weeks, with a Starting point tab. Previews apply only when accepted. See the [feature README](src/features/roadmap/README.md).
 
+Skills Profile has no manual refresh button: it rechecks saved CVs when the window regains focus or comes back online, and every few seconds while a CV is processing (the review screen keeps a **Check progress** button). Its caveats sit in the **i** tooltip beside the title. Home, Roadmap and Skills Profile read the same `loadSkills` summary, so skill and experience counts match on every page.
+
 Skills Profile shows upload beside a fixed-height, internally scrolling **Your CVs**
 library. Cards support persisted titles, Rename, Review CV, View extracted results,
-Set as active baseline and confirmed deletion. An accepted upload opens the
+Make active and confirmed deletion. An accepted upload opens the
 full-viewport `/cv?review=<cv_id>` screen for processing and guided questions.
 **Save and review later** returns to Skills Profile. The named shortcut restores
 the saved transcript and current question. **View extracted results** opens the
 classified CV directly. Renaming keeps the original filename and evidence intact.
+
+
+Standalone **Compare with my skills** on Career Goal, Skills Profile and Home runs
+Assessment without generating a roadmap. All three show the current saved result;
+stale markings are suppressed. Home prioritises CV review, comparison and roadmap
+work and replaces skill-count bars with goal match and top confirmed gaps. CV review
+offers version-bound goal confirmation in an expandable inline control. Roadmap
+refreshes idle source context and labels partial research without a required checkbox.
+Saved manual Profile declarations can support comparison without a selected CV.
+Numerical scoring remains unavailable pending rubric approval.
+
+## Redesign alignment — 10 November 2026
+
+Screens follow the "elo — Redesigned Screens" design canvas (sample content only):
+
+- Navigation: Home, Career Goal, Skills Profile, Roadmap, Search Jobs, then Conversations
+  and Calendar below a divider. Phones get a five-item bottom tab bar.
+- Home: dated "Welcome back" hero with one next step and the journey path; Goal match (the
+  saved comparison's Have/Partial/Gap/Unknown bar and top three gaps), Roadmap countdown with
+  the next session, This week, Coming up (saved-job deadlines and follow-ups) and Skills
+  Profile counts. The background card and "Up next" tiles were removed.
+- Career Goal: three tab pages; see the [Career Goal README](src/features/career/README.md).
+- Skills Profile: compact header with counts and the compared goal, Upload new CV and Chat to
+  edit; a CV card with a version switcher (same file name grouped as versions), Active chip,
+  Make active, review and Delete, and a short "What elo understood" line built from saved
+  items (no model summary yet). Skills are chips in one panel, a row per category, coloured
+  by goal relevance and sortable by relevance; a chip opens a panel with where it was used
+  and exactly one competence state. Older CV management sits under "Manage saved CVs".
+- Roadmap sessions have a Word-like notes page with a toolbar (bold, italic, underline,
+  heading, lists, checkbox, choice) that saves automatically; no file uploads.
+- Search Jobs tabs read "Search jobs" and "My applications"; `?tab=applications` opens the
+  tracker. The last board column is "Rejected or closed".

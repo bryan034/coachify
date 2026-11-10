@@ -12,7 +12,7 @@ serialize per service instance and use a 180-second HTTP timeout; operations use
 
 ## Product direction — 4 November 2026
 
-The timed roadmap supersedes the 30 October chat-first direction and its "no exact time slots" limit. `/roadmap` is now Configure → Generate → Review. Configure is a fixed planner form. A button opens an optional chat helper, which guides the user through the required details and fills in the form; after a plan exists, the same helper requests edits. A selected, extracted CV and a Career goal are both required, and Assessment runs before planning.
+The timed roadmap supersedes the 30 October chat-first direction and its "no exact time slots" limit. `/roadmap` is now Configure → Generate → Review. Configure is a fixed planner form. A button opens an optional chat helper, which guides the user through the required details and fills in the form; after a plan exists, the same helper requests edits. A Career goal and admissible Assessment evidence are required, and Assessment runs before planning. Evidence may be a selected extracted CV plus saved Profile declarations, or saved Profile declarations alone when no CV is selected.
 
 Jira references: G01/SCRUM-34, R01/SCRUM-41, R02–R09/SCRUM-42–49, E01–E07/SCRUM-50–56 and T01–T06/SCRUM-57–62. Retain existing identifiers/hierarchy/statuses. These stories were not re-read for this slice because Jira was not accessible; check them for conflicts.
 

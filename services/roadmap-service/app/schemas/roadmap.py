@@ -49,12 +49,17 @@ class PlannerConfig(Contract):
     weekly_minutes:int|None=Field(default=None,strict=True,ge=0,le=10080)
     blocks:list[StudyBlock]=Field(default_factory=list,max_length=28)
     use_backup:bool=False
+    allow_overflow:bool=False
+    overflow_start:Clock='08:00'
+    overflow_end:Clock='22:00'
     blackouts:list[BlackoutRule]=Field(default_factory=list,max_length=366)
     preferred_session_minutes:int=Field(default=60,strict=True,ge=15,le=480)
     learning_focus:list[Focus]=Field(default_factory=list,max_length=6)
     learning_notes:str=Field(default='',max_length=1000)
+    learning_topics:list[Title]=Field(default_factory=list,max_length=12)
     @model_validator(mode='after')
     def coherent(self):
+        if self.overflow_start>=self.overflow_end:raise ValueError('Overflow must end after it starts on the same day.')
         try:ZoneInfo(self.time_zone)
         except (ZoneInfoNotFoundError,ValueError):raise ValueError('Choose a valid planning time zone.') from None
         if len(set(self.learning_focus))!=len(self.learning_focus):raise ValueError('Choose each learning focus once.')
@@ -193,6 +198,7 @@ class RunwayResolved(Contract):
     target_date:str|None
     matched_duration:Duration|None
 class Runway(Contract):
+    windows:list[dict]=Field(default_factory=list,max_length=10000)
     can_generate:bool
     issues:list[RunwayIssue]
     resolved:RunwayResolved
@@ -294,6 +300,7 @@ class PlanAssignment(DraftAssignment):
     completed_at:str|None=None
     evidence_note:str|None=None
     history:list[AssignmentChange]=Field(default_factory=list)
+    task_id:str|None=Field(default=None,description='The editable task this session is a slot of; null on sessions saved before tasks existed.')
 class PlannedRoadmap(Contract):
     model_config=ConfigDict(extra='allow')
     schema_version:Literal['roadmap-v2']

@@ -28,10 +28,11 @@ class Batch(Contract):
 
 class InputVersions(Contract):
     as_of_date:str|None=None
-    cv_id:str
-    cv_version:int
-    extraction_version:int
-    effective_version:int
+    source_mode:Literal['cv_and_profile','profile_only']='cv_and_profile'
+    cv_id:str|None
+    cv_version:int|None
+    extraction_version:int|None
+    effective_version:int|None
     cv_selection_version:int
     declarations_version:int
     profile_version:int
@@ -52,6 +53,11 @@ class Outcome(Contract):
     recommendation:str|None
     mapping_method:Literal['canonical','semantic','unresolved']
     mapping_reason:str
+    relevance:Literal['high','medium','low','none']|None=None
+    competence_score:float|None=Field(default=None,ge=0,le=10)
+    score_status:Literal['estimated','not_reviewed','insufficient_evidence']='insufficient_evidence'
+    score_explanation:str|None=None
+    scoring_rubric_version:str|None=None
 class Result(Contract):
     schema_version:Literal['assessment-v1']
     id:str

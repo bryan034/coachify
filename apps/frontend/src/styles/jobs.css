@@ -85,3 +85,7 @@
 .job-paste:hover{background:var(--cloud)}
 .job-column-empty p{margin:0}
 @media (max-width:820px){.job-link-form{grid-template-columns:minmax(0,1fr)}}
+.job-search-panel{position:sticky;top:16px;align-self:start;max-height:calc(100dvh - 32px);overflow:auto}
+.has-results .job-search-hero{padding-block:20px}.job-card{padding:16px!important}.job-board .job-card[draggable]{cursor:grab}
+.job-card details form{display:grid;gap:8px}.job-card details label{display:grid;gap:4px}
+@media(max-width:800px){.job-search-panel{position:static;max-height:none}}

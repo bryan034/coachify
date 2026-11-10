@@ -6,6 +6,7 @@ import { useCareerSession } from './career-session';
 import { Icon } from '@/components/ui/icon';
 import { useProfile } from '@/features/profile/profile-provider';
 import { importCareer, type CareerPreview } from '@/lib/api/career';
+import { errorText } from '@/lib/errors';
 
 const methods = [
  { id: 'text', label: 'Paste description', icon: 'doc', hint: 'Bring the opportunity into focus.', detail: 'Copy the complete description from one job listing, including responsibilities and requirements.' },
@@ -20,9 +21,9 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
  const { token } = useProfile();
  const router=useRouter();const {jd,chooseJD}=useCareerSession();
  useEffect(()=>{if(new URLSearchParams(window.location.search).get('explore')==='1')router.replace('/career-goal/chat');},[router]);
- const [method,setMethod] = useState<Method>('text');
+ const [method,setMethod] = useState<Method>(()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).has('job_url')?'url':'text');
  const [drafts,setDrafts] = useState(()=>{const values=empty();if(jd)values.text={text:jd.text};return values;});
- const [url,setUrl] = useState(''); const [file,setFile] = useState<File>();
+ const [url,setUrl] = useState(()=>typeof window!=='undefined'?new URLSearchParams(window.location.search).get('job_url')||'':''); const [file,setFile] = useState<File>();
  const [error,setError] = useState(''); const [busy,setBusy] = useState(false);
  const controller = useRef<AbortController | null>(null); const request = useRef(0); const input = useRef<HTMLInputElement>(null);
  const active = methods.find(m=>m.id===method)!; const draft=drafts[method];
@@ -62,19 +63,19 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
    const preview=await importCareer(target,body,token,abort.signal);
    if(sequence!==request.current)return;
    setDrafts(previous=>({...previous,[target]:{text:preview.text,preview}}));
-  }catch(cause){if(sequence===request.current&&!abort.signal.aborted)setError(cause instanceof Error?cause.message:'Could not import this source. Please retry.');}
+  }catch(cause){if(sequence===request.current&&!abort.signal.aborted)setError(errorText(cause, 'Could not import this source. Please retry.'));}
   finally{if(sequence===request.current)setBusy(false);}
  }
  function clear(){if(hasWork&&!window.confirm('Clear this temporary input and preview?'))return;request.current++;controller.current?.abort();setBusy(false);setError('');setDrafts(p=>({...p,[method]:{text:''}}));if(method==='url')setUrl('');if(method==='document'){setFile(undefined);if(input.current)input.current.value='';}}
  return <section className="page on career-goal">
-  <div className="ptitle"><div><h1>Career Goal</h1><p className="small goal-lede">Bring a job description that interests you. Start with its text, a link or a document.</p></div><div className="goal-title-actions">{!replacing&&<button type="button" className="btn ghost" onClick={()=>router.push('/career-goal/chat')}>Continue career conversation</button>}<button type="button" className="btn ghost" onClick={()=>{chooseJD(null);router.push('/career-goal/discovery');}}>Explore careers <span aria-hidden="true">↗</span></button></div></div>
+  <div className="ptitle"><div><h1>Career Goal</h1><p className="small goal-lede">Bring a job description that interests you. Start with its text, a link or a document.</p></div><div className="goal-title-actions">{!replacing&&<button type="button" className="btn ghost" onClick={()=>router.push('/career-goal/chat')}>Continue career conversation</button>}<button type="button" className="btn ghost" onClick={()=>{chooseJD(null);router.push('/career-goal/discovery');}}>Explore careers</button></div></div>
   <div className="goal-grid"><div className="card goal-editor">
    <div className="goal-tabs" role="tablist" aria-label="Job description input method">{methods.map((item,index)=><button key={item.id} id={`goal-tab-${item.id}`} type="button" role="tab" aria-selected={method===item.id} aria-controls="goal-panel" tabIndex={method===item.id?0:-1} onKeyDown={event=>keyboard(event,index)} onClick={()=>changeMethod(item.id)}><Icon name={item.icon}/>{item.label}</button>)}</div>
    <div id="goal-panel" role="tabpanel" aria-labelledby={`goal-tab-${method}`} className="goal-panel">
     <h2>{active.hint}</h2><p className="small goal-help">{active.detail}</p>
     {method!=='text'&&<form className="goal-import" onSubmit={startImport}>
      {method==='url'?<><label htmlFor="job-url">Job description URL</label><input id="job-url" type="url" maxLength={2048} placeholder="https://company.com/careers/your-next-role" value={url} onChange={event=>setUrl(event.target.value)} disabled={busy} required/><p className="small">Public HTTP/HTTPS pages only. We won’t sign into websites or bypass access restrictions.</p></>:<><label htmlFor="job-document">Job description document</label><input ref={input} id="job-document" type="file" accept=".pdf,.docx,.txt" disabled={busy} onChange={event=>{const next=event.target.files?.[0];setFile(next);setError('');if(next)void startImport(undefined,next);}}/><p className="small">PDF, DOCX or UTF-8 TXT · Up to 10 MiB · Scanned PDFs need a text alternative.</p>{file&&<p className="small goal-filename">Selected: {file.name}</p>}</>}
-     {(method==='url'||!!error)&&<button className="btn pri" disabled={busy||(method==='url'?!url:!file)}>{busy?'Preparing preview…':method==='url'?'Import job page':'Retry reading document'}<span aria-hidden="true">↗</span></button>}
+     {(method==='url'||!!error)&&<button className="btn pri" disabled={busy||(method==='url'?!url:!file)}>{busy?'Preparing preview…':method==='url'?'Import job page':'Retry reading document'}</button>}
     </form>}
     {busy&&<p role="status" className="goal-status">Preparing a temporary preview. You can switch methods to cancel.</p>}
     {error&&<div role="alert" className="goal-error"><p>{error}</p><p className="small">Your current input is still here. Retry, paste the description or choose another source.</p>{method==='url'&&<div className="row"><button type="button" className="btn ghost sm" onClick={()=>changeMethod('text')}>Paste description</button><button type="button" className="btn ghost sm" onClick={()=>changeMethod('document')}>Upload document</button></div>}</div>}
@@ -85,11 +86,8 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
      <p id="goal-input-note" className="small">{tooLong?'This description exceeds 8,000 characters. Shorten it before using it in a future analysis; your text has not been cut off.':'Keep the original wording, bullet points and line breaks. Review imported content for missing or unrelated sections.'}</p>
      {draft.preview?.notices.map((notice,index)=><p key={index} className="small goal-notice">{notice}</p>)}
     </div>}
-    <div className="row between goal-actions"><button type="button" className="btn ghost sm" disabled={!draft.text&&!(method==='url'?url:method==='document'?file:false)} onClick={clear}>Clear input</button><button type="button" className="btn pri" disabled={!draft.text.trim()||tooLong||busy} onClick={()=>{chooseJD({text:draft.text,kind:method,name:draft.preview?.source_name||'Pasted job description',url:draft.preview?.source_url});router.push('/career-goal/chat?source=jd');}}>Extract career goal <span aria-hidden="true">↗</span></button></div>
+    <div className="row between goal-actions"><button type="button" className="btn ghost sm" disabled={!draft.text&&!(method==='url'?url:method==='document'?file:false)} onClick={clear}>Clear input</button><button type="button" className="btn pri" disabled={!draft.text.trim()||tooLong||busy} onClick={()=>{chooseJD({text:draft.text,kind:method,name:draft.preview?.source_name||'Pasted job description',url:draft.preview?.source_url});router.push('/career-goal/chat?source=jd');}}>Extract career goal</button></div>
    </div>
-  </div><aside className="goal-guide">
-   <div className="card pad"><p className="k">A little guidance</p><h3>One opportunity at a time.</h3><p className="small">Use a complete description for one role. A title or link alone won’t tell the full story.</p><div className="goal-guide-step"><span>01</span><div><strong>Bring the description</strong><p className="small">Choose the input that works for you.</p></div></div><div className="goal-guide-step"><span>02</span><div><strong>Check the details</strong><p className="small">Review the text and remove unrelated content.</p></div></div><div className="goal-guide-step"><span>03</span><div><strong>Understand the role</strong><p className="small">Extract the role’s skills, then review them with your career agent.</p></div></div></div>
-   <div className="goal-temporary"><Icon name="doc"/><div><strong>Just a temporary preview</strong><p className="small">Your description stays temporary. Extract career goal sends it to the configured AI provider and saves a structured review. A successfully extracted goal is saved automatically and replaces your current goal. Refreshing discards temporary inputs.</p></div></div>
-  </aside></div>
+  </div></div>
  </section>;
 }

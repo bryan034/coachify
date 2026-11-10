@@ -3,7 +3,7 @@ from fastapi import Depends, Request
 from uuid import NAMESPACE_URL, uuid5
 import copy
 from starlette.concurrency import run_in_threadpool as thread
-from elo_shared.runtime import Problem, authenticated, begin, launch, operation_view, stamp
+from elo_shared.runtime import Problem, authenticated, begin, launch, operation_view, stamp, digest
 from app.planning.capacity import Capacity, normalized
 from app.planning.generator import PLANNING_SECONDS
 from app.planning.milestone_membership import mark_plan_membership_changes
@@ -13,6 +13,30 @@ from app.planning.task_routes import register_task_routes
 from app.schemas.roadmap import (AssignmentStatus, ExperienceConfirmation, GeneratePlan, LearningPlan, OperationAccepted, Runway, MilestoneOutcome,
     PlannerConfig, RunwayRequest, SaveConfig)
 from app.schemas.planner import Mutation, Workspace
+
+from pydantic import Field
+class ConfirmEvidence(Mutation):
+    expected_declarations_version:int=Field(ge=0)
+    proposal_hash:str=Field(min_length=64,max_length=64)
+
+def evidence_proposals(row):
+    state=planner_state(row);plan=copy.deepcopy(state.get('active'))
+    if not plan:return []
+    ensure_tasks(plan);project_assignments(plan)
+    gaps={gap['id']:gap for gap in plan.get('gaps',[])}
+    proposals=[]
+    for session in plan.get('assignments',[]):
+        if session.get('status')!='completed' or not session.get('evidence_note'):continue
+        identifiers=session.get('skill_gap_ids') or ([session['gap_id']] if session.get('gap_id') else [])
+        for gap_id in identifiers:
+            gap=gaps.get(gap_id)
+            if not gap:continue
+            proposal={'id':session['id']+'_'+gap_id,'session_id':session['id'],'name':gap['name'],
+                'description':'Self-reported roadmap practice: '+session['evidence_note']}
+            if len(proposal['name'])>120 or len(proposal['description'])>2000:continue  # Original note stays saved; never truncate evidence.
+            proposal['proposal_hash']=digest({'plan':plan['id'],**proposal})
+            if proposal['proposal_hash'] not in state.get('confirmed_evidence',[]):proposals.append(proposal)
+    return proposals
 
 def register_planner(app,context,mutate,worker):
     prefix='/api/v1/roadmaps/planner'
@@ -49,6 +73,39 @@ def register_planner(app,context,mutate,worker):
         row=await thread(begin,app.state.store,account['id'],body,'generate',PLANNING_SECONDS)
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
         return {'version':row['version'],'operation':operation_view(row)}
+
+    @app.post(prefix+'/roll-forward',status_code=202,response_model=OperationAccepted)
+    async def roll_forward(body:GeneratePlan,request:Request,account=Depends(authenticated)):
+        from app.planning.capacity import week_of
+        row=await thread(app.state.store.load,account['id']);state=planner_state(row)
+        active=state.get('active')
+        if not active or state.get('candidate'):raise Problem('A saved active roadmap without a pending preview is required.',409,'roll_forward_blocked')
+        today=Capacity(saved_config(state),app.state.clock()).today
+        if active.get('first_planning_week','')>=week_of(today).isoformat():return {'version':row['version'],'operation':operation_view(row)}
+        row=await thread(begin,app.state.store,account['id'],body,'roll_forward',PLANNING_SECONDS)
+        if row.get('pending'):launch(app,account['id'],account['token'],worker)
+        return {'version':row['version'],'operation':operation_view(row)}
+
+    @app.get(prefix+'/evidence-proposals')
+    async def proposals(request:Request,account=Depends(authenticated)):
+        row=await thread(app.state.store.load,account['id'])
+        declarations=await app.state.upstream.read('profile','/api/v1/profile/capabilities',account['token'])
+        return {'version':row['version'],'declarations_version':declarations['version'],'items':evidence_proposals(row)}
+
+    @app.post(prefix+'/evidence-proposals/{proposal_id}/confirm',response_model=Workspace)
+    async def confirm_evidence(proposal_id:str,body:ConfirmEvidence,request:Request,account=Depends(authenticated)):
+        row=await thread(app.state.store.load,account['id'])
+        if row['version']!=body.expected_version:raise Problem('Your roadmap changed. Review the evidence proposal again.',409,'inputs_changed')
+        proposal=next((item for item in evidence_proposals(row) if item['id']==proposal_id and item['proposal_hash']==body.proposal_hash),None)
+        if not proposal:raise Problem('This evidence proposal changed or was already confirmed.',409,'inputs_changed')
+        await app.state.upstream.write('profile','/api/v1/profile/capabilities',account['token'],
+            {'expected_version':body.expected_declarations_version,'mutation_id':'roadmap_'+body.proposal_hash,
+             'name':proposal['name'],'description':proposal['description'],'mode':'new'})
+        def apply(current,source):
+            if not any(item['proposal_hash']==body.proposal_hash for item in evidence_proposals(current)):raise Problem('The session note changed before confirmation.',409,'inputs_changed')
+            state=planner_state(current);state.setdefault('confirmed_evidence',[]).append(body.proposal_hash)
+            return current
+        return await mutate(body,account,apply,operation='evidence.confirm')
 
     @app.post(prefix+'/accept',response_model=Workspace)
     async def accept(body:Mutation,request:Request,account=Depends(authenticated)):
