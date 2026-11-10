@@ -4,7 +4,7 @@ import {ReviewEvidence} from './review-evidence';
 import {SkillProfile, profileSkillGroups, profileSkillList} from './skill-cards';
 import {groupSkills} from '@/lib/skill-groups';
 import '@/styles/skills.css';
-import type { CvDetail, Declarations, SkillsProfile } from './types';
+import type { CvDetail, CvSummary, Declarations, SkillsProfile } from './types';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
@@ -13,8 +13,9 @@ const labels: Record<string, string> = {education:'Education',work:'Work and int
 const cvKind = (kind: string) => kind === 'work' ? 'experience' : kind;
 const readable = (value: string) => value.replaceAll('_', ' ');
 
-export function SkillsProfileSummary({title, profile, cv, declarations, error, upload, build, review, retry, save, saving, saveCv, savingCv, pending}: {
+export function SkillsProfileSummary({title, profile, cv, recentReview, declarations, error, upload, build, review, retry, save, saving, saveCv, savingCv, pending}: {
  title?: ReactNode; profile: SkillsProfile | null; cv: CvDetail | null; declarations: Declarations | null; error: string;
+ recentReview?: CvSummary;
  upload: () => void; build: () => void; review: (id: string) => void; retry: () => void;
  save: () => void; saving: boolean;
  saveCv: () => void; savingCv: boolean;
@@ -35,6 +36,7 @@ export function SkillsProfileSummary({title, profile, cv, declarations, error, u
   {skills.length>0&&<ul className="skills-stats" aria-label="Your profile in numbers">{stats.map(([count,label])=><li key={label}><strong>{count}</strong> {label}</li>)}</ul>}
   <p className="skills-home-intro">What you can do and the experience behind it. elo uses this evidence to assess how your skills match job applications. Unknown details can stay unknown.</p>
   <div className={`skills-entry-actions${skills.length ? ' compact' : ''}`}>
+   {recentReview && <button type="button" className="skills-entry-action skills-entry-review" onClick={() => review(recentReview.id)}><Icon name="doc"/><span><strong>Review {recentReview.display_name ?? recentReview.file_name}</strong><span>Open this CV to start or continue its review.</span></span></button>}
    <button type="button" className="skills-entry-action" onClick={upload}><Icon name="up"/><span><strong>Upload your CV</strong><span>Drop a PDF or DOCX to start reviewing your experience and contributions.</span></span></button>
    <button type="button" className="skills-entry-action" onClick={build}><Icon name="chat"/><span><strong>{profile?.status === 'draft' ? 'Continue building your profile' : profile?.entries.length ? 'Update through chat' : 'Build through chat'}</strong><span>No CV needed. Explore your work, projects, education and interests with guided questions.</span></span></button>
   </div>
@@ -44,7 +46,7 @@ export function SkillsProfileSummary({title, profile, cv, declarations, error, u
    {reviewRow}
    <div className="skills-summary-heading"><h2>Skills you have</h2><Link className="small text-link" href="/career-goal">Skills your goal needs</Link><span className="pill n">{profile?.status === 'saved' ? 'Saved profile' : profile?.status === 'draft' ? 'Draft saved' : cv?.profile_reviewed_effective_version === cv?.effective_version && cv ? 'Saved CV profile' : cv ? 'CV available' : 'Not started'}</span></div>
    {error && <div role="alert" className="cv-error"><p>{error}</p><button type="button" className="btn ghost sm" onClick={retry}>Retry skills profile</button></div>}
-   {pending&&<p role="status" className="cv-warning">Finish or cancel the pending conversation updates before saving. You can review your current saved draft below.</p>}
+   {pending&&<p role="status" className="cv-warning">Finish or cancel the pending conversation updates before saving your profile. You can review your current saved draft below.</p>}
    {!profile && !error && <p role="status">Loading your skills profile…</p>}
    {profile && !profile.entries.length && !cv && !declarations?.declarations.length && <p className="skills-empty">Start with your CV or a conversation. Your experience and skills will appear here as you build your profile.</p>}
    {profile?.status === 'draft'&&<div className="skills-profile-save"><p className="small">Review the details below. You can save a partial profile; unknown details stay uncertain.</p><button className="btn pri" type="button" disabled={saving||pending} onClick={save}>{saving?'Saving profile…':'Save profile'}</button></div>}

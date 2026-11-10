@@ -5,7 +5,7 @@ import {cvApi,CvApiError} from '@/lib/api/cv';
 import {savedCv} from '../../../tests/fixtures/cv';
 vi.mock('@/lib/api/cv',()=>({cvApi:{rename:vi.fn()},CvApiError:class extends Error{constructor(message:string,public status:number){super(message);}}}));
 beforeEach(()=>vi.clearAllMocks());
-function setup(){const props={cv:savedCv('one'),active:true,busy:false,token:'synthetic',review:vi.fn(),select:vi.fn(),remove:vi.fn(),saved:vi.fn(),refresh:vi.fn().mockResolvedValue(undefined)};render(<SavedCvCard {...props}/>);return props;}
+function setup(){const props={cv:savedCv('one'),active:true,busy:false,token:'synthetic',review:vi.fn(),results:vi.fn(),select:vi.fn(),remove:vi.fn(),saved:vi.fn(),refresh:vi.fn().mockResolvedValue(undefined)};render(<SavedCvCard {...props}/>);return props;}
 it('saves a title independently of baseline selection or review',async()=>{
  const props=setup();vi.mocked(cvApi.rename).mockResolvedValue({...props.cv,display_name:'Engineering CV'});
  fireEvent.click(screen.getByRole('button',{name:'Rename'}));fireEvent.change(screen.getByRole('textbox',{name:'CV title'}),{target:{value:' Engineering CV '}});fireEvent.click(screen.getByRole('button',{name:'Save title'}));
