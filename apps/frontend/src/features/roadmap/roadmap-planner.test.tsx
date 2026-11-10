@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { RoadmapPlanner } from './roadmap-planner';
+import { RoadmapPlanner, generationProgress } from './roadmap-planner';
 import type { Workspace } from './types';
-import { planner, review, roadmap } from '../../../tests/fixtures/roadmap-workspace';
+import { planner, review, roadmap, runway } from '../../../tests/fixtures/roadmap-workspace';
 const session = vi.hoisted(() => ({ account: { id: 'owner-one' }, token: 'synthetic-token' }));
 const api = vi.hoisted(() => vi.fn());
 vi.mock('@/features/profile/profile-provider', () => ({ useProfile: () => session }));
@@ -24,6 +24,15 @@ it('gates missing CV and goal without making model requests', async () => {
  render(<RoadmapPlanner />); await screen.findByText('Select an extracted CV.');
  expect(screen.getByRole('link', { name: 'Open CV' })).toHaveAttribute('href', '/cv');
  await openHelper(); expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled(); expect(api).toHaveBeenCalledTimes(1);
+});
+it('sends the chat helper message on Enter but keeps Shift+Enter for a new line', async () => {
+ api.mockImplementation((path: string) => path === '/messages' ? new Promise(() => {}) : Promise.resolve(state()));
+ render(<RoadmapPlanner />); await openHelper(); const input = await screen.findByRole('textbox', { name: 'Answer here' });
+ fireEvent.change(input, { target: { value: 'I have six hours a week.' } });
+ fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+ expect(api.mock.calls.some(call => call[0] === '/messages')).toBe(false);
+ fireEvent.keyDown(input, { key: 'Enter' });
+ await waitFor(() => expect(api.mock.calls.find(call => call[0] === '/messages')?.[2]).toMatchObject({ message: 'I have six hours a week.' }));
 });
 it('retains the next draft during async advice and sends the exact chosen partial flag', async () => {
  let resolveSend: (value: unknown) => void = () => {};
@@ -48,7 +57,7 @@ it('clears private conversation and ignores old responses on account switch', as
  let oldResponse: (value: Workspace) => void = () => {};
  api.mockImplementationOnce(() => new Promise(resolve => { oldResponse = resolve; })).mockResolvedValue(state());
  const view = render(<RoadmapPlanner />); session.account = { id: 'owner-two' }; session.token = 'second-token'; view.rerender(<RoadmapPlanner />);
- await openHelper(); await screen.findByRole('heading', { name: 'Your chat helper' });
+ await openHelper(); await screen.findByRole('heading', { name: 'Plan helper' });
  await act(async () => oldResponse(state({ messages: [{ id: 'private', role: 'user', content: 'Private old-owner plans', created_at: '2030-01-01' }] })));
  expect(screen.queryByText('Private old-owner plans')).not.toBeInTheDocument();
 });
@@ -63,16 +72,31 @@ it('retries a lost-response message using its original mutation identity', async
  expect(api.mock.calls.filter(call => call[0] === '/messages')[1][2]).toEqual(original);
 });
 
-it('explains satisfied alternatives and preserves the original requirement wording', async () => {
- const value = state(); value.assessment = { id: 'a', input_hash: 'h', role: 'Developer', research_coverage: 'no_findings', priorities: [], interview_prep_gaps: [], constraints: [],
-  groups: [{ id: 'languages', operator: 'any', requirement_refs: ['python', 'sql'], match_status: 'supported', known_shortfall_refs: [] }],
-  job_skill_gaps: [{ ref: 'python', name: 'Python', match_status: 'supported', evidence: 'Python or SQL experience is accepted.', priority: 'required', components: [{ dimension: 'capability', status: 'supported', explanation: 'Personal project use.', evidence_refs: [] }] }, { ref: 'sql', name: 'SQL', match_status: 'uncertain', components: [] }] };
- // Starting point is a view of a generated roadmap; before one exists the planner is the only view.
- const plan = roadmap({ assessment: value.assessment }); value.planner = planner({ active: plan, active_review: review(plan) });
- api.mockResolvedValue(value); render(<RoadmapPlanner />); await screen.findByRole('tab', { name: 'Starting point' });
- fireEvent.click(screen.getByRole('tab', { name: 'Starting point' }));
- expect(screen.getByText('One supported permitted route satisfies this group. Unused alternatives are not mandatory work.')).toBeInTheDocument();
- expect(screen.getByText('Python or SQL experience is accepted.')).toBeInTheDocument();
+it('has no Starting point tab or panel, before or after a roadmap exists', async () => {
+ api.mockResolvedValue(state()); const first = render(<RoadmapPlanner />);
+ await screen.findByRole('heading', { name: 'Roadmap' });
+ expect(screen.queryByRole('tab')).not.toBeInTheDocument(); expect(screen.queryByText('Your starting point')).not.toBeInTheDocument();
+ first.unmount();
+ const value = state(); const plan = roadmap(); value.planner = planner({ active: plan, active_review: review(plan) });
+ api.mockResolvedValue(value); render(<RoadmapPlanner />);
+ await screen.findByRole('region', { name: 'To-do list' });
+ expect(screen.queryByRole('tab', { name: 'Starting point' })).not.toBeInTheDocument();
+});
+
+it('shows a generation progress bar from the click and moves it with the reported stage', async () => {
+ let finish: (value: unknown) => void = () => {};
+ const value = state(); value.planner = planner({ runway: runway({ can_generate: true }) });
+ api.mockImplementation((path: string) => path === '/generate' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(value));
+ render(<RoadmapPlanner />);
+ const button = await screen.findByRole('button', { name: /^Generate roadmap/ });
+ fireEvent.click(button);
+ const bar = await screen.findByRole('progressbar', { name: 'Roadmap generation progress' });
+ expect(bar).toHaveAttribute('aria-valuenow', String(generationProgress().percent));
+ expect(generationProgress('assessing')).toMatchObject({ step: 1, percent: 30 });
+ expect(generationProgress('writing')).toMatchObject({ step: 2, percent: 65 });
+ expect(generationProgress('correcting')).toMatchObject({ step: 3, percent: 88 });
+ expect(generationProgress('anything-else')).toMatchObject({ step: 0, percent: 8 });
+ await act(async () => finish({ version: 1, operation: { id: 'op', status: 'running', stage: 'writing' } }));
 });
 
 it('distinguishes an unavailable source check from missing input and retains saved chat', async () => {

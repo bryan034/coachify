@@ -92,3 +92,26 @@
 
 @media (max-width:1100px){.cal-layout{grid-template-columns:minmax(0,1fr)}.cal-rail{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}}
 @media (max-width:640px){.cal-events>div{grid-template-columns:minmax(0,1fr)}.cal-controls{width:100%;justify-content:space-between}}
+
+/* Canvas alignment: forest study blocks, dashed backups, blue interviews, orange deadlines, hatched blocked days. */
+.cal-title-name p{margin:2px 0 0;color:var(--slate)}
+.cal-session{border-left:0;background:var(--forest);color:var(--white)}
+.cal-session small{color:color-mix(in srgb,var(--white) 82%,var(--forest))}
+.cal-session.is-backup{border:1.5px dashed var(--forest);background:var(--mint-mist);color:var(--forest-ink)}
+.cal-session.is-backup small{color:var(--forest-ink)}
+.cal-mark.is-deadline{background:var(--gap-bg);color:var(--gap-ink);font-weight:600}
+.cal-mark.is-interview{background:var(--partial-bg);color:var(--partial-ink);font-weight:600}
+.cal-column.is-blocked{background-image:repeating-linear-gradient(45deg,#e2e8f0 0 4px,var(--snow) 4px 10px)}
+.cal-target{padding:20px;border-radius:16px;background:var(--ink);color:var(--white)}
+.cal-target p{margin:0;font-size:13px;font-weight:600;color:#6ee7b7}
+.cal-target b{display:block;margin-top:4px;font-size:22px;font-weight:600}
+.cal-target span{color:#cbd5e1}
+.cal-key ul{display:grid;gap:8px;margin:10px 0 0;padding:0;list-style:none;font-size:13px}
+.cal-key li{display:flex;align-items:center;gap:8px}
+.cal-key i{flex:none;width:14px;height:14px;border-radius:4px}
+.cal-key i.is-study{background:var(--forest)}
+.cal-key i.is-backup{background:var(--mint-mist);border:1.5px dashed var(--forest)}
+.cal-key i.is-interview{background:var(--partial-bg)}
+.cal-key i.is-deadline{background:var(--gap-bg)}
+.cal-key i.is-blocked{border:1px solid #cbd5e1;background:repeating-linear-gradient(45deg,#e2e8f0 0 3px,var(--snow) 3px 6px)}
+.cal-key a{display:inline-block;margin-top:14px;font-size:13px;font-weight:600;color:var(--forest);text-decoration:none}

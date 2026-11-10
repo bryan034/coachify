@@ -34,7 +34,7 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  const targetId=target.id;
  await page.goto('/career-goal');
  await page.getByRole('link',{name:'About the role',exact:true}).click();
- await page.locator('summary').filter({hasText:/^Eligibility and commitment\b/}).click();
+ await expect(page.getByRole('heading',{name:'Eligibility and commitment',exact:true})).toBeVisible();
  await chapter('1. Review the target requirements', 'The test account uses a pre-seeded synthetic canonical goal. The displayed skills and diploma requirement are saved by Career; this walkthrough does not evaluate live extraction.', page.getByRole('heading',{name:'Synthetic data analyst internship',exact:true}));
  await expect(page.getByText(qualification,{exact:true}).first()).toBeVisible();
  await page.getByRole('link',{name:'Skills needed',exact:true}).click();

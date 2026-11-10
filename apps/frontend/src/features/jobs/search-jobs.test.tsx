@@ -37,6 +37,7 @@ const prompt=()=>screen.queryByRole('region',{name:'Application check'});
 const VISITS='elo.job-apply-visits.synthetic-account';
 const renderWithCheck=()=>render(<><SearchJobs/><JobApplicationCheck/></>);
 async function visitEmployer(title:string){
+ await runSearch();
  const card=(await screen.findByRole('heading',{name:title})).closest('li')!;
  const apply=within(card).getByRole('link',{name:/Apply on employer site/});
  apply.addEventListener('click',event=>event.preventDefault());
@@ -44,6 +45,8 @@ async function visitEmployer(title:string){
  return card;
 }
 const returnToElo=()=>fireEvent.focus(window);
+// Nothing is searched until the user presses Search.
+const runSearch=async()=>fireEvent.click(await screen.findByRole('button',{name:'Search'}));
 
 describe('Search Jobs',()=>{
  async function openLinkForm(){
@@ -88,6 +91,7 @@ describe('Search Jobs',()=>{
  it('shows current listings with their facts and the bearer token',async()=>{
   render(<SearchJobs/>);
   expect(screen.getByRole('heading',{level:1,name:'Search Jobs'})).toBeVisible();
+  await runSearch();
   const card=(await screen.findByRole('heading',{name:'Data Intern'})).closest('li')!;
   expect(within(card).getByText('Internship')).toBeVisible();
   expect(within(card).getByText('Fintech')).toBeVisible();
@@ -98,38 +102,56 @@ describe('Search Jobs',()=>{
   const headers=(vi.mocked(fetch).mock.calls[0][1] as RequestInit).headers as Record<string,string>;
   expect(headers.Authorization).toBe('Bearer synthetic-token');
  });
- it('sends each chosen filter to the service',async()=>{
+ it('searches nothing on load, and sends each chosen filter only when Search is pressed',async()=>{
   render(<SearchJobs/>);
   await screen.findByRole('checkbox',{name:'Internship (2)'});
+  expect(searches()).toHaveLength(0);
+  expect(screen.getByText('Choose your filters, then press Search')).toBeVisible();
+  expect(screen.queryByText(/No jobs are listed/)).toBeNull();
   fireEvent.click(screen.getByRole('checkbox',{name:'Internship (2)'}));
-  await waitFor(()=>expect(lastSearch().getAll('job_type')).toEqual(['internship']));
   fireEvent.click(screen.getByRole('checkbox',{name:'Full-time (1)'}));
-  await waitFor(()=>expect(lastSearch().getAll('job_type')).toEqual(['internship','full_time']));
   fireEvent.click(screen.getByRole('checkbox',{name:'Fintech (3)'}));
-  await waitFor(()=>expect(lastSearch().getAll('industry')).toEqual(['fintech']));
   fireEvent.change(screen.getByRole('combobox',{name:'Work arrangement'}),{target:{value:'hybrid'}});
-  await waitFor(()=>expect(lastSearch().getAll('workplace')).toEqual(['hybrid']));
   fireEvent.change(screen.getByRole('combobox',{name:'Employer'}),{target:{value:'Synthetic Pay'}});
-  await waitFor(()=>expect(lastSearch().getAll('company')).toEqual(['Synthetic Pay']));
   fireEvent.change(screen.getByRole('combobox',{name:'Date posted'}),{target:{value:'7'}});
-  await waitFor(()=>expect(lastSearch().get('posted_within_days')).toBe('7'));
+  fireEvent.change(screen.getByRole('combobox',{name:'Sort results'}),{target:{value:'newest'}});
+  expect(searches()).toHaveLength(0);
+  await runSearch();
+  await waitFor(()=>expect(searches()).toHaveLength(1));
+  const sent=lastSearch();
+  expect(sent.getAll('job_type')).toEqual(['internship','full_time']);
+  expect(sent.getAll('industry')).toEqual(['fintech']);
+  expect(sent.getAll('workplace')).toEqual(['hybrid']);
+  expect(sent.getAll('company')).toEqual(['Synthetic Pay']);
+  expect(sent.get('posted_within_days')).toBe('7');
+  expect(sent.get('sort')).toBe('newest');
+  // Editing a filter after a search does not search again until Search is pressed.
+  fireEvent.click(screen.getByRole('checkbox',{name:'Fintech (3)'}));
+  expect(searches()).toHaveLength(1);
+  // Clearing filters returns to the waiting state instead of searching.
   fireEvent.click(screen.getByRole('button',{name:'Clear filters'}));
+  expect(searches()).toHaveLength(1);
+  expect(await screen.findByText('Choose your filters, then press Search')).toBeVisible();
+  await runSearch();
   // Sort is a display order, not a filter: clearing filters keeps the chosen order.
-  await waitFor(()=>expect([...lastSearch().entries()]).toEqual([['sort','recommended']]));
+  await waitFor(()=>expect([...lastSearch().entries()]).toEqual([['sort','newest']]));
  });
  it('supports a custom posted date range',async()=>{
   render(<SearchJobs/>);
+  await runSearch();
   await screen.findByRole('heading',{name:'Data Intern'});
   expect(screen.queryByLabelText('Posted from')).toBeNull();
   fireEvent.change(screen.getByRole('combobox',{name:'Date posted'}),{target:{value:'custom'}});
   fireEvent.change(screen.getByLabelText('Posted from'),{target:{value:'2026-10-01'}});
   fireEvent.change(screen.getByLabelText('Posted to'),{target:{value:'2026-10-31'}});
+  await runSearch();
   await waitFor(()=>{expect(lastSearch().get('posted_from')).toBe('2026-10-01');expect(lastSearch().get('posted_to')).toBe('2026-10-31');});
   expect(lastSearch().get('posted_within_days')).toBeNull();
  });
  it('searches keywords on submit and shows the service\'s external links without browser storage',async()=>{
   const storage=vi.spyOn(Storage.prototype,'setItem');
   render(<SearchJobs/>);
+  await runSearch();
   await screen.findByRole('heading',{name:'Data Intern'});
   expect(screen.queryByRole('link',{name:/LinkedIn/})).toBeNull();
   const before=searches().length;
@@ -229,6 +251,7 @@ describe('Search Jobs',()=>{
  it('promotes an already saved job on yes and leaves a further status alone',async()=>{
   saved=[application('saved',1)];
   const view=renderWithCheck();
+  await runSearch();
   await screen.findByText('Saved in My applications');
   await visitEmployer('Data Intern');
   returnToElo();
@@ -237,6 +260,7 @@ describe('Search Jobs',()=>{
   view.unmount();
   saved=[application('interviewing',3)];
   renderWithCheck();
+  await runSearch();
   await screen.findByText('Interviewing in My applications');
   await visitEmployer('Data Intern');
   returnToElo();
@@ -268,6 +292,7 @@ describe('Search Jobs',()=>{
  it('loads further pages with the cursor and keeps the current filters',async()=>{
   search=url=>url.searchParams.get('cursor')?json({items:[posting('c','Third Role')],total:2,next_cursor:null}):json({items:[posting('a','Data Intern')],total:2,next_cursor:'next-page'});
   render(<SearchJobs/>);
+  await runSearch();
   fireEvent.click(await screen.findByRole('button',{name:'Show more jobs'}));
   await screen.findByRole('heading',{name:'Third Role'});
   expect(screen.getByRole('heading',{name:'Data Intern'})).toBeVisible();
@@ -277,6 +302,7 @@ describe('Search Jobs',()=>{
  it('offers each HTTPS listing as a career goal through the review intake',async()=>{
   search=()=>json({items:[posting('a','Data Intern')],total:1,next_cursor:null});
   render(<SearchJobs/>);
+  await runSearch();
   const card=(await screen.findByRole('heading',{name:'Data Intern'})).closest('li')!;
   const use=within(card).getByRole('link',{name:'Use as career goal'});
   expect(new URLSearchParams(use.getAttribute('href')!.split('?')[1]).get('job_url')).toMatch(/^https:\/\//);
@@ -285,6 +311,7 @@ describe('Search Jobs',()=>{
  it('never renders a non-HTTPS link from a listing',async()=>{
   search=()=>json({items:[posting('a','Unsafe Role',{apply_url:'javascript:alert(1)',listing_url:'http://jobs.example.test/a'})],total:1,next_cursor:null});
   render(<SearchJobs/>);
+  await runSearch();
   const card=(await screen.findByRole('heading',{name:'Unsafe Role'})).closest('li')!;
   expect(within(card).queryByRole('link')).toBeNull();
  });
@@ -292,6 +319,7 @@ describe('Search Jobs',()=>{
   let attempts=0;
   search=()=>++attempts===1?json({detail:'Storage is unavailable.',code:'storage'},503):json({items:[posting('a','Data Intern')],total:1,next_cursor:null});
   render(<SearchJobs/>);
+  await runSearch();
   expect(await screen.findByRole('alert')).toHaveTextContent('Storage is unavailable.');
   fireEvent.click(screen.getByRole('button',{name:'Retry'}));
   await screen.findByRole('heading',{name:'Data Intern'});
@@ -300,16 +328,19 @@ describe('Search Jobs',()=>{
  it('treats a malformed response as a recoverable error',async()=>{
   search=()=>json({items:'not-a-list'});
   render(<SearchJobs/>);
+  await runSearch();
   expect(await screen.findByRole('alert')).toHaveTextContent('unexpected response');
  });
  it('shows partial provider failures alongside usable listings',async()=>{
   search=()=>json({items:[posting('a','Live Intern')],total:1,next_cursor:null,unavailable_sources:['lever:synthetic']});
   render(<SearchJobs/>);
+  await runSearch();
   await screen.findByRole('heading',{name:'Live Intern'});
   expect(screen.getByRole('status')).toHaveTextContent('Results may be incomplete');
  });
  it('fetches again when the same search is submitted',async()=>{
   render(<SearchJobs/>);
+  await runSearch();
   await screen.findByRole('heading',{name:'Data Intern'});
   const before=searches().length;
   search=()=>json({items:[posting('c','New live job')],total:1,next_cursor:null});
@@ -320,6 +351,7 @@ describe('Search Jobs',()=>{
  it('keeps saved applications readable without claiming current availability',async()=>{
   saved=[{...application('saved',1),posting_status:'unknown'}];
   render(<SearchJobs/>);
+  await runSearch();
   await screen.findByRole('heading',{name:'Data Intern'});
   fireEvent.click(screen.getByRole('button',{name:'My applications (1)'}));
   expect(screen.getByText('Check employer site for availability')).toBeVisible();
@@ -328,8 +360,10 @@ describe('Search Jobs',()=>{
  it('explains empty live results and an empty filter result differently',async()=>{
   search=()=>json({items:[],total:0,next_cursor:null});
   render(<SearchJobs/>);
+  await runSearch();
   await screen.findByText('No jobs are listed right now.');
   fireEvent.change(screen.getByRole('combobox',{name:'Date posted'}),{target:{value:'1'}});
+  await runSearch();
   await screen.findByText(/No jobs match these filters/);
  });
 });

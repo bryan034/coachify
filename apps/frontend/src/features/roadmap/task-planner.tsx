@@ -1,9 +1,10 @@
 "use client";
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { addDays, addMonths, clockRange, dayOfMonth, fullDate, monthKey, monthTitle, monthWeeks, shortDate, weekColumns, weekDates, weekStart, weekdayName } from './roadmap-calendar';
 import { hours, longDate } from './settings-panel';
 import type { NotesDocument, PlanAssignment, PlanMilestone, PlanReview, PlannedRoadmap } from './types';
 import { NotesEditor } from './notes-editor';
+import { AddTaskForm, type AddTask } from './add-task';
 
 type View = 'day' | 'week' | 'month';
 const views: [View, string][] = [['day', 'Daily'], ['week', 'Weekly'], ['month', 'Monthly']];
@@ -34,14 +35,9 @@ function TaskItem({ session, plan, review, frozen, complete, reopen, saveNotes }
    ? <input className="todo-check" type="checkbox" aria-label={`Mark complete: ${session.task}`} checked={done} disabled={frozen} onChange={event => tick(event.target.checked)} />
    : <span className={`todo-check-static${done ? ' done' : ''}`} aria-hidden="true" />}
   <div className="todo-body">
-   <p className="todo-when"><span>{clockRange(session.start_time, session.duration_minutes)}</span><span>{hours(session.duration_minutes)}</span>
-    {session.id === review.next_assignment_id && <span className="todo-flag next">Next</span>}
-    {review.missed_assignment_ids.includes(session.id) && <span className="todo-flag">Passed</span>}
-    {session.kind === 'diagnostic' && <span className="todo-flag">Diagnostic</span>}
-   </p>
    <p className="todo-task">{session.task}</p>
-   <p className="small">Done when: {session.completion_criterion}</p>
    {(skills.length > 0 || milestone) && <div className="todo-tags">{skills.map(skill => <span className="todo-skill" key={skill}>{skill}</span>)}{milestone && <span className="small">{milestone.title}</span>}</div>}
+   <p className="small todo-done-when">Done when: {session.completion_criterion}</p>
    {saveNotes && session.task_id && (() => { const task = plan.editable_tasks?.find(item => item.id === session.task_id); const has = !!task?.notes?.blocks.length;
     return <details className="todo-notes" open={has || undefined}><summary>{has ? 'Notes' : 'Add notes'}</summary><NotesEditor label={`Notes for ${session.task}`} value={task?.notes} disabled={frozen} onSave={doc => saveNotes(session.task_id!, doc)}/></details>; })()}
    {session.evidence_note && <p className="small">Your note: {session.evidence_note}</p>}
@@ -50,6 +46,11 @@ function TaskItem({ session, plan, review, frozen, complete, reopen, saveNotes }
     <button type="button" className="btn ghost" disabled={frozen || !note.trim()} onClick={() => void complete(session, note)}>Save note</button>
    </details>}
   </div>
+   <p className="todo-when"><span className="todo-time">{clockRange(session.start_time, session.duration_minutes)}</span><span className="todo-length">{hours(session.duration_minutes)}</span>
+   {session.id === review.next_assignment_id && <span className="todo-flag next">Next</span>}
+   {review.missed_assignment_ids.includes(session.id) && <span className="todo-flag">Passed</span>}
+   {session.kind === 'diagnostic' && <span className="todo-flag">Diagnostic</span>}
+  </p>
  </li>;
 }
 
@@ -81,15 +82,18 @@ function MonthView({ cursor, today, plan, review, sessions, open }: { cursor: st
 }
 
 /** The roadmap's working surface: the sessions to tick off, seen by day or week, and each week at a glance by month. */
-export function TaskPlanner({ plan, review, frozen, complete, reopen, saveNotes = null }: { plan: PlannedRoadmap; review: PlanReview; frozen: boolean; complete: ((session: PlanAssignment, note: string) => Promise<unknown>) | null; reopen: ((session: PlanAssignment) => Promise<unknown>) | null; saveNotes?: SaveNotes }) {
+export function TaskPlanner({ plan, review, frozen, complete, reopen, saveNotes = null, addTask = null }: { plan: PlannedRoadmap; review: PlanReview; frozen: boolean; complete: ((session: PlanAssignment, note: string) => Promise<unknown>) | null; reopen: ((session: PlanAssignment) => Promise<unknown>) | null; saveNotes?: SaveNotes; addTask?: AddTask | null }) {
  const today = review.remaining.resolved.today;
  const sessions = [...plan.assignments].sort(bySchedule);
  const next = sessions.find(session => session.id === review.next_assignment_id);
  const edges = [plan.config.start_date, plan.config.target_date, ...sessions.map(session => session.date), ...plan.milestones.flatMap(item => [item.projected_start, item.projected_end])].filter((value): value is string => !!value).sort();
  const first = edges[0] || today; const last = edges[edges.length - 1] || today;
  const [view, setView] = useState<View>('week');
+ const [adding, setAdding] = useState<string | null>(null);
  const [cursor, setCursor] = useState(next?.date || (today >= first && today <= last ? today : plan.first_planning_week));
 
+ // Moving to another day or view closes an unsaved new-task form.
+ useEffect(() => setAdding(null), [cursor, view]);
  const week = weekDates(cursor);
  const shown = view === 'day' ? sessions.filter(session => session.date === cursor) : sessions.filter(session => week.includes(session.date));
  const done = shown.filter(session => session.status === 'completed');
@@ -107,7 +111,11 @@ export function TaskPlanner({ plan, review, frozen, complete, reopen, saveNotes 
  const title = view === 'month' ? monthTitle(cursor)
   : view === 'day' ? (cursor === today ? 'Today' : longDate(cursor))
   : sameWeek ? 'This week' : `Week of ${shortDate(weekStart(cursor))}`;
- const days = [...new Set(shown.map(session => session.date))];
+ const canAdd = !!addTask && !frozen;
+ // A new task goes on the chosen day, or today in the current week, or the first day of a future week.
+ const addDay = view === 'day' ? cursor : sameWeek ? today : weekStart(cursor);
+ const days = [...new Set([...shown.map(session => session.date), ...(adding && view === 'week' && week.includes(adding) ? [adding] : [])])].sort();
+ const addRow = (day: string) => canAdd && (adding === day ? <AddTaskForm key={`add-${day}`} plan={plan} date={day} add={addTask!} cancel={() => setAdding(null)} /> : null);
  const item = (session: PlanAssignment) => <TaskItem key={session.id} session={session} plan={plan} review={review} frozen={frozen} complete={complete} reopen={reopen} saveNotes={saveNotes} />;
 
  return <section className="task-planner" aria-label="To-do list">
@@ -133,12 +141,13 @@ export function TaskPlanner({ plan, review, frozen, complete, reopen, saveNotes 
 
   {view === 'week' && days.map(day => <div className="todo-day" key={day}>
    <h3><button type="button" className="todo-day-link" aria-label={`Open ${longDate(day)}`} onClick={() => { setCursor(day); setView('day'); }}>{day === today ? 'Today' : weekdayName(day)}<span>{shortDate(day)}</span></button></h3>
-   <ul className="todo-list">{shown.filter(session => session.date === day).map(item)}</ul>
+   <ul className="todo-list">{shown.filter(session => session.date === day).map(item)}{addRow(day)}</ul>
   </div>)}
-  {view === 'day' && shown.length > 0 && <ul className="todo-list">{shown.map(item)}</ul>}
+  {view === 'day' && (shown.length > 0 || adding === cursor) && <ul className="todo-list">{shown.map(item)}{addRow(cursor)}</ul>}
+  {canAdd && view !== 'month' && !adding && addDay >= today && <button type="button" className="add-task-open" onClick={() => setAdding(addDay)}><span aria-hidden="true">+</span>Add a task{view === 'week' ? ` on ${weekdayName(addDay)} ${shortDate(addDay)}` : ''}</button>}
 
-  {view === 'day' && !shown.length && <p className="task-empty">Nothing is planned for {longDate(cursor)}.</p>}
-  {view === 'week' && !shown.length && <div className="task-empty">
+  {view === 'day' && !shown.length && adding !== cursor && <p className="task-empty">Nothing is planned for {longDate(cursor)}.</p>}
+  {view === 'week' && !days.length && <div className="task-empty">
    {addDays(weekStart(cursor), 6) < today ? <p>No sessions were planned for this week.</p> : <p>Sessions for this week aren’t planned yet. Elo plans one week at a time, so preview an updated roadmap when you get here.</p>}
    {available !== undefined && <p className="small">{hours(available)} available this week.</p>}
    {milestones.length > 0 && <><h3>Milestones this week</h3><ul>{milestones.map(entry => <li key={entry.id}>{entry.title}</li>)}</ul></>}

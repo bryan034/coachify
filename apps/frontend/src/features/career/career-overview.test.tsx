@@ -28,7 +28,6 @@ it('shows saved skills in briefing accordions and keeps refinement and replaceme
  expect(skillRow('SQL').closest('section')!.querySelector('h3')).toHaveTextContent('Data & analytics');expect(within(skillRow('SQL')).getByText('Essential')).toBeVisible();
  expect(skillRow('Teamwork').closest('section')!.querySelector('h3')).toHaveTextContent('Communication & leadership');expect(within(skillRow('Teamwork')).getByText('Important')).toBeVisible();
  expect(screen.getByRole('link',{name:'Refine goal'})).toHaveAttribute('href','/career-goal/chat?refine=1');
- expect(await screen.findByRole('link',{name:/Upload my CV/})).toHaveAttribute('href','/cv');
  fireEvent.click(screen.getByRole('button',{name:/Set a new goal/}));expect(push).toHaveBeenCalledWith('/career-goal?new=1');
  expect(vi.mocked(careerApi).mock.calls.every(call=>!call[2]?.method)).toBe(true);
 });
@@ -64,51 +63,18 @@ it('marks each needed skill from the saved comparison',async()=>{
 it('leaves skills unmarked and explains how to compare when no saved comparison exists',async()=>{
  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({version:0,ready:true,model_available:true,operation:null,stale:false,result:null}))));
  overview();
- expect(await screen.findByText(/Not yet compared with your latest Skills Profile/)).toBeVisible();
- expect(screen.getByRole('button',{name:'Compare with my skills'})).toBeEnabled();
+ expect(screen.getByRole('link',{name:'Compare with your skills'})).toHaveAttribute('href','/cv');
  expect(screen.queryByText('Have')).not.toBeInTheDocument();
- await screen.findByRole('link',{name:/Upload my CV/});
  vi.unstubAllGlobals();
 });
 it('displays extracted categories while research is still running',async()=>{
  overview({...workspace,phase:'researching',research_id:null});expect(screen.getByText('SQL')).toBeVisible();
  expect(screen.getByText('Researching opportunity information. Your extracted goal is already saved.')).toBeVisible();
- await screen.findByRole('link',{name:/Upload my CV/});
-});
-it.each([
- {status:'no_cv',heading:'Add your CV background',action:'Upload my CV',description:'No saved CV was found.'},
- {status:'not_evaluated',heading:'CV skills are not available yet',action:'Review my CV',description:'A CV is saved, but no successfully extracted skills were found.'},
-])('distinguishes missing CV from saved CV without available skills: $status',async({status,heading,action,description})=>{
- vi.mocked(careerApi).mockResolvedValue({status,cv_uploaded:status!=='no_cv',skills_evaluated:false});overview();
- const card=screen.getByRole('region',{name:'Your CV skills'});
- expect(await within(card).findByRole('heading',{name:heading})).toBeVisible();
- expect(within(card).getByRole('link',{name:new RegExp(action)})).toHaveAttribute('href','/cv');
- expect(card).toHaveTextContent(description);
- expect(card).not.toHaveTextContent(/assessed|assessment|evaluated/iu);
-});
-it('describes extracted CV skills as available without claiming an assessment was run',async()=>{
- vi.mocked(careerApi).mockResolvedValue({status:'evaluated',cv_uploaded:true,skills_evaluated:true});overview();
- const card=screen.getByRole('region',{name:'Your CV skills'});
- expect(await within(card).findByRole('heading',{name:'CV skills available'})).toBeVisible();
- expect(card).toHaveTextContent('extracted or user-clarified skills available to review');
- expect(within(card).getByRole('link',{name:/View my CV/})).toHaveAttribute('href','/cv');
- expect(card).not.toHaveTextContent(/assessed|assessment|evaluated/iu);
- expect(card).not.toHaveTextContent(/mastered|proven/iu);
-});
-it('does not mistake unavailable CV data for an empty database and allows retry',async()=>{
- let first=true;vi.mocked(careerApi).mockImplementation(async path=>{if(path==='/context/assessment'){if(first){first=false;throw new Error('Unavailable');}return {status:'evaluated',cv_uploaded:true,skills_evaluated:true} as never;}return {finished:true,categories:{}} as never;});overview();
- expect(await screen.findByRole('heading',{name:'CV skills status unavailable'})).toBeVisible();
- expect(screen.getByRole('region',{name:'Your CV skills'})).toHaveTextContent('We couldn’t check your saved CV.');
- expect(screen.queryByText(/No saved CV was found/)).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('button',{name:'Retry CV check'}));
- expect(await screen.findByRole('link',{name:/View my CV/})).toHaveAttribute('href','/cv');
- expect(screen.queryByRole('link',{name:/Upload my CV/})).not.toBeInTheDocument();
 });
 it('restores the overview after reload instead of showing a new input form',async()=>{
  render(<CareerSessionProvider><CareerGoalHome/></CareerSessionProvider>);
  expect(await screen.findByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
  expect(screen.queryByRole('textbox',{name:'Job description'})).not.toBeInTheDocument();
- await waitFor(()=>expect(careerApi).toHaveBeenCalledWith('/context/assessment','synthetic-token',expect.anything()));
 });
 it('new-goal mode keeps the saved goal untouched and opens the input methods',()=>{
  params.set('new','1');render(<CareerSessionProvider><CareerGoalHome/></CareerSessionProvider>);
@@ -131,20 +97,13 @@ it('preserves AND/OR, provenance and safe sources without inventing learning gui
  expect(within(skillRow('Teamwork')).getByText('Nice to have')).toBeVisible();
  expect(within(skillRow('Teamwork')).getByLabelText('importance inferred by elo')).toBeInTheDocument();
  expect(screen.queryByText('A way to practise')).not.toBeInTheDocument();
- await screen.findByRole('link',{name:/Upload my CV/});
 });
-it('hides role fields with no data and never labels individual skills as assessed',async()=>{
- vi.mocked(careerApi).mockResolvedValue({status:'evaluated',cv_uploaded:true,skills_evaluated:true});
+it('hides role fields with no data and never labels individual skills as assessed',()=>{
  overview({...workspace,current:{...workspace.current,goal:{...workspace.current.goal!,skills:[],responsibilities:[],non_skill_requirements:[],summary:null}}});
  expect(screen.getByText(/No skills are listed/)).toBeVisible();
  expect(screen.queryByText(/Eligibility & commitment/)).not.toBeInTheDocument();
  expect(screen.queryByText(/0 requirements/)).not.toBeInTheDocument();
  expect(screen.queryByText('What you would work on')).not.toBeInTheDocument();
- const cvSkills=screen.getByRole('region',{name:'Your CV skills'});
- expect(await within(cvSkills).findByRole('heading',{name:'CV skills available'})).toBeVisible();
- expect(cvSkills).toHaveTextContent('These are separate from your goal’s requirements.');
- expect(cvSkills).toHaveTextContent('A comparison against this goal is not available yet.');
- expect(cvSkills).not.toHaveTextContent(/assessed|assessment|evaluated|upload.*planned/iu);
 });
 
 it('retries a failed research job without replacing the saved goal',async()=>{
@@ -214,24 +173,6 @@ it('retains the full title and saved content behind an independent accessible di
  expect(screen.getByRole('button',{name:'Teamwork'})).toHaveAttribute('aria-expanded','false');
  fireEvent.click(button);expect(panel).not.toBeVisible();
 });
-it('uses the confirmed banner only for the exact current goal revision',async()=>{
- const value={goal_id:'goal',goal_version:1,selection_version:1,confirmed:true,context:{id:'goal',version:1,selection_version:1,confirmed:true as const},reason:null};
- vi.mocked(getCvGoalConfirmation).mockResolvedValue(value);
- const {rerender}=overview();
- await waitFor(()=>expect(screen.getByRole('complementary',{name:'Your starting point'})).toHaveClass('briefing-context-banner'));
- expect(screen.getByRole('complementary',{name:'Your starting point'}).compareDocumentPosition(screen.getByRole('heading',{name:'Skills this role needs'}))&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
- rerender(<CareerSessionProvider><CareerGoalOverview workspace={{...workspace,current:{...workspace.current,goal:{...workspace.current.goal!,version:2}}}} onReload={vi.fn()}/></CareerSessionProvider>);
- await waitFor(()=>expect(screen.getByRole('complementary',{name:'Your starting point'})).not.toHaveClass('briefing-context-banner'));
-});
-it('updates the layout after the existing explicit confirmation succeeds',async()=>{
- vi.mocked(confirmCvGoal).mockResolvedValue({goal_id:'goal',goal_version:1,selection_version:1,confirmed:true,context:{id:'goal',version:1,selection_version:1,confirmed:true},reason:null});
- overview();const button=screen.getByRole('button',{name:'Confirm goal'});
- await waitFor(()=>expect(button).toBeEnabled());fireEvent.click(button);
- await waitFor(()=>expect(screen.getByRole('complementary',{name:'Your starting point'})).toHaveClass('briefing-context-banner'));
- expect(confirmCvGoal).toHaveBeenCalledTimes(1);
-});
-
-
 it('refreshes automatically when returning to a goal page updated by discovery',async()=>{
  const mounted=render(<CareerSessionProvider><CareerGoalHome/></CareerSessionProvider>);
  await screen.findByRole('heading',{name:'Backend Software Engineer'});
@@ -263,4 +204,12 @@ it('hides labels and charts that carry no information',()=>{
  const required=[{...extraction.skills[0],priority:'required' as const},{...extraction.skills[1],priority:'required' as const}];
  overview({...workspace,current:{...workspace.current,goal:{...workspace.current.goal!,skills:required}}});
  expect(screen.queryByRole('figure',{name:/Priority of the/})).not.toBeInTheDocument();
+});
+
+it('has no side rail: the skills fill the page and the three goal pages are one tab group',()=>{
+ overview();
+ expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+ expect(screen.queryByText('Explore other careers')).not.toBeInTheDocument();
+ const tabs=screen.getByRole('navigation',{name:'Career goal pages'}).querySelector('.goal-tab-group')!;
+ expect(within(tabs as HTMLElement).getAllByRole('link').map(link=>link.textContent)).toEqual(['Skills needed','Interview preparation','About the role']);
 });

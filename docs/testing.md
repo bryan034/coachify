@@ -25,7 +25,9 @@ Full-stack onboarding journeys finish on `/getting-started` and use Go to Home
 to reach the dashboard. Saved background assertions live on My profile. Career
 requirements are reviewed under About the role. Baseline Profile planning defaults
 are tested through the standalone `/profile/edit` route; the profile summary links
-to Roadmap’s separate planner settings.
+to Roadmap’s separate planner settings. The C-series completion journey checks the
+visible eligibility card on About the role before returning to Skills needed to
+confirm the exact goal revision for CV review.
 
 Full-stack CV chat journeys enter guided review from a fresh upload or reopen a
 saved CV from the Your CV card on Skills Profile. Detailed correction journeys
