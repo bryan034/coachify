@@ -16,7 +16,8 @@ from app.domain.service import now
 from app.schemas.cv import Mutation
 from app.schemas.interview import InterviewTurn
 from app.schemas.interview_evidence import fact_key, fact_groups, fact_group_value
-from app.conversation.interview_memory import build_context, reconcile_memory, progress, evidence_for, target_key, topic_question_count, topic_ids, MAX_TOPIC_QUESTIONS, MAX_TARGET_ATTEMPTS
+from app.conversation.interview_memory import (build_context, reconcile_memory, progress, evidence_for, target_key,
+    topic_question_count, topic_ids, question_options, MAX_TOPIC_QUESTIONS, MAX_TARGET_ATTEMPTS)
 from app.conversation.presentation import review_reply
 from app.conversation.interview_policy import validate_decision, DecisionRejected
 
@@ -150,7 +151,7 @@ class InterviewHarness:
                 for attempt in range(2):
                     try:
                         result, metadata = await self.call(app, account, identifier, route['id'], token,
-                            {'task': 'cv_interview_interpret', 'message': route['_text'],
+                            {'task': 'cv_interview_interpret', 'message': route['_text'], 'message_id': route.get('_message_id'),
                              'schema_retry': bool(attempt), **context})
                         result = InterviewTurn.model_validate(result)
                         if result.topic_relevant:
@@ -263,14 +264,22 @@ class InterviewHarness:
                 'Your review is complete. There are no additional experience topics to clarify.', None, [])
         current_items = [item for item in effective_items(document) if not item['removed']]
         needed = set(topic_ids(current_items))
-        if not any(item_id in needed and item_id not in memory['coverage'] and topic_question_count(memory, item_id) < MAX_TOPIC_QUESTIONS
-                   for item_id in memory['topic_ids']):
+        available_topics = {item['id'] for item in current_items if topic_question_count(memory, item['id']) < MAX_TOPIC_QUESTIONS}
+        eligible = [item for item in current_items
+                    if item['id'] in needed and item['id'] in available_topics and item['id'] not in memory['coverage']]
+        if not eligible:
             for item_id in memory['topic_ids']:
                 memory['coverage'].setdefault(item_id, {'item_id': item_id, 'status': 'reviewed_with_gaps', 'evidence_refs': []})
             memory['status'] = 'reviewed_with_gaps' if any(v['status'] != 'reviewed' for v in memory['coverage'].values()) else 'reviewed'
             memory['focus_item_id'] = None
             return await self.publish(account, conversation['_id'], route['id'], token, memory,
                 'Your baseline skill review is complete. Each project skill has an evidence-based estimate; details that could not be established remain unknown.', None, [])
+        # Offer the next viable topic up front when the current one has no
+        # remaining material question. The previous ledger remains citable.
+        current_focus = next((item for item in eligible if item['id'] == memory.get('focus_item_id')), None)
+        if not current_focus or not any(option['open_fields'] for option in question_options(current_focus, memory)):
+            focus_id = next((item['id'] for item in eligible
+                             if any(option['open_fields'] for option in question_options(item, memory))), None)
         decision = None
         diagnostics = []
 
@@ -324,9 +333,11 @@ class InterviewHarness:
                 continue
             # The agent can choose another experience; hydrate it before validating
             # a question rather than asking it to reason from an abbreviated title.
-            if raw.get('action') == 'ask' and raw.get('item_id') and (context.get('focused_source') or {}).get('id') != raw['item_id']:
+            source_id = raw.get('item_id')
+            if (raw.get('action') == 'ask' and isinstance(source_id, str) and source_id in available_topics
+                    and (context.get('focused_source') or {}).get('id') != source_id):
                 await record('hydrate_source', 'ask')
-                focus_id = raw['item_id']
+                focus_id = source_id
                 feedback = [*feedback, 'Your selected experience is now hydrated. Reconsider the question against its known evidence.']
                 context_calls += 1
                 if context_calls > MAX_CONTEXT_CALLS: break

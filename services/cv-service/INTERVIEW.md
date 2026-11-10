@@ -32,11 +32,13 @@ malformed output asks a conversational clarification without a failed evidence c
 Corrections, removals and manual additions retain explicit confirmation. Confirmation
 or action-specific recovery resumes the original interview planner once siblings finish.
 
-The planner can choose any source; the harness hydrates a newly selected source
-before permitting its question. Up to three invalid-decision attempts and three context-loading calls per turn
-cover source hydration, answer recall and correction. Context retrieval does not
-consume the invalid-decision allowance; total planner calls remain bounded at six. An invalid proposal never becomes
-a fabricated fallback question. Errors retain the saved turn for explicit retry.
+The planner can choose any source. When the current topic has no remaining
+question options, the first planning request includes the next eligible source
+and retains the previous topic's evidence for validating coverage. The harness
+still hydrates other sources and recalls exact answers on request. Up to three
+invalid-decision attempts and three context-loading calls share a six-call
+planning bound. An invalid proposal is rejected. Errors retain the saved turn
+for explicit retry.
 Model-capacity denial during interpretation/planning pauses the interview; a denial
 inside evidence interpretation retains the existing failed-action recovery path.
 
@@ -69,13 +71,14 @@ MongoDB remains the production persistence authority:
 - `cv_conversations.messages`: the durable transcript and retry receipts. Internal
   proposals, memory and execution controls are not returned as public chat fields.
 
-Each provider call gets a transient context capped at 96 KiB: all source identities
-and field statuses, the focused source and its validated evidence, four recent
-messages (excluding processing placeholders), preferences and compact interview
-progress. A deterministic discussion summary groups retained question history by
-source, with answered/skipped counts and latest target references; full question
-wording is not replayed. Attempt details are scoped to the focused source. These
-projections rebuild from existing durable memory without a summarisation model call.
+The harness builds a transient context capped at 96 KiB, with source identities,
+field statuses, focused evidence, four recent messages, preferences and interview
+progress. The provider adapter projects the context for interpretation or planning
+and avoids replaying duplicate answer text and evidence. Validation keeps its
+full local context. A deterministic discussion summary groups retained question
+history by source, with answered/skipped counts and latest target references.
+Attempt details are scoped to the focused source. These projections rebuild from
+existing durable memory without a summarisation model call.
 Saved source answers are always an ID/target/status index by default; the planner
 can request up to four complete exact answers via `recall` when wording is needed.
 Only the requested answers are hydrated on that call. No factual answer is silently
