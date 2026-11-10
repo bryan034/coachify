@@ -21,8 +21,9 @@ The goal-confirmation browser journey holds the concurrent workspace refresh whi
 checking the stale-revision guard, then releases it after the explicit reload.
 This preserves the guard assertions without racing the normal focus refresh.
 
-Full-stack CV chat journeys explicitly enter Review CV or Build through chat from
-the Skills Profile summary. The synthetic provider serves guided questions, manual
+Full-stack CV chat journeys enter guided review from a fresh upload or reopen a
+saved CV from Skills Profile. Manual intake starts from Build through chat. The
+synthetic provider serves guided questions, manual
 intake and a finite set of labelled semantic-evidence verdicts; unsupported claims
 and unrelated source blocks are rejected. Manual intake stays a draft until Save
 profile publishes it, and outage/retry checks retain the original saved turn.
@@ -517,8 +518,9 @@ these mocked responses.
 ## Skills Profile verification
 
 The summary-first page has component tests and a synthetic browser journey covering
-explicit upload/Review CV entry, processing gates, mobile layout and preserved draft
-recovery. Profile tests run structured draft/publication, declaration preservation,
+automatic upload-to-review entry, processing gates, mobile layout, preserved drafts,
+save and resume after reload, and the separate classified-results route. Profile
+tests run structured draft/publication, declaration preservation,
 idempotent acknowledgement recovery and account CAS races against both memory and
 an explicitly supplied disposable MongoDB. CV tests cover target-independent basic
 review, manual field order, source/version changes, semantic positive/negative

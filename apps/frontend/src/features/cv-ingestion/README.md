@@ -6,9 +6,9 @@ It uploads CVs, extracts potential skills and retains the existing evidence/revi
 workflow. Search Jobs has its own navigation tab, which also holds application tracking. Target confirmation and gap analysis remain separate.
 
 `resume-preview.tsx` coordinates the policy, saved CVs, explicit selection and
-recoverable upload/processing states. Upload opens progress, then displays classified
-results when ready. Explicit Review CV opens the optional text conversation in
-`cv-conversation.tsx`. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, Set as active baseline and Delete CV. Original filenames and source versions remain under File details;
+recoverable upload/processing states. Upload opens guided review immediately and
+shows progress until the first question is ready. `cv-conversation.tsx` saves the
+conversation for later. **View extracted results** opens the detailed classified CV. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, View extracted results, Set as active baseline and Delete CV. Original filenames and source versions remain under File details;
 **Your CV summary** exposes the effective evidence, detailed corrections,
 reconciliation and manual declarations when needed. Uploading never changes selection. The
 active baseline is identified separately from the CV currently being
@@ -28,7 +28,8 @@ invalidates in-flight reads so an old response cannot restore it.
 
 The conversation opens or resumes a CV-owned server record for the viewed CV, or a
 manual-only record when no CV is open. A compact header identifies the reviewed file
-and the confirmed Career target. **Review CV** starts basic guided questions explicitly.
+and the confirmed Career target. An upload starts basic guided questions after extraction
+when the review screen is open. **Review CV** can start or resume a saved CV.
 Users may answer naturally, add context, ask a side question or propose a correction
 at any time. **Skip this question** leaves the current detail uncertain. Skills
 Profile review automatically asks a follow-up or moves to the next topic.
@@ -141,9 +142,11 @@ the frontend only displays them; a skill missing from the map shows under Other 
 Experience and clarifications, then the
 upload form and saved CVs, follow below, with links to jump between sections.
 Upload your CV / Build through chat remain explicit choices. Upload supports drag/drop as well as
-keyboard file selection. An accepted upload shows processing/recovery status, then opens the detailed extracted results when ready. It starts no chat or clarification call automatically and does not change the analysis selection.
-Review CV starts/resumes basic guided review only after extraction is ready;
-failed/processing files expose View processing status instead.
+keyboard file selection. An accepted upload opens the guided review with progress
+and recovery controls. A fresh review starts automatically once extraction is ready
+and the review is open. **Save and review later** also works during processing.
+The named shortcut returns to the same CV. **View extracted results** opens the
+classified results without starting a review. Upload leaves the analysis selection explicit.
 
 Manual chat and CV review use `purpose: skills_profile`. Backend field selection,
 semantic evidence checking and source-bound interpretation drive their questions.
@@ -164,17 +167,19 @@ source identity and review history; processing and failed CVs can also be rename
 
 Review CV opens `/cv?review=<cv_id>` as a full-viewport review screen, hiding the
 workspace sidebar, upload/library and summary. Manual intake uses `?review=manual`.
-The transcript scrolls above the composer; Back to Skills Profile restores the
-summary and retains the mounted unsent draft. Native browser back and direct reload
-restore the corresponding view. Upload and review do not change the active baseline.
+The transcript scrolls above the composer. **Save and review later** returns to Skills
+Profile. Submitted answers and the current question restore from the saved
+conversation. Unsent text remains in page memory. Native browser back and direct
+reload restore the corresponding view. Baseline selection is a separate action.
 The library retains pagination and bounded internal scrolling on mobile.
 
 The upload panel and CV library share the same desktop row height, while only the
 library contents scroll. On mobile they stack with independent natural/bounded heights.
-After an upload is accepted, `/cv?review=<cv_id>&uploaded=1` opens immediately with
-processing, retry and failure states. This mode survives reload and returns to
-classified results when ready. Review CV remains the explicit entry into guided
-clarification. Returning to Skills Profile does not alter the active baseline.
+After an upload is accepted, `/cv?review=<cv_id>` opens immediately with processing,
+retry and failure states. Processing and guided review survive reload. An older
+review link containing `uploaded=1` also opens guided review. **View extracted results**
+and the completed review’s **Review profile** action open `/cv?cv=<cv_id>`, which
+restores the classified results directly on reload.
 
 Review evidence can contain multiple distinct facts in the same field. Rendering
 uses complete fact identities and labels personal/shared attribution, retaining
@@ -195,13 +200,11 @@ all excerpts without React key collisions in review and source reconciliation.
 ## Agent-led uploaded-CV interview
 
 Uploaded-CV review resumes persistent interview progress from the CV service.
-Opening a paused review resumes questions automatically; completed reviews do not
-restart. A segmented progress bar counts experience/project topics needing
-clarification, with follow-ups staying in the same topic. Ordinary answer receipts
-are hidden. Processing failures use compact retry; old evidence-alignment failures
-get one automatic recovery attempt per mounted chat. The persistent Continue review
-and Review profile summary controls are removed. Only completed reviews show
-**Review profile**, opening the existing Skills Profile summary. Agent questions, evidence updates and stopping
+Reopening an active review restores its current question. A paused review offers
+**Continue review**. A completed review offers **Review profile**, which opens the
+classified results. A segmented progress bar counts experience and project topics.
+Follow-up questions stay in the same topic. Processing and failed evidence updates
+offer explicit retry. Agent questions, evidence updates and stopping
 decisions are backend-owned. Chat displays source-specific skill estimates as
 conversation-based judgments, while the summary exposes structured roles,
 responsibilities, skill evidence and unresolved/partial details with their quotes.

@@ -63,7 +63,8 @@ async function enterDrafts(page: Page) {
   await page.goto('/cv');await openCvReviewTools(page);
   await page.getByLabel('CV profile-compatible-cv',{exact:true}).getByRole('button',{name:'Review CV'}).click();
   await page.getByRole('textbox', { name: 'Message elo', exact: true }).fill('Unsaved chat: I also cleaned the reporting data.');
-  await page.getByRole('button',{name:'Back to Skills Profile',exact:true}).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button',{name:'Save and review later',exact:true}).click();
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toBeEnabled();
   await page.getByRole('button', { name: 'Edit or remove Team dashboard' }).click();
   await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Unsaved correction: I prepared the data.');

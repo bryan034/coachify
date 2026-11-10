@@ -22,14 +22,15 @@ export async function mockEmptyConversation(page: Page) {
 
 /** Existing review tools now live behind explicit disclosures in the chat workspace. */
 export async function openCvReviewTools(page: Page) {
-  if (new URL(page.url()).searchParams.has('review')) {
+  const review = new URL(page.url()).searchParams.get('review');
+  if (review) {
     // Finish an already-started turn before editing the same CV version. If
     // extraction is still running, leaving the review prevents auto-start.
     if (await page.getByRole('region',{name:'CV conversation',exact:true}).count()) {
       await expect(page.getByRole('textbox',{name:'Message elo',exact:true})).toBeEnabled({timeout:35_000});
       await expect(page.locator('.cv-chat-action-pending')).toHaveCount(0,{timeout:35_000});
     }
-    await page.getByRole('button', {name:'Back to Skills Profile', exact:true}).click();
+    await page.getByRole('button', {name:review === 'manual' ? 'Back to Skills Profile' : 'Save and review later', exact:true}).click();
   }
   await expect(page.getByRole('heading', {name:'Your CVs', exact:true})).toBeVisible();
   await expect(page.getByText('Loading saved CVs…', {exact: true})).toHaveCount(0);

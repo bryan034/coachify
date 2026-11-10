@@ -27,7 +27,12 @@ function ResumeWorkspace({token}:{token:string}) {
  const [chatWorking,setChatWorking]=useState(false);
  const [chatDraft,setChatDraft]=useState('');
  const [chatOpen,setChatOpen]=useState(false),[chatCvId,setChatCvId]=useState<string|null|undefined>(undefined);
- const [uploadedCvId,setUploadedCvId]=useState<string|null>(null);
+ const [reviewLaterId,setReviewLaterId]=useState<string|null>(null);
+ const [mountedReviewId,setMountedReviewId]=useState<string|null>(null);
+ const waitingForCv=typeof chatCvId==='string'&&(detail?.id!==chatCvId||detail.status!=='ready');
+ useEffect(()=>{
+  setMountedReviewId(previous=>typeof chatCvId==='string'&&(!waitingForCv||previous===chatCvId)?chatCvId:null);
+ },[chatCvId,waitingForCv]);
  const [summaryOpen,setSummaryOpen]=useState(false);
  const [listRefreshing,setListRefreshing]=useState(false),[moreLoading,setMoreLoading]=useState(false),[moreError,setMoreError]=useState('');
  const loadedPages=useRef(1);
@@ -81,13 +86,6 @@ function ResumeWorkspace({token}:{token:string}) {
  },[]);
  useEffect(()=>{if(!viewId&&list?.selection.cv_id)setViewId(list.selection.cv_id);},[list,viewId]);
  useEffect(()=>{if(viewId)void getDetail(viewId);},[viewId,getDetail]);
- useEffect(()=>{
-  if(!uploadedCvId||detail?.id!==uploadedCvId||detail.status!=='ready')return;
-  closeReview();setChatCvId(undefined);setSummaryOpen(true);
-  const url=new URL(window.location.href);url.searchParams.set('cv',uploadedCvId);window.history.replaceState(null,'',url);
-  setNotice('CV extracted successfully. Your results are ready below. Guided review is optional; choose Review CV when you want to clarify details.');
-  requestAnimationFrame(()=>document.querySelector('.cv-summary-disclosure')?.scrollIntoView?.({block:'start'}));
- },[uploadedCvId,detail?.id,detail?.status]);
  useEffect(()=>{if(!list?.cvs.some(cv=>processing(cv.status))&&!(detail&&processing(detail.status)))return;const timer=setInterval(()=>{void getList();if(viewId&&(list?.cvs.some(cv=>cv.id===viewId&&processing(cv.status))||(detail?.id===viewId&&processing(detail.status))))void getDetail(viewId);},3000);return()=>clearInterval(timer);},[list,viewId,detail?.status,getList,getDetail]);
  const foregroundRefresh=useRef(false);
  useEffect(()=>{
@@ -119,7 +117,7 @@ function ResumeWorkspace({token}:{token:string}) {
   const extension=file.name.split('.').pop()?.toLowerCase();if(!file.size||file.size>policy.max_file_bytes||!policy.formats.includes(extension as 'pdf'|'docx')){setError(`Choose a non-empty ${policy.formats.map(f=>f.toUpperCase()).join(' or ')} file up to ${policy.max_file_bytes/(1024*1024)} MiB.`);return;}
   if(document.querySelector('.cv-workspace [data-unsaved="true"]')&&!window.confirm('Upload this CV and discard unsaved CV or capability drafts?'))return;
   const form=new FormData();form.set('file',file);form.set('mutation_id',uploadKey.current);if(reuploadTarget){form.set('cv_id',reuploadTarget.id);form.set('expected_version',String(reuploadTarget.version));}setBusy('upload');pendingUpload.current=true;
-  try{const value=await cvApi.upload(form,token,lifetime.current.signal);if(lifetime.current.signal.aborted)return;viewedCv.current=value.id;detailSequence.current++;detailController.current?.abort();setViewId(value.id);setDetail(value);setQuestions(null);setDetailError('');setChatDraft('');setChatCvId(value.id);setUploadedCvId(value.id);setChatOpen(true);reviewUrl(value.id,true);setFile(null);setReuploadTarget(null);if(fileInput.current)fileInput.current.value='';uploadKey.current=crypto.randomUUID();pendingUpload.current=false;setNotice('Upload saved. Extracted results will appear when processing finishes. You can start guided review afterward.');await getList();}
+  try{const value=await cvApi.upload(form,token,lifetime.current.signal);if(lifetime.current.signal.aborted)return;viewedCv.current=value.id;detailSequence.current++;detailController.current?.abort();setViewId(value.id);setDetail(value);setQuestions(null);setDetailError('');setChatDraft('');setChatCvId(value.id);setChatOpen(true);reviewUrl(value.id);setFile(null);setReuploadTarget(null);if(fileInput.current)fileInput.current.value='';uploadKey.current=crypto.randomUUID();pendingUpload.current=false;setNotice('Upload saved. Your CV review will start when processing finishes. Set it as your active baseline when you are ready.');await getList();}
   catch(cause){if(!lifetime.current.signal.aborted)setError(`${cause instanceof Error?cause.message:'The upload response was interrupted.'} Check saved status before retrying this file. Retry keeps the same request identity.`);}
   finally{if(!lifetime.current.signal.aborted)setBusy('');}
  }
@@ -155,28 +153,70 @@ function ResumeWorkspace({token}:{token:string}) {
   }catch(cause){if(!lifetime.current.signal.aborted){setError(cause instanceof Error?cause.message:'Could not delete this CV. Retry with the same request identity.');if(cause instanceof CvApiError&&cause.status===409)await getList();}}
   finally{if(!lifetime.current.signal.aborted)setBusy('');}
  }
- function reviewUrl(id:string|null,uploaded=false){const url=new URL(window.location.href);url.searchParams.set('review',id??'manual');if(uploaded)url.searchParams.set('uploaded','1');else url.searchParams.delete('uploaded');if(url.href!==window.location.href)window.history.pushState(null,'',url);}
- function closeReview(){setChatOpen(false);setUploadedCvId(null);const url=new URL(window.location.href);url.searchParams.delete('review');url.searchParams.delete('uploaded');window.history.replaceState(null,'',url);requestAnimationFrame(()=>{const heading=document.querySelector<HTMLElement>('.cv-workspace h1');heading?.setAttribute('tabindex','-1');heading?.focus();});}
- const routeReview=useRef<(id:string|null,uploaded?:boolean)=>void>(()=>{});
- const routeResults=useRef<(id:string)=>void>(()=>{});
- routeResults.current=id=>{setChatOpen(false);setUploadedCvId(null);setChatCvId(undefined);inspectCv(id);};
- routeReview.current=(id,uploaded)=>id===null?openManual():review(id,uploaded);
- useEffect(()=>{const restore=()=>{const params=new URL(window.location.href).searchParams;const id=params.get('review');if(id)routeReview.current(id==='manual'?null:id,params.get('uploaded')==='1');else if(params.get('cv'))routeResults.current(params.get('cv')!);else{setChatOpen(false);setUploadedCvId(null);}};restore();window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore);},[]);
- function review(id:string,uploaded=false){if(busy)return;setUploadedCvId(uploaded?id:null);if(chatCvId===id&&viewId===id){setChatOpen(true);reviewUrl(id,uploaded);requestAnimationFrame(()=>document.querySelector('.cv-chat')?.scrollIntoView?.({block:'start'}));return;}if(document.querySelector('.cv-workspace [data-unsaved="true"]')&&!window.confirm('Leave this CV and discard its unsaved draft?'))return;viewedCv.current=id;detailSequence.current++;detailController.current?.abort();setViewId(id);setDetail(null);setQuestions(null);setDetailError('');setPrepareError('');setPreparing(null);if(chatCvId!==id)setChatDraft('');setChatCvId(id);setChatOpen(true);reviewUrl(id,uploaded);if(id===viewId)void getDetail(id);requestAnimationFrame(()=>document.querySelector('.cv-chat')?.scrollIntoView?.({block:'start'}));}
- function inspectCv(id:string){if(busy)return;if(document.querySelector('.cv-workspace [data-unsaved="true"]')&&!window.confirm('Leave this CV and discard its unsaved draft?'))return;viewedCv.current=id;detailSequence.current++;detailController.current?.abort();setViewId(id);setDetail(null);setQuestions(null);setSummaryOpen(true);if(id===viewId)void getDetail(id);}
+ function reviewUrl(id:string|null){const url=new URL(window.location.href);url.searchParams.set('review',id??'manual');url.searchParams.delete('cv');url.searchParams.delete('uploaded');if(url.href!==window.location.href)window.history.pushState(null,'',url);}
+ function closeReview(){setChatOpen(false);const url=new URL(window.location.href);url.searchParams.delete('review');url.searchParams.delete('uploaded');window.history.replaceState(null,'',url);requestAnimationFrame(()=>{const heading=document.querySelector<HTMLElement>('.cv-workspace h1');heading?.setAttribute('tabindex','-1');heading?.focus();});}
+ function reviewLater(unconfirmed=false){
+  if(unconfirmed&&!window.confirm('We couldn’t confirm whether your message was saved. Reopen this CV here to retry the original send. Leave the review now?'))return;
+  if(!unconfirmed&&chatDraft.trim()&&!window.confirm('Your unsent text stays here while this page is open. Leave the review now?'))return;
+  setReviewLaterId(chatCvId??null);
+  setNotice(unconfirmed?'Reopen this CV in this tab to check the interrupted send.':'Open this CV again whenever you’re ready to continue its review.');
+  closeReview();
+ }
+ const restoreRoute=useRef<()=>void>(()=>{});
+ restoreRoute.current=()=>{
+  const params=new URL(window.location.href).searchParams;
+  const reviewId=params.get('review'),resultsId=params.get('cv');
+  if(reviewId==='manual')openManual(false);
+  else if(reviewId)review(reviewId,false);
+  else if(resultsId)openResults(resultsId,false);
+  else setChatOpen(false);
+ };
+ useEffect(()=>{const restore=()=>restoreRoute.current();restore();window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore);},[]);
+ useEffect(()=>{
+  if(!chatOpen||!chatCvId)return;
+  const frame=requestAnimationFrame(()=>document.querySelector<HTMLElement>('.cv-review-screen .cv-chat h2')?.focus());
+  return()=>cancelAnimationFrame(frame);
+ },[chatOpen,chatCvId]);
+ function review(id:string,updateUrl=true){if(busy)return;if(chatCvId===id&&viewId===id){setChatOpen(true);if(updateUrl)reviewUrl(id);requestAnimationFrame(()=>document.querySelector('.cv-chat')?.scrollIntoView?.({block:'start'}));return;}if(document.querySelector('.cv-workspace [data-unsaved="true"]')&&!window.confirm('Leave this CV and discard its unsaved draft?'))return;viewedCv.current=id;detailSequence.current++;detailController.current?.abort();setViewId(id);setDetail(null);setQuestions(null);setDetailError('');setPrepareError('');setPreparing(null);if(chatCvId!==id)setChatDraft('');setChatCvId(id);setChatOpen(true);if(updateUrl)reviewUrl(id);if(id===viewId)void getDetail(id);requestAnimationFrame(()=>document.querySelector('.cv-chat')?.scrollIntoView?.({block:'start'}));}
+ function inspectCv(id:string){
+  if(busy)return false;
+  const switchingReview=typeof chatCvId==='string'&&chatCvId!==id;
+  if((viewedCv.current!==id||switchingReview)&&document.querySelector('.cv-workspace [data-unsaved="true"]')&&!window.confirm('Leave this CV and discard its unsaved draft?'))return false;
+  if(switchingReview){setChatCvId(undefined);setChatDraft('');}
+  if(viewedCv.current!==id||detail?.id!==id){
+   viewedCv.current=id;detailSequence.current++;detailController.current?.abort();setViewId(id);setDetail(null);setQuestions(null);
+   if(id===viewId)void getDetail(id);
+  }
+  setSummaryOpen(true);
+  return true;
+ }
+ function openResults(id:string,updateUrl=true){
+  if(!inspectCv(id))return;
+  setChatOpen(false);
+  if(updateUrl){
+   const url=new URL(window.location.href);
+   url.searchParams.delete('review');url.searchParams.delete('uploaded');url.searchParams.set('cv',id);
+   if(url.href!==window.location.href)window.history.pushState(null,'',url);
+  }
+  requestAnimationFrame(()=>{
+   summaryPanel.current?.querySelector('summary')?.focus();
+   summaryPanel.current?.scrollIntoView?.({block:'start'});
+  });
+ }
  function reupload(value:CvDetail){if(document.querySelector('.cv-workspace [data-unsaved="true"]')&&!window.confirm('Reprocess this source and discard its unsaved draft?'))return;setReuploadTarget(value);setFile(null);if(fileInput.current){fileInput.current.value='';fileInput.current.focus();}uploadKey.current=crypto.randomUUID();setError('');}
- function openManual(){if(document.querySelector('.cv-workspace [data-unsaved="true"]')&&chatCvId!==null&&!window.confirm('Switch to manual entry and discard the unsent conversation draft?'))return;if(chatCvId!==null)setChatDraft('');setChatCvId(null);setChatOpen(true);reviewUrl(null);}
+ function openManual(updateUrl=true){if(document.querySelector('.cv-workspace [data-unsaved="true"]')&&chatCvId!==null&&!window.confirm('Switch to manual entry and discard the unsent conversation draft?'))return;if(chatCvId!==null)setChatDraft('');setChatCvId(null);setChatOpen(true);if(updateUrl)reviewUrl(null);}
  async function saveCvProfile(){const source=detail??selectedCv;if(!source||busy||chatWorking)return;const body={expected_version:source.version};setBusy('cv-profile');setSkillsError('');try{const value=await cvApi.saveCvProfile(source.id,{...body,mutation_id:getKey({operation:'cv-profile',id:source.id,...body})},token,lifetime.current.signal);if(!lifetime.current.signal.aborted){if(viewedCv.current===source.id)setDetail(value);if(selectionRef.current===source.id)setSelectedCv(value);await getList();}}catch(cause){if(!lifetime.current.signal.aborted){setSkillsError(cause instanceof Error?cause.message:'Could not save this CV review. Retry without changing sources.');if(cause instanceof CvApiError&&cause.status===409){mutation.current=null;await refresh();}}}finally{if(!lifetime.current.signal.aborted)setBusy('');}}
  async function saveProfile(){if(!skillsProfile||busy||chatWorking)return;const body={expected_version:skillsProfile.version,status:'saved' as const,areas:skillsProfile.areas,entries:skillsProfile.entries};setBusy('profile');setSkillsError('');try{const value=await cvApi.saveSkillsProfile({...body,mutation_id:getKey({operation:'skills-profile',...body})},token,lifetime.current.signal);if(!lifetime.current.signal.aborted){setSkillsProfile(value);await getDeclarations();}}catch(cause){if(!lifetime.current.signal.aborted){setSkillsError(cause instanceof Error?cause.message:'Could not save your skills profile. Retry your saved draft.');if(cause instanceof CvApiError&&cause.status===409){mutation.current=null;await getSkillsProfile();}}}finally{if(!lifetime.current.signal.aborted)setBusy('');}}
  function selectDroppedFile(value:File){if(busy||!policy)return;if(value.size>policy.max_file_bytes){setError(`This file exceeds the ${policy.max_file_bytes/(1024*1024)} MiB limit. Choose a smaller file.`);return;}setFile(value);uploadKey.current=crypto.randomUUID();pendingUpload.current=false;setError('');}
+ const recentReview=list?.cvs.find(cv=>cv.id===reviewLaterId)??(detail?.id===reviewLaterId?detail:undefined)??list?.cvs.find(cv=>cv.status!=='failed');
  return <section className={`page on cv-workspace${chatOpen?' cv-review-screen':''}`}><div hidden={chatOpen}>
-  {!chatOpen&&<SkillsProfileSummary title={<PageTitle title="Skills Profile"><button type="button" className="btn ghost" onClick={()=>void refresh()} disabled={Boolean(busy)}>Refresh saved status</button></PageTitle>} profile={skillsProfile} cv={detail??selectedCv} declarations={declarations} error={skillsError} upload={()=>{requestAnimationFrame(()=>fileInput.current?.focus());}} build={openManual} review={review} retry={()=>void getSkillsProfile()} save={()=>void saveProfile()} saving={busy==='profile'} saveCv={()=>void saveCvProfile()} savingCv={busy==='cv-profile'} pending={chatWorking}/>}
+  {!chatOpen&&<SkillsProfileSummary title={<PageTitle title="Skills Profile"><button type="button" className="btn ghost" onClick={()=>void refresh()} disabled={Boolean(busy)}>Refresh saved status</button></PageTitle>} profile={skillsProfile} cv={detail??selectedCv} recentReview={recentReview} declarations={declarations} error={skillsError} upload={()=>{requestAnimationFrame(()=>fileInput.current?.focus());}} build={()=>openManual()} review={review} retry={()=>void getSkillsProfile()} save={()=>void saveProfile()} saving={busy==='profile'} saveCv={()=>void saveCvProfile()} savingCv={busy==='cv-profile'} pending={chatWorking}/>}
   <div>
   <p className="small cv-baseline-status" aria-label="Selected CV">{list?.selection.cv_id?<>Active baseline: <strong>{list.cvs.find(cv=>cv.id===list.selection.cv_id)?.display_name??list.cvs.find(cv=>cv.id===list.selection.cv_id)?.file_name??selectedCv?.display_name??selectedCv?.file_name??'Saved CV'}</strong><span className="cv-visually-hidden"> {list.selection.cv_id}</span></>:'No CV selected as your active baseline.'}</p>
   <div className="cv-top-grid" id="your-cvs"><section className="card pad cv-upload-panel"><h2>Upload a CV</h2>{policy?<><form className="cv-form" onSubmit={upload}>{reuploadTarget&&<div className="cv-warning"><p>Re-uploading the exact source for {reuploadTarget.file_name} · CV {reuploadTarget.id}. Its saved corrections and removals will be preserved. A changed document needs a separate upload.</p><button type="button" className="btn ghost sm" disabled={Boolean(busy)} onClick={()=>{setReuploadTarget(null);uploadKey.current=crypto.randomUUID();}}>Cancel source re-upload</button></div>}<div className="skills-dropzone" onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();if(event.dataTransfer.files.length===1)selectDroppedFile(event.dataTransfer.files[0]);else setError('Choose one CV at a time.');}}><p>Drop your CV here, or choose a file below.</p><label htmlFor="cv-document">CV document<input ref={fileInput} id="cv-document" type="file" accept={policy.formats.map(f=>`.${f}`).join(',')} disabled={Boolean(busy)} onChange={e=>{const value=e.target.files?.[0];if(value)selectDroppedFile(value);else setFile(null);}}/></label>{file&&<p className="small" role="status">Selected: {file.name}</p>}</div><p className="small">Text-based {policy.formats.map(f=>f.toUpperCase()).join(' or ')} · Up to {policy.max_file_bytes/(1024*1024)} MiB. Scanned PDFs need a text-based alternative. Files are private and retained temporarily for processing and retry. The text read from a file stays saved until you delete that CV or upload a replacement.</p>{policy.max_saved_cvs&&policy.max_stored_original_bytes&&<p className="small">Your account can save up to {policy.max_saved_cvs} CVs and retain up to {policy.max_stored_original_bytes/(1024*1024)} MiB of original files at a time.</p>}{!policy.extraction_configured&&<p className="cv-warning">CV extraction is not configured on this server. Your existing saved CVs and manual capabilities remain available. New files cannot be processed until it is configured.</p>}<button className="btn pri" disabled={!file||Boolean(busy)||!policy.extraction_configured}><Icon name="up"/>{busy==='upload'?'Uploading…':pendingUpload.current?'Retry upload':reuploadTarget?'Re-upload same source':'Upload CV'}</button></form></>:<p className="small">{policyError||'Loading supported formats and upload limit…'}</p>}{policyError&&<button className="btn ghost sm" onClick={()=>void getPolicy()}>Retry upload settings</button>}</section>
 
   <section className="card pad cv-saved cv-library" aria-label="Saved CVs"><div className="row between"><h2>Your CVs</h2><span className="small">{list?.cvs.length??0} {list?.next_cursor?'shown':'saved'}</span></div><div className="cv-library-scroll" tabIndex={0} role="region" aria-label="Your uploaded CVs">{loading&&<p role="status">Loading saved CVs…</p>}{listError&&<div role="alert" className="cv-error"><p>{listError}</p><button className="btn ghost sm" onClick={()=>void getList()}>Retry saved CVs</button></div>}{list&&!list.cvs.length&&<EmptyState icon="doc" title="No saved CV yet">Upload a readable CV, choose Build through chat without one.</EmptyState>}
-   <div className="cv-list">{list?.cvs.map(cv=><SavedCvCard key={cv.id} cv={cv} active={list.selection.cv_id===cv.id} busy={Boolean(busy)} token={token} review={()=>cv.status==='ready'?review(cv.id):inspectCv(cv.id)} select={()=>void select(cv.id)} remove={()=>void deleteCv(cv)} refresh={getList} saved={value=>{setList(previous=>previous?{...previous,cvs:previous.cvs.map(item=>item.id===value.id?value:item)}:previous);if(viewedCv.current===value.id)setDetail(value);if(selectionRef.current===value.id)setSelectedCv(value);}}/>)}</div>
+   <div className="cv-list">{list?.cvs.map(cv=><SavedCvCard key={cv.id} cv={cv} active={list.selection.cv_id===cv.id} busy={Boolean(busy)} token={token} review={()=>cv.status==='failed'?inspectCv(cv.id):review(cv.id)} results={()=>openResults(cv.id)} select={()=>void select(cv.id)} remove={()=>void deleteCv(cv)} refresh={getList} saved={value=>{setList(previous=>previous?{...previous,cvs:previous.cvs.map(item=>item.id===value.id?value:item)}:previous);if(viewedCv.current===value.id)setDetail(value);if(selectionRef.current===value.id)setSelectedCv(value);}}/>)}</div>
   {moreError&&<p role="alert" className="cv-error">{moreError}</p>}{list?.next_cursor&&<button type="button" className="btn ghost sm" disabled={moreLoading||listRefreshing} onClick={()=>void loadMore()}>{moreLoading?'Loading older CVs…':'Show more saved CVs'}</button>}
   </div></section></div>
   {busy==='upload'&&<p role="status" className="cv-notice">Uploading the file. Once accepted, processing status is saved and can be checked after returning.</p>}{error&&<div role="alert" className="cv-error">{error}</div>}{notice&&<p role="status" className="cv-notice">{notice}</p>}
@@ -191,6 +231,25 @@ function ResumeWorkspace({token}:{token:string}) {
   {declarations?<CapabilityDeclarations data={declarations} selectedCv={selectedCv} token={token} signal={lifetime.current.signal} onSaved={setDeclarations} refresh={refresh}/>:<section className="card pad cv-declarations"><h2>Add what your CV leaves out</h2><p className="small">{declarationError||'Loading your manual capabilities…'}</p>{declarationError&&<button className="btn ghost sm" onClick={()=>void getDeclarations()}>Retry manual capabilities</button>}</section>}
  </details>
   </div></div>
-  {chatCvId!==undefined&&<div hidden={!chatOpen}>{chatCvId!==null&&(uploadedCvId===chatCvId||!detail||detail.id!==chatCvId||detail.status!=='ready')?<section className="cv-chat" aria-label="CV review progress"><header className="cv-chat-header"><div><div><h2>Review your CV</h2><p>{detail?.id===chatCvId?(detail.display_name??detail.file_name):'Loading your CV…'}</p></div></div><button type="button" className="btn ghost sm" onClick={closeReview}>Back to Skills Profile</button></header><div className="cv-chat-messages">{detailError?<div role="alert" className="cv-error"><p>{detailError}</p><button type="button" className="btn ghost sm" onClick={()=>void getDetail(chatCvId)}>Retry loading CV</button></div>:detail?.id===chatCvId&&detail.status==='failed'?<div role="alert"><h3>We couldn’t process this CV</h3><p className="cv-error">{detail.error?.message??'Return to Skills Profile to retry this upload.'}</p>{detail.source_available&&detail.error?.retryable&&<button type="button" className="btn pri" disabled={Boolean(busy)} onClick={()=>void retry()}>Retry processing</button>}</div>:<div className="cv-chat-welcome" role="status"><h3>Preparing your CV for review</h3><p>Your upload is saved. Once processing finishes, your extracted information will be displayed. You can clarify details afterward.</p>{detail?.id===chatCvId&&<CvProcessingProgress cv={detail}/>}</div>}{error&&<p role="alert" className="cv-error">{error}</p>}<button type="button" className="btn ghost sm" disabled={Boolean(busy)} onClick={()=>void refresh()}>Refresh saved status</button></div></section>:<CvConversationPanel key={chatCvId??'manual'} cvId={chatCvId} detail={detail?.id===chatCvId?detail:selectedCv?.id===chatCvId?selectedCv:null} token={token} draft={chatDraft} onDraftChange={setChatDraft} unavailable={Boolean(busy)} purpose="skills_profile" autoReview={chatOpen} onActivityChanged={setChatWorking} onChanged={refresh} onOpenSummary={closeReview}/>}</div>}
+  {chatCvId!==undefined&&<div hidden={!chatOpen}>
+   {waitingForCv&&chatCvId&&<section className="cv-chat" aria-label="CV review progress">
+    <header className="cv-chat-header">
+     <div><div><h2 tabIndex={-1}>Review your CV</h2><p>{detail?.id===chatCvId?(detail.display_name??detail.file_name):'Loading your CV…'}</p></div></div>
+     <button type="button" className="btn ghost sm" onClick={()=>reviewLater()}>Save and review later</button>
+    </header>
+    <div className="cv-chat-messages">
+     {detailError?<div role="alert" className="cv-error"><p>{detailError}</p><button type="button" className="btn ghost sm" onClick={()=>void getDetail(chatCvId)}>Retry loading CV</button></div>:detail?.id===chatCvId&&detail.status==='failed'?<div role="alert">
+      <h3>We couldn’t process this CV</h3><p className="cv-error">{detail.error?.message??'Return to Skills Profile to retry this upload.'}</p>
+      {detail.source_available&&detail.error?.retryable&&<button type="button" className="btn pri" disabled={Boolean(busy)} onClick={()=>void retry()}>Retry processing</button>}
+     </div>:<div className="cv-chat-welcome" role="status">
+      <h3>Preparing your CV for review</h3>
+      {detail?.id===chatCvId?<><p>Your upload is saved. The first clarification question will appear here when processing finishes. You can come back anytime.</p><CvProcessingProgress cv={detail}/></>:<p>Checking the saved status of this CV.</p>}
+     </div>}
+     {error&&<p role="alert" className="cv-error">{error}</p>}
+     <button type="button" className="btn ghost sm" disabled={Boolean(busy)} onClick={()=>void refresh()}>Refresh saved status</button>
+    </div>
+   </section>}
+   {(!waitingForCv||mountedReviewId===chatCvId)&&<CvConversationPanel key={chatCvId??'manual'} hidden={waitingForCv} cvId={chatCvId} detail={detail?.id===chatCvId?detail:selectedCv?.id===chatCvId?selectedCv:null} token={token} draft={chatDraft} onDraftChange={setChatDraft} unavailable={Boolean(busy)||waitingForCv} purpose="skills_profile" autoReview={chatOpen&&!waitingForCv} onActivityChanged={setChatWorking} onChanged={refresh} onOpenSummary={chatCvId?()=>openResults(chatCvId):closeReview} onReviewLater={reviewLater}/>}
+  </div>}
  </section>;
 }

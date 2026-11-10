@@ -33,7 +33,8 @@ test('saved CV upload, explicit selection, correction, declaration and reload',a
  });
  await page.goto('/cv');await openCvReviewTools(page);await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
  await page.getByLabel('CV document',{exact:true}).setInputFiles({name:'resume.pdf',mimeType:'application/pdf',buffer:Buffer.from('synthetic fixture; API mocked')});await page.getByRole('button',{name:'Upload CV',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();await page.getByRole('button',{name:'Save and review later'}).click();
+ await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'View extracted results',exact:true}).click();await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
  await expect(page.getByLabel('CV cv-two',{exact:true})).toBeVisible();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
  page.once('dialog',async dialog=>{expect(dialog.message()).toContain('If any roles or responsibilities are not clearly stated in your CV details');await dialog.dismiss();});await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'Set as active baseline'}).click();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
  page.once('dialog',dialog=>dialog.accept());await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'Set as active baseline'}).click();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-two');
@@ -74,21 +75,43 @@ test('confirmed target prepares relevant questions and preserves answers and ski
  context={...context,id:'target-design',selection_version:2,role:'Design researcher',skill_ids:['research']};await page.getByRole('button',{name:'Refresh clarification context'}).click();await expect(page.getByLabel('Confirmed clarification target')).toContainText('Design researcher');await expect(page.getByRole('textbox',{name:'Your explanation'})).toHaveCount(0);await expect(page.getByRole('region',{name:'CV review',exact:true}).getByText('I cleaned the Python data. A teammate designed the dashboard.',{exact:true})).toBeVisible();await expect(page.getByText(/No relevant clarification questions are pending for this target/)).toBeVisible();
 });
 
-test('Skills Profile displays extracted results and starts clarification only on request',async({page},testInfo)=>{
+test('upload opens the review and save for later restores the same question after reload',async({page},testInfo)=>{
  await workspace(page);
  await page.route('**/api/v1/profile/capabilities',route=>route.fulfill({json:emptyDeclarations}));
- let source:CvDetail|null=null,opens=0,reviewStarts=0;
- const conversation={id:'explicit-review',cv_id:'uploaded-profile-cv',revision:1,read_only:false,previous_conversation_id:null,active_question:null as null|{id:string;item_id:string;title:string;question:string},context:null,messages:[] as object[],next_before:null,limits:{max_message_chars:4000,max_messages:500}};
+ let source:CvDetail|null=null,opens=0,reviewStarts=0,answers=0;
+ const firstQuestion='Which parts of the dashboard did you personally build?';
+ const nextQuestion='How did you check that the dashboard was accurate?';
+ const answer='I wrote the data import script and checked the totals.';
+ const conversation={id:'explicit-review',cv_id:'uploaded-profile-cv',purpose:'skills_profile',revision:1,read_only:false,previous_conversation_id:null,active_question:null as null|{id:string;item_id:string;title:string;question:string},context:null,messages:[] as object[],next_before:null,limits:{max_message_chars:4000,max_messages:500}};
+ const addMessage=(role:'user'|'assistant',text:string)=>{
+  const sequence=conversation.messages.length+1;
+  conversation.messages.push({id:`message-${sequence}`,sequence,role,text,created_at:'2026-11-02T00:00:00Z',actions:[]});
+ };
  await page.route('**/api/v1/cv{,/**}',route=>{
   const request=route.request(),path=new URL(request.url()).pathname;
   if(path.includes('/conversations')){
    if(request.method()==='POST'&&path.endsWith('/conversations')){opens++;expect(request.postDataJSON().purpose).toBe('skills_profile');return route.fulfill({json:conversation});}
-   if(request.method()==='POST'&&path.endsWith('/messages')){reviewStarts++;expect(request.postDataJSON().command).toBe('review');conversation.revision++;conversation.messages=[{id:'guided-question',sequence:1,role:'assistant',text:'Which parts of the dashboard did you personally build?',created_at:'2026-11-02T00:00:00Z',actions:[]}];conversation.active_question={id:'personal-work',item_id:source!.items[0].id,title:'Team dashboard',question:'Which parts of the dashboard did you personally build?'};}
+   if(request.method()==='POST'&&path.endsWith('/messages')){
+    const body=request.postDataJSON();
+    expect(body.expected_revision).toBe(conversation.revision);
+    conversation.revision++;
+    addMessage('user',body.text);
+    if(body.command==='review'){
+     reviewStarts++;
+     addMessage('assistant',firstQuestion);
+     conversation.active_question={id:'personal-work',item_id:source!.items[0].id,title:'Team dashboard',question:firstQuestion};
+    }else{
+     expect(body.text).toBe(answer);
+     answers++;
+     addMessage('assistant',nextQuestion);
+     conversation.active_question={id:'verification',item_id:source!.items[0].id,title:'Team dashboard',question:nextQuestion};
+    }
+   }
    return route.fulfill({json:conversation});
   }
   if(path.endsWith('/policy'))return route.fulfill({json:policy});
   if(path==='/api/v1/cv')return route.fulfill({json:{cvs:source?[source]:[],selection:{cv_id:null,version:0}}});
-  if(path.endsWith('/uploads')){source={...savedCv('uploaded-profile-cv'),status:'processing'};return route.fulfill({status:202,json:source});}
+  if(path.endsWith('/uploads')){source={...savedCv('uploaded-profile-cv'),file_name:'synthetic-profile.pdf',status:'processing'};return route.fulfill({status:202,json:source});}
   if(path.endsWith('/clarifications'))return route.fulfill({json:clarificationState(source!)});
   return route.fulfill({json:source});
  });
@@ -104,21 +127,40 @@ test('Skills Profile displays extracted results and starts clarification only on
  await expect(page).toHaveURL(/review=uploaded-profile-cv/);
  await expect(page.getByRole('heading',{name:'Preparing your CV for review'})).toBeVisible();
  expect(opens).toBe(0);expect(reviewStarts).toBe(0);
+ await page.getByRole('button',{name:'Save and review later'}).click();
+ await expect(page.getByRole('heading',{name:'Skills Profile',exact:true})).toBeVisible();
+ const reviewShortcut=page.getByRole('button',{name:/Review synthetic-profile\.pdf/});
+ await reviewShortcut.click();
+ await expect(page.getByRole('heading',{name:'Preparing your CV for review'})).toBeVisible();
  await page.reload();
  await expect(page.getByRole('heading',{name:'Preparing your CV for review'})).toBeVisible();
  expect(opens).toBe(0);expect(reviewStarts).toBe(0);
  source={...source!,status:'ready'};
  await page.getByRole('button',{name:'Refresh saved status'}).click();
  await page.setViewportSize({width:390,height:844});
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ await expect(page.getByRole('list',{name:'Saved conversation messages'}).getByText(firstQuestion,{exact:true})).toBeVisible();
+ expect(opens).toBe(1);expect(reviewStarts).toBe(1);
+ await page.getByRole('button',{name:'Why this question?'}).click();
+ await expect(page.getByText(/what you personally did in Team dashboard/)).toBeVisible();
+ await page.getByRole('textbox',{name:'Message elo'}).fill(answer);
+ await page.getByRole('button',{name:'Send message'}).click();
+ await expect(page.getByText(nextQuestion,{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Save and review later'}).click();
+ await expect(page).not.toHaveURL(/review=/);
+ await page.reload();
+ await expect(page.getByLabel('Selected CV')).toContainText('No CV selected');
+ await page.getByRole('article',{name:'CV uploaded-profile-cv',exact:true}).getByRole('button',{name:'View extracted results',exact:true}).click();
+ await expect(page).toHaveURL(/\?cv=uploaded-profile-cv$/);
  await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
- expect(opens).toBe(0);expect(reviewStarts).toBe(0);
+ const opensBeforeResultsReload=opens;
  await page.reload();
  await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
- expect(opens).toBe(0);expect(reviewStarts).toBe(0);
- await page.getByRole('article',{name:'CV uploaded-profile-cv',exact:true}).getByRole('button',{name:'Review CV',exact:true}).click();
- await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
- await expect(page.getByRole('list',{name:'Saved conversation messages'}).getByText('Which parts of the dashboard did you personally build?',{exact:true})).toBeVisible();
- expect(opens).toBe(1);expect(reviewStarts).toBe(1);
+ expect(opens).toBe(opensBeforeResultsReload);expect(reviewStarts).toBe(1);
+ await reviewShortcut.click();
+ await expect(page.getByText(answer,{exact:true})).toBeVisible();
+ await expect(page.getByText(nextQuestion,{exact:true})).toBeVisible();
+ expect(reviewStarts).toBe(1);expect(answers).toBe(1);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
@@ -157,8 +199,12 @@ test('CV library scrolls internally, persists renamed titles and opens full-page
   await page.screenshot({path:testInfo.outputPath(`cv-review-${viewport.width}.png`),fullPage:true});
  }
  await page.goBack();await expect(page.getByRole('heading',{name:'Your CVs',exact:true})).toBeVisible();
+ await page.goto('/cv?review=library-0&uploaded=1');
+ await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ await expect(page).toHaveURL(/review=library-0&uploaded=1$/);
+ await page.goBack();await expect(page.getByRole('heading',{name:'Your CVs',exact:true})).toBeVisible();
  await first.getByRole('button',{name:'Review CV',exact:true}).click();await page.reload();await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeHidden();await expect(page.locator('.cv-chat-header')).toContainText('Software engineering CV');
- await page.getByRole('button',{name:'Back to Skills Profile'}).click();await expect(page.getByRole('heading',{name:'Your CVs',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Save and review later'}).click();await expect(page.getByRole('heading',{name:'Your CVs',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Menu',exact:true})).toHaveAttribute('aria-expanded','false');
  await page.getByRole('button',{name:'Menu',exact:true}).click();
  await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();

@@ -293,7 +293,9 @@ CV-context acknowledgement stays separate.
 `/roadmap` opens a planner that writes the goal, study settings and repeating blackout days and times as a sentence travelling down a road to a backend-calculated runway and Generate. The chat helper docks beside it on wide screens, guides the user through the required details and fills in the form. Generation runs Assessment if needed and opens a roadmap page led by a to-do list of sessions, viewed by day, week or a monthly calendar of weeks, with a Starting point tab. Previews apply only when accepted. See the [feature README](src/features/roadmap/README.md).
 
 Skills Profile shows upload beside a fixed-height, internally scrolling **Your CVs**
-library. Cards support persisted titles, Rename, Review CV, Set as active baseline
-and confirmed deletion. Review opens the full-viewport `/cv?review=<cv_id>` screen
-with the workspace sidebar hidden; Back to Skills Profile retains the mounted chat
-draft. Renaming keeps the original filename and extracted evidence intact.
+library. Cards support persisted titles, Rename, Review CV, View extracted results,
+Set as active baseline and confirmed deletion. An accepted upload opens the
+full-viewport `/cv?review=<cv_id>` screen for processing and guided questions.
+**Save and review later** returns to Skills Profile. The named shortcut restores
+the saved transcript and current question. **View extracted results** opens the
+classified CV directly. Renaming keeps the original filename and evidence intact.
