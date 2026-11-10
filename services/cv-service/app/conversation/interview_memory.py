@@ -147,20 +147,22 @@ def build_context(conversation, document, memory, *, focus_id=None, recall_ids=(
     if focus is None and items: focus = items[0]
     index = {}
     # A transition may close the previous topic while asking about a new source.
-    # Retain both ledgers so closing coverage can cite the source being left.
-    for item in items:
-        if item['id'] not in {focus['id'] if focus else None, memory.get('focus_item_id')}: continue
+    # Retain both ledgers and answer indexes while closing the prior topic.
+    focused_id = focus['id'] if focus else None
+    scoped_items = [item for item in items if item['id'] in (focused_id, memory.get('focus_item_id'))]
+    scoped_ids = {item['id'] for item in scoped_items}
+    for item in scoped_items:
         for fact in evidence_for(item):
             ref = 'fact:' + digest({'item': item['id'], 'fact': fact})[:24]
             index[ref] = {'item_id': item['id'], **fact}
-    # The complete answer for the focused source is retrievable even after it
-    # has left the recent-message window, including earlier conversation segments.
+    # Keep exact answers out of the ordinary context until requested.
     answers = [{'id': 'answer:' + q['id'],
+                **({'item_id': q['item_id']} if q['item_id'] != focused_id else {}),
                 'resolution': q.get('resolution'), 'interpretation_status': q.get('interpretation_status'),
                 **({'question': q['question'], 'answer': q.get('answer')} if 'answer:' + q['id'] in recall_ids
                    else {'targets': q.get('_interview_targets', []),
                          'uncertainty': q.get('uncertainty'), 'status': q.get('status')})}
-               for q in document['clarifications'] if focus and q['item_id'] == focus['id']
+               for q in document['clarifications'] if q['item_id'] in scoped_ids
                and not q.get('reconciliation_required')]
     active = conversation.get('active_question')
     active_record = next((q for q in document['clarifications'] if active and q['id'] == active['id']), None)

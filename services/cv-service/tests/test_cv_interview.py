@@ -648,6 +648,45 @@ def test_planner_recalls_exact_answer_without_extra_interpretation(harness):
     assert app.state.interpreter.calls == 0
 
 
+def test_preloaded_next_topic_retains_exact_answer_recall_for_previous_topic(harness):
+    client, _, *_ = harness
+    _, chat, provider = start_two_topics(harness)
+    first = chat['active_question']
+    next_topic = next(t['id'] for t in chat['interview']['topics'] if t['id'] != first['item_id'])
+    earlier_answer = 'I built the Python API with guidance and tracked feedback in a log.'
+    provider.evaluation = evaluate
+    provider.plans = [{'action': 'ask', 'item_id': first['item_id'], 'reply': 'What was the scope?',
+                       'targets': [{'field': 'task_scope'}]}]
+    chat = send(client, chat, earlier_answer)
+    provider.plans = [{'action': 'ask', 'item_id': first['item_id'], 'reply': 'Could you repeat the work?',
+                       'targets': [{'field': 'replication_confidence'}]}]
+    chat = send(client, chat, 'I implemented two Python API endpoints with guidance.')
+    requested = 'answer:' + first['id']
+
+    def recall(context):
+        assert context['focused_source']['id'] == next_topic
+        previous = next(row for row in context['source_answers'] if row['id'] == requested)
+        assert previous['item_id'] == first['item_id']
+        assert all('answer' not in row for row in context['source_answers'])
+        return {'action': 'recall', 'reply': 'Retrieve the earlier wording.', 'recall_ids': [requested]}
+
+    def ask_after_recall(context):
+        assert context['focused_source']['id'] == next_topic
+        hydrated, = [row for row in context['source_answers'] if 'answer' in row]
+        assert hydrated['id'] == requested
+        assert hydrated['answer'] == earlier_answer
+        assert hydrated['question'] == first['question']
+        return {'action': 'ask', 'item_id': next_topic, 'reply': 'What did you personally do next?',
+                'targets': [{'field': 'personal_contribution'}]}
+
+    provider.plans = [recall, ask_after_recall]
+    calls_before = len(provider.calls)
+    chat = send(client, chat, 'I could repeat those endpoints with guidance.')
+    assert chat['active_question'] and chat['active_question']['item_id'] == next_topic, chat['messages'][-1]
+    assert [call['task'] for call in provider.calls[calls_before:]] == [
+        'cv_interview_interpret', 'cv_interview_plan', 'cv_interview_plan']
+
+
 def test_reviewed_with_gaps_is_a_persistent_interview_outcome(harness):
     client, _, *_ = harness
     _, chat, provider = start(harness)
@@ -679,12 +718,44 @@ def test_real_provider_adapter_uses_the_typed_interview_protocol(monkeypatch, ta
         requests.append(json.loads(request.content))
         return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(result)}}]})
     monkeypatch.setattr('app.clients.conversation.Client', lambda **kwargs: real_client(transport=httpx.MockTransport(response), **kwargs))
-    output, metadata = ConversationRouter().route({'task': task, 'message': 'Synthetic question'})
+    text = 'I checked the calculations, but did not build the model.'
+    earlier = 'I prefer to review the finance project first.'
+    fact_record = {'item_id': 'project', **fact('responsibilities', text, 'Checked calculations')}
+    context = {'task': task, 'message': text, 'message_id': 'latest',
+        'focused_source': {'id': 'project', 'kind': 'project', 'title': 'Forecast exercise',
+            'description': 'Coursework forecast.', 'review_evidence': [fact_record],
+            'skill_claims': [{'skill_id': 'skill:excel', 'name': 'Excel'}]},
+        'sources': [{'id': 'project', 'kind': 'project', 'title': 'Forecast exercise',
+            'listed_skills': ['Excel'], 'questions_remaining': 2, 'coverage': None}],
+        'evidence_index': {'fact:checked': fact_record},
+        'source_answers': [{'id': 'answer:older', 'question': 'Who built the model?',
+            'answer': 'My teammate built the model.'}],
+        'recent_messages': [{'id': 'earlier', 'role': 'user', 'text': earlier},
+            {'id': 'latest', 'role': 'user', 'text': text}],
+        'memory': {'notes': [], 'summary': []},
+        'question_options': [{'skill_name': None, 'open_fields': ['personal_contribution'],
+            'clarification_fields': ['personal_contribution'], 'closed_fields': {'responsibilities': 'closed'}}]}
+    original = deepcopy(context)
+    output, metadata = ConversationRouter().route(context)
     assert output.reply == result['reply']
-    assert metadata['prompt_version'] == 'cv-interview-11'
+    assert metadata['prompt_version'] == 'cv-interview-12'
     assert len(requests) == 1 and requests[0]['max_tokens'] == 5000
     assert 'untrusted' in requests[0]['messages'][0]['content'].lower()
     assert 'synthetic-secret-for-test' not in json.dumps(requests[0]['messages'])
+    outgoing = json.loads(requests[0]['messages'][1]['content'])
+    assert outgoing['evidence_index'] == context['evidence_index']
+    assert outgoing['source_answers'] == context['source_answers']
+    assert outgoing['focused_source']['skill_claims'][0]['skill_id'] == 'skill:excel'
+    assert 'review_evidence' not in outgoing['focused_source']
+    assert [message['text'] for message in outgoing['recent_messages']] == [earlier]
+    assert context == original
+    if task == 'cv_interview_interpret':
+        assert outgoing['message'] == text
+        assert 'question_options' not in outgoing
+    else:
+        assert 'message' not in outgoing
+        assert outgoing['question_options'][0]['open_fields'] == ['personal_contribution']
+        assert 'clarification_fields' not in outgoing['question_options'][0]
 
 
 def test_malformed_review_fields_reach_schema_validation_instead_of_crashing_the_harness():
@@ -1131,10 +1202,17 @@ def test_three_questions_for_each_project_not_three_for_the_entire_baseline_revi
     chat = send(client, chat, 'I personally implemented the Python and SQL pipeline with guidance.')
     provider.plans = [ask(first, 'complexity')]
     chat = send(client, chat, 'I personally implemented the Python and SQL pipeline with guidance.')
+    before_transition = len(provider.calls)
     provider.plans = [ask(second, 'personal_contribution'), ask(second, 'personal_contribution')]
     chat = send(client, chat, 'I personally implemented the Python and SQL pipeline with guidance.')
     assert chat['active_question']['item_id'] == second
     assert chat['interview']['reviewed_items'] == 1
+    interpretation, plan = provider.calls[before_transition:]
+    assert interpretation['task'] == 'cv_interview_interpret'
+    assert interpretation['focused_source']['id'] == first
+    assert plan['task'] == 'cv_interview_plan'
+    assert plan['focused_source']['id'] == second
+    assert any(fact['item_id'] == first for fact in plan['evidence_index'].values())
     provider.plans = [ask(second, 'task_scope')]
     chat = send(client, chat, 'I personally implemented the SQL pipeline with guidance.')
     provider.plans = [ask(second, 'complexity')]

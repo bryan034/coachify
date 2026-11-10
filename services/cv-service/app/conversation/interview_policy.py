@@ -78,12 +78,12 @@ def validate_decision(decision, context, memory, *, user_stop=False, max_attempt
     if decision.action == 'ask':
         if decision.item_id not in sources or not decision.targets:
             raise DecisionRejected('question_source', 'A question needs an available source and explicit evidence targets.')
+        if topic_question_count(memory, decision.item_id) >= MAX_TOPIC_QUESTIONS:
+            raise DecisionRejected('question_topic_limit', 'This topic already has three questions. Move to another topic with questions remaining, or finish with gaps if all topics are covered.')
         if not focused or focused['id'] != decision.item_id:
             raise DecisionRejected('question_unhydrated', 'Inspect the selected source before asking about it.')
         if not clarification_context(focused, evidence_for(focused))['clarification_targets']:
             raise DecisionRejected('question_no_ambiguity', 'This source has no material clarification remaining. Use its CV context and move to an ambiguous topic or finish.')
-        if topic_question_count(memory, decision.item_id) >= MAX_TOPIC_QUESTIONS:
-            raise DecisionRejected('question_topic_limit', 'This topic already has three questions. Move to another topic with questions remaining, or finish with gaps if all topics are covered.')
         open_targets = [target for target in decision.targets
                         if target_availability(focused, memory, target.field, target.skill_name,
                                                max_attempts=max_attempts) == 'open']
