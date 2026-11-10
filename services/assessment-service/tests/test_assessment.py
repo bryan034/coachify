@@ -261,3 +261,38 @@ def test_dashboard_source_does_not_hide_revoked_access(status):
         async def fail(*args,**kwargs):raise Problem('Sign in again.',status,'session')
         sources.read=fail
         assert client.get(PATH,headers=H).status_code==status
+
+
+@pytest.mark.parametrize('repair_succeeds', [True, False])
+def test_evidence_repair_is_bounded_and_never_publishes_rejected_batch(repair_succeeds):
+    class Repairing(Interpreter):
+        def __init__(self):
+            super().__init__()
+            self.contexts = []
+
+        async def generate(self, schema, instructions, context):
+            self.contexts.append(copy.deepcopy(context))
+            value = await super().generate(schema, instructions, context)
+            if self.calls == 1 or not repair_succeeds:
+                value.outcomes[0].components[0].evidence_refs = ['cv:item1']
+            return value
+
+    model = Repairing()
+    with TestClient(create_app(MemoryStore(), Sources(), model)) as client:
+        response = client.post('/api/v1/assessments', json={
+            'expected_version': 0, 'mutation_id': str(uuid4()), 'allow_partial': True,
+        }, headers=H)
+        assert response.status_code == 202
+        state = finish(client)
+    assert model.calls == 2
+    assert 'source-scoped' in model.contexts[1]['validation_feedback']
+    rejected = model.contexts[1]['previous_output']['outcomes'][0]
+    assert rejected['components'][0]['evidence_refs'] == ['cv:item1']
+    assert model.contexts[1]['evidence'] == model.contexts[0]['evidence']
+    assert model.contexts[1]['requirements'] == model.contexts[0]['requirements']
+    if repair_succeeds:
+        assert state['operation']['status'] == 'succeeded'
+        assert state['result']['job_skill_gaps'][0]['components'][0]['evidence_refs'] == ['cv:item1:claim:0']
+    else:
+        assert state['operation']['status'] == 'failed' and state['result'] is None
+        assert state['operation']['error']['code'] == 'assessment_output'

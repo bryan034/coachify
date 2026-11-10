@@ -46,6 +46,15 @@ A worker runs at most 210 seconds per execution, renewing its 240-second lease a
 
 Limits: 1 MiB upstream response, 120,000 UTF-8 bytes/model context, 512 KiB model response, 64 KiB request body, 4 MiB retained workspace and 1,000 mutation receipts. Excess is explicit; sources are not silently truncated. Private reads/errors use no-store; prompts, response prose, tokens and evidence are not logged. Authentication/ownership is enforced in the backend. Three concurrent executions per process; one active operation per owner.
 
+### Evidence-validation correction
+
+Each assessment batch allows one correction after an `assessment_output` evidence
+validation failure. The model receives the unchanged requirements and evidence,
+its rejected output and fixed local validation guidance. The corrected batch
+passes every original check before checkpointing. A second failure ends the
+operation without publishing a partial assessment. Provider, authentication and
+quota failures bypass this correction. Existing schema-level retries remain separate.
+
 ## Remaining boundaries
 
 G05 factual corrections use the existing CV/Profile review entry points; adviser chat itself does not mutate capability evidence. Inferred dependency ranking, result-specific roadmap notifications and migration of any old Career analysis records remain unimplemented. Tests establish contracts/workflow with synthetic models, not live-model quality.
