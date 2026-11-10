@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { useProfile } from '@/features/profile/profile-provider';
+import { blockedOn } from '@/features/roadmap/blackout-rules';
 import { addDays, addMonths, clockRange, fullDate, monthKey, monthTitle, monthWeeks, shortDate, weekDates } from '@/features/roadmap/roadmap-calendar';
-import type { PlanAssignment } from '@/features/roadmap/types';
+import type { BlackoutRule, PlanAssignment } from '@/features/roadmap/types';
 import { loadGoal, loadRoadmap, loadApplications, useSection } from '@/lib/api/workspace-summary';
 import '@/styles/calendar.css';
 import { PageSkeleton } from '@/components/ui/workspace-ui';
@@ -14,19 +15,23 @@ const views = ['Day', 'Week', 'Month'] as const;
 type View = typeof views[number];
 const dateKinds: Record<string, string> = { application_deadline: 'Application deadline', interview: 'Interview', job_start: 'Job starts' };
 const DEADLINE_DAYS = 14;
+const daysAway = (from: string, to: string) => { const days = Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000); return days > 0 ? `${days} ${days === 1 ? 'day' : 'days'} away` : days === 0 ? 'Today' : 'Passed'; };
 const localToday = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; };
 const longDay = (value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 const toMinutes = (clock: string) => { const [hour, minute] = clock.split(':').map(Number); return hour * 60 + minute; };
-export type DatedMark = { date: string; label: string; kind: 'deadline' | 'milestone' };
+export type DatedMark = { date: string; label: string; kind: 'deadline' | 'milestone' | 'interview' };
+const weekdayIndex = (value: string) => (new Date(`${value}T12:00:00Z`).getUTCDay() + 6) % 7;
+/** Whole days the user blocked out (no start/end time), so the grid can hatch them. */
+const blockedDay = (rules: BlackoutRule[], day: string) => rules.some(rule => !rule.start_time && !rule.end_time && day >= rule.start_date && (!rule.end_date || day <= rule.end_date) && (rule.frequency === 'once' ? day === rule.start_date : blockedOn(rule, weekdayIndex(day))));
 
 function SessionBlock({ item, top, height }: { item: PlanAssignment; top: number; height: number }) {
- return <Link href="/roadmap" className={`cal-session${item.status === 'completed' ? ' is-done' : ''}`} style={{ top: `${top}%`, height: `${height}%` }} title={`${clockRange(item.start_time, item.duration_minutes)} ${item.task}`}>
+ return <Link href="/roadmap" className={`cal-session${item.status === 'completed' ? ' is-done' : ''}${item.id.startsWith('block-') ? ' is-backup' : ''}`} style={{ top: `${top}%`, height: `${height}%` }} title={`${clockRange(item.start_time, item.duration_minutes)} ${item.task}`}>
   <small>{clockRange(item.start_time, item.duration_minutes)}</small><span>{item.task}</span>
  </Link>;
 }
 
 /** Hours widen beyond 08:00 to 21:00 only when a saved session falls outside them. */
-function TimeGrid({ days, today, sessions, marks }: { days: string[]; today: string; sessions: PlanAssignment[]; marks: DatedMark[] }) {
+function TimeGrid({ days, today, sessions, marks, blackouts }: { days: string[]; today: string; sessions: PlanAssignment[]; marks: DatedMark[]; blackouts: BlackoutRule[] }) {
  const visible = sessions.filter(item => days.includes(item.date));
  const start = Math.min(8 * 60, ...visible.map(item => Math.floor(toMinutes(item.start_time) / 60) * 60));
  const end = Math.max(24 * 60, ...visible.map(item => Math.ceil((toMinutes(item.start_time) + item.duration_minutes) / 60) * 60));
@@ -37,7 +42,7 @@ function TimeGrid({ days, today, sessions, marks }: { days: string[]; today: str
   <span/>{days.map(day => <div key={day} className={`cal-head${day === today ? ' is-today' : ''}`} aria-current={day === today ? 'date' : undefined}><small>{dayNames[weekDates(day).indexOf(day)]}</small><b>{Number(day.slice(8))}</b></div>)}
   {hasMarks && <><span className="cal-hour-label">All day</span>{days.map(day => <div key={day} className="cal-allday">{marks.filter(mark => mark.date === day).map(mark => <span key={mark.label} className={`cal-mark is-${mark.kind}`}>{mark.label}</span>)}</div>)}</>}
   <div className="cal-hours">{hours.map(value => <span key={value} style={{ top: `${(value - start) / span * 100}%` }}>{String(Math.floor(value / 60)).padStart(2, '0')}:00</span>)}</div>
-  {days.map(day => <div key={day} className={`cal-column${day === today ? ' is-today' : ''}`} style={{ backgroundSize: `100% ${120 / span * 100}%` }}>
+  {days.map(day => <div key={day} className={`cal-column${day === today ? ' is-today' : ''}${blockedDay(blackouts, day) ? ' is-blocked' : ''}`} style={{ backgroundSize: `100% ${120 / span * 100}%` }}>
    {visible.filter(item => item.date === day).map(item => <SessionBlock key={item.id} item={item} top={(toMinutes(item.start_time) - start) / span * 100} height={Math.max(item.duration_minutes / span * 100, 5)}/>)}
   </div>)}
  </div>;
@@ -73,24 +78,25 @@ export function CalendarPreview() {
  ], [plan,roadmap.state]);
  const jobDates = useMemo(() => goal.state.status === 'ready' ? (goal.state.data.goal?.job_dates ?? []).filter(item => item.date) : [], [goal.state]);
  const role = goal.state.status === 'ready' ? goal.state.data.goal?.role : undefined;
+ const blackouts = roadmap.state.status === 'ready' ? roadmap.state.data.planner.config.blackouts ?? [] : [];
  const target = roadmap.state.status === 'ready' ? roadmap.state.data.planner.runway.resolved.target_date : null;
  const marks = useMemo<DatedMark[]>(() => [
   ...(applications.state.status==='ready'?applications.state.data.filter(item=>item.deadline).map(item=>({date:item.deadline!,label:`${item.snapshot.title} deadline`,kind:'deadline' as const})):[]),
-  ...jobDates.map(item => ({ date: item.date!, label: dateKinds[item.kind] ?? item.kind, kind: 'deadline' as const })),
+  ...jobDates.map(item => ({ date: item.date!, label: dateKinds[item.kind] ?? item.kind, kind: item.kind === 'interview' ? 'interview' as const : 'deadline' as const })),
   ...(target ? [{ date: target, label: 'Roadmap target date', kind: 'deadline' as const }] : []),
   ...(plan?.milestones ?? []).map(item => ({ date: item.projected_end, label: item.title, kind: 'milestone' as const })),
  ], [jobDates, target, plan,applications.state]);
  if (!today || !focus) return <section className="page on calendar-page"><h1>Calendar</h1><PageSkeleton label="Loading calendar…"/></section>;
  const step = (direction: number) => setFocus(view === 'Day' ? addDays(focus, direction) : view === 'Week' ? addDays(focus, direction * 7) : addMonths(focus, direction));
  const horizon = addDays(today, DEADLINE_DAYS);
- const deadlines = marks.filter(mark => mark.kind === 'deadline' && mark.date >= today && mark.date <= horizon).sort((a, b) => a.date.localeCompare(b.date));
+ const deadlines = marks.filter(mark => mark.kind !== 'milestone' && mark.date >= today && mark.date <= horizon).sort((a, b) => a.date.localeCompare(b.date));
  const remaining = sessions.filter(item => !item.id.startsWith('block-') && item.status === 'scheduled' && item.date >= today).sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
  const dueToday = remaining.filter(item => item.date === today).length;
  const milestones = (plan?.milestones ?? []).filter(item => !item.outcome.demonstrated).sort((a, b) => a.projected_end.localeCompare(b.projected_end));
  const failure = [roadmap, goal].find(section => section.state.status === 'error');
  return <section className="page on calendar-page">
   <div className="cal-title">
-   <div className="cal-title-name"><h1>Calendar</h1></div>
+   <div className="cal-title-name"><h1>Calendar</h1><p>Study sessions from your roadmap, saved-job deadlines and interviews.</p></div>
    <div className="cal-controls">
     <div className="cal-views" role="group" aria-label="Calendar view">{views.map(name => <button key={name} type="button" className={view === name ? 'on' : ''} aria-pressed={view === name} onClick={() => setView(name)}>{name}</button>)}</div>
 
@@ -104,14 +110,19 @@ export function CalendarPreview() {
       <div className="cal-nav">{focus !== today && <button type="button" className="cal-today" onClick={() => setFocus(today)}>Today</button>}<button type="button" aria-label={`Previous ${view.toLowerCase()}`} onClick={() => step(-1)}>‹</button><button type="button" aria-label={`Next ${view.toLowerCase()}`} onClick={() => step(1)}>›</button></div>
      </header>
      <div className="calendar-grid-wrap" aria-label={`${view} calendar`}>
-      {view === 'Month' ? <MonthGrid focus={focus} today={today} sessions={sessions} marks={marks}/> : <TimeGrid days={view === 'Day' ? [focus] : weekDates(focus)} today={today} sessions={sessions} marks={marks}/>}
+      {view === 'Month' ? <MonthGrid focus={focus} today={today} sessions={sessions} marks={marks}/> : <TimeGrid days={view === 'Day' ? [focus] : weekDates(focus)} today={today} sessions={sessions} marks={marks} blackouts={blackouts}/>}
      </div>
      {roadmap.state.status === 'ready' && !plan && <p className="cal-hint">Your study sessions appear here once you have a roadmap. <Link href="/roadmap">Plan your roadmap</Link></p>}
     </section>
     <section className="cal-events"><h2>Events</h2><p className="small">Event discovery is coming soon.</p></section>
    </div>
    <aside className="cal-rail">
+    {target && <section className="cal-target" aria-labelledby="cal-target-title"><p id="cal-target-title">Target date</p><b>{fullDate(target)}</b><span>{daysAway(today, target)}</span></section>}
     <MiniMonth focus={focus} today={today} onPick={setFocus}/>
+    <section className="cal-card cal-key" aria-labelledby="cal-key-title"><h2 id="cal-key-title">Key</h2>
+     <ul>{[['study', 'Study session'], ['backup', 'Session in a backup block'], ['interview', 'Interview'], ['deadline', 'Application deadline'], ['blocked', 'Blocked out']].map(([kind, label]) => <li key={kind}><i className={`is-${kind}`} aria-hidden="true"/>{label}</li>)}</ul>
+     <Link href="/roadmap">Change study times in Roadmap</Link>
+    </section>
     <section className="cal-card cal-row" aria-labelledby="cal-deadlines-title">
      <span className="cal-row-icon"><Icon name="brief"/></span><div><h2 id="cal-deadlines-title">Deadlines</h2>{deadlines.length ? <ul>{deadlines.slice(0, 3).map(item => <li key={`${item.label}:${item.date}`}>{item.label}<b>{shortDate(item.date)}</b></li>)}</ul> : <small>{role ? `Nothing due for ${role} in ${DEADLINE_DAYS} days` : 'Nothing due'}</small>}</div><em>{DEADLINE_DAYS} days</em>
     </section>

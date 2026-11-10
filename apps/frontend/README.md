@@ -13,7 +13,7 @@ the Inter OFL licence; no runtime font request is needed. The browser tab icon u
 |---|---|
 | `/` | Public account entry, with distinct sign-in and create-account actions |
 | `/dashboard` | Protected home with live saved background from the profile API |
-| `/career-goal` | Saved career briefing with the skills the role needs by category, marked from a saved comparison when one exists, a starting-point panel, collapsible role/research context, guided refinement and CV handoff; new accounts see JD inputs/exploration |
+| `/career-goal` | Saved career briefing with the skills the role needs by category, marked from a saved comparison when one exists, collapsible role/research context, guided refinement and CV handoff; new accounts see JD inputs/exploration |
 | `/career-goal/discovery` | Chat with bounded memory, automatic concurrent research, cited skill recommendations and explicit shared-goal confirmation |
 | `/career-goal?new=1` | Replace the goal using a new text, URL or document JD; preserve the previous goal until extraction succeeds |
 | `/career-goal/chat` | Saved-goal Q&A or separate career exploration; `?refine=1` opens guided goal refinement |
@@ -290,7 +290,7 @@ CV-context acknowledgement stays separate.
 
 ## Roadmap adviser
 
-`/roadmap` opens a planner that writes the goal, study settings and repeating blackout days and times as a sentence travelling down a road to a backend-calculated runway and Generate. The chat helper docks beside it on wide screens, guides the user through the required details and fills in the form. Generation runs Assessment if needed and opens a roadmap page led by a to-do list of sessions, viewed by day, week or a monthly calendar of weeks, with a Starting point tab. Previews apply only when accepted. See the [feature README](src/features/roadmap/README.md).
+`/roadmap` opens a planner that writes the goal, study settings and repeating blackout days and times as a sentence travelling down a road to a backend-calculated runway and Generate. The chat helper docks beside it on wide screens, guides the user through the required details and fills in the form. Generation runs Assessment if needed and opens a roadmap page led by a to-do list of sessions, viewed by day, week or a monthly calendar of weeks. While it runs, a progress bar appears at once and moves with the stage the service reports (comparing skills, writing the roadmap, fixing schedule-check findings). Previews apply only when accepted. See the [feature README](src/features/roadmap/README.md).
 
 Skills Profile has no manual refresh button: it rechecks saved CVs when the window regains focus or comes back online, and every few seconds while a CV is processing (the review screen keeps a **Check progress** button). Its caveats sit in the **i** tooltip beside the title. Home, Roadmap and Skills Profile read the same `loadSkills` summary, so skill and experience counts match on every page.
 
@@ -329,7 +329,10 @@ Screens follow the "elo — Redesigned Screens" design canvas (sample content on
   items (no model summary yet). Skills are chips in one panel, a row per category, coloured
   by goal relevance and sortable by relevance; a chip opens a panel with where it was used
   and exactly one competence state. Older CV management sits under "Manage saved CVs".
+- Roadmap (after generation): the header reads "N days until <target> · Week n of m"; "Add a task" opens a small task page (title, day, skill, time slot, duration) that saves through the existing tasks API; practice-note evidence appears as a mint "Add this to your Skills Profile?" banner with Not now / Add to Skills Profile.
 - Roadmap sessions have a Word-like notes page with a toolbar (bold, italic, underline,
   heading, lists, checkbox, choice) that saves automatically; no file uploads.
+- Search Jobs: no search runs until Search is pressed (not on load, and not when filters or sort change).
+- Calendar: intro line, a dark Target date card and a Key in the side rail (study sessions forest, backup-block sessions dashed, interviews blue, deadlines orange, whole blocked-out days hatched) with a link to change study times in Roadmap.
 - Search Jobs tabs read "Search jobs" and "My applications"; `?tab=applications` opens the
-  tracker. The last board column is "Rejected or closed".
+  tracker. The last board column is "Rejected or closed". Empty columns after the first read "Drop a card here". Search Jobs does not yet offer the canvas's skill-match filter or sort: they need per-posting match data from the Jobs service.

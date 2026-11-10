@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {useRouter,useSearchParams} from 'next/navigation';
 import {Icon} from '@/components/ui/icon';
 import {useProfile} from '@/features/profile/profile-provider';
-import {careerApi,refreshWorkspace,type AssessmentStatus,type CareerWorkspace,type ReviewSkill} from '@/lib/api/career';
+import {careerApi,refreshWorkspace,type CareerWorkspace,type ReviewSkill} from '@/lib/api/career';
 import {useCareerSession} from './career-session';
 import {CareerGoal} from './career-goal';
 import {OpportunityIntelligence} from './opportunity-intelligence';
@@ -14,7 +14,7 @@ import {sourceLink} from './source-links';
 import {OTHER_SKILLS,groupSkills,type SkillGroupMap} from '@/lib/skill-groups';
 import {type SkillMatch} from '@/lib/api/assessment';
 import '@/styles/goal.css';
-import { useComparison, ComparisonPanel } from '@/features/assessment/comparison';
+import { useComparison } from '@/features/assessment/comparison';
 import type { Requirement } from '@/features/roadmap/types';
 import { formatDate } from '@/lib/format';
 import { PageSkeleton } from '@/components/ui/workspace-ui';
@@ -128,7 +128,7 @@ export function LearningFocus({skills,categories,matches,outcomes}:{skills:Revie
  const kinds=new Set(skills.map(skillImportance));
  return <section id="priorities" className="card goal-skills" aria-labelledby="priorities-title">
   <div className="goal-skills-head">
-   <div><h2 id="priorities-title">Skills this role needs</h2><p className="small">{outcomes?'Your saved comparison is shown on each skill. Click a skill for details.':'Click a skill for details. Compare with your skills to see where you stand.'}</p></div>
+   <div><h2 id="priorities-title">Skills this role needs</h2><p className="small">{outcomes?'Your saved comparison is shown on each skill. Click a skill for details.':<>Click a skill for details. <Link href="/cv">Compare with your skills</Link> to see where you stand.</>}</p></div>
    {skills.length>0&&<p className="goal-skills-summary">{scored.length>0?<><strong className="band-ready">{scored.filter(v=>band(v)==='ready').length} ready</strong> · <strong className="band-growing">{scored.filter(v=>band(v)==='growing').length} getting there</strong> · <strong className="band-build">{scored.filter(v=>band(v)==='build').length} to build</strong> · {skills.length-scored.length} not rated</>:counts.length?<>You have <strong>{counts[0][1]}</strong> of {skills.length}{counts.slice(1).filter(([,n])=>n).map(([status,n])=><span key={status}> · {n} {matchLabels[status].toLowerCase()}</span>)}</>:<>{skills.length} saved {skills.length===1?'skill':'skills'}</>}</p>}
   </div>
   {skills.length>0&&<div className="goal-skills-legend"><span>Importance:</span>{(['essential','important','nice','unclear'] as Importance[]).filter(kind=>kinds.has(kind)).map(kind=><span key={kind}><i className={`importance-square importance-${kind}`} aria-hidden="true"/>{importanceLabels[kind]}</span>)}{skills.some(inferredImportance)&&<span><InferredMark/>Inferred by elo</span>}{scored.length>0&&<><span className="legend-divider" aria-hidden="true"/><span>Competence:</span><span><i className="score-dot score-ready" aria-hidden="true"/>8.5+</span><span><i className="score-dot score-growing" aria-hidden="true"/>6 – 8.4</span><span><i className="score-dot score-build" aria-hidden="true"/>Below 6</span></>}</div>}
@@ -154,20 +154,13 @@ const dateKinds:Record<string,string>={application_deadline:'Apply by',interview
 const tabs:{view:GoalView;href:string;label:string}[]=[{view:'skills',href:'/career-goal',label:'Skills needed'},{view:'interview',href:'/career-goal/interview',label:'Interview preparation'},{view:'role',href:'/career-goal/role',label:'About the role'}];
 export function CareerGoalOverview({workspace,loadError='',onReload,view='skills'}:{workspace:CareerWorkspace;loadError?:string;onReload:()=>void;view?:GoalView}){
  const {token}=useProfile(),router=useRouter(),session=useCareerSession();
- const [assessment,setAssessment]=useState<AssessmentStatus>(),[check,setCheck]=useState(0),[retrying,setRetrying]=useState(false),[retryError,setRetryError]=useState('');
- useEffect(()=>{if(!token||view!=='skills')return;const abort=new AbortController();setAssessment(undefined);
-  void careerApi<AssessmentStatus>('/context/assessment',token,{signal:abort.signal}).then(v=>{if(!abort.signal.aborted)setAssessment(v);}).catch(()=>{if(!abort.signal.aborted)setAssessment({status:'unavailable',cv_uploaded:null,skills_evaluated:null});});
-  return()=>abort.abort();
- },[token,check,view]);
+ const [retrying,setRetrying]=useState(false),[retryError,setRetryError]=useState('');
  const saved=workspace.current.goal!;
  const comparison=useComparison(token, `${saved._id}:${saved.version}`);
  const current=!(comparison.result?.inputs && (comparison.result.inputs.goal_id!==saved._id || comparison.result.inputs.goal_version!==saved.version));
  const matches=current?comparison.matches:null,outcomes=current?comparison.outcomes:null;
  const goal={...saved,summary:saved.summary||null,responsibilities:saved.responsibilities||[],non_skill_requirements:saved.non_skill_requirements||[]};
  const confirmationKey=`${token}:${goal._id}:${goal.version}:${workspace.current.selection_version}`;
- const [confirmedKey,setConfirmedKey]=useState<string|null>(null);
- const onConfirmationChange=useCallback((confirmed:boolean)=>setConfirmedKey(confirmed?confirmationKey:null),[confirmationKey]);
- const confirmed=confirmedKey===confirmationKey;
  const working=processing.includes(workspace.phase);
  async function retryResearch(){if(!token||retrying)return;setRetrying(true);setRetryError('');try{await careerApi('/workspace/retry',token,{method:'POST'});onReload();}catch{setRetryError('Research could not be resumed. Please retry.');}finally{setRetrying(false);}}
  const facts:{icon:string;text:string}[]=[
@@ -177,16 +170,9 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   goal.target_type==='career_exploration'?{icon:'search',text:'Career exploration'}:null,
   ...(goal.job_dates??[]).filter(item=>item.date||item.text).map(item=>({icon:item.kind==='application_deadline'?'cal':'flag',text:`${dateKinds[item.kind]??sentence(item.kind.replaceAll('_',' '))} ${item.date?formatDate(item.date):item.text}`})),
  ].filter((fact):fact is {icon:string;text:string}=>Boolean(fact));
- const startingPoint=<aside className={`briefing-context${confirmed?' briefing-context-banner':''}`} aria-label="Your starting point"><section className="briefing-assessment" id="starting-point" aria-label="Your CV skills"><span className="briefing-mini-icon"><Icon name="bolt"/></span>
-   <h2>{!assessment?'Checking your CV…':assessment.status==='evaluated'?'CV skills available':assessment.status==='unavailable'?'CV skills status unavailable':assessment.status==='no_cv'?'Add your CV background':'CV skills are not available yet'}</h2>
-   <p>{!assessment?'Checking your saved CV and extracted skills.':assessment.status==='evaluated'?'Your saved CV has extracted or user-clarified skills available to review. These are separate from your goal’s requirements.':assessment.status==='unavailable'?'We couldn’t check your saved CV. Your career goal is safe; retry the check or visit your CV page.':assessment.status==='no_cv'?'No saved CV was found. Upload a CV to review and clarify your background.':'A CV is saved, but no successfully extracted skills were found. Visit your CV page to check processing or review the source.'}</p>
-   {assessment?.status==='unavailable'&&<button className="btn ghost sm" onClick={()=>setCheck(v=>v+1)}>Retry CV check</button>}
-   {assessment&&<Link className="btn pri" href="/cv">{assessment.status==='evaluated'?'View my CV':assessment.status==='no_cv'?'Upload my CV':assessment.status==='unavailable'?'Open my CV':'Review my CV'}</Link>}
-   <p className="briefing-micro">Missing evidence doesn’t mean a missing skill. {matches?'Your saved comparison is shown on each skill.':'A comparison against this goal is not available yet.'}</p>
-  </section></aside>;
  const research=(section:'interview'|'role')=><OpportunityIntelligence key={`${goal._id}:${section}`} section={section} goalId={goal._id} version={goal.version} selectionVersion={workspace.current.selection_version} roleDetails={section==='role'?<>
-    {goal.non_skill_requirements.length>0&&<details><summary>Eligibility and commitment</summary><ul>{goal.non_skill_requirements.map(item=><li key={item.requirement_id}><p>{item.description}</p><p className="small">{originLabel(item)}</p><RequirementSources urls={item.source_urls}/></li>)}</ul></details>}
-    {(goal.summary||goal.responsibilities.length>0)&&<details><summary>What you would work on</summary>{goal.summary&&<p>{goal.summary}</p>}<ul>{goal.responsibilities.map((item,index)=><li key={index}>{item}</li>)}</ul>{goal.job_url&&<RequirementSources urls={[goal.job_url]}/>}</details>}
+    {goal.non_skill_requirements.length>0&&<article className="fact-card role-card"><h3><span className="role-card-icon" aria-hidden="true"><Icon name="check"/></span>Eligibility and commitment</h3><ul>{goal.non_skill_requirements.map(item=><li key={item.requirement_id}><p>{item.description}</p><p className="small">{originLabel(item)}</p><RequirementSources urls={item.source_urls}/></li>)}</ul></article>}
+    {(goal.summary||goal.responsibilities.length>0)&&<article className="fact-card role-card"><h3><span className="role-card-icon" aria-hidden="true"><Icon name="code"/></span>What you would work on</h3>{goal.summary&&<p>{goal.summary}</p>}{goal.responsibilities.length>0&&<ul>{goal.responsibilities.map((item,index)=><li key={index}>{item}</li>)}</ul>}{goal.job_url&&<RequirementSources urls={[goal.job_url]}/>}</article>}
    </>:undefined}/>;
  return <section className="page on goal-overview career-briefing">
   <section className="briefing-target goal-header" id="target" aria-label="Your target role">
@@ -194,19 +180,15 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
    <div className="briefing-target-actions"><Link className="btn goal-header-btn" href="/career-goal/chat?refine=1">Refine goal</Link><button type="button" className="btn goal-header-btn" onClick={()=>{session.chooseJD(null);router.push('/career-goal?new=1');}}>Set a new goal</button></div>
    {view==='skills'&&<PriorityRing skills={goal.skills}/>}
   </section>
-  <nav className="goal-tabs" aria-label="Career goal pages">{tabs.map(tab=><Link key={tab.view} href={tab.href} className={tab.view===view?'on':''} aria-current={tab.view===view?'page':undefined}>{tab.label}</Link>)}<span className="goal-saved">Saved automatically</span></nav>
+  <nav className="goal-tabs" aria-label="Career goal pages"><div className="goal-tab-group">{tabs.map(tab=><Link key={tab.view} href={tab.href} className={tab.view===view?'on':''} aria-current={tab.view===view?'page':undefined}>{tab.label}</Link>)}</div><span className="goal-saved">Saved automatically</span></nav>
   {loadError&&<div className="notice" role="alert">{loadError} <button className="btn ghost sm" onClick={onReload}>Retry loading goal</button></div>}
   {goal.requirements_need_review&&<p className="notice">Your role context changed. Refine your goal to review which requirements still apply.</p>}
   {working&&<p className="notice" role="status">{workspace.phase==='waiting_quota'?`Research is waiting for the service allowance and will resume automatically${workspace.retry_after?` in about ${workspace.retry_after} seconds`:''}.`:'Researching opportunity information. Your extracted goal is already saved.'}</p>}
   {workspace.phase==='research_failed'&&<div className="notice" role="alert"><p>Opportunity research could not finish. Your saved goal remains available.</p><button className="btn ghost sm" disabled={retrying} onClick={()=>void retryResearch()}>{retrying?'Resuming research…':'Retry research'}</button>{retryError&&<p>{retryError}</p>}</div>}
   {view==='skills'&&<>
-   <CvGoalConfirmationCard key={confirmationKey} goal={goal} selectionVersion={workspace.current.selection_version} token={token} onReload={onReload} onConfirmationChange={onConfirmationChange}/>
-   {confirmed&&startingPoint}
-   <div className={`briefing-grid${confirmed?' briefing-grid-confirmed':''}`}>
+   <CvGoalConfirmationCard key={confirmationKey} goal={goal} selectionVersion={workspace.current.selection_version} token={token} onReload={onReload}/>
+   <div className="briefing-grid briefing-grid-confirmed">
     <div className="briefing-learning"><LearningFocus key={`${goal._id}:${goal.version}`} skills={goal.skills} categories={workspace.current.skill_groups} matches={matches} outcomes={outcomes}/></div>
-    <div className="goal-rail">{!confirmed&&startingPoint}<ComparisonPanel comparison={comparison}/>
-     <section className="goal-rail-card" aria-labelledby="goal-explore-title"><h2 id="goal-explore-title">Explore other careers</h2><p>{goal.discovery?`This goal draws on ${goal.discovery.listings_analysed} listings from ${goal.discovery.employers_analysed} employers. Compare it with other roles.`:'Talk through what you enjoy and see which roles fit, with listings behind each suggestion.'}</p><Link className="btn ghost" href="/career-goal/discovery">Compare other careers</Link></section>
-    </div>
    </div>
   </>}
   {view!=='skills'&&research(view)}

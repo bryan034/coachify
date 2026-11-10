@@ -46,7 +46,7 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
 
  await page.goto('/roadmap');
  await expect(page.getByRole('heading', { name: 'What elo will use' })).toBeVisible();
- await expect(page.getByRole('heading', { name: 'Your chat helper' })).toBeVisible();
+ await expect(page.getByRole('heading', { name: 'Plan helper' })).toBeVisible();
  await expect(page.getByRole('textbox', { name: 'Answer here' })).not.toBeFocused();
  const beside = async () => (await page.getByRole('region', { name: 'Chat helper' }).boundingBox())!.x > (await page.locator('.plan-road').boundingBox())!.x + 200;
  await page.setViewportSize({ width: 1920, height: 1080 });
@@ -80,7 +80,7 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  expect(await noOverflow(page)).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-helper-mobile.png') });
  await page.getByRole('button', { name: 'Close chat helper' }).click();
- await page.getByRole('button', { name: 'Add Blockout Times' }).click();
+ await page.getByRole('button', { name: 'Add blocked-out time' }).click();
  const blackout = page.getByRole('group', { name: 'Blackout 2' });
  await blackout.getByLabel('Blackout 2 repeats').selectOption('monthly');
  await expect(blackout).toContainText('18:00–20:00');

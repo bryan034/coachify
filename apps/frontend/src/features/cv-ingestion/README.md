@@ -279,6 +279,6 @@ by the current result is highlighted, and its component explanations remain visi
 This highlight is not an inferred relevance rating. Goal-relative scores stay null
 pending rubric approval; existing CV application levels remain unchanged.
 
-CV chat offers **Focus questions on my goal** inside its scrollable transcript.
+CV chat offers **Focus on your goal?** in the topics rail beside the transcript.
 Confirmation uses the same goal/selection version checks as Career Goal and then
 refreshes conversation context. It does not clear the composer draft.

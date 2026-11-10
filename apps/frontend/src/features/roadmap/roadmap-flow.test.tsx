@@ -302,7 +302,7 @@ it('opens the helper when a saved message failed, so it can be retried', async (
 
 it('adds blocked times to the week as their own blocks and sends them for the runway', async () => {
  serve(workspace({ planner: planner({ config: config({ blackouts: [] }) }) })); render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('button', { name: 'Add Blockout Times' }));
+ fireEvent.click(await screen.findByRole('button', { name: 'Add blocked-out time' }));
  const rule = screen.getByRole('group', { name: 'Blackout 1' });
  expect(within(rule).getByText('Every week on Mon, 18:00–20:00, from Wed, 9 Jan 2030')).toBeVisible();
  const week = document.querySelector('.block-week') as HTMLElement;
@@ -323,7 +323,7 @@ it('adds blocked times to the week as their own blocks and sends them for the ru
 
 it('offers daily, monthly and one-day blocked times, keeping only the fields each one uses', async () => {
  serve(workspace({ planner: planner({ config: config({ blackouts: [] }) }) })); render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('button', { name: 'Add Blockout Times' }));
+ fireEvent.click(await screen.findByRole('button', { name: 'Add blocked-out time' }));
  const rule = screen.getByRole('group', { name: 'Blackout 1' });
  fireEvent.click(within(rule).getByRole('checkbox', { name: 'Blackout 1 all day' }));
  const repeats = within(rule).getByRole('combobox', { name: 'Blackout 1 repeats' });
@@ -634,7 +634,7 @@ it('labels partial research while allowing the helper to prepare a plan change',
  expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
 });
 
-it('a new preview from chat opens on the roadmap tab', async () => {
+it('a new preview from chat opens on the roadmap, which has no tabs', async () => {
  let state = withActive();
  api.mockImplementation((path: string) => path === '/messages' ? Promise.resolve({ version: 2, operation: null }) : Promise.resolve(state));
  render(<RoadmapPlanner />);
@@ -643,7 +643,7 @@ it('a new preview from chat opens on the roadmap tab', async () => {
  const preview = roadmap({ id: 'preview', base_active_id: 'plan1' }); state = workspace({ planner: planner({ active: roadmap(), active_review: review(), candidate: preview, candidate_review: review(preview) }) });
  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Send message' })); });
  await screen.findByText('Preview: not active until you accept it');
- expect(screen.getByRole('tab', { name: 'Roadmap' })).toHaveAttribute('aria-selected', 'true');
+ expect(screen.queryByRole('tab')).not.toBeInTheDocument();
  expect(screen.queryByRole('region', { name: 'Chat helper' })).not.toBeInTheDocument();
 });
 

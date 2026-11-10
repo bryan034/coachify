@@ -456,3 +456,69 @@
 .note-choice label{display:flex;align-items:center;gap:8px;min-height:32px}
 .note-choice input{accent-color:var(--forest)}
 .notes-status{margin:0;padding:6px 18px 10px}
+
+/* Add a task: a small page with a big title and a property list (redesign canvas). */
+.add-task-open{display:flex;align-items:center;gap:10px;width:100%;margin-top:12px;padding:12px 14px;border:1.5px dashed var(--line);border-radius:16px;background:transparent;font:inherit;font-size:14px;font-weight:500;color:var(--slate);cursor:pointer}
+.add-task-open:hover{border-color:var(--forest);background:var(--white);color:var(--ink)}
+.add-task-open span{display:grid;place-items:center;width:26px;height:26px;border:1.5px dashed currentColor;border-radius:50%;line-height:1}
+.add-task-open:focus-visible,.add-task :is(button,input,select):focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.add-task{margin:8px 0;padding:22px 26px 18px;border:1px solid var(--line);border-radius:18px;background:var(--white);box-shadow:0 10px 30px rgba(17,24,39,.08)}
+.add-task-crumb{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--slate)}
+.add-task-crumb strong{color:var(--ink);font-weight:600}
+.add-task-close{display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:10px;background:transparent;font-size:20px;color:var(--slate);cursor:pointer}
+.add-task-close:hover{background:var(--cloud);color:var(--ink)}
+.add-task-title{box-sizing:border-box;width:100%;padding:10px 0 6px;border:0;background:transparent;font:inherit;font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.25;color:var(--ink);outline:none}
+.add-task-title::placeholder{color:#cbd5e1}
+.add-task-props{display:grid;gap:2px;margin:8px 0 10px}
+.add-task-prop{display:grid;grid-template-columns:200px minmax(0,1fr);gap:10px;align-items:center;min-height:40px;margin:0;padding:5px 6px;border:0;border-radius:8px;font-size:13.5px}
+.add-task-prop:hover{background:var(--snow)}
+.add-task-prop legend{float:left;padding:0}
+.add-task-key{color:var(--slate)}
+.add-task-prop select{justify-self:start;min-height:32px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--white);font:inherit;font-size:13.5px}
+.add-task-options{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.add-task-options button{min-height:32px;padding:0 11px;border:0;border-radius:6px;background:var(--cloud);font:inherit;font-size:13px;font-weight:500;color:#334155;cursor:pointer}
+.add-task-options button:hover{background:#e2e8f0}
+.add-task-options button[aria-pressed="true"]{background:var(--ink);color:var(--white)}
+.add-task-inline{display:inline-flex;align-items:center;gap:6px;color:var(--slate)}
+.add-task-inline input{min-height:32px;padding:0 8px;border:1px solid var(--line);border-radius:6px;font:inherit}
+.add-task>form>p{margin:4px 6px}
+.add-task-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+@media (max-width:640px){.add-task{padding:18px 16px}.add-task-prop{grid-template-columns:minmax(0,1fr);gap:4px}.add-task-title{font-size:22px}}
+
+.evidence-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px;padding:16px 20px;border:1px solid #a7f3d0;border-radius:16px;background:var(--mint-mist)}
+.evidence-banner>div:first-child{flex:1 1 360px;min-width:0}
+.evidence-banner h2{margin:0;font-size:15px;font-weight:600}
+.evidence-banner p{margin:2px 0 0;color:#334155}
+.evidence-actions{display:flex;gap:8px}
+.roadmap-heading p strong{color:var(--ink);font-weight:600}
+
+.generation-bar{position:relative;height:8px;margin:12px 0 8px;overflow:hidden;border-radius:4px;background:#d1fae5}
+.generation-bar i{display:block;height:100%;border-radius:4px;background:var(--forest);transition:width .6s ease}
+.generation-bar i::after{content:"";display:block;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);background-size:60px 100%;animation:generation-shimmer 1.4s linear infinite}
+.generation-step{margin:0;font-weight:600}
+@keyframes generation-shimmer{from{background-position:-60px 0}to{background-position:100% 0}}
+@media (prefers-reduced-motion:reduce){.generation-bar i{transition:none}.generation-bar i::after{animation:none}}
+
+/* To-do rows (redesign "Roadmap (after generation)"): one card per task, time and length as pills. */
+.todo-list{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.todo-list>.todo,.todo-day .todo:first-child{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:6px 16px;align-items:center;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--white)}
+.todo.done{background:var(--snow)}
+.todo-check,.todo-check-static{width:26px;height:26px;border-width:1.5px;border-color:var(--slate)}
+.todo-check:checked,.todo-check-static.done{background:var(--forest);border-color:var(--forest)}
+.todo-body .todo-task{font-size:15px;font-weight:600;margin:0}
+.todo-tags{margin-top:6px}
+.todo-skill{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-size:12.5px}
+.todo-skill::before{content:"";width:7px;height:7px;border-radius:50%;background:#dc2626}
+.todo-done-when{margin-top:6px!important}
+.todo-when{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px;margin:0;font-size:13px}
+.todo-time{display:inline-flex;align-items:center;justify-content:center;min-width:150px;min-height:32px;padding:0 16px;border-radius:999px;background:var(--ink);color:var(--white);font-weight:600}
+.todo-length{display:inline-flex;align-items:center;justify-content:center;min-width:96px;min-height:32px;padding:0 14px;border:1px solid #a7f3d0;border-radius:999px;background:var(--mint-mist);color:var(--forest);font-weight:600}
+.todo-day{margin-top:22px}
+.todo-day h3{font-size:15px}
+.todo-day-link{font-weight:600}
+@container (max-width:620px){.todo-list>.todo,.todo-day .todo:first-child{grid-template-columns:28px minmax(0,1fr)}.todo-when{grid-column:2;justify-content:flex-start}.todo-time{min-width:0}.todo-length{min-width:0}}
+/* Chat helper (redesign "Plan helper"): one Close button, composer footer never clips Send. */
+.helper-launcher[hidden]{display:none!important}
+.adviser-composer>div{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.adviser-composer>div .btn{flex:none;white-space:nowrap}
+.adviser-close{min-height:36px;padding:0 14px;border-radius:10px;font-weight:600}

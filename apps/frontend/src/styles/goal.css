@@ -228,3 +228,42 @@
 @media (max-width:700px){.round-body{padding-left:16px}}
 
 .briefing-learning,.goal-skills,.goal-skill-category,.goal-skill-list,.goal-skill-row{min-width:0}
+
+/* The three Career Goal pages are one pill group (redesign canvas), not three separate buttons. */
+.goal-tabs{justify-content:space-between;gap:8px 16px}
+.goal-tab-group{display:inline-flex;flex-wrap:wrap;gap:2px;padding:4px;background:var(--white);border:1px solid var(--line);border-radius:999px}
+.goal-tab-group a{margin:0;background:transparent;border:0}
+.goal-tab-group a:hover{background:var(--cloud)}
+.goal-tab-group a.on,.goal-tab-group a.on:hover{background:var(--ink);color:var(--white)}
+.goal-tab-group a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* Skill rows (redesign): one plain chevron, chip stays inside the card, full-width list. */
+.career-briefing .briefing-grid.briefing-grid-confirmed{grid-template-columns:minmax(0,1fr)}
+.goal-skill-row .skill-row-toggle{grid-template-columns:14px minmax(0,1fr) auto auto 20px;padding:12px 8px;font-weight:400}
+.goal-skill-row .skill-row-toggle::after{display:none}
+.goal-skill-row .skill-rank-chevron{width:20px;height:20px;background:none;border-radius:0}
+.goal-skill-row .skill-rank-chevron::after{left:6px;top:4px;width:7px;height:7px;border-color:var(--slate)}
+.goal-skill-row .skill-row-toggle[aria-expanded=true] .skill-rank-chevron::after{top:8px}
+.goal-skill-row .score-chip{min-width:74px}
+.goal-skills{padding:24px}
+.goal-skills-head{align-items:flex-start}
+.goal-skills-head .small{margin-top:4px;font-size:14px;color:var(--slate)}
+.career-briefing .goal-confirmation{padding:12px 18px;margin-bottom:16px;background:var(--white);border:1px solid var(--line)}
+.career-briefing .goal-confirmation p{font-size:13px}
+.goal-tabs{margin-bottom:18px}
+@media (max-width:900px){.goal-skill-row .skill-row-toggle{grid-template-columns:12px minmax(0,1fr) auto 16px}}
+/* Tabs sit on the page, not in the old editor's toolbar. */
+.career-briefing .goal-tabs{padding:0;border:0;background:none;position:static}
+.career-briefing .goal-saved{padding:0;border:0;background:none;font-size:12px;color:var(--slate)}
+/* About the role: every field is a card (icon, fact, source), as in the redesign. */
+.role-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:14px}
+.role-details+.fact-cards{margin-top:14px}
+.fact-card{display:flex;flex-direction:column;gap:10px;padding:20px;border-radius:16px}
+.fact-card h3{display:flex;align-items:center;gap:12px;margin:0;font-size:14px;font-weight:600;color:var(--slate)}
+.role-card-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--mint-mist);color:var(--forest)}
+.role-card-icon svg{width:16px;height:16px}
+.role-card ul{margin:0;padding-left:18px;display:grid;gap:6px}
+.role-card li p{margin:0}
+.role-card>p,.role-card li>p:first-child{font-size:15px;line-height:1.5;color:var(--ink)}
+.briefing-sources a{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--mint-mist);font-size:12px;font-weight:600;color:var(--forest);text-decoration:none}
+.career-briefing .goal-header .briefing-target-meta{text-transform:none}

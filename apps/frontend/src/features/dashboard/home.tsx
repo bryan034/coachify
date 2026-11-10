@@ -189,10 +189,14 @@ export function HomeDashboard() {
    <div className="home-welcome-copy">
     <p className="home-welcome-lede">{formatDate(today)}</p>
     <h1>Welcome back{firstName ? `, ${firstName}` : ''}.</h1>
-    <p>{settled && nextAction ? nextAction.why : 'A clearer path to your next role.'}</p>
-    <div className="home-welcome-actions" aria-live="polite">
-     {settled && nextAction && <Link className="btn home-mint" href={nextAction.href}>{nextAction.action}</Link>}
-     {settled && !flags.includes('error') && <span>{doneCount} of {stops.length} steps done</span>}
+    <div className="home-next-step">
+     <p className="home-next-label">Your next step</p>
+     <p className="home-next-why">{settled && nextAction ? nextAction.why : 'A clearer path to your next role.'}</p>
+     {settled && !flags.includes('error') && <ol className="home-step-bar" aria-hidden="true">{states.map((state, index) => <li key={stops[index].name} className={state === 'done' ? 'is-done' : ''}/>)}</ol>}
+     <div className="home-welcome-actions" aria-live="polite">
+      {settled && nextAction && <Link className="btn home-mint" href={nextAction.href}>{nextAction.action}</Link>}
+      {settled && !flags.includes('error') && <span>{doneCount} of {stops.length} steps done</span>}
+     </div>
     </div>
    </div>
    <Journey states={states}/>

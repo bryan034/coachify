@@ -98,7 +98,7 @@ disappears once the summary arrives.
 
 Career chats give the conversation at least 70% of the screen height, on any screen size. Short screens scroll the page rather than shrinking it.
 
-The saved-goal overview opens with the role and a ring of skills by the backend's priority. A side rail holds the CV status, comparison status, job dates and a link to Explore careers. Skills form one numbered list sorted by priority, with category filters. Each skill keeps its number when filtered, using the backend's categories in, using the backend's
+The saved-goal overview opens with the role and a ring of skills by the backend's priority. There is no side rail: the skills fill the page, and the three goal pages are one pill-shaped tab group. CV status and the comparison live in Skills Profile and Home, and Explore careers is reached from Conversations. Skills form one numbered list sorted by priority, with category filters. Each skill keeps its number when filtered, using the backend's categories in, using the backend's
 `current.skill_groups`. Importance (Required, Preferred and so on) is a label on each
 row, most important first, with any level the job states.
 

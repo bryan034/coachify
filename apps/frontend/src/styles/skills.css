@@ -170,3 +170,38 @@
 @media (max-width:820px){.skills-board.has-panel{grid-template-columns:minmax(0,1fr)}.skill-panel{position:static}.skills-category-row{grid-template-columns:minmax(0,1fr);gap:8px}}
 
 .cv-library-disclosure .cv-library-scroll{max-height:480px}
+
+/* Redesign "Skills Profile": cards keep their inner padding; the skill list is one bordered card. */
+.skills-home .card.skills-cv-card{padding:20px 22px;border-radius:16px}
+.skills-home .card.skills-cv-card .skills-understood{margin:16px -22px 0;padding:16px 22px 0}
+.skills-summary .card.skills-unified-panel{padding:20px 22px;border:1px solid var(--line);border-radius:16px;background:var(--white)}
+.skills-summary .skills-panel-head{margin-bottom:12px}
+
+/* CV review (redesign "CV review chat"): topics rail on the left, transcript on the right. */
+.cv-review-rail{display:grid;align-content:start;gap:16px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.cv-review-rail .cv-review-progress{padding:0;background:none;border:0}
+.cv-review-rail .cv-topic-checklist{padding:0;border:0}
+.cv-topic-checklist h3{margin:0 0 4px;font-size:16px;font-weight:600}
+.cv-topic-checklist ol{display:flex;flex-wrap:wrap;gap:6px 12px;margin:8px 0 0;padding:0;list-style:none}
+.cv-topic-checklist li{display:flex;align-items:flex-start;gap:10px;font-size:14px}
+.cv-topic-checklist li strong{display:block;font-weight:500}
+.cv-topic-checklist li small{display:block;font-size:12px;color:var(--slate)}
+.cv-topic-mark{display:grid;place-items:center;flex:none;width:20px;height:20px;margin-top:1px;border:1.5px solid var(--field-line);border-radius:50%;font-size:11px;color:var(--white)}
+.cv-topic-checklist li.is-done .cv-topic-mark{background:var(--forest);border-color:var(--forest)}
+.cv-topic-checklist li.is-now .cv-topic-mark{border:6px solid var(--ink)}
+.cv-review-rail .cv-inline-confirmation{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--snow);font-size:13px}
+.cv-review-rail .cv-inline-confirmation summary{cursor:pointer;font-weight:600}
+@media (min-width:900px){
+ .cv-review-screen .cv-chat:has(.cv-review-rail){display:grid;grid-template-columns:260px minmax(0,1fr);grid-template-rows:auto auto auto 1fr auto}
+ .cv-review-screen .cv-chat:has(.cv-review-rail)>*{grid-column:2}
+ .cv-review-screen .cv-chat:has(.cv-review-rail)>.cv-chat-header{grid-column:1 / -1}
+ .cv-review-screen .cv-chat>.cv-review-rail{grid-column:1;grid-row:2 / -1;overflow:auto;padding:24px 16px;border-bottom:0;border-right:1px solid var(--line)}
+ .cv-review-rail .cv-topic-checklist ol{flex-direction:column;gap:14px}
+ .cv-review-rail .cv-topic-checklist li.is-now{margin:-6px -8px;padding:6px 8px;border-radius:10px;background:var(--mint-mist)}
+ .cv-review-screen .cv-chat:has(.cv-review-rail)>.cv-chat-context{grid-row:2}
+ .cv-review-screen .cv-chat:has(.cv-review-rail)>.cv-chat-history-banner{grid-row:3}
+ .cv-review-screen .cv-chat:has(.cv-review-rail)>.cv-chat-messages{grid-row:4;min-height:0}
+ .cv-review-screen .cv-chat:has(.cv-review-rail)>.cv-chat-composer-wrap{grid-row:5}
+}
+/* Phones keep the transcript tall: the segmented bar stands in for the topic list. */
+@media (max-width:899px){.cv-review-rail{padding:6px 14px;gap:4px}.cv-review-rail .cv-topic-checklist{display:none}.cv-review-rail .cv-inline-confirmation{padding:0;border:0;background:none;font-size:12px;line-height:1.4}}

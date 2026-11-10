@@ -41,18 +41,21 @@ export function SearchJobs(){
 function JobSearch({accountId,token}:{accountId:string;token:string}){
  const {profile}=useProfile();
  const [sort,setSort]=useState<'recommended'|'newest'>('recommended');
+ // Nothing is searched until Search is pressed. `applied` is the search that was last run; edits to the box, filters and sort only change the draft.
+ const [applied,setApplied]=useState<{keywords:string;choices:Choices;sort:'recommended'|'newest'}|null>(null);
  const defaultsApplied=useRef(false),filtersTouched=useRef(false);
  // ?tab=applications opens the tracker directly, for links from Home.
  const [tab,setTab]=useState<'search'|'tracker'>(()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('tab')==='applications'?'tracker':'search');
- const [draft,setDraft]=useState('');const [keywords,setKeywords]=useState('');
+ const [draft,setDraft]=useState('');
  const [choices,setChoices]=useState(NO_CHOICES);
  const [options,setOptions]=useState<FilterOptions|null>(null);
  const [items,setItems]=useState<Posting[]>([]);const [total,setTotal]=useState(0);const [cursor,setCursor]=useState<string|null>(null);
  const [unavailable,setUnavailable]=useState<string[]>([]);
- const [loading,setLoading]=useState(true);const [more,setMore]=useState(false);const [error,setError]=useState('');
+ const [loading,setLoading]=useState(false);const [more,setMore]=useState(false);const [error,setError]=useState('');
  const [applications,setApplications]=useState<Application[]>([]);const [trackerError,setTrackerError]=useState('');
  const [retry,setRetry]=useState(0);
- const filters=useMemo(()=>({...toFilters(keywords,choices),sort}),[keywords,choices,sort]);
+ const keywords=applied?.keywords??'';
+ const filters=useMemo(()=>applied?{...toFilters(applied.keywords,applied.choices),sort:applied.sort}:null,[applied]);
  const latest=useRef(0);
  const goal=useSection(loadGoal,token);
  const [sites,setSites]=useState<ExternalSearch[]>([]);
@@ -65,7 +68,9 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
  },[token,retry]);
 
  useEffect(()=>{
-  const controller=new AbortController();const request=++latest.current;
+  const request=++latest.current;
+  if(!filters){setItems([]);setTotal(0);setCursor(null);setUnavailable([]);setError('');setLoading(false);return;}
+  const controller=new AbortController();
   setLoading(true);setError('');
   searchJobs(token,filters,controller.signal).then(result=>{
    if(request!==latest.current)return;
@@ -86,7 +91,7 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
  },[token,keywords]);
 
  async function loadMore(){
-  if(!cursor)return;
+  if(!cursor||!filters)return;
   const request=latest.current;setMore(true);setError('');
   try{
    const result=await searchJobs(token,{...filters,cursor});
@@ -125,31 +130,30 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
   setTrackerError('');
   try{await removeApplication(token,item);setApplications(current=>current.filter(other=>other.id!==item.id));}catch(problem){await recover(problem);}
  }
- function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setKeywords(draft.trim());setRetry(value=>value+1);}
+ function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setApplied({keywords:draft.trim(),choices,sort});}
  function change(next:Partial<Choices>){filtersTouched.current=true;setChoices(current=>({...current,...next}));}
- function tryTerm(term:string){setDraft(term);setKeywords(term);setTab('search');setRetry(value=>value+1);}
- function clear(){setDraft('');setKeywords('');setChoices(NO_CHOICES);}
+ function tryTerm(term:string){setDraft(term);setTab('search');}
+ function clear(){setDraft('');setApplied(null);setChoices(NO_CHOICES);}
  useEffect(()=>{if(defaultsApplied.current||goal.state.status!=='ready'||filtersTouched.current)return;defaultsApplied.current=true;const type=goal.state.data.goal?.employment_type;const suggested=type&&type!=='unknown'?type:profile?.occupational_status==='student'?'internship':null;if(suggested)setChoices(current=>({...current,jobTypes:[suggested]}));},[goal.state,profile]);
  const goalTerms=goal.state.status==='ready'&&goal.state.data.goal?[goal.state.data.goal.role,...goal.state.data.goal.skills.filter(skill=>skill.priority==='required').map(skill=>skill.name),...goal.state.data.goal.skills.filter(skill=>skill.priority!=='required').map(skill=>skill.name)].slice(0,4):[];
- const filtered=Boolean(keywords)||JSON.stringify(choices)!==JSON.stringify(NO_CHOICES);
+ const filtered=Boolean(draft)||JSON.stringify(choices)!==JSON.stringify(NO_CHOICES);
 
  return <section className={`page on job-search-page${items.length?' has-results':''}`}>
-  <div className="job-hero">
-   <h1>Search Jobs</h1>
-   <p className="job-search-intro">Find jobs and internships in Singapore, then apply on the employer&rsquo;s own site. Elo tracks your progress and sends nothing to employers.</p>
-   <form className="job-search-form" onSubmit={submit}>
-    <label htmlFor="job-keywords"><Icon name="search"/><span className="cv-visually-hidden">Job title or keywords</span><input id="job-keywords" name="keywords" value={draft} maxLength={120} placeholder="Job title or keywords" onChange={event=>setDraft(event.target.value)}/></label>
-    <span className="job-search-place"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 21s7-6.1 7-11.5a7 7 0 1 0-14 0C5 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Singapore</span>
-    <button className="btn job-find">Search</button>
-   </form>
-   {goalTerms.length>0&&<div className="job-try"><span>From your goal</span>{goalTerms.map(term=><button type="button" key={term} onClick={()=>tryTerm(term)}>{term}</button>)}</div>}
-   {sites.length>0&&<div className="job-open-on" aria-label="Search other job sites" role="group"><span>Open on</span>{sites.filter(site=>httpsOnly(site.url)).map(site=><a key={site.name} href={site.url} target="_blank" rel="noopener noreferrer">{site.name}<span aria-hidden="true"> ↗</span><span className="cv-visually-hidden">Opens in a new tab</span></a>)}</div>}
-   {sites.length>0&&<p className="job-hero-note">Only your search terms leave elo when you open a site, and your CV stays here. A site may ask you to sign in.</p>}
-  </div>
+  <h1 className="cv-visually-hidden">Search Jobs</h1>
   <div className="job-tabs" role="group" aria-label="Job views">
-   <button type="button" className="btn ghost" aria-pressed={tab==='search'} onClick={()=>setTab('search')}>Search jobs</button>
-   <button type="button" className="btn ghost" aria-pressed={tab==='tracker'} onClick={()=>setTab('tracker')}>My applications ({applications.length})</button>
+   <button type="button" aria-pressed={tab==='search'} onClick={()=>setTab('search')}>Search jobs</button>
+   <button type="button" aria-pressed={tab==='tracker'} aria-label={`My applications (${applications.length})`} onClick={()=>setTab('tracker')}>My applications<span className="job-tab-count" aria-hidden="true">{applications.length}</span></button>
   </div>
+  {tab==='search'&&<div className="job-hero">
+   <form className="job-search-form" onSubmit={submit}>
+    <label htmlFor="job-keywords"><span>Role or skills</span><input id="job-keywords" name="keywords" value={draft} maxLength={120} placeholder="Job title or keywords" aria-label="Job title or keywords" onChange={event=>setDraft(event.target.value)}/></label>
+    <label htmlFor="job-location"><span>Location</span><input id="job-location" value="Singapore" readOnly aria-describedby="job-location-note"/></label>
+    <button className="btn pri job-find">Search</button>
+   </form>
+   <p className="job-search-intro" id="job-location-note">Singapore listings only for now. Apply on the employer&rsquo;s own site; elo tracks your progress and sends nothing to employers.</p>
+   {goalTerms.length>0&&<div className="job-try"><span>From your goal</span>{goalTerms.map(term=><button type="button" key={term} onClick={()=>tryTerm(term)}>{term}</button>)}</div>}
+   {sites.length>0&&<div className="job-open-on" aria-label="Search other job sites" role="group"><span>Also search on</span>{sites.filter(site=>httpsOnly(site.url)).map(site=><a key={site.name} href={site.url} target="_blank" rel="noopener noreferrer">{site.name}<span aria-hidden="true"> ↗</span><span className="cv-visually-hidden">Opens in a new tab</span></a>)}<small>Only your search terms leave elo, and a site may ask you to sign in.</small></div>}
+  </div>}
   {trackerError&&<p className="small" role="alert">{trackerError}</p>}
   {tab==='tracker'?<Tracker items={applications} onStatus={changeStatus} onRemove={remove} onSaveLink={link=>saveJobLink(token,link)} onSaved={remember} onDetails={async(item,fields)=>{try{remember(await updateApplicationDetails(token,item,fields));}catch(problem){await recover(problem);throw problem;}}}/>:<div className="job-find-layout">
    <div className="job-search-panel" aria-label="Filters" role="group">
@@ -179,13 +183,14 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
     </div>
    </div>
    <div className="job-results">
-    <div className="job-results-summary" aria-live="polite"><label>Sort results<select value={sort} onChange={event=>setSort(event.target.value as typeof sort)}><option value="recommended">Recommended</option><option value="newest">Newest first</option></select></label>
-     <span><strong>{loading?'Searching…':error?'':`${total} ${total===1?'job':'jobs'} in Singapore`}</strong>{!loading&&!error&&options?.last_synced_at&&<small> Employer boards last read {day(options.last_synced_at)}</small>}</span>
-     {filtered&&<button type="button" className="btn ghost" onClick={clear}>Clear filters</button>}
+    <div className="job-results-summary" aria-live="polite">
+     <span><strong>{!applied?'Choose your filters, then press Search':loading?'Searching…':error?'':`${total} ${total===1?'job':'jobs'} in Singapore`}</strong>{!loading&&!error&&options?.last_synced_at&&<small> Employer boards last read {day(options.last_synced_at)}</small>}</span>
+     {filtered&&<button type="button" className="btn ghost sm" onClick={clear}>Clear filters</button>}
+     <label>Sort results<select value={sort} onChange={event=>setSort(event.target.value as typeof sort)}><option value="recommended">Recommended</option><option value="newest">Newest first</option></select></label>
     </div>
     {error&&<div role="alert"><p>{error}</p><button type="button" className="btn ghost" onClick={()=>setRetry(value=>value+1)}>Retry</button></div>}
     {!loading&&unavailable.length>0&&<p role="status">Some employer boards could not be read. Results may be incomplete. Search again to retry.</p>}
-    {!loading&&!error&&!items.length&&<p>{filtered?'No jobs match these filters. Try removing one.':'No jobs are listed right now.'}</p>}
+    {applied&&!loading&&!error&&!items.length&&<p>{filtered?'No jobs match these filters. Try removing one.':'No jobs are listed right now.'}</p>}
     <ul className="job-list">
      {items.map(posting=><JobCard key={posting.id} posting={posting} item={tracked.get(posting.id)} onSave={()=>save(posting)} onApply={()=>visitEmployer(posting)}/>)}
     </ul>
@@ -208,24 +213,25 @@ function CheckGroup({legend,options,names,selected,onChange}:{legend:string;opti
 
 function JobCard({posting,item,onSave,onApply}:{posting:Posting;item?:Application;onSave:()=>void;onApply:()=>void}){
  const apply=httpsOnly(posting.apply_url),listing=httpsOnly(posting.listing_url);
- return <li className="job-card">
-  <h3>{posting.title}</h3>
-  <div>{posting.company}{posting.department?` · ${posting.department}`:''}</div>
-  <div className="job-card-meta">
-   <span>{label(JOB_TYPES,posting.job_type)}</span><span>{label(WORKPLACES,posting.workplace)}</span>
-   <span>{label(INDUSTRIES,posting.industry)}</span><span>{posting.location}</span>
-   <span>{posting.posted_at_estimated?'Posting date not supplied':`Posted ${day(posting.posted_at)}`}</span>
-   {posting.application_deadline&&<span>Closes {day(posting.application_deadline)}</span>}
+ return <li className="job-card job-result">
+  <div className="job-result-main">
+   <div className="job-result-title"><h3>{listing?<a href={listing} target="_blank" rel="noopener noreferrer" title="Opens the full job in a new tab">{posting.title}</a>:posting.title}</h3>
+   <p className="job-source" title={`Listed through ${label(PROVIDERS,posting.provider)}. Details and applications are handled by ${posting.company}.`}><span aria-hidden="true">i</span><span className="cv-visually-hidden">Listed through {label(PROVIDERS,posting.provider)}. Details and applications are handled by {posting.company}.</span></p></div>
+   <p className="job-card-company">{posting.company}{posting.department?` · ${posting.department}`:''}</p>
+   <div className="job-card-meta">
+    <span>{label(JOB_TYPES,posting.job_type)}</span><span>{label(WORKPLACES,posting.workplace)}</span>
+    <span>{label(INDUSTRIES,posting.industry)}</span><span>{posting.location}</span>
+    <span>{posting.posted_at_estimated?'Posting date not supplied':`Posted ${day(posting.posted_at)}`}</span>
+    {posting.application_deadline&&<span>Closes {day(posting.application_deadline)}</span>}
+   </div>
+   {posting.excerpt&&<p className="job-excerpt">{posting.excerpt}</p>}
+   <div className="job-card-actions">
+    {item?<span className="small">{STATUSES[item.status]} in My applications</span>:<button type="button" className="btn ghost" onClick={onSave}>Save job</button>}
+    {listing&&<Link className="btn ghost" href={`/career-goal?new=1&job_url=${encodeURIComponent(listing)}`}>Use as career goal</Link>}
+    {apply&&<a className="btn pri" href={apply} target="_blank" rel="noopener noreferrer" onClick={onApply}>Apply on employer site<span aria-hidden="true"> ↗</span><span className="cv-visually-hidden">Opens in a new tab</span></a>}
+   </div>
   </div>
-  {posting.matched_skills&&<p className="small" title={posting.match_basis??undefined}>{posting.matched_skills.length} profile skill names in this listing{posting.matched_skills.length?`: ${posting.matched_skills.join(', ')}`:''}</p>}
-  {posting.excerpt&&<p>{posting.excerpt}</p>}
-  <div className="job-card-actions">
-   {apply&&<a className="btn pri" href={apply} target="_blank" rel="noopener noreferrer" onClick={onApply}>Apply on employer site<span aria-hidden="true"> ↗</span><span className="small">Opens in a new tab</span></a>}
-   {listing&&<a className="btn ghost" href={listing} target="_blank" rel="noopener noreferrer">View full job<span aria-hidden="true"> ↗</span></a>}
-   {listing&&<Link className="btn ghost" href={`/career-goal?new=1&job_url=${encodeURIComponent(listing)}`}>Use as career goal</Link>}
-   {item?<span className="small">{STATUSES[item.status]} in My applications</span>:<button type="button" className="btn ghost" onClick={onSave}>Save job</button>}
-  </div>
-  <span className="small" title={`Listed through ${label(PROVIDERS,posting.provider)}. Details and applications are handled by ${posting.company}.`}>Listing source ⓘ</span>
+  {posting.matched_skills&&<aside className="job-match" title={posting.match_basis??undefined} aria-label="Skills from your profile"><p><strong>{posting.matched_skills.length}</strong> {posting.matched_skills.length===1?'skill':'skills'} from your profile</p>{posting.matched_skills.length>0&&<p className="small">Named in this listing: {posting.matched_skills.join(', ')}</p>}</aside>}
  </li>;
 }
 
@@ -273,7 +279,10 @@ function Tracker({items,onStatus,onRemove,onSaveLink,onSaved,onDetails}:{onDetai
      const link=httpsOnly(item.snapshot.listing_url);
      return <li className="job-card" key={item.id} draggable onDragStart={event=>event.dataTransfer.setData('text/plain',item.id)}>
       <h3>{item.snapshot.title}</h3>
-      <div>{item.snapshot.company}</div><ApplicationDetails key={`${item.id}:${item.version}`} item={item} save={fields=>onDetails(item,fields)}/>
+      <div className="job-card-company">{item.snapshot.company}</div>
+      {(item.deadline||item.applied_at||item.follow_up_at)&&<dl className="job-dates">{item.deadline&&<><dt>Deadline</dt><dd className={item.status==='saved'?'is-soon':undefined}>{day(item.deadline)}</dd></>}{item.applied_at&&<><dt>Applied</dt><dd>{day(item.applied_at)}</dd></>}{item.follow_up_at&&<><dt>Follow up</dt><dd className="is-soon">{day(item.follow_up_at.slice(0,10))}</dd></>}</dl>}
+      {item.notes&&<p className="job-note">{item.notes}</p>}
+      <ApplicationDetails key={`${item.id}:${item.version}`} item={item} save={fields=>onDetails(item,fields)}/>
       <div className="job-card-meta">
        <span>{label(JOB_TYPES,item.snapshot.job_type)}</span>{item.snapshot.location&&<span>{item.snapshot.location}</span>}
        {item.source==='link'&&<span>Added from a link</span>}
@@ -290,7 +299,7 @@ function Tracker({items,onStatus,onRemove,onSaveLink,onSaved,onDetails}:{onDetai
        <button type="button" className="btn ghost" aria-label={`Remove ${item.snapshot.title}`} onClick={()=>onRemove(item)}>Remove</button>
       </div>
      </li>;
-    })}</ul>:<div className="job-column-empty">{index===0&&<div>{!items.length&&<p>You haven&rsquo;t saved any jobs yet. Jobs you save or confirm you applied to will appear here.</p>}{!adding&&<button type="button" className="job-paste" onClick={()=>{setMessage('');setAdding(true);}}>Paste a job link</button>}</div>}</div>}
+    })}</ul>:<div className="job-column-empty">{index>0&&<p>Drop a card here</p>}{index===0&&<div>{!items.length&&<p>You haven&rsquo;t saved any jobs yet. Jobs you save or confirm you applied to will appear here.</p>}{!adding&&<button type="button" className="job-paste" onClick={()=>{setMessage('');setAdding(true);}}>Paste a job link</button>}</div>}</div>}
    </section>;
   })}</div>
  </section>;

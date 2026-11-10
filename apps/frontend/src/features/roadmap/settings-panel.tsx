@@ -131,7 +131,7 @@ function StudyWeek({ blocks, blackouts, startDate, setBlocks, setBlackouts }: { 
   {rule && editing && <BlockedTimeEditor rule={rule} number={editing.index + 1} change={next => setBlackouts(blackouts.map((r, i) => i === editing.index ? next : r))} remove={() => { setBlackouts(blackouts.filter((_, i) => i !== editing.index)); setEditing(null); }} close={() => setEditing(null)} />}
   <div className="road-adds">
    <button type="button" className="btn ghost road-add" disabled={blocks.length >= 28} onClick={() => add(0)}><span aria-hidden="true">+ </span>Add study block</button>
-   <button type="button" className="btn ghost road-add" disabled={blackouts.length >= 366} onClick={addBlocked}><span aria-hidden="true">+ </span>Add Blockout Times</button>
+   <button type="button" className="btn ghost road-add" disabled={blackouts.length >= 366} onClick={addBlocked}><span aria-hidden="true">+ </span>Add blocked-out time</button>
   </div>
  </>;
 }
@@ -226,7 +226,7 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
   </> },
   { name: 'Session length', required: true, filled: config.preferred_session_minutes > 0, content: <p className="road-clause">in <NumberToken name="Preferred session in minutes" min={15} max={480} step={5} value={config.preferred_session_minutes} suffix="-minute" attached onChange={value => update({ preferred_session_minutes: Math.round(Number(value)) })} /> sessions,</p> },
   { name: 'Recurring study blocks', required: true, filled: config.blocks.length > 0, content: <>
-   <p className="road-clause">on these days each week:</p>
+   <p className="road-clause">mostly at these times each week:</p>
    <p className="small road-hint">These are your preferred study times. elo fills them first, then uses the overflow window if enabled. Blocked-out times are never used.</p>
    <div className="settings-field"><label><input type="checkbox" checked={!!config.allow_overflow} onChange={e=>update({allow_overflow:e.target.checked,overflow_start:config.overflow_start||'08:00',overflow_end:config.overflow_end||'22:00'})}/> Use extra time outside my preferred blocks</label>{config.allow_overflow&&<div className="row"><label>Overflow starts<input type="time" value={config.overflow_start||'08:00'} onChange={e=>update({overflow_start:e.target.value})}/></label><label>Overflow ends<input type="time" value={config.overflow_end||'22:00'} onChange={e=>update({overflow_end:e.target.value})}/></label></div>}</div>
    <StudyWeek blocks={config.blocks} blackouts={config.blackouts} startDate={start} setBlocks={blocks => update({ blocks })} setBlackouts={blackouts => update({ blackouts })} />

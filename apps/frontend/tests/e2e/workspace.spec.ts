@@ -106,8 +106,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.getByRole('heading',{name:'What elo will use'})).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/career-goal"]')).toBeVisible();
- await page.getByRole('tab',{name:'Starting point',exact:true}).click();
- await expect(page.getByRole('tabpanel',{name:'Starting point',exact:true})).toBeVisible();
+ await expect(page.getByRole('tab')).toHaveCount(0);
  expect(apiCalls.every(p=>p.startsWith('/api/v1/profile')||p==='/api/v1/roadmaps/workspace'||p==='/api/v1/career/goals/current'||p==='/api/v1/roadmaps/learning'||p.startsWith('/api/v1/jobs/')||(p==='/api/v1/cv'||p.startsWith('/api/v1/cv/')))).toBe(true);
  expect(apiCalls).toContain('/api/v1/cv/policy');
  // The sidebar stays beside content, and mobile navigation expands on demand.

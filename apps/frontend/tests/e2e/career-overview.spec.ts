@@ -44,7 +44,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.locator('.goal-skill-details:visible').getByText('Compare with your skills to see where you stand.',{exact:true})).toBeVisible();
  await expect(page.getByRole('status').filter({hasText:'Researching opportunity information'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
- await expect(page.getByRole('link',{name:/Upload my CV/})).toHaveAttribute('href','/cv');
+ await expect(page.getByRole('complementary',{name:'Your starting point'})).toHaveCount(0);
  await page.getByRole('navigation',{name:'Career goal pages'}).getByRole('link',{name:'About the role'}).click();
  await page.getByText('Eligibility and commitment',{exact:true}).click();
  await expect(page.getByText('Degree in a related discipline',{exact:false}).first()).toBeVisible();
@@ -72,7 +72,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
  expect(extractions).toBe(1);
  await page.reload();await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
- await page.getByRole('link',{name:/Upload my CV/}).click();
+ await page.getByRole('link',{name:'Compare with your skills'}).click();
  await expect(page).toHaveURL(/\/cv$/);
  await expect(page.getByRole('heading',{name:'Skills Profile',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();
@@ -105,9 +105,7 @@ test('research tabs keep partial results, citations and refresh on mobile',async
   return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',review:{review_id:'1'.repeat(24),version:1,target_type:'specific_job',extraction:goal,requirements_need_review:false},current:{selection_version:1,goal},research:null,coverage:[],error:null,retry_after:null})});
  });
  await page.goto('/career-goal');
- const cvSkills=page.getByRole('region',{name:'Your CV skills'});
- await expect(cvSkills.getByRole('heading',{name:'CV skills available'})).toBeVisible();
- await expect(cvSkills).not.toContainText(/assessed|assessment|evaluated/iu);
+ await expect(page.getByRole('complementary',{name:'Your starting point'})).toHaveCount(0);
  const tabs=page.getByRole('navigation',{name:'Career goal pages'});
  await tabs.getByRole('link',{name:'Interview preparation'}).click();
  await expect(page).toHaveURL(/\/career-goal\/interview$/);
@@ -144,7 +142,7 @@ test('the grouped skill list supports keyboard disclosure, long lists, confirmed
   return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',current:{selection_version:1,goal}})});
  });
  await page.setViewportSize({width:1440,height:1000});await page.goto('/career-goal');
- await expect(page.locator('.briefing-context-banner')).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Skills this role needs'})).toBeVisible();
  // Skills sit under category headings, most important group first, coloured by importance.
  const rows=page.locator('.goal-skill-row');
  await expect(rows).toHaveCount(9);

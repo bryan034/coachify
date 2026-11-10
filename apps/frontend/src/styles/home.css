@@ -194,3 +194,29 @@
 .home-stat-big{margin:10px 0 0;font-size:28px;font-weight:600;letter-spacing:-.02em}
 .home-board .home-card .home-link{margin-top:16px;align-self:flex-start;font-weight:600;color:var(--forest)}
 @media (max-width:980px){.home-grid-top{grid-template-columns:minmax(0,1fr)}}
+
+/* Grid repair: legacy span rules belong to the old 12-column grid, so cards size to the redesign columns. */
+.home-grid-top>*,.home-grid-bottom>*{grid-column:auto}
+.home-board .home-welcome{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.home-board .home-welcome h1{font-size:clamp(36px,3.8vw,52px)}
+.home-next-step{display:contents}
+.home-next-label,.home-step-bar{display:none}
+.home-next-why{font-size:16px;line-height:1.5;color:var(--home-on-dark);max-width:40ch}
+/* Phone: the greeting sits on the page; only the next step is dark (redesign "Home — mobile"). */
+@media (max-width:640px){
+ .home-board .home-welcome{display:block;min-height:0;margin-bottom:16px;padding:0;border-radius:0;background:none;color:var(--ink);overflow:visible}
+ .home-board .home-welcome .home-welcome-lede{margin-bottom:6px;color:var(--slate)}
+ .home-board .home-welcome h1{margin-bottom:16px;font-size:28px;letter-spacing:-.03em;color:var(--ink)}
+ .home-next-step{display:block;padding:22px;border-radius:20px;background:var(--ink);color:var(--white)}
+ .home-next-label{display:block;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--mint)}
+ .home-next-why{font-size:19px;font-weight:600;line-height:1.3;color:var(--white)}
+ .home-step-bar{display:flex;gap:4px;margin:14px 0 0;padding:0;list-style:none}
+ .home-step-bar li{flex:1;height:5px;border-radius:3px;background:color-mix(in srgb,var(--white) 18%,transparent)}
+ .home-step-bar li.is-done{background:var(--mint)}
+ .home-next-step .home-welcome-actions{margin-top:18px}
+ .home-next-step .home-welcome-actions .btn{flex:1 1 100%;justify-content:center;min-height:48px;border-radius:12px}
+ .home-next-step .home-welcome-actions>span{display:none}
+ .home-journey{display:none}
+ .home-match .home-match-legend,.home-match .home-chip:not([class*=match-]),.home-match>header>.home-link,.home-skills-count{display:none}
+ .home-big{font-size:34px}
+}

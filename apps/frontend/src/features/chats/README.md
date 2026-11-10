@@ -1,5 +1,5 @@
 # chats
 
-Chats & Socials previews expert conversations, the conversation network and socials. No backend exists for these, so they are labelled Coming soon and their actions are disabled.
+**Conversations** lists every saved chat with elo, newest first: CV reviews and Skills Profile chats (CV service), Explore careers sessions (Career service) and the Roadmap plan helper (Roadmap service). Each row names its kind and when it was last updated. The Career Goal chat has no saved time, so it is listed first. Data is read through each service's API.
 
-**Talk to elo today** links to the conversations that do exist: Career goal chat and Explore careers (Career service), Skills Profile chat (CV service) and the Roadmap helper (Roadmap service). It reads the current goal and saved roadmap messages through their APIs.
+**Socials** (peers and mentors) has no backend yet and is shown only as a "Socials are on the way" note.
