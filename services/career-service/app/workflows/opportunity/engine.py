@@ -25,7 +25,7 @@ from app.repositories.goals import GoalError,now,fingerprint
 from app.schemas.analysis import ResearchContext,ResearchSource,InterviewResearch,Generation
 from app.schemas.opportunity import CATEGORIES,FIELDS,CategoryResult,OpportunityReport,Summary
 from .store import OpportunityStore
-from .sources import pool,retain_useful
+from .sources import pool,retain_useful,merge_sources,category_sources
 from .queries import ACTIVITIES,planned_queries
 from app.domain.review import MAPPING_VERSION
 from .domain import whitespace,public_opportunity,validate_claims,summary_input,dedupe_findings,supported_claims
@@ -193,7 +193,7 @@ class OpportunityEngine:
                             if not retryable or attempt==self.settings.retries:raise
                             await asyncio.sleep(.5*2**attempt)
                     history.append(query)
-                    evidence=pool([s.model_dump(mode='json') for s in [*(sources or []),*evidence]])[:(self.settings.max_searches+1)*OPPORTUNITY_SOURCE_LIMIT]
+                    evidence=merge_sources([s.model_dump(mode='json') for s in evidence],[s.model_dump(mode='json') for s in (sources or [])])[:(self.settings.max_searches+1)*OPPORTUNITY_SOURCE_LIMIT]
                     await thread(self.store.update,job['_id'],job['worker_token'],**{f'evidence.{category}':[s.model_dump(mode='json') for s in evidence],f'history.{category}':history})
                 # Quota pauses resume the unfinished evaluation, not earlier successful ones.
                 if history[index] in evaluated:continue
@@ -263,8 +263,10 @@ class OpportunityEngine:
     async def quality(self,state):
         # Revalidate persisted branch values; missing citations can never reach summary/storage.
         job=await self.job(state);categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
-        sources={s.source_id:s for s in pool([s for values in job.get('retained_sources',job.get('evidence',{})).values() for s in values])}
         for key,result in categories.items():
+            # Each category is checked against its own saved sources only, so a page that another
+            # category also cites cannot have this category's quoted text merged away.
+            sources=category_sources(job,key)
             valid=[f for f in result.findings if all(s in sources and whitespace(q) in whitespace(sources[s].evidence or '') for s,q in zip(f.source_ids,f.quotes))]
             if len(valid)!=len(result.findings):
                 result.warnings=(result.warnings+['Some claims exceeded the bounded evidence budget.'])[:10]

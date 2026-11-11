@@ -33,3 +33,19 @@ def retain_useful(category,findings,sources,relevant_ids=()):
     chosen=max(combinations(candidates,min(OPPORTUNITY_SOURCE_LIMIT,len(candidates))),key=score)
     ids={s.source_id for s in chosen}
     return [f for f in findings if set(f.source_ids)<=ids],list(chosen)
+
+
+def merge_sources(saved,fresh):
+    """Add new results after saved ones so text a model has already cited keeps its place.
+
+    pool() appends a repeated URL's new text and then cuts at the excerpt limit. Listing saved
+    sources first means that cut can only remove the newest text, never an earlier cited passage.
+    """
+    return pool([*saved,*fresh])
+
+
+def category_sources(job,category):
+    """A category's own saved sources; a page shared with another category is never merged in."""
+    retained=job.get('retained_sources')
+    values=(retained.get(category) if retained is not None else None) or job.get('evidence',{}).get(category,[])
+    return {s.source_id:s for s in pool(values)}

@@ -90,6 +90,16 @@ export type OpportunityAvailabilityIssue='research_disabled'|'reasoning_disabled
 export type SavedQuestionResearch={research_id:string;research_version:number;focus:string;findings:IntelligenceFinding[];sources:ResearchSource[];updated_at:string};
 export type OpportunityView={available:boolean;availability_issues?:OpportunityAvailabilityIssue[];job_id:string|null;career_target_id:string;status:'pending'|'running'|'partial'|'completed'|'failed';finished?:boolean;historical?:boolean;question_research?:SavedQuestionResearch[];categories:Partial<Record<IntelligenceCategory,IntelligenceResult>>;sources?:ResearchSource[];summary?:IntelligenceSummary;research_id?:string|null;research_version?:number|null;updated_at?:string|null;error_code:string|null;retry_after?:number|null};
 
+export type PrepBasis='confirmed'|'candidate_report'|'prediction';
+export type InterviewPrepGuide={goal_id:string;goal_version:number;research_id:string|null;generated_at:string;interview_date:string|null;
+ role:string[];success:string[];process:{round:number|null;name:string;format:string[];basis:PrepBasis;source_ids:string[]}[];
+ resume:{competency:string;skill:string|null;signals:string[];status:'strength'|'partial'|'gap'}[];
+ syllabus:{name:string;priority:'high'|'medium'|'low';depth:'awareness'|'working'|'deep';terms:string[];basis:PrepBasis;source_ids:string[]}[];
+ company:{model:string[];products:string[];customers:string[];competitors:string[];risks:string[]};
+ questions:{text:string;kind:'behavioural'|'technical'|'case'|'ask';basis:PrepBasis;source_ids:string[]}[];
+ schedule:{when:string;focus:string[]}[];sources:{source_id:string;url:string;title:string|null}[];not_covered:string[]};
+export type InterviewPrepView={status:'ready'|'missing';guide:InterviewPrepGuide|null};
+
 export type WorkspaceProgress=Pick<CareerWorkspace,'session_id'|'phase'|'revision'|'activities'|'error'|'error_code'|'retry_after'|'limit_scope'|'provider'|'research_id'|'edit_question'>&{goal_id:string|null;selection_version:number;result_version:string|null;categories?:Partial<Record<IntelligenceCategory,{status:IntelligenceResult['status'];error_code:string|null}>>};
 export async function refreshWorkspace(previous:CareerWorkspace,token:string,signal:AbortSignal):Promise<CareerWorkspace>{
  const progress=await careerApi<WorkspaceProgress>('/workspace/progress',token,{signal});

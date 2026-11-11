@@ -419,3 +419,13 @@ A round is kept only when its selected passage names it (or states its number wi
 Other categories cannot carry rounds, and their decoding schema omits the fields. The same
 fact in two rounds stays two findings. Prompt version `opportunity-structured-findings-v4`.
 Saved reports without rounds remain valid and display as process-wide facts until refreshed.
+
+## Source merging and the quality recheck — 11 November 2026
+
+A page returned by a later search is merged after the text already saved for it, so a passage a
+finding has cited keeps its place when the merged text is cut at the excerpt limit
+(`merge_sources`). The final quality recheck compares each finding's quote with that
+category's own saved sources only (`category_sources`), so a page also cited by another
+category cannot have this category's quoted text merged away. The word-for-word quote and number
+checks themselves are unchanged. Reports already saved with a `validation_failed` category keep
+their surviving findings until research is refreshed.

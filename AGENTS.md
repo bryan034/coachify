@@ -2,15 +2,21 @@
 
 ## Working rules
 
-- Use the current checkout. Read the root README and relevant service documentation, specifications and API contracts; verify implementation in code.
+- Use the current checkout. Start with the root README; follow only documentation, specifications and API contracts relevant to the task. Verify implementation in code.
 - Check Git status and branch before editing. Preserve unrelated contributors’ changes. Never push directly to `main`; if on `main`, suggest a new branch and make implementation changes on a separate branch.
 - Follow the requested scope and existing conventions. Avoid unrelated refactoring or dependencies. Discuss material architecture changes, breaking APIs and destructive migrations before proceeding unless already authorised.
-- Keep product requirements in Jira/specifications, not this file. Do not invent requirements or present placeholders as implemented features.
+- Follow the user's request and relevant specifications. Do not invent requirements or present placeholders as implemented features.
+
+## Keeping context small
+
+- Keep this file concise: include only durable repository-specific rules, essential commands, navigation links, architecture and safety constraints, and verification requirements that are hard to infer from code.
+- Link to detailed documentation instead of copying it. Keep product requirements, feature status, schemas and endpoint catalogues in their existing specifications and service documents.
+- Read focused sections and files as needed; avoid loading unrelated documentation or whole directories. Add commands here only after verifying them in the repository.
 
 ## Architecture and safety
 
 - Stack: Next.js/React/TypeScript, FastAPI services, NGINX, MongoDB and Docker. Follow [service boundaries](docs/architecture/service-boundaries.md).
-- Before building CV, JD/skills-analysis or roadmap features, read the [MongoDB collections](docs/architecture/diagrams/mongodb_collections_uml.mmd), [embedded objects](docs/architecture/diagrams/mongodb_embedded_objects_uml.mmd) and [three-service architecture](docs/architecture/diagrams/dockerised-mvp.puml). Reconcile them with Jira and service contracts; keep the diagrams current as services are added.
+- For CV, JD/skills-analysis or roadmap changes, consult relevant sections of the [collections](docs/architecture/diagrams/mongodb_collections_uml.mmd), [embedded objects](docs/architecture/diagrams/mongodb_embedded_objects_uml.mmd) and [service architecture](docs/architecture/diagrams/dockerised-mvp.puml) diagrams. Reconcile with code and service contracts; update affected diagrams when services change.
 - Keep domain logic in backend services. Access another service’s data through its API, never its database. Keep schemas, contracts and frontend types consistent.
 - Enforce authentication, ownership and input validation in the backend. Handle failures, retries and concurrent updates without losing data.
 - Centralise all user-configurable deployment variables in `infrastructure/docker/.env`. Document every active variable in `infrastructure/docker/.env.example` with safe defaults and blank secrets; update this template and the relevant Compose injection whenever configuration changes. Do not introduce root-level or service-specific environment files. Fixed internal service wiring stays in Compose; inject each setting only into the services that need it.
@@ -20,14 +26,14 @@
 
 ## Documentation
 
-- Review relevant documentation each task and update it before finishing when behaviour, endpoints, configuration or implementation status changes. Fix affected links.
+- Update affected documentation and links when behaviour, endpoints, configuration or implementation status changes.
 - Keep `docs/` application-wide. Do not recreate `docs/development/` or Postman collections. Service-specific specifications belong in the service folder.
-- Keep each service README short: start with its purpose, then explain available endpoints grouped by Jira stories. Clearly label unimplemented features; do not invent endpoint paths.
+- Keep service READMEs short: purpose, then available endpoints grouped by capability. Label unimplemented features; do not invent endpoint paths.
 - Keep `docs/api/README.md` to a brief prefix → purpose → service-folder map, including implementation status. Keep detailed schemas in `contracts/api/`; avoid duplicate endpoint catalogues.
 
-## Jira
+## Jira (only when explicitly requested)
 
-- Access only `coachifyy.atlassian.net`, project `SCRUM`. Read the relevant story, acceptance criteria and subtasks before story work.
+- Consult Jira only when the user explicitly requests Jira work. Access only `coachifyy.atlassian.net`, project `SCRUM`.
 - Preserve identifiers and Epic → Story → Subtask parents. Avoid duplicates; change sprints, assignees or status only when authorised.
 
 ## Verification

@@ -28,6 +28,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  };
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/interview-prep'))return route.fulfill({json:{status:'missing',guide:null}});
   if(path.endsWith('/context/assessment'))return route.fulfill({json:careerFixture(route.request().url(),{status:'no_cv',cv_uploaded:false,skills_evaluated:false})});
   if(path.endsWith('/workspace/jd')){extractions++;currentRole='Data Engineer';return route.fulfill({json:careerFixture(route.request().url(),state())});}
   if(path.endsWith('/workspace/messages')){edits++;return route.fulfill({json:careerFixture(route.request().url(),{reply:edits===1?'Which part would you like to change: your role, skills or location?':'Your goal has been updated.',edit_status:'clarifying'})});}
@@ -97,6 +98,7 @@ test('research tabs keep partial results, citations and refresh on mobile',async
  let refreshed='';
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/interview-prep'))return route.fulfill({json:{status:'missing',guide:null}});
   if(path.endsWith('/context/assessment'))return route.fulfill({json:careerFixture(route.request().url(),{status:'evaluated',cv_uploaded:true,skills_evaluated:true})});
   if(path.endsWith('/opportunity-research')){
    if(route.request().method()==='POST')refreshed=route.request().postDataJSON().category;
@@ -109,6 +111,7 @@ test('research tabs keep partial results, citations and refresh on mobile',async
  const tabs=page.getByRole('navigation',{name:'Career goal pages'});
  await tabs.getByRole('link',{name:'Interview preparation'}).click();
  await expect(page).toHaveURL(/\/career-goal\/interview$/);
+ await page.getByText('Full research and sources',{exact:true}).click();
  await expect(page.getByText('Part of this research could not finish. Other results are preserved; refresh to retry.')).toBeVisible();
  await tabs.getByRole('link',{name:'About the role'}).click();
  const salary=page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Salary',exact:true})});
@@ -136,6 +139,7 @@ test('the grouped skill list supports keyboard disclosure, long lists, confirmed
  const longTitle='Ability to learn quickly, investigate failure modes, and iterate based on evidence and user feedback';
  await page.route('**/api/v1/career/**',route=>{
   const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/interview-prep'))return route.fulfill({json:{status:'missing',guide:null}});
   if(path.endsWith('/context/assessment'))return route.fulfill({json:{status:'not_evaluated',cv_uploaded:true,skills_evaluated:false}});
   if(path.endsWith('/cv-confirmation'))return route.fulfill({json:{goal_id:'111111111111111111111111',goal_version:1,selection_version:1,confirmed:true,context:{id:'111111111111111111111111',version:1,selection_version:1,confirmed:true},reason:null}});
   const goal={_id:'111111111111111111111111',version:1,role:'Product Manager',field:'Product',target_type:'specific_job',skills:Array.from({length:count},(_,i)=>({item_id:`skill-${i}`,name:i===0?longTitle:`Product skill ${i}`,category:i%2?'AI':'Product Management',priority:i<6?'required':'preferred',origin:'employer',context:'Investigate product outcomes using evidence.',evidence:'Learn from user feedback.'}))};
