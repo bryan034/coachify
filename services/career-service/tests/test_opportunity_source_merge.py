@@ -35,6 +35,20 @@ def test_a_page_shared_with_another_category_keeps_each_categorys_full_text():
     assert 'COMPANY-QUOTE' in own and 'INTERVIEW-QUOTE' not in own
 
 
+def test_followup_pages_lead_evaluation_without_replacing_saved_page_text():
+    saved=long_text('SAVED-CITATION',OPPORTUNITY_EXCERPT_LIMIT-500)
+    fresh=long_text('FRESH-EXCERPT',OPPORTUNITY_EXCERPT_LIMIT-500)
+    merged=merge_sources([source(saved),source('Earlier result.',URL+'/old')],
+        [source('Follow-up result.',URL+'/new'),source(fresh)])
+    assert [s.url for s in merged]==[URL+'/new',URL,URL+'/old']
+    assert saved in merged[1].evidence
+    assert len(merged[1].evidence)<=OPPORTUNITY_EXCERPT_LIMIT
+    # Reloading a checkpoint must retain both evaluation order and the original quote.
+    restored=pool([s.model_dump(mode='json') for s in merged])
+    assert [s.url for s in restored]==[s.url for s in merged]
+    assert saved in restored[1].evidence
+
+
 def test_category_sources_fall_back_to_unevaluated_evidence_and_unknown_categories():
     job={'evidence':{'interview_intelligence':[source('Round one is a case study.')]}}
     assert 'case study' in list(category_sources(job,'interview_intelligence').values())[0].evidence

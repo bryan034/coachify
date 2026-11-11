@@ -54,6 +54,8 @@ Opportunity requests consider 30 results and return at most three URLs per query
 Weak coverage can trigger a focused follow-up within the existing two-search default.
 Candidate evidence remains checkpointed; final categories retain at most three useful
 sources selected by validated field coverage, role match, confidence and source type.
+Follow-up URLs lead the next evaluation, including after quota/restart recovery.
+Repeated URLs preserve saved excerpt text before appending new text within the excerpt limit.
 Relevant sources with absent facts are distinguished from irrelevant search results.
 Other research workflows retain their existing six-URL request limit.
 Requests use 8,192 total context tokens, 2,048 per URL,

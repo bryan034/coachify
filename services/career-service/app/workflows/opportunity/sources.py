@@ -36,12 +36,16 @@ def retain_useful(category,findings,sources,relevant_ids=()):
 
 
 def merge_sources(saved,fresh):
-    """Add new results after saved ones so text a model has already cited keeps its place.
+    """Present fresh URLs first while preserving previously cited text within each page.
 
     pool() appends a repeated URL's new text and then cuts at the excerpt limit. Listing saved
     sources first means that cut can only remove the newest text, never an earlier cited passage.
+    Reorder the merged pages afterwards so follow-up evaluation prioritises new results;
+    this order is also checkpointed for quota/restart retries.
     """
-    return pool([*saved,*fresh])
+    merged=pool([*saved,*fresh])
+    priority={s.source_id:index for index,s in enumerate(pool(fresh))}
+    return sorted(merged,key=lambda s:priority.get(s.source_id,len(priority)))
 
 
 def category_sources(job,category):
