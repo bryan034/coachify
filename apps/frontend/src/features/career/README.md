@@ -138,10 +138,21 @@ Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview
   Partial, Gap or Unknown status. Expanding a skill shows why it matters, its importance
   source, the competence bar and the "What you need" learning items. Job-description quotes
   are not shown in skill cards. Long lists start with ten skills.
-- Interview preparation leads with up to four process-wide headline facts, then one
-  expandable card per researched round with questions to expect, how to prepare and sources.
-  Fewer rounds are shown when sources describe fewer; with no round data it says so.
-- About the role shows eligibility and work from the goal, then one sourced card per field the
-  research found; fields with nothing found are hidden.
+- Interview preparation is always shown, never inside a disclosure: the Stages, Timeline and
+  Difficulty tiles, then one always-open card per researched round with questions to expect,
+  how to prepare and sources (with no round data, those slots cover the whole process).
+- About the role always shows eligibility, work and every role topic (salary, benefits,
+  projects, mentorship, hours, progression, conversion and culture), as bullets, not
+  extracted paragraphs. Sourced cards are condensed by an AI digest
+  (`/goals/{id}/role-summary`) into one to five cited bullets marked "Summarised by AI from
+  the sources"; until then, or if it fails, each item is split into one bullet per sentence.
+  Confidence and conflict flags sit beside their bullet; sources are listed once per card.
+- Every field the sources leave empty is written by the AI once research settles
+  (`/interview-prep` for interview slots and tiles, the `generated` cards of `/role-summary`
+  for role topics). Each such field carries a small orange warning icon, explained by a legend
+  under the accuracy warning ("made by an AI model based on the context it was provided, and
+  not found in any sources"). The legend replaced the grey research-outcome banners. A field
+  reads "Not filled yet" only while generating fails. The keyword-only "Interview prep" guide
+  card was removed on 11 November 2026.
 - Both research tabs carry the accuracy warning. The per-finding quote disclosure and the
   per-category refresh buttons were removed; refresh covers the tab's research.

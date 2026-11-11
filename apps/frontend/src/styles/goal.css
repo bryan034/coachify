@@ -210,11 +210,8 @@
 .rounds-title{margin:8px 0 4px;font-size:17px;font-weight:600}
 .rounds{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
 .round{border:1px solid var(--line);border-radius:14px;background:var(--white)}
-.round.open{border-color:var(--ink)}
-.round-head{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:32px minmax(0,1fr) 20px;gap:14px;align-items:center;padding:14px 16px;cursor:pointer;min-height:44px}
-.round-head:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:14px}
+.round-head{display:grid;grid-template-columns:32px minmax(0,1fr);gap:14px;align-items:center;padding:14px 16px;min-height:44px}
 .round-head .small{display:block}
-.round.open .round-head svg{transform:rotate(180deg)}
 .round-num{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--white);font-weight:600}
 .round-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;padding:0 16px 16px 62px}
 .round-list{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
@@ -267,15 +264,16 @@
 .role-card>p,.role-card li>p:first-child{font-size:15px;line-height:1.5;color:var(--ink)}
 .briefing-sources a{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--mint-mist);font-size:12px;font-weight:600;color:var(--forest);text-decoration:none}
 .career-briefing .goal-header .briefing-target-meta{text-transform:none}
-.prep-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
-.prep-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-.prep-actions input{margin-left:6px;padding:6px 8px;border:1px solid var(--line);border-radius:8px}
-.prep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:14px}
-.prep-group{margin-top:16px}.prep-group h3{margin:0 0 6px;font-size:15px;font-weight:600}
-.prep-chips{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
-.prep-chips li{padding:3px 10px;border:1px solid var(--line);border-radius:999px;background:var(--snow);font-size:13px}
-.prep-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.prep-rows li{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.prep-basis,.prep-priority,.prep-fit{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--slate)}
-.prep-basis.is-confirmed,.prep-fit.is-strength{color:var(--forest)}
-.prep-priority.is-high,.prep-fit.is-gap{color:var(--ink);border-color:var(--ink)}
+.round-body.is-process{padding:14px 0 0}
+.fact-tile.is-empty strong,.not-filled{color:var(--slate);font-weight:500}
+.role-bullets{margin:0;padding-left:18px;display:grid;gap:6px;font-size:14.5px;line-height:1.5;color:var(--ink)}
+.role-bullets li::marker{color:var(--forest)}
+.role-bullets .finding-flag{margin-left:6px}
+.role-card-note{margin:0;color:var(--slate)}
+/* AI-made marker and legend: a deeper orange than the amber research warning. */
+.ai-made{display:inline-grid;place-items:center;width:18px;height:18px;margin-left:6px;border-radius:50%;background:#ffedd5;color:#c2410c;vertical-align:-3px;text-transform:none}
+.ai-made svg{width:11px;height:11px}
+.ai-made-legend{display:flex;gap:10px;align-items:center;margin:-8px 0 20px;padding:12px 14px;border-radius:12px;background:#ffedd5;color:#9a3412;font-size:13px}
+.ai-made-legend .ai-made{margin:0;background:#fff7ed;flex:none}
+.fact-tile.is-ai-made,.role-card.is-ai-made{border-color:#fed7aa}
+.role-card>p.role-card-note,.role-card>p.not-filled{font-size:12.5px;line-height:1.4;color:var(--slate)}

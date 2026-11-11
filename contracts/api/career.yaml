@@ -2356,7 +2356,7 @@
     "/api/v1/career/goals/{goal_id}/interview-prep": {
       "get": {
         "tags": [
-          "Interview preparation guide"
+          "Interview preparation suggestions"
         ],
         "summary": "Read",
         "operationId": "read_api_v1_career_goals__goal_id__interview_prep_get",
@@ -2399,7 +2399,7 @@
       },
       "post": {
         "tags": [
-          "Interview preparation guide"
+          "Interview preparation suggestions"
         ],
         "summary": "Generate",
         "operationId": "generate_api_v1_career_goals__goal_id__interview_prep_post",
@@ -2424,7 +2424,105 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PrepCommand"
+                "$ref": "#/components/schemas/SuggestCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/career/goals/{goal_id}/role-summary": {
+      "get": {
+        "tags": [
+          "About the role summary"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_career_goals__goal_id__role_summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "About the role summary"
+        ],
+        "summary": "Generate",
+        "operationId": "generate_api_v1_career_goals__goal_id__role_summary_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryCommand"
               }
             }
           }
@@ -7831,24 +7929,12 @@
         ],
         "title": "WorkspaceView"
       },
-      "PrepCommand": {
+      "SuggestCommand": {
         "properties": {
           "expected_version": {
             "type": "integer",
             "minimum": 1.0,
             "title": "Expected Version"
-          },
-          "interview_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Interview Date"
           },
           "refresh": {
             "type": "boolean",
@@ -7861,7 +7947,27 @@
         "required": [
           "expected_version"
         ],
-        "title": "PrepCommand"
+        "title": "SuggestCommand"
+      },
+      "SummaryCommand": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "SummaryCommand"
       }
     },
     "securitySchemes": {

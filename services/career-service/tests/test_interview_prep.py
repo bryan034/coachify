@@ -1,36 +1,28 @@
-"""Keyword-only interview guide: gating, evidence labels, provenance and planning (synthetic data)."""
+"""AI fills for empty interview slots: gap detection, provenance limits, persistence and routes (synthetic data)."""
 import asyncio
 import json
-from datetime import date
 from types import SimpleNamespace as NS
 import pytest
-from pydantic import ValidationError
 from app.ai.adapter import AIError
-from app.ai.interview_prep import PrepKeywords,prep_schema
+from app.ai.interview_prep import PrepSuggestions,prep_schema
 from app.repositories.goals import GoalError
-from app.schemas.interview_prep import Keyword,Stage
 from app.workflows import interview_prep as prep
 
 
-def finding(value,evidence_type,source='s1',round_number=None,field='recruitment_stages'):
-    return NS(field=field,value=value,evidence_type=evidence_type,scope='exact',round_number=round_number,round_name=None,source_ids=[source])
+def finding(field,value,round_number=None,round_name=None):
+    return NS(field=field,value=value,evidence_type='candidate_reported',scope='exact',round_number=round_number,round_name=round_name,source_ids=['s1'])
 
 
-def record():
-    categories={'interview_intelligence':NS(findings=[finding('Online assessment then panel','official',round_number=1),
-                                                       finding('Case study reported','candidate_reported','s2',2)]),
-                'company_intelligence':NS(findings=[])}
-    return NS(id='r1',sources=[NS(source_id='s1',url='https://example.test/careers',title='Careers'),
-                               NS(source_id='s2',url='https://example.test/report',title='Report')],intelligence=NS(categories=categories))
+def record(findings=None,research_id='r1'):
+    if findings is None:
+        findings=[finding('round_format','Online assessment',1,'Online assessment'),finding('interview_questions','Explain a SQL join',1),
+                  finding('round_format','Panel',2,'Final panel'),finding('preparation_topics','Review past projects',2)]
+    return NS(id=research_id,sources=[],intelligence=NS(categories={'interview_intelligence':NS(findings=findings)}))
 
 
-def goal(target='specific_job'):
-    return NS(id='g1',version=3,target_type=target,role='Analyst',company='Example',field='Data',location='Singapore',seniority_level=None,
-              employment_type='internship',source_cv_id=None,responsibilities=['Build dashboards'],skills=[NS(name='SQL',priority='required',category='Data')])
-
-
-def cv():
-    return NS(skills=[NS(name='SQL',experience_months=12,context='Reporting database queries')])
+def goal(version=3):
+    return NS(id='a'*24,version=version,target_type='specific_job',role='Analyst',company='Example',field='Data',location='Singapore',seniority_level=None,
+              employment_type='internship',responsibilities=['Build dashboards'],skills=[NS(name='SQL',priority='required',category='Data')])
 
 
 class Collection:
@@ -39,133 +31,113 @@ class Collection:
     def find_one(self,query):return self.rows.get(query['_id'])
 
 
-def request(output):
+def request(output,saved=None):
     calls=[]
     async def generate(req,operation,**kwargs):
         calls.append(req)
         kwargs['validate_output'](output)
         return NS(data=output)
-    saved=goal()
-    store=NS(current=lambda owner:{'goal':saved},goals=NS(database={'interview_prep_guides':Collection()}))
+    saved=saved or goal()
+    store=NS(current=lambda owner:{'goal':saved},goals=NS(database={'interview_prep_suggestions':Collection()}))
     return NS(app=NS(state=NS(ai=NS(generate=generate,context_enabled=True),goal_store=store))),calls
 
 
+def fills(*items):
+    return PrepSuggestions.model_validate({'fills':[{'round_number':n,'field':f,'items':v} for n,f,v in items]})
+
+
 def good():
-    return PrepKeywords.model_validate({'role':['SQL','Dashboards'],'success':['Accuracy'],
-        'process':[{'round':2,'name':'Case study','format':['case'],'refs':['research_1']},
-                   {'round':1,'name':'Online assessment','format':['timed'],'refs':['research_0']}],
-        'resume':[{'competency':'Data querying','skill':'SQL','signals':['Reporting']},{'competency':'Stakeholder mgmt','skill':None}],
-        'syllabus':[{'name':'Statistics','priority':'low','depth':'awareness','terms':['Mean']},
-                    {'name':'SQL joins','priority':'high','depth':'deep','terms':['INNER','LEFT'],'refs':['research_0']}],
-        'questions':[{'text':'Why this company?','kind':'behavioural'}]})
+    return fills((1,'preparation_topics',['Practise timed SQL problems','Practise timed SQL problems']),
+                 (2,'interview_questions',['Why this team?']))
 
 
 def run(coro):return asyncio.run(coro)
 
 
-def test_keywords_reject_sentences_and_long_phrases():
-    for bad in ('Tell me about a time you led a team','Ends with a stop.'):
-        with pytest.raises(ValidationError):Stage(name=bad,basis='prediction')
-    assert Stage(name='Case study',basis='prediction').name=='Case study'
+def test_gaps_are_the_empty_slots_of_each_sourced_round():
+    gaps=prep.find_gaps(record().intelligence.categories['interview_intelligence'].findings)
+    assert [(g.round_number,g.round_name,g.field) for g in gaps]==[(None,None,'recruitment_stages'),(None,None,'application_timeline'),(None,None,'difficulty'),
+        (1,'Online assessment','preparation_topics'),(2,'Final panel','interview_questions')]
 
 
-def test_guide_labels_evidence_from_stored_findings_not_the_model():
+def test_without_rounds_the_whole_process_is_filled():
+    assert [g.field for g in prep.find_gaps([])]==['recruitment_stages','application_timeline','difficulty','interview_questions','preparation_topics']
+    general=[finding('interview_questions','Tell me about yourself'),finding('difficulty','Moderate'),finding('recruitment_stages','Two stages'),finding('application_timeline','Four weeks')]
+    assert [(g.round_number,g.field) for g in prep.find_gaps(general)]==[(None,'preparation_topics')]
+
+
+def test_suggestions_fill_only_gaps_and_drop_duplicates():
     req,calls=request(good())
-    guide=run(prep.generate(req,'owner',goal(),record(),cv(),date(2026,11,20),today=date(2026,11,11)))
-    assert [(s.round,s.basis) for s in guide.process]==[(1,'confirmed'),(2,'candidate_report')]
-    assert [t.name for t in guide.syllabus]==['SQL joins','Statistics']  # high priority first
-    assert guide.syllabus[0].basis=='confirmed' and guide.syllabus[1].basis=='prediction'
-    assert guide.questions[0].basis=='prediction'
-    assert [(r.skill,r.status) for r in guide.resume]==[('SQL','strength'),(None,'gap')]
-    assert {s.source_id for s in guide.sources}=={'s1','s2'}
-    assert 'recent news' in guide.not_covered
+    result=run(prep.generate(req,'owner',goal(),record()))
+    assert [(s.round_number,s.field,s.value) for s in result.items]==[(1,'preparation_topics','Practise timed SQL problems'),(2,'interview_questions','Why this team?')]
     assert calls[0].stage=='interview_prep'
     sent=json.loads(calls[0].context)
-    assert 'owner' not in calls[0].context and sent['cv'][0]['name']=='SQL'
+    assert 'owner' not in calls[0].context and len(sent['gaps'])==5 and sent['research'][1]['value']=='Explain a SQL join'
 
 
-def test_guide_is_saved_per_goal_version():
-    req,_=request(good())
-    run(prep.generate(req,'owner',goal(),record(),cv(),None))
-    assert run(prep.read_saved(req,'owner',goal())).goal_version==3
-    other=goal();other.version=4
-    assert run(prep.read_saved(req,'owner',other)) is None
-
-
-def test_exploration_goals_are_rejected():
-    req,_=request(good())
-    with pytest.raises(GoalError) as error:run(prep.generate(req,'owner',goal('career_exploration'),record(),cv(),None))
-    assert error.value.status==409
-
-
-def test_unknown_reference_unknown_skill_and_invented_numbers_are_rejected():
-    for patch,issue in (({'process':[{'name':'Case','refs':['research_9']}]},'unknown_research_reference'),
-                        ({'resume':[{'competency':'Python','skill':'Python'}]},'unknown_cv_skill'),
-                        ({'role':['Led 40 engineers']},'unsupported_number')):
-        req,_=request(PrepKeywords.model_validate(patch))
-        with pytest.raises(AIError) as error:run(prep.generate(req,'owner',goal(),record(),cv(),None))
+def test_unrequested_slots_and_multi_value_headlines_are_rejected():
+    for output,issue in ((fills((1,'interview_questions',['Explain joins'])),'unrequested_gap'),
+                         (fills((None,'difficulty',['Likely moderate','Likely hard'])),'one_item_expected')):
+        req,_=request(output)
+        with pytest.raises(AIError) as error:run(prep.generate(req,'owner',goal(),record()))
         assert error.value.violations[0]['issue']==issue
 
 
-def test_schedule_uses_days_left_or_a_default_week():
-    topics=[NS(name='SQL',priority='high'),NS(name='Stats',priority='low')]
-    process=[NS(name='Panel')];resume=[NS(competency='Data',status='strength')]
-    dated=prep.make_schedule(topics,process,resume,date(2026,11,11),date(2026,11,20))
-    assert dated[0].when=='Nov 11' and dated[-1].focus[0]=='Final review' and len(dated)==6
-    today_only=prep.make_schedule(topics,process,resume,date(2026,11,11),date(2026,11,11))
-    assert len(today_only)==1 and today_only[0].focus[0]=='Final review'
-    default=prep.make_schedule(topics,process,resume,date(2026,11,11),None)
-    assert default[0].when=='Day 1'
+def test_no_gaps_skips_the_model_and_saves_per_goal_version_and_research():
+    complete=[finding('interview_questions','Q',1),finding('preparation_topics','P',1),*(finding(f,'Known') for f in ('recruitment_stages','application_timeline','difficulty'))]
+    req,calls=request(good())
+    result=run(prep.generate(req,'owner',goal(),record(complete)))
+    assert result.items==[] and not calls
+    assert run(prep.read_saved(req,'owner',goal(),record(complete))) is not None
+    assert run(prep.read_saved(req,'owner',goal(4),record(complete))) is None
+    assert run(prep.read_saved(req,'owner',goal(),record(complete,'r2'))) is None
 
 
-def test_provider_schema_binds_refs_and_cv_skills_to_this_snapshot():
-    schema=prep_schema({'research':[{'ref':'research_0'}],'cv':[{'name':'SQL'}]})
-    assert schema['$defs']['PrepStage']['properties']['refs']['items']['enum']==['research_0']
-    assert schema['$defs']['PrepResume']['properties']['skill']['anyOf'][0]['enum']==['SQL']
-    empty=prep_schema({'research':[],'cv':[]})
-    assert empty['$defs']['PrepTopic']['properties']['refs']['maxItems']==0
+def test_provider_schema_binds_rounds_and_fields_to_the_gaps():
+    schema=prep_schema({'gaps':[{'round_number':2,'field':'interview_questions'}]})
+    fill=schema['$defs']['GapFill']['properties']
+    assert fill['round_number']=={'anyOf':[{'type':'integer','enum':[2]}]} and fill['field']['enum']==['interview_questions']
+    general=prep_schema({'gaps':[{'round_number':None,'field':'preparation_topics'}]})
+    assert general['$defs']['GapFill']['properties']['round_number']=={'anyOf':[{'type':'null'}]}
 
 
-
-def client(output,target='specific_job'):
+def client(output,job):
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
     from fastapi.testclient import TestClient
     from app.api.v1.goals import owner
     from app.api.v1.interview_prep import router
     req,calls=request(output)
-    saved=goal(target);saved.id='a'*24
-    req.app.state.goal_store.current=lambda account:{'goal':saved}
-    req.app.state.opportunities=NS(store=NS(latest=lambda *a:{'research_id':'r1'},research=NS(records=NS(get_research=lambda i:record()))))
+    req.app.state.opportunities=NS(store=NS(latest=lambda *a:job,research=NS(records=NS(get_research=lambda i:record()))))
     app=FastAPI();app.include_router(router);app.state=req.app.state
     app.dependency_overrides[owner]=lambda:'owner'
     @app.exception_handler(GoalError)
     async def goal_error(request,error):return JSONResponse({'detail':error.message},error.status)
-    return TestClient(app),calls,saved
+    return TestClient(app),calls
 
 
-def without_cv():
-    data=good().model_dump()
-    data['resume']=[{'competency':'Data querying','skill':None,'signals':[]}]
-    return PrepKeywords.model_validate(data)
+PATH=f'/api/v1/career/goals/{"a"*24}/interview-prep'
 
 
-def test_route_generates_once_then_serves_the_saved_guide():
-    http,calls,goal_=client(without_cv())
-    path=f'/api/v1/career/goals/{goal_.id}/interview-prep'
-    assert http.get(path).json()=={'status':'missing','guide':None}
-    first=http.post(path,json={'expected_version':3,'interview_date':'2026-11-20'})
-    assert first.status_code==200 and first.json()['guide']['process'][0]['basis']=='confirmed'
-    again=http.post(path,json={'expected_version':3,'interview_date':'2026-11-20'})
-    assert again.json()['status']=='ready' and len(calls)==1
-    http.post(path,json={'expected_version':3,'interview_date':'2026-11-20','refresh':True})
-    assert len(calls)==2 and http.get(path).json()['status']=='ready'
+def test_estimates_with_numbers_are_allowed_because_they_are_labelled_ai_made():
+    req,_=request(fills((None,'application_timeline',['Typically 3 to 6 weeks from application to offer'])))
+    result=run(prep.generate(req,'owner',goal(),record()))
+    assert result.items[0].value.startswith('Typically 3')
 
 
-def test_route_refuses_exploration_goals_and_stale_versions():
-    http,calls,goal_=client(good(),'career_exploration')
-    path=f'/api/v1/career/goals/{goal_.id}/interview-prep'
-    assert http.get(path).status_code==409 and http.post(path,json={'expected_version':3}).status_code==409
-    http,calls,goal_=client(good())
-    path=f'/api/v1/career/goals/{goal_.id}/interview-prep'
-    assert http.post(path,json={'expected_version':2}).status_code==409 and not calls
+def test_route_generates_once_then_serves_the_saved_suggestions():
+    http,calls=client(good(),{'research_id':'r1','finished':True})
+    assert http.get(PATH).json()=={'status':'missing','suggestions':None}
+    first=http.post(PATH,json={'expected_version':3})
+    assert first.status_code==200 and first.json()['suggestions']['research_id']=='r1'
+    assert http.post(PATH,json={'expected_version':3}).json()['status']=='ready' and len(calls)==1
+    http.post(PATH,json={'expected_version':3,'refresh':True})
+    assert len(calls)==2 and http.get(PATH).json()['status']=='ready'
+
+
+def test_route_waits_for_research_and_refuses_stale_versions():
+    http,calls=client(good(),{'research_id':'r1','finished':False})
+    assert http.get(PATH).json()['status']=='researching'
+    assert http.post(PATH,json={'expected_version':3}).status_code==409 and not calls
+    http,calls=client(good(),{'research_id':'r1','finished':True})
+    assert http.post(PATH,json={'expected_version':2}).status_code==409 and not calls

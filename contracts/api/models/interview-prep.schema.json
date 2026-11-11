@@ -1,220 +1,9 @@
 {
   "$defs": {
-    "CompanyKeywords": {
+    "Gap": {
       "additionalProperties": false,
       "properties": {
-        "model": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 6,
-          "title": "Model",
-          "type": "array"
-        },
-        "products": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 6,
-          "title": "Products",
-          "type": "array"
-        },
-        "customers": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 6,
-          "title": "Customers",
-          "type": "array"
-        },
-        "competitors": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 6,
-          "title": "Competitors",
-          "type": "array"
-        },
-        "risks": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 6,
-          "title": "Risks",
-          "type": "array"
-        }
-      },
-      "title": "CompanyKeywords",
-      "type": "object"
-    },
-    "GuideSource": {
-      "additionalProperties": false,
-      "properties": {
-        "source_id": {
-          "title": "Source Id",
-          "type": "string"
-        },
-        "url": {
-          "title": "Url",
-          "type": "string"
-        },
-        "title": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Title"
-        }
-      },
-      "required": [
-        "source_id",
-        "url"
-      ],
-      "title": "GuideSource",
-      "type": "object"
-    },
-    "Question": {
-      "additionalProperties": false,
-      "properties": {
-        "text": {
-          "maxLength": 90,
-          "minLength": 3,
-          "title": "Text",
-          "type": "string"
-        },
-        "kind": {
-          "enum": [
-            "behavioural",
-            "technical",
-            "case",
-            "ask"
-          ],
-          "title": "Kind",
-          "type": "string"
-        },
-        "basis": {
-          "enum": [
-            "confirmed",
-            "candidate_report",
-            "prediction"
-          ],
-          "title": "Basis",
-          "type": "string"
-        },
-        "source_ids": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 3,
-          "title": "Source Ids",
-          "type": "array"
-        }
-      },
-      "required": [
-        "text",
-        "kind",
-        "basis"
-      ],
-      "title": "Question",
-      "type": "object"
-    },
-    "ResumeLink": {
-      "additionalProperties": false,
-      "properties": {
-        "competency": {
-          "maxLength": 48,
-          "minLength": 1,
-          "title": "Competency",
-          "type": "string"
-        },
-        "skill": {
-          "anyOf": [
-            {
-              "maxLength": 48,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Skill"
-        },
-        "signals": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 4,
-          "title": "Signals",
-          "type": "array"
-        },
-        "status": {
-          "enum": [
-            "strength",
-            "partial",
-            "gap"
-          ],
-          "title": "Status",
-          "type": "string"
-        }
-      },
-      "required": [
-        "competency",
-        "status"
-      ],
-      "title": "ResumeLink",
-      "type": "object"
-    },
-    "ScheduleStep": {
-      "additionalProperties": false,
-      "properties": {
-        "when": {
-          "maxLength": 48,
-          "minLength": 1,
-          "title": "When",
-          "type": "string"
-        },
-        "focus": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 4,
-          "minItems": 1,
-          "title": "Focus",
-          "type": "array"
-        }
-      },
-      "required": [
-        "when",
-        "focus"
-      ],
-      "title": "ScheduleStep",
-      "type": "object"
-    },
-    "Stage": {
-      "additionalProperties": false,
-      "properties": {
-        "round": {
+        "round_number": {
           "anyOf": [
             {
               "maximum": 10,
@@ -226,111 +15,79 @@
             }
           ],
           "default": null,
-          "title": "Round"
+          "title": "Round Number"
         },
-        "name": {
-          "maxLength": 48,
-          "minLength": 1,
-          "title": "Name",
-          "type": "string"
-        },
-        "format": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 4,
-          "title": "Format",
-          "type": "array"
-        },
-        "basis": {
-          "enum": [
-            "confirmed",
-            "candidate_report",
-            "prediction"
+        "round_name": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "title": "Basis",
-          "type": "string"
+          "default": null,
+          "title": "Round Name"
         },
-        "source_ids": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 3,
-          "title": "Source Ids",
-          "type": "array"
+        "field": {
+          "enum": [
+            "interview_questions",
+            "preparation_topics",
+            "recruitment_stages",
+            "application_timeline",
+            "difficulty"
+          ],
+          "title": "Field",
+          "type": "string"
         }
       },
       "required": [
-        "name",
-        "basis"
+        "field"
       ],
-      "title": "Stage",
+      "title": "Gap",
       "type": "object"
     },
-    "Topic": {
+    "Suggestion": {
       "additionalProperties": false,
       "properties": {
-        "name": {
-          "maxLength": 48,
-          "minLength": 1,
-          "title": "Name",
-          "type": "string"
-        },
-        "priority": {
-          "enum": [
-            "high",
-            "medium",
-            "low"
+        "round_number": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "title": "Priority",
-          "type": "string"
+          "default": null,
+          "title": "Round Number"
         },
-        "depth": {
+        "field": {
           "enum": [
-            "awareness",
-            "working",
-            "deep"
+            "interview_questions",
+            "preparation_topics",
+            "recruitment_stages",
+            "application_timeline",
+            "difficulty"
           ],
-          "title": "Depth",
+          "title": "Field",
           "type": "string"
         },
-        "terms": {
-          "items": {
-            "maxLength": 48,
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 6,
-          "title": "Terms",
-          "type": "array"
-        },
-        "basis": {
-          "enum": [
-            "confirmed",
-            "candidate_report",
-            "prediction"
-          ],
-          "title": "Basis",
+        "value": {
+          "maxLength": 200,
+          "minLength": 3,
+          "title": "Value",
           "type": "string"
-        },
-        "source_ids": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 3,
-          "title": "Source Ids",
-          "type": "array"
         }
       },
       "required": [
-        "name",
-        "priority",
-        "depth",
-        "basis"
+        "field",
+        "value"
       ],
-      "title": "Topic",
+      "title": "Suggestion",
       "type": "object"
     }
   },
@@ -361,98 +118,20 @@
       "title": "Generated At",
       "type": "string"
     },
-    "interview_date": {
-      "anyOf": [
-        {
-          "format": "date",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Interview Date"
-    },
-    "role": {
+    "gaps": {
       "items": {
-        "maxLength": 48,
-        "minLength": 1,
-        "type": "string"
+        "$ref": "#/$defs/Gap"
       },
-      "maxItems": 10,
-      "title": "Role",
+      "maxItems": 24,
+      "title": "Gaps",
       "type": "array"
     },
-    "success": {
+    "items": {
       "items": {
-        "maxLength": 48,
-        "minLength": 1,
-        "type": "string"
+        "$ref": "#/$defs/Suggestion"
       },
-      "maxItems": 6,
-      "title": "Success",
-      "type": "array"
-    },
-    "process": {
-      "items": {
-        "$ref": "#/$defs/Stage"
-      },
-      "maxItems": 10,
-      "title": "Process",
-      "type": "array"
-    },
-    "resume": {
-      "items": {
-        "$ref": "#/$defs/ResumeLink"
-      },
-      "maxItems": 10,
-      "title": "Resume",
-      "type": "array"
-    },
-    "syllabus": {
-      "items": {
-        "$ref": "#/$defs/Topic"
-      },
-      "maxItems": 14,
-      "title": "Syllabus",
-      "type": "array"
-    },
-    "company": {
-      "$ref": "#/$defs/CompanyKeywords"
-    },
-    "questions": {
-      "items": {
-        "$ref": "#/$defs/Question"
-      },
-      "maxItems": 30,
-      "title": "Questions",
-      "type": "array"
-    },
-    "schedule": {
-      "items": {
-        "$ref": "#/$defs/ScheduleStep"
-      },
-      "maxItems": 8,
-      "title": "Schedule",
-      "type": "array"
-    },
-    "sources": {
-      "items": {
-        "$ref": "#/$defs/GuideSource"
-      },
-      "maxItems": 30,
-      "title": "Sources",
-      "type": "array"
-    },
-    "not_covered": {
-      "items": {
-        "maxLength": 48,
-        "minLength": 1,
-        "type": "string"
-      },
-      "maxItems": 6,
-      "title": "Not Covered",
+      "maxItems": 120,
+      "title": "Items",
       "type": "array"
     }
   },
@@ -461,6 +140,6 @@
     "goal_version",
     "generated_at"
   ],
-  "title": "InterviewPrepGuide",
+  "title": "InterviewSuggestions",
   "type": "object"
 }
