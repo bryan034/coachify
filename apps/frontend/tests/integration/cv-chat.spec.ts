@@ -31,10 +31,12 @@ test('manual-only chat persists without a fake CV and recovers saved failed mess
   expect((await (await account.get('/api/v1/cv')).json()).cvs).toHaveLength(0);
   const before = await readChat(account, null); await page.reload();
   await page.getByRole('button', {name: /^Update through chat/}).click();
+  // The saved transcript is visible before the refreshed question is ready.
+  await expect(page.getByRole('button', {name: 'Skip this question', exact: true})).toBeEnabled();
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   await expect(page.getByRole('list',{name:'Saved conversation messages'})).toContainText('What can you share about your work?');
-  expect((await readChat(account,null)).active_question?.question).toContain('What can you share about your work?');
   const resumed = await readChat(account, null);
+  expect(resumed.active_question?.question).toContain('What can you share about your work?');
   // Publishing changes Profile's revision; reopening asks the current question
   // again while preserving every saved factual turn and its action receipts.
   expect(resumed.messages.slice(0, before.messages.length)).toEqual(before.messages);

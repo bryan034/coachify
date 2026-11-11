@@ -130,10 +130,14 @@ browser → gateway → API → MongoDB, including SMTP-to-Mailpit OTP verificat
 
 ```sh
 cd apps/frontend
-PROFILE_E2E_BASE_URL=http://localhost:8081 MAILPIT_BASE_URL=http://localhost:8026 npx playwright test --config playwright.integration.config.ts
+ELO_TEST_COMPOSE_PROJECT=elo-integration-test \
+  PROFILE_E2E_BASE_URL=http://localhost:8081 MAILPIT_BASE_URL=http://localhost:8026 \
+  npx playwright test --config playwright.integration.config.ts
 ```
 
-Use a separate Compose project and database volume, and set
+Use a separate Compose project and database volume. Set `ELO_TEST_COMPOSE_PROJECT`
+to the project name used to start the disposable stack so the Career fixture
+loader finds the matching service. Set
 `GATEWAY_PORT=8081`, `MAILPIT_PORT=8026` and `COMPOSE_PROFILES=development`, with
 SMTP pointed at the disposable Mailpit container as in `.env.example`. This suite writes synthetic data; do not target your personal
 profile. Boundary-fixture browser tests use
