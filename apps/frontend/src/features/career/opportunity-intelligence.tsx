@@ -1,9 +1,10 @@
 "use client";
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {useProfile} from '@/features/profile/profile-provider';
-import {careerApi,type OpportunityView,type OpportunityAvailabilityIssue,type IntelligenceCategory,type IntelligenceFinding,type ResearchSource} from '@/lib/api/career';
+import {careerApi,type InterviewSuggestions,type InterviewSuggestionsView,type RoleSummary,type RoleSummaryView,type PrepGapField,type OpportunityView,type OpportunityAvailabilityIssue,type IntelligenceCategory,type IntelligenceFinding,type ResearchSource} from '@/lib/api/career';
 import { formatDateTime } from '@/lib/format';
 import { Icon } from '@/components/ui/icon';
+import {sourceLink} from './source-links';
 
 const categories:[IntelligenceCategory,string,string][]=[
  ['interview_intelligence','Interview Intelligence','Recruitment stages, assessments, reported questions and preparation.'],
@@ -21,42 +22,57 @@ const availabilityMessages:Record<OpportunityAvailabilityIssue,string>={
  search_not_configured:'The configured search provider is not connected to the Career service.',
  brave_llm_context_required:'The Brave connection needs LLM Context mode for opportunity research.'
 };
-function outcomeMessage(result:{outcome?:string|null;error_code:string|null}){
- switch(result.outcome){
-  case 'no_relevant_sources':return 'The searches did not find sources relevant to this category.';
-  case 'information_not_found':return 'Relevant sources were found, but they did not provide supported information for this category.';
-  case 'validation_failed':return 'Proposed findings could not be verified. Available findings are preserved; refresh this section to retry.';
-  case 'provider_failed':return result.error_code?.includes('timeout')?'The research provider timed out. Available findings are preserved; refresh this section to retry.':'A research provider could not complete the request. Available findings are preserved; refresh this section to retry.';
-  default:return null;
- }
-}
 type Links=(ids:string[])=>ReactNode[];
-const roundFields={questions:'interview_questions',prepare:'preparation_topics'};
-/** Headline facts are process-wide; everything tied to one round sits under that round. */
-function InterviewRounds({findings,links,done}:{findings:IntelligenceFinding[];links:Links;done:boolean}){
- const [open,setOpen]=useState<number|null>(null);
+type Generated={items:InterviewSuggestions['items'];busy:boolean;error:string};
+const roundFields={questions:'interview_questions',prepare:'preparation_topics'} as const;
+const headlineFields=['recruitment_stages','application_timeline','difficulty'];
+const NotFilled=({busy=false}:{busy?:boolean})=>busy?<p className="small" role="status">Generating…</p>:<p className="small not-filled">Not filled yet.</p>;
+const AI_MADE='Made by an AI model from the context it was provided, not found in any sources.';
+/** Small marker on every field the model wrote; the legend under the page warning explains it. */
+export const AiMark=()=><span className="ai-made" role="img" aria-label={AI_MADE} title={AI_MADE}><Icon name="warn"/></span>;
+const AiLegend=()=><p className="ai-made-legend" role="note"><AiMark/>Fields marked with this icon were made by an AI model based on the context it was provided, and were not found in any sources.</p>;
+/** Sourced findings first; an empty slot shows AI-made predictions with the marker, or says it is not filled. */
+function Slot({label,sourced,generated,round,field,list}:{label:string;sourced:IntelligenceFinding[];generated:Generated;round:number|null;field:PrepGapField;list:(items:IntelligenceFinding[])=>ReactNode}){
+ const predicted=generated.items.filter(item=>item.round_number===round&&item.field===field);
+ return <div><p className="briefing-detail-label">{label}{!sourced.length&&predicted.length>0&&<AiMark/>}</p>
+  {sourced.length?list(sourced):predicted.length?<ul className="round-list is-ai-made">{predicted.map(item=><li key={item.value}>{item.value}</li>)}</ul>:<NotFilled busy={generated.busy}/>}
+ </div>;
+}
+/** Headline facts are process-wide; everything tied to one round sits under that round. All rounds stay open. */
+function InterviewRounds({findings,links,generated}:{findings:IntelligenceFinding[];links:Links;generated:Generated}){
  const general=findings.filter(f=>f.round_number==null);
- const headline=general.filter(f=>['recruitment_stages','application_timeline','difficulty'].includes(f.field)).slice(0,4);
- const otherGeneral=general.filter(f=>!headline.includes(f));
+ const headline=general.filter(f=>headlineFields.includes(f.field)).slice(0,4);
+ const missingHeadline=headlineFields.filter(field=>!headline.some(f=>f.field===field));
+ const slotFields:string[]=Object.values(roundFields);
  const numbers=[...new Set(findings.map(f=>f.round_number).filter((n):n is number=>n!=null))].sort((a,b)=>a-b);
+ // Without rounds, the questions and preparation slots belong to the whole process.
+ const otherGeneral=general.filter(f=>!headline.includes(f)&&(numbers.length>0||!slotFields.includes(f.field)));
  const rounds=numbers.map(n=>{const items=findings.filter(f=>f.round_number===n);return {n,name:items.find(f=>f.round_name)?.round_name||`Round ${n}`,items};});
- const shown=open??rounds[0]?.n??null;
  const list=(items:IntelligenceFinding[])=><ul className="round-list">{items.map(f=><li key={f.finding_id}><span>{f.value}</span><FindingLabels finding={f}/> {links(f.source_ids)}</li>)}</ul>;
- if(!findings.length)return done?<p className="small">elo couldn’t find interview details for this role in public sources. Refresh research to look again.</p>:null;
+ const slots=(items:IntelligenceFinding[],round:number|null)=><>
+  <Slot label="Questions to expect" sourced={items.filter(f=>f.field===roundFields.questions)} generated={generated} round={round} field={roundFields.questions} list={list}/>
+  <Slot label="How to prepare" sourced={items.filter(f=>f.field===roundFields.prepare)} generated={generated} round={round} field={roundFields.prepare} list={list}/>
+ </>;
  return <>
-  {headline.length>0&&<ul className="fact-tiles" aria-label="Interview headline facts">{headline.map(f=><li key={f.finding_id} className="fact-tile"><strong>{f.value}</strong><span className="small">{fieldTitles[f.field]??words(f.field)}</span><FindingLabels finding={f}/>{links(f.source_ids)}</li>)}</ul>}
+  <ul className="fact-tiles" aria-label="Interview headline facts">
+   {headline.map(f=><li key={f.finding_id} className="fact-tile"><strong>{f.value}</strong><span className="small">{fieldTitles[f.field]??words(f.field)}</span><FindingLabels finding={f}/>{links(f.source_ids)}</li>)}
+   {missingHeadline.map(field=>{const made=generated.items.find(item=>item.round_number==null&&item.field===field);
+    return made?<li key={field} className="fact-tile is-ai-made"><strong>{made.value}</strong><span className="small">{fieldTitles[field]} <AiMark/></span></li>
+     :<li key={field} className="fact-tile is-empty"><strong>{generated.busy?'Generating…':'Not filled yet'}</strong><span className="small">{fieldTitles[field]}</span></li>;})}
+  </ul>
+  {generated.error&&<p className="notice" role="alert">{generated.error}</p>}
   <h3 className="rounds-title">The rounds</h3>
-  {rounds.length?<><p className="small">{rounds.length===1?'Sources describe one round.':`Sources describe ${rounds.length} rounds.`} Open a round to see what to expect and how to prepare.</p>
-   <ol className="rounds">{rounds.map(round=>{const expanded=shown===round.n;const format=round.items.filter(f=>f.field==='round_format');const questions=round.items.filter(f=>f.field===roundFields.questions),prepare=round.items.filter(f=>f.field===roundFields.prepare),other=round.items.filter(f=>![...Object.values(roundFields),'round_format'].includes(f.field));
-    return <li key={round.n} className={`round${expanded?' open':''}`}>
-     <button type="button" className="round-head" aria-expanded={expanded} onClick={()=>setOpen(expanded?-1:round.n)}><span className="round-num" aria-hidden="true">{round.n}</span><span><strong>{round.name}</strong>{format[0]&&<span className="small">{format[0].value}</span>}</span><Icon name="chevron"/></button>
-     {expanded&&<div className="round-body">
+  {rounds.length?<><p className="small">{rounds.length===1?'Sources describe one round.':`Sources describe ${rounds.length} rounds.`}</p>
+   <ol className="rounds">{rounds.map(round=>{const format=round.items.filter(f=>f.field==='round_format');const other=round.items.filter(f=>![...slotFields,'round_format'].includes(f.field));
+    return <li key={round.n} className="round open">
+     <div className="round-head"><span className="round-num" aria-hidden="true">{round.n}</span><span><strong>{round.name}</strong>{format[0]&&<span className="small">{format[0].value}</span>}</span></div>
+     <div className="round-body">
       {format.length>1&&list(format.slice(1))}
-      <div><p className="briefing-detail-label">Questions to expect</p>{questions.length?list(questions):<p className="small">No reported questions for this round.</p>}</div>
-      <div><p className="briefing-detail-label">How to prepare</p>{prepare.length?list(prepare):<p className="small">No reported preparation advice for this round.</p>}</div>
+      {slots(round.items,round.n)}
       {other.length>0&&<div><p className="briefing-detail-label">Candidate reports</p>{list(other)}</div>}
-     </div>}
-    </li>;})}</ol></>:<p className="small">Sources don’t break this process down by round yet. Refresh research to look again.</p>}
+     </div>
+    </li>;})}</ol></>:<><p className="small">Not filled yet: sources don’t break this process down by round. Refresh research to look again.</p>
+   <div className="round-body is-process">{slots(general,null)}</div></>}
   {otherGeneral.length>0&&<><h3 className="rounds-title">Across the process</h3>{list(otherGeneral)}</>}
  </>;
 }
@@ -64,16 +80,47 @@ const fieldTitles:Record<string,string>={recruitment_stages:'Stages',application
 function FindingLabels({finding}:{finding:IntelligenceFinding}){
  return <>{finding.confidence==='low'&&<span className="finding-flag">low confidence</span>}{finding.scope!=='exact'&&<span className="finding-flag">{words(finding.scope)} context</span>}{finding.conflict_group&&<span className="finding-flag intelligence-conflict">Conflicting reports</span>}</>;
 }
-/** One card per field the research found; fields with nothing found are hidden. */
-function RoleFacts({findings,links,details,done}:{findings:IntelligenceFinding[];links:Links;details?:ReactNode;done:boolean}){
- const fields=[...new Set(findings.map(f=>f.field))];
- return <>
-  {details&&<div className="role-details">{details}</div>}
-  {fields.length>0&&<div className="fact-cards">{fields.map(field=><article key={field} className="fact-card"><h3>{fieldTitles[field]??words(field)}</h3>{findings.filter(f=>f.field===field).map(f=><div key={f.finding_id} className="fact-card-item"><p>{f.value}</p><FindingLabels finding={f}/><p className="fact-sources">{links(f.source_ids)}</p></div>)}</article>)}</div>}
-  {done&&<p className="small">Fields elo couldn’t find are hidden.</p>}
- </>;
+/** A goal-derived card item; refs match the backend digest (req:<id>, summary, resp:<index>). */
+export type RoleItem={ref:string;text:string;note?:string;urls?:string[]};
+export type RoleCardInput={card_id:string;title:string;icon:string;items:RoleItem[]};
+type CardItem=RoleItem&{finding?:IntelligenceFinding};
+const fieldIcons:Record<string,string>={compensation:'money',conversion_salary:'money',benefits:'check',projects:'code',mentorship:'people',management:'people',team_culture:'people',company_culture:'building',work_life_balance:'cal',full_time_role:'up',career_path:'up',conversion_rate:'flag',historical_cohort:'flag',offer_acceptance:'flag'};
+/** Fallback before (or without) the digest: one bullet per sentence, never a paragraph. */
+export const toBullets=(text:string)=>text.split(/(?<=[.!?])\s+(?=[A-Z0-9"“(])|;\s+|\n+/).map(part=>part.trim()).filter(Boolean);
+type SourceLinks=(ids:string[])=>{key:string;href:string;label:string}[];
+/** One card per topic: scannable bullets, flags beside the bullet they qualify, sources once at the foot. */
+function RoleCard({title,icon,items,digest,made,busy=false,sourceLinks}:{title:string;icon:string;items:CardItem[];digest?:{text:string;refs:string[]}[];made?:string[];busy?:boolean;sourceLinks:SourceLinks}){
+ if(!items.length)return <article className={`fact-card role-card${made?.length?' is-ai-made':''}`}>
+  <h3><span className="role-card-icon" aria-hidden="true"><Icon name={icon}/></span><span>{title}{made?.length?<AiMark/>:null}</span></h3>
+  {made?.length?<ul className="role-bullets">{made.map(text=><li key={text}>{text}</li>)}</ul>:<NotFilled busy={busy}/>}
+ </article>;
+ const byRef=new Map(items.map(item=>[item.ref,item]));
+ const usable=digest?.length&&digest.every(b=>b.refs.every(ref=>byRef.has(ref)))?digest:null;
+ const bullets=usable?usable.map(b=>({text:b.text,items:b.refs.map(ref=>byRef.get(ref)!)})):items.flatMap(item=>toBullets(item.text).map(text=>({text,items:[item]})));
+ const notes=[...new Set(items.map(item=>item.note).filter((n):n is string=>!!n))];
+ const links=[...new Map(items.flatMap(item=>[...(item.urls??[]).map(sourceLink).filter(l=>l!==null).map(l=>({key:l.url,href:l.url,label:l.domain})),...(item.finding?sourceLinks(item.finding.source_ids):[])]).map(l=>[l.href,l])).values()];
+ return <article className="fact-card role-card">
+  <h3><span className="role-card-icon" aria-hidden="true"><Icon name={icon}/></span>{title}</h3>
+  <ul className="role-bullets">{bullets.map((b,i)=>{const flagged=b.items.map(item=>item.finding).filter((f):f is IntelligenceFinding=>!!f);
+   return <li key={i}><span>{b.text}</span>{flagged.slice(0,1).map(f=><FindingLabels key={f.finding_id} finding={f}/>)}</li>;})}</ul>
+  {(notes.length>0||usable)&&<p className="small role-card-note">{[...notes,...(usable?['Summarised by AI from the sources']:[])].join(' · ')}</p>}
+  {links.length>0&&<p className="briefing-sources">{links.map(l=><a key={l.key} href={l.href} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}</p>}
+ </article>;
 }
-export function OpportunityIntelligence({goalId,version,selectionVersion,roleDetails,section='interview'}:{goalId:string;version:number;selectionVersion:number;roleDetails?:ReactNode;section?:'interview'|'role'}){
+// Every topic the page always shows, in page order (matches the backend digest).
+const roleFields=['compensation','benefits','projects','mentorship','work_life_balance','full_time_role','career_path','conversion_salary','conversion_rate','historical_cohort','offer_acceptance','company_culture','team_culture','management'];
+/** Goal cards first, then every role topic: sourced bullets, AI-made bullets with the marker, or not filled. */
+function RoleFacts({findings,cards,digest,busy,loaded,sourceLinks}:{findings:IntelligenceFinding[];cards:RoleCardInput[];digest:RoleSummary|null;busy:boolean;loaded:boolean;sourceLinks:SourceLinks}){
+ // Goal cards never wait for research; research topics appear once it has loaded.
+ const fields=loaded?[...new Set([...roleFields,...findings.map(f=>f.field)])]:[];
+ const all=[...cards,...fields.map(field=>({card_id:field,title:fieldTitles[field]??sentenceCase(words(field)),icon:fieldIcons[field]??'doc',
+  items:findings.filter(f=>f.field===field).map(f=>({ref:f.finding_id,text:f.value,finding:f}))}))];
+ const bulletsFor=(id:string)=>digest?.cards.find(card=>card.card_id===id)?.bullets;
+ const madeFor=(id:string)=>digest?.generated?.find(card=>card.card_id===id)?.bullets;
+ return <div className="fact-cards">{all.map(card=><RoleCard key={card.card_id} title={card.title} icon={card.icon} items={card.items} digest={bulletsFor(card.card_id)} made={madeFor(card.card_id)} busy={busy} sourceLinks={sourceLinks}/>)}</div>;
+}
+const sentenceCase=(value:string)=>value.charAt(0).toUpperCase()+value.slice(1);
+export function OpportunityIntelligence({goalId,version,selectionVersion,roleCards=[],section='interview'}:{goalId:string;version:number;selectionVersion:number;roleCards?:RoleCardInput[];section?:'interview'|'role'}){
  const {token}=useProfile();const [data,setData]=useState<OpportunityView>(),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[busy,setBusy]=useState<IntelligenceCategory|'all'|null>(null);
  const command=useRef<{signature:string;key:string}|null>(null),controller=useRef<AbortController|null>(null);
  const path=`/goals/${goalId}/opportunity-research`;
@@ -107,9 +154,40 @@ export function OpportunityIntelligence({goalId,version,selectionVersion,roleDet
  const states=keys.map(key=>results[key]).filter((v):v is NonNullable<typeof v>=>!!v);
  const researchedAt=states.map(v=>v.researched_at).filter((v):v is string=>!!v).sort().at(-1);
  const pending=states.some(v=>['pending','running'].includes(v.status));
- const notices:string[]=[...new Set(states.map(v=>outcomeMessage(v)).filter((v):v is NonNullable<typeof v>=>!!v))];
- const failed=states.some(v=>v.status==='failed')&&!notices.length;
+ // Outcome banners are replaced by AI-made fills and the legend; only the general-target note remains.
+ const notices:string[]=[];
  if(states.some(v=>v.status==='not_applicable'))notices.push('No company is specified, so employer-specific research was skipped.');
+ const done=!!data&&!pending&&!running;
+ const researchId=data?.research_id??null;
+ const [suggestions,setSuggestions]=useState<InterviewSuggestions|null>(null),[suggesting,setSuggesting]=useState(false),[suggestError,setSuggestError]=useState('');
+ useEffect(()=>{
+  // Once research settles, fill empty interview slots with labelled AI predictions (saved per goal version and research).
+  if(section!=='interview'||!token||!done)return;const abort=new AbortController();const prep=`/goals/${goalId}/interview-prep`;
+  (async()=>{try{
+   let view=await careerApi<InterviewSuggestionsView>(prep,token,{signal:abort.signal});
+   if(view.status==='missing'){if(abort.signal.aborted)return;setSuggesting(true);setSuggestError('');
+    view=await careerApi<InterviewSuggestionsView>(prep,token,{method:'POST',signal:abort.signal,body:JSON.stringify({expected_version:version})});}
+   if(!abort.signal.aborted)setSuggestions(view.suggestions);
+  }catch{if(!abort.signal.aborted)setSuggestError('AI suggestions for the empty sections could not be generated. Refresh research to try again.');}
+  finally{if(!abort.signal.aborted)setSuggesting(false);}})();
+  return()=>abort.abort();
+ },[section,token,done,goalId,version,researchId]);
+ const [digest,setDigest]=useState<RoleSummary|null>(null),[digesting,setDigesting]=useState(false);
+ useEffect(()=>{
+  // Once research settles, condense each card into short cited bullets (saved per goal version and research).
+  if(section!=='role'||!token||!done)return;const abort=new AbortController();const url=`/goals/${goalId}/role-summary`;
+  (async()=>{try{
+   let view=await careerApi<RoleSummaryView>(url,token,{signal:abort.signal});
+   if(view.status==='missing'){if(abort.signal.aborted)return;setDigesting(true);
+    view=await careerApi<RoleSummaryView>(url,token,{method:'POST',signal:abort.signal,body:JSON.stringify({expected_version:version})});}
+   if(!abort.signal.aborted)setDigest(view.summary);
+  }catch{/* Cards keep their sentence bullets when the summary is unavailable. */}
+  finally{if(!abort.signal.aborted)setDigesting(false);}})();
+  return()=>abort.abort();
+ },[section,token,done,goalId,version,researchId]);
+ const currentDigest=digest&&digest.research_id===researchId&&digest.goal_version===version?digest:null;
+ const generated={items:suggestions&&suggestions.research_id===researchId&&suggestions.goal_version===version?suggestions.items:[],busy:suggesting,error:suggestError};
+ const sourceLinks=(ids:string[])=>ids.map(id=>sources.find(source=>source.source_id===id)).filter((source):source is ResearchSource=>!!source).map(source=>({key:source.source_id,href:source.url,label:source.title||source.platform}));
  const links=(ids:string[])=>ids.map(id=>sources.find(source=>source.source_id===id)).filter((source):source is ResearchSource=>!!source).map(source=><a key={source.source_id} className="fact-source" href={source.url} target="_blank" rel="noopener noreferrer">{source.title||source.platform} ↗</a>);
  const status=<div className="research-status">
   <p className="small">{researchedAt?`Researched ${formatDateTime(researchedAt)}`:'No completed research yet.'}</p>
@@ -118,12 +196,12 @@ export function OpportunityIntelligence({goalId,version,selectionVersion,roleDet
  return <section className="card goal-research" id={section==='interview'?'interview-preparation':'about-role'} aria-labelledby={`${section}-research-heading`}>
   <div className="goal-research-head"><h2 id={`${section}-research-heading`}>{section==='interview'?'Interview preparation':'About the role'}</h2>{status}</div>
   <p className="research-warning" role="note"><Icon name="warn"/>This comes from AI research and public websites and may be inaccurate or out of date. Double-check before relying on it.</p>
+  {(section==='interview'?generated.items.length>0:!!currentDigest?.generated?.length)&&<AiLegend/>}
   {!data&&!error&&<p role="status" className="small">Checking opportunity research…</p>}
   {data&&!data.available&&<div className="notice"><p>Opportunity research is unavailable on this server. Saved findings remain readable.</p>{!!data.availability_issues?.length&&<ul>{data.availability_issues.map(issue=><li key={issue}>{availabilityMessages[issue]}</li>)}</ul>}</div>}
   {error&&<div role="alert" className="notice"><p>{error}</p><button className="btn ghost sm" onClick={()=>setAttempt(v=>v+1)}>Retry loading research</button></div>}
   {pending&&<p role="status" className="notice">{states.some(v=>['rate_limited','source_rate_limited'].includes(v.error_code||''))?`Waiting for the AI allowance${data?.retry_after?`; resuming in about ${data.retry_after} seconds`:''}.`:'Researching…'} Available findings stay visible.</p>}
   {notices.map(notice=><p key={notice} className="notice">{notice}</p>)}
-  {failed&&<p className="notice">Part of this research could not finish. Other results are preserved; refresh to retry.</p>}
-  {section==='interview'?<InterviewRounds findings={findings} links={links} done={!!data&&!pending}/>:<RoleFacts findings={findings} links={links} details={roleDetails} done={!!data&&!pending}/>}
+  {section==='interview'?data&&<InterviewRounds findings={findings} links={links} generated={generated}/>:<RoleFacts findings={findings} cards={roleCards} digest={currentDigest} busy={digesting} loaded={!!data} sourceLinks={sourceLinks}/>}
  </section>;
 }

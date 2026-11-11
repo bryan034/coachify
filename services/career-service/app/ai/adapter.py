@@ -25,7 +25,8 @@ from app.ai.waiting import quota_progress,quota_reason
 from app.ai.metrics import usage_observer
 from app.ai.recovery import recover_responses,validation_feedback,issues_for,schema_fields
 from app.ai.goal_summary import GoalSummary,SUMMARY_PROMPT,summary_schema
-from app.ai.interview_prep import PrepKeywords,PREP_PROMPT,prep_schema
+from app.ai.interview_prep import PrepSuggestions,PREP_PROMPT,prep_schema
+from app.ai.role_summary import RoleDigest,ROLE_SUMMARY_PROMPT,role_summary_schema
 from app.ai.context_contracts import ContextPlan,CONTEXT_PROMPT
 from app.ai.research_planning import ResearchPlan,ResearchAssessment,PLAN_PROMPT,ASSESS_PROMPT,planning_input
 from app.ai.config import AISettings
@@ -47,7 +48,7 @@ from app.ai.opportunity_contracts import QueryPlan,StructuredFindings,Referenced
 from app.ai.discovery_contracts import OUTPUTS as DISCOVERY_OUTPUTS, PROMPTS as DISCOVERY_PROMPTS
 
 usage_logger = logging.getLogger('uvicorn.error.ai_usage')
-MODEL_OUTPUTS = {'goal_summary':GoalSummary,'interview_prep':PrepKeywords,'jd_scope':JobIdentity,**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_structure':ReferencedFindings,'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
+MODEL_OUTPUTS = {'goal_summary':GoalSummary,'interview_prep':PrepSuggestions,'role_summary':RoleDigest,'jd_scope':JobIdentity,**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_structure':ReferencedFindings,'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
 
 PROMPT_VERSION = 'career-ai-v23'
 JD_OUTPUT_TOKENS={'jd_scope':4096,'jd_extraction':8192}
@@ -332,7 +333,7 @@ def compact_schema(schema):
 def provider_input(request):
     if request.stage.startswith('opportunity_'):return request.context
     data = planning_input(request) if request.stage in ('research_plan','research_assess') else interview_input(request) if request.stage=='interview_synthesis' else request.model_dump(mode='json', exclude_defaults=True)
-    if request.stage in ('goal_summary', 'interview_prep', 'jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'discovery_turn') and request.context:
+    if request.stage in ('goal_summary', 'interview_prep', 'role_summary', 'jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'discovery_turn') and request.context:
         try:
             data['context'] = json.loads(request.context)
         except ValueError:
@@ -660,6 +661,9 @@ class AIAdapter:
         if request.stage=='interview_prep' and output_schema is None:
             try:output_schema=prep_schema(json.loads(request.context or '{}'))
             except (ValueError,TypeError,KeyError,AttributeError):raise AIError('invalid_operation') from None
+        if request.stage=='role_summary' and output_schema is None:
+            try:output_schema=role_summary_schema(json.loads(request.context or '{}'))
+            except (ValueError,TypeError,KeyError,AttributeError):raise AIError('invalid_operation') from None
         if request.stage=='opportunity_structure':
             try:output_schema=findings_schema(json.loads(request.context or '{}'))
             except (ValueError,TypeError,KeyError,AttributeError):raise AIError('invalid_operation') from None
@@ -675,7 +679,7 @@ class AIAdapter:
             if self.settings.provider in ('local','deepseek'):mode='json_schema_strict'
             elif self.settings.provider=='gemini':mode='json_schema'
             elif mode!='json_schema_strict':raise AIError('unsupported_structured_output')
-        local_structured = self.settings.provider == 'local' and request.stage in ('goal_summary','interview_prep', 'jd_scope', 'jd_extraction', 'discovery_turn', 'opportunity_plan', 'opportunity_structure')
+        local_structured = self.settings.provider == 'local' and request.stage in ('goal_summary','interview_prep','role_summary', 'jd_scope', 'jd_extraction', 'discovery_turn', 'opportunity_plan', 'opportunity_structure')
         if local_structured and mode == 'json_object':
             # JSON Object mode does not constrain the required fields.
             # Constrain decoding as well as validating the result below.
@@ -696,6 +700,8 @@ class AIAdapter:
             instructions=SUMMARY_PROMPT
         elif request.stage=='interview_prep':
             instructions=PREP_PROMPT
+        elif request.stage=='role_summary':
+            instructions=ROLE_SUMMARY_PROMPT
         elif request.stage=='jd_scope':
             instructions=LOCAL_SCOPE_PROMPT if self.settings.provider=='local' else JD_SCOPE_PROMPT
         elif request.stage in DISCOVERY_PROMPTS:
@@ -721,11 +727,11 @@ class AIAdapter:
                 'Follow the response schema; correct the listed fields and types. Use supplied facts only; '
                 'do not invent values to satisfy validation. Latest validation issues: '
                 +json.dumps(validation_feedback.get(),separators=(',',':')))
-        if mode == 'json_object' or self.settings.provider=='local' and request.stage in ('goal_summary','interview_prep','discovery_turn','opportunity_plan','opportunity_structure'):
+        if mode == 'json_object' or self.settings.provider=='local' and request.stage in ('goal_summary','interview_prep','role_summary','discovery_turn','opportunity_plan','opportunity_structure'):
             instructions += '\nJSON schema: ' + json.dumps(schema, separators=(',', ':'))
         schema_bytes = len(json.dumps(response_format, separators=(',', ':')).encode())
         jd_output_tokens=LOCAL_JD_OUTPUT_TOKENS if self.settings.provider=='local' else JD_OUTPUT_TOKENS
-        output_tokens = min(self.settings.max_output_tokens, {**jd_output_tokens,'goal_summary':8192,'interview_prep':4096,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'discovery_turn':4096,'discovery_plan':512,'discovery_assess':2048,'discovery_extract':8192,'discovery_summary':8192,'opportunity_plan':4096,'opportunity_structure':4096}.get(request.stage,self.settings.max_output_tokens))
+        output_tokens = min(self.settings.max_output_tokens, {**jd_output_tokens,'goal_summary':8192,'interview_prep':4096,'role_summary':4096,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'research_plan':512,'research_assess':1024,'discovery_turn':4096,'discovery_plan':512,'discovery_assess':2048,'discovery_extract':8192,'discovery_summary':8192,'opportunity_plan':4096,'opportunity_structure':4096}.get(request.stage,self.settings.max_output_tokens))
         if request.stage=='discovery_extract':
             output_tokens=EXTRACTION_OUTPUT_TOKENS
         safety_margin = max(1024, self.settings.context_tokens // 10)
@@ -760,7 +766,7 @@ class AIAdapter:
             # JD admission counts the full provider prompt and grammar, including
             # schema-in-prompt JSON mode and any repair feedback. Bytes are not
             # tokens; the unchanged source must fit alongside reserved output.
-            size = input_tokens({'messages':messages,'response_format':response_format}) if request.stage in DISCOVERY_PROMPTS or request.stage in JD_OUTPUT_TOKENS or request.stage in ('goal_summary','interview_prep','opportunity_structure') else sum(len(message['content'].encode()) for message in messages) + schema_bytes
+            size = input_tokens({'messages':messages,'response_format':response_format}) if request.stage in DISCOVERY_PROMPTS or request.stage in JD_OUTPUT_TOKENS or request.stage in ('goal_summary','interview_prep','role_summary','opportunity_structure') else sum(len(message['content'].encode()) for message in messages) + schema_bytes
             return size <= input_budget, size
 
         current = request
@@ -780,7 +786,7 @@ class AIAdapter:
                 remove_count = 2 if len(current.conversation) > 2 and current.conversation[0].role == 'user' and current.conversation[1].role == 'assistant' else 1
                 current = current.model_copy(update={'conversation': current.conversation[remove_count:]})
                 continue
-            if current.stage in ('goal_edit','goal_summary','interview_prep','opportunity_structure') or current.stage in DISCOVERY_PROMPTS:raise AIError('context_limit')
+            if current.stage in ('goal_edit','goal_summary','interview_prep','role_summary','opportunity_structure') or current.stage in DISCOVERY_PROMPTS:raise AIError('context_limit')
             if len(current.conversation) > 1:
                 # The last message is the current user input; keep it intact.
                 remove_count = 2 if len(current.conversation) > 2 else 1

@@ -1,0 +1,134 @@
+{
+  "$defs": {
+    "Bullet": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "maxLength": 160,
+          "minLength": 2,
+          "title": "Text",
+          "type": "string"
+        },
+        "refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "refs"
+      ],
+      "title": "Bullet",
+      "type": "object"
+    },
+    "CardDigest": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "maxLength": 60,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "bullets": {
+          "items": {
+            "$ref": "#/$defs/Bullet"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "title": "Bullets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "card_id",
+        "bullets"
+      ],
+      "title": "CardDigest",
+      "type": "object"
+    },
+    "GeneratedCard": {
+      "additionalProperties": false,
+      "description": "A card no source filled: the model wrote it from the goal and research context. Never a sourced fact.",
+      "properties": {
+        "card_id": {
+          "maxLength": 60,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "bullets": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 2,
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Bullets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "card_id",
+        "bullets"
+      ],
+      "title": "GeneratedCard",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "goal_id": {
+      "title": "Goal Id",
+      "type": "string"
+    },
+    "goal_version": {
+      "title": "Goal Version",
+      "type": "integer"
+    },
+    "research_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Research Id"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "cards": {
+      "items": {
+        "$ref": "#/$defs/CardDigest"
+      },
+      "maxItems": 24,
+      "title": "Cards",
+      "type": "array"
+    },
+    "generated": {
+      "items": {
+        "$ref": "#/$defs/GeneratedCard"
+      },
+      "maxItems": 24,
+      "title": "Generated",
+      "type": "array"
+    }
+  },
+  "required": [
+    "goal_id",
+    "goal_version",
+    "generated_at"
+  ],
+  "title": "RoleSummary",
+  "type": "object"
+}

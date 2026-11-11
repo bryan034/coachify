@@ -32,6 +32,7 @@ from app.workflows.opportunity.engine import OpportunityEngine
 from app.ai.opportunity_config import OpportunitySettings
 from app.api.v1.opportunity import router as opportunity_router
 from app.api.v1.interview_prep import router as interview_prep_router
+from app.api.v1.role_summary import router as role_summary_router
 from app.workflows.operations import Operations,OperationConflict
 from app.api.v1.workspace import router as workspace_router
 from app.repositories.reviews import ReviewStore
@@ -143,6 +144,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     app.include_router(discovery_router)
     app.include_router(opportunity_router)
     app.include_router(interview_prep_router)
+    app.include_router(role_summary_router)
     app.include_router(workspace_router)
     app.include_router(cv_confirmation_router)
     app.include_router(goals_router)
