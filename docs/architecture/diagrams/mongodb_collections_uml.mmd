@@ -78,6 +78,12 @@ class career_goals {
     +Date updated_at
 }
 
+class interview_prep_guides {
+    +String _id [owner:goal_id, one guide per goal]
+    +Number goal_version
+    +InterviewPrepGuide guide [keyword-only; evidence-labelled; no raw CV/JD text]
+}
+
 class interview_research {
     +OpportunityReport intelligence?
     +Number version
@@ -122,10 +128,13 @@ users "1" --> "0..*" skill_gap_analyses : receives
 
 cvs "1" --> "0..*" skill_gap_analyses : used in
 career_goals "1" --> "0..*" skill_gap_analyses : evaluated in
+career_goals "1" --> "0..1" interview_prep_guides : prepared for
 interview_research "0..*" --> "0..*" skill_gap_analyses : referenced by
 
 note for users "Logical authority: existing Profile accounts; no collection rename or auth migration."
 note for career_goals "One current goal/chat per account; validated saves automatically move the current pointer. Current goals use owner/version CAS edits. Versioned exploration drafts and temporary structured intake records share this collection. Intake promotes the same document into the current goal; no duplicate original-content copy is saved. Draft role/field may be unknown; confirmed role/field are required. Drafts retain adaptive topic context, current focus/question, total_turns and latest 30 turns. Structured progress and bounded evidence only; no raw JD/CV text."
+
+note for interview_prep_guides "Private, owner-scoped keyword guide for specific_job goals only, replaced per goal version. Built from saved public research plus CV skill names; never shared and never stored in interview_research."
 
 note for interview_research "Immutable public-context revisions; shared seven-day reuse. Private career_state links constrain user reads. Operational research_contexts holds leases/cache pointers. Brave API adapters acquire evidence. Operational LangGraph checkpoints expire after 24h inactivity; current goals persist. Unavailable acquisition preserves saved goals/research."
 

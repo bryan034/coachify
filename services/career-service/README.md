@@ -149,6 +149,8 @@ attachment's limitations. Choosing a direction automatically makes it current.
 
 - `GET /api/v1/career/goals/{id}/opportunity-research` — Owner-scoped category status/results; optional `research_id` pins an immutable linked version.
 - `POST /api/v1/career/goals/{id}/opportunity-research` — Start/reuse/refresh with expected goal/selection versions and UUID idempotency; optional category refresh.
+- `GET /api/v1/career/goals/{id}/interview-prep` — Saved keyword-only interview guide for the current goal version (`status: missing` before first generation). `specific_job` goals only; career exploration returns 409.
+- `POST /api/v1/career/goals/{id}/interview-prep` — Generate or refresh it with `expected_version`, optional `interview_date` and `refresh`. Each item is labelled `confirmed`, `candidate_report` or `prediction` by the backend; résumé fit uses CV skill names only. Recent-news and competitor research are not implemented yet and are listed in `not_covered`.
 
 The configured path starts after goal validation. Gemini plans role-tailored queries, five LangGraph
 branches retrieve Brave LLM Context and use Gemini to structure cited findings,

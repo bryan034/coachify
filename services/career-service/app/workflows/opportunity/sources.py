@@ -33,3 +33,23 @@ def retain_useful(category,findings,sources,relevant_ids=()):
     chosen=max(combinations(candidates,min(OPPORTUNITY_SOURCE_LIMIT,len(candidates))),key=score)
     ids={s.source_id for s in chosen}
     return [f for f in findings if set(f.source_ids)<=ids],list(chosen)
+
+
+def merge_sources(saved,fresh):
+    """Present fresh URLs first while preserving previously cited text within each page.
+
+    pool() appends a repeated URL's new text and then cuts at the excerpt limit. Listing saved
+    sources first means that cut can only remove the newest text, never an earlier cited passage.
+    Reorder the merged pages afterwards so follow-up evaluation prioritises new results;
+    this order is also checkpointed for quota/restart retries.
+    """
+    merged=pool([*saved,*fresh])
+    priority={s.source_id:index for index,s in enumerate(pool(fresh))}
+    return sorted(merged,key=lambda s:priority.get(s.source_id,len(priority)))
+
+
+def category_sources(job,category):
+    """A category's own saved sources; a page shared with another category is never merged in."""
+    retained=job.get('retained_sources')
+    values=(retained.get(category) if retained is not None else None) or job.get('evidence',{}).get(category,[])
+    return {s.source_id:s for s in pool(values)}

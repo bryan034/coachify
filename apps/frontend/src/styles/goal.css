@@ -267,3 +267,15 @@
 .role-card>p,.role-card li>p:first-child{font-size:15px;line-height:1.5;color:var(--ink)}
 .briefing-sources a{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--mint-mist);font-size:12px;font-weight:600;color:var(--forest);text-decoration:none}
 .career-briefing .goal-header .briefing-target-meta{text-transform:none}
+.prep-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.prep-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.prep-actions input{margin-left:6px;padding:6px 8px;border:1px solid var(--line);border-radius:8px}
+.prep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:14px}
+.prep-group{margin-top:16px}.prep-group h3{margin:0 0 6px;font-size:15px;font-weight:600}
+.prep-chips{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.prep-chips li{padding:3px 10px;border:1px solid var(--line);border-radius:999px;background:var(--snow);font-size:13px}
+.prep-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.prep-rows li{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.prep-basis,.prep-priority,.prep-fit{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--slate)}
+.prep-basis.is-confirmed,.prep-fit.is-strength{color:var(--forest)}
+.prep-priority.is-high,.prep-fit.is-gap{color:var(--ink);border-color:var(--ink)}

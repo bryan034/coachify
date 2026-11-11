@@ -8,6 +8,7 @@ import {useProfile} from '@/features/profile/profile-provider';
 import {careerApi,refreshWorkspace,type CareerWorkspace,type ReviewSkill} from '@/lib/api/career';
 import {useCareerSession} from './career-session';
 import {CareerGoal} from './career-goal';
+import {InterviewPrepGuideCard} from './interview-prep-guide';
 import {OpportunityIntelligence} from './opportunity-intelligence';
 import {CvGoalConfirmationCard} from './cv-goal-confirmation';
 import {sourceLink} from './source-links';
@@ -191,6 +192,9 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
     <div className="briefing-learning"><LearningFocus key={`${goal._id}:${goal.version}`} skills={goal.skills} categories={workspace.current.skill_groups} matches={matches} outcomes={outcomes}/></div>
    </div>
   </>}
-  {view!=='skills'&&research(view)}
+  {view==='interview'&&goal.target_type==='specific_job'?<>
+   <InterviewPrepGuideCard key={`${goal._id}:${goal.version}`} goalId={goal._id} version={goal.version}/>
+   <details className="prep-research"><summary>Full research and sources</summary>{research('interview')}</details>
+  </>:view!=='skills'&&research(view)}
  </section>;
 }
