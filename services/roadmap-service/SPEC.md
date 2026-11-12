@@ -7,12 +7,12 @@ explicit development HTTP mode. Local testing can share the 16K-context
 Providers receive JSON Output plus the schema in the prompt;
 all responses still undergo the existing Pydantic and domain checks. Local calls
 serialize per service instance and use a 180-second HTTP timeout; operations use
-600-second budgets and 630-second leases. Cloud limits remain unchanged.
+240-second budgets and 270-second leases, as do cloud operations.
 
 
 ## Product direction — 4 November 2026
 
-The timed roadmap supersedes the 30 October chat-first direction and its "no exact time slots" limit. `/roadmap` is now Configure → Generate → Review. Configure is a fixed planner form. A button opens an optional chat helper, which guides the user through the required details and fills in the form; after a plan exists, the same helper requests edits. A Career goal and admissible Assessment evidence are required, and Assessment runs before planning. Evidence may be a selected extracted CV plus saved Profile declarations, or saved Profile declarations alone when no CV is selected.
+The timed roadmap supersedes the 30 October chat-first direction and its "no exact time slots" limit. `/roadmap` is now Configure → Generate → Review. Configure is a fixed planner form. A button opens an optional chat helper, which guides the user through the required details and fills in the form; after a plan exists, the same helper requests edits. A Career goal and admissible Assessment evidence are required, and a saved current Assessment is reused for planning. Missing or outdated evaluations require an explicit evaluation command before generation. Evidence may be a selected extracted CV plus saved Profile declarations, or saved Profile declarations alone when no CV is selected.
 
 Jira references: G01/SCRUM-34, R01/SCRUM-41, R02–R09/SCRUM-42–49, E01–E07/SCRUM-50–56 and T01–T06/SCRUM-57–62. Retain existing identifiers/hierarchy/statuses. These stories were not re-read for this slice because Jira was not accessible; check them for conflicts.
 
@@ -106,8 +106,25 @@ Workspace `active` and `draft` remain as older untimed plans, shown read-only un
 
 ## Configuration and limits
 
-See setup for required service-scoped credentials. All model calls go through the OpenAI Python SDK with the service's own base URL, key and model. `ROADMAP_LLM_TOKEN_PARAMETER` selects `max_completion_tokens` for models that reject `max_tokens`. Planning operations have a 330-second budget for Assessment polling plus three model calls, and plan calls allow 24,000 output tokens. Other limits are unchanged: 55-second cloud HTTP calls (local limits above), three worker slots, one operation per owner, 64 KiB requests, 1 MiB upstream responses and 120,000-byte model contexts. Overflow is explicit, not silent truncation.
+See setup for required service-scoped credentials. All model calls go through the OpenAI Python SDK with the service's own base URL, key and model. `ROADMAP_LLM_TOKEN_PARAMETER` selects `max_completion_tokens` for models that reject `max_tokens`. Planning operations have a total 240-second budget, including Assessment polling and model calls. Assessment is polled at most 60 times at two-second intervals (120 seconds of waiting plus request time), stopping early on completion or failure. Plan calls allow 24,000 output tokens and up to three validation attempts, subject to the overall operation deadline. Other limits are unchanged: 55-second cloud HTTP calls (local limits above), three worker slots, one operation per owner, 64 KiB requests, 1 MiB upstream responses and 250,000-byte model contexts. Overflow is explicit, not silent truncation.
 
 ## Remaining scope
 
 No external calendar or course integrations, automatic revision without a user request, scheduled reviews, actual-time recording, conversation continuation or modelled non-zero reduced periods. Task editing, period views, review decisions and recovery still need frontend implementation. The dashboard backend provides read-only projections; its frontend remains unimplemented. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.
+
+
+## Saved evaluation handoff
+
+Roadmap reads Assessment through its owner-scoped API. A saved result must have explicitly
+current freshness, a compatible skill profile and `stale=false`. A current result causes no
+Assessment command or evaluation model calls. The plan prompt includes saved per-skill
+judgements, requirement gaps and evidence-reference metadata; raw evidence text remains in
+the immutable Assessment and is not duplicated into the planning prompt. This does not
+truncate the authoritative saved evidence.
+
+Roadmap never starts a missing/outdated Assessment automatically. The UI offers Evaluate
+skills or Update evaluation, with independent freshness, progress and completeness indicators.
+If an explicit evaluation is already pending/running, Roadmap can reconnect with at most 60
+polls at two-second intervals. The total operation budget remains 240 seconds for cloud and
+local models; Assessment's timeouts are unchanged. Publication rechecks the exact source
+fingerprint, and accepting a preview requires a current evaluation and unchanged inputs.

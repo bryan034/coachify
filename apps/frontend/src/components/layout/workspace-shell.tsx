@@ -2,7 +2,7 @@
 import { BrandLogo } from '@/components/ui/brand-logo';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { useProfile } from '@/features/profile/profile-provider';
 import { statuses, studyYearLabel } from '@/features/profile/types';
@@ -24,11 +24,25 @@ export function pageTitle(pathname: string) {
  if (pathname === '/profile' || pathname.startsWith('/profile/')) return 'My profile';
  return [...nav, ...more].find(item => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label ?? 'elo';
 }
+/** The top page of the section the user is in; the logo returns there rather than always to Home. */
+export function sectionHome(pathname: string) {
+ if (pathname === '/profile' || pathname.startsWith('/profile/')) return '/profile';
+ return [...nav, ...more].find(item => pathname === item.href || pathname.startsWith(`${item.href}/`))?.href ?? '/dashboard';
+}
 export function WorkspaceShell({ children }: { children: ReactNode }) {
  const pathname = usePathname();
  const [menuOpen, setMenuOpen] = useState(false);
  const menuButton = useRef<HTMLButtonElement>(null);
  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+ const home = sectionHome(pathname);
+ // Already on the section page but inside one of its views (such as a CV review in the query string): clear the view
+ // through a history entry, which the page restores from like the browser's Back button.
+ const goHome = (event: MouseEvent<HTMLAnchorElement>) => {
+  if (pathname !== home || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  if (window.location.search || window.location.hash) { window.history.pushState(null, '', home); window.dispatchEvent(new PopStateEvent('popstate')); }
+  window.scrollTo?.({ top: 0 });
+ };
  const { profile, account, mode, token, signOut, loading, configError, loadError, sessionChecking, sessionError } = useProfile();
  // While a session is being rechecked, nothing private is reachable: the guard locks the page and the shell hides its links.
  const locked = Boolean(sessionChecking || sessionError);
@@ -40,11 +54,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
  return <div className="app">
   <a href="#main-content" className="skip-link">Skip to content</a>
   <div className="workspace-topbar" hidden={locked}>
-   <div className="workspace-topbar-title"><Link href="/dashboard" className="brand" aria-label="elo home"><BrandLogo/></Link><span aria-hidden="true"/><strong>{pageTitle(pathname)}</strong></div>
+   <div className="workspace-topbar-title"><Link href={home} className="brand" aria-label={`elo: back to ${pageTitle(home)}`} onClick={goHome}><BrandLogo/></Link><span aria-hidden="true"/><strong>{pageTitle(pathname)}</strong></div>
    <button ref={menuButton} type="button" className="workspace-menu btn ghost sm" aria-expanded={menuOpen} aria-controls="workspace-sidebar" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? 'Close navigation' : 'Menu'}</button>
   </div>
   <aside id="workspace-sidebar" hidden={locked} inert={locked} className={`side${menuOpen ? ' is-open' : ''}`} aria-label="Workspace" onKeyDown={event => { if (event.key === 'Escape') { setMenuOpen(false); menuButton.current?.focus(); } }} onClick={event => { if ((event.target as HTMLElement).closest('a')) setMenuOpen(false); }}>
-   <Link href="/dashboard" className="brand" aria-label="elo home"><BrandLogo/></Link>
+   <Link href={home} className="brand" aria-label={`elo: back to ${pageTitle(home)}`} onClick={goHome}><BrandLogo/></Link>
    <nav className="nav" aria-label="Main navigation">{nav.map(n => <Link key={n.href} href={n.href} className={isActive(n.href) ? 'on' : ''} aria-current={isActive(n.href) ? 'page' : undefined}><Icon name={n.icon}/>{n.label}</Link>)}</nav>
    <hr className="nav-divider"/>
    <nav className="nav" aria-label="More">{more.map(n => <Link key={n.href} href={n.href} className={isActive(n.href) ? 'on' : ''} aria-current={isActive(n.href) ? 'page' : undefined}><Icon name={n.icon}/>{n.label}</Link>)}</nav>

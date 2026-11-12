@@ -162,7 +162,8 @@ def test_structured_wording_is_saved_without_another_model_pass(opportunity_flow
     assert result['categories']['interview_intelligence']['findings'][0]['value']==text
     assert calls.count('opportunity_structure')==5
     job=flow[1].research_contexts.find_one({'kind':'opportunity_job'})
-    assert set(job['metrics'])=={'opportunity_plan','opportunity_structure'}
+    # The only model stages are planning, structuring and the skill-level rating; nothing rewrites the wording.
+    assert set(job['metrics'])=={'opportunity_plan','opportunity_structure','opportunity_skill_levels'}
 
 
 def test_empty_retrieval_is_completed_with_category_not_found_notice(opportunity_flow):

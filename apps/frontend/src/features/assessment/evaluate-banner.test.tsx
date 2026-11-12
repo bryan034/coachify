@@ -59,3 +59,9 @@ it('disappears once a current evaluation exists', async () => {
  await waitFor(() => expect(api.mock.calls.some(call => call[0] === '/context')).toBe(true));
  await waitFor(() => expect(view.container).toBeEmptyDOMElement());
 });
+it('leaves an out-of-date evaluation to the workspace change banner', async () => {
+ serve({input_hash: 'new-hash'}, {stale: true, result: {input_hash: 'old-hash', job_skill_gaps: [], groups: [], priorities: []}});
+ const { container } = render(<View/>);
+ await waitFor(() => expect(api).toHaveBeenCalledWith('/context', 'synthetic', undefined, expect.anything()));
+ expect(container).toBeEmptyDOMElement();
+});

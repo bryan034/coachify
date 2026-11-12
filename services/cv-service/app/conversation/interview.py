@@ -159,10 +159,7 @@ class InterviewHarness:
                         break
                     except ValidationError:
                         if attempt:
-                            active = conversation.get('active_question')
-                            reply = 'Could you clarify that in a little more detail?' + (' ' + active['question'] if active else '')
-                            return await self.publish(account, identifier, route['id'], token, memory,
-                                reply, active, conversation.get('interview_targets', []))
+                            return await self.schema_followup(app, account, conversation, document, route, token, memory)
                 evaluated = {'result': result.model_dump(mode='json'), 'metadata': metadata}
                 def remember(current):
                     service.check_lease(action_in(current, route['id']), token)
@@ -515,33 +512,96 @@ class InterviewHarness:
         else:
             active, targets = conversation.get('active_question'), conversation.get('interview_targets', [])
         if active:
-            from app.conversation.service import action_in
-            # Interview targets carry field scope. Legacy attribution-wide questions
-            # would require reinterpreting every skill on an unrelated follow-up.
-            uncertainty = 'claim'
-            question = {'id': active['id'], 'item_id': active['item_id'],
-                'kind': 'project' if context['focused_source']['kind'] == 'project' else 'work' if context['focused_source']['kind'] == 'experience' else 'other',
-                'question': active['question'], 'uncertainty': uncertainty,
-                'uncertainty_key': digest({'interview_question': active['id']}), 'status': 'unanswered', 'answer': None,
-                'career_target_id': None, 'career_target_version': None, 'career_target_type': None,
-                'extraction_version': document['extraction_version'], 'reconciliation_required': False,
-                'answer_revision': 0, 'answer_sequence': 0, 'interpretation_status': 'not_requested',
-                'interpretation_error': None, 'resolution': 'unresolved', 'interpretation': None, 'followup_of': None,
-                '_interview_targets': targets}
-            def retain_plan(current):
-                action = action_in(current, route['id'])
-                self.service.check_lease(action, token)
-                action['_interview_plan'] = {'memory': memory, 'reply': reply_text, 'active': active, 'targets': targets,
-                    'question': question, 'expected_version': document['version']}
-            await run_in_threadpool(self.service.update, account['id'], conversation['_id'], retain_plan)
-            def add(current):
-                if any(q['id'] == question['id'] for q in current['clarifications']): return
-                if len(current['clarifications']) >= 800: raise CvError('This CV has reached its question history limit.', 409)
-                current['clarifications'].append(question)
-            await run_in_threadpool(self.service.cv.mutate, account['id'], document['_id'],
-                Mutation(expected_version=document['version'], mutation_id=key(route['id'] + ':interview-question')),
-                'interview-question', add)
+            source = next(item for item in current_items if item['id'] == active['item_id'])
+            return await self.save_question(account, conversation, document, route, token, memory,
+                reply_text, active, targets, source)
         return await self.publish(account, conversation['_id'], route['id'], token, memory, reply_text, active, targets)
+
+    async def schema_followup(self, app, account, conversation, document, route, token, memory):
+        """A repeated question is a new, durable question within the same topic budget."""
+        from app.conversation.service import key
+        active = conversation.get('active_question')
+        if not active:
+            return await self.plan(app, account, conversation, document, route, token, memory)
+        item_id = active['item_id']
+        asked = topic_question_count(memory, item_id)
+        if asked >= MAX_TOPIC_QUESTIONS:
+            memory['coverage'][item_id] = {'item_id': item_id, 'status': 'reviewed_with_gaps', 'evidence_refs': []}
+            memory['focus_item_id'] = None
+            return await self.plan(app, account, {**conversation, 'active_question': None}, document, route, token, memory)
+        active = {**active, 'id': key(route['id'] + ':interview-question'),
+                  'number': asked + 1, 'limit': MAX_TOPIC_QUESTIONS}
+        targets = conversation.get('interview_targets', [])
+        memory.setdefault('question_counts', {})[item_id] = asked + 1
+        memory['questions'].append({**active, 'targets': targets, 'evidence_version': document['effective_version']})
+        memory['questions'] = memory['questions'][-120:]
+        source = next(item for item in effective_items(document) if item['id'] == item_id and not item['removed'])
+        return await self.save_question(account, conversation, document, route, token, memory,
+            active['question'], active, targets, source)
+
+    async def save_question(self, account, conversation, document, route, token, memory, reply_text, active, targets, source):
+        """Stage before writing so a retry publishes the same question and count exactly once."""
+        from app.conversation.service import action_in, key
+        # Interview targets carry field scope. Legacy attribution-wide questions
+        # would require reinterpreting every skill on an unrelated follow-up.
+        uncertainty = 'claim'
+        question = {'id': active['id'], 'item_id': active['item_id'],
+            'kind': 'project' if source['kind'] == 'project' else 'work' if source['kind'] == 'experience' else 'other',
+            'question': active['question'], 'uncertainty': uncertainty,
+            'uncertainty_key': digest({'interview_question': active['id']}), 'status': 'unanswered', 'answer': None,
+            'career_target_id': None, 'career_target_version': None, 'career_target_type': None,
+            'extraction_version': document['extraction_version'], 'reconciliation_required': False,
+            'answer_revision': 0, 'answer_sequence': 0, 'interpretation_status': 'not_requested',
+            'interpretation_error': None, 'resolution': 'unresolved', 'interpretation': None, 'followup_of': None,
+            '_interview_targets': targets}
+        def retain_plan(current):
+            action = action_in(current, route['id'])
+            self.service.check_lease(action, token)
+            action['_interview_plan'] = {'memory': memory, 'reply': reply_text, 'active': active, 'targets': targets,
+                'question': question, 'expected_version': document['version']}
+        await run_in_threadpool(self.service.update, account['id'], conversation['_id'], retain_plan)
+        def add(current):
+            if any(q['id'] == question['id'] for q in current['clarifications']): return
+            if len(current['clarifications']) >= 800: raise CvError('This CV has reached its question history limit.', 409)
+            current['clarifications'].append(question)
+        await run_in_threadpool(self.service.cv.mutate, account['id'], document['_id'],
+            Mutation(expected_version=document['version'], mutation_id=key(route['id'] + ':interview-question')),
+            'interview-question', add)
+        return await self.publish(account, conversation['_id'], route['id'], token, memory, reply_text, active, targets)
+
+    async def rate_skill_levels(self, account, conversation):
+        """Rate the skills of every closed or skipped topic, and of every source once the review ends.
+
+        Runs after the reply is saved and is best effort: a failure never loses the turn, and the
+        topic is rated on a later turn. Levels are stored beside the CV and applied on read.
+        """
+        from uuid import uuid5, NAMESPACE_URL
+        from app.domain.skill_levels import BATCH, pending_sources, validate_level_review
+        service, owner = self.service, account['id']
+        try:
+            memory = conversation.get('interview_memory') or {}
+            document = service.cv.get(owner, conversation['cv_id'])
+            if document['operation']['status'] != 'ready' or document.get('candidate'): return
+            finished = memory.get('status') in {'reviewed', 'reviewed_with_gaps'}
+            statuses = {item_id: value['status'] for item_id, value in memory.get('coverage', {}).items()}
+            items = [item for item in effective_items(document)
+                     if not item['removed'] and (finished or item['id'] in statuses)]
+            pending = pending_sources(document, items, statuses)
+            for start in range(0, len(pending), BATCH):
+                batch = pending[start:start + BATCH]
+                rated = await run_in_threadpool(service.rate_skill_levels, owner,
+                    {'task': 'cv_skill_levels', 'sources': [source['model'] for source in batch]})
+                if rated is None: return
+                reviews = validate_level_review(rated[0], batch)
+                current = service.cv.get(owner, document['_id'])
+                def store(target):
+                    target.setdefault('skill_level_reviews', {}).update(deepcopy(reviews))
+                await run_in_threadpool(service.cv.mutate, owner, document['_id'],
+                    Mutation(expected_version=current['version'],
+                             mutation_id=uuid5(NAMESPACE_URL, 'elo:skill-levels:' + digest(reviews))),
+                    'skill-levels', store, record_history=False)
+        except Exception as exc:  # Best effort by design; the saved review is never at risk.
+            logger.warning('CV skill level evaluation skipped reason=%s', type(exc).__name__)
 
     async def pause(self, account, identifier, route_id, token, memory, reply):
         memory['status'] = 'paused'
@@ -571,6 +631,7 @@ class InterviewHarness:
                            active_question=active, interview_targets=targets)
             if active: current['last_item_id'] = active['item_id']
         saved = await run_in_threadpool(self.service.update, account['id'], identifier, save)
+        await self.rate_skill_levels(account, saved)
         if memory.get('status') in {'reviewed', 'reviewed_with_gaps'}:
             await run_in_threadpool(self.service.cv.mark_reviewed_when_ready, account['id'], saved['cv_id'])
         return saved

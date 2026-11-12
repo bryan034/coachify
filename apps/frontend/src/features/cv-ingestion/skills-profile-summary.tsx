@@ -1,5 +1,6 @@
 "use client";
 import { useComparison } from '@/features/assessment/comparison';
+import { EvaluationStatusPanel } from '@/features/assessment/evaluation-status';
 import { EvaluateBanner } from '@/features/assessment/evaluate-banner';
 import {SkillBaseline} from './skill-baseline';
 import {ReviewEvidence} from './review-evidence';
@@ -73,7 +74,7 @@ export function SkillsProfileSummary({token, title, profile, cv, recentReview, d
    {skills.length > 0 && <p className="skills-hero-line"><strong>{skills.length} {skills.length === 1 ? 'skill' : 'skills'}</strong> from <strong>{experiences} {experiences === 1 ? 'experience' : 'experiences'}</strong>{goalRole ? <> · compared with <Link href="/career-goal">{goalRole}</Link></> : null}</p>}
   </div>
   <div className="skills-hero-actions"><button type="button" className="btn ghost" onClick={upload}><Icon name="up"/>Upload new CV</button><button type="button" className="btn pri" aria-expanded={chatOpen} onClick={chat ?? build}><Icon name="chat"/>{chatOpen ? 'Close chat' : 'Chat to edit'}</button></div></header>
-  <EvaluateBanner comparison={comparison} here="/cv"/>
+  <EvaluationStatusPanel comparison={comparison} /><EvaluateBanner comparison={comparison} here="/cv"/>
   {cv && reviewed && cv.status === 'ready' && <ReviewComplete cv={cv}/>}
   {cvCard}
   {<div className="skills-entry-actions">{recentReview && recentReview.id !== cv?.id && <button type="button" className="btn ghost sm" onClick={() => review(recentReview.id)}>Review {recentReview.display_name ?? recentReview.file_name}</button>}{(profile?.status === 'draft' || !!profile?.entries.length) && <button type="button" className="btn ghost sm" onClick={build}>{profile?.status === 'draft' ? 'Continue building your profile through chat' : 'Update through chat'}</button>}</div>}
@@ -84,7 +85,7 @@ export function SkillsProfileSummary({token, title, profile, cv, recentReview, d
    {!profile && !error && <CardSkeleton label="Loading your skills profile…"/>}
    {profile && !profile.entries.length && !cv && !declarations?.declarations.length && <p className="skills-empty">Start with your CV or a conversation. Your experience and skills will appear here as you build your profile.</p>}
    {profile?.status === 'draft'&&<div className="skills-profile-save"><p className="small">Review the details below. You can save a partial profile; unknown details stay uncertain.</p><button className="btn pri" type="button" disabled={saving||pending} onClick={save}>{saving?'Saving profile…':'Save profile'}</button></div>}
-   {skills.length>0&&<SkillProfile skills={skills} categories={profileSkillGroups(cv, profile, declarations)} subcategories={{...declarations?.skill_subgroups,...profile?.skill_subgroups,...cv?.skill_subgroups}} comparison={comparison.result?.inputs?.cv_id && comparison.result.inputs.cv_id !== cv?.id ? null : comparison.result}/>}
+   {skills.length>0&&<SkillProfile token={token} skills={skills} categories={profileSkillGroups(cv, profile, declarations)} subcategories={{...declarations?.skill_subgroups,...profile?.skill_subgroups,...cv?.skill_subgroups}} comparison={comparison.result?.inputs?.cv_id && comparison.result.inputs.cv_id !== cv?.id ? null : comparison.result}/>}
    {skills.length===0&&cv&&<p className="skills-empty">No skills have been saved from this CV yet. They will appear here once they are available.</p>}
    {hasExperience&&<section className="skills-experience" id="your-experience" aria-labelledby="your-experience-title">
     <h2 id="your-experience-title">Experience behind your skills</h2>

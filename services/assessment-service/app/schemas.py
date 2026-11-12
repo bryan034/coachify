@@ -81,6 +81,7 @@ class SkillProfile(Contract):
     skills:list[EvaluatedSkill]
 
 class InputVersions(Contract):
+    evidence_hash:str|None=None
     as_of_date:str|None=None
     source_mode:Literal['cv_and_profile','profile_only']='cv_and_profile'
     cv_id:str|None
@@ -137,7 +138,14 @@ class Result(Contract):
     research_coverage:Literal['available','no_findings','unavailable','stale','partial']
     # Absent on results saved before per-skill evaluation existed.
     skill_profile:SkillProfile|None=None
+class EvaluationStatus(Contract):
+    freshness:Literal['missing','current','outdated','unavailable']
+    processing:Literal['idle','evaluating','failed']
+    completeness:Literal['complete','partial']|None=None
+    evaluated_at:str|None=None
+    reasons:list[str]=Field(default_factory=list)
 class Context(Contract):
+    evaluation:EvaluationStatus
     ready:bool
     issues:list[dict]|None=None
     goal:dict|None=None
@@ -151,6 +159,7 @@ class Context(Contract):
     research_pending:bool|None=None
     model_available:bool
 class Current(Contract):
+    evaluation:EvaluationStatus
     version:int
     operation:dict|None
     result:Result|None
@@ -158,7 +167,25 @@ class Current(Contract):
     ready:bool
     issues:list[dict]
 
+SkillName=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=120)]
+class SkillRatingInput(Contract):
+    """The person's own level for a skill elo could not rate. A null score removes it."""
+    expected_version:int=Field(strict=True,ge=0)
+    name:SkillName
+    canonical_skill_id:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160)]|None=None
+    score:int|None=Field(default=None,strict=True,ge=1,le=10)
+class SkillRating(Contract):
+    key:str
+    name:str
+    canonical_skill_id:str|None=None
+    score:int=Field(ge=1,le=10)
+    updated_at:str
+class SkillRatings(Contract):
+    version:int
+    ratings:list[SkillRating]
+
 class DashboardSource(Contract):
+    evaluation:EvaluationStatus
     version:int
     workspace_updated_at:str|None=None
     operation:dict|None=None

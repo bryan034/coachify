@@ -7,6 +7,11 @@ const session = vi.hoisted(() => ({ account: { id: 'owner-one' }, token: 'synthe
 const api = vi.hoisted(() => vi.fn());
 vi.mock('@/features/profile/profile-provider', () => ({ useProfile: () => session }));
 vi.mock('@/lib/api/roadmap', () => ({ roadmapApi: api, RoadmapError: class extends Error { status = 503; } }));
+vi.mock('@/lib/api/assessment', async original => ({ ...await original<typeof import('@/lib/api/assessment')>(),
+ assessmentApi: vi.fn(async path => path === '/context' ? { ready: true, model_available: true, cv_reviewed: true } : {
+  version: 0, stale: false, result: null, operation: null, ready: true, issues: [],
+  evaluation: { freshness: 'current', processing: 'idle', completeness: 'complete', evaluated_at: null, reasons: [] },
+ }) }));
 function state(overrides: Partial<Workspace> = {}): Workspace { return { planner: planner(), version: 0, messages: [], operation: null, active: null, draft: null, assessment: null, stale: false,
  context: { ready: true, issues: [], model_available: true, research_coverage: 'no_findings', goal: { role: 'Developer', target_type: 'specific_job' }, cv: { id: 'cv-one', name: 'synthetic.docx' }, planning_defaults: { application_date: null, weekly_hours: 6, availability_periods: [] } }, ...overrides }; }
 const openHelper = async () => fireEvent.click(await screen.findByRole('button', { name: /(Start|Continue with) chat helper/ }));

@@ -27,6 +27,8 @@ function setupStep(c: Comparison): Step | null {
 export function EvaluateBanner({ comparison: c, here }: { comparison: Comparison; here: Page }) {
  if (c.error && !c.current) return <section className="evaluate-banner is-setup" role="alert"><div><h2>Your evaluation could not be loaded</h2><p>{c.error}</p></div><div className="evaluate-banner-actions"><button type="button" className="btn" onClick={c.retry}>Reload</button></div></section>;
  if (!c.current || !c.context || c.result) return null;
+ // An earlier evaluation from changed inputs is announced on every page by ChangeBanner.
+ if (c.current.result && c.context.ready && c.current.result.input_hash !== c.context.input_hash) return null;
  const role = c.context.goal?.role;
  const operation = c.current.operation;
  if (operation && ['pending', 'running'].includes(operation.status)) return <section className="evaluate-banner" aria-busy="true" aria-labelledby="evaluate-banner-title">

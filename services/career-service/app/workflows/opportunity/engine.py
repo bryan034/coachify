@@ -28,7 +28,7 @@ from .store import OpportunityStore
 from .sources import pool,retain_useful,merge_sources,category_sources
 from .queries import ACTIVITIES,planned_queries
 from app.domain.review import MAPPING_VERSION
-from .domain import whitespace,public_opportunity,validate_claims,summary_input,dedupe_findings,supported_claims
+from .domain import whitespace,public_opportunity,validate_claims,summary_input,dedupe_findings,supported_claims,validated_skill_levels
 
 logger=logging.getLogger('uvicorn.error.opportunity')
 
@@ -69,6 +69,11 @@ def availability_issues(settings,ai,source):
     return issues
 
 def merge(left,right):return {**left,**right}
+def valid_levels(levels,categories):
+    # A rating may only cite findings that survived into the saved report.
+    ids={f.finding_id for result in categories.values() for f in result.findings}
+    return [{**level,'finding_ids':[i for i in level.get('finding_ids',[]) if i in ids]} for level in levels or []][:60]
+
 class State(TypedDict,total=False):
     job_id:str
     results:Annotated[dict,merge]
@@ -87,9 +92,9 @@ class OpportunityEngine:
         self.availability_issues=availability_issues(settings,ai,self.source)
         self.available=not self.availability_issues
         graph=StateGraph(State)
-        for name,node in [('load_context',self.load),('cache_and_plan',self.plan),('research_category',self.branch),('quality',self.quality),('summarize',self.summarize),('validate_persist',self.persist)]:graph.add_node(name,node)
+        for name,node in [('load_context',self.load),('cache_and_plan',self.plan),('research_category',self.branch),('quality',self.quality),('summarize',self.summarize),('rate_skills',self.rate_skills),('validate_persist',self.persist)]:graph.add_node(name,node)
         graph.add_edge(START,'load_context');graph.add_edge('load_context','cache_and_plan')
-        graph.add_conditional_edges('cache_and_plan',self.fanout);graph.add_edge('research_category','quality');graph.add_edge('quality','summarize');graph.add_edge('summarize','validate_persist');graph.add_edge('validate_persist',END)
+        graph.add_conditional_edges('cache_and_plan',self.fanout);graph.add_edge('research_category','quality');graph.add_edge('quality','summarize');graph.add_edge('summarize','rate_skills');graph.add_edge('rate_skills','validate_persist');graph.add_edge('validate_persist',END)
         saver=MongoDBSaver(db.client,db_name=db.name,checkpoint_collection_name='career_checkpoints',writes_collection_name='career_checkpoint_writes',ttl=86400)
         self.graph=graph.compile(checkpointer=saver)
         self.sweeper=asyncio.create_task(self.recover())
@@ -289,6 +294,29 @@ class OpportunityEngine:
         await thread(self.store.update,job['_id'],job['worker_token'],summary_error=False)
         return {'summary':summary.model_dump()}
 
+    async def rate_skills(self,state):
+        """Rate the level the role needs in each goal skill from the validated findings.
+
+        Optional enrichment: any model failure leaves the description-based targets in place.
+        """
+        job=await self.job(state);skills=job.get('skills') or []
+        categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
+        # Rebuilding a cached report's summary researched nothing new: keep its saved ratings, spend no call.
+        if not skills or not job.get('requested') or any(v.status=='pending' for v in categories.values()):return {}
+        findings=[{k:f[k] for k in ('id','category','field','value','confidence','scope')} for f in summary_input(categories)]
+        public=job['public'];ids={f['id'] for f in findings}
+        data={'opportunity':{k:public.get(k) for k in ('company','role','field','location','seniority_level','employment_type')},'skills':skills,'findings':findings}
+        try:
+            output=await self.generate(job,'opportunity_skill_levels',data,lambda value:validated_skill_levels(value,skills,ids))
+            levels=validated_skill_levels(output,skills,ids)
+        except Exception as error:
+            # Never let this enrichment fail or re-run the research: an unhandled error here would
+            # make durable recovery repeat the whole job. Cancellation still propagates.
+            logger.warning('node=opportunity_skill_levels skipped error_code=%s',getattr(error,'code',type(error).__name__))
+            return {}
+        await thread(self.store.update,job['_id'],job['worker_token'],skill_levels=levels)
+        return {}
+
     async def persist(self,state):
         job=await self.job(state);identifier=job['_id'];token=job['worker_token'];cache=job['cache'];context=ResearchContext.model_validate(job['context'])
         categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
@@ -300,6 +328,7 @@ class OpportunityEngine:
         models={k:v for k,v in {'reasoning':getattr(getattr(primary,'settings',None),'model',None),'coordination':getattr(getattr(coordinator,'settings',None),'model',None)}.items() if v}
         report=OpportunityReport(models=models,fingerprint=context.details_fingerprint,opportunity_id=context.details_fingerprint if context.company else None,
             employment_type=job['public']['employment_type'],job_url=job['public']['job_url'],categories=categories,summary=Summary.model_validate(state.get('summary',{})),status=status,
+            skill_levels=valid_levels(job.get('skill_levels'),categories),
             researched_at=stamp,expires_at=min(v.expires_at or stamp for v in categories.values()),warnings=['Summary uses only validated cited extracts.']+(['Overall summary unavailable; validated category findings remain available.'] if job.get('summary_error') else []))
         record=InterviewResearch(_id=str(ObjectId()),version=cache['version'],skill_mapping_version=MAPPING_VERSION,created_at=stamp,updated_at=stamp,
             **context.model_dump(),intelligence=report,sources=sources,

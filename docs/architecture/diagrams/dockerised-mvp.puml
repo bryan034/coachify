@@ -69,7 +69,7 @@ Roadmap --> Profile : Read deadline and availability
 Assessment --> CV : Selected effective evidence and versions
 Assessment --> Career : Full goal and linked research snapshot
 Assessment --> Profile : Verify session and current background
-Roadmap --> Assessment : Current comparison, evidence preview and freshness
+Roadmap --> Assessment : Reuse current saved skill evaluation; explicit update first; resume pending work
 Jobs --> Profile : Verify session
 
 CV --> CVDB : Own records only
@@ -141,3 +141,5 @@ endlegend
 @enduml
 
 ' CV interview memory persists in existing CV Mongo records; extraction graph/provider context remains transient.
+
+' CV skill ratings and Career researched requirements share the 1-10 competence scale; Assessment compares them.

@@ -2,14 +2,15 @@ from uuid import uuid5, NAMESPACE_URL
 from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import application, authenticated, Problem, begin, launch, operation_view, stamp, digest
-from app.schemas import Generate, Result, Context, Current, DashboardSource, batch_schema
+from app.schemas import Generate, Result, Context, Current, DashboardSource, SkillRatingInput, SkillRatings, batch_schema
 from app.inputs import capture
-from app.domain import INSTRUCTIONS, validate_batch, group_outcome
+from app.domain import INSTRUCTIONS, validate_batch, group_outcome, model_evidence, ASSESSMENT_CONTEXT_BYTES
 from app.skills import evaluate_skills, link_profile
 from app.competence import RUBRIC_VERSION
+from app.freshness import evaluation_status
 
 def create_app(store=None,upstream=None,model=None):
-    app=application('elo Assessment API','ASSESSMENT',store=store,upstream=upstream,model=model)
+    app=application('elo Assessment API','ASSESSMENT',store=store,upstream=upstream,model=model,max_context_bytes=ASSESSMENT_CONTEXT_BYTES)
     async def worker(row,account):
         snapshot=await capture(app.state.upstream,account)
         if not snapshot['ready']:raise Problem('Complete the selected CV and Career goal before assessment.',409,'inputs_missing')
@@ -20,7 +21,10 @@ def create_app(store=None,upstream=None,model=None):
         # source revisions still match. Never reuse its already inflated scores.
         if checkpoint and checkpoint.get('scoring_rubric')!=RUBRIC_VERSION and checkpoint['input_hash']==digest(snapshot['inputs']):
             checkpoint=None
-        if checkpoint and checkpoint['input_hash']!=snapshot['input_hash']:raise Problem('The captured inputs changed. Start a new assessment with the latest inputs.',409,'inputs_changed')
+        # A retry of a failed run carries its checkpoint. When the CV, goal, research or profile changed since,
+        # its partial outcomes describe old inputs: discard them and compare the latest inputs from the start.
+        if checkpoint and checkpoint['input_hash']!=snapshot['input_hash']:
+            checkpoint=None
         if checkpoint:
             snapshot=checkpoint['snapshot'];outcomes=checkpoint['outcomes']
         else:
@@ -33,7 +37,7 @@ def create_app(store=None,upstream=None,model=None):
             live=await capture(app.state.upstream,verified)
             if live.get('input_hash')!=snapshot['input_hash']:raise Problem('Your inputs changed before the next comparison step.',409,'inputs_changed')
             requirements=snapshot['requirements'][start:start+8]
-            model_context={'requirements':requirements,'evidence':snapshot['evidence']}
+            model_context={'requirements':requirements,'evidence':model_evidence(snapshot['evidence'],requirements)}
             schema=batch_schema(requirements,snapshot['evidence'])
             for attempt in range(2):
                 output=await app.state.model.generate(schema,INSTRUCTIONS,model_context)
@@ -93,17 +97,22 @@ def create_app(store=None,upstream=None,model=None):
     async def context(request:Request,account=Depends(authenticated)):
         """What an evaluation would read, and which setup step is still open. Never starts one."""
         snapshot=await capture(app.state.upstream,account)
-        return {k:snapshot.get(k) for k in ('ready','issues','goal','cv','input_hash','inputs','research_coverage','evidence','cv_reviewed','research_pending')} | {'model_available':app.state.model.configured}
+        row=await thread(app.state.store.load,account['id'])
+        return {k:snapshot.get(k) for k in ('ready','issues','goal','cv','input_hash','inputs','research_coverage','evidence','cv_reviewed','research_pending')} | {'model_available':app.state.model.configured,'evaluation':evaluation_status(row,snapshot)}
 
     @app.get('/api/v1/assessments/current',response_model=Current)
     async def current(request:Request,account=Depends(authenticated)):
         """Read the saved comparison and resume a pending one. A new comparison starts only from the explicit command."""
+        unavailable=False
+        try:snapshot=await capture(app.state.upstream,account)
+        except Problem as error:
+            if error.status in (401,403):raise
+            unavailable=True;snapshot={'ready':False,'issues':[]}
         row=await thread(app.state.store.load,account['id'])
-        snapshot=await capture(app.state.upstream,account)
-        if row.get('pending'):launch(app,account['id'],account['token'],worker)
-        result=row.get('result')
-        return {'version':row['version'],'operation':operation_view(row),'result':result,
-            'stale':bool(result and result['input_hash']!=snapshot.get('input_hash')),'ready':snapshot['ready'],'issues':snapshot['issues']}
+        if row.get('pending') and not unavailable:launch(app,account['id'],account['token'],worker)
+        result=row.get('result');evaluation=evaluation_status(row,snapshot,unavailable)
+        return {'version':row['version'],'operation':operation_view(row),'result':result,'evaluation':evaluation,
+            'stale':bool(result and evaluation['freshness']!='current'),'ready':snapshot['ready'],'issues':snapshot['issues']}
 
     @app.get('/api/v1/assessments/dashboard-source',response_model=DashboardSource)
     async def dashboard_source(request:Request,account=Depends(authenticated)):
@@ -127,9 +136,10 @@ def create_app(store=None,upstream=None,model=None):
         elif not snapshot['ready']:
             freshness='not_ready'
         else:
-            freshness='current' if result['input_hash']==snapshot.get('input_hash') else 'stale'
+            freshness='current' if evaluation_status(row,snapshot)['freshness']=='current' else 'stale'
         return {'version':row['version'],'workspace_updated_at':row.get('updated_at'),
             'operation':operation_view(row),'result':result,'freshness':freshness,
+            'evaluation':evaluation_status(row,snapshot,bool(failure)),
             'ready':snapshot.get('ready') if snapshot else None,
             'issues':snapshot.get('issues',[]) if snapshot else [],
             'input_hash':snapshot.get('input_hash') if snapshot else None,
@@ -151,6 +161,29 @@ def create_app(store=None,upstream=None,model=None):
         return {'version':row['version'],'operation':operation_view(row),
             'retry_request':(row.get('last_operation') or {}).get('body'),
             'result':row.get('result') if not row.get('pending') else None}
+
+    def ratings_view(row):
+        return {'version':row['version'],'ratings':sorted((row.get('skill_ratings') or {}).values(),key=lambda r:r['name'].casefold())}
+
+    @app.get('/api/v1/assessments/skill-ratings',response_model=SkillRatings)
+    async def skill_ratings(request:Request,account=Depends(authenticated)):
+        """The levels the person set for skills elo could not rate. They are shown as self-rated and never change a model score."""
+        return ratings_view(await thread(app.state.store.load,account['id']))
+
+    @app.post('/api/v1/assessments/skill-ratings',response_model=SkillRatings)
+    async def rate_skill(body:SkillRatingInput,request:Request,account=Depends(authenticated)):
+        row=await thread(app.state.store.load,account['id'])
+        # A running evaluation publishes only onto the version it started from; never move it.
+        if row.get('pending'):raise Problem('Wait for the current evaluation to finish before rating a skill.',409,'operation_pending')
+        if row['version']!=body.expected_version:raise Problem('Your workspace changed. Reload before saving.',409,'version_conflict')
+        key=body.canonical_skill_id or body.name.casefold()
+        ratings=dict(row.get('skill_ratings') or {})
+        if body.score is None:ratings.pop(key,None)
+        else:
+            if key not in ratings and len(ratings)>=300:raise Problem('You can rate up to 300 skills.',413,'ratings_capacity')
+            ratings[key]={'key':key,'name':body.name,'canonical_skill_id':body.canonical_skill_id,'score':body.score,'updated_at':stamp()}
+        row['skill_ratings']=ratings
+        return ratings_view(await thread(app.state.store.cas,account['id'],row['version'],row))
 
     @app.get('/api/v1/assessments/{identifier}',response_model=Result)
     async def history(identifier:str,request:Request,account=Depends(authenticated)):

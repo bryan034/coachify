@@ -45,3 +45,22 @@ export function skillMatches(result: Assessment): Record<string, SkillMatch> {
  const covered = new Set((result.groups ?? []).filter(group => group.operator === 'any' && group.match_status === 'supported').flatMap(group => group.requirement_refs));
  return Object.fromEntries(result.job_skill_gaps.map(item => [item.ref.slice(4), item.match_status !== 'supported' && covered.has(item.ref) ? 'covered' : item.match_status]));
 }
+
+/** A level the person set for a skill elo could not rate. Shown as self-rated; it never changes a model score. */
+export type SkillRating = { key: string; name: string; canonical_skill_id: string | null; score: number; updated_at: string };
+export type SkillRatings = { version: number; ratings: SkillRating[] };
+export const skillRatings = (token: string, signal?: AbortSignal) => assessmentApi<SkillRatings>('/skill-ratings', token, undefined, signal);
+/** Sets (1–10) or clears (null) one self-rating against the expected workspace version. */
+export const rateSkill = (token: string, body: { expected_version: number; name: string; canonical_skill_id: string | null; score: number | null }) =>
+ assessmentApi<SkillRatings>('/skill-ratings', token, body);
+/** The same identity the backend keys ratings by: registry id, else the case-folded name. */
+export const ratingKey = (skill: { canonicalId?: string | null; name: string }) => skill.canonicalId || skill.name.trim().toLowerCase();
+
+/** Derived by Assessment from the saved result and live source revisions. */
+export type EvaluationStatus = {
+ freshness: 'missing' | 'current' | 'outdated' | 'unavailable';
+ processing: 'idle' | 'evaluating' | 'failed';
+ completeness: 'complete' | 'partial' | null;
+ evaluated_at: string | null;
+ reasons: string[];
+};

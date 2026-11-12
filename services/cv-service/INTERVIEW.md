@@ -28,7 +28,12 @@ after failure. Review validation checks schema, topic relevance and source ident
 it does not verify agreement with the CV, quote entailment or earlier answers. Normal factual interview turns reuse their already-admitted interpretation;
 they do not run a second interpretation model merely to save it. Review turns do not make a separate evidence-verification call. Planning starts
 after statement actions succeed. One automatic schema retry is allowed; repeated
-malformed output asks a conversational clarification without a failed evidence card.
+malformed output repeats the question directly as a new numbered follow-up, without
+a failed evidence card. Follow-ups use the same durable question publication path
+and count toward the three-question topic limit, including after reload or retry.
+After the third question, the harness closes the topic with gaps and moves on;
+it never asks a fourth question because interpretation failed. The original user
+messages remain saved in the conversation; malformed interpretations add no facts.
 Corrections, removals and manual additions retain explicit confirmation. Confirmation
 or action-specific recovery resumes the original interview planner once siblings finish.
 

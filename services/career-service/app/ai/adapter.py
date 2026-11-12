@@ -43,11 +43,11 @@ from app.ai.interview_contracts import InterviewFindings,interview_input
 from app.ai.qa_contracts import QuestionRoute,FocusedAnswer
 from app.ai.goal_edit_contracts import GoalEditDecision
 
-from app.ai.opportunity_contracts import QueryPlan,StructuredFindings,ReferencedFindings,FindingReferenceError,findings_schema,PROMPTS as OPPORTUNITY_PROMPTS
+from app.ai.opportunity_contracts import QueryPlan,SkillLevels,StructuredFindings,ReferencedFindings,FindingReferenceError,findings_schema,PROMPTS as OPPORTUNITY_PROMPTS
 from app.ai.discovery_contracts import OUTPUTS as DISCOVERY_OUTPUTS, PROMPTS as DISCOVERY_PROMPTS
 
 usage_logger = logging.getLogger('uvicorn.error.ai_usage')
-MODEL_OUTPUTS = {'goal_summary':GoalSummary,'interview_prep':PrepSuggestions,'role_summary':RoleDigest,'jd_scope':JobIdentity,**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_structure':ReferencedFindings,'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'career_guidance':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
+MODEL_OUTPUTS = {'goal_summary':GoalSummary,'interview_prep':PrepSuggestions,'role_summary':RoleDigest,'jd_scope':JobIdentity,**OUTPUTS,**DISCOVERY_OUTPUTS,'opportunity_plan':QueryPlan,'opportunity_structure':ReferencedFindings,'opportunity_skill_levels':SkillLevels,'jd_extraction': ExtractedJD, 'jd_chat': JDAnswer, 'jd_edit': SkillEdits, 'role_guidance': ExtractedJD, 'interview_synthesis': InterviewFindings, 'workspace_chat': WorkspaceAnswer, 'question_route':QuestionRoute, 'focused_answer':FocusedAnswer,'goal_edit':GoalEditDecision,'context_route':ContextPlan,'context_answer':FocusedAnswer,'career_guidance':FocusedAnswer,'research_plan':ResearchPlan,'research_assess':ResearchAssessment}
 
 PROMPT_VERSION = 'career-ai-v23'
 JD_OUTPUT_TOKENS={'jd_scope':4096,'jd_extraction':8192}
@@ -691,7 +691,7 @@ class AIAdapter:
         if request.stage in DISCOVERY_OUTPUTS:
             if self.settings.provider in ('local','deepseek'):mode='json_schema_strict'
             elif mode!='json_schema_strict':raise AIError('unsupported_structured_output')
-        local_structured = self.settings.provider == 'local' and request.stage in ('goal_summary','interview_prep','role_summary', 'jd_scope', 'jd_extraction', 'discovery_turn', 'opportunity_plan', 'opportunity_structure')
+        local_structured = self.settings.provider == 'local' and request.stage in ('goal_summary','interview_prep','role_summary', 'jd_scope', 'jd_extraction', 'discovery_turn', 'opportunity_plan', 'opportunity_structure', 'opportunity_skill_levels')
         if local_structured and mode == 'json_object':
             # JSON Object mode does not constrain the required fields.
             # Constrain decoding as well as validating the result below.
@@ -735,11 +735,11 @@ class AIAdapter:
                 'Follow the response schema; correct the listed fields and types. Use supplied facts only; '
                 'do not invent values to satisfy validation. Latest validation issues: '
                 +json.dumps(validation_feedback.get(),separators=(',',':')))
-        if mode == 'json_object' or self.settings.provider=='local' and request.stage in ('goal_summary','interview_prep','role_summary','discovery_turn','opportunity_plan','opportunity_structure'):
+        if mode == 'json_object' or self.settings.provider=='local' and request.stage in ('goal_summary','interview_prep','role_summary','discovery_turn','opportunity_plan','opportunity_structure','opportunity_skill_levels'):
             instructions += '\nJSON schema: ' + json.dumps(schema, separators=(',', ':'))
         schema_bytes = len(json.dumps(response_format, separators=(',', ':')).encode())
         jd_output_tokens=LOCAL_JD_OUTPUT_TOKENS if self.settings.provider=='local' else JD_OUTPUT_TOKENS
-        output_tokens = min(self.settings.max_output_tokens, {**jd_output_tokens,'goal_summary':8192,'interview_prep':4096,'role_summary':4096,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'career_guidance':1024,'research_plan':512,'research_assess':1024,'discovery_turn':4096,'discovery_plan':512,'discovery_assess':2048,'discovery_extract':8192,'discovery_summary':8192,'opportunity_plan':4096,'opportunity_structure':4096}.get(request.stage,self.settings.max_output_tokens))
+        output_tokens = min(self.settings.max_output_tokens, {**jd_output_tokens,'goal_summary':8192,'interview_prep':4096,'role_summary':4096,'workspace_chat':1024, 'jd_chat':1024, 'interview_synthesis':2048, 'question_route':256, 'focused_answer':768,'goal_edit':2048,'context_route':512,'context_answer':768,'career_guidance':1024,'research_plan':512,'research_assess':1024,'discovery_turn':4096,'discovery_plan':512,'discovery_assess':2048,'discovery_extract':8192,'discovery_summary':8192,'opportunity_plan':4096,'opportunity_structure':4096,'opportunity_skill_levels':4096}.get(request.stage,self.settings.max_output_tokens))
         if request.stage=='discovery_extract':
             output_tokens=EXTRACTION_OUTPUT_TOKENS
         safety_margin = max(1024, self.settings.context_tokens // 10)

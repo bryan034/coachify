@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback,useEffect,useId,useState} from 'react';
+import {useCallback,useEffect,useId,useRef,useState} from 'react';
 import Link from 'next/link';
 import {useRouter,useSearchParams} from 'next/navigation';
 import {Icon} from '@/components/ui/icon';
@@ -14,7 +14,8 @@ import {sourceLink} from './source-links';
 import {OTHER_SKILLS,groupSkills,type SkillGroupMap} from '@/lib/skill-groups';
 import {type SkillMatch} from '@/lib/api/assessment';
 import '@/styles/goal.css';
-import { useComparison } from '@/features/assessment/comparison';
+import { announceInputsChanged, useComparison } from '@/features/assessment/comparison';
+import { EvaluationStatusPanel } from '@/features/assessment/evaluation-status';
 import { EvaluateBanner } from '@/features/assessment/evaluate-banner';
 import { ProcessingCard, SkeletonRows, type ProcessingStep } from '@/components/ui/processing-card';
 import type { Requirement } from '@/features/roadmap/types';
@@ -179,6 +180,9 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
  const [retrying,setRetrying]=useState(false),[retryError,setRetryError]=useState('');
  const saved=workspace.current.goal!;
  const comparison=useComparison(token, `${saved._id}:${saved.version}`);
+ // A new or edited goal (such as a changed job description) makes earlier evaluations and roadmaps out of date.
+ const savedRevision=useRef(`${saved._id}:${saved.version}`);
+ useEffect(()=>{const revision=`${saved._id}:${saved.version}`;if(savedRevision.current!==revision){savedRevision.current=revision;announceInputsChanged();}},[saved._id,saved.version]);
  const current=!(comparison.result?.inputs && (comparison.result.inputs.goal_id!==saved._id || comparison.result.inputs.goal_version!==saved.version));
  const matches=current?comparison.matches:null,outcomes=current?comparison.outcomes:null;
  const goal={...saved,summary:saved.summary||null,responsibilities:saved.responsibilities||[],non_skill_requirements:saved.non_skill_requirements||[]};
@@ -219,6 +223,7 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
    footer={<p>{working&&workspace.phase==='waiting_quota'?waitingText:'You can leave this page. elo keeps working, and your skills will be here when it’s done.'}</p>}>{!goal.skills.length&&<SkeletonRows rows={4}/>}</ProcessingCard>}
   {workspace.phase==='research_failed'&&<div className="notice" role="alert"><p>Opportunity research could not finish. Your saved goal remains available.</p><button className="btn ghost sm" disabled={retrying} onClick={()=>void retryResearch()}>{retrying?'Resuming research…':'Retry research'}</button>{retryError&&<p>{retryError}</p>}</div>}
   {view==='skills'&&<>
+   <EvaluationStatusPanel comparison={comparison} />
    {!working&&!comparing&&<EvaluateBanner comparison={comparison} here="/career-goal"/>}
    <CvGoalConfirmationCard hideWhenConfirmed key={confirmationKey} goal={goal} selectionVersion={workspace.current.selection_version} token={token} onReload={onReload}/>
    <div className="briefing-grid briefing-grid-confirmed">

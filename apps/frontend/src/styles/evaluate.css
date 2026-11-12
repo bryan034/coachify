@@ -19,3 +19,4 @@
 @keyframes evaluate-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.evaluate-banner-mark.is-busy{animation:none}}
 @media (max-width:760px){.evaluate-banner{grid-template-columns:36px minmax(0,1fr)}.evaluate-banner-actions{grid-column:1 / -1}.evaluate-banner .btn{white-space:normal}}
+.change-banner{margin:0 0 20px}

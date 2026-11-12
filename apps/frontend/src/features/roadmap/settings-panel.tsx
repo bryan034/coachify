@@ -196,6 +196,7 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
  const targetProblem = issues.has('target_before_start') || issues.has('target_elapsed') || issues.has('runway_too_long');
  const validResearch = ['available', 'no_findings'].includes(context.research_coverage || '');
  const reasons = [
+  ...(context.evaluation && context.evaluation.freshness !== 'current' ? ['Update your skill evaluation before generating a roadmap.'] : []),
   ...(context.ready ? [] : [context.availability === 'unavailable' ? 'Your CV and Career goal can’t be checked right now.' : 'Finish the CV and Career goal steps shown above.']),
   ...runway.issues.map(issue => issue.message),
   ...(settings.previewError ? [settings.previewError] : []),

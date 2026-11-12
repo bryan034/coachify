@@ -2,6 +2,7 @@ classDiagram
 direction TB
 
 class CvSkill {
+    +SkillLevelInfo skill_level?
     +String skill_id [legacy source key]
     +String canonical_skill_id?
     +String skill_registry_version
@@ -260,6 +261,7 @@ InterviewProcess *-- InterviewEvidence
 InterviewStage *-- InterviewEvidence
 
 class OpportunityReport {
+    +RequiredSkillLevel[] skill_levels
     +String fingerprint
     +String opportunity_id? [null_for_general_targets]
     +String employment_type
@@ -389,6 +391,7 @@ class ValidationIssue {
 }
 
 class SkillClaim {
+    +SkillLevelInfo skill_level?
     +String skill_id
     +String attribution [personal/team/observed/denied/unknown]
     +String assistance [independent/assisted/supervised/unknown]
@@ -813,3 +816,31 @@ class CompetenceTarget {
 TargetSkill *-- CompetenceTarget
 note for CompetenceTarget "Career prepares role targets; current workspace and Assessment handoff enrich them from fresh cited public preparation research. Public research never reads private CV evidence."
 note for ReviewFact "self_rating is an explicitly stated skill-specific whole number 1..10, saved as a string with an exact answer quote. It informs review but never overrides evidence-based competence."
+
+class SkillLevelInfo {
+    +Integer level? [1_to_10]
+    +String status [rated_or_uncertain]
+    +String rationale
+    +String source [cv_or_review]
+    +Evidence[] evidence
+}
+class RequiredSkillLevel {
+    +String skill
+    +Integer level [1_to_10]
+    +String rationale
+    +String[] finding_ids
+}
+CvSkill *-- SkillLevelInfo
+SkillClaim *-- SkillLevelInfo
+OpportunityReport *-- RequiredSkillLevel
+note for SkillLevelInfo "Shared competence scale: 1 not competent, 5 independent with understanding, 10 most complex. Missing independence caps guided use at 3. Review ratings are fingerprint-bound overlays stored on the CV; goal comparison remains Assessment-owned."
+
+
+class EvaluationStatus {
+    +String freshness [missing_current_outdated_unavailable]
+    +String processing [idle_evaluating_failed]
+    +String completeness? [complete_partial]
+    +Date evaluated_at?
+    +String[] reasons
+}
+note for EvaluationStatus "Read-only Assessment API projection; not persisted. InputVersions.evidence_hash pins reviewed evidence and skill levels, alongside CV/goal/research versions and scoring rubric."

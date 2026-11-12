@@ -40,15 +40,17 @@ function SkillProgress({ plan, review }: { plan: PlannedRoadmap; review: PlanRev
  </section>;
 }
 
-export function RoadmapReview({ plan, review, preview, planner, blockers, frozen, accept, discard, backToSettings, revise, complete, reopen, recordOutcome, confirm, saveNotes, addTask }: {
+export function RoadmapReview({ plan, review, preview, planner, blockers, frozen, sourceChanged = false, generationBlocked = false, accept, discard, backToSettings, revise, complete, reopen, recordOutcome, confirm, saveNotes, addTask }: {
  saveNotes?: (taskId: string, notes: NotesDocument) => Promise<unknown>;
  addTask?: AddTask;
  plan: PlannedRoadmap; review: PlanReview; preview: boolean; planner: Planner; blockers: Issue[]; frozen: boolean;
+ sourceChanged?: boolean; generationBlocked?: boolean;
  accept: () => void; discard: () => void; backToSettings: () => void; revise: () => void;
  complete: (session: PlanAssignment, note: string) => Promise<unknown>; reopen: (session: PlanAssignment) => Promise<unknown>;
  recordOutcome: (milestone: PlanMilestone, demonstrated: boolean, note: string) => void; confirm: (gap: PlanGap, answer: Confirmation['answer']) => void;
 }) {
  const next = plan.assignments.find(session => session.id === review.next_assignment_id);
+ const signals = planner.signals.filter(signal => !sourceChanged || signal.kind !== 'evidence');
  const remaining = review.remaining;
  const confirmed = plan.gaps.filter(gap => gap.status === 'confirmed_gap').sort((a, b) => a.priority - b.priority);
  const unknown = plan.gaps.filter(gap => gap.status === 'unknown').sort((a, b) => a.priority - b.priority);
@@ -66,16 +68,16 @@ export function RoadmapReview({ plan, review, preview, planner, blockers, frozen
     {preview ? <>
      <button type="button" className="btn primary" disabled={frozen || blockers.length > 0} onClick={accept}>Accept plan</button>
      <button type="button" className="btn ghost" onClick={backToSettings}>Back to configuration</button>
-     {planner.signals.length > 0 && <button type="button" className="btn ghost" disabled={frozen} onClick={revise}>Regenerate</button>}
+     {!sourceChanged && signals.length > 0 && <button type="button" className="btn ghost" disabled={frozen || generationBlocked} onClick={revise}>Regenerate</button>}
      {planner.active && <button type="button" className="btn ghost" disabled={frozen} onClick={discard}>Discard preview</button>}
     </> : <>
-     <button type="button" className={`btn${planner.signals.length ? ' primary' : ' ghost'}`} disabled={frozen} onClick={revise}>Preview updated roadmap</button>
+     {!sourceChanged && <button type="button" className={`btn${signals.length ? ' primary' : ' ghost'}`} disabled={frozen || generationBlocked} onClick={revise}>Preview updated roadmap</button>}
      <button type="button" className="btn ghost" onClick={backToSettings}>Change settings</button>
     </>}
    </div>
-   {preview && blockers.map(blocker => <p className="roadmap-notice" key={blocker.code}>{blocker.message}</p>)}
-   {!preview && planner.signals.map(signal => <p className="roadmap-notice" key={signal.kind + signal.message}>{signal.message}</p>)}
-   {preview && planner.signals.map(signal => <p className="roadmap-notice" key={signal.kind + signal.message}>{signal.message} Regenerate to include them.</p>)}
+   {preview && blockers.filter(blocker => !sourceChanged || blocker.code !== 'inputs_changed').map(blocker => <p className="roadmap-notice" key={blocker.code}>{blocker.message}</p>)}
+   {!preview && signals.map(signal => <p className="roadmap-notice" key={signal.kind + signal.message}>{signal.message}</p>)}
+   {preview && signals.map(signal => <p className="roadmap-notice" key={signal.kind + signal.message}>{signal.message} Regenerate to include them.</p>)}
   </header>
 
   {preview && changes && <section className="review-card review-section" aria-label="What this preview changes">

@@ -272,18 +272,82 @@ def test_progress_counts_topics_not_followup_questions(harness):
     assert resumed['interview']['topics'] == chat['interview']['topics']
 
 
-def test_repeated_invalid_schema_asks_for_clarification_without_failure_card(harness):
-    client, _, *_ = harness
+def test_repeated_invalid_schema_records_a_direct_numbered_followup(harness):
+    client, app, *_ = harness
     cv, chat, provider = start(harness)
     active = deepcopy(chat['active_question'])
     provider.evaluation = {'intent': 'invalid', 'reply': 'Malformed'}
     before = client.get('/api/v1/cv/' + cv['id']).json()
     chat = send(client, chat, 'A relevant but unstructured answer.')
-    assert chat['active_question'] == active
-    assert 'Could you clarify' in chat['messages'][-1]['text']
+    followup = chat['active_question']
+    assert followup['id'] != active['id']
+    assert (followup['number'], followup['limit']) == (2, 3)
+    assert followup['question'] == active['question']
+    assert chat['messages'][-1]['text'] == active['question']
     assert not any(a['status'] == 'failed' for a in chat['messages'][-1]['actions'])
-    assert client.get('/api/v1/cv/' + cv['id']).json() == before
+    saved = client.get('/api/v1/cv/' + cv['id']).json()
+    assert len(saved['clarifications']) == len(before['clarifications']) + 1
+    assert saved['effective_version'] == before['effective_version']
+    stored = app.state.conversations.get('owner-a', chat['id'])
+    memory = reconcile_memory(stored, app.state.conversations.cv.get('owner-a', cv['id']))
+    assert memory['question_counts'][active['item_id']] == 2
+    assert client.get(PREFIX + '/' + chat['id']).json()['active_question'] == followup
     assert len([c for c in provider.calls if c['task'] == 'cv_interview_interpret']) == 2
+
+
+def test_schema_followup_publication_retry_keeps_the_same_number(harness, monkeypatch):
+    client, app, *_ = harness
+    cv, chat, provider = start(harness)
+    provider.evaluation = {'intent': 'invalid', 'reply': 'Malformed'}
+    service = app.state.conversations.cv
+    mutate = service.mutate
+    def fail_question(*args, **kwargs):
+        if args[3] == 'interview-question':
+            raise ValueError('Synthetic question publication failure')
+        return mutate(*args, **kwargs)
+    monkeypatch.setattr(service, 'mutate', fail_question)
+    chat = send(client, chat, 'My saved answer.')
+    route = chat['messages'][-1]['actions'][0]
+    assert route['status'] == 'failed'
+    monkeypatch.setattr(service, 'mutate', mutate)
+    response = client.post(PREFIX + '/' + chat['id'] + '/actions/' + route['id'], json={
+        'mutation_id': str(uuid4()), 'expected_revision': chat['revision'], 'decision': 'retry'})
+    assert response.status_code == 200, response.text
+    resumed = settled(client, chat['id'])
+    assert resumed['active_question']['number'] == 2
+    document = service.get('owner-a', cv['id'])
+    item_id = resumed['active_question']['item_id']
+    assert len([q for q in document['clarifications'] if q['item_id'] == item_id and '_interview_targets' in q]) == 2
+    assert len([c for c in provider.calls if c['task'] == 'cv_interview_interpret']) == 2
+
+
+def test_invalid_schema_followups_stop_after_three_questions(harness):
+    client, app, *_ = harness
+    cv, chat, provider = start(harness)
+    item_id = chat['active_question']['item_id']
+    provider.evaluation = {'intent': 'invalid', 'reply': 'Malformed'}
+    for number in (2, 3):
+        chat = send(client, chat, f'Answer before question {number}.')
+        assert (chat['active_question']['number'], chat['active_question']['limit']) == (number, 3)
+    chat = send(client, chat, 'Answer to the third question.')
+    assert chat['active_question'] is None
+    assert chat['interview']['status'] == 'reviewed_with_gaps'
+    stored = app.state.conversations.cv.get('owner-a', cv['id'])
+    assert len([q for q in stored['clarifications'] if q['item_id'] == item_id and '_interview_targets' in q]) == 3
+
+
+def test_invalid_schema_at_question_three_moves_to_next_topic(harness):
+    client, _, *_ = harness
+    _, chat, provider = start_two_topics(harness)
+    first = chat['active_question']['item_id']
+    provider.evaluation = {'intent': 'invalid', 'reply': 'Malformed'}
+    for number in (2, 3):
+        chat = send(client, chat, f'Answer before question {number}.')
+        assert chat['active_question']['number'] == number
+    chat = send(client, chat, 'Answer to the third question.')
+    assert chat['active_question']['item_id'] != first
+    assert chat['active_question']['number'] == 1
+    assert next(t for t in chat['interview']['topics'] if t['id'] == first)['status'] == 'reviewed_with_gaps'
 
 
 def test_old_evidence_failure_retries_under_review_policy_and_resumes(harness, monkeypatch):

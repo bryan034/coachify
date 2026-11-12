@@ -8,6 +8,7 @@ from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates
 from app.domain.extraction_errors import EvidenceValidationError
 from app.schemas.interview_evidence import ReviewFact, fact_key, fact_statement, unique_facts
 from pydantic import ValidationError
+from elo_shared.competence_scale import GUIDED_CEILING, INDEPENDENT_LEVEL, MAX_LEVEL, MENTION_CEILING, clamp_level
 
 
 def normalized_name(name):
@@ -132,7 +133,16 @@ def validate_extraction(payload, blocks, cv_id, semantic_support=frozenset()):
                 raise EvidenceValidationError('Interview evidence is not supported by the CV.',
                                               'review_support', index, review_index=review_index)
         review_facts = unique_facts(review_facts)
-        items.append({'review_evidence': review_facts, 'id': identity, 'kind': item.kind, 'title': item.title, 'description': item.description,
+        # A skill level is optional model judgement. One that cannot be tied to a
+        # listed skill and a real CV quotation is dropped, never a reason to lose the item.
+        skill_levels = []
+        for judged in item.skill_levels:
+            level_id = skill_id(judged.skill_name)
+            quotes = [{'id': ref.source_id, 'location': source[ref.source_id]['location'], 'excerpt': ref.quote}
+                      for ref in judged.evidence if ref.source_id in source and evidence_matches(ref.quote, source_text[ref.source_id])]
+            if level_id in names_by_id and len(quotes) == len(judged.evidence) and not any(l['skill_id'] == level_id for l in skill_levels):
+                skill_levels.append({'skill_id': level_id, 'level': judged.level, 'rationale': judged.rationale, 'evidence': quotes})
+        items.append({'review_evidence': review_facts, 'skill_levels': skill_levels, 'id': identity, 'kind': item.kind, 'title': item.title, 'description': item.description,
                       'provenance': 'explicit' if item.explicit else 'inferred', 'evidence': evidence,
                       'skill_ids': [skill_id(name) for name in names], 'skill_names': names,
                       'category': item.category or 'unspecified', 'proficiency': item.proficiency,
@@ -172,6 +182,30 @@ def validate_other_information(refs, blocks, semantic_support=frozenset()):
     return result
 
 
+def level_ceiling(item, claim):
+    """The highest level this source can support, read pessimistically.
+
+    Project or work use counts as guided unless the person's own independent work is stated.
+    A skill that is only named cannot rise above basic exposure.
+    """
+    facts = [f for f in item.get('review_evidence', []) if f['status'] == 'supported'
+             and (not f.get('skill_name') or skill_id(f['skill_name']) == claim['skill_id'])]
+    if item['kind'] in {'project', 'experience'}:
+        independent = claim.get('assistance') == 'independent' or any(
+            f['field'] == 'assistance' and f.get('value') == 'independent' for f in facts)
+        personal = claim.get('attribution') == 'personal' or any(
+            f['field'] in {'skill_use', 'personal_contribution'} and f.get('attribution') == 'personal' for f in facts)
+        return MAX_LEVEL if independent and personal else GUIDED_CEILING
+    described = claim.get('proficiency') or claim.get('experience_months') is not None or facts
+    return INDEPENDENT_LEVEL if described else MENTION_CEILING
+
+
+def cap_skill_level(item, claim):
+    judged = claim.get('skill_level')
+    if judged and judged.get('level') is not None:
+        judged['level'] = clamp_level(judged['level'], level_ceiling(item, claim))
+
+
 def _base_claims(item):
     result = {}
     for index, identifier in enumerate(item['skill_ids']):
@@ -180,6 +214,11 @@ def _base_claims(item):
             'attribution': 'unknown', 'assistance': 'unknown', 'proficiency': item.get('proficiency'),
             'experience_months': item.get('experience_months'), 'evidence': deepcopy(item['evidence']),
             'evidence_type': item['provenance'], 'support_uncertain': item.get('support_uncertain', False)}
+    for judged in item.get('skill_levels', []):
+        # Omitted, not null, when absent so existing fingerprints are unchanged.
+        if judged['skill_id'] in result:
+            result[judged['skill_id']]['skill_level'] = {'level': judged['level'], 'rationale': judged['rationale'],
+                                                          'source': 'cv', 'evidence': deepcopy(judged['evidence'])}
     return result
 
 
@@ -266,7 +305,12 @@ def effective_items(document):
             claim = item['_claims'].setdefault(patch['skill_id'], {'skill_id': patch['skill_id'], 'name': patch['name'],
                 'attribution': 'unknown', 'assistance': 'unknown', 'proficiency': None, 'experience_months': None,
                 'evidence': [], 'evidence_type': 'user_clarified', 'support_uncertain': True})
-            for field in patch['changed_fields']: claim[field] = patch[field]
+            for field in patch['changed_fields']:
+                if field == 'skill_level':
+                    claim['skill_level'] = {'level': patch['skill_level'], 'rationale': patch['skill_level_rationale'],
+                                            'source': 'review', 'evidence': [{'id': 'answer:' + question['id'],
+                                            'location': 'Your clarification', 'excerpt': patch['evidence_excerpt']}]}
+                else: claim[field] = patch[field]
             if 'attribution' in patch['changed_fields']:
                 claim['support_uncertain'] = patch['attribution'] == 'unknown'
             claim['evidence_type'] = 'user_clarified'
@@ -333,6 +377,7 @@ def effective_items(document):
         claims = list(item.pop('_claims').values())
         item.pop('_field_sequences', None)
         item['skill_claims'] = claims
+        for claim in claims: cap_skill_level(item, claim)
         active = [claim for claim in claims if claim['attribution'] not in {'team', 'observed', 'denied'}]
         item['skill_ids'], item['skill_names'] = [c['skill_id'] for c in active], [c['name'] for c in active]
         item['support_uncertain'] = any(claim['support_uncertain'] for claim in active)
@@ -362,6 +407,7 @@ def skills_for(items):
             source = {'item_id': item['id'], 'evidence_type': 'uncertain' if uncertain else claim['evidence_type'],
                       'explicit': not uncertain and claim['evidence_type'] == 'explicit', 'support_uncertain': uncertain,
                       **{field: claim[field] for field in ('attribution', 'assistance', 'proficiency', 'experience_months', 'evidence')}}
+            if claim.get('skill_level'): source['skill_level'] = claim['skill_level']
             skill['sources'].append(source)
             # Retain source-level uncertainty even when another independent source
             # supports the same skill. Never turn repetition into stronger proof.
@@ -376,6 +422,12 @@ def skills_for(items):
             values = {source[field] for source in skill['sources'] if not source['support_uncertain'] and source[field] is not None}
             skill[field] = next(iter(values)) if len(values) == 1 else None
             if len(values) > 1: skill['conflicting_fields'].append(field)
+        # A skill's level legitimately differs between sources; report the highest rated one
+        # (each is already capped by its own evidence), preferring the review on a tie.
+        judged = [s['skill_level'] for s in skill['sources'] if s.get('skill_level')]
+        rated = [j for j in judged if j.get('level') is not None]
+        if rated: skill['skill_level'] = max(rated, key=lambda j: (j['level'], j['source'] == 'review'))
+        elif judged: skill['skill_level'] = judged[0]
     return list(groups.values())
 
 
@@ -394,6 +446,8 @@ def effective_fingerprint(document):
         if statements: value['clarified_statements'] = [normalized_name(text) for text in statements]
         value['claims'] = [{key: claim[key] for key in ('skill_id', 'attribution', 'assistance',
             'proficiency', 'experience_months', 'support_uncertain')} for claim in item['skill_claims']]
+        for fingerprinted, claim in zip(value['claims'], item['skill_claims']):
+            if claim.get('skill_level'): fingerprinted['skill_level'] = claim['skill_level']['level']
         value['claims'].sort(key=lambda claim: claim['skill_id'])
         value['review_evidence'] = sorted([{k: f.get(k) for k in ('field', 'skill_name', 'status', 'value', 'attribution')} for f in item.get('review_evidence', [])], key=lambda f: fact_key(f))
         value['uncertainties'] = sorted(item.get('uncertainties', []))
@@ -530,9 +584,17 @@ def validate_interpretation(payload, item, question, semantic_support=frozenset(
                 not excerpt or (not re.search(r'(?<!\w)' + re.escape(normalized_name(claim.name)) + r'(?!\w)', normalized_name(excerpt))
                                 and (claim.skill_id, 'attribution') not in semantic_support)):
             raise ValueError('A new skill requires an explicit personal mention in the answer.')
-        for field in ('proficiency', 'experience_months'):
-            if getattr(claim, field) is not None and field not in fields:
+        for field, declared in (('proficiency', 'proficiency'), ('experience_months', 'experience_months'),
+                                ('skill_level', 'skill_level'), ('skill_level_rationale', 'skill_level')):
+            if getattr(claim, field) is not None and declared not in fields:
                 raise ValueError('Interpretation supplied an attribute outside its declared changes.')
+        if 'skill_level' in fields:
+            existing_claim = next((c for c in item.get('skill_claims', []) if c['skill_id'] == claim.skill_id), None)
+            personal = claim.attribution == 'personal' if 'attribution' in fields else bool(existing_claim and existing_claim['attribution'] == 'personal')
+            if claim.skill_level is None or not claim.skill_level_rationale or not excerpt:
+                raise ValueError('A skill level needs its rationale and the supporting answer excerpt.')
+            if not personal:
+                raise ValueError('A skill level requires the user’s personal work with that skill.')
         if claim.proficiency is not None and (not excerpt or (normalized_name(claim.proficiency) not in normalized_name(excerpt)
                 and (claim.skill_id, 'proficiency') not in semantic_support)):
             raise ValueError('Proficiency must preserve the user’s wording.')

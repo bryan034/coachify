@@ -3,7 +3,7 @@
 Saved, private CV uploads and effective evidence review for C01–C09. The existing
 `/cv` workspace is named **Skills Profile** in navigation and its page heading.
 It uploads CVs, extracts potential skills and retains the existing evidence/review
-workflow. Search Jobs has its own navigation tab, which also holds application tracking. Target confirmation and gap analysis remain separate.
+workflow. Search Jobs has its own navigation tab, which also holds application tracking. Target confirmation and gap analysis remain separate. Skill chip outlines use the CV's individual `skill_level` when present, including explicit uncertainty. The side panel shows its level and rationale separately from the goal comparison. Legacy data without individual ratings can still display comparison or self-ratings.
 
 The Skills Profile page has three entry states. With no CV, profile or manual capability it is an
 upload-first screen: a drop zone, **Add skills by chat**, and **What happens next**. While the only CV is

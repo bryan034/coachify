@@ -630,3 +630,28 @@
 .results-tag.is-removed{background:var(--white);color:var(--slate);border:1px solid #94a3b8;text-decoration:line-through}
 .results-empty{margin:0;padding:0 20px 20px;color:var(--slate)}
 @media(max-width:700px){.results-row{grid-template-columns:minmax(0,1fr);gap:8px}.results-strip-meta{margin-left:0}.results-experiences{padding:18px}}
+
+/* Skill level outline: green 8.5+, orange 6–8.4, yellow below 6, grey when no level is known. */
+:root{--level-strong:#16a34a;--level-developing:#f97316;--level-early:#eab308;--level-uncertain:#94a3b8}
+.skill-chip.level-strong{outline:2px solid var(--level-strong);outline-offset:2px}
+.skill-chip.level-developing{outline:2px solid var(--level-developing);outline-offset:2px}
+.skill-chip.level-early{outline:2px solid var(--level-early);outline-offset:2px}
+.skill-chip.level-uncertain{outline:2px dashed var(--level-uncertain);outline-offset:2px}
+.skill-chips{gap:12px}
+.skills-level-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:8px 0 4px;padding:0 20px 14px;list-style:none;font-size:12px;color:var(--slate)}
+.skills-level-legend li{display:flex;align-items:center;gap:6px}
+.skills-level-legend li:first-child{font-weight:600}
+.skills-level-legend i{width:14px;height:14px;border-radius:999px;background:var(--white);border:2px solid}
+.skills-level-legend i.level-strong{border-color:var(--level-strong)}
+.skills-level-legend i.level-developing{border-color:var(--level-developing)}
+.skills-level-legend i.level-early{border-color:var(--level-early)}
+.skills-level-legend i.level-uncertain{border:2px dashed var(--level-uncertain)}
+.skill-level-tag{display:inline-block;margin-right:8px;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;background:var(--white)}
+.skill-level-tag.level-uncertain{border:1.5px dashed var(--level-uncertain);color:var(--slate)}
+.skill-panel-uncertain{line-height:1.5}
+.skill-self-rating{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.skill-self-rating .row{display:flex;gap:8px;flex-wrap:wrap}
+.skill-self-rating-form{display:flex;flex-direction:column;gap:8px}
+.skill-self-rating-form label{font-size:14px}
+.skill-self-rating-form input[type=range]{width:100%;accent-color:var(--ink)}
+.skill-self-rating-scale{display:flex;justify-content:space-between;color:var(--slate)}

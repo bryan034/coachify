@@ -1,15 +1,31 @@
 """Conservative evidence ceilings shared by both Assessment scoring paths."""
 import math
 import re
+from elo_shared.competence_scale import INDEPENDENT_LEVEL
 
-RUBRIC_VERSION='evidence-role-v2'
+# v4: reuse reviewed CV levels on the shared scale, retaining conservative evidence ceilings.
+RUBRIC_VERSION='evidence-role-v4'
+_NOT_PERSONAL={'team','observed','denied'}
 
 
 def role_level(requirement):
     target=requirement.get('competence_target') or {}
     if isinstance(target.get('level'),int) and 1<=target['level']<=10:
         return target['level']
-    return 9 if requirement.get('required_proficiency')=='advanced' else 8
+    # No Career target: working independently with understanding, or complex work when stated advanced.
+    return 7 if requirement.get('required_proficiency')=='advanced' else INDEPENDENT_LEVEL
+
+
+def cv_level(records):
+    """The level the CV review already gave this skill on the same scale, across its personal sources."""
+    levels=[r['cv_level'] for r in records if isinstance(r.get('cv_level'),int) and r.get('attribution') not in _NOT_PERSONAL]
+    return max(levels) if levels else None
+
+
+def within_cv_level(level,records):
+    # Assessment never rates a skill above the CV review's own pessimistic level.
+    own=cv_level(records)
+    return level if level is None or own is None else min(level,own)
 
 
 def source_level(record):
@@ -39,12 +55,34 @@ def source_level(record):
 
 
 def evidence_level(records, proposed=None):
+    # Valid CV review levels already judged this evidence on the shared scale.
+    reviewed=[r for r in records if r.get('reviewed') is True]
+    own=cv_level(reviewed)
+    if own is not None:proposed=own
     levels=[level for record in records if (level:=source_level(record)) is not None]
     if not levels: return None
     ceiling=max(levels)
     # Missing ownership is an explicit provisional baseline, never verified mastery.
-    if ceiling<=5: return ceiling
-    return min(proposed,ceiling) if proposed is not None else ceiling
+    if ceiling<=5: return within_cv_level(ceiling,records)
+    return within_cv_level(min(proposed,ceiling) if proposed is not None else ceiling,records)
+
+
+# A finished review (answers or skipped topics) lets the model's own level stand where the
+# evidence cannot set one; it stays a capped, low-confidence estimate, never verified mastery.
+MODEL_ESTIMATE_CEILING=5
+
+
+def reviewed_estimate(records, proposed):
+    """The model's level for evidence the user has reviewed but whose personal part is unconfirmed."""
+    if proposed is None: return None
+    usable=[r for r in records if r.get('reviewed') and r.get('attribution') not in {'team','observed','denied'}]
+    if not usable: return None
+    return within_cv_level(max(1,min(int(proposed),MODEL_ESTIMATE_CEILING)),usable)
+
+
+def unreviewed(records):
+    """Cited CV evidence from a review the user has not finished."""
+    return any(r.get('reviewed') is False for r in records)
 
 
 def goal_score(have,need):

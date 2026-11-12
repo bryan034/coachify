@@ -155,18 +155,9 @@ CV context is read through its owner-authenticated API. The Career projection ha
 
 ## Role competence targets
 
-Career prepares each skill's `competence_target` (level, basis, explanation, public
-source URLs). Familiarity means at least 8; advanced/proficient expectations 9 and
-expert mastery 10 on elo's planning scale. Explicit beginner expectations target 7;
-unstated expectations default to 8. These are planning estimates, never invented
-employer pass marks. The existing public interview research queries also seek the
-expected practical depth of named role skills. Current workspace and Assessment
-handoff projections use fresh, nonconflicting medium/high-confidence preparation
-findings with that exact skill in their cited passages; research can raise but not
-lower the target. Weak, stale or unrelated findings do not calibrate it. Related-role
-sources remain labelled advisory. No private CV or user self-ratings enter research.
-Original goal wording and research revision ownership remain unchanged; Assessment
-pins the goal/research versions and owns the evidence comparison.
+Career prepares each skill's `competence_target` (level, basis, explanation, public source URLs) on the same 1–10 competence scale as CV: 1 not competent, 5 independent with understanding, 10 the most complex work. Description-based defaults are 5 for familiarity/unstated expectations, 3 for basic/beginner, 7 for advanced/proficient/complex, and 9 for expert/mastery.
+
+After public research, a model stage rates every non-user-declared goal skill using public role metadata and validated findings. It returns a whole-number level, rationale and finding references, persisted in `intelligence.skill_levels`. No CV, private chat or full JD text enters this rating call. Explicit employer expectations are a floor; otherwise research determines the target. Expired research is ignored. Rating failure preserves completed research and description-based targets; cached summary rebuilds reuse saved ratings without another call. These remain planning estimates, never employer pass marks. Assessment pins goal/research versions and owns the comparison.
 
 The canonical `GET /goals/current`, workspace and Assessment handoff reads use the
 same calibrated target projection. Reading the current goal cannot disagree with
