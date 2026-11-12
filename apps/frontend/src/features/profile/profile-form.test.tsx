@@ -92,7 +92,9 @@ test('custom institution, course and extended year survive a failed save and ret
   fireEvent.click(screen.getByRole('button', { name: 'Save background' }));
   await screen.findByText('Profile saved.');
   expect(saved.education).toMatchObject({ institution: { kind: 'custom', name: 'Unlisted International College' }, course: 'Computing & Design', study_year: 6 });
-  fireEvent.change(screen.getByRole('combobox', { name: 'Occupational status' }), { target: { value: 'unemployed' } });
+  const status = screen.getByRole('combobox', { name: 'Occupational status' });
+  await waitFor(() => expect(status).toBeEnabled());
+  fireEvent.change(status, { target: { value: 'unemployed' } });
   expect(screen.getByRole('textbox', { name: 'What course did you study?' })).toHaveValue('Computing & Design');
   expect(screen.queryByRole('spinbutton', { name: /Current study level/ })).not.toBeInTheDocument();
   expect(screen.queryByText(/Previous study year retained:/)).not.toBeInTheDocument();

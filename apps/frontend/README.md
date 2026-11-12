@@ -87,6 +87,7 @@ layouts and reduced-motion preferences are supported.
 Profile API access uses `src/lib/api/profile.ts`; temporary Career imports use
 `src/lib/api/career.ts` through `/api/v1/career` at the gateway. Career source
 content stays in the account-scoped Career route provider, never browser storage.
+Career chat disables temporary CV attachment while the conversation loads.
 **Extract career goal** starts the LangGraph JD workflow. Validated role/skill/condition
 information immediately becomes the account's latest goal. The browser stays in chat while the saved goal overview is populated. Saved skills appear in compact expandable cards grouped by importance, with category filters above 12 skills; eligibility, responsibilities and cited research are in collapsible context sections. The starting-point panel becomes a slim banner above the full-width skill grid after confirmation of the current goal revision. It distinguishes available CV skills, a missing CV, saved CVs without available skills, and unavailable status. Its links open the implemented CV workspace without claiming a per-skill assessment. See the [briefing data map and proposed extensions](../../docs/design/career-briefing.md). Research status updates on this page without hiding the extracted goal. **Refine goal** opens guided chat; **Set a new goal** opens fresh JD inputs while preserving the current goal until successful replacement.
 The validated JD summary, cited research and follow-up composer open together only after both extraction and research finish. Progress is visible meanwhile.

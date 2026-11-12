@@ -181,8 +181,18 @@ describe('single career conversation',()=>{
  it('shows an explicit empty JD state instead of silently changing to exploration',async()=>{
   active=empty;search.set('source','jd');mount();await screen.findByText(/No job description is available/);expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
  });
- it('starts separate exploration without a session chooser or goal confirmation',async()=>{
-  active=empty;mount();await screen.findByText(/Hi, I’m your career agent/);fireEvent.click(screen.getByRole('checkbox',{name:/Allow elo/}));fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'I enjoy data'}});await waitFor(()=>expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('What appeals to you about data?');expect(screen.queryByText('Previous conversations')).toBeNull();
+ it('starts separate exploration without a session chooser or goal confirmation', async () => {
+  active = empty;
+  mount();
+  await screen.findByText(/Hi, I’m your career agent/);
+  const composer = screen.getByRole('textbox', {name: 'Message elo'});
+  await waitFor(() => expect(composer).toBeEnabled());
+  fireEvent.click(screen.getByRole('checkbox', {name: /Allow elo/}));
+  fireEvent.change(composer, {target: {value: 'I enjoy data'}});
+  await waitFor(() => expect(screen.getByRole('button', {name: 'Send message'})).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', {name: 'Send message'}));
+  await screen.findByText('What appeals to you about data?');
+  expect(screen.queryByText('Previous conversations')).toBeNull();
  });
  it('keeps a pending-context goal current and explains that its requirements need review',async()=>{
   active.current.goal!.requirements_need_review=true;await chat();
@@ -191,8 +201,33 @@ describe('single career conversation',()=>{
   expect(screen.getByRole('button',{name:'Send message'})).toBeEnabled();
   expect(screen.queryByRole('button',{name:/Confirm.*goal/})).toBeNull();
  });
- it('keeps temporary CV content out of browser storage',async()=>{
-  active=empty;vi.mocked(importExplorationCV).mockResolvedValue({kind:'document',source_name:'cv.txt',text:'Synthetic private CV',notices:[]});const storage=vi.spyOn(Storage.prototype,'setItem');mount();await screen.findByText(/Hi, I’m your career agent/);fireEvent.click(screen.getByText('CV optional · add or choose a CV'));await waitFor(()=>expect(screen.getByLabelText('Temporary CV attachment')).toBeEnabled());fireEvent.change(screen.getByLabelText('Temporary CV attachment'),{target:{files:[new File(['Synthetic private CV'],'cv.txt',{type:'text/plain'})]}});await screen.findByText('Temporary CV: cv.txt');expect(storage).not.toHaveBeenCalled();
+ it('waits for the conversation to load and keeps temporary CV content out of browser storage', async () => {
+  active = empty;
+  const api = vi.mocked(careerApi);
+  const original = api.getMockImplementation()!;
+  let finishContext!: () => void;
+  const pendingContext = new Promise<void>(resolve => { finishContext = resolve; });
+  api.mockImplementation(async (path, token, options) => {
+   if (path === '/context') await pendingContext;
+   return original(path, token, options);
+  });
+  vi.mocked(importExplorationCV).mockResolvedValue({kind: 'document', source_name: 'cv.txt', text: 'Synthetic private CV', notices: []});
+  const storage = vi.spyOn(Storage.prototype, 'setItem');
+  try {
+   mount();
+   fireEvent.click(await screen.findByText('CV optional · add or choose a CV'));
+   const input = screen.getByLabelText('Temporary CV attachment');
+   expect(input).toBeDisabled();
+
+   await act(async () => { finishContext(); });
+   expect(input).toBeEnabled();
+   const file = new File(['Synthetic private CV'], 'cv.txt', {type: 'text/plain'});
+   fireEvent.change(input, {target: {files: [file]}});
+   await screen.findByText('Temporary CV: cv.txt');
+   expect(storage).not.toHaveBeenCalled();
+  } finally {
+   storage.mockRestore();
+  }
  });
 });
 

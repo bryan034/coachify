@@ -30,7 +30,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
  const [draft,setDraft]=useState<GoalDraft>();const [context,setContext]=useState<CareerContext>();const [current,setCurrent]=useState<CurrentGoal>();
  const [message,setMessage]=useState('');const [pending,setPending]=useState('');const [activity,setActivity]=useState('Preparing your answer…');
  const [consent,setConsent]=useState(false);const [cvId,setCvId]=useState('');const [useCV,setUseCV]=useState(false);
- const [cvText,setCVText]=useState('');const [cvName,setCVName]=useState('');const [busy,setBusy]=useState(false);const [loading,setLoading]=useState(false);
+ const [cvText,setCVText]=useState('');const [cvName,setCVName]=useState('');const [busy,setBusy]=useState(false);const [loading,setLoading]=useState(true);
  const [error,setError]=useState(''),[code,setCode]=useState('');const [notice,setNotice]=useState('');const [retry,setRetry]=useState(0);
  const [showDetails,setShowDetails]=useState(false);const controller=useRef<AbortController|null>(null);const seq=useRef(0);
  const mutation=useRef<{signature:string;key:string}|null>(null);const {transcript,followReply,showJump,jumpToLatest,scrollProps}=useChatScroll();
@@ -85,7 +85,8 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
   finally{if(n===seq.current){setBusy(false);setPending('');}}
  }
  async function upload(file?:File){
-  if(!file||!token||busy)return;
+  // The upload replaces the abort controller, so let the conversation finish loading first.
+  if(!file||!token||busy||loading)return;
   if(!file.size||file.size>10*1024*1024){setCode('');setError('Choose a non-empty PDF, DOCX or TXT CV up to 10 MiB.');return;}
   const n=++seq.current;const abort=new AbortController();controller.current?.abort();controller.current=abort;setActivity('Reading your CV attachment…');setBusy(true);setError('');setCode('');
   try{const preview=await importExplorationCV(file,token,abort.signal);if(n!==seq.current||abort.signal.aborted)return;
@@ -127,7 +128,13 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
    {busy&&<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentActivity label={activity}/></div>}
    {draft?.context_complete&&!!draft.suggestions.length&&<div className="agent-directions"><p className="small">Directions we can explore · AI guidance</p>{draft.suggestions.map((role,index)=><article key={index}><h2>{role.role}</h2><AgentMarkdown>{role.rationale}</AgentMarkdown><p className="small">Still uncertain: {role.uncertainty}</p><button className="btn ghost sm" disabled={busy} onClick={()=>void chooseDirection(index)}>Explore this direction</button></article>)}</div>}
    {notice&&<p role="status" className="goal-notice">{notice}</p>}
-   {error&&<AgentRecovery message={error} code={code} disabled={busy} label="Reload conversation" onRetry={()=>{if(!dirty.current||window.confirm('Reload saved progress and discard unsent edits?')){draftId.current=null;setRetry(v=>v+1);}}}/>}
+   {error&&<AgentRecovery message={error} code={code} disabled={busy||loading} label="Reload conversation" onRetry={()=>{
+    if(!dirty.current||window.confirm('Reload saved progress and discard unsent edits?')){
+     draftId.current=null;
+     setLoading(true);
+     setRetry(v=>v+1);
+    }
+   }}/>}
 
   </div>
   <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
