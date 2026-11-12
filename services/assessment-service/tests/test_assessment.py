@@ -388,10 +388,10 @@ def test_independence_without_success_gets_a_conservative_level_against_role_tar
     snapshot=asyncio.run(capture(sources,asyncio.run(sources.account('synthetic'))))
     output=asyncio.run(Interpreter().generate(Batch,'',snapshot))
     outcome=validate_batch(output,snapshot['requirements'],snapshot['evidence'])[0]
-    assert outcome['competence_score']==5
-    assert outcome['demonstrated_score']==4 and outcome['required_score']==8
+    assert outcome['competence_score']==8
+    assert outcome['demonstrated_score']==4 and outcome['required_score']==5
     assert outcome['relevance']=='high'
-    assert outcome['scoring_rubric_version']=='evidence-role-v2'
+    assert outcome['scoring_rubric_version']=='evidence-role-v4'
     assert outcome['score_status']=='estimated'
 
 
@@ -417,7 +417,7 @@ def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
         assert state['result']['inputs']['cv_id'] is None
         # The declaration supplies basic personal use, not evidence of independent successful delivery.
         python=state['result']['job_skill_gaps'][0]
-        assert python['scoring_rubric_version']=='evidence-role-v2' and python['competence_score']==3.7
+        assert python['scoring_rubric_version']=='evidence-role-v4' and python['competence_score']==6
         assert python['profile_skills'][0]['name']=='Python'
 
 
@@ -480,5 +480,89 @@ def test_retry_discards_pre_v2_scores_only_when_source_revisions_still_match():
         client.post('/api/v1/assessments',headers=H,json=body)
         current=finish(client)
         assert current['operation']['status']=='succeeded'
-        assert current['result']['job_skill_gaps'][0]['competence_score']==5
+        assert current['result']['job_skill_gaps'][0]['competence_score']==8
         assert model.calls==2
+
+
+def test_retry_after_inputs_changed_restarts_from_the_latest_inputs():
+    class Failing(Interpreter):
+        fail=True
+        async def generate(self,schema,instructions,context):
+            if schema is SkillBatch and self.fail: raise Problem('Synthetic failure.',503,'model_provider')
+            return await super().generate(schema,instructions,context)
+    sources=Sources();model=Failing();store=MemoryStore()
+    body={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True}
+    with TestClient(create_app(store,sources,model)) as client:
+        client.post('/api/v1/assessments',headers=H,json=body)
+        assert finish(client)['operation']['status']=='failed'
+        old=store.load(OWNER)['last_operation']['checkpoint']['input_hash']
+        # The user changes the CV before pressing "Try again" on the failed run.
+        sources.source['cv_version']+=1
+        model.fail=False
+        client.post('/api/v1/assessments',headers=H,json=body)
+        current=finish(client)
+        assert current['operation']['status']=='succeeded'
+        assert current['result']['input_hash']!=old and current['result']['inputs']['cv_version']==2
+        assert not current['stale'] and model.calls==2
+
+
+def test_large_cv_evidence_is_compacted_to_fit_the_model_request_budget():
+    import json
+    from app.domain import model_evidence, MODEL_CONTEXT_BUDGET
+    sources=Sources()
+    long='I built and maintained the synthetic data pipeline in Python. '*120
+    excerpts=[{'id':'e'+str(i),'excerpt':long,'location':'answer'} for i in range(3)]
+    sources.source['items']=[{'id':'item'+str(i),'kind':'project','title':'Synthetic project '+str(i),'description':long,'provenance':'user_clarified',
+        'evidence':excerpts,'removed':False,'skill_claims':[{'name':'Python','attribution':'personal','assistance':'independent','proficiency':None,
+        'experience_months':None,'support_uncertain':False,'evidence_type':'user_clarified','evidence':excerpts}]} for i in range(30)]
+    snapshot=asyncio.run(capture(sources,asyncio.run(sources.account('synthetic'))))
+    requirements=snapshot['requirements'][:8]
+    assert len(json.dumps({'requirements':requirements,'evidence':snapshot['evidence']}).encode())>120000
+    compact=model_evidence(snapshot['evidence'],requirements)
+    assert len(json.dumps({'requirements':requirements,'evidence':compact},ensure_ascii=False).encode())<=MODEL_CONTEXT_BUDGET
+    assert set(compact)==set(snapshot['evidence'])
+    assert all(snapshot['evidence'][ref]['text'].startswith(record['text'].rstrip('…')) for ref,record in compact.items())
+    # The full comparison now runs instead of failing with model_context.
+    model=Interpreter()
+    with TestClient(create_app(MemoryStore(),sources,model)) as client:
+        client.post('/api/v1/assessments',json={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True},headers=H)
+        assert finish(client)['operation']['status']=='succeeded'
+
+
+def test_small_evidence_is_sent_unshortened():
+    from app.domain import model_evidence
+    evidence={'cv:a':{'ref':'cv:a','kind':'project','name':'A','text':'Used SQL daily.','provenance':'cv','evidence':[{'excerpt':'Used SQL daily.'}],'proficiency':None}}
+    assert model_evidence(evidence,[])=={'cv:a':{'ref':'cv:a','kind':'project','name':'A','text':'Used SQL daily.'}}
+
+
+def test_only_the_assessment_model_client_accepts_the_larger_request_limit(monkeypatch):
+    from elo_shared.runtime import Model, MAX_CONTEXT_BYTES
+    from app.domain import ASSESSMENT_CONTEXT_BYTES
+    monkeypatch.setenv('ASSESSMENT_LLM_API_KEY','synthetic')
+    with TestClient(create_app(MemoryStore(),Sources())) as client:
+        assert client.app.state.model.max_context_bytes==ASSESSMENT_CONTEXT_BYTES==154000
+    other=Model(None,'ROADMAP');monkeypatch.setenv('ROADMAP_LLM_API_KEY','synthetic')
+    assert other.max_context_bytes==MAX_CONTEXT_BYTES==120000
+    # A context between the two limits is refused by the default client before any network call.
+    with pytest.raises(Problem) as error:asyncio.run(other.generate(Batch,'Assess.',{'text':'x'*130000}))
+    assert error.value.code=='model_context'
+
+
+def test_people_can_rate_a_skill_elo_could_not_rate():
+    store=MemoryStore()
+    with TestClient(create_app(store,Sources(),Interpreter())) as client:
+        empty=client.get('/api/v1/assessments/skill-ratings',headers=H).json()
+        assert empty=={'version':0,'ratings':[]}
+        saved=client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':0,'name':'FastAPI','canonical_skill_id':None,'score':7}).json()
+        assert saved['version']==1 and saved['ratings'][0]|{'updated_at':None}=={'key':'fastapi','name':'FastAPI','canonical_skill_id':None,'score':7,'updated_at':None}
+        # Stale versions and out-of-range scores are rejected.
+        assert client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':0,'name':'FastAPI','score':8}).status_code==409
+        assert client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':1,'name':'FastAPI','score':11}).status_code==422
+        changed=client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':1,'name':'FastAPI','score':8}).json()
+        assert [r['score'] for r in changed['ratings']]==[8]
+        cleared=client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':2,'name':'FastAPI','score':None}).json()
+        assert cleared['ratings']==[]
+        # A rating never interrupts a running evaluation.
+        begin(store,OWNER,Generate(expected_version=3,mutation_id=uuid4(),allow_partial=True),'assessment')
+        blocked=client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':4,'name':'FastAPI','score':5})
+        assert blocked.status_code==409 and blocked.json().get('code','operation_pending')

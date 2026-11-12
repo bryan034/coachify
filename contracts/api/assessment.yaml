@@ -685,6 +685,241 @@
         ]
       }
     },
+    "/api/v1/assessments/skill-ratings": {
+      "get": {
+        "summary": "Skill Ratings",
+        "description": "The levels the person set for skills elo could not rate. They are shown as self-rated and never change a model score.",
+        "operationId": "skill_ratings_api_v1_assessments_skill_ratings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillRatings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Rate Skill",
+        "operationId": "rate_skill_api_v1_assessments_skill_ratings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillRatingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillRatings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/assessments/{identifier}": {
       "get": {
         "summary": "History",
@@ -887,6 +1122,9 @@
       },
       "Context": {
         "properties": {
+          "evaluation": {
+            "$ref": "#/components/schemas/EvaluationStatus"
+          },
           "ready": {
             "type": "boolean",
             "title": "Ready"
@@ -1007,6 +1245,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "evaluation",
           "ready",
           "model_available"
         ],
@@ -1014,6 +1253,9 @@
       },
       "Current": {
         "properties": {
+          "evaluation": {
+            "$ref": "#/components/schemas/EvaluationStatus"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -1060,6 +1302,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "evaluation",
           "version",
           "operation",
           "result",
@@ -1071,6 +1314,9 @@
       },
       "DashboardSource": {
         "properties": {
+          "evaluation": {
+            "$ref": "#/components/schemas/EvaluationStatus"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -1164,6 +1410,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "evaluation",
           "version",
           "freshness"
         ],
@@ -1300,6 +1547,69 @@
         ],
         "title": "EvaluatedSkill"
       },
+      "EvaluationStatus": {
+        "properties": {
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "current",
+              "outdated",
+              "unavailable"
+            ],
+            "title": "Freshness"
+          },
+          "processing": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "evaluating",
+              "failed"
+            ],
+            "title": "Processing"
+          },
+          "completeness": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "partial"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completeness"
+          },
+          "evaluated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluated At"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "freshness",
+          "processing"
+        ],
+        "title": "EvaluationStatus"
+      },
       "Generate": {
         "properties": {
           "expected_version": {
@@ -1328,6 +1638,17 @@
       },
       "InputVersions": {
         "properties": {
+          "evidence_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Hash"
+          },
           "as_of_date": {
             "anyOf": [
               {
@@ -1587,6 +1908,22 @@
             "title": "Score Status",
             "default": "insufficient_evidence"
           },
+          "score_confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Confidence"
+          },
           "score_explanation": {
             "anyOf": [
               {
@@ -1629,22 +1966,6 @@
             },
             "type": "array",
             "title": "Profile Skills"
-          },
-          "score_confidence": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "low",
-                  "medium",
-                  "high"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score Confidence"
           }
         },
         "additionalProperties": true,
@@ -1833,6 +2154,119 @@
           "skills"
         ],
         "title": "SkillProfile"
+      },
+      "SkillRating": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "score": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Score"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "score",
+          "updated_at"
+        ],
+        "title": "SkillRating"
+      },
+      "SkillRatingInput": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "name"
+        ],
+        "title": "SkillRatingInput",
+        "description": "The person's own level for a skill elo could not rate. A null score removes it."
+      },
+      "SkillRatings": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "ratings": {
+            "items": {
+              "$ref": "#/components/schemas/SkillRating"
+            },
+            "type": "array",
+            "title": "Ratings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "ratings"
+        ],
+        "title": "SkillRatings"
       }
     },
     "securitySchemes": {

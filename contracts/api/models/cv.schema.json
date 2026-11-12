@@ -450,6 +450,18 @@
           ],
           "title": "Experience Months"
         },
+        "skill_level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SkillLevelInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Highest rated level across this skill's sources; uncertain only when no source could be rated."
+        },
         "context": {
           "anyOf": [
             {
@@ -859,6 +871,34 @@
           "default": null,
           "title": "Experience Months"
         },
+        "skill_level": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Level"
+        },
+        "skill_level_rationale": {
+          "anyOf": [
+            {
+              "maxLength": 400,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill Level Rationale"
+        },
         "evidence_excerpt": {
           "anyOf": [
             {
@@ -879,11 +919,12 @@
               "attribution",
               "assistance",
               "proficiency",
-              "experience_months"
+              "experience_months",
+              "skill_level"
             ],
             "type": "string"
           },
-          "maxItems": 4,
+          "maxItems": 5,
           "minItems": 1,
           "title": "Changed Fields",
           "type": "array"
@@ -1370,6 +1411,17 @@
           ],
           "title": "Experience Months"
         },
+        "skill_level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SkillLevelInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "evidence": {
           "items": {
             "$ref": "#/$defs/Evidence"
@@ -1451,6 +1503,61 @@
       "title": "SkillEstimate",
       "type": "object"
     },
+    "SkillLevelInfo": {
+      "description": "The skill's own 1-10 level on the shared competence scale (not a goal comparison).\n\n`uncertain` means the CV and review were not conclusive; the level is then null.",
+      "properties": {
+        "level": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Level"
+        },
+        "status": {
+          "default": "rated",
+          "enum": [
+            "rated",
+            "uncertain"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "source": {
+          "description": "cv: judged at extraction from the saved CV; review: judged during the CV review from the CV and the user's answers.",
+          "enum": [
+            "cv",
+            "review"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "level",
+        "rationale",
+        "source",
+        "evidence"
+      ],
+      "title": "SkillLevelInfo",
+      "type": "object"
+    },
     "SkillSource": {
       "properties": {
         "item_id": {
@@ -1515,6 +1622,17 @@
           ],
           "default": null,
           "title": "Experience Months"
+        },
+        "skill_level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SkillLevelInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "evidence": {
           "default": [],

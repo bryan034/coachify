@@ -43,7 +43,7 @@ def test_valid_judgements_keep_category_scores_and_drop_a_goal_level_for_unneede
         judgement('s2', category='Cloud & DevOps', relevance='none', required_score=5)])
     python, docker = validate_skill_batch(output, skills, {'job:req1'}, EVIDENCE)
     assert python['subcategory'] == 'Languages' and python['competence_score'] == 4
-    assert python['required_score'] == 8 and python['canonical_skill_id'] == 'language.python'
+    assert python['required_score'] == 5 and python['canonical_skill_id'] == 'language.python'
     assert docker['category'] == 'Cloud & DevOps' and docker['required_score'] is None and docker['evidence_refs'] == []
 
 
@@ -77,10 +77,10 @@ def test_completed_assessment_publishes_the_skill_profile():
         client.post('/api/v1/assessments', json={'expected_version': 0, 'mutation_id': str(uuid4()), 'allow_partial': True}, headers=H)
         state = finish(client)
     profile = state['result']['skill_profile']
-    assert profile['status'] == 'evaluated' and profile['rubric_version'] == 'evidence-role-v2'
+    assert profile['status'] == 'evaluated' and profile['rubric_version'] == 'evidence-role-v4'
     [skill]=profile['skills']
     assert skill['name']=='Python' and skill['canonical_skill_id']=='language.python'
-    assert skill['competence_score']==4 and skill['required_score']==8
+    assert skill['competence_score']==4 and skill['required_score']==5
     assert skill['evidence_refs']==['cv:item1:claim:0'] and skill['requirement_refs']==['job:req1']
     assert 'Self-ratings do not override' in skill['explanation']
     assert model.calls == 1 and model.skill_calls == 1
@@ -149,7 +149,7 @@ def test_large_profiles_are_judged_in_bounded_batches_and_checkpointed():
 def test_a_profile_without_skills_is_empty_without_a_model_call():
     model = Interpreter()
     profile = asyncio.run(evaluate_skills(model, {'evidence': {}, 'goal': {}, 'requirements': []}, [], [], None))
-    assert profile == {'status': 'empty', 'rubric_version': 'evidence-role-v2', 'skills': []} and model.skill_calls == 0
+    assert profile == {'status': 'empty', 'rubric_version': 'evidence-role-v4', 'skills': []} and model.skill_calls == 0
 
 
 def test_ambiguous_project_has_a_provisional_baseline_even_if_model_leaves_it_unknown():
@@ -160,3 +160,35 @@ def test_ambiguous_project_has_a_provisional_baseline_even_if_model_leaves_it_un
     assert skill['competence_score']==3
     assert skill['evidence_refs']==['cv:p:claim:0']
     assert 'Provisional' in skill['explanation'] and 'not verified capability' in skill['explanation']
+
+
+@pytest.mark.parametrize('reviewed,score', [(True, 5), (False, None)])
+def test_skipped_topics_take_the_models_capped_score_only_after_the_review(reviewed, score):
+    evidence = {'cv:s:claim:0': {'kind': 'skill', 'name': 'SQL', 'source_kind': 'skills', 'attribution': 'unknown',
+                                 'text': 'SQL', 'reviewed': reviewed}}
+    output = SkillBatch(skills=[judgement('s1', competence_score=6, evidence_refs=['cv:s:claim:0'])])
+    if score is None:
+        with pytest.raises(OutputProblem) as error:
+            validate_skill_batch(output, profile_skills(evidence), set(), evidence)
+        assert error.value.detail == 'Finish your CV review so elo can rate your competence.'
+        return
+    [skill] = validate_skill_batch(output, profile_skills(evidence), set(), evidence)
+    assert skill['competence_score'] == score and skill['evidence_refs'] == ['cv:s:claim:0']
+    assert 'rough estimate' in skill['explanation']
+
+
+def test_reviewed_cv_level_is_reused_even_when_goal_model_omits_it():
+    import copy
+    evidence=copy.deepcopy(EVIDENCE)
+    record=evidence['cv:item1:claim:0']
+    record.update(cv_level=3,source_kind='project')
+    skills=profile_skills(evidence)
+    output=SkillBatch(skills=[judgement('s1',competence_score=None,requirement_refs=['job:req1']),judgement('s2',relevance='none')])
+    python,_=validate_skill_batch(output,skills,{'job:req1'},evidence)
+    assert python['competence_score']==3 and python['required_score']==5
+    assert 'cv:item1:claim:0' in python['evidence_refs']
+    # An unreviewed or team-only source cannot lend an established level.
+    record['reviewed']=False
+    output.skills[0].competence_score=None
+    python,_=validate_skill_batch(output,profile_skills(evidence),{'job:req1'},evidence)
+    assert python['competence_score'] is None

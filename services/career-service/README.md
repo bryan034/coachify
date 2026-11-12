@@ -2,6 +2,8 @@
 
 Career owns transient job inputs, the account's canonical goal and guided chat, conversational discovery and cited public research. JD intake and discovery share the same structured goal persistence path. Configured model/search access is required for live interpretation and research; previews make no model calls. Synthetic tests do not establish live quality or provider cost.
 
+Research also rates each goal skill’s required competence on the shared 1–10 scale (1 not competent, 5 independent with understanding, 10 most complex). Ratings retain finding references; stated employer expectations are a floor. Failed rating calls preserve research and description-based targets.
+
 ## Model and search providers
 
 All Career stages share the configured model through the OpenAI Python SDK. The

@@ -1,6 +1,6 @@
 from elo_shared.skills import resolve, MAPPING_VERSION
 from elo_shared.skill_groups import skill_groups, skill_subgroups
-from app.schemas.interview_evidence import ReviewFact, SkillEstimate
+from app.schemas.interview_evidence import ReviewFact, SkillEstimate, SkillLevel, ExtractedSkillLevel
 from app.domain.extraction_errors import FailureStage, FailureCategory, ProviderReason, ProviderParameter
 from typing import Annotated, Literal
 import calendar
@@ -130,6 +130,7 @@ class ExtractedItem(StrictModel):
     supporting_items: list[Annotated[int, Field(strict=True)]] = Field(default_factory=list, max_length=15)
     uncertainties: list[Uncertainty] = Field(default_factory=list, max_length=7)
     review_evidence: list[ReviewFact] = Field(default_factory=list, max_length=12)
+    skill_levels: list[ExtractedSkillLevel] = Field(default_factory=list, max_length=15)
 
     @model_validator(mode='after')
     def valid_dates(self):
@@ -194,6 +195,23 @@ class Evidence(BaseModel):
     location: str
 
 
+class SkillLevelInfo(BaseModel):
+    """The skill's own 1-10 level on the shared competence scale (not a goal comparison).
+
+    `uncertain` means the CV and review were not conclusive; the level is then null.
+    """
+    level: SkillLevel | None
+    status: Literal['rated', 'uncertain'] = 'rated'
+    rationale: str
+    source: Literal['cv', 'review'] = Field(description="cv: judged at extraction from the saved CV; review: judged during the CV review from the CV and the user's answers.")
+    evidence: list[Evidence]
+
+    @model_validator(mode='after')
+    def consistent_status(self):
+        self.status = 'uncertain' if self.level is None else 'rated'
+        return self
+
+
 class SkillClaim(BaseModel):
     skill_id: str
     name: str
@@ -201,6 +219,7 @@ class SkillClaim(BaseModel):
     assistance: Literal['independent', 'assisted', 'supervised', 'unknown']
     proficiency: str | None
     experience_months: float | None
+    skill_level: SkillLevelInfo | None = None
     evidence: list[Evidence]
     evidence_type: str
     support_uncertain: bool
@@ -247,6 +266,7 @@ class SkillSource(BaseModel):
     assistance: Literal['independent', 'assisted', 'supervised', 'unknown'] = 'unknown'
     proficiency: str | None = None
     experience_months: float | None = None
+    skill_level: SkillLevelInfo | None = None
     evidence: list[Evidence] = []
 
 
@@ -263,6 +283,7 @@ class CvSkill(BaseModel):
     category: str
     proficiency: str | None
     experience_months: float | None
+    skill_level: SkillLevelInfo | None = Field(default=None, description="Highest rated level across this skill's sources; uncertain only when no source could be rated.")
     context: str | None
     evidence: list[Evidence]
     evidence_type: str
@@ -279,8 +300,10 @@ class InterpretedClaim(StrictModel):
     assistance: Literal['independent', 'assisted', 'supervised', 'unknown'] = 'unknown'
     proficiency: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)] | None = None
     experience_months: Months | None = None
+    skill_level: SkillLevel | None = None
+    skill_level_rationale: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)] | None = None
     evidence_excerpt: Annotated[str, StringConstraints(min_length=1, max_length=500)] | None = None
-    changed_fields: list[Literal['attribution', 'assistance', 'proficiency', 'experience_months']] = Field(min_length=1, max_length=4)
+    changed_fields: list[Literal['attribution', 'assistance', 'proficiency', 'experience_months', 'skill_level']] = Field(min_length=1, max_length=5)
 
 
 class InterpretedDates(StrictModel):

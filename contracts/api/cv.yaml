@@ -5001,6 +5001,17 @@
             ],
             "title": "Experience Months"
           },
+          "skill_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillLevelInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highest rated level across this skill's sources; uncertain only when no source could be rated."
+          },
           "context": {
             "anyOf": [
               {
@@ -5593,6 +5604,32 @@
             ],
             "title": "Experience Months"
           },
+          "skill_level": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Level"
+          },
+          "skill_level_rationale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 400,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Level Rationale"
+          },
           "evidence_excerpt": {
             "anyOf": [
               {
@@ -5613,11 +5650,12 @@
                 "attribution",
                 "assistance",
                 "proficiency",
-                "experience_months"
+                "experience_months",
+                "skill_level"
               ]
             },
             "type": "array",
-            "maxItems": 4,
+            "maxItems": 5,
             "minItems": 1,
             "title": "Changed Fields"
           }
@@ -6666,6 +6704,16 @@
             ],
             "title": "Experience Months"
           },
+          "skill_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillLevelInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "evidence": {
             "items": {
               "$ref": "#/components/schemas/Evidence"
@@ -6809,6 +6857,16 @@
               }
             ],
             "title": "Experience Months"
+          },
+          "skill_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillLevelInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "evidence": {
             "items": {
@@ -7168,6 +7226,61 @@
           "total_topics"
         ],
         "title": "ReviewProgress"
+      },
+      "SkillLevelInfo": {
+        "properties": {
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "rated",
+              "uncertain"
+            ],
+            "title": "Status",
+            "default": "rated"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "cv",
+              "review"
+            ],
+            "title": "Source",
+            "description": "cv: judged at extraction from the saved CV; review: judged during the CV review from the CV and the user's answers."
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            },
+            "type": "array",
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "level",
+          "rationale",
+          "source",
+          "evidence"
+        ],
+        "title": "SkillLevelInfo",
+        "description": "The skill's own 1-10 level on the shared competence scale (not a goal comparison).\n\n`uncertain` means the CV and review were not conclusive; the level is then null."
       }
     },
     "securitySchemes": {

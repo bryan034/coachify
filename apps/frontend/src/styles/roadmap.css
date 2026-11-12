@@ -425,7 +425,7 @@
  .helper-open .adviser-messages{padding:18px}
  .helper-open .adviser-composer{padding:12px 18px}
  .helper-open .adviser-composer textarea{min-height:56px}
- .helper-open .adviser-composer>div{margin-top:8px}
+ .helper-open .adviser-composer .adviser-compose-box{margin-top:0}
 }
 
 /* Session notes: a Word-like page with a formatting toolbar at the top. */
@@ -510,8 +510,8 @@
 @container (max-width:620px){.todo-list>.todo,.todo-day .todo:first-child{grid-template-columns:28px minmax(0,1fr)}.todo-when{grid-column:2;justify-content:flex-start}.todo-time{min-width:0}.todo-length{min-width:0}}
 /* Chat helper (redesign "Plan helper"): one Close button, composer footer never clips Send. */
 .helper-launcher[hidden]{display:none!important}
-.adviser-composer>div{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.adviser-composer>div .btn{flex:none;white-space:nowrap}
+.adviser-composer .adviser-compose-foot{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.adviser-composer .adviser-compose-foot .btn{flex:none;white-space:nowrap}
 .adviser-close{min-height:36px;padding:0 14px;border-radius:10px;font-weight:600}
 
 .prerequisite-list{list-style:none;padding:0;margin:16px 0 0}.prerequisite-list li{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line)}.prerequisite-list li>div{flex:1;min-width:0}.prerequisite-list p{font-size:13px;color:var(--mute);margin-top:2px}.prerequisite-mark{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--line);flex-shrink:0}.prerequisite-list .done .prerequisite-mark{background:var(--green);border-color:var(--green);color:#fff}@media(max-width:600px){.prerequisite-list li{flex-wrap:wrap}}

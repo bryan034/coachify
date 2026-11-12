@@ -82,6 +82,14 @@ class Summary(Model):
     key_takeaway_refs:list[str]=Field(default_factory=list,max_length=6)
     consideration_refs:list[str]=Field(default_factory=list,max_length=6)
 
+class SkillLevelRating(Model):
+    """The level a role needs in one skill on elo's shared 1-10 competence scale, rated from research."""
+    skill:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=200)]
+    level:int=Field(ge=1,le=10,strict=True)
+    rationale:Text
+    # Findings of this report that informed the level; empty when it rests on the role alone.
+    finding_ids:list[str]=Field(default_factory=list,max_length=4)
+
 class OpportunityReport(Model):
     schema_version:Literal[1,2]=2
     fingerprint:str=Field(pattern=r'^[0-9a-f]{64}$')
@@ -95,6 +103,7 @@ class OpportunityReport(Model):
     expires_at:datetime
     warnings:list[Text]=Field(default_factory=list,max_length=10)
     models:dict[str,str]=Field(default_factory=dict,max_length=2)
+    skill_levels:list[SkillLevelRating]=Field(default_factory=list,max_length=60)
 
     @model_validator(mode='after')
     def references(self):

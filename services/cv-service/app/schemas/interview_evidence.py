@@ -1,5 +1,5 @@
 """One evidence vocabulary for CV extraction, clarification and interview memory."""
-from typing import Literal
+from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ReviewField = Literal['role', 'responsibilities', 'personal_contribution', 'assistance',
@@ -82,3 +82,20 @@ class SkillEstimate(BaseModel):
     level: Literal['insufficient_evidence', 'guided_application', 'independent_application', 'complex_application']
     explanation: str = Field(min_length=1, max_length=800)
     evidence_refs: list[str] = Field(min_length=1, max_length=12)
+
+
+# elo_shared.competence_scale: 1 = not competent, 5 = independent and understands, 10 = most complex work.
+SkillLevel = Annotated[int, Field(ge=1, le=10, strict=True)]
+
+
+class ExtractedSkillLevel(BaseModel):
+    """A model-judged 1-10 level of one skill by itself, never a comparison with a career goal.
+
+    Read pessimistically from the CV and capped by the backend where independence is not stated.
+    Each level cites exact CV quotations.
+    """
+    model_config = ConfigDict(extra='forbid')
+    skill_name: str = Field(min_length=1, max_length=120)
+    level: SkillLevel
+    rationale: str = Field(min_length=1, max_length=400)
+    evidence: list[ReviewQuote] = Field(min_length=1, max_length=3)

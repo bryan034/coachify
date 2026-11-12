@@ -21,7 +21,7 @@ class Sources:
         if path.endswith('/context'):
             return {'ready':self.ready,'issues':[] if self.ready else [{'source':'cv','message':'Select a CV.','href':'/cv'}],'input_hash':self.hash,'research_coverage':'no_findings','goal':{'role':'Developer','target_type':'specific_job','job_dates':[]},'cv':{'id':'cv1','name':'synthetic.docx'},'evidence':assessment()['evidence']}
         if path.endswith('/operation'):return {'operation':{'status':'succeeded'},'result':self.result,'retry_request':None}
-        return {'version':0,'ready':self.ready,'result':self.result,'stale':False,'operation':None}
+        return {'version':0,'ready':self.ready,'result':self.result,'stale':False,'evaluation':{'freshness':'current'},'operation':None}
     async def write(self,service,path,token,body):
         self.writes.append(path);self.result=assessment(self.hash);return {'version':1}
 class Scripted:
@@ -182,12 +182,13 @@ def test_failed_generation_retry_reuses_its_identity_and_replay_is_idempotent():
         assert client.post('/api/v1/roadmaps/planner/generate',headers=H,json=body).status_code==202
         assert len(model.contexts)==2
 
-def test_assessment_runs_before_planning_when_none_is_current():
+def test_missing_assessment_requires_explicit_evaluation_before_planning():
     sources=Sources();sources.result=None;model=Scripted([draft()])
     with client_for(model,sources) as client:
         state=generate(client,configure(client))
-        assert sources.writes==['/api/v1/assessments'] and state['planner']['candidate']['assessment_id']=='assessment1'
-        assert state['operation']['status']=='succeeded',state['operation']
+        assert sources.writes==[] and state['planner']['candidate'] is None
+        assert state['operation']['error']['code']=='assessment_required'
+        assert model.contexts==[]
 
 def test_accept_requires_a_current_preview_and_snapshots_the_plan():
     sources=Sources();model=Scripted([draft(),draft()])
@@ -596,3 +597,82 @@ def test_learning_steps_report_each_skills_progress_in_priority_order():
 def test_a_passed_session_is_missed_rather_than_next():
     step=learning_view(learning_plan(),NOW+timedelta(days=30))['steps'][1]
     assert (step['name'],step['sessions_missed'],step['next_session'],step['state'])==('SQL',1,None,'in_progress')
+
+
+@pytest.mark.parametrize('complete_after', [3, None])
+def test_assessment_polling_uses_two_second_intervals_and_stops_at_sixty(monkeypatch, complete_after):
+    import asyncio
+    sleeps=[]
+    original_sleep=asyncio.sleep
+    async def sleep(seconds):
+        sleeps.append(seconds)
+        await original_sleep(0)
+    monkeypatch.setattr('app.main.asyncio.sleep',sleep)
+    class Processing(Sources):
+        polls=0
+        async def read(self,service,path,token,params=None):
+            if path.endswith('/current') and not (complete_after and self.polls>=complete_after):
+                return {'version':0,'ready':True,'result':None,'operation':{'status':'running'}}
+            if path.endswith('/operation'):
+                self.polls+=1
+                if not (complete_after and self.polls>=complete_after):
+                    return {'operation':{'status':'running'},'result':None}
+            return await super().read(service,path,token,params)
+    sources=Processing();model=Scripted([draft()])
+    with client_for(model,sources) as client:
+        state=generate(client,configure(client))
+    assert sources.polls==(complete_after or 60)
+    assert sleeps==[2]*(complete_after or 60)
+    assert sources.writes==[]
+    if complete_after:
+        assert state['operation']['status']=='succeeded'
+    else:
+        assert state['operation']['error']['code']=='assessment_processing'
+        assert model.contexts==[]
+
+
+def test_current_evaluation_is_reused_with_skill_judgements_and_reference_metadata_only():
+    sources=Sources();sources.result['skill_profile']['skills']=[{'name':'Python','competence_score':3,'required_score':5}]
+    model=Scripted([draft()])
+    with client_for(model,sources) as client:
+        state=generate(client,configure(client))
+        assert state['operation']['status']=='succeeded'
+    assert sources.writes==[] and not any(path.endswith('/operation') for path in sources.reads)
+    sent=model.contexts[0]['assessment']
+    assert sent['skill_profile']==sources.result['skill_profile']
+    assert set(sent['evidence'])==set(sources.result['evidence'])
+    assert all('text' not in record for record in sent['evidence'].values())
+
+
+@pytest.mark.parametrize('kind',['outdated','legacy','unavailable'])
+def test_unusable_saved_evaluation_never_starts_assessment_or_plan_model(kind):
+    class NotCurrent(Sources):
+        async def read(self,service,path,token,params=None):
+            value=await super().read(service,path,token,params)
+            if path.endswith('/current'):
+                if kind=='legacy':value['result'].pop('skill_profile')
+                else:value.update(stale=True,evaluation={'freshness':kind})
+            return value
+    sources=NotCurrent();model=Scripted([draft()])
+    with client_for(model,sources) as client:
+        state=generate(client,configure(client))
+    assert state['operation']['error']['code']=='assessment_required'
+    assert sources.writes==[] and model.contexts==[]
+
+
+def test_preview_cannot_be_accepted_when_saved_evaluation_needs_an_update():
+    class EvaluationSource(Sources):
+        freshness='current'
+        async def read(self,service,path,token,params=None):
+            value=await super().read(service,path,token,params)
+            if path.endswith('/context'):value['evaluation']={'freshness':self.freshness}
+            return value
+    sources=EvaluationSource()
+    with client_for(Scripted([draft()]),sources) as client:
+        state=generate(client,configure(client))
+        assert state['planner']['candidate']
+        sources.freshness='outdated'
+        response=client.post('/api/v1/roadmaps/planner/accept',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
+        assert response.status_code==409 and response.json()['code']=='assessment_required'
+        state=read(client)
+        assert state['planner']['candidate'] and state['planner']['active'] is None

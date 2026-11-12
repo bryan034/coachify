@@ -77,6 +77,9 @@ def summary(document):
 def detail(document):
     items = effective_items(document)
     for item in items: item['source_fingerprint'] = source_fingerprint(item)
+    # Review-time skill levels are overlaid after fingerprints, so they never alter evidence identity.
+    from app.domain.skill_levels import apply_skill_level_reviews
+    apply_skill_level_reviews(document, items)
     return {**summary(document),
         'skill_estimates': visible_baseline_estimates(baseline_estimates(items)),
         'other_information': document.get('other_information', []),

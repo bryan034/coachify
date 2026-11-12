@@ -9,6 +9,10 @@ const api = vi.hoisted(() => vi.fn());
 vi.mock('@/features/profile/profile-provider', () => ({ useProfile: () => session }));
 vi.mock('@/lib/api/roadmap', () => ({ roadmapApi: api, RoadmapError: class extends Error { status = 503; } }));
 // The planner shows the Skills Profile's own counts, not its evidence list (which repeats a skill per source).
+const evaluationApi = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/api/assessment', async original => ({ ...await original<typeof import('@/lib/api/assessment')>(), assessmentApi: evaluationApi }));
+const evaluationStatus = { freshness: 'current', processing: 'idle', completeness: 'complete', evaluated_at: '2030-01-09T00:00:00Z', reasons: [] } as const;
+beforeEach(() => evaluationApi.mockImplementation(async path => path === '/context' ? { ready: true, model_available: true, cv_reviewed: true, input_hash: 'hash1' } : { version: 0, stale: false, ready: true, result: null, operation: null, issues: [], evaluation: evaluationStatus }));
 const profileSkills = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/api/workspace-summary', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api/workspace-summary')>(), loadSkills: profileSkills }));
 beforeEach(() => profileSkills.mockResolvedValue({ total: 1, experiences: 1, groups: [{ name: 'Technical coding', count: 1, skills: ['Git'] }] }));
@@ -604,6 +608,48 @@ it('offers an updated preview when settings, progress or evidence change', async
  await waitFor(() => expect(calls('/planner/generate')).toHaveLength(1));
 });
 
+it.each(['CV', 'career goal'])('replaces source notices with a roadmap banner after the %s changes', async source => {
+ const state = withActive(roadmap(), { signals: [{ kind: 'evidence', message: 'Your CV, skills or Career goal changed since this roadmap was prepared.' }] });
+ state.context.input_hash = `${source}-changed`;
+ const freshPlan = roadmap({ id: 'fresh-preview', assessment_hash: state.context.input_hash });
+ const fresh = withCandidate(freshPlan, { active: state.planner.active });
+ fresh.context.input_hash = state.context.input_hash;
+ serve(state, { '/planner/generate': () => fresh });
+ render(<RoadmapPlanner />);
+ expect(await screen.findByRole('heading', { name: 'Your roadmap is out of date' })).toBeVisible();
+ expect(screen.queryByText('Your CV, skills or Career goal changed since this roadmap was prepared.')).not.toBeInTheDocument();
+ expect(screen.queryByRole('button', { name: 'Preview updated roadmap' })).not.toBeInTheDocument();
+ expect(calls('/planner/generate')).toHaveLength(0);
+ fireEvent.click(screen.getByRole('button', { name: 'Regenerate roadmap' }));
+ await screen.findByText('Preview: not active until you accept it');
+ expect(calls('/planner/generate')).toHaveLength(1);
+ expect(screen.queryByRole('heading', { name: 'Your roadmap is out of date' })).not.toBeInTheDocument();
+ expect(calls('/planner/accept')).toHaveLength(0);
+});
+
+it('replaces an outdated preview source blocker while keeping acceptance blocked', async () => {
+ const state = withCandidate(roadmap(), { candidate_blockers: [{ code: 'inputs_changed', message: 'Your CV or Career goal changed after this preview was prepared. Generate a fresh plan.' }] });
+ state.context.input_hash = 'new-inputs';
+ serve(state); render(<RoadmapPlanner />);
+ expect(await screen.findByRole('button', { name: 'Regenerate roadmap' })).toBeEnabled();
+ expect(screen.getByRole('button', { name: 'Accept plan' })).toBeDisabled();
+ expect(screen.queryByText('Your CV or Career goal changed after this preview was prepared. Generate a fresh plan.')).not.toBeInTheDocument();
+});
+
+it('disables banner regeneration when the latest inputs are not ready', async () => {
+ const state = withActive(); state.context = { ...state.context, input_hash: 'new-inputs', ready: false };
+ serve(state); render(<RoadmapPlanner />);
+ expect(await screen.findByRole('button', { name: 'Regenerate roadmap' })).toBeDisabled();
+ expect(calls('/planner/generate')).toHaveLength(0);
+});
+
+it('keeps the outdated banner hidden for a current roadmap', async () => {
+ const state = withActive(); state.context.input_hash = state.planner.active!.assessment_hash;
+ serve(state); render(<RoadmapPlanner />);
+ await screen.findByText('Your active roadmap');
+ expect(screen.queryByRole('heading', { name: 'Your roadmap is out of date' })).not.toBeInTheDocument();
+});
+
 it('keeps the plan and offers an exact retry when generation fails', async () => {
  const retry = { expected_version: 2, mutation_id: 'failed-one', allow_partial_assessment: false };
  const state = withActive(roadmap(), { retry_generate: retry }); state.operation = { id: 'failed-one', status: 'failed', stage: 'failed', error: { code: 'plan_validation', detail: 'We could not produce a plan that fits your schedule after 3 attempts. Your last valid plan is unchanged.' } };
@@ -675,4 +721,26 @@ it('a blocked runway disables generation on saved settings too', async () => {
  serve(workspace({ planner: planner({ runway: blockedRunway() }) })); render(<RoadmapPlanner />);
  await screen.findByRole('heading', { name: 'Before you can generate' });
  expect(screen.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
+});
+
+
+it('requires an explicit evaluation update before generating from outdated skills', async () => {
+ const outdated = { ...evaluationStatus, freshness: 'outdated' as const, reasons: ['goal_changed'] };
+ let running = false;
+ evaluationApi.mockImplementation(async (path, _token, body) => {
+  if (path === '/context') return { ready: true, model_available: true, cv_reviewed: true, input_hash: 'new' };
+  if (body) { running = true; return {}; }
+  return { version: 3, stale: true, result: null, ready: true, issues: [], operation: running ? { status: 'running' } : null,
+   evaluation: { ...outdated, processing: running ? 'evaluating' : 'idle' } };
+ });
+ const state = workspace(); state.context.evaluation = outdated;
+ serve(state); render(<RoadmapPlanner />);
+ expect(await screen.findByText('Skill evaluation: Outdated')).toBeVisible();
+ expect(screen.getByText('Your career goal changed.')).toBeVisible();
+ expect(screen.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
+ expect(evaluationApi.mock.calls.every(call => call[2] === undefined)).toBe(true);
+ fireEvent.click(screen.getByRole('button', { name: 'Update evaluation' }));
+ await waitFor(() => expect(evaluationApi.mock.calls.filter(call => call[0] === '' && call[2])).toHaveLength(1));
+ expect(calls('/planner/generate')).toHaveLength(0);
+ expect(await screen.findByText(/Skill evaluation: Outdated/)).toBeVisible();
 });

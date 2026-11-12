@@ -4,12 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useProfile } from '@/features/profile/profile-provider';
 import { deviceTimeZone } from '@/features/profile/planning-preferences';
 import { roadmapApi, RoadmapError } from '@/lib/api/roadmap';
+import { useComparison, COMPARISON_REFRESH } from '@/features/assessment/comparison';
+import { EvaluationStatusPanel } from '@/features/assessment/evaluation-status';
 import { EvidenceProposals } from './evidence-proposals';
 import { AdviserChat } from './adviser-chat';
 import { RoadmapReview } from './roadmap-review';
 import { SettingsPanel, useSettingsDraft, type AutosaveState } from './settings-panel';
 import type { Context, Workspace, MessageRequest, PlannerConfig } from './types';
 import '@/styles/roadmap.css';
+import '@/styles/evaluate.css';
 import { errorText, friendlyOperationError } from '@/lib/errors';
 import { loadSkills, useSection } from '@/lib/api/workspace-summary';
 import { PageSkeleton } from '@/components/ui/workspace-ui';
@@ -42,6 +45,7 @@ function workspacePath() {
 function Planner({ token }: { token: string }) {
  const [workspace, setWorkspace] = useState<Workspace | null>(null);
  const profileSkills = useSection(loadSkills, token);
+ const evaluation = useComparison(token);
  const [text, setText] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
  const [partial, setPartial] = useState(true);
  const [helperOpen, setHelperOpen] = useState(()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('chat')==='1'); const launcher = useRef<HTMLButtonElement>(null);
@@ -79,6 +83,19 @@ function Planner({ token }: { token: string }) {
   const timer = setInterval(refresh, 10000);
   return () => { window.removeEventListener('focus', refresh); clearInterval(timer); };
  }, []);
+ useEffect(() => {
+  const refresh = () => { if (!saving.current) void load(); };
+  window.addEventListener(COMPARISON_REFRESH, refresh);
+  return () => window.removeEventListener(COMPARISON_REFRESH, refresh);
+ }, []);
+ const seenEvaluation = useRef<string | null>(null);
+ useEffect(() => {
+  const status = evaluation.current?.evaluation;
+  if (!status) return;
+  const key = `${status.freshness}:${status.processing}`;
+  const previous = seenEvaluation.current; seenEvaluation.current = key;
+  if (previous !== null && previous !== key && !saving.current) void load();
+ }, [evaluation.current?.evaluation?.freshness, evaluation.current?.evaluation?.processing]);
  const running = workspace?.operation?.status === 'pending' || workspace?.operation?.status === 'running';
  const settled = !busy && !running && !error && !unknown && !pending && !workspace?.operation?.retry_after;
  idle.current = settled;
@@ -191,6 +208,7 @@ function Planner({ token }: { token: string }) {
  }
  const rolling = useRef<string | null>(null);
  useEffect(()=>{
+  if(workspace?.context.evaluation && workspace.context.evaluation.freshness!=='current')return;
   if(!workspace?.planner.active||workspace.planner.candidate||!settled||!workspace.planner.signals.some(signal=>signal.kind==='next_week'))return;
   const key=`${workspace.planner.active.id}:${workspace.planner.runway.first_planning_week}`;
   if(rolling.current===key)return;rolling.current=key;
@@ -200,6 +218,7 @@ function Planner({ token }: { token: string }) {
  const { context, active: earlier, draft: earlierDraft, planner } = workspace;
  const frozen = busy || running || !!error || unknown || !!pending || !!workspace.operation?.retry_after;
  const plan = planner.candidate || planner.active; const preview = !!planner.candidate;
+ const sourceChanged = !!plan && !!context.input_hash && plan.assessment_hash !== context.input_hash;
  const review = preview ? planner.candidate_review : planner.active_review;
  const showRoadmap = !!plan && !!review && !configuring;
  // Without both an extracted CV and a Career goal there is nothing to plan from, so only the checklist is shown.
@@ -217,16 +236,22 @@ function Planner({ token }: { token: string }) {
     {running && !helperOpen && <p className="small">Your request is still being worked on. Changes are paused until it finishes.</p>}
    </div>
   </header>
+  {sourceChanged && <section className="evaluate-banner change-banner" aria-labelledby="roadmap-outdated-title">
+   <span className="evaluate-banner-mark" aria-hidden="true">↻</span>
+   <div><h2 id="roadmap-outdated-title">Your roadmap is out of date</h2><p>Your CV, skills or career goal changed. Regenerate your roadmap to build a plan from your latest information. You can review the new plan before accepting it.</p></div>
+   <div className="evaluate-banner-actions"><button type="button" className="btn pri" disabled={starting || frozen || !context.ready || !context.model_available || (!!context.evaluation && context.evaluation.freshness !== 'current')} onClick={() => void generate()}>Regenerate roadmap</button></div>
+  </section>}
   {error && <div className="roadmap-notice" role="alert"><p>{error}</p><button className="btn ghost" disabled={busy} onClick={() => void load()}>Reload saved work</button>{pending && <button className="btn" disabled={busy || running} onClick={() => void send(pending)}>Recover sent message</button>}{unknown && <button className="btn" disabled={busy || running} onClick={() => void change('', {}, true)}>Recover saved change</button>}</div>}
   {pending && !busy && !error && <div className="roadmap-notice"><p>The sent message is awaiting confirmation.</p><button className="btn" disabled={running} onClick={() => void send(pending)}>Recover sent message</button></div>}
   {unknown && !error && <div className="roadmap-notice"><p>The previous change is awaiting confirmation.</p><button className="btn" disabled={busy || running} onClick={() => void change('', {}, true)}>Recover saved change</button></div>}
   {planner.active&&<EvidenceProposals token={token} version={workspace.version} onSaved={()=>void load()}/>}
   {context.availability === 'unavailable' && <div className="roadmap-notice"><p>We can’t check your latest CV and Career goal right now. Your saved roadmap and conversation are still here; new plans and accepting a preview need this check.</p><button className="btn ghost" onClick={() => void load()}>Retry source check</button></div>}
+  <EvaluationStatusPanel comparison={evaluation} actions disabled={frozen} />
   {blocked && <Prerequisites issues={context.issues} />}
   <GenerationProgress active={starting || running} stage={running ? workspace.operation?.stage : undefined} context={context} />
-  {failedGeneration && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your plan could not be prepared. Try again.')}</p>{!!workspace.operation?.retry_after && <p>Provider capacity: retry in {workspace.operation.retry_after} seconds.</p>}<button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={() => retryGenerate(failedGeneration, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
+  {failedGeneration && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your plan could not be prepared. Try again.')}</p>{!!workspace.operation?.retry_after && <p>Provider capacity: retry in {workspace.operation.retry_after} seconds.</p>}<button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after || (!!context.evaluation && context.evaluation.freshness !== 'current')} onClick={() => retryGenerate(failedGeneration, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
   <div id="plan-panel">
-   {showRoadmap ? <RoadmapReview plan={plan!} review={review!} preview={preview} planner={planner} blockers={planner.candidate_blockers} frozen={frozen}
+   {showRoadmap ? <RoadmapReview plan={plan!} review={review!} preview={preview} planner={planner} blockers={planner.candidate_blockers} frozen={frozen} sourceChanged={sourceChanged} generationBlocked={!!context.evaluation && context.evaluation.freshness !== 'current'}
     accept={() => void change('/planner/accept', {})} discard={() => void change('/planner/discard', {})} backToSettings={() => setConfiguring(true)} revise={() => void generate()}
     complete={(session, note) => change('/planner/assignments/status', { assignment_id: session.id, status: 'completed', evidence_note: note.trim() || null })}
     reopen={session => change('/planner/assignments/status', { assignment_id: session.id, status: 'scheduled' })}

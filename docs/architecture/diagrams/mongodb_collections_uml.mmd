@@ -31,6 +31,7 @@ class cvs {
     +Integer effective_version
     +Integer profile_reviewed_effective_version?
     +CvItem[] items
+    +Map skill_level_reviews [item_id_to_fingerprinted_ratings]
     +Object corrections
     +Clarification[] clarifications
     +Object reconciliation_candidate?
@@ -326,3 +327,5 @@ note for job_applications "Private and owner-scoped. Snapshot keeps the record r
 %% Evidence-role-v2: Career skill targets retain planning provenance; fresh research enriches read projections.
 %% CV-owned review facts retain skill self-ratings without creating a separate score store.
 %% Assessment pins the scoring rubric in its input hash; historical assessments become stale after rubric changes.
+
+%% Assessment evidence_hash pins reviewed CV skill-level overlays; freshness is derived on API reads, never persisted as a boolean.

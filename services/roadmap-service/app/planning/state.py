@@ -7,7 +7,7 @@ from elo_shared.skill_groups import skill_groups
 from app.planning.capacity import Capacity, to_minute
 from app.schemas.roadmap import PlannerConfig
 
-ASSESSMENT_FIELDS=('id','input_hash','role','target_type','job_skill_gaps','interview_prep_gaps','constraints','groups','priorities','research_coverage','evidence')
+ASSESSMENT_FIELDS=('id','input_hash','role','target_type','job_skill_gaps','interview_prep_gaps','constraints','groups','priorities','research_coverage','evidence','skill_profile')
 
 def planner_state(row):
     state=row.setdefault('planner',{})
@@ -160,6 +160,8 @@ def candidate_blockers(state,source,now):
         add('sources_unavailable','Your CV and Career goal cannot be checked right now. Retry before accepting.')
     elif not source.get('ready') or candidate['assessment_hash']!=source.get('input_hash'):
         add('inputs_changed','Your CV or Career goal changed after this preview was prepared. Generate a fresh plan.')
+    if source.get('evaluation',{}).get('freshness','current')!='current':
+        add('assessment_required','Update your skill evaluation before accepting this roadmap.')
     if settings_differ(candidate,state):
         add('settings_changed','Your settings changed after this preview was prepared. Generate a fresh plan.')
     if candidate.get('revision_review'):

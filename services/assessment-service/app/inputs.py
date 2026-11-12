@@ -48,6 +48,7 @@ async def capture(upstream,account):
         if item.get('removed'):continue
         ref='cv:'+item['id']
         evidence[ref]={'ref':ref,'kind':item['kind'],'name':item['title'],'text':item['description'],
+            'reviewed':bool(cv and cv.get('profile_reviewed_effective_version')==cv.get('effective_version')),
             'attribution':'unknown','assistance':'unknown','unscoped_item':bool(item.get('skill_claims')),'support_uncertain':item.get('support_uncertain',False),
             'start_date':item.get('start_date'),'end_date':item.get('end_date'),'ongoing':item.get('ongoing',False),
             'provenance':item.get('provenance'),'evidence':item.get('evidence',[])}
@@ -57,6 +58,8 @@ async def capture(upstream,account):
                 **{k:claim.get(k) for k in ('attribution','assistance','proficiency','experience_months','support_uncertain','evidence_type')},
                 'application_level':next((estimate['level'] for estimate in (cv or {}).get('skill_estimates',[]) if estimate.get('item_id')==item['id'] and estimate.get('skill_name','').casefold()==claim['name'].casefold()),None),
                 'reviewed':bool(cv and cv.get('profile_reviewed_effective_version')==cv.get('effective_version')),**identity(claim['name'])}
+            # The CV review's own 1-10 level for this skill (null when unrated or uncertain).
+            evidence[key]['cv_level']=(claim.get('skill_level') or {}).get('level')
             evidence[key]['source_kind']=item['kind']
             evidence[key]['review_facts']=[f for f in item.get('review_evidence',[])
                 if (not f.get('skill_name') and f['field'] not in {'complexity','problem_solving','frequency','recency'})
@@ -93,7 +96,7 @@ async def capture(upstream,account):
     interview_status=((research or {}).get('intelligence') or {}).get('categories',{}).get('interview_intelligence',{}).get('status')
     research_pending=bool(research and (research.get('research_status') in ('pending','processing') or interview_status in ('pending','running')))
     time_sensitive=bool(goal.get('non_skill_requirements') or any(item.get('ongoing') for item in source['items']))
-    vector={'source_mode':'cv_and_profile' if cv_id else 'profile_only','as_of_date':datetime.now(ZoneInfo('Asia/Singapore')).date().isoformat() if time_sensitive else None,'cv_id':cv_id,'cv_version':source['cv_version'],'extraction_version':source['extraction_version'],
+    vector={'evidence_hash':digest(evidence),'source_mode':'cv_and_profile' if cv_id else 'profile_only','as_of_date':datetime.now(ZoneInfo('Asia/Singapore')).date().isoformat() if time_sensitive else None,'cv_id':cv_id,'cv_version':source['cv_version'],'extraction_version':source['extraction_version'],
         'effective_version':source['effective_version'],'cv_selection_version':source['selection_version'],
         'declarations_version':source['declarations_version'],'profile_version':account['profile']['version'],
         'goal_id':goal['_id'],'goal_version':goal['version'],'goal_selection_version':career['selection_version'],

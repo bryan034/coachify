@@ -40,9 +40,9 @@ Current Opportunity reports are read from their interview category; archived `In
 
 ## Durability and limits
 
-Each accepted command has UUID mutation identity and expected workspace revision. Persist before model work; a per-owner leased CAS workspace fences replicas. Completed batch outputs and their captured inputs checkpoint durably, so quota/provider retries retain completed comparisons. Model requests use a configured OpenAI-compatible endpoint (OpenRouter HTTPS by default), service-scoped model/key settings, schema validation and up to two schema repairs. Provider quota errors expose safe retry delay; invalid output/failure cannot become successful uncertainty.
+Each accepted command has UUID mutation identity and expected workspace revision. Persist before model work; a per-owner leased CAS workspace fences replicas. Completed batch outputs and their captured inputs checkpoint durably, so quota/provider retries retain completed comparisons. Each requirement batch sends a compacted copy of the evidence: every evidence ref is kept, fields used only by local validation (provenance, excerpt lists) are dropped, and long texts are shortened step by step until the request fits a 124 KB budget. Assessment's model client accepts requests up to 154 KB (the shared 120 KB default plus room for a full 8,500-character job description); other services keep the 120 KB default. Validation and quotes are always checked against the full records. Model requests use a configured OpenAI-compatible endpoint (OpenRouter HTTPS by default), service-scoped model/key settings, schema validation and up to two schema repairs. When a batch leaves out a component the requirement needs (capability, proficiency, duration or qualification), that component is recorded as `uncertain` (not judged) instead of failing the evaluation; it can neither support the requirement nor prove a shortfall. Other rejected output gets one repair with feedback naming the requirement ref, component and fix. Provider quota errors expose safe retry delay; invalid output/failure cannot become successful uncertainty.
 
-A worker runs at most 210 seconds per execution, renewing its 240-second lease at checkpoints. Retry resumes completed batches. Restart recovery occurs when an authenticated GET reconnects after a lease expires; no bearer is persisted. Revocable sessions and exact source revisions are checked before publishing. Immutable result insertion precedes pointer CAS; an interrupted pointer update recovers the same request-bound result, and older writers cannot replace newer pointers.
+A worker runs at most 210 seconds per execution, renewing its 240-second lease at checkpoints. Retry resumes completed batches while the captured inputs are unchanged; if the CV, goal, research or profile changed since the failure, the retry discards the old checkpoint and compares the latest inputs from the start. Inputs changing during a run still fail it (`inputs_changed`). Restart recovery occurs when an authenticated GET reconnects after a lease expires; no bearer is persisted. Revocable sessions and exact source revisions are checked before publishing. Immutable result insertion precedes pointer CAS; an interrupted pointer update recovers the same request-bound result, and older writers cannot replace newer pointers.
 
 Limits: 1 MiB upstream response, 120,000 UTF-8 bytes/model context, 512 KiB model response, 64 KiB request body, 4 MiB retained workspace and 1,000 mutation receipts. Excess is explicit; sources are not silently truncated. Private reads/errors use no-store; prompts, response prose, tokens and evidence are not logged. Authentication/ownership is enforced in the backend. Three concurrent executions per process; one active operation per owner.
 
@@ -108,7 +108,12 @@ Local validation requires one judgement per skill. Evidence references must come
 from that skill's own sources, and requirement references from the goal. A
 competence score needs a cited source. Team, observed and denied sources cannot
 support personal competence; ambiguous project participation has only a provisional
-level 3, with low confidence, and does not establish capability match status. `required_score`
+level 3, with low confidence, and does not establish capability match status. Once the
+CV review is finished (including topics the user skipped), a source whose personal part
+stayed unconfirmed keeps the model's own level, capped at 5 with low confidence and an
+explanation that it is a rough estimate from the CV as written. Before the review is
+finished, such a score is rejected with “Finish your CV review so elo can rate your
+competence.” The same rule applies to requirement `demonstrated_level`. `required_score`
 is dropped when relevance is `none`. A rejected batch gets one correction with
 fixed feedback. If it still fails, that batch is left out and `status` becomes
 `partial`, or `failed` when no batch passed. The requirement comparison is
@@ -177,8 +182,31 @@ reaches 10/10. Profile skill scores remain absolute evidence levels, not this ra
 `scoring_rubric_version` and the profile `rubric_version` are `evidence-role-v2`.
 The input hash includes this version, making older comparisons stale without changing
 history. Pre-v2 pending checkpoints restart under v2 only if the exact source revision
-vector still matches; changed sources retain the normal rejection. New checkpoints
-resume completed v2 work normally. Profile links retain the same ceilings and role
+vector still matches. New checkpoints resume completed v2 work normally. Profile links retain the same ceilings and role
 target when filling an unscored requirement. Scores never change match status, gaps
 or priorities. The Career Goal page marks current progress on each skill line and
 explains that 10/10 satisfies this specific role's goal, based on available evidence.
+
+
+## Saved evaluation freshness and level reuse
+
+`GET /context`, `/current` and `/dashboard-source` expose a derived `evaluation` object:
+`freshness` (`missing`, `current`, `outdated`, `unavailable`), `processing` (`idle`,
+`evaluating`, `failed`), `completeness` (`complete`, `partial`, or null before a result),
+`evaluated_at` and fixed reason codes. Freshness is calculated against current owner-scoped
+sources, never persisted as an authoritative flag. Outdated results remain readable and may
+coexist with a running replacement. An unavailable source cannot establish freshness.
+
+The input vector includes `evidence_hash` over the full admissible evidence, including
+reviewed status and CV skill-level overlays. A rating or review change therefore invalidates
+an earlier evaluation even if extracted text and effective evidence versions did not change.
+CV selection/versions, declarations, profile, goal selection/versions, research coverage/versions,
+time-sensitive dates, skill registry and scoring rubric are also checked. Results lacking the
+current skill profile/rubric must be explicitly refreshed. No historical result is rewritten.
+
+The v4 scoring path reuses reviewed CV levels for the goal comparison and per-skill judgement,
+subject to the existing ownership, uncertainty and evidence ceilings. Model-generated goal
+relevance and links remain necessary; absent levels and manual evidence retain their validated
+fallback scoring. Goal changes do not independently re-rate an unchanged CV review. Source
+fingerprints are rechecked during processing and before publication. Assessment worker and
+model-call timeouts are unchanged.

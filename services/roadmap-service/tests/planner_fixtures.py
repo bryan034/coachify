@@ -17,7 +17,7 @@ def outcome(ref,status,shortfall=False):
     component={'dimension':'capability','status':'confirmed_shortfall' if shortfall else 'uncertain' if status!='supported' else 'supported','explanation':'Synthetic.','evidence_refs':[]}
     return {'ref':ref,'kind':'job_skill','name':ref.split(':')[1].title(),'match_status':status,'components':[component],'recommendation':None,'mapping_method':'canonical','mapping_reason':'Synthetic.'}
 def assessment(input_hash='hash1'):
-    return {'id':'assessment1','input_hash':input_hash,'role':'Developer','target_type':'specific_job','research_coverage':'no_findings',
+    return {'skill_profile':{'status':'evaluated','rubric_version':'synthetic','skills':[]},'id':'assessment1','input_hash':input_hash,'role':'Developer','target_type':'specific_job','research_coverage':'no_findings',
         'job_skill_gaps':[outcome('job:python','confirmed_shortfall',True),outcome('job:sql','uncertain'),outcome('job:git','supported')],
         'interview_prep_gaps':[],'constraints':[{'ref':'condition:visa','name':'Work authorisation','match_status':'uncertain','components':[]}],
         'groups':[],'priorities':['job:python'],'evidence':{'cv:a':{'kind':'skill','name':'Git','text':'Declared project use.','attribution':'personal'},

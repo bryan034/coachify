@@ -26,7 +26,7 @@ def test_both_scoring_paths_obey_the_evidence_ceiling(record,level):
     result=planning_estimate({'kind':'job_skill','priority':'required','competence_target':{'level':8}},outcome,{'e1':record})
     assert result['demonstrated_score']==level and result['required_score']==8
     assert result['competence_score']==(goal_score(level,8) if level is not None else None)
-    assert result['scoring_rubric_version']=='evidence-role-v2'
+    assert result['scoring_rubric_version']=='evidence-role-v4'
     assert (result['score_status']=='estimated')==(level is not None)
 
 

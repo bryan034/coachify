@@ -348,8 +348,8 @@
         "scope",
         "last_verified_at"
       ],
-      "type": "object",
-      "title": "Finding"
+      "title": "Finding",
+      "type": "object"
     },
     "Generation": {
       "additionalProperties": false,
@@ -770,6 +770,14 @@
           "maxProperties": 2,
           "title": "Models",
           "type": "object"
+        },
+        "skill_levels": {
+          "items": {
+            "$ref": "#/$defs/SkillLevelRating"
+          },
+          "maxItems": 60,
+          "title": "Skill Levels",
+          "type": "array"
         }
       },
       "required": [
@@ -984,6 +992,45 @@
         "url"
       ],
       "title": "ResearchSource",
+      "type": "object"
+    },
+    "SkillLevelRating": {
+      "additionalProperties": false,
+      "description": "The level a role needs in one skill on elo's shared 1-10 competence scale, rated from research.",
+      "properties": {
+        "skill": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Skill",
+          "type": "string"
+        },
+        "level": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Level",
+          "type": "integer"
+        },
+        "rationale": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "finding_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Finding Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "skill",
+        "level",
+        "rationale"
+      ],
+      "title": "SkillLevelRating",
       "type": "object"
     },
     "Summary": {

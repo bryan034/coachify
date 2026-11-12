@@ -16,8 +16,10 @@ from app.planning.state import plan_review
 from app.planning.tasks import ensure_tasks,project_assignments,task_readiness
 from app.schemas.roadmap import DashboardSource
 
+ROADMAP_CONTEXT_BYTES=250000
+
 def create_app(store=None,upstream=None,model=None,clock=None):
-    app=application('elo Roadmap Adviser API','ROADMAP',store=store,upstream=upstream,model=model)
+    app=application('elo Roadmap Adviser API','ROADMAP',store=store,upstream=upstream,model=model,max_context_bytes=ROADMAP_CONTEXT_BYTES)
     app.state.clock=clock or (lambda:datetime.now(timezone.utc))
     shared_lifespan=app.router.lifespan_context
     @asynccontextmanager
@@ -38,23 +40,23 @@ def create_app(store=None,upstream=None,model=None,clock=None):
     async def assessment(account,operation_id,allow_partial):
         token=account['token']
         current=await app.state.upstream.read('assessment','/api/v1/assessments/current',token)
-        if current.get('result') and not current.get('stale'):return current['result']
+        def usable(value):
+            profile=(value.get('result') or {}).get('skill_profile')
+            return (value.get('stale') is False and profile and profile.get('status') in ('evaluated','partial','empty')
+                and value.get('evaluation',{}).get('freshness')=='current')
+        if usable(current):return current['result']
         if not current.get('ready'):raise Problem('Complete your selected CV and Career goal first.',409,'inputs_missing')
         if not current.get('operation') or current['operation']['status'] not in ('pending','running'):
-            request={'expected_version':current['version'],'mutation_id':str(uuid5(NAMESPACE_URL,operation_id+':assessment')),'allow_partial':allow_partial}
-            progress=await app.state.upstream.read('assessment','/api/v1/assessments/operation',token)
-            if (progress.get('operation') or {}).get('status')=='failed' and (progress.get('retry_request') or {}).get('mutation_id')==request['mutation_id']:
-                request=progress['retry_request']
-            await app.state.upstream.write('assessment','/api/v1/assessments',token,request)
-        for _ in range(90):
-            await asyncio.sleep(1)
+            raise Problem('Evaluate your latest skills against your Career goal before generating a roadmap.',409,'assessment_required')
+        for _ in range(60):
+            await asyncio.sleep(2)
             state=await app.state.upstream.read('assessment','/api/v1/assessments/operation',token)
             operation=state.get('operation') or {}
             if operation.get('status')=='failed':
                 error=operation.get('error') or {};raise Problem(error.get('detail','Assessment failed. Retry your saved planning message.'),409,error.get('code','assessment_failed'),operation.get('retry_after'))
             if state.get('result') and operation.get('status')=='succeeded':
                 current=await app.state.upstream.read('assessment','/api/v1/assessments/current',token)
-                if current.get('stale'):raise Problem('Your inputs changed during assessment. Retry with the current inputs.',409,'inputs_changed')
+                if not usable(current):raise Problem('Your evaluation needs updating before planning. Update your evaluation and retry.',409,'assessment_required')
                 return current['result']
         raise Problem('Assessment is still processing. Retry this saved planning message to reconnect.',503,'assessment_processing')
     async def worker(row,account):

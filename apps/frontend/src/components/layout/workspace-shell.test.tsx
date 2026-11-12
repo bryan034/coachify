@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { WorkspaceShell, pageTitle } from './workspace-shell';
+import { fireEvent } from '@testing-library/react';
+import { WorkspaceShell, pageTitle, sectionHome } from './workspace-shell';
 
 const path = vi.hoisted(() => ({ current: '/cv' }));
 const session = vi.hoisted(() => ({ checking: false }));
@@ -46,4 +47,23 @@ it('steps the tab bar aside on full-screen chats so the composer stays reachable
  path.current = '/career-goal/chat';
  const { container } = render(<WorkspaceShell><p>Page</p></WorkspaceShell>);
  expect(container.querySelector('.workspace-tabbar')).toHaveAttribute('hidden');
+});
+
+it('sends the logo to the top page of the current section', () => {
+ path.current = '/career-goal/interview';
+ render(<WorkspaceShell><p>Page</p></WorkspaceShell>);
+ for (const logo of screen.getAllByRole('link', { name: 'elo: back to Career Goal' })) expect(logo).toHaveAttribute('href', '/career-goal');
+ expect(sectionHome('/profile/edit')).toBe('/profile');
+ expect(sectionHome('/getting-started')).toBe('/dashboard');
+});
+
+it('clears an in-page view such as a CV review when the logo is pressed on its section page', () => {
+ window.history.replaceState(null, '', '/cv?review=cv-1');
+ const restored = vi.fn();
+ window.addEventListener('popstate', restored);
+ render(<WorkspaceShell><p>Page</p></WorkspaceShell>);
+ fireEvent.click(screen.getAllByRole('link', { name: 'elo: back to Skills Profile' })[0]);
+ expect(window.location.pathname + window.location.search).toBe('/cv');
+ expect(restored).toHaveBeenCalledTimes(1);
+ window.removeEventListener('popstate', restored);
 });

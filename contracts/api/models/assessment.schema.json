@@ -189,6 +189,18 @@
     "InputVersions": {
       "additionalProperties": false,
       "properties": {
+        "evidence_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Hash"
+        },
         "as_of_date": {
           "anyOf": [
             {
@@ -452,6 +464,23 @@
           "title": "Score Status",
           "type": "string"
         },
+        "score_confidence": {
+          "anyOf": [
+            {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score Confidence"
+        },
         "score_explanation": {
           "anyOf": [
             {
@@ -497,23 +526,6 @@
           },
           "title": "Profile Skills",
           "type": "array"
-        },
-        "score_confidence": {
-          "anyOf": [
-            {
-              "enum": [
-                "low",
-                "medium",
-                "high"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Score Confidence"
         }
       },
       "required": [

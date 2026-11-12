@@ -13,11 +13,13 @@ from app.schemas.roadmap import ChatTurn, PlanDraft, PlannerConfig
 
 MAX_ATTEMPTS=3
 PLAN_MAX_TOKENS=24000
-# Assessment polling (90s) plus three 55-second model calls and their source checks.
-PLANNING_SECONDS=330
+# Total operation budget, including up to 60 Assessment polls at two-second intervals.
+PLANNING_SECONDS=240
 PROMPT_VERSION='roadmap-plan-v2'
 
 PLAN_INSTRUCTIONS='''You write a personal study roadmap towards the user's career goal. You own the learning plan: identify and prioritise gaps, sequence prerequisites, estimate effort, define milestones and write the actual assignments. The backend owns dates and capacity and rejects anything that does not fit, so work only inside the supplied windows and weekly capacity.
+
+Use assessment.skill_profile as the saved evaluation of individual skills; reuse its levels, relevance and links rather than rating proficiency again. Evidence entries are reference metadata; do not invent quotations or additional source facts.
 
 Gaps. assessment holds the evidence-linked comparison of the user's goal with their skills.
 - A requirement whose outcome has a confirmed_shortfall component is status confirmed_gap. uncertain or partial outcomes are status unknown: missing proof is not a shortfall. Supported outcomes and members of satisfied "any" groups are not gaps. assessment.constraints are non-learning conditions that study cannot resolve; never list them as gaps.
@@ -47,6 +49,13 @@ A blackout is time the user cannot study. frequency is once, daily, weekly or mo
 Never compute available hours or claim the schedule fits: the planner form shows the calculated runway. You cannot start generation or apply a plan. When the required details are in, tell the user to review the form and press Generate.
 
 When current_plan is present and the user asks to change it, set revision_instruction to a short, precise description of the change, and include any settings changes. This prepares a preview; nothing applies until the user accepts it. Do not set revision_instruction when the user only asks a question. Completed sessions cannot be changed. Factual skill corrections belong in Skills Profile, so point the user there.'''
+
+def planning_assessment(result):
+    """Keep the saved skill judgements and their evidence handles without copying raw source documents."""
+    value={k:result.get(k) for k in ASSESSMENT_FIELDS if k!='evidence'}
+    value['evidence']={ref:{k:record[k] for k in ('name','kind','attribution','reviewed','cv_level','canonical_skill_id') if k in record}
+        for ref,record in result.get('evidence',{}).items()}
+    return value
 
 def compact_plan(plan):
     if not plan:return None
@@ -240,7 +249,7 @@ def build_plan(draft,assessment,config,first_week,operation_id,attempts,active,c
 
 async def set_stage(app,row,owner,stage):
     row['pending']['stage']=stage
-    seconds=630 if getattr(app.state.model,'local',False) else PLANNING_SECONDS+30
+    seconds=PLANNING_SECONDS+30
     await thread(app.state.store.checkpoint,owner,row,seconds)
 
 async def prepare_plan(app,row,account,assess,read_context,*,config=None,instruction=None,user_message=None):
@@ -270,7 +279,7 @@ async def prepare_plan(app,row,account,assess,read_context,*,config=None,instruc
     local=now.astimezone(capacity.zone)
     draft,attempts=await write_plan(app.state.model,{
         'current_date':capacity.today.isoformat(),'current_time':to_clock(local.hour*60+local.minute),'time_zone':config.time_zone,
-        'goal':source['goal'],'assessment':{k:result.get(k) for k in ASSESSMENT_FIELDS},
+        'goal':source['goal'],'assessment':planning_assessment(result),
         'settings':config.model_dump(mode='json'),'runway':{k:report[k] for k in ('calendar','study')},
         'first_planning_week':report['first_planning_week'],'first_week_windows':capacity.windows_for_week(first_week),
         'weekly_capacity':[{k:w[k] for k in ('week_start','usable_minutes','partial')} for w in report['weeks']],

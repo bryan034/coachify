@@ -100,6 +100,26 @@ def compatibility(categories,sources=()):
     return skills,InterviewProcess(stages=stages[:8])
 
 
+def rating_skills(goal):
+    """Skill names and stated expectations only; never the job text, CV or user notes."""
+    return [{'name':s.name,'priority':s.priority,'stated_proficiency':s.required_proficiency}
+            for s in goal.skills if s.origin!='user_declaration'][:60]
+
+
+def validated_skill_levels(output,skills,finding_ids):
+    """One rating per requested skill, citing only this report's findings."""
+    wanted={' '.join(s['name'].casefold().split()):s['name'] for s in skills};seen={};problems=[]
+    for index,rated in enumerate(output.levels):
+        key=' '.join(rated.skill.casefold().split())
+        if key not in wanted or key in seen:problems.append({'field':f'levels.{index}.skill','issue':'unknown_or_repeated_skill'});continue
+        if any(i not in finding_ids for i in rated.finding_ids):problems.append({'field':f'levels.{index}.finding_ids','issue':'unknown_finding'});continue
+        seen[key]={'skill':wanted[key],'level':rated.level,'rationale':plain_text(rated.rationale),'finding_ids':list(dict.fromkeys(rated.finding_ids))}
+    if problems or len(seen)!=len(wanted):
+        raise AIError('invalid_output',True,reason='schema_validation',fields=('levels',),
+            violations=problems or [{'field':'levels','issue':'missing_skill'}])
+    return list(seen.values())
+
+
 def summary_input(categories):
     # Interleave categories so the bounded summary cannot lose later categories
     # when interview/internship evidence fills the first sixty slots.

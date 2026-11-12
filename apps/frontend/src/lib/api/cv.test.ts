@@ -13,6 +13,17 @@ describe('CV service boundary',()=>{
   response({...value,items:[{...value.items[0],review_evidence:[{...field,status:'verified_mastery'}]}]});
   await expect(cvApi.get(cv.id,'token',signal())).rejects.toThrow('incomplete response');
  });
+ it('preserves individual numeric skill levels and rejects invalid or inconsistent ratings',async()=>{
+  const cv=savedCv();const rating={level:3,status:'rated',rationale:'Guided project use.',source:'review',evidence:cv.skills[0].evidence};
+  const value={...cv,skills:[{...cv.skills[0],skill_level:rating}]};
+  response(value);expect((await cvApi.get(cv.id,'token',signal())).skills[0].skill_level).toEqual(rating);
+  response({...value,skills:[{...value.skills[0],skill_level:{...rating,level:null,status:'uncertain'}}]});
+  expect((await cvApi.get(cv.id,'token',signal())).skills[0].skill_level?.status).toBe('uncertain');
+  for(const invalid of [{level:11},{level:2.5},{level:null},{status:'uncertain'},{source:'career'}]){
+   response({...value,skills:[{...value.skills[0],skill_level:{...rating,...invalid}}]});
+   await expect(cvApi.get(cv.id,'token',signal())).rejects.toThrow('incomplete response');
+  }
+ });
  it('deletes only the identified CV using authenticated versioned input and validates the acknowledgement',async()=>{
   const body={expected_version:3,mutation_id:'synthetic-deletion'};const result={cv_id:'cv/id',deleted:true,selection:{cv_id:null,version:2}};
   response(result);expect(await cvApi.delete('cv/id',body,'token',signal())).toEqual(result);

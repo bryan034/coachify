@@ -24,3 +24,5 @@ Local testing can use the shared 1.5B Ollama alias through this service's own
 `*_LLM_BASE_URL`, `*_LLM_MODEL` and explicit development `*_LLM_ALLOW_HTTP` flag.
 Local requests omit stored cloud credentials; cloud requests retain authentication.
 JSON/domain validation stays mandatory. See [all-service local setup](../../docs/setup.md#career-model-and-search-configuration).
+
+Roadmap reuses the saved current Assessment and Skills Profile judgements. Missing or outdated evaluations need an explicit update; an already-running evaluation can be reconnected. Freshness is rechecked before publication and preview acceptance.

@@ -284,6 +284,14 @@ class ConversationService:
                 configured=getattr(self.provider, 'configured', True))
         finally: self.slots.release()
 
+    def rate_skill_levels(self, owner, payload):
+        """One provider call rating skills by themselves; None when the provider cannot rate."""
+        rate = getattr(self.provider, 'rate_skill_levels', None)
+        if rate is None or not self.slots.acquire(blocking=False): return None
+        try:
+            return self.cv.model_usage.run(owner, rate, payload, configured=getattr(self.provider, 'configured', True))
+        finally: self.slots.release()
+
     def verify_intake(self, owner, blocks, refs):
         if not self.slots.acquire(blocking=False):
             raise ValueError('Evidence validation is busy. Your message is saved; retry shortly.')

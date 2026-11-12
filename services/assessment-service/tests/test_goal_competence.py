@@ -22,8 +22,8 @@ def batch(refs, **levels):
 
 def test_model_levels_cannot_inflate_the_evidence_or_lower_the_role_target():
     [outcome] = validate_batch(batch(['cv:item1:claim:0'], demonstrated_level=10, required_level=2), [REQUIREMENT], EVIDENCE)
-    assert (outcome['competence_score'], outcome['demonstrated_score'], outcome['required_score']) == (3.7, 3, 8)
-    assert outcome['scoring_rubric_version'] == 'evidence-role-v2'
+    assert (outcome['competence_score'], outcome['demonstrated_score'], outcome['required_score']) == (6, 3, 5)
+    assert outcome['scoring_rubric_version'] == 'evidence-role-v4'
     assert outcome['relevance'] == 'high' and outcome['score_status'] == 'estimated'
 
 
@@ -35,7 +35,7 @@ def test_a_demonstrated_level_needs_cited_personal_evidence():
 
 def test_only_a_required_level_leaves_the_score_unknown():
     [outcome] = validate_batch(batch([], required_level=8), [REQUIREMENT], EVIDENCE)
-    assert outcome['competence_score'] is None and outcome['scoring_rubric_version'] == 'evidence-role-v2'
+    assert outcome['competence_score'] is None and outcome['scoring_rubric_version'] == 'evidence-role-v4'
 
 
 def test_levels_are_ignored_outside_job_skills():
@@ -56,7 +56,7 @@ def test_goal_skills_link_to_profile_skills_and_borrow_their_estimate_only_when_
                 {'ref': 'interview:1', 'kind': 'interview_preparation'}]
     testing, python, docker, interview = link_profile(outcomes, profile)
     assert [s['name'] for s in testing['profile_skills']] == ['pytest'] and testing['competence_score'] == 5
-    assert testing['scoring_rubric_version'] == 'evidence-role-v2' and 'pytest' in testing['score_explanation']
+    assert testing['scoring_rubric_version'] == 'evidence-role-v4' and 'pytest' in testing['score_explanation']
     assert python['competence_score'] == 9 and python['scoring_rubric_version'] == 'llm-ratio-v1'
     assert python['profile_skills'][0]['name'] == 'Python'
     assert docker['profile_skills'] == [] and docker['competence_score'] is None
@@ -151,3 +151,83 @@ def test_dashboard_reads_never_start_a_comparison():
     with TestClient(create_app(MemoryStore(), Reviewed(), model)) as client:
         assert client.get('/api/v1/assessments/dashboard-source', headers=H).json()['freshness'] == 'missing'
     assert model.calls == 0
+
+
+SKIPPED = {'cv:item2': {'kind': 'skills', 'text': 'Skills: SQL', 'attribution': 'unknown', 'unscoped_item': True, 'reviewed': True},
+           'cv:item2:claim:0': {'kind': 'skill', 'name': 'SQL', 'text': 'SQL', 'attribution': 'unknown', 'source_kind': 'skills', 'reviewed': True}}
+
+
+def test_a_finished_review_with_skipped_topics_keeps_the_models_capped_level():
+    [outcome] = validate_batch(batch(['cv:item2:claim:0'], demonstrated_level=7, required_level=8), [REQUIREMENT], SKIPPED)
+    assert (outcome['demonstrated_score'], outcome['required_score']) == (5, 5)
+    assert outcome['score_status'] == 'estimated' and outcome['score_confidence'] == 'low'
+    assert 'rough estimate' in outcome['score_explanation']
+
+
+def test_an_unfinished_review_still_asks_for_the_review_before_rating():
+    evidence = {ref: {**record, 'reviewed': False} for ref, record in SKIPPED.items()}
+    with pytest.raises(OutputProblem) as error:
+        validate_batch(batch(['cv:item2:claim:0'], demonstrated_level=6, required_level=8), [REQUIREMENT], evidence)
+    assert error.value.detail == 'Finish your CV review so elo can rate your competence.'
+
+
+def test_team_only_work_stays_unrated_even_after_review():
+    evidence = {'cv:item1:claim:1': {**EVIDENCE['cv:item1:claim:1'], 'reviewed': True}}
+    with pytest.raises(OutputProblem):
+        validate_batch(batch(['cv:item1:claim:1'], demonstrated_level=6, required_level=8), [REQUIREMENT], evidence)
+
+
+def test_a_dimension_the_model_left_out_is_recorded_as_not_judged():
+    from app.domain import validate_batch
+    from app.schemas import Batch
+    output=Batch(outcomes=[{'requirement_ref':'job:1','components':[{'dimension':'capability','status':'uncertain','explanation':'No relevant evidence.','evidence_refs':[]}],
+        'recommendation':None,'mapping_method':'unresolved','mapping_reason':'Synthetic.'}])
+    requirement={'ref':'job:1','kind':'job_skill','name':'Synthetic skill','required_proficiency':'intermediate','required_experience_months':24}
+    result=validate_batch(output,[requirement],{})
+    added={c['dimension']:c for c in result[0]['components']}
+    assert set(added)=={'capability','proficiency','duration'}
+    assert added['proficiency']['status']==added['duration']['status']=='uncertain' and not added['duration']['evidence_refs']
+    assert result[0]['match_status']=='uncertain'
+
+
+def test_repair_feedback_names_the_failing_requirement():
+    import pytest
+    from app.domain import OutputProblem, validate_batch
+    from app.schemas import Batch
+    output=Batch(outcomes=[{'requirement_ref':'job:1','components':[{'dimension':'capability','status':'supported','explanation':'Claimed.','evidence_refs':[]}],
+        'recommendation':None,'mapping_method':'semantic','mapping_reason':'Synthetic.'}])
+    with pytest.raises(OutputProblem) as error:validate_batch(output,[{'ref':'job:1','kind':'job_skill'}],{})
+    assert "'job:1'" in error.value.feedback and 'capability' in error.value.feedback
+
+
+def test_assessment_never_rates_above_the_cv_reviews_own_level():
+    from app.competence import evidence_level, reviewed_estimate, role_level
+    record = {'attribution': 'personal', 'assistance': 'independent', 'source_kind': 'project', 'reviewed': True,
+              'review_facts': [{'field': 'outcome', 'status': 'supported', 'value': 'delivered and deployed'}]}
+    assert evidence_level([record]) == 5
+    # The CV review, on the same 1-10 scale, judged this skill lower: the lower level stands.
+    assert evidence_level([{**record, 'cv_level': 3}]) == 3
+    assert evidence_level([{**record, 'cv_level': 8}]) == 5
+    # Team-only sources cannot lend their CV level.
+    assert evidence_level([record, {'attribution': 'team', 'cv_level': 1}]) == 5
+    unclear = {'attribution': 'unknown', 'reviewed': True, 'cv_level': 2}
+    assert reviewed_estimate([unclear], 5) == 2
+    # Without a Career target the role is assumed to need independent work, or complex work when stated advanced.
+    assert role_level({}) == 5 and role_level({'required_proficiency': 'advanced'}) == 7
+    assert role_level({'competence_target': {'level': 3}}) == 3
+
+
+def test_cv_skill_level_reaches_the_evidence_record():
+    import asyncio
+    from app.inputs import capture
+    from tests.test_assessment import Sources
+    sources = Sources()
+    claim = {'name': 'Python', 'attribution': 'personal', 'assistance': 'unknown', 'proficiency': None, 'experience_months': None,
+             'support_uncertain': False, 'evidence_type': 'explicit', 'evidence': []}
+    sources.source['items'] = [{'id': 'item1', 'kind': 'project', 'title': 'Project', 'description': 'Used Python.', 'provenance': 'explicit',
+        'evidence': [], 'removed': False, 'skill_claims': [
+            {**claim, 'skill_level': {'level': 3, 'status': 'rated', 'rationale': 'Guided use.', 'source': 'review', 'evidence': []}},
+            {**claim, 'name': 'SQL', 'skill_level': {'level': None, 'status': 'uncertain', 'rationale': 'Conflict.', 'source': 'review', 'evidence': []}},
+            {**claim, 'name': 'Go'}]}]
+    evidence = asyncio.run(capture(sources, asyncio.run(sources.account('synthetic'))))['evidence']
+    assert [evidence[f'cv:item1:claim:{i}']['cv_level'] for i in range(3)] == [3, None, None]
