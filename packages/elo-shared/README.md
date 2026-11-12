@@ -13,8 +13,8 @@ Examples: Python → `language.python`; SQL / Structured Query Language → `lan
 
 Assessment/Roadmap model endpoints are independently configured using each service's
 `*_LLM_BASE_URL`, `*_LLM_MODEL`, `*_LLM_API_KEY` and explicit development
-`*_LLM_ALLOW_HTTP` flag. Local requests omit credentials and serialize per Model
-instance. Gemini retains native JSON Schema; compatible local/DeepSeek providers
+`*_LLM_ALLOW_HTTP` flag. Local requests omit credentials and serialize per model
+instance. All providers (OpenRouter, local, DeepSeek)
 receive JSON Output with authoritative schema/domain checks after generation.
 Synthetic endpoint/credential/concurrency tests live in `tests/test_model.py`.
 

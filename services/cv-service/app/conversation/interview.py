@@ -17,12 +17,13 @@ from app.schemas.cv import Mutation
 from app.schemas.interview import InterviewTurn
 from app.schemas.interview_evidence import fact_key, fact_groups, fact_group_value
 from app.conversation.interview_memory import (build_context, reconcile_memory, progress, evidence_for, target_key,
-    topic_question_count, topic_ids, question_options, MAX_TOPIC_QUESTIONS, MAX_TARGET_ATTEMPTS)
+    topic_question_count, topic_discussed, topic_ids, enough_context, ownership_established, question_options, MAX_TOPIC_QUESTIONS, MAX_TARGET_ATTEMPTS)
 from app.conversation.presentation import review_reply, unverified_notice
 from app.conversation.interview_policy import validate_decision, DecisionRejected
 
 logger = logging.getLogger(__name__)
 
+TOPIC_COMMANDS = {'skip_topic', 'skip_remaining', 'review_topic'}
 MAX_PLAN_CALLS = 3
 MAX_CONTEXT_CALLS = 3
 # Whole-message refusals only: "I skipped the tests" or "skip, but I used Python" go to the model.
@@ -35,7 +36,10 @@ def is_skip_request(text):
 
 
 class InterviewHarness:
-    def __init__(self, service): self.service = service
+    def __init__(self, service):
+        self.service = service
+        self.lead = ''  # Fixed text placed before the next reply, e.g. confirming a skipped topic.
+        self.requested_topic = None  # A topic the user asked to review; the next question must be about it.
 
     async def call(self, app, account, conversation_id, route_id, token, payload):
         from app.conversation.service import action_in, LEASE_SECONDS
@@ -77,6 +81,8 @@ class InterviewHarness:
             return await self.publish(account, identifier, route['id'], token, retained['memory'],
                 retained['reply'], retained['active'], retained['targets'])
         command = route.get('_command')
+        if command in TOPIC_COMMANDS:
+            return await self.topic_command(app, account, conversation, document, route, token, memory, command)
         if not command and conversation.get('active_question') and is_skip_request(route.get('_text') or ''):
             command = 'skip'
             route = {**route, '_command': command}
@@ -86,19 +92,7 @@ class InterviewHarness:
         if command == 'skip':
             active = conversation.get('active_question')
             if active:
-                from app.clarification.service import answer
-                from app.schemas.cv import AnswerMutation
-                operation = route.get('_interview_skip') or {'expected_version': document['version'],
-                    'mutation_id': key(route['id'] + ':interview-skip'), 'action': 'skip'}
-                def remember_skip(current):
-                    service.check_lease(action_in(current, route['id']), token)
-                    action_in(current, route['id'])['_interview_skip'] = operation
-                await run_in_threadpool(service.update, owner, identifier, remember_skip)
-                document = await run_in_threadpool(answer, service.cv, owner, document['_id'], active['id'], AnswerMutation.model_validate(operation))
-                memory['attempts'].update({target_key(active['item_id'], t['field'], t.get('skill_name')):
-                    {'signature': 'declined', 'count': MAX_TARGET_ATTEMPTS, 'declined': True}
-                    for t in conversation.get('interview_targets', [])})
-                memory['questions'] = [{**q, 'skipped': True} if q['id'] == active['id'] else q for q in memory['questions']]
+                document = await self.skip_active(account, conversation, document, route, token, memory)
                 conversation = {**conversation, 'active_question': None}
                 # With nothing left to ask here, close the topic now rather than
                 # leaving the planner focused on a source it cannot question.
@@ -254,6 +248,96 @@ class InterviewHarness:
             raise ValueError('Your saved evidence still needs interpretation. Retry that action before continuing.')
         return await self.plan(app, account, conversation, document, route, token, memory)
 
+    async def skip_active(self, account, conversation, document, route, token, memory):
+        """Record the active question as skipped; the same receipt makes a retry idempotent."""
+        from app.conversation.service import action_in, key
+        from app.clarification.service import answer
+        from app.schemas.cv import AnswerMutation
+        service, owner, identifier = self.service, account['id'], conversation['_id']
+        active = conversation['active_question']
+        operation = route.get('_interview_skip') or {'expected_version': document['version'],
+            'mutation_id': key(route['id'] + ':interview-skip'), 'action': 'skip'}
+        def remember_skip(current):
+            service.check_lease(action_in(current, route['id']), token)
+            action_in(current, route['id'])['_interview_skip'] = operation
+        await run_in_threadpool(service.update, owner, identifier, remember_skip)
+        document = await run_in_threadpool(answer, service.cv, owner, document['_id'], active['id'], AnswerMutation.model_validate(operation))
+        memory['attempts'].update({target_key(active['item_id'], t['field'], t.get('skill_name')):
+            {'signature': 'declined', 'count': MAX_TARGET_ATTEMPTS, 'declined': True}
+            for t in conversation.get('interview_targets', [])})
+        memory['questions'] = [{**q, 'skipped': True} if q['id'] == active['id'] else q for q in memory['questions']]
+        return document
+
+    async def topic_command(self, app, account, conversation, document, route, token, memory, command):
+        """Skip one topic, skip every uncovered topic, or reopen a topic the user skipped.
+
+        Skipped topics keep their CV evidence and saved answers; remaining details stay uncertain.
+        """
+        items = {i['id']: i for i in effective_items(document) if not i['removed']}
+        target = route.get('_item_id')
+        uncovered = [i for i in memory.get('topic_ids', []) if i in items and i not in memory['coverage']]
+        if command == 'review_topic':
+            if (target not in memory.get('deferred_topics', {})
+                    or memory['coverage'].get(target, {}).get('status') != 'deferred'):
+                raise Conflict('Only a skipped topic can be reviewed again.')
+            # Reviewing again starts from what was saved: answers stay, but the skipped questions are
+            # reopened and the topic gets a fresh question budget, using the updated source context.
+            from app.conversation.service import key
+            document = await run_in_threadpool(self.service.cv.reopen_topic_skips, account['id'], document['_id'], target,
+                key(route['id'] + ':reopen:' + target))
+            items = {i['id']: i for i in effective_items(document) if not i['removed']}
+            memory.setdefault('question_counts', {})[target] = 0
+            memory['attempts'] = {k: v for k, v in memory.get('attempts', {}).items() if not k.startswith(target + ':')}
+            memory['questions'] = [{**q, 'skipped': False} if q['item_id'] == target else q for q in memory.get('questions', [])]
+            if not any(option['open_fields'] for option in question_options(items[target], memory)):
+                raise Conflict('elo has no questions left for this topic. Your CV is used as written for it.')
+            memory['deferred_topics'].pop(target)
+            memory['coverage'].pop(target)
+            memory.update(status='reviewing', focus_item_id=target)
+            self.requested_topic = target
+            active = conversation.get('active_question')
+            if active and active['item_id'] != target:
+                document = await self.skip_active(account, conversation, document, route, token, memory)
+                conversation = {**conversation, 'active_question': None}
+            return await self.plan(app, account, conversation, document, route, token, memory)
+        if command == 'skip_topic' and target not in uncovered:
+            raise Conflict('This topic is already covered. Refresh to see the latest topics.')
+        skipped = [target] if command == 'skip_topic' else uncovered
+        if not skipped: raise Conflict('No topics are left to skip.')
+        active = conversation.get('active_question')
+        if active and active['item_id'] in skipped:
+            document = await self.skip_active(account, conversation, document, route, token, memory)
+            conversation, active = {**conversation, 'active_question': None}, None
+        for item_id in skipped:
+            memory.setdefault('deferred_topics', {})[item_id] = {'reason': 'user_skip', 'remaining_ownership': 'uncertain'}
+            memory['coverage'][item_id] = {'item_id': item_id, 'status': 'deferred', 'evidence_refs': []}
+        if memory.get('focus_item_id') in skipped: memory['focus_item_id'] = None
+        self.lead = (f"Skipped {items[target]['title']}. I’ll use your CV as written for it. " if command == 'skip_topic'
+                     else 'Skipped the remaining topics. I’ll use your CV as written for them. ')
+        if active:
+            # Skipping another topic leaves the current question in place.
+            memory['focus_item_id'] = active['item_id']
+            return await self.publish(account, conversation['_id'], route['id'], token, memory,
+                f"Back to {active['title']}: {active['question']}", active, conversation.get('interview_targets', []))
+        return await self.plan(app, account, conversation, document, route, token, memory)
+
+    def close_finished_topics(self, memory, items):
+        """End a discussed topic as soon as nothing material is left to ask, before its three-question limit."""
+        closed = []
+        for item in items:
+            if item['id'] not in memory.get('topic_ids', []) or item['id'] in memory['coverage']: continue
+            if not topic_discussed(memory, item['id']): continue
+            used_budget = topic_question_count(memory, item['id']) >= MAX_TOPIC_QUESTIONS
+            settled = not any(option['open_fields'] for option in question_options(item, memory))
+            if settled or used_budget or enough_context(item):
+                # A topic that needed all of its questions closes with gaps, as before. An early
+                # close is reviewed only with proven ownership; skill levels stay uncertain where unproven.
+                status = 'reviewed' if not used_budget and ownership_established(item) else 'reviewed_with_gaps'
+                memory['coverage'][item['id']] = {'item_id': item['id'], 'status': status, 'evidence_refs': []}
+                closed.append(item['title'])
+        # Focus stays on a just-closed topic so the planner can still cite its evidence when moving on.
+        return closed
+
     async def plan(self, app, account, conversation, document, route, token, memory):
         from app.conversation.service import key
         memory['max_target_attempts'] = self.service.cv.settings.interview_max_target_attempts
@@ -263,6 +347,7 @@ class InterviewHarness:
             return await self.publish(account, conversation['_id'], route['id'], token, memory,
                 'Your review is complete. There are no additional experience topics to clarify.', None, [])
         current_items = [item for item in effective_items(document) if not item['removed']]
+        just_completed = self.close_finished_topics(memory, current_items)
         needed = set(topic_ids(current_items))
         available_topics = {item['id'] for item in current_items if topic_question_count(memory, item['id']) < MAX_TOPIC_QUESTIONS}
         eligible = [item for item in current_items
@@ -280,6 +365,7 @@ class InterviewHarness:
         if not current_focus or not any(option['open_fields'] for option in question_options(current_focus, memory)):
             focus_id = next((item['id'] for item in eligible
                              if any(option['open_fields'] for option in question_options(item, memory))), None)
+        if self.requested_topic: focus_id = self.requested_topic
         decision = None
         diagnostics = []
 
@@ -297,6 +383,7 @@ class InterviewHarness:
         invalid_calls = context_calls = 0
         for _ in range(MAX_PLAN_CALLS + MAX_CONTEXT_CALLS):
             context = build_context(conversation, document, memory, focus_id=focus_id, recall_ids=recall_ids)
+            if just_completed: context['just_completed_topics'] = just_completed
             try:
                 result, _ = await self.call(app, account, conversation['_id'], route['id'], token,
                     {'task': 'cv_interview_plan', 'validation_feedback': feedback, **context})
@@ -331,9 +418,15 @@ class InterviewHarness:
                 context_calls += 1
                 if context_calls > MAX_CONTEXT_CALLS: break
                 continue
+            source_id = raw.get('item_id')
+            if self.requested_topic and raw.get('action') == 'ask' and source_id != self.requested_topic:
+                await record('question_requested_topic', 'ask')
+                feedback = ['The person asked to review the focused topic. Ask about it now.']
+                invalid_calls += 1
+                if invalid_calls >= MAX_PLAN_CALLS: break
+                continue
             # The agent can choose another experience; hydrate it before validating
             # a question rather than asking it to reason from an abbreviated title.
-            source_id = raw.get('item_id')
             if (raw.get('action') == 'ask' and isinstance(source_id, str) and source_id in available_topics
                     and (context.get('focused_source') or {}).get('id') != source_id):
                 await record('hydrate_source', 'ask')
@@ -372,6 +465,7 @@ class InterviewHarness:
                 'recall_unavailable': 'It requested an earlier answer that is unavailable in the current context.',
                 'invalid_schema': 'Its proposed next steps did not match the required response format.',
                 'answer_instead_of_next_step': 'It replied without choosing the next question or completion.',
+                'question_requested_topic': 'It did not ask about the topic you chose to review.',
             }
             detail = explanations.get(reason, 'Its proposed next steps did not pass the review checks.')
             if reason.startswith('estimate_'):
@@ -388,8 +482,12 @@ class InterviewHarness:
         active, targets, reply_text = None, [], decision.reply
         if decision.action == 'ask':
             memory.update(status='reviewing', focus_item_id=decision.item_id)
+            asked = topic_question_count(memory, decision.item_id) + 1
             active = {'id': key(route['id'] + ':interview-question'), 'item_id': decision.item_id,
-                      'title': context['focused_source']['title'], 'question': decision.reply}
+                      'title': context['focused_source']['title'], 'question': decision.reply,
+                      'number': asked, 'limit': MAX_TOPIC_QUESTIONS,
+                      'hints': [hint for hint in (review_reply(h) for h in decision.answer_hints) if hint][:4],
+                      'reason': review_reply(decision.reason) or None if decision.reason else None}
             targets = [t.model_dump(mode='json') for t in decision.targets]
             facts = fact_groups(evidence_for(context['focused_source']))
             for target in targets:
@@ -399,7 +497,7 @@ class InterviewHarness:
                 previous = memory['attempts'].get(identity, {})
                 memory['attempts'][identity] = {'signature': signature, 'count': previous.get('count', 0) + 1
                     if previous.get('signature') == signature else 1}
-            memory.setdefault('question_counts', {})[decision.item_id] = topic_question_count(memory, decision.item_id) + 1
+            memory.setdefault('question_counts', {})[decision.item_id] = asked
             unverified = next((i for i in current_items if i['id'] == decision.item_id and i.get('validation_issue')), None)
             # Say it again in the chat, once, before the first question about a section that failed validation.
             if unverified and memory['question_counts'][decision.item_id] == 1:
@@ -411,7 +509,9 @@ class InterviewHarness:
             decision.reply = ('Your review is complete. Some details remain uncertain.' if any(v['status'] != 'reviewed' for v in coverage.values())
                               else 'Your review is complete.')
             memory['status'] = 'reviewed' if all(v['status'] == 'reviewed' for v in coverage.values()) else 'reviewed_with_gaps'
-        elif decision.action == 'pause': memory['status'] = 'paused'
+        elif decision.action == 'pause':
+            memory['status'] = 'paused'
+            if memory.get('focus_item_id') in memory['coverage']: memory['focus_item_id'] = None
         else:
             active, targets = conversation.get('active_question'), conversation.get('interview_targets', [])
         if active:
@@ -448,10 +548,11 @@ class InterviewHarness:
         return await self.publish(account, identifier, route_id, token, memory, reply, None, [])
 
     async def publish(self, account, identifier, route_id, token, memory, reply, active, targets):
-        reply = review_reply(reply)
+        reply = review_reply(self.lead + reply)
         if not reply:
             raise ValueError('The review reply contained no readable text. Your answer is saved; retry to continue.')
-        if active: active = {**active, 'question': review_reply(active['question'])}
+        if active: active = {**active, 'question': review_reply(active['question']),
+                             **({'hints': [h for h in (review_reply(x) for x in active['hints']) if h]} if active.get('hints') else {})}
         from app.conversation.service import action_in, action_message
         def save(current):
             action = action_in(current, route_id)
@@ -469,4 +570,7 @@ class InterviewHarness:
             current.update(interview_memory=normalized, interview_progress=progress(normalized, document),
                            active_question=active, interview_targets=targets)
             if active: current['last_item_id'] = active['item_id']
-        return await run_in_threadpool(self.service.update, account['id'], identifier, save)
+        saved = await run_in_threadpool(self.service.update, account['id'], identifier, save)
+        if memory.get('status') in {'reviewed', 'reviewed_with_gaps'}:
+            await run_in_threadpool(self.service.cv.mark_reviewed_when_ready, account['id'], saved['cv_id'])
+        return saved

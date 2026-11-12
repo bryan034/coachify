@@ -6,10 +6,10 @@ import { errorText, friendlyOperationError } from '@/lib/errors';
 import { assessmentApi, skillMatches, skillOutcomes } from '@/lib/api/assessment';
 
 type Command = { expected_version: number; mutation_id: string; allow_partial: boolean };
-type Current = { version: number; operation: Operation | null; result: Assessment | null; stale: boolean; ready: boolean; issues: { message: string; href: string }[] };
-type Context = { ready: boolean; model_available: boolean; research_coverage?: string; goal?: { role: string }; cv?: { name: string }; input_hash?: string; issues?: Current['issues'] };
+type Current = { version: number; operation: Operation | null; result: Assessment | null; stale: boolean; ready: boolean; issues: { message: string; href: string; source?: string }[] };
+type Context = { ready: boolean; model_available: boolean; research_coverage?: string; goal?: { role: string }; cv?: { name: string }; input_hash?: string; issues?: Current['issues']; cv_reviewed?: boolean | null; research_pending?: boolean | null };
 
-/** Every consumer reads the same version-checked Assessment result. Reads never submit a comparison. */
+/** Every consumer reads the same version-checked Assessment result. Reads never start one: only `compare` submits the explicit command. */
 export function useComparison(token: string | undefined, revision?: string) {
  const [current, setCurrent] = useState<Current | null>(null), [context, setContext] = useState<Context | null>(null);
  const [error, setError] = useState(''), [busy, setBusy] = useState(false), [attempt, setAttempt] = useState(0);

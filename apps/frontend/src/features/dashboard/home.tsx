@@ -143,7 +143,7 @@ function ComingUp({ applications, goal, today }: { applications: Section<Applica
  return <section className="home-card home-upcoming" aria-labelledby="home-upcoming-title">
   <h2 id="home-upcoming-title">Coming up</h2>
   {applications.status === 'loading' ? <CardSkeleton label="Loading your applications…"/> : items.length ? <ul>{items.slice(0, 4).map(item => { const d = new Date(`${item.date}T12:00:00Z`); return <li key={item.date + item.title + item.detail}><span className="home-date" aria-hidden="true"><small>{d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}</small><b>{d.getUTCDate()}</b></span><span><strong>{item.title}</strong><span className="home-muted">{item.detail}{days(item.date) <= 14 ? ` · ${days(item.date) === 0 ? 'today' : `in ${plural(days(item.date), 'day')}`}` : ''}</span><span className="cv-visually-hidden">{formatDate(item.date)}</span></span></li>; })}</ul> : <p className="home-muted">No deadlines or follow-ups coming up. Add dates to saved jobs in My applications.</p>}
-  <Link className="home-link" href="/jobs?tab=applications">My applications</Link>
+  <Link className="home-link" href="/jobs#saved-jobs">Saved jobs</Link>
  </section>;
 }
 

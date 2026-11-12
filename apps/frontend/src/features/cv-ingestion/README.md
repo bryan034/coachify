@@ -5,12 +5,17 @@ Saved, private CV uploads and effective evidence review for C01–C09. The exist
 It uploads CVs, extracts potential skills and retains the existing evidence/review
 workflow. Search Jobs has its own navigation tab, which also holds application tracking. Target confirmation and gap analysis remain separate.
 
+The Skills Profile page has three entry states. With no CV, profile or manual capability it is an
+upload-first screen: a drop zone, **Add skills by chat**, and **What happens next**. While the only CV is
+still processing and none is active it shows a reading screen (`skills-states.tsx`) with real progress,
+the experiences found so far and skeleton skills, plus **Open review** and **Cancel upload**. When a CV is read but its review is unfinished, the page shows **Finish your CV review** at full page width (no separate CV card; **Upload new CV** scrolls to the upload panel beside **Your CVs**, which shows `x/max` CVs from the policy, 3 by default) instead of skills: a Continue review action, the saved topic progress (read from the CV's current saved conversation, without starting one) and a **Waiting for your review** list of what unlocks. Once the
+active CV is reviewed, a **Your CV review is complete** banner reports the questions answered and the skills added, corrected and removed (from the CV's `review_summary`) and offers Generate roadmap and Search jobs. A skill's side panel adds **From your review** when the backend holds a note for it.
+
 `resume-preview.tsx` coordinates the policy, saved CVs, explicit selection and
 recoverable upload/processing states. Upload opens guided review immediately and
 shows progress until the first question is ready. `cv-conversation.tsx` saves the
-conversation for later. **View extracted results** opens the detailed classified CV. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, View extracted results, Make active and Delete CV. Original filenames and source versions remain under File details;
-**Your CV summary** exposes the effective evidence, detailed corrections,
-reconciliation and manual declarations when needed. Uploading never changes selection. The
+conversation for later. **Your CVs** is the one place to switch, make active, rename, delete or review CVs: each row shows its state, review progress, and **Review CV** (**Refine CV** once reviewed). The Skills Profile card only summarises the CV analysed. **View extracted results** opens a read-only results page for that CV (`extracted-results.tsx`): skills by category or by where they came from (CV, added, removed or skipped in review), a detail panel for the selected skill, and the experiences found. **Upload a CV** sits beside a fixed-height **Your CVs** library with a sticky desktop position and an independently scrollable card list. Each card offers a persisted title, Rename with Save/Cancel, Review CV, View extracted results, Make active and Delete CV. Original filenames and source versions remain under File details;
+The Skills Profile no longer has a “CV details and corrections” section. Source reconciliation, when a re-upload needs a decision, appears on the results page. Uploading never changes selection. The
 active CV is identified separately from the CV currently being
 reviewed, including when filenames repeat. Same-source re-upload sends the original
 CV ID/version and preserves backend corrections; changed bytes require a separate
@@ -25,6 +30,8 @@ Deleting the viewed source clears its private review/chat/resupply drafts and
 invalidates in-flight reads so an old response cannot restore it.
 
 ## Saved conversation
+
+The review screen has a white header (logo, **Review your CV**, saved status) and a **Topics** rail: topics covered, a segmented bar (forest = done, mint = current), the percentage reviewed (or how many were reviewed and skipped) and each topic marked Done, Now · question *n* of 3, Up next or Skipped · CV used as written. Each open topic has **Skip**, confirmed inline; a skipped topic has **Review**; **Skip all remaining** sits beside the Topics heading. On phone widths the topic list is hidden, so the composer's **Skip this topic** shortcut, confirmed in the chat, is the way to skip there. The question being asked sits in a forest-outlined bubble with its topic, its position and up to four points the answer can cover; **Why this question?** shows the reason elo gives. Topics end early once elo has enough context ([backend rules](../../../../../services/cv-service/INTERVIEW.md#topic-skips-question-format-and-early-topic-completion)); the user's messages are green-tinted. When every topic is covered, a **Your CV review is complete** card lists what was added, corrected and removed (read from saved conversation actions) with **View Skills Profile** and **Generate roadmap**.
 
 The conversation opens or resumes a CV-owned server record for the viewed CV, or a
 manual-only record when no CV is open. A compact header identifies the reviewed file
@@ -179,13 +186,13 @@ After an upload is accepted, `/cv?review=<cv_id>` opens immediately with process
 retry and failure states. Processing and guided review survive reload. An older
 review link containing `uploaded=1` also opens guided review. **View extracted results**
 and the completed review’s **Review profile** action open `/cv?cv=<cv_id>`, which
-restores the classified results directly on reload.
+restores the results page directly on reload; its back link returns to the Skills Profile.
 
 Review evidence can contain multiple distinct facts in the same field. Rendering
 uses complete fact identities and labels personal/shared attribution, retaining
 all values and quotes through updates.
 
-**Make active** warns when the current `effective_version` does not match
+The most recent ready upload is made the active CV automatically (once per upload, no warning; a failed or still-processing newest CV is skipped until ready), so **Make active** is only needed to go back to an older CV. **Make active** warns when the current `effective_version` does not match
 `profile_reviewed_effective_version`. The warning explains that AI interpretation
 may infer skills or experience inaccurately when any roles or responsibilities are
 not clearly stated in the CV, so the baseline may not reflect current skills,
@@ -281,9 +288,10 @@ Skills Profile shows the shared current Assessment with an explicit comparison
 action. Saved manual Profile declarations can be compared without selecting a CV;
 a selected incomplete CV still blocks admission. Only evidence actually referenced
 by the current result is highlighted, and its component explanations remain visible.
-This highlight is not an inferred relevance rating. Goal-relative scores stay null
-pending rubric approval; existing CV application levels remain unchanged.
+This highlight is not an inferred relevance rating. When the saved comparison has a
+`skill_profile` (the model's judgement of each skill from the reviewed CV), the skill
+chips use its category, sub-category and relevance colour. The skill panel shows its
+competence score against the goal's level, plus its explanation. Older results fall
+back to the backend's `skill_groups` and requirement outcomes. Existing CV application
+levels remain unchanged.
 
-CV chat offers **Focus on your goal?** in the topics rail beside the transcript.
-Confirmation uses the same goal/selection version checks as Career Goal and then
-refreshes conversation context. It does not clear the composer draft.

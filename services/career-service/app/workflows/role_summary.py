@@ -7,8 +7,8 @@ from app.ai.adapter import AIError,Operation
 from app.ai.contracts import AIInput
 from app.ai.routing import chat_models
 from app.repositories.goals import now
-from app.schemas.opportunity import FIELDS
-from app.schemas.role_summary import Bullet,CardDigest,GeneratedCard,RoleSummary
+from app.schemas.opportunity import FIELDS,plain_text
+from app.schemas.role_summary import FORMAT,Bullet,CardDigest,GeneratedCard,RoleSummary,markup_issue
 from app.workflows.structured import structured_node
 
 # The About the role page shows every category except interview research.
@@ -34,7 +34,7 @@ def build_cards(goal,record):
     for category in ROLE_CATEGORIES:
         result=categories.get(category)
         for f in (result.findings if result else []):
-            fields.setdefault(f.field,[]).append({'ref':f.finding_id,'text':f.value})
+            fields.setdefault(f.field,[]).append({'ref':f.finding_id,'text':plain_text(f.value)})
     cards.extend({'card_id':field,'title':TITLES.get(field,field.replace('_',' ')),'items':items} for field,items in fields.items())
     return cards
 
@@ -47,6 +47,11 @@ def missing_cards(cards):
 def numbers(text):return set(NUMBER.findall(text))
 
 
+def markup_error(path,text):
+    issue=markup_issue(text)
+    return AIError('invalid_output',True,reason='format',fields=(path.split('.')[0],),violations=({'field':path,'issue':issue},)) if issue else None
+
+
 def validator(cards,missing=()):
     by_id={c['card_id']:c for c in cards}
     wanted={m['card_id'] for m in missing}
@@ -57,6 +62,8 @@ def validator(cards,missing=()):
                 raise AIError('invalid_output',True,reason='provenance',fields=('fills',),
                     violations=({'field':f'fills.{index}.card_id','issue':'unknown_or_repeated_card'},))
             filled.add(fill.card_id)
+            for b,text in enumerate(fill.bullets):
+                if error:=markup_error(f'fills.{index}.bullets.{b}',text):raise error
         seen=set()
         for index,card in enumerate(output.cards):
             source=by_id.get(card.card_id)
@@ -66,7 +73,11 @@ def validator(cards,missing=()):
             seen.add(card.card_id)
             refs={item['ref'] for item in source['items']}
             allowed=numbers(' '.join(item['text'] for item in source['items']))
+            if numbers(card.headline)-allowed:
+                raise AIError('invalid_output',True,reason='provenance',fields=('cards',),
+                    violations=({'field':f'cards.{index}.headline','issue':'unsupported_number'},))
             for b,bullet in enumerate(card.bullets):
+                if error:=markup_error(f'cards.{index}.bullets.{b}.text',bullet.text):raise error
                 if not set(bullet.refs)<=refs:
                     raise AIError('invalid_output',True,reason='provenance',fields=('cards',),
                         violations=({'field':f'cards.{index}.bullets.{b}.refs','issue':'ref_outside_card'},))
@@ -89,7 +100,7 @@ def research_key(record):return getattr(record,'id',None)
 
 async def read_saved(request,account,goal,record):
     row=await thread(collection(request).find_one,{'_id':key_for(account,goal)})
-    if not row or row.get('goal_version')!=goal.version or row.get('research_id')!=research_key(record):return None
+    if not row or row.get('summary',{}).get('format')!=FORMAT or row.get('goal_version')!=goal.version or row.get('research_id')!=research_key(record):return None
     return RoleSummary.model_validate(row['summary'])
 
 
@@ -115,8 +126,8 @@ async def generate(request,account,goal,record):
             validate(result.data)
             return result.data
         output=await present({})
-        summary.cards=[CardDigest(card_id=c.card_id,bullets=[Bullet(text=b.text,refs=list(dict.fromkeys(b.refs))) for b in c.bullets]) for c in output.cards]
-        summary.generated=[GeneratedCard(card_id=c.card_id,bullets=c.bullets) for c in output.fills]
+        summary.cards=[CardDigest(card_id=c.card_id,headline=c.headline,bullets=[Bullet(text=b.text,refs=list(dict.fromkeys(b.refs))) for b in c.bullets]) for c in output.cards]
+        summary.generated=[GeneratedCard(card_id=c.card_id,headline=c.headline,bullets=c.bullets) for c in output.fills]
     await thread(collection(request).replace_one,{'_id':key_for(account,goal)},
         {'_id':key_for(account,goal),'goal_version':goal.version,'research_id':summary.research_id,'summary':jsonable_encoder(summary)},True)
     return summary

@@ -12,6 +12,7 @@ const paths: Record<string, ReactNode> = {
  brief: <><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V3h6v4"/></>,
  bolt: <path d="M13 2L4 14h7l-1 8 9-12h-7z"/>,
  user: <><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></>,
+ trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>,
  up: <path d="M12 16V4M6 10l6-6 6 6M4 20h16"/>,
  building: <path d="M4 21V5h10v16M14 9h6v12M8 9h2M8 13h2M8 17h2"/>,
  pin: <path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12zM12 7a2 2 0 1 0 0 4a2 2 0 1 0 0-4"/>,
@@ -21,6 +22,9 @@ const paths: Record<string, ReactNode> = {
  money: <path d="M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6"/>,
  people: <path d="M9 11a3 3 0 1 0 0-6a3 3 0 1 0 0 6M3 20a6 6 0 0 1 12 0M17 11a2.5 2.5 0 1 0 0-5M21 19a5 5 0 0 0-4-5"/>,
  chevron: <path d="M6 9l6 6 6-6"/>,
+ chevronLeft: <path d="M15 6l-6 6 6 6"/>,
+ lock: <><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></>,
+ bookmark: <path d="M7 3h10v18l-5-4-5 4z"/>,
  warn: <path d="M12 3l10 18H2zM12 10v5M12 18h.01"/>,
 };
 export function Icon({ name, style }: { name: string; style?: CSSProperties }) {

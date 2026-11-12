@@ -49,7 +49,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   const readCv = async (): Promise<CvDetail> => (await account.get(`/api/v1/cv/${cvId}`)).json();
   const chat = page.getByRole('region', {name: 'CV conversation', exact: true});
   await page.goto('/cv');
-  await page.getByRole('region', {name: 'Your CV', exact: true}).getByRole('button', {name: /^(Continue review|Refine)$/, exact: true}).click();
+  await page.getByRole('button', {name: /^(Continue review|Start review|Refine)$/}).first().click();
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   await chapter('1. Review your saved CV through a conversation', 'This is a synthetic account and model, using real local services and saves. The CV and Career target were explicitly selected before this walkthrough.', chat);
   await expect(chat.locator('.cv-chat-transcript .cv-chat-message-assistant').last()).toContainText('Team dashboard');
@@ -131,7 +131,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   await chapter('11. Inspect the evidence whenever you need it', 'The summary retains the saved contributions, sources, original evidence and detailed review tools. It does not calculate readiness or create an assessment.', page.getByRole('region', {name: 'Potential skills', exact: true}));
   const storage = await page.evaluate(() => JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]));
   expect(storage).not.toContain(chatAnswer); expect(storage).not.toContain(manualMessage);
-  await page.getByRole('region', {name: 'Your CV', exact: true}).getByRole('button', {name: /^(Continue review|Refine)$/, exact: true}).click();
+  await page.getByRole('button', {name: /^(Continue review|Start review|Refine)$/}).first().click();
   await page.setViewportSize({width: 390, height: 844});
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

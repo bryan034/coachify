@@ -11,6 +11,8 @@ class Model(BaseModel):
 
 
 SuggestionText=Annotated[str,StringConstraints(strip_whitespace=True,min_length=3,max_length=200)]
+# Provider output is held tighter than stored text, so earlier saved suggestions still load.
+GeneratedSuggestionText=Annotated[str,StringConstraints(strip_whitespace=True,min_length=3,max_length=160)]
 # Round slots plus the process-wide headline facts; every one is filled when sources leave it empty.
 GapField=Literal['interview_questions','preparation_topics','recruitment_stages','application_timeline','difficulty']
 

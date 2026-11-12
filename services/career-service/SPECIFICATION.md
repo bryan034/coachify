@@ -142,7 +142,7 @@ permitted. Saved review editing, reclassification and confirmation follow
 calls or database writes. Sources remain transient, and reload restores only
 structured information. J05 importance review and J10 advisory exploration skills use this same review
 boundary. J12/J13 research orchestration, versioned storage and review UI are
-implemented with Gemini/Brave source adapters and an injectable synthetic test boundary. Unconfigured or unavailable acquisition preserves previous goal/research state.
+implemented with model/Brave source adapters and an injectable synthetic test boundary. Unconfigured or unavailable acquisition preserves previous goal/research state.
 The separate Assessment and Roadmap services now own comparison and user-directed planning; Career only supplies versioned inputs. See their service specifications.
 
 ## Canonical confirmation for CV review

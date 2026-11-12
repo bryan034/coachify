@@ -33,11 +33,11 @@ def claim(**changes):
 
 
 @pytest.mark.parametrize('category',CATEGORIES)
-@pytest.mark.parametrize('provider',['local','gemini','deepseek'])
+@pytest.mark.parametrize('provider',['local','compatible','deepseek'])
 def test_decoding_schema_is_bound_to_actual_category_sources_and_passages(category,provider):
     sources=[source(0,('A complete sentence about mentorship. '*25)),source(1)]
     context=structure_input({},category,sources)
-    settings=AISettings(provider=provider,response_mode='json_object' if provider!='gemini' else 'json_schema')
+    settings=AISettings(provider=provider,response_mode='json_object' if provider=='deepseek' else 'json_schema_strict')
     payload=AIAdapter(settings,None)._payload(AIInput(stage='opportunity_structure',context=json.dumps(context)))
     if provider=='deepseek':
         schema=json.loads(payload['messages'][0]['content'].split('JSON schema: ',1)[1])
@@ -195,3 +195,37 @@ def test_referenced_provider_findings_persist_and_remain_readable_through_existi
         assert historical.status_code==200 and historical.json()['historical'] is True
         assert historical.json()['categories']==result['categories']
     finally:client.portal.call(transport.aclose)
+
+
+def test_finding_wording_is_short_while_stored_quotes_keep_full_passages():
+    with pytest.raises(ValidationError):ReferencedClaim.model_validate(claim(value='x'*241))
+    sources=[source(0,'Example interns receive SGD 1500 monthly. '+('Complete sentence about projects. '*15))]
+    context=structure_input({},'internship_insights',sources)
+    result=ReferencedFindings.model_validate({'findings':[claim(value='x'*240)]}).to_domain(context)
+    assert len(result.findings[0].quotes[0])>240
+
+
+@pytest.mark.parametrize('category',CATEGORIES)
+def test_interview_research_may_return_more_findings_than_other_categories(category):
+    context=structure_input({},category,[source()])
+    expected=20 if category=='interview_intelligence' else 12
+    assert findings_schema(context)['properties']['findings']['maxItems']==expected
+    items=[claim(field='interview_questions',value=f'Question {n}?') for n in range(20)]
+    assert len(ReferencedFindings.model_validate({'findings':items}).findings)==20
+
+
+def test_key_term_bold_is_kept_when_reasonable_and_dropped_when_not():
+    from app.schemas.opportunity import plain_text
+    kept='Interns receive **SGD 1500** monthly.'
+    assert ReferencedClaim.model_validate(claim(value=kept)).value==kept
+    for bad in ('**Everything is bold here**','**All** **bold**','**a** **b** **c** **d** extra text here','Use <b>html</b> and **bold**','Stray * asterisk'):
+        assert '*' not in ReferencedClaim.model_validate(claim(value=bad)).value
+    assert plain_text('A **key** term') =='A key term'
+
+
+def test_bold_markers_do_not_change_identity_numbers_or_dedupe():
+    sources=[source(0)]
+    out=lambda value:supported_claims(ReferencedFindings.model_validate({'findings':[claim(value=value)]}).to_domain(structure_input({},'internship_insights',sources)),'internship_insights',sources)[0]
+    plain,bold=out('Interns receive SGD 1500 monthly.')[0],out('Interns receive **SGD 1500** monthly.')[0]
+    assert plain.finding_id==bold.finding_id and bold.value=='Interns receive **SGD 1500** monthly.'
+    assert len(dedupe_findings('internship_insights',[plain,bold]))==1

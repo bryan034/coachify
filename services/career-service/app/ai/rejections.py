@@ -11,14 +11,11 @@ CODES=frozenset({
 })
 FIELDS=frozenset({'model','messages','response_format','json_schema','schema','strict',
     'reasoning_effort','thinking','max_tokens','max_completion_tokens','temperature','top_p','tools','tool_choice'})
-AUTH=frozenset({'API_KEY_INVALID','API_KEY_SERVICE_BLOCKED','API_KEY_HTTP_REFERRER_BLOCKED',
-    'API_KEY_IP_ADDRESS_BLOCKED','API_KEY_ANDROID_APP_BLOCKED','API_KEY_IOS_APP_BLOCKED',
-    'UNAUTHENTICATED','PERMISSION_DENIED'})
 
 
 def safe_diagnostic(value):
     if not isinstance(value,dict) or type(value.get('http_status')) is not int or not 100<=value['http_status']<=599:return None
-    result={'http_status':value['http_status'],'provider':value.get('provider') if value.get('provider') in ('gemini','deepseek','local','compatible') else 'other'}
+    result={'http_status':value['http_status'],'provider':value.get('provider') if value.get('provider') in ('deepseek','local','compatible') else 'other'}
     code=value.get('code')
     if isinstance(code,str) and code in CODES:result['code']=code
     fields=value.get('fields')
@@ -30,8 +27,8 @@ def classify(raw,status,provider):
     error={}
     try:
         payload=json.loads(raw)
-        # Google's compatibility endpoint may wrap its native error in a list.
-        # Only unwrap a single error envelope, never arbitrary nested content.
+        # Some endpoints wrap their error in a list. Only unwrap a single error
+        # envelope, never arbitrary nested content.
         if isinstance(payload,list) and len(payload)==1:payload=payload[0]
         if isinstance(payload,dict) and isinstance(payload.get('error'),dict):error=payload['error']
     except (ValueError,UnicodeError,TypeError,RecursionError):pass
@@ -72,11 +69,4 @@ def classify(raw,status,provider):
     elif code=='context_length_exceeded':result='context_limit'
     elif status in (401,403):result='provider_auth'
     elif provider=='local' and status==404:result='model_unavailable'
-    if provider=='gemini':
-        if code in AUTH:result='provider_auth'
-        elif code in ('SERVICE_DISABLED','BILLING_DISABLED','FAILED_PRECONDITION'):result='provider_access'
-        elif code=='NOT_FOUND':result='model_unavailable'
-        elif fields & {'response_format','json_schema','schema','strict'}:result='provider_schema'
-        elif 'model' in fields:result='model_unavailable'
-        elif fields:result='provider_parameter'
     return result,diagnostic

@@ -198,7 +198,7 @@ parent receipt’s private `_interview_planning` list (at most six events per at
 with a content-free log event. No reply, question, skill name, CV text, raw provider
 output or schema input is logged. Exhaustion returns a fixed explanation of its last
 rejection category. Earlier failures without diagnostics cannot be reconstructed
-from the generic saved error. Prompt provenance is `cv-interview-11`.
+from the generic saved error. Prompt provenance is `cv-interview-13`.
 
 Internal IDs remain in structured backend fields. Prompts prohibit IDs in visible
 replies/estimate explanations; the frontend also filters opaque source references
@@ -356,3 +356,34 @@ unrelated interpretation/correction failures are not bypassed. The next uncovere
 project is planned, or the review finishes with gaps if none remain. Deferral is
 saved before planning and source-version/fingerprint checked on retries; it survives
 reload/segment rollover and invalidates when the source changes.
+
+## Topic skips, question format and early topic completion
+
+The owner can skip a whole topic at any time with `command: "skip_topic"` and its
+`item_id`, skip every uncovered topic with `command: "skip_remaining"`, or reopen a
+topic they skipped with `command: "review_topic"` and its `item_id`. The send endpoint
+refuses a request that cannot apply (a covered topic, a topic that was not skipped,
+or nothing left to skip) with 409 before saving the message; the harness re-checks
+under its lease. A skipped topic is a private `deferred_topics` entry with
+`remaining_ownership: "uncertain"` and progress status `deferred`. Its CV evidence,
+saved answers and supported estimates stay unchanged and no answer is invented. If
+the active question belongs to a skipped topic it is recorded as skipped through the
+same idempotent clarification receipt as a question skip. Skipping another topic
+keeps the current question. The reply starts with a fixed confirmation. Reopening
+needs a remaining question and an open field; the next question must be about that
+topic (rejection reason `question_requested_topic`).
+
+Each issued question carries `number` and `limit` (question *n* of 3 for its topic),
+up to four short `hints` for what the answer can cover, and a one-sentence `reason`.
+The planner writes one plain question of at most 45 words; hints and reason pass
+through the same ID-stripping as replies. Older saved questions omit these fields.
+
+The harness closes a discussed topic before planning when nothing material is left to
+ask, when it has used its three questions, or when it has enough context: supported
+personal or shared ownership, a concrete task fact and supported use of every listed
+skill (team, observed or declined skills excepted). Optional details such as
+assistance may stay unknown, so related skill levels stay uncertain. An early close
+is `reviewed` only with proven ownership; a topic that used all three questions
+closes `reviewed_with_gaps`. The planner sees per-source `enough_context` and the
+titles in `just_completed_topics`, and the focus stays on the closed topic for that
+turn so its evidence can be cited in the handover.

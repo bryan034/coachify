@@ -19,15 +19,20 @@ export function SavedCvCard({cv,active,busy,token,review,results,select,remove,s
   finally{if(!controller.current.signal.aborted)setSaving(false);}
  }
  const name=cv.display_name??cv.file_name;
- return <article aria-label={`CV ${cv.id}`} className={`cv-library-row${active?' selected':''}`}>
-  <div className="row between"><h3>{name}</h3><span className="pill n">{cv.status==='ready'?'Ready':cv.status==='failed'?'Failed':'Processing'}</span></div>
-  {active&&<p className="cv-selection-label">Active CV</p>}
-  {editing?<form className="cv-rename-form" onSubmit={rename}><label>CV title<input autoFocus maxLength={200} required value={title} disabled={saving} onChange={event=>setTitle(event.target.value)}/></label><div className="row"><button className="btn pri sm" disabled={saving||!title.trim()}>{saving?'Saving…':'Save title'}</button><button type="button" className="btn ghost sm" disabled={saving} onClick={()=>{setEditing(false);setError('');pending.current=null;}}>Cancel</button></div></form>:<button type="button" className="text-link cv-rename" disabled={busy} onClick={()=>{setTitle(name);setEditing(true);setError('');}}>Rename</button>}
-  {error&&<p role="alert" className="cv-error">{error}</p>}
-  <p className="small">{cv.file_name} · Uploaded {formatDate(cv.created_at)}</p>
-  <details className="cv-card-details"><summary>File details</summary><p className="small">{cv.file_name}</p><p className="small">CV {cv.id}</p><p className="small">Updated {new Date(cv.updated_at).toLocaleString()} · Extraction {cv.extraction_version} · Effective version {cv.effective_version}</p></details>
-  {cv.error&&<p className="small">{cv.error.message}</p>}
-  <div className="row cv-actions"><button type="button" className="btn pri sm" disabled={busy||saving} onClick={review}>{cv.status==='ready'?'Review CV':'View processing status'}</button>{cv.status==='ready'&&<button type="button" className="btn ghost sm" disabled={busy||saving} onClick={results}>View extracted results</button>}<button type="button" className="btn ghost sm" disabled={busy||saving||cv.status!=='ready'||active} onClick={select}>{active?'Active CV':'Make active'}</button><button type="button" className="btn ghost sm" disabled={busy||saving} onClick={remove}>Delete CV</button></div>
-  {cv.status!=='ready'&&<p className="small">Processing must finish before you can make this CV active.</p>}
+ const progress=cv.review_progress,reviewed=cv.profile_reviewed_effective_version===cv.effective_version;
+ const state=cv.status==='ready'?'Ready':cv.status==='failed'?'Failed':'Processing';
+ return <article aria-label={`CV ${cv.id}`} className={`cv-card${active?' is-active':''}`}>
+  <span className="cv-card-tile" aria-hidden="true">{cv.file_type.toUpperCase()}</span>
+  <div className="cv-card-main">
+   <div className="cv-card-title"><h3>{name}</h3><span className={`cv-state-pill is-${cv.status}`}>{cv.status==='ready'&&<span aria-hidden="true">✓ </span>}{state}</span>{active&&<span className="cv-active-pill">Active CV</span>}</div>
+   {editing&&<form className="cv-rename-form" onSubmit={rename}><label>CV title<input autoFocus maxLength={200} required value={title} disabled={saving} onChange={event=>setTitle(event.target.value)}/></label><div className="row"><button className="btn pri sm" disabled={saving||!title.trim()}>{saving?'Saving…':'Save title'}</button><button type="button" className="btn ghost sm" disabled={saving} onClick={()=>{setEditing(false);setError('');pending.current=null;}}>Cancel</button></div></form>}
+   {error&&<p role="alert" className="cv-error">{error}</p>}
+   <p className="cv-card-meta">Uploaded {formatDate(cv.created_at)}{cv.status==='ready'&&progress&&progress.total_topics>0?` · Reviewed ${progress.reviewed_topics} of ${progress.total_topics} topics`:''}</p>
+   <details className="cv-card-details"><summary>File details</summary><p className="small">{cv.file_name}</p><p className="small">CV {cv.id}</p><p className="small">Updated {new Date(cv.updated_at).toLocaleString()} · Extraction {cv.extraction_version} · Effective version {cv.effective_version}</p></details>
+   {cv.error&&<p className="small">{cv.error.message}</p>}
+   <div className="row cv-actions"><button type="button" className="btn pri sm" disabled={busy||saving} onClick={review}>{cv.status!=='ready'?'View processing status':reviewed?'Refine CV':'Review CV'}</button>{cv.status==='ready'&&<button type="button" className="btn ghost sm" disabled={busy||saving} onClick={results}>View extracted results</button>}{!active&&<button type="button" className="btn ghost sm" disabled={busy||saving||cv.status!=='ready'} onClick={select}>Make active</button>}</div>
+   {cv.status!=='ready'&&<p className="small">Processing must finish before you can make this CV active.</p>}
+  </div>
+  <div className="cv-card-side">{!editing&&<button type="button" className="cv-link" disabled={busy} onClick={()=>{setTitle(name);setEditing(true);setError('');}}>Rename</button>}<button type="button" className="cv-link is-danger" disabled={busy||saving} onClick={remove}>Delete CV</button></div>
  </article>;
 }

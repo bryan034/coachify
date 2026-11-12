@@ -395,7 +395,7 @@ def test_failed_reprocessing_preserves_other_information(harness, monkeypatch):
 
 
 @pytest.mark.parametrize('defect', ['items_count', 'citation_count', 'duration', 'other_count', 'extra', 'enum'])
-def test_gemini_simple_schema_keeps_all_backend_constraints(harness, monkeypatch, defect):
+def test_decoding_schema_keeps_all_backend_constraints(harness, monkeypatch, defect):
     _, invalid = candidates()
     if defect == 'items_count': invalid['items'] *= 81
     # Every item carries the defect, so nothing verifies and the whole extraction fails.
@@ -409,14 +409,13 @@ def test_gemini_simple_schema_keeps_all_backend_constraints(harness, monkeypatch
     elif defect == 'enum':
         for item in invalid['items']: item['kind'] = 'invented'
     client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, invalid])
-    app.state.worker.extractor.base_url = 'https://generativelanguage.googleapis.com/v1beta/openai'
     app.state.worker.run_once()
     result = read_result(client, queued)
     assert result['status'] == 'failed' and result['error']['failure_category'] == 'schema_validation'
     assert result['items'] == [] and result['extraction_version'] == 0
     assert len(calls) == 2
     for request in calls:
-        assert 'maxItems' not in request['response_format']['json_schema']['schema']['properties']['items']
+        assert 'maxItems' in request['response_format']['json_schema']['schema']['properties']['items']
 
 
 @pytest.mark.parametrize('other', [False, True])

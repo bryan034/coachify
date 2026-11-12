@@ -33,7 +33,7 @@ def clarification_bundle(understanding):
 def grounded_understanding(proposed, previous, messages, *, changed_field=False, current_message=''):
     """Missing is never converted to unsure. Only user-backed updates are kept.
 
-    Meaning/inference is assessed by Gemini; Python verifies the supplied evidence
+    Meaning/inference is assessed by the model; Python verifies the supplied evidence
     actually belongs to this chat. Old explicit answers survive bounded history.
     """
     result=DiscoveryUnderstanding.model_validate(previous or {})

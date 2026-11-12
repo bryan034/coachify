@@ -96,10 +96,10 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 raise RuntimeError('Career storage could not connect. Check database setup.') from None
         # Model egress needs the deployment proxy/CA; internal API clients below
         # stay direct. Explicit local inference keeps its direct transport.
-        gemini=AISettings.from_env() if ai is None else None
-        async with httpx.AsyncClient(trust_env=gemini is None or gemini.provider!='local', follow_redirects=False) as ai_client:
+        model_settings=AISettings.from_env() if ai is None else None
+        async with httpx.AsyncClient(trust_env=model_settings is None or model_settings.provider!='local', follow_redirects=False) as ai_client:
             # One configured model serves every reasoning/extraction/chat stage.
-            primary=ai or AIAdapter(gemini,ai_client)
+            primary=ai or AIAdapter(model_settings,ai_client)
             context=primary if ai is None else context_ai
             app.state.ai=ModelRouter(primary,context) if context is not None else primary
             app.state.research_client = research_client or SourceAPIs.from_environment(ai_client)
@@ -108,7 +108,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
             app.state.workspace_store = WorkspaceStore(app.state.goal_store,app.state.review_store) if db is not None else None
             app.state.workflow = await run_in_threadpool(CareerWorkflow,app,db) if db is not None else None
             opportunity_settings=OpportunitySettings.from_env()
-            opportunity_ai=opportunity_models(primary,context,gemini,opportunity_settings,ai_client)
+            opportunity_ai=opportunity_models(primary,context,model_settings,opportunity_settings,ai_client)
             app.state.opportunities=OpportunityEngine(app,db,opportunity_settings,opportunity_ai) if db is not None else None
             app.state.discovery=DiscoveryEngine(app,db,opportunity_ai,app.state.opportunities.source) if db is not None else None
             # Chat and research share the model; provider waits remain resumable.

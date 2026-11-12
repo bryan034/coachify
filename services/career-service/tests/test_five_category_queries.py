@@ -20,7 +20,7 @@ from tests.test_opportunity import opportunity_flow
  ('Investment Banking Summer Analyst','Finance','valuation accounting deal exposure'),
  ('Software Engineering Intern','Software Engineering','coding algorithms API projects'),
 ])
-def test_gemini_writes_all_five_initial_queries_before_brave(role,field,terms,company):
+def test_model_writes_all_five_initial_queries_before_brave(role,field,terms,company):
     calls=[];plans=[]
     identity=JobIdentity(is_job_description=True,role=role,field=field,company=company,location='Singapore',employment_type='internship',evidence=['Synthetic JD'])
     expected={category:[f'Example {role} Singapore {category} {terms}'] for category in CATEGORIES}

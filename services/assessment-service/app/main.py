@@ -5,6 +5,7 @@ from elo_shared.runtime import application, authenticated, Problem, begin, launc
 from app.schemas import Generate, Batch, Result, Context, Current, DashboardSource
 from app.inputs import capture
 from app.domain import INSTRUCTIONS, validate_batch, group_outcome
+from app.skills import evaluate_skills, link_profile
 
 def create_app(store=None,upstream=None,model=None):
     app=application('elo Assessment API','ASSESSMENT',store=store,upstream=upstream,model=model)
@@ -38,12 +39,20 @@ def create_app(store=None,upstream=None,model=None):
                         raise
                     # Only fixed local validation guidance is sent back. Provider
                     # failures do not enter repair, and no rejected batch is saved.
-                    model_context={**model_context,'validation_feedback':error.detail,
+                    model_context={**model_context,'validation_feedback':getattr(error,'feedback',None) or error.detail,
                                    'previous_output':output.model_dump(mode='json')}
             outcomes.extend(validated)
             row['pending']['checkpoint']['outcomes']=outcomes
             row['pending']['stage']='assessed_'+str(len(outcomes))
             await thread(app.state.store.checkpoint,account['id'],row)
+        # Per-skill category, relevance and competence, judged from the same reviewed evidence.
+        judged=row['pending']['checkpoint'].setdefault('skill_batches',[])
+        async def save_skills():
+            row['pending']['checkpoint']['skill_batches']=judged
+            row['pending']['stage']='skills_'+str(len(judged))
+            await thread(app.state.store.checkpoint,account['id'],row)
+        skill_profile=await evaluate_skills(app.state.model,snapshot,outcomes,judged,save_skills)
+        link_profile(outcomes,skill_profile)
         groups={}
         for outcome in outcomes:
             if outcome.get('group_id') and outcome['kind']!='interview_preparation':groups.setdefault(outcome['group_id'],[]).append(outcome)
@@ -70,20 +79,23 @@ def create_app(store=None,upstream=None,model=None):
             'interview_prep_gaps':[o for o in outcomes if o['kind']=='interview_preparation'],
             'constraints':[o for o in outcomes if o['kind']=='constraint'],'groups':group_results,'priorities':priorities,
             'analysis_status':'succeeded' if snapshot['research_coverage'] in ('available','no_findings') else 'partial',
-            'research_coverage':snapshot['research_coverage']}
+            'research_coverage':snapshot['research_coverage'],'skill_profile':skill_profile}
         result=await thread(app.state.store.save_result,account['id'],result)
         row['result']=result;return row
 
     @app.get('/api/v1/assessments/context',response_model=Context)
     async def context(request:Request,account=Depends(authenticated)):
+        """What an evaluation would read, and which setup step is still open. Never starts one."""
         snapshot=await capture(app.state.upstream,account)
-        return {k:snapshot.get(k) for k in ('ready','issues','goal','cv','input_hash','inputs','research_coverage','evidence')} | {'model_available':app.state.model.configured}
+        return {k:snapshot.get(k) for k in ('ready','issues','goal','cv','input_hash','inputs','research_coverage','evidence','cv_reviewed','research_pending')} | {'model_available':app.state.model.configured}
 
     @app.get('/api/v1/assessments/current',response_model=Current)
     async def current(request:Request,account=Depends(authenticated)):
+        """Read the saved comparison and resume a pending one. A new comparison starts only from the explicit command."""
         row=await thread(app.state.store.load,account['id'])
+        snapshot=await capture(app.state.upstream,account)
         if row.get('pending'):launch(app,account['id'],account['token'],worker)
-        result=row.get('result'); snapshot=await capture(app.state.upstream,account)
+        result=row.get('result')
         return {'version':row['version'],'operation':operation_view(row),'result':result,
             'stale':bool(result and result['input_hash']!=snapshot.get('input_hash')),'ready':snapshot['ready'],'issues':snapshot['issues']}
 

@@ -204,9 +204,8 @@ credential. This confirms settings are present, not provider access or schema
 compatibility.
 
 For a managed cloud environment, bind the model key securely and allow its
-selected provider host. An existing secret restricted to
-`generativelanguage.googleapis.com` needs its allowed destination changed to
-`openrouter.ai` in environment settings when switching providers. Changing only
+selected provider host. A secret restricted to another host needs its allowed destination changed to
+`openrouter.ai` in environment settings. Changing only
 `CV_LLM_BASE_URL` does not update a secret's destination restriction. Apply the
 settings and restart the service; extraction, routing and interpretation read
 configuration at startup. For Compose, recreate the service as shown below.
@@ -303,26 +302,7 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml restart gateway
 ```
 
-Existing deployments retain their configured providers until their private settings are updated; the plain Compose fallback without the public template remains Gemini.
-
-For a Gemini deployment instead, use the following settings and supply each service's own Gemini key. OpenRouter fallback does not apply to Gemini's host:
-
-```dotenv
-CAREER_LLM_PROVIDER=gemini
-CAREER_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
-CAREER_LLM_MODEL=gemini-3.5-flash-lite
-CAREER_LLM_RESPONSE_MODE=json_schema
-CAREER_LLM_TOKEN_PARAMETER=max_tokens
-CV_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
-CV_LLM_MODEL=gemini-3.5-flash-lite
-CV_LLM_ALLOW_HTTP=false
-ASSESSMENT_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
-ASSESSMENT_LLM_MODEL=gemini-3.5-flash-lite
-ASSESSMENT_LLM_ALLOW_HTTP=false
-ROADMAP_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
-ROADMAP_LLM_MODEL=gemini-3.5-flash-lite
-ROADMAP_LLM_ALLOW_HTTP=false
-```
+Existing deployments retain their configured providers until their private settings are updated; without the public template, Compose falls back to OpenRouter (`https://openrouter.ai/api/v1`, `openai/gpt-4o-mini`) and requires `OPENROUTER_API_KEY` or a service key.
 
 Keep `AI_ENABLED=true` for Career inference and configure public search independently. SDK retries are disabled; each service retains its own retry, quota, timeout and validation policy.
 
@@ -441,8 +421,7 @@ do not serialize requests across the separate AI services.
 
 Local model requests omit Authorization headers even when cloud keys remain configured;
 those values can be preserved for a later switch. Assessment/Roadmap now support independent
-OpenAI-compatible endpoints: Gemini retains native JSON Schema/minimal reasoning, and other
-providers use JSON Output with the schema in the prompt. Every response still passes the
+OpenAI-compatible endpoints; providers use JSON Output with the schema in the prompt. Every response still passes the
 existing domain/schema validation. Their local calls use a 180-second HTTP timeout and
 serialize per service worker; durable operations retain a 600-second local execution
 budget with a longer lease. CV keeps its quota/ownership boundaries and uses 120-second
@@ -495,18 +474,14 @@ Response size, source counts, URL validation, retries and citation checks remain
 Search results are untrusted. No raw JD, private CV or chat message is sent to search.
 Search provider changes use distinct research cache policies; historical evidence remains readable.
 
-Existing Gemini deployments remain supported: select `CAREER_LLM_PROVIDER=gemini`,
-`CAREER_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`,
-`CAREER_LLM_MODEL=gemini-3.5-flash-lite`, `CAREER_LLM_RESPONSE_MODE=json_schema`
-and the corresponding key. When the new provider setting is absent, code/Compose
-retain Gemini defaults for compatibility. Explicit nonblank model values override
+Career defaults to OpenRouter (`CAREER_LLM_PROVIDER=compatible`, `CAREER_LLM_BASE_URL=https://openrouter.ai/api/v1`, `CAREER_LLM_RESPONSE_MODE=json_schema_strict`). Explicit nonblank model values override
 provider defaults, so update the model as well when switching providers.
-Direct non-Compose processes may use deprecated `GEMINI_API_KEY` and `BRAVE_API_KEY`
-aliases only for their own provider when the canonical key is absent. Compose requires
+Direct non-Compose processes may use the deprecated `BRAVE_API_KEY` alias
+only for Brave when the canonical key is absent. Compose requires
 the canonical `CAREER_*` keys; rename old private entries yourself before recreating
 Career. This prevents a provider switch from forwarding another provider's key.
 The old `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`,
-`AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL` and `OPPORTUNITY_GEMINI_MODEL`
+`AI_TOKEN_PARAMETER`, and the obsolete `GEMINI_*` switches
 settings remain unused. Assessment, Roadmap and CV retain their independent model settings.
 
 Saved-goal follow-up questions may research automatically when public information is
@@ -631,7 +606,7 @@ There is no new five-minute inactivity lock. Recoverable session checks preserve
 
 Startup/configuration commands in this guide are for the user to run with private settings. Agents may read/edit the public `infrastructure/docker/.env.example` template and validate it against Compose. Agents must not read or load private environment files. Automated verification uses isolated resources and explicit synthetic settings. Existing recordings from before an integration demonstrate that earlier build, not the newly merged application.
 
-When retaining Gemini or Brave, migrate `GEMINI_API_KEY` to `CAREER_LLM_API_KEY`
+When retaining a previous key, migrate it to `CAREER_LLM_API_KEY`
 and `BRAVE_API_KEY` to `CAREER_RESEARCH_API_KEY` in private settings. Legacy names
 are fallback aliases only when the corresponding new name is absent. An explicitly
 blank new name suppresses the legacy alias; for an OpenRouter endpoint the blank
@@ -661,7 +636,7 @@ All user-configurable deployment inputs belong in the single ignored `infrastruc
 | `ROADMAP_DB_PASSWORD` | New scoped `elo_roadmap` MongoDB user/database |
 | `ASSESSMENT_LLM_API_KEY` | Server-only cloud credential for evidence comparison; optional for explicit local HTTP |
 | `ROADMAP_LLM_API_KEY` | Server-only cloud credential for adviser recommendations; optional for explicit local HTTP |
-| `ASSESSMENT_LLM_MODEL`, `ROADMAP_LLM_MODEL` | Independent model identifiers; the public local profile uses `elo-deepseek-r1:1.5b`; absent settings retain Gemini compatibility defaults |
+| `ASSESSMENT_LLM_MODEL`, `ROADMAP_LLM_MODEL` | Independent model identifiers; the public local profile uses `elo-deepseek-r1:1.5b`; absent settings fall back to OpenRouter defaults |
 | `ASSESSMENT_LLM_BASE_URL`, `ROADMAP_LLM_BASE_URL` | Independent OpenAI-compatible endpoints; local profile uses the Docker-host Ollama `/v1` URL |
 | `ASSESSMENT_LLM_TOKEN_PARAMETER`, `ROADMAP_LLM_TOKEN_PARAMETER` | `max_tokens` by default; set `max_completion_tokens` for models that reject `max_tokens` |
 | `ASSESSMENT_LLM_ALLOW_HTTP`, `ROADMAP_LLM_ALLOW_HTTP` | Explicit local HTTP permission; also requires `APP_ENV=development` |
@@ -674,13 +649,13 @@ for setting in ASSESSMENT_DB_PASSWORD ROADMAP_DB_PASSWORD; do
 done
 ```
 
-Keep passwords already associated with existing database users. For local testing, use the all-service profile above. For a Gemini cloud deployment, restore the HTTPS base URLs, disable the HTTP flags, and add keys from your provider account to the same private file:
+Keep passwords already associated with existing database users. For local testing, use the all-service profile above. For a cloud deployment, restore the HTTPS base URLs, disable the HTTP flags, and add keys from your provider account to the same private file:
 
 ```dotenv
-ASSESSMENT_LLM_API_KEY=YOUR_GEMINI_API_KEY
-ASSESSMENT_LLM_MODEL=gemini-3.5-flash-lite
-ROADMAP_LLM_API_KEY=YOUR_GEMINI_API_KEY
-ROADMAP_LLM_MODEL=gemini-3.5-flash-lite
+ASSESSMENT_LLM_API_KEY=YOUR_OPENROUTER_API_KEY
+ASSESSMENT_LLM_MODEL=openai/gpt-4o-mini
+ROADMAP_LLM_API_KEY=YOUR_OPENROUTER_API_KEY
+ROADMAP_LLM_MODEL=openai/gpt-4o-mini
 ```
 
 For a completely fresh installation only, generate each of `MONGO_ROOT_PASSWORD`, `PROFILE_DB_PASSWORD`, `CAREER_DB_PASSWORD` and `CV_DB_PASSWORD` separately with `openssl rand -hex 24`, and generate `OTP_HASH_SECRET` once with `openssl rand -hex 32`. Never regenerate these merely to rebuild an existing stack.

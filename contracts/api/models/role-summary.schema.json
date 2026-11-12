@@ -4,7 +4,7 @@
       "additionalProperties": false,
       "properties": {
         "text": {
-          "maxLength": 160,
+          "maxLength": 110,
           "minLength": 2,
           "title": "Text",
           "type": "string"
@@ -34,11 +34,26 @@
           "title": "Card Id",
           "type": "string"
         },
+        "headline": {
+          "anyOf": [
+            {
+              "maxLength": 60,
+              "minLength": 2,
+              "pattern": "^[^*]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Headline"
+        },
         "bullets": {
           "items": {
             "$ref": "#/$defs/Bullet"
           },
-          "maxItems": 5,
+          "maxItems": 3,
           "minItems": 1,
           "title": "Bullets",
           "type": "array"
@@ -60,13 +75,28 @@
           "title": "Card Id",
           "type": "string"
         },
+        "headline": {
+          "anyOf": [
+            {
+              "maxLength": 60,
+              "minLength": 2,
+              "pattern": "^[^*]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Headline"
+        },
         "bullets": {
           "items": {
-            "maxLength": 160,
+            "maxLength": 110,
             "minLength": 2,
             "type": "string"
           },
-          "maxItems": 4,
+          "maxItems": 3,
           "minItems": 1,
           "title": "Bullets",
           "type": "array"
@@ -88,6 +118,11 @@
     },
     "goal_version": {
       "title": "Goal Version",
+      "type": "integer"
+    },
+    "format": {
+      "default": 2,
+      "title": "Format",
       "type": "integer"
     },
     "research_id": {

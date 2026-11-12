@@ -117,24 +117,24 @@ test('upload opens the review and save for later restores the same question afte
   return route.fulfill({json:source});
  });
  await page.goto('/cv');
- await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();
- await expect(page.getByRole('button',{name:/Build through chat/})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Upload your CV'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Add skills by chat'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveCount(0);
  expect(opens).toBe(0);
  await page.screenshot({path:testInfo.outputPath('skills-summary-desktop.png'),fullPage:true});
- await page.getByRole('button',{name:'Upload new CV'}).click();
  await page.getByLabel('CV document',{exact:true}).setInputFiles({name:'synthetic-profile.pdf',mimeType:'application/pdf',buffer:Buffer.from('Synthetic CV; extraction APIs mocked.')});
  await page.getByRole('button',{name:'Upload CV',exact:true}).click();
  await expect(page).toHaveURL(/review=uploaded-profile-cv/);
- await expect(page.getByRole('heading',{name:'Preparing your CV for review'})).toBeVisible();
+ await expect(page.getByRole('progressbar',{name:'Reading your CV'})).toBeVisible();
  expect(opens).toBe(0);expect(reviewStarts).toBe(0);
  await page.getByRole('button',{name:'Save and review later'}).click();
  await expect(page.getByRole('heading',{name:'Skills Profile',exact:true})).toBeVisible();
- const reviewShortcut=page.getByRole('region',{name:'Your CV'}).getByRole('button',{name:/^(Open|Continue) review$/});
+ // While the only CV is still being read, the reading screen carries the review shortcut.
+ const reviewShortcut=page.getByRole('region',{name:'synthetic-profile.pdf'}).getByRole('button',{name:'Open review'});
  await reviewShortcut.click();
- await expect(page.getByRole('heading',{name:'Preparing your CV for review'})).toBeVisible();
+ await expect(page.getByRole('progressbar',{name:'Reading your CV'})).toBeVisible();
  await page.reload();
- await expect(page.getByRole('heading',{name:'Preparing your CV for review'})).toBeVisible();
+ await expect(page.getByRole('progressbar',{name:'Reading your CV'})).toBeVisible();
  expect(opens).toBe(0);expect(reviewStarts).toBe(0);
  source={...source!,status:'ready'};
  await page.getByRole('button',{name:'Check progress'}).click();
@@ -183,7 +183,7 @@ test('CV library scrolls internally, persists renamed titles and opens full-page
  await page.goto('/cv');
  const library=page.getByRole('region',{name:'Your uploaded CVs',exact:true}),first=page.getByRole('article',{name:'CV library-0',exact:true});
  // The CV card switches versions; the full library sits under Manage saved CVs.
- await expect(page.getByRole('region',{name:'Your CV'})).toBeVisible();await openCvLibrary(page);await expect(first).toBeVisible();await page.getByRole('heading',{name:'Your CVs',exact:true}).scrollIntoViewIfNeeded();await expect(page.locator('summary').filter({hasText:'CV files'})).toHaveCount(0);
+ await openCvLibrary(page);await expect(first).toBeVisible();await page.getByRole('heading',{name:'Your CVs',exact:true}).scrollIntoViewIfNeeded();await expect(page.locator('summary').filter({hasText:'CV files'})).toHaveCount(0);
  const before=await library.boundingBox();expect(await library.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
  await library.evaluate(el=>{el.scrollTop=el.scrollHeight;});
  const after=await library.boundingBox();expect(after!.y).toBe(before!.y);expect(after!.height).toBe(before!.height);

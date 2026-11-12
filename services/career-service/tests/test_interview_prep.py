@@ -141,3 +141,18 @@ def test_route_waits_for_research_and_refuses_stale_versions():
     assert http.post(PATH,json={'expected_version':3}).status_code==409 and not calls
     http,calls=client(good(),{'research_id':'r1','finished':True})
     assert http.post(PATH,json={'expected_version':2}).status_code==409 and not calls
+
+
+def test_generated_items_are_capped_tighter_than_saved_suggestions():
+    from pydantic import ValidationError
+    from app.schemas.interview_prep import Suggestion
+    with pytest.raises(ValidationError):fills((1,'interview_questions',['x'*161]))
+    assert fills((1,'interview_questions',['x'*160])).fills[0].items==['x'*160]
+    assert Suggestion(round_number=1,field='interview_questions',value='x'*200).value=='x'*200
+
+
+def test_generated_items_keep_reasonable_bold_and_dedupe_on_plain_text():
+    from app.workflows.interview_prep import research_catalogue
+    out=fills((1,'preparation_topics',['Practise **window functions**','Practise window functions','Bad **bold** **a** **b** **c** x']))
+    assert out.fills[0].items[0]=='Practise **window functions**' and '*' not in out.fills[0].items[2]
+    assert research_catalogue([finding('interview_questions','Explain a **SQL join**')])[0]['value']=='Explain a SQL join'

@@ -126,6 +126,7 @@ class skill_gap_analyses {
     +String[] priorities
     +String analysis_status
     +String research_coverage
+    +SkillProfileEvaluation skill_profile?
     +String created_at
     +String request_hash
 }
@@ -159,7 +160,7 @@ note for interview_research "Immutable public-context revisions; shared seven-da
 
 %% Career Discovery: private sessions/jobs and immutable public-evidence snapshots in research_contexts.
 %% Both JD and discovery publish via ReviewStore.goal / GoalStore.persist_target.
-%% Generic legacy quota tests retain ledger coverage; production model stages use one Gemini client.
+%% Generic legacy quota tests retain ledger coverage; production model stages use one model client.
 
 %% JD job identity and speculative retrieval are transient until full extraction validates.
 %% Matching public-only seeds reuse research_contexts job history/evidence; activities are fixed stage IDs.

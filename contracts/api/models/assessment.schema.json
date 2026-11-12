@@ -75,6 +75,117 @@
       "title": "Component",
       "type": "object"
     },
+    "EvaluatedSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "canonical_skill_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Skill Id"
+        },
+        "category": {
+          "enum": [
+            "AI & ML",
+            "Languages",
+            "Data & analytics",
+            "Cloud & DevOps",
+            "Technical coding",
+            "Software & project management",
+            "Design",
+            "Communication & leadership",
+            "Business & finance",
+            "Other skills"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "subcategory": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subcategory"
+        },
+        "relevance": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "none"
+          ],
+          "title": "Relevance",
+          "type": "string"
+        },
+        "competence_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Competence Score"
+        },
+        "required_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Score"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "requirement_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requirement Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "category",
+        "relevance",
+        "explanation",
+        "evidence_refs",
+        "requirement_refs"
+      ],
+      "title": "EvaluatedSkill",
+      "type": "object"
+    },
     "InputVersions": {
       "additionalProperties": false,
       "properties": {
@@ -317,6 +428,20 @@
           "default": null,
           "title": "Competence Score"
         },
+        "required_score": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Score"
+        },
         "score_status": {
           "default": "insufficient_evidence",
           "enum": [
@@ -350,6 +475,28 @@
           ],
           "default": null,
           "title": "Scoring Rubric Version"
+        },
+        "demonstrated_score": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Demonstrated Score"
+        },
+        "profile_skills": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Profile Skills",
+          "type": "array"
         }
       },
       "required": [
@@ -363,6 +510,39 @@
         "mapping_reason"
       ],
       "title": "Outcome",
+      "type": "object"
+    },
+    "SkillProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "evaluated",
+            "partial",
+            "failed",
+            "empty"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "rubric_version": {
+          "title": "Rubric Version",
+          "type": "string"
+        },
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/EvaluatedSkill"
+          },
+          "title": "Skills",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "rubric_version",
+        "skills"
+      ],
+      "title": "SkillProfile",
       "type": "object"
     }
   },
@@ -471,6 +651,17 @@
       ],
       "title": "Research Coverage",
       "type": "string"
+    },
+    "skill_profile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SkillProfile"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

@@ -1,0 +1,21 @@
+/* Evaluate banner on Career Goal and Skills Profile: either the open setup step or the evaluate action. */
+.evaluate-banner{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:14px 16px;align-items:center;padding:20px 24px;margin:0;border:1px solid #a7f3d0;border-radius:20px;background:var(--mint-mist,#ecfdf5);color:var(--ink)}
+.evaluate-banner.is-setup{background:#fff;border-color:var(--line)}
+.evaluate-banner>div:not(.evaluate-banner-actions){grid-column:2;min-width:0}
+.evaluate-banner[role=alert]>div:first-child{grid-column:1 / span 2}
+.evaluate-banner h2{margin:0 0 2px;font-size:18px;font-weight:600;letter-spacing:0}
+.evaluate-banner p{margin:0;max-width:68ch;color:#064e3b}
+.evaluate-banner.is-setup p{color:var(--slate)}
+.evaluate-banner p+p{margin-top:6px}
+.evaluate-banner p[role=alert]{color:#991b1b;font-weight:500}
+.evaluate-banner-mark{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--ready-ink,#116149);color:#fff}
+.evaluate-banner.is-setup .evaluate-banner-mark{background:#fef3c7;color:#854d0e}
+.evaluate-banner-mark.is-busy,.evaluate-banner.is-setup .evaluate-banner-mark.is-busy{background:none;border:3px solid #a7f3d0;border-top-color:var(--ready-ink,#116149);animation:evaluate-spin 1s linear infinite}
+.evaluate-banner-actions{display:flex;flex-wrap:wrap;gap:10px}
+.evaluate-banner .btn{min-height:44px;height:auto;padding:0 20px;border-radius:999px;font-size:14px;font-weight:600;border:1px solid rgb(71 85 105 / .35);background:#fff;color:var(--ink);text-decoration:none;white-space:nowrap}
+.evaluate-banner .btn.pri{background:var(--ink);border-color:var(--ink);color:#fff}
+.evaluate-banner .btn.pri:hover:not(:disabled){background:#1f2937}
+.evaluate-banner .btn:disabled{opacity:.55;cursor:not-allowed}
+@keyframes evaluate-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.evaluate-banner-mark.is-busy{animation:none}}
+@media (max-width:760px){.evaluate-banner{grid-template-columns:36px minmax(0,1fr)}.evaluate-banner-actions{grid-column:1 / -1}.evaluate-banner .btn{white-space:normal}}

@@ -21,10 +21,21 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()).hexdigest()
 
 
+# A hyphen ending a PDF line ("proof-of-\nconcept", "evi-\ndence") becomes
+# "word- word" once whitespace collapses. Only a hyphen attached to the
+# preceding word counts, so spaced separators such as "Python - SQL" stay.
+_WRAPPED_HYPHEN = re.compile(r'(?<=\w)- (?=\w)')
+
+
 def evidence_matches(excerpt, source):
     # Preserve words and meaningful punctuation (e.g. C++ versus C#), while
     # tolerating PDF line wraps, spacing, case and Unicode presentation forms.
-    return excerpt in source or normalized_name(excerpt) in normalized_name(source)
+    if excerpt in source: return True
+    excerpt, source = normalized_name(excerpt), normalized_name(source)
+    if excerpt in source: return True
+    # A quotation may rejoin a line-wrapped hyphenated compound or word.
+    excerpt = _WRAPPED_HYPHEN.sub('-', excerpt)
+    return excerpt in _WRAPPED_HYPHEN.sub('-', source) or excerpt in _WRAPPED_HYPHEN.sub('', source)
 
 
 def _validate_review_quote(ref, source, item_index, review_index, quote_index):
@@ -312,7 +323,7 @@ def effective_items(document):
     # A declined question is a review disposition, not fabricated factual evidence.
     # Rebuild from the durable skip receipt; corrections/reconciliation fence it.
     for question in document.get('clarifications', []):
-        if (question.get('status') != 'skipped' or question.get('reconciliation_required')
+        if (question.get('status') != 'skipped' or question.get('reconciliation_required') or question.get('reopened')
                 or question.get('extraction_version') != document.get('extraction_version')): continue
         item = by_id.get(question['item_id'])
         if not item: continue

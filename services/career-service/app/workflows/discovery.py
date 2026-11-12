@@ -764,7 +764,7 @@ class DiscoveryEngine:
     async def recover(self):
         while not self.stopping:
             try:
-                if self.ai.settings.enabled and getattr(self.ai.settings,'provider',None)=='gemini':
+                if self.ai.settings.enabled and getattr(self.ai.settings,'provider',None)=='compatible':
                     await thread(resume_obsolete_model_waits,self.rows,'career_discovery')
                 rows=await thread(lambda:list(self.rows.find({'kind':'career_discovery','status':{'$in':['researching','waiting']},'next_attempt_at':{'$lte':now()},'lease_until':{'$lte':now()}},{'_id':1}).limit(10)))
                 for row in rows:self.launch(row['_id'])

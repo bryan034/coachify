@@ -1,4 +1,5 @@
 """Public, claim-level opportunity intelligence; private target links live outside reports."""
+import re
 from datetime import datetime
 from typing import Annotated,Literal
 from pydantic import BaseModel,ConfigDict,Field,StringConstraints,model_validator
@@ -6,6 +7,19 @@ from pydantic import BaseModel,ConfigDict,Field,StringConstraints,model_validato
 class Model(BaseModel):
     model_config=ConfigDict(extra='forbid')
 Text=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]
+BOLD=re.compile(r'\*\*(?=\S)([^*\n]{1,40}?)(?<=\S)\*\*')
+
+
+def plain_text(text):
+    """Drop the **key term** markers; used wherever wording is compared, cited or fed back to a model."""
+    return BOLD.sub(r'\1',text or '').replace('*','')
+
+
+def tidy_bold(text):
+    """Keep at most three short bold key terms, never a fully bold line; otherwise show plain text."""
+    spans=BOLD.findall(text);rest=BOLD.sub('',text)
+    if '*' in rest or re.search(r'[`#<>]|\]\(',rest) or len(spans)>3 or (spans and not re.search(r'\w',rest)):return plain_text(text)
+    return text
 RoundName=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
 # Interview rounds vary by job; only rounds the evidence supports are recorded.
 MAX_ROUNDS=10

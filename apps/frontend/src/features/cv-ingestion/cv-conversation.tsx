@@ -1,15 +1,15 @@
 "use client";
-import { InlineGoalConfirmation } from '@/features/career/inline-goal-confirmation';
 import { reviewText } from './review-text';
 import { BrandLogo } from '@/components/ui/brand-logo';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type Dispatch, type SetStateAction } from 'react';
 import { cvApi, CvApiError } from '@/lib/api/cv';
-import type { ConversationAction, ConversationDecision, ConversationInput, ConversationMessage, CvConversation, CvDetail } from './types';
+import type { ActiveQuestion, ConversationAction, ConversationDecision, ConversationInput, ConversationMessage, CvConversation, CvDetail, InterviewTopic } from './types';
 import { errorText } from '@/lib/errors';
 import { humaniseText, formatDate } from '@/lib/format';
 import { ChatSkeleton } from '@/components/ui/workspace-ui';
+const RAIL_MIN = 220, RAIL_MAX = 520, RAIL_DEFAULT = 280;
 
 const statusLabel: Record<ConversationAction['status'], string> = {
  awaiting_confirmation: 'Review before saving', needs_source: 'Choose the right source', pending: 'Processing',
@@ -40,7 +40,7 @@ function ActionCard({action, busy, readOnly, decide, review = false}: {review?: 
  if (action.kind === 'route' && action.status === 'saved') return null;
  if (action.kind === 'route' && action.status === 'pending') return <p className="cv-chat-working cv-chat-action-pending">Your message is saved. Understanding it now…</p>;
  if (action.status === 'cancelled') return <details className="cv-chat-receipt"><summary><span className="cv-chat-action-status">Cancelled</span> {action.title}</summary><p>{action.summary}</p></details>;
- if (action.status === 'saved' && ['clarify','skip'].includes(action.kind)) return <p className="cv-chat-receipt"><span className="cv-chat-action-status">Saved</span> {action.summary}</p>;
+ if (action.status === 'saved' && ['clarify','skip'].includes(action.kind)) return <p className="cv-chat-receipt"><span className="cv-chat-receipt-mark" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10"/></svg></span><span><span className="cv-chat-action-status">Saved</span> {action.summary}</span></p>;
  return <article className={`cv-chat-action cv-chat-action-${action.status}`} aria-label={action.title}>
   <div className="cv-chat-action-heading"><strong>{action.title}</strong><span className="cv-chat-action-status">{statusLabel[action.status]}</span></div>
   {action.item_title && <p className="cv-chat-source">{action.item_title}</p>}
@@ -60,6 +60,22 @@ function failureReply(message: CvConversation['messages'][number]) {
  return FAILURE_REPLY.test(message.text.trim()) && message.actions.some(action => action.status === 'failed' || action.status === 'stale');
 }
 
+/** Plain status for a review topic; the current topic shows its question position when known. */
+export function topicStatus(topic: InterviewTopic, question?: ActiveQuestion | null) {
+ if (topic.status === 'deferred') return 'Skipped · CV used as written';
+ if (topic.status === 'reviewed') return 'Done';
+ if (topic.status === 'reviewed_with_gaps') return 'Done · some details uncertain';
+ if (topic.status === 'current') return question?.item_id === topic.id && question.number && question.limit ? `Now · question ${question.number} of ${question.limit}` : 'Now';
+ return 'Up next';
+}
+function QuestionLabel({question, sourceIds}: {question: ActiveQuestion; sourceIds: string[]}) {
+ return <><p className="cv-question-topic">{reviewText(question.title, sourceIds)}</p>{question.number && question.limit ? <p className="cv-question-count">Question {question.number} of {question.limit}</p> : null}</>;
+}
+function AnswerHints({hints}: {hints?: string[]}) {
+ if (!hints?.length) return null;
+ return <div className="cv-answer-hints"><p>Your answer can cover</p><ul>{hints.map(hint => <li key={hint}>{hint}</li>)}</ul></div>;
+}
+
 export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSummary, onReviewLater = onOpenSummary, unavailable = false, hidden = false, purpose, autoReview = false, onActivityChanged, draft: persistedDraft, onDraftChange}: {
  cvId: string | null; detail: CvDetail | null; token: string; onChanged: () => Promise<void>; onOpenSummary: () => void; unavailable?: boolean; hidden?: boolean; purpose?: 'skills_profile'; autoReview?: boolean; onActivityChanged?: (active: boolean) => void; draft?: string; onDraftChange?: Dispatch<SetStateAction<string>>;
  onReviewLater?: (unconfirmed: boolean) => void;
@@ -71,7 +87,11 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
  const [error, setError] = useState(''), [busy, setBusy] = useState(''), [loading, setLoading] = useState(true), [historyLoading, setHistoryLoading] = useState(false), [announcement, setAnnouncement] = useState('');
  const [unconfirmedMessage, setUnconfirmedMessage] = useState<ConversationInput | null>(null);
  const [checkingReturn, setCheckingReturn] = useState(false);
- const [hintFor, setHintFor] = useState<string | null>(null);
+ // Skip confirmations: one topic in the rail, all remaining topics, or the composer shortcut in the chat.
+ const [skipping, setSkipping] = useState<{scope: 'topic' | 'all' | 'chat'; id?: string} | null>(null);
+ // Topics rail width: drag the divider or use the arrow keys; the choice is remembered in this browser.
+ const [railWidth, setRailWidth] = useState(() => {try {const saved = Number(window.localStorage.getItem('elo-cv-rail-width')); return saved >= RAIL_MIN && saved <= RAIL_MAX ? saved : RAIL_DEFAULT;} catch {return RAIL_DEFAULT;}});
+ const resizeRail = useCallback((width: number) => {const next = Math.min(RAIL_MAX, Math.max(RAIL_MIN, Math.round(width))); setRailWidth(next); try {window.localStorage.setItem('elo-cv-rail-width', String(next));} catch {}}, []);
  const lifetime = useRef(new AbortController()), openKey = useRef(crypto.randomUUID()), newestId = useRef<string | null>(null), scrollArea = useRef<HTMLDivElement>(null), chatPanel = useRef<HTMLElement>(null), composer = useRef<HTMLTextAreaElement>(null), nearBottom = useRef(true);
  const current = useRef(conversation); current.current = conversation;
  const onChangedRef = useRef(onChanged); onChangedRef.current = onChanged;
@@ -175,9 +195,9 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
  }, [pending, busy, loading, refresh]);
  useEffect(() => {if (nearBottom.current && scrollArea.current) scrollArea.current.scrollTop = scrollArea.current.scrollHeight;}, [conversation?.messages, busy]);
 
- async function send(text: string, command?: ConversationInput['command']) {
+ async function send(text: string, command?: ConversationInput['command'], itemId?: string) {
   const active = current.current;
-  const signature = JSON.stringify({text, command});
+  const signature = JSON.stringify({text, command, itemId});
   const previousAttempt = messageAttempts.current.get(signature);
   const recovering = Boolean(unconfirmedMessage && previousAttempt?.body.mutation_id === unconfirmedMessage.mutation_id);
   if (!active || busy || unavailable || resumeBlocked || active.id !== newestId.current || !text.trim() || (unconfirmedMessage && !recovering)) return;
@@ -185,8 +205,9 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
   if (Array.from(text).length > active.limits.max_message_chars) {setError(`Keep your message within ${active.limits.max_message_chars} characters. Your draft is still here.`); return;}
   // An interrupted response may already be saved. Other sends must not replace
   // its original receipt, revision or segment before that outcome is resolved.
-  const attempt = previousAttempt ?? {conversationId: active.id, body: {expected_revision: active.revision, mutation_id: crypto.randomUUID(), text, ...(command ? {command} : {})}};
+  const attempt = previousAttempt ?? {conversationId: active.id, body: {expected_revision: active.revision, mutation_id: crypto.randomUUID(), text, ...(command ? {command} : {}), ...(itemId ? {item_id: itemId} : {})}};
   messageAttempts.current.set(signature, attempt);
+  if (command === 'review_topic') setReopening(true);
   setBusy('message'); setError(''); setAnnouncement('Saving your message and checking what it means.'); nearBottom.current = true;
   if (command === 'review' && window.matchMedia?.('(max-width: 700px)').matches) chatPanel.current?.scrollIntoView?.({block:'start',behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
   try {
@@ -198,7 +219,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    messageAttempts.current.delete(signature);
    setUnconfirmedMessage(null);
    if (uploadedReview) setBusy('refreshing-message');
-   setAnnouncement(currentSegment ? command === 'skip' ? 'Skipped. Unclarified details remain uncertain; the review can continue.' : 'Your message is saved. Review the response for any changes or actions needing attention.' : 'Your earlier message is saved in the previous conversation.');
+   setAnnouncement(currentSegment ? command === 'skip' ? 'Skipped. Unclarified details remain uncertain; the review can continue.' : command === 'skip_topic' ? 'Topic skipped. elo uses your CV as written for it.' : command === 'skip_remaining' ? 'Remaining topics skipped. elo uses your CV as written for them.' : 'Your message is saved. Review the response for any changes or actions needing attention.' : 'Your earlier message is saved in the previous conversation.');
    if (currentSegment) await syncLoadedActions(value).catch(cause => setError(errorText(cause, 'Could not refresh earlier actions. Check saved messages again.')));
    await onChangedRef.current().catch(cause => {
     if (!uploadedReview) throw cause;
@@ -221,7 +242,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
      }
     }
    }
-  } finally {if (!lifetime.current.signal.aborted) {setBusy(''); composer.current?.focus();}}
+  } finally {if (!lifetime.current.signal.aborted) {setReopening(false); setBusy(''); composer.current?.focus();}}
  }
  async function decide(actionId: string, decision: Omit<ConversationDecision, 'mutation_id' | 'expected_revision'>) {
   const active = current.current;
@@ -254,14 +275,14 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
   } catch (cause) {if (!lifetime.current.signal.aborted) setError(errorText(cause, 'Could not load earlier messages.'));}
   finally {if (!lifetime.current.signal.aborted) setHistoryLoading(false);}
  }
- function submit(event: FormEvent) {event.preventDefault(); void send(draft);}
- function keyboard(event: KeyboardEvent<HTMLTextAreaElement>) {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault(); void send(draft);}}
  const upgrading = useRef(false);
  useEffect(()=>{if(!purpose||!conversation||loading||busy)return;if(conversation.purpose===purpose){upgrading.current=false;return;}if(conversation.purpose===null&&!conversation.messages.some(hasOutstandingAction)&&!upgrading.current){upgrading.current=true;void open();}},[purpose,conversation,loading,busy,open]);
  const started = conversation?.messages.some(message => message.role === 'user') ?? false;
  const unfinished = conversation?.messages.some(hasOutstandingAction) ?? false;
  const hasReviewHistory = Boolean(started || conversation?.interview || conversation?.previous_conversation_id || conversation?.next_before != null);
- const reviewComplete = Boolean(conversation?.interview && ['reviewed','reviewed_with_gaps'].includes(conversation.interview.status));
+ const [reopening, setReopening] = useState(false);
+ // Reviewing a skipped topic reopens a finished review at once, before the server answers.
+ const reviewComplete = !reopening && Boolean(conversation?.interview && ['reviewed','reviewed_with_gaps'].includes(conversation.interview.status));
  const autoStarted = useRef(false);
  useEffect(() => {
   if (!autoReview) {autoStarted.current = false; return;}
@@ -292,6 +313,15 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
  const awaitingFirstQuestion = uploadedReview && autoReview && !autoStarted.current && !hasReviewHistory &&
   !conversation?.active_question && !unfinished && !error && conversation?.purpose !== null;
  const blocked = Boolean(busy || unavailable || resumeBlocked || awaitingFirstQuestion || unconfirmedMessage || !conversation || conversation.read_only || historical);
+ // Typing never waits on the AI. A message sent while elo is working is held and sent once it is free.
+ const [queued, setQueued] = useState(false);
+ const working = Boolean(busy) || pending || awaitingFirstQuestion;
+ const canType = !(unavailable || resumeBlocked || !conversation || conversation.read_only || historical || unconfirmedMessage);
+ function sendOrQueue() {if (!draft.trim()) return; if (working) setQueued(true); else void send(draft);}
+ useEffect(() => {if (queued && !draft.trim()) setQueued(false);}, [queued, draft]);
+ useEffect(() => {if (queued && !working && canType) {setQueued(false); void send(draft);}}); // eslint-disable-line react-hooks/exhaustive-deps
+ function submit(event: FormEvent) {event.preventDefault(); sendOrQueue();}
+ function keyboard(event: KeyboardEvent<HTMLTextAreaElement>) {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault(); sendOrQueue();}}
  const progress = conversation?.interview;
  const unverifiedTopics = progress?.topics?.filter(topic => topic.validation === 'unverified') ?? [];
  const question = conversation?.active_question;
@@ -299,23 +329,46 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
  const reviewPercent = reviewComplete ? 100 : progress?.total_items ? Math.round(100 * progress.reviewed_items / progress.total_items) : 0;
  const count = Array.from(draft).length, limit = conversation?.limits.max_message_chars ?? 4000;
  const exitBlocked = Boolean(busy && busy !== 'refreshing-message');
- const hintOpen = Boolean(question && hintFor === question.id);
- return <section ref={chatPanel} className="cv-chat" aria-label="CV conversation" hidden={hidden} data-unsaved={Boolean(draft || unconfirmedMessage || (uploadedReview && busy === 'message'))}>
-  <header className="cv-chat-header"><div><span className="cv-chat-brand" aria-hidden="true"><BrandLogo compact decorative/></span><div><h2 tabIndex={uploadedReview ? -1 : undefined}>{uploadedReview ? 'Review your CV' : 'Let’s talk about your experience'}</h2><p>{detail?.display_name ?? detail?.file_name ?? 'Your capabilities'}{conversation && (!uploadedReview || started && !exitBlocked && !unconfirmedMessage) && <><span className="cv-chat-saved-dot" aria-hidden="true"/>{uploadedReview ? 'Sent messages saved' : 'Saved to your account'}</>}</p></div></div>
+ const covered = (status: string) => ['reviewed', 'reviewed_with_gaps', 'deferred'].includes(status);
+ const skippedCount = progress?.topics?.filter(topic => topic.status === 'deferred').length ?? 0;
+ const remainingTopics = progress?.topics?.filter(topic => !covered(topic.status)) ?? [];
+ const canSkip = uploadedReview && !historical && !blocked && !pending && !reviewComplete;
+ function skipTopic(id: string) {const topic = progress?.topics?.find(item => item.id === id); setSkipping(null); if (topic) void send(`Skip ${topic.title}.`, 'skip_topic', id);}
+ const progressBlock = purpose && progress && <div className="cv-review-progress">
+  <p className="cv-review-count">{progress.reviewed_items} of {progress.total_items} topics covered</p>
+  {progress.total_items>0&&<div className="cv-review-segments" role="progressbar" aria-label="Review progress" aria-valuemin={0} aria-valuemax={progress.total_items} aria-valuenow={progress.reviewed_items} aria-valuetext={`${progress.reviewed_items} of ${progress.total_items} topics covered${skippedCount?`, ${skippedCount} skipped`:''}`}>
+   {Array.from({length:progress.total_items},(_,index)=>{const topic=progress.topics?.[index];const done=topic?covered(topic.status):index<progress.reviewed_items;return <span key={topic?.id??index} title={topic?`${topic.title}: ${topicStatus(topic, question)}`:undefined} className={topic?.status==='deferred'?'skipped':done?'covered':topic?.status==='current'?'current':''}/>;})}
+  </div>}
+  <p className="cv-review-percent">{`${reviewPercent}% of your experience reviewed`}{reviewComplete?' · Review complete':progress.status==='paused'?' · Paused':''}</p>
+ </div>;
+ const confirmSkip = (title: string, body: string, action: string, onConfirm: () => void) => <div className="cv-skip-confirm" role="group" aria-label={title}><p><strong>{title}</strong></p><p>{body}</p><div><button type="button" className="btn pri sm" disabled={!canSkip} onClick={onConfirm}>{action}</button><button type="button" className="btn sm" onClick={() => setSkipping(null)}>Keep reviewing</button></div></div>;
+ const topicsBlock = progress?.topics ? <div className="cv-topic-checklist" role="group" aria-label="Review topics">
+  <div className="cv-topic-head"><h3>Topics</h3>{canSkip && remainingTopics.length > 0 && <button type="button" className="cv-skip-link" aria-expanded={skipping?.scope === 'all'} onClick={() => setSkipping(skipping?.scope === 'all' ? null : {scope: 'all'})}>Skip all remaining</button>}</div>
+  {skipping?.scope === 'all' && confirmSkip(remainingTopics.length === 1 ? 'Skip the last remaining topic?' : `Skip all ${remainingTopics.length} remaining topics?`, `elo will use your CV as written for ${remainingTopics.length === 1 ? 'it' : 'them'} and finish the review. Your saved answers stay.`, 'Skip all', () => {setSkipping(null); void send('Skip all remaining topics.', 'skip_remaining');})}
+  {progressBlock}
+  <ol>{progress.topics.map(topic=>{const done=covered(topic.status),now=topic.status==='current',skipped=topic.status==='deferred',warn=topic.validation==='unverified',confirming=skipping?.scope==='topic'&&skipping.id===topic.id;return <li key={topic.id} className={`${skipped?'is-skipped':done?'is-done':now?'is-now':''}${warn?' is-warning':''}${confirming?' is-confirming':''}`.trim()} aria-current={now?'step':undefined}>
+   <span className="cv-topic-mark" aria-hidden="true">{warn?'!':done&&!skipped&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10"/></svg>}</span>
+   <span><strong>{topic.title}</strong><small>{topicStatus(topic, question)}</small>{warn&&<small className="cv-topic-warning">Warning · could not be verified. Best explained in the chat.</small>}{warn&&<span className="cv-visually-hidden"> · warning, could not be verified</span>}</span>
+   {canSkip && !done && !confirming && <button type="button" className="cv-skip-link" aria-label={`Skip ${topic.title}`} onClick={() => setSkipping({scope: 'topic', id: topic.id})}>Skip</button>}
+   {skipped && uploadedReview && !historical && <button type="button" className="cv-skip-link" disabled={blocked || pending} aria-label={`Review ${topic.title} instead`} onClick={() => void send(`Review ${topic.title} instead.`, 'review_topic', topic.id)}>Review</button>}
+   {confirming && confirmSkip('Skip this topic?', 'elo will use your CV as written and won’t ask about it. You can review it later.', 'Skip topic', () => skipTopic(topic.id))}
+  </li>;})}</ol></div> : progressBlock;
+ // What changed in the profile, read from the actions that were saved during the review.
+ const savedActions = (kind: ConversationAction['kind']) => (conversation?.messages ?? []).flatMap(message => message.actions).filter(action => action.kind === kind && action.status === 'saved').map(action => action.item_title ?? action.title);
+ const changes: [string, string[], boolean][] = [['Added', savedActions('add_capability'), false], ['Corrected', savedActions('correct'), false], ['Removed', savedActions('remove'), true]];
+ const lastAssistant = [...(conversation?.messages ?? [])].reverse().find(message => message.role === 'assistant');
+ return <section ref={chatPanel} className="cv-chat" style={{'--cv-rail-w': `${railWidth}px`} as React.CSSProperties} aria-label="CV conversation" hidden={hidden} data-unsaved={Boolean(draft || unconfirmedMessage || (uploadedReview && busy === 'message'))}>
+  {(progress || (conversation && !conversation.context)) && <div className="cv-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize topics sidebar" aria-valuemin={RAIL_MIN} aria-valuemax={RAIL_MAX} aria-valuenow={railWidth} tabIndex={0}
+    onKeyDown={event => {if (event.key === 'ArrowLeft') {event.preventDefault(); resizeRail(railWidth - 16);} else if (event.key === 'ArrowRight') {event.preventDefault(); resizeRail(railWidth + 16);}}}
+    onPointerDown={event => {event.preventDefault(); document.body.classList.add('cv-rail-dragging'); const left = chatPanel.current?.getBoundingClientRect().left ?? 0; const move = (e: PointerEvent) => resizeRail(e.clientX - left); const stop = () => {document.body.classList.remove('cv-rail-dragging'); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop);}; window.addEventListener('pointermove', move); window.addEventListener('pointerup', stop);}}/>}
+  <header className="cv-chat-header"><div>{uploadedReview?<><span className="cv-chat-logo"><BrandLogo decorative/></span><span className="cv-chat-divider" aria-hidden="true"/></>:<span className="cv-chat-brand" aria-hidden="true"><BrandLogo compact decorative/></span>}<div><h2 tabIndex={uploadedReview ? -1 : undefined}>{uploadedReview ? 'Review your CV' : 'Let’s talk about your experience'}</h2><p>{detail?.display_name ?? detail?.file_name ?? 'Your capabilities'}{conversation && (!uploadedReview || started && !exitBlocked && !unconfirmedMessage) && <><span className="cv-chat-saved-dot" aria-hidden="true"/>{uploadedReview ? 'Sent messages saved' : 'Saved to your account'}</>}</p></div></div>
    {uploadedReview ? <button className="btn ghost sm" type="button" onClick={() => onReviewLater(Boolean(unconfirmedMessage))} disabled={exitBlocked}>{unconfirmedMessage ? 'Review later' : 'Save and review later'}</button> : <button className="btn ghost sm" type="button" onClick={onOpenSummary} aria-label="Back to Skills Profile"><span className="cv-chat-summary-desktop">Back to Skills Profile</span><span className="cv-chat-summary-mobile">Back</span></button>}
   </header>
   {(progress || (conversation && !conversation.context)) && <aside className="cv-review-rail" aria-label="Review progress and topics">
-   {purpose && progress && <div className="cv-review-progress">
-   <div className="row between"><span>{progress.reviewed_items} of {progress.total_items} topics covered</span><span>{reviewPercent}% · {reviewComplete?'Review complete':progress.status==='paused'?'Paused':'Experience review'}</span></div>
-   {progress.total_items>0&&<div className="cv-review-segments" role="progressbar" aria-label="Review progress" aria-valuemin={0} aria-valuemax={progress.total_items} aria-valuenow={progress.reviewed_items} aria-valuetext={`${progress.reviewed_items} of ${progress.total_items} topics covered`}>
-    {Array.from({length:progress.total_items},(_,index)=>{const topic=progress.topics?.[index];const covered=topic?['reviewed','reviewed_with_gaps','deferred'].includes(topic.status):index<progress.reviewed_items;return <span key={topic?.id??index} title={topic?`${topic.title}: ${topic.status.replaceAll('_',' ')}`:undefined} className={covered?'covered':topic?.status==='current'?'current':''}/>;})}
-   </div>}
-  </div>}
    {unverifiedTopics.length>0&&<p className="cv-rail-warning" role="status"><strong>Warning</strong> · {unverifiedTopics.length} {unverifiedTopics.length===1?'section':'sections'} could not be verified against your CV. {unverifiedTopics.length===1?'It is':'They are'} kept as unconfirmed, so explain {unverifiedTopics.length===1?'it':'them'} here in the chat.</p>}
-   {progress?.topics&&<div className="cv-topic-checklist" role="group" aria-label="Review topics"><h3>Topics</h3><ol>{progress.topics.map(topic=>{const done=['reviewed','reviewed_with_gaps','deferred'].includes(topic.status),now=topic.status==='current',warn=topic.validation==='unverified';return <li key={topic.id} className={`${done?'is-done':now?'is-now':''}${warn?' is-warning':''}`.trim()} aria-current={now?'step':undefined}><span className="cv-topic-mark" aria-hidden="true">{warn?'!':done?'✓':''}</span><span><strong>{topic.title}</strong><small>{done?'Done':now?'Now':'Up next'}</small>{warn&&<small className="cv-topic-warning">Warning · could not be verified. Best explained in the chat.</small>}</span><span className="cv-visually-hidden"> · {topic.status.replaceAll('_',' ')}{warn?' · warning, could not be verified':''}</span></li>;})}</ol></div>}
-   {conversation && !conversation.context && <details className="cv-inline-confirmation"><summary>Focus on your goal?</summary><InlineGoalConfirmation token={token} onConfirmed={() => { void refresh().catch(() => {}); }}/></details>}
+   {topicsBlock}
   </aside>}
-<div className="cv-chat-context">{conversation?.context_error ? <><span>{conversation.context_error}</span><button type="button" className="text-link" onClick={() => void refresh().catch(cause => setError(errorText(cause, 'Could not refresh the career context.')))}>Retry career context</button></> : conversation?.context ? <><span>Reviewing for <strong>{conversation.context.role}</strong></span><Link href="/career-goal" className="text-link">Open Career Goal</Link></> : <><span>You can review your experience now. A confirmed target helps focus the questions.</span><Link href="/career-goal" className="text-link">Open Career Goal</Link></>}</div>
+{(conversation?.context_error || conversation?.context) && <div className="cv-chat-context">{conversation?.context_error ? <><span>{conversation.context_error}</span><button type="button" className="text-link" onClick={() => void refresh().catch(cause => setError(errorText(cause, 'Could not refresh the career context.')))}>Retry career context</button></> : conversation?.context ? <><span>Reviewing for <strong>{conversation.context.role}</strong></span></> : null}</div>}
   {historical && <div className="cv-chat-history-banner"><span>Earlier conversation · read only</span><button className="btn ghost sm" type="button" disabled={Boolean(busy) || historyLoading} onClick={() => void history(newestId.current!)}>Return to current conversation</button></div>}
   <div ref={scrollArea} className="cv-chat-messages" onScroll={() => {const area = scrollArea.current; if (area) nearBottom.current = area.scrollHeight - area.scrollTop - area.clientHeight < 90;}}>
    {loading && <ChatSkeleton label="Opening your saved conversation…"/>}
@@ -324,31 +377,36 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    {conversation && <>
     <div className="cv-chat-history-controls">{conversation.next_before !== null && <button className="btn ghost sm" type="button" disabled={historyLoading || Boolean(busy)} onClick={() => void history()}>Show earlier messages</button>}{conversation.previous_conversation_id && <button className="btn ghost sm" type="button" disabled={historyLoading || Boolean(busy)} onClick={() => void history(conversation.previous_conversation_id!)}>Previous conversation</button>}</div>
     {!conversation.messages.length && <div className="cv-chat-welcome"><div className="cv-chat-mark" aria-hidden="true"><BrandLogo compact decorative/></div><h3>Your experience has a story.</h3><p>{cvId ? 'We’ll work through the details that matter, one question at a time. You can add context, correct something or ask a question whenever you like.' : 'Tell me about a capability you want to include, or upload a CV to start from what you already have.'}</p>{cvId && !purpose && <button className="btn pri" type="button" disabled={blocked} onClick={() => void send('Review my CV with me.', 'review')}>Review with me</button>}</div>}
-    <ol className="cv-chat-transcript" aria-label="Saved conversation messages">{conversation.messages.map((message,index) => <li key={message.id} className={`cv-chat-message cv-chat-message-${message.role}`}>{(index===0||message.created_at.slice(0,10)!==conversation.messages[index-1].created_at.slice(0,10))&&<p className="cv-chat-day">{formatDate(message.created_at.slice(0,10))}</p>}<div className="cv-chat-speaker">{message.role === 'user' ? 'You' : 'elo'}<time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'})}</time></div><div className="cv-chat-bubble">{!(purpose && message.role === 'assistant' && failureReply(message)) && <p>{message.role === 'assistant' ? humaniseText(reviewText(message.text, sourceIds)) : message.text}</p>}{message.actions.map(action => <ActionCard key={`${action.id}:${action.status}`} action={action} busy={Boolean(busy)} readOnly={historical} review={Boolean(purpose)} decide={(id, decision) => void decide(id, decision)}/>)}</div></li>)}</ol>
+    <ol className="cv-chat-transcript" aria-label="Saved conversation messages">{conversation.messages.map((message,index) => <li key={message.id} className={`cv-chat-message cv-chat-message-${message.role}${message === lastAssistant && question && !historical && message.text.includes(question.question) ? ' is-question' : ''}`}>{(index===0||message.created_at.slice(0,10)!==conversation.messages[index-1].created_at.slice(0,10))&&<p className="cv-chat-day">{formatDate(message.created_at.slice(0,10))}</p>}{message.role === 'assistant' && <span className="cv-chat-avatar" aria-hidden="true"><BrandLogo compact decorative/></span>}<div className="cv-chat-speaker">{message.role === 'user' ? 'You' : 'elo'}<time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'})}</time></div><div className="cv-chat-bubble">{uploadedReview && question && message === lastAssistant && !historical && message.text.includes(question.question) && <QuestionLabel question={question} sourceIds={sourceIds}/>}{!(purpose && message.role === 'assistant' && failureReply(message)) && <p>{message.role === 'assistant' ? humaniseText(reviewText(message.text, sourceIds)) : message.text}</p>}{uploadedReview && question && message === lastAssistant && !historical && message.text.includes(question.question) && <AnswerHints hints={question.hints}/>}{message.actions.map(action => <ActionCard key={`${action.id}:${action.status}`} action={action} busy={Boolean(busy)} readOnly={historical} review={Boolean(purpose)} decide={(id, decision) => void decide(id, decision)}/>)}</div></li>)}</ol>
    </>}
    <div className="cv-chat-inline-actions">
-   {conversation?.interview&&conversation.interview.status!=='reviewing'&&<p className="small" role="status">{conversation.interview.status==='paused'?'Review paused. Continue whenever you’re ready.':conversation.interview.status==='reviewed_with_gaps'?'Review complete with some details still uncertain.':'Experience review complete.'}</p>}
+   {conversation?.interview&&conversation.interview.status!=='reviewing'&&conversation.interview.status!=='reviewed'&&<p className="small" role="status">{conversation.interview.status==='paused'?'Review paused. Continue whenever you’re ready.':conversation.interview.status==='reviewed_with_gaps'?'Review complete with some details still uncertain.':'Experience review complete.'}</p>}
    {conversation?.interview?.estimates.filter(estimate=>estimate.level!=='insufficient_evidence').map(estimate=><details key={`${estimate.item_id}:${estimate.skill_name}`}><summary>{estimate.skill_name} · {detail?.items.find(item=>item.id===estimate.item_id)?.title??'Experience'} · {estimate.level.replaceAll('_',' ')}</summary><p className="small">{reviewText(estimate.explanation, sourceIds)}</p><p className="small">Based on your CV and conversation; practical proficiency has not been tested.</p></details>)}
    {uploadedReview && question && !historical && !conversation?.messages.some(message => message.role === 'assistant' && message.text.includes(question.question)) && <p className="cv-chat-current-question">{reviewText(question.question, sourceIds)}</p>}
    {question && !historical && <div className="cv-chat-quick-actions">
-    {uploadedReview ? <button type="button" aria-expanded={hintOpen} onClick={() => setHintFor(hintOpen ? null : question.id)}>Why this question?</button> : <button type="button" disabled={blocked} onClick={() => void send('Why are you asking this question?')}>Why this question?</button>}
     <button type="button" disabled={blocked || (uploadedReview && pending)} onClick={() => void send('Skip this question.', 'skip')}>Skip this question</button>
+    {["I didn't do this",'Not sure'].map(reply=><button type="button" key={reply} disabled={blocked} onClick={()=>setDraft(reply)}>{reply}</button>)}
+    {uploadedReview&&<button type="button" disabled={!canSkip} aria-expanded={skipping?.scope==='chat'} onClick={()=>setSkipping(skipping?.scope==='chat'?null:{scope:'chat'})}>Skip this topic</button>}
    </div>}
-   {hintOpen && uploadedReview && question && !historical && <p className="small cv-chat-hint">Your answer helps clarify what you personally did in {reviewText(question.title, sourceIds)}. You can skip if you’re unsure.</p>}
+   {skipping?.scope === 'chat' && question && uploadedReview && !historical && <div className="cv-chat-message cv-chat-message-assistant cv-skip-chat"><span className="cv-chat-avatar" aria-hidden="true"><BrandLogo compact decorative/></span><div className="cv-chat-speaker">elo</div><div className="cv-chat-bubble is-confirm">{confirmSkip(`Skip ${reviewText(question.title, sourceIds)}?`, 'I’ll use what your CV says about it, as written, and won’t ask you questions about it. You can come back and review it later.', 'Skip topic', () => skipTopic(question.item_id))}</div></div>}
    {uploadedReview && conversation && !question && !blocked && !loading && !reviewComplete && !unfinished && conversation.purpose !== null && (hasReviewHistory || !autoReview || Boolean(error)) && <div className="cv-chat-quick-actions"><button type="button" onClick={() => void send(hasReviewHistory ? 'Continue reviewing my CV.' : 'Review my CV.', hasReviewHistory ? 'continue' : 'review')}>{hasReviewHistory ? 'Continue review' : 'Start review'}</button></div>}
    {purpose && cvId && conversation && !conversation.active_question && !historical && conversation.interview?.topics?.some(topic=>topic.status==='current') && conversation.messages.some(message=>message.actions.some(action=>action.kind==='route'&&action.status==='failed'&&action.error?.startsWith('The interview could not choose a valid next step.'))) && <div className="cv-chat-quick-actions"><button type="button" disabled={blocked} onClick={()=>void send('Skip remaining questions for this experience.', 'skip')}>Skip and continue</button></div>}
    {!purpose && conversation && !conversation.active_question && conversation.messages.length > 0 && (cvId || purpose) && !historical && !conversation.read_only && <div className="cv-chat-quick-actions"><button type="button" disabled={blocked} onClick={() => void send(cvId?(started ? 'Continue reviewing my CV.' : 'Review my CV with me.'):'Continue building my skills profile.', started ? 'continue' : 'review')}>{started ? 'Continue review' : 'Review with me'}</button></div>}
-   {purpose&&reviewComplete&&!historical&&<div className="cv-chat-quick-actions"><button className="btn pri" type="button" disabled={blocked||unfinished} onClick={onOpenSummary}>Review profile</button></div>}
+   {purpose&&reviewComplete&&!historical&&<section className="cv-chat-done" aria-labelledby="cv-done-title">
+    <div className="cv-chat-done-head"><span aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10"/></svg></span><div><h3 id="cv-done-title">Your CV review is complete</h3><p>{(sent => `You sent ${sent} ${sent === 1 ? 'answer' : 'answers'} across ${progress!.total_items} ${progress!.total_items === 1 ? 'topic' : 'topics'}.`)(conversation!.messages.filter(message => message.role === 'user').length)}</p></div></div>
+    {changes.some(([, items]) => items.length) && <div className="cv-chat-done-changes">{changes.filter(([, items]) => items.length).map(([label, items, out]) => <div key={label}><p>{label} ({items.length})</p><p>{items.map((item, index) => <span key={`${item}:${index}`} className={`cv-chat-pill${out ? ' is-out' : ''}`}>{item}</span>)}</p></div>)}</div>}
+    <div className="cv-chat-done-actions"><button className="btn pri" type="button" disabled={blocked||unfinished} onClick={onOpenSummary}>View Skills Profile</button><Link className="btn" href="/roadmap">Generate roadmap</Link></div>
+   </section>}
    </div>
    {busy === 'message' && <p className="cv-chat-working" role="status">{uploadedReview && !hasReviewHistory ? 'Preparing your first question…' : 'Checking your message…'}</p>}
   </div>
   <div className="cv-chat-composer-wrap">
    {(error || unconfirmedMessage) && <div role="alert" className="cv-error"><p>{unconfirmedMessage ? 'We couldn’t confirm your last message was sent.' : error}</p>
     {/* One action per failure. Resending reuses the same message ID, so it also confirms a send that did arrive. */}
-    {unconfirmedMessage ? <button type="button" className="btn ghost sm" disabled={Boolean(busy) || unavailable || historical || resumeBlocked} onClick={() => void send(unconfirmedMessage.text, unconfirmedMessage.command)}>Try again</button>
+    {unconfirmedMessage ? <button type="button" className="btn ghost sm" disabled={Boolean(busy) || unavailable || historical || resumeBlocked} onClick={() => void send(unconfirmedMessage.text, unconfirmedMessage.command, unconfirmedMessage.item_id)}>Try again</button>
     : conversation && <button type="button" className="btn ghost sm" disabled={Boolean(busy)} onClick={() => uploadedReview ? void checkSavedReview() : void refresh().then(() => setError('')).catch(cause => setError(errorText(cause, 'Could not refresh saved messages.')))}>Check saved messages</button>}
    </div>}
-   {conversation?.read_only && !historical ? <div className="cv-chat-limit"><p>This part of your conversation is full. Its messages will stay available when you continue.{conversation.next_before !== null ? ' Checking earlier messages for outstanding actions.' : unfinished && ' Finish or cancel the outstanding actions above first.'}</p><button className="btn pri" type="button" disabled={Boolean(busy) || loading || historyLoading || conversation.next_before !== null || unfinished} onClick={() => {openKey.current = crypto.randomUUID(); void open();}}>Continue in a new conversation</button></div> : !historical && <form className="cv-chat-composer" onSubmit={submit} aria-busy={Boolean(busy)}><label className="cv-visually-hidden" htmlFor={`cv-chat-input-${cvId ?? 'manual'}`}>Message elo</label><textarea id={`cv-chat-input-${cvId ?? 'manual'}`} ref={composer} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyboard} placeholder="Add context, ask a question, or correct something…" rows={2} disabled={blocked} aria-invalid={count > limit} aria-describedby="cv-chat-input-help"/><div className="cv-chat-composer-footer">{conversation?.active_question&&<div className="cv-quick-replies">{["I didn't do this",'Not sure'].map(reply=><button type="button" className="chip" key={reply} disabled={blocked} onClick={()=>setDraft(reply)}>{reply}</button>)}</div>}<p id="cv-chat-input-help" className={conversation?.active_question && count <= limit * 0.8 ? 'cv-visually-hidden' : undefined}>{count > limit * 0.8 ? `${count} / ${limit} characters` : 'Enter to send · Shift + Enter for a new line'}</p><button type="submit" className="btn pri" disabled={blocked || pending || !draft.trim() || count > limit} aria-label="Send message">{busy === 'message' ? 'Sending…' : 'Send'}<span aria-hidden="true">↑</span></button></div></form>}
+   {conversation?.read_only && !historical ? <div className="cv-chat-limit"><p>This part of your conversation is full. Its messages will stay available when you continue.{conversation.next_before !== null ? ' Checking earlier messages for outstanding actions.' : unfinished && ' Finish or cancel the outstanding actions above first.'}</p><button className="btn pri" type="button" disabled={Boolean(busy) || loading || historyLoading || conversation.next_before !== null || unfinished} onClick={() => {openKey.current = crypto.randomUUID(); void open();}}>Continue in a new conversation</button></div> : !historical && <form className="cv-chat-composer" onSubmit={submit} aria-busy={Boolean(busy)}><label className="cv-visually-hidden" htmlFor={`cv-chat-input-${cvId ?? 'manual'}`}>Message elo</label><textarea id={`cv-chat-input-${cvId ?? 'manual'}`} ref={composer} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyboard} placeholder="Add context, ask a question, or correct something…" rows={2} disabled={!canType} aria-invalid={count > limit} aria-describedby="cv-chat-input-help"/><div className="cv-chat-composer-footer"><p id="cv-chat-input-help" className={conversation?.active_question && count <= limit * 0.8 && !queued ? 'cv-visually-hidden' : undefined}>{queued ? 'Your message will send as soon as elo finishes.' : count > limit * 0.8 ? `${count} / ${limit} characters` : 'Enter to send · Shift + Enter for a new line'}</p><button type="submit" className="btn pri" disabled={!canType || queued || !draft.trim() || count > limit} aria-label="Send message">{busy === 'message' ? 'Sending…' : queued ? 'Queued' : 'Send'}<span aria-hidden="true">↑</span></button></div></form>}
    <p className="cv-chat-footnote">{uploadedReview ? 'Sent answers save automatically. You can return to this CV from Skills Profile.' : 'Only what you share is used. Unknown details can stay unknown.'}</p>
   </div>
   <p className="cv-visually-hidden" role="status" aria-live="polite">{announcement}</p>

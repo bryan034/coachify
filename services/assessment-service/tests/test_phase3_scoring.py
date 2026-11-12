@@ -8,6 +8,7 @@ def test_estimate_requires_explicit_supported_levels(evidence,required,expected)
     result=planning_estimate({'priority':'required','required_proficiency':required},outcome,{'e1':{'attribution':'personal','application_level':evidence,'reviewed':True}})
     assert result['competence_score']==expected
     assert result['relevance']=='high'
+    assert result['required_score']=={'beginner':3,'intermediate':7,'advanced':10}.get(required)
     assert result['scoring_rubric_version']=='application-ratio-v1'
     assert (result['score_status']=='estimated')==(expected is not None)
 

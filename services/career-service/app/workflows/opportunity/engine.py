@@ -63,7 +63,7 @@ def availability_issues(settings,ai,source):
     if not settings.enabled:return ['research_disabled']
     issues=[]
     if not getattr(getattr(ai,'settings',None),'enabled',False):issues.append('reasoning_disabled')
-    if not getattr(ai,'context_enabled',False):issues.append('gemini_not_configured' if getattr(getattr(ai,'settings',None),'provider','gemini')=='gemini' else 'model_not_configured')
+    if not getattr(ai,'context_enabled',False):issues.append('model_not_configured')
     if not callable(getattr(source,'collect_opportunity_query',None)) or not getattr(source,'configured',True):issues.append('brave_not_configured' if getattr(source,'provider','brave')=='brave' else 'search_not_configured')
     if getattr(source,'provider','brave')=='brave' and getattr(source,'brave_mode','')!='llm_context':issues.append('brave_llm_context_required')
     return issues
@@ -304,7 +304,7 @@ class OpportunityEngine:
         record=InterviewResearch(_id=str(ObjectId()),version=cache['version'],skill_mapping_version=MAPPING_VERSION,created_at=stamp,updated_at=stamp,
             **context.model_dump(),intelligence=report,sources=sources,
             research_status='failed' if failed else 'succeeded' if any(v.findings for v in categories.values()) else 'no_findings',last_researched_at=stamp,
-            generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-structured-findings-v4',generated_at=stamp))
+            generation=Generation(provider=getattr(getattr(primary,'settings',None),'provider','unreported'),model=models.get('reasoning','unreported'),prompt_version='opportunity-structured-findings-v5',generated_at=stamp))
         record=await thread(self.store.research.finish,context,cache['token'],record)
         if not pending:await thread(self.store.rows.update_one,{'_id':identifier,'worker_token':token},{'$addToSet':{'activities':'research_failed' if failed else 'research_partial' if status=='partial' else 'research_complete'}})
         failure=next((v.error_code for v in categories.values() if v.error_code),None)
@@ -324,7 +324,7 @@ class OpportunityEngine:
     async def recover(self):
         while not self.stopping:
             try:
-                if self.available and getattr(self.ai.settings,'provider',None)=='gemini':
+                if self.available and getattr(self.ai.settings,'provider',None)=='compatible':
                     await thread(resume_obsolete_model_waits,self.store.rows,'opportunity_job')
                 if self.available:
                     for row in await thread(self.store.due):self.launch(row['_id'])

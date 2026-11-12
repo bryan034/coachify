@@ -14,7 +14,7 @@ skinparam databaseBackgroundColor #EFF6FA
 actor "User browser" as Browser
 component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nAccount-owned manual skills intake + capability declarations" as Profile
 cloud "Configured CV model API\nOpenAI-compatible extraction, routing and interpretation" as CVLLM
-cloud "Career model router\nLocal OpenAI-compatible / DeepSeek cloud / Gemini\nShared adapter: extraction, chat, research coordination" as LLM
+cloud "Career model router\nLocal OpenAI-compatible / DeepSeek cloud / OpenRouter\nShared adapter: extraction, chat, research coordination" as LLM
 cloud "Public employer job boards\nGreenhouse / Lever / Ashby" as JobBoards
 cloud "Public search API\nBrave LLM Context (testing) / DeepSeek Search (production)" as Sources
 
@@ -131,7 +131,7 @@ legend bottom
   Durable category jobs/receipts reuse research_contexts; no duplicate domain collections.
   The configured model plans, evaluates cited evidence and selects validated summaries using unchanged JSON models.
   Career, CV, Assessment and Roadmap use the OpenAI Python SDK with independent endpoint settings.
-  The deployment template selects Gemini; a local 1.5B Ollama server remains optional.
+  The deployment template selects OpenRouter; a local 1.5B Ollama server remains optional.
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend
 @enduml

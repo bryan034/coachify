@@ -24,7 +24,6 @@ the Inter OFL licence; no runtime font request is needed. The browser tab icon u
 | `/roadmap` | Planner form with an optional chat helper, repeating blackouts and runway, generated roadmap review, timed sessions and revision previews |
 | `/cv` | **Skills Profile**: summary-first evidence, CV upload-to-review, guided manual intake, interpreted clarification and correction/reconciliation |
 | `/jobs` | **Search Jobs**: search and filter Singapore listings, apply on the employer's site and track self-reported applications; see the [feature README](src/features/jobs/README.md) |
-| `/chats` | Chats/socials layout and local filters; requests unavailable |
 | `/calendar` | Current week/month views; events and task actions unavailable |
 | `/career`, `/reviews` | Matching placeholders for existing reserved routes |
 | `/login`, `/register` | P09–P16 account screens: email/password, optional Google and email-code verification |
@@ -193,7 +192,7 @@ Whole-report and individual refresh use versioned UUID-idempotent commands.
 finishes; ordinary questions still require interview evidence. Employment type
 is shown only when established. No-company employer sections are not applicable.
 
-Career Discovery uses Gemini for direction setting and no CV inputs. Its research
+Career Discovery uses the AI model for direction setting and no CV inputs. Its research
 review groups core, specialisation-specific and optional skills, with sample counts,
 coverage, qualifications, responsibilities and source links. Removing a requirement
 saves through the existing review API; explicit confirmation uses `/goals/confirm`.
@@ -210,7 +209,7 @@ JD summary and final sourced research summary use word-by-word validated Markdow
 (reduced-motion support and Show full response). The Career Goal button explicitly
 opens populated cards; ordinary questions and refinement become available after the
 combined initial response is ready. The frontend requests `/workspace/summary` after
-extraction and research finish, then renders a concise Gemini overview of the key
+extraction and research finish, then renders a concise AI overview of the key
 points with validated citations and the final line “Ask me anything about this goal set!”
 Follow-up fact markers such as `[f1, f3]` also render as source-domain links beside the supported claim.
 The summary uses short bullets throughout, including its role overview, rather than an opening paragraph.
@@ -221,7 +220,7 @@ A saved report loading after workspace completion shows a loading state, never a
 spurious Resume research button. Finished partial reports can be summarised with
 coverage limits. Report-read and summary retries do not restart completed research. Progress is removed once this answer is ready. Summary retries preserve their
 operation key. Follow-up questions stay in the same conversation and can initiate public
-Brave research through Gemini's backend context route; their observed steps disappear
+Brave research through the backend model context route; their observed steps disappear
 when the cited reply arrives. Public answers do not silently edit the saved goal.
 Polling continues while any research category is pending, even after interview completion.
 Unrelated document intake shows a fixed career-only scope explanation. Client scope
@@ -303,8 +302,9 @@ the saved transcript and current question. **View extracted results** opens the
 classified CV directly. Renaming keeps the original filename and evidence intact.
 
 
-Standalone **Compare with my skills** on Career Goal, Skills Profile and Home runs
-Assessment without generating a roadmap. All three show the current saved result;
+The **Evaluate skills with career goal** banner on Career Goal and Skills Profile
+(or the open setup step it points to instead), and **Compare with my skills** on Home,
+run Assessment without generating a roadmap. All three show the current saved result;
 stale markings are suppressed. Home prioritises CV review, comparison and roadmap
 work and replaces skill-count bars with goal match and top confirmed gaps. CV review
 offers version-bound goal confirmation in an expandable inline control. Roadmap
@@ -332,7 +332,6 @@ Screens follow the "elo — Redesigned Screens" design canvas (sample content on
 - Roadmap (after generation): the header reads "N days until <target> · Week n of m"; "Add a task" opens a small task page (title, day, skill, time slot, duration) that saves through the existing tasks API; practice-note evidence appears as a mint "Add this to your Skills Profile?" banner with Not now / Add to Skills Profile.
 - Roadmap sessions have a Word-like notes page with a toolbar (bold, italic, underline,
   heading, lists, checkbox, choice) that saves automatically; no file uploads.
-- Search Jobs: no search runs until Search is pressed (not on load, and not when filters or sort change).
+- Search Jobs: no search runs until Find jobs is pressed (not on load, and not when filters or sort change).
 - Calendar: intro line, a dark Target date card and a Key in the side rail (study sessions forest, backup-block sessions dashed, interviews blue, deadlines orange, whole blocked-out days hatched) with a link to change study times in Roadmap.
-- Search Jobs tabs read "Search jobs" and "My applications"; `?tab=applications` opens the
-  tracker. The last board column is "Rejected or closed". Empty columns after the first read "Drop a card here". Search Jobs does not yet offer the canvas's skill-match filter or sort: they need per-posting match data from the Jobs service.
+- Search Jobs is one page: hero search, results (after a search), a Saved jobs board (Saved, Applied, Interview, Offer; Closed appears only when used) and a Career Goal prompt. Home links to `/jobs#saved-jobs`. Search Jobs does not yet offer the canvas's skill-match filter or sort: they need per-posting match data from the Jobs service.

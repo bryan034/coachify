@@ -59,9 +59,6 @@
 @media(max-width:1100px){.helper-open .adviser-conversation{position:fixed;z-index:90;top:0;right:0;bottom:0;left:auto;width:min(100%,440px);height:auto;border-radius:0;border-width:0 0 0 1px;box-shadow:0 0 0 100vmax rgba(17,24,39,.16)}}
 
 /* Generation */
-.generation-progress{background:var(--mint-mist);border-radius:14px;padding:14px 18px;margin-bottom:20px;font-size:13px}
-.generation-progress ol{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--slate)}
-.generation-progress li.done::before{content:'✓ '}.generation-progress li.current{color:var(--ink);font-weight:600}
 
 .roadmap-review{display:flex;flex-direction:column;gap:32px}
 .route-map{position:relative;height:190px;margin:64px 12px 26px;animation:route-reveal 1100ms cubic-bezier(.3,.7,.2,1) both}
@@ -419,7 +416,7 @@
 
 /* Chat helper: beside the page heading and nearly the full screen, with most of it for reading */
 .roadmap-adviser .roadmap-heading{margin-bottom:20px}
-.roadmap-main>.roadmap-notice,.roadmap-main>.roadmap-prerequisites,.roadmap-main>.generation-progress{margin-bottom:18px}
+.roadmap-main>.roadmap-notice,.roadmap-main>.roadmap-prerequisites{margin-bottom:18px}
 @media(min-width:1101px){
  .helper-open .adviser-conversation{top:24px;height:calc(100vh - 48px);min-height:520px}
  .helper-open .adviser-intro{padding:12px 18px}
@@ -492,12 +489,6 @@
 .evidence-actions{display:flex;gap:8px}
 .roadmap-heading p strong{color:var(--ink);font-weight:600}
 
-.generation-bar{position:relative;height:8px;margin:12px 0 8px;overflow:hidden;border-radius:4px;background:#d1fae5}
-.generation-bar i{display:block;height:100%;border-radius:4px;background:var(--forest);transition:width .6s ease}
-.generation-bar i::after{content:"";display:block;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);background-size:60px 100%;animation:generation-shimmer 1.4s linear infinite}
-.generation-step{margin:0;font-weight:600}
-@keyframes generation-shimmer{from{background-position:-60px 0}to{background-position:100% 0}}
-@media (prefers-reduced-motion:reduce){.generation-bar i{transition:none}.generation-bar i::after{animation:none}}
 
 /* To-do rows (redesign "Roadmap (after generation)"): one card per task, time and length as pills. */
 .todo-list{display:flex;flex-direction:column;gap:10px;margin-top:8px}
@@ -522,3 +513,5 @@
 .adviser-composer>div{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .adviser-composer>div .btn{flex:none;white-space:nowrap}
 .adviser-close{min-height:36px;padding:0 14px;border-radius:10px;font-weight:600}
+
+.prerequisite-list{list-style:none;padding:0;margin:16px 0 0}.prerequisite-list li{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line)}.prerequisite-list li>div{flex:1;min-width:0}.prerequisite-list p{font-size:13px;color:var(--mute);margin-top:2px}.prerequisite-mark{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--line);flex-shrink:0}.prerequisite-list .done .prerequisite-mark{background:var(--green);border-color:var(--green);color:#fff}@media(max-width:600px){.prerequisite-list li{flex-wrap:wrap}}

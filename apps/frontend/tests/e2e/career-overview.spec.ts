@@ -40,11 +40,12 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.screenshot({path:testInfo.outputPath(`career-goal-${width}.png`),fullPage:true});}
  await page.setViewportSize({width:1280,height:900});
  await expect(page.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Skills this role needs'})).toBeVisible();
+ await expect(page.locator('#priorities-title')).toHaveText('Skills needed');
  await expect(page.getByText('Python',{exact:true})).toBeVisible();
  await page.getByText('Teamwork',{exact:true}).click();
- await expect(page.locator('.goal-skill-details:visible').getByText('Compare with your skills to see where you stand.',{exact:true})).toBeVisible();
- await expect(page.getByRole('status').filter({hasText:'Researching opportunity information'})).toBeVisible();
+ await expect(page.locator('.goal-skill-details:visible').getByText('Evaluate your skills to see where you stand.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('status').filter({hasText:'elo keeps working'})).toBeVisible();
+ await expect(page.locator('.evaluate-banner')).toHaveCount(0);
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
  await expect(page.getByRole('complementary',{name:'Your starting point'})).toHaveCount(0);
  await page.getByRole('navigation',{name:'Career goal pages'}).getByRole('link',{name:'About the role'}).click();
@@ -74,13 +75,15 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
  expect(extractions).toBe(1);
  await page.reload();await expect(page.getByRole('heading',{name:'Data Engineer',exact:true})).toBeVisible();
- await page.getByRole('link',{name:'Compare with your skills'}).click();
+ await expect(page.getByRole('heading',{name:'Add your skills first'})).toBeVisible();
+ for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.locator('.evaluate-banner').screenshot({path:testInfo.outputPath(`evaluate-banner-${width}.png`)});}
+ await page.setViewportSize({width:1280,height:900});
+ await expect(page.getByRole('button',{name:'Evaluate skills'})).toHaveCount(0);
+ await page.getByRole('link',{name:'Go to Skills Profile'}).click();
  await expect(page).toHaveURL(/\/cv$/);
  await expect(page.getByRole('heading',{name:'Skills Profile',exact:true})).toBeVisible();
- await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Upload your CV'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveCount(0);
- await page.getByRole('button',{name:'Upload new CV'}).click();
- await expect(page.getByRole('heading',{name:'No saved CV yet'})).toBeVisible();
  await expect(page.getByLabel('CV document',{exact:true})).toBeEnabled();
 });
 
@@ -116,7 +119,7 @@ test('research tabs keep partial results, citations and refresh on mobile',async
  await expect(page.getByText('Part of this research could not finish. Other results are preserved; refresh to retry.')).toHaveCount(0);
  await tabs.getByRole('link',{name:'About the role'}).click();
  const salary=page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Salary',exact:true})});
- await expect(salary).toContainText('SGD 1500 per month');await expect(salary).toContainText('low confidence');
+ await expect(salary).toContainText('SGD 1500 per month');await expect(salary).not.toContainText('low confidence');
  await expect(salary.getByRole('link',{name:'Public intern report ↗'})).toHaveAttribute('href','https://example.test/report');
  await expect(page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Full-time salary'})})).toContainText('SGD 5000 monthly base salary, 2025');
  await expect(page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Conversion rate'})})).toContainText('Not filled yet.');
@@ -147,7 +150,7 @@ test('the grouped skill list supports keyboard disclosure, long lists, confirmed
   return route.fulfill({json:careerFixture(route.request().url(),{phase:'ready',current:{selection_version:1,goal}})});
  });
  await page.setViewportSize({width:1440,height:1000});await page.goto('/career-goal');
- await expect(page.getByRole('heading',{name:'Skills this role needs'})).toBeVisible();
+ await expect(page.locator('#priorities-title')).toHaveText('Skills needed');
  // Skills sit under category headings, most important group first, coloured by importance.
  const rows=page.locator('.goal-skill-row');
  await expect(rows).toHaveCount(9);

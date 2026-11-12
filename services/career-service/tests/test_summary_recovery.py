@@ -11,7 +11,7 @@ from tests.test_goal_chat_presentation import environment
 from tests.test_local_summary_schema import settings
 
 
-@pytest.mark.parametrize('provider',['local','deepseek','gemini'])
+@pytest.mark.parametrize('provider',['local','deepseek','compatible'])
 def test_summary_schema_contains_only_references_from_this_snapshot(provider):
     context={'goal':{'reference':'goal','skills':[{'reference':'skill_0'}],
                      'non_skill_requirements':[{'reference':'condition_0'}]},

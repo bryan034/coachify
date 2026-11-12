@@ -1,12 +1,12 @@
 from tests.api_views import saved_research
-"""Synthetic Gemini routing and semantic retrieval; no live APIs."""
+"""Synthetic ContextModel routing and semantic retrieval; no live APIs."""
 import asyncio
 import json
 from types import SimpleNamespace
 import httpx
 import pytest
 from app.ai.adapter import AIAdapter,AIError,Operation
-from app.ai.config import AISettings,GeminiSettings
+from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.context_contracts import ContextPlan
 from app.ai.qa_contracts import FocusedAnswer
@@ -20,29 +20,29 @@ from tests.test_focused_questions import ask
 def plan(**changes):return ContextPlan(**{'topic':'skills','item_refs':['s0'],'resolved_question':'Explain SQL requirements.',**changes})
 
 
-def test_independent_gemini_configuration_and_safe_errors(monkeypatch):
-    monkeypatch.setenv('AI_ENABLED','true');monkeypatch.setenv('GEMINI_API_KEY','gemini-fixture');monkeypatch.setenv('AI_API_KEY','unused-fixture')
+def test_independent_model_configuration_and_safe_errors(monkeypatch):
+    monkeypatch.setenv('AI_ENABLED','true');monkeypatch.setenv('CAREER_LLM_API_KEY','openrouter-fixture');monkeypatch.setenv('AI_API_KEY','unused-fixture')
     monkeypatch.delenv('CAREER_LLM_MODEL',raising=False)
-    config=GeminiSettings.from_env()
-    assert config.model=='gemini-3.5-flash-lite' and config.api_key.get_secret_value()=='gemini-fixture'
-    assert 'gemini-fixture' not in repr(config)
+    config=AISettings.from_env()
+    assert config.model=='openai/gpt-4o-mini' and config.api_key.get_secret_value()=='openrouter-fixture'
+    assert 'openrouter-fixture' not in repr(config)
     monkeypatch.setenv('AI_ENABLED','PRIVATE_INVALID')
-    with pytest.raises(ValueError) as error:GeminiSettings.from_env()
+    with pytest.raises(ValueError) as error:AISettings.from_env()
     assert 'PRIVATE' not in str(error.value)
 
 
-def test_all_reasoning_and_context_routes_share_gemini_without_local_quota():
+def test_all_reasoning_and_context_routes_share_one_model_without_local_quota():
     async def run():
         calls=[]
         def handler(request):
             body=json.loads(request.content);calls.append(body)
-            assert request.url.host=='generativelanguage.googleapis.com' and request.headers['authorization']=='Bearer gemini-fixture'
-            assert body['model']=='gemini-3.5-flash-lite'
-            assert body['reasoning_effort']=='minimal' and 'max_tokens' in body and 'max_completion_tokens' not in body
+            assert request.url.host=='openrouter.ai' and request.headers['authorization']=='Bearer openrouter-fixture'
+            assert body['model']=='openai/gpt-4o-mini'
+            assert 'reasoning_effort' not in body and 'max_tokens' in body and 'max_completion_tokens' not in body
             output=plan().model_dump() if body['response_format']['json_schema']['name']=='context_route' else FocusedAnswer(reply='SQL is required.',references=['f1']).model_dump()
             return httpx.Response(200,json={'usage':{'prompt_tokens':100,'completion_tokens':50,'total_tokens':150},'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(GeminiSettings(enabled=True,api_key='gemini-fixture'),client)
+            adapter=AIAdapter(AISettings(enabled=True,api_key='openrouter-fixture'),client)
             for stage in ('context_route','context_answer','focused_answer'):
                 await ModelRouter(adapter,adapter).generate(AIInput(stage=stage,context='{"facts":[]}',conversation=[{'role':'user','content':'Explain SQL'}]),Operation('alice','1',stage),current_revision=lambda:'1')
         assert len(calls)==3
@@ -80,7 +80,7 @@ def enable_context(flow,decision):
     context=ContextAI(decision);flow[0].app.state.ai=ModelRouter(flow[2],context);return context
 
 
-def test_simple_semantic_question_uses_gemini_and_only_selected_facts(flow):
+def test_simple_semantic_question_uses_the_model_and_only_selected_facts(flow):
     ingest(flow);current=wait(flow);before=len(flow[2].calls);context=enable_context(flow,plan())
     response=ask(flow,current,'What capabilities does this role call for?')
     assert response.status_code==200,response.text
@@ -90,7 +90,7 @@ def test_simple_semantic_question_uses_gemini_and_only_selected_facts(flow):
     assert [f['data']['name'] for f in payload['facts']]==['SQL'] and 'index' not in payload
 
 
-def test_followup_comparison_uses_gemini_with_multiple_topics_without_keyword_matching(flow):
+def test_followup_comparison_uses_the_model_with_multiple_topics_without_keyword_matching(flow):
     ingest(flow);current=wait(flow);before=len(flow[2].calls)
     context=enable_context(flow,plan(related_topics=['interview_skills','interview_process'],item_refs=['s0','i0'],followup=True,include_evidence=True,needs_reasoning=True,resolved_question='How does SQL support the technical interview?'))
     response=ask(flow,current,'How would that help with the technical screen?',conversation=[{'role':'assistant','content':'Relational data queries. '+('x'*800)}]*12)
@@ -124,7 +124,7 @@ def test_semantic_edit_intent_still_uses_the_validated_primary_edit_workflow(flo
     assert response.json()['edit_status']=='saved' and [v.stage for v in flow[2].calls[before:]]==['goal_edit']
 
 
-@pytest.mark.parametrize('provider,model',[('gemini','gemini-3.5-flash-lite'),('deepseek','deepseek-flash'),('local','deepseek-r1:1.5b')])
+@pytest.mark.parametrize('provider,model',[('compatible','openai/gpt-4o-mini'),('deepseek','deepseek-flash'),('local','deepseek-r1:1.5b')])
 def test_startup_wires_one_configured_adapter_for_all_stages(monkeypatch,provider,model):
     from app.main import create_app
     from fastapi.testclient import TestClient

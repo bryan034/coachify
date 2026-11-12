@@ -29,7 +29,7 @@ def test_clear_skill_question_sends_only_relevant_fields_without_history(flow):
     assert [f['kind'] for f in context['facts']]==['jd_skill']
     assert 'sources' not in context and 'summaries' not in context and 'responsibilities' not in str(context)
     assert len(calls[0].conversation)==1 and 'OLD_HISTORY' not in calls[0].model_dump_json()
-    payload=AIAdapter(AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='fixture'),None)._payload(calls[0])
+    payload=AIAdapter(AISettings(enabled=True,model='openai/gpt-4o-mini',api_key='fixture'),None)._payload(calls[0])
     assert input_tokens(payload)<1000
     assert 'SkillEdits' not in str(payload['response_format'])
 
@@ -165,3 +165,50 @@ def test_weather_shortcuts_do_not_fall_through_to_ai_router(message):
 
 def test_weather_job_context_is_not_blocked_by_a_blanket_keyword_filter():
     assert direct_route('What skills are needed for this weather forecasting role?') is None
+
+
+def test_goal_questions_are_answered_in_refine_mode_without_the_edit_model(flow):
+    ingest(flow);current=wait(flow);_,_,ai,_=flow
+    before=len(ai.calls)
+    response=ask(flow,current,'Which skills are required?',mode='refine')
+    assert response.status_code==200,response.text
+    assert [v.stage for v in ai.calls[before:]]==['focused_answer']
+    assert response.json().get('edit_status') is None
+
+
+def guidance_ai(ai):
+    original=ai.generate
+    async def generate(request,operation,**kwargs):
+        if request.stage=='question_route':
+            ai.calls.append(request);return SimpleNamespace(data=QuestionRoute(topic='career_guidance'))
+        if request.stage=='career_guidance':
+            from app.ai.qa_contracts import FocusedAnswer
+            ai.calls.append(request)
+            return SimpleNamespace(data=FocusedAnswer(reply='General guidance: data engineering could suit you.',references=[]))
+        return await original(request,operation,**kwargs)
+    ai.generate=generate
+
+
+def test_refine_mode_allows_general_career_and_new_path_questions(flow):
+    ingest(flow);current=wait(flow);_,_,ai,_=flow;guidance_ai(ai);before=len(ai.calls)
+    response=ask(flow,current,'What other career paths could suit me?',mode='refine')
+    assert response.status_code==200,response.text
+    assert response.json()['reply'].startswith('General guidance') and response.json().get('edit_status') is None
+    calls=ai.calls[before:];assert [v.stage for v in calls]==['question_route','career_guidance']
+    assert json.loads(calls[0].context)['scope']=='career' and json.loads(calls[1].context)['scope']=='career'
+    assert flow[0].get(BASE,headers=headers()).json()['revision']==current['revision']
+
+
+def test_question_mode_still_refuses_career_path_exploration(flow):
+    from app.domain.questions import REFUSAL
+    ingest(flow);current=wait(flow);_,_,ai,_=flow;guidance_ai(ai);before=len(ai.calls)
+    response=ask(flow,current,'What other career paths could suit me?')
+    assert response.status_code==200 and response.json()['reply']==REFUSAL
+    assert 'career_guidance' not in [v.stage for v in ai.calls[before:]]
+
+
+def test_refine_mode_still_blocks_unrelated_tasks_before_any_model_call(flow):
+    from app.domain.questions import REFUSAL
+    ingest(flow);current=wait(flow);_,_,ai,_=flow;before=len(ai.calls)
+    response=ask(flow,current,'Write a python script that sorts a list',mode='refine')
+    assert response.json()['reply']==REFUSAL and len(ai.calls)==before

@@ -23,7 +23,8 @@ it('gates missing CV and goal without making model requests', async () => {
  const value = state(); value.context.ready = false; value.context.issues = [{ source: 'cv', message: 'Select an extracted CV.', href: '/cv' }]; api.mockResolvedValue(value);
  render(<RoadmapPlanner />); await screen.findByText('Select an extracted CV.');
  expect(screen.getByRole('link', { name: 'Open CV' })).toHaveAttribute('href', '/cv');
- await openHelper(); expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled(); expect(api).toHaveBeenCalledTimes(1);
+ expect(screen.getByText('Your Career goal is set.')).toBeInTheDocument();
+ expect(screen.queryByRole('button', { name: /chat helper/ })).toBeNull(); expect(screen.queryByRole('button', { name: 'Generate roadmap' })).toBeNull(); expect(api).toHaveBeenCalledTimes(1);
 });
 it('sends the chat helper message on Enter but keeps Shift+Enter for a new line', async () => {
  api.mockImplementation((path: string) => path === '/messages' ? new Promise(() => {}) : Promise.resolve(state()));
@@ -90,7 +91,7 @@ it('shows a generation progress bar from the click and moves it with the reporte
  render(<RoadmapPlanner />);
  const button = await screen.findByRole('button', { name: /^Generate roadmap/ });
  fireEvent.click(button);
- const bar = await screen.findByRole('progressbar', { name: 'Roadmap generation progress' });
+ const bar = await screen.findByRole('progressbar', { name: 'Starting: saving your settings' });
  expect(bar).toHaveAttribute('aria-valuenow', String(generationProgress().percent));
  expect(generationProgress('assessing')).toMatchObject({ step: 1, percent: 30 });
  expect(generationProgress('writing')).toMatchObject({ step: 2, percent: 65 });

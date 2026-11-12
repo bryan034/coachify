@@ -83,6 +83,10 @@ async def capture(upstream,account):
             name=f.get('value') or f.get('name')
             requirements.append({**f,'ref':'interview:'+str(f.get('finding_id') or index),'kind':'interview_preparation',
                 'name':name,'priority':'suggested','origin':'interview_research',**identity(name)})
+    # Reported to the client, which offers evaluation once the CV review is finished and research has settled.
+    reviewed=not cv_id or bool(cv.get('profile_reviewed_effective_version') is not None and cv.get('profile_reviewed_effective_version')==cv.get('effective_version'))
+    interview_status=((research or {}).get('intelligence') or {}).get('categories',{}).get('interview_intelligence',{}).get('status')
+    research_pending=bool(research and (research.get('research_status') in ('pending','processing') or interview_status in ('pending','running')))
     time_sensitive=bool(goal.get('non_skill_requirements') or any(item.get('ongoing') for item in source['items']))
     vector={'source_mode':'cv_and_profile' if cv_id else 'profile_only','as_of_date':datetime.now(ZoneInfo('Asia/Singapore')).date().isoformat() if time_sensitive else None,'cv_id':cv_id,'cv_version':source['cv_version'],'extraction_version':source['extraction_version'],
         'effective_version':source['effective_version'],'cv_selection_version':source['selection_version'],
@@ -92,4 +96,5 @@ async def capture(upstream,account):
         'research_coverage':coverage,'registry_version':MAPPING_VERSION}
     return {'ready':True,'issues':[],'goal':goal,'cv':{'id':cv_id,'name':cv['file_name']} if cv else None,'inputs':vector,
         'input_hash':digest(vector),'requirements':requirements,'evidence':evidence,
-        'source_snapshot':{'capabilities':source,'goal':goal,'research':research,'education':education},'research_coverage':coverage}
+        'source_snapshot':{'capabilities':source,'goal':goal,'research':research,'education':education},'research_coverage':coverage,
+        'cv_reviewed':reviewed,'research_pending':research_pending}

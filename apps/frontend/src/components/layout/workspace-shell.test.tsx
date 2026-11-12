@@ -14,7 +14,7 @@ it('orders the sidebar by the journey and puts coming-soon pages below a divider
  const main = within(screen.getByRole('navigation', { name: 'Main navigation' })).getAllByRole('link').map(link => link.textContent);
  expect(main).toEqual(['Home', 'Career Goal', 'Skills Profile', 'Roadmap', 'Search Jobs']);
  const more = within(screen.getByRole('navigation', { name: 'More' })).getAllByRole('link').map(link => link.textContent);
- expect(more).toEqual(['Conversations', 'Calendar']);
+ expect(more).toEqual(['Calendar']);
  expect(screen.getByRole('separator')).toBeInTheDocument();
  expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('link', { name: 'Skills Profile' })).toHaveAttribute('aria-current', 'page');
 });

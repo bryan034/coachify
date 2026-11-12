@@ -62,7 +62,7 @@ maximum interpretation fields plus worker bookkeeping. Private reservation data
 is excluded from public CV responses.
 
 Provider adapter tests exercise OpenAI SDK requests using explicit HTTP mocks,
-including host-scoped Gemini reasoning and reduced-complexity decoding schemas while retaining backend limits, DeepSeek extensions and local credential
+including full-bound decoding schemas, backend limits, DeepSeek extensions and local credential
 isolation. Shared transport tests cover bounded bodies, redirects and SDK retry
 suppression. No live provider credentials are used.
 

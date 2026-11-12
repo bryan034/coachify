@@ -165,7 +165,7 @@ populated `TIKTOKEN_CACHE_DIR` because tokenizer downloads are blocked too.
 Frontend tests cover
 three methods, Unicode, failure recovery, method-switch races and temporary state.
 The full-stack Career browser test uses the usual disposable Compose stack and
-Mailpit variables; no live Gemini key or live website is used. Career imports are rate
+Mailpit variables; no live model key or live website is used. Career imports are rate
 limited at the gateway; use synthetic sources and discard only test-stack data.
 
 ## AI and analysis contracts
@@ -227,7 +227,7 @@ LangGraph single-workspace checks use real disposable MongoDB with synthetic mod
 and Brave HTTP responses. They cover automatic current-goal saves, session
 replacement, stale-session/owner rejection, saved-goal chat during research failures, persisted
 checkpoints, quota pause/resume without repeating searches, no-findings and expiry.
-Token-limit tests verify large and concurrent Gemini requests without a local
+Token-limit tests verify large and concurrent model requests without a local
 minute quota, provider retry delays and bounded output. Browser checks cover the
 new single-chat flow and mobile evidence. No live model/search credentials are used.
 
@@ -243,8 +243,8 @@ through CV-page navigation using synthetic providers. Backend assessment-status 
 verify authentication/no-store, owner filtering, empty/pending/failed/succeeded CVs
 and unavailable upstream snapshots without database or model writes.
 
-Opportunity Intelligence tests use a real disposable MongoDB with synthetic Gemini,
-Gemini and Brave boundaries. They cover independent parallel categories, partial
+Opportunity Intelligence tests use a real disposable MongoDB with synthetic model,
+Model and Brave boundaries. They cover independent parallel categories, partial
 failure, no company/no results, conflicting employee/intern salary context, forged
 refs/quotes, bounded schema repair, category cache/expiry, refresh/idempotency,
 owner access, quota recovery and restart without repeating acquired searches.
@@ -271,18 +271,18 @@ distinct entries while validating every supplied entry before trimming. Provider
 requests are mocked.
 
 
-Gemini reasoning migration regressions use synthetic settings and HTTP responses:
-all Career production stages share Gemini 3.5 Flash Lite and ignore unused provider/model/key
+Model reasoning migration regressions use synthetic settings and HTTP responses:
+all Career production stages share the configured OpenRouter model and ignore unused provider/model/key
 switches. Brave grounding snippets
 pass through the real JSON-schema adapter into every existing research field in all
 five categories; model round-trips, exact citations, invalid aliases and forged
 quotes are checked. These tests preserve existing domain schemas and do not establish
 live-provider access or extraction accuracy. The opt-in live smoke uses the same
-Gemini reasoning configuration as production.
+reasoning configuration as production.
 
 Schema compatibility regressions also check all stage projections and reject oversized
 skills, condition arrays, names, evidence and experience ranges despite provider HTTP
-success. Gemini's decoding projection leaves the domain models unchanged.
+success.
 
 
 Concurrent JD regressions hold full extraction open to prove public retrieval starts
@@ -302,7 +302,7 @@ an explicit button after checking the chat summary. API artifacts include the ad
 operation/workspace activity arrays; domain schema artifacts are unchanged.
 
 
-Gemini rejection regressions cover native invalid-key/model/project/schema/parameter
+Rejection regressions cover invalid-key/model/schema/parameter
 errors, malformed bodies, safe API/log diagnostics, no schema-free fallback, and a
 single explicit model override across every Career role. The Docker-template check
 uses only the user-approved clean tracked public template in an isolated copy,
@@ -318,7 +318,7 @@ presentation checks, precise repair metadata and successful no-information resul
 Research-validation regressions cover differently worded corroborating sources, shared
 generation/storage text bounds and label enums, and preservation of storage failure
 paths/reasons. Exact quote and exact-number
-checks remain active; synthetic provider fixtures make no live Gemini/Brave calls.
+checks remain active; synthetic provider fixtures make no live model/Brave calls.
 
 Duplicate-finding regressions cover different summaries sharing one extract ID, stable
 identity while merging corroborating citations, and quality-stage cleanup of persisted
@@ -344,7 +344,7 @@ normalize prefetched source IDs before evaluation without repeating early search
 
 Structuring replaces the former model evaluation/support/overview-selection stages.
 Quota/retry/ownership coverage remains; overviews are built locally from finding IDs.
-Chat fixtures verify retained findings are displayed through the Gemini overview response, with temporary progress removed on completion.
+Chat fixtures verify retained findings are displayed through AI overview response, with temporary progress removed on completion.
 
 Goal-chat presentation checks in `services/career-service/tests/test_goal_chat_presentation.py`
 use synthetic adapters without MongoDB: summary citation validation, stale-goal rejection,

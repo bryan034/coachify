@@ -139,8 +139,8 @@ it('renders summary headings and a bold final invitation inside the conversation
 });
 
 it('shows provider waits after sending without hiding the composer',async()=>{
- configure(()=>({available:true,introduction,session:{...base,status:'waiting',retry_after:407,limit_scope:'provider',provider:'gemini'}}));
- await open();send();await screen.findByText('gemini is rate limiting requests');
+ configure(()=>({available:true,introduction,session:{...base,status:'waiting',retry_after:407,limit_scope:'provider',provider:'compatible'}}));
+ await open();send();await screen.findByText('The AI service is rate limiting requests');
  expect(screen.getByRole('status')).toHaveTextContent('Resuming in 407 seconds');
  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  expect(screen.queryByRole('button',{name:'Confirm and save goal'})).toBeNull();

@@ -41,7 +41,7 @@ for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:3
   await expect(page.getByText(question,{exact:true})).toHaveCount(1);
   await expect(page.locator('.cv-chat-current-topic')).toHaveCount(0);
   await expect(page.locator('.cv-chat-messages').getByRole('button',{name:'Skip this question'})).toBeInViewport();
-  await expect(page.locator('.cv-chat-message-user .cv-chat-bubble')).toHaveCSS('background-color','rgb(52, 211, 153)');
+  await expect(page.locator('.cv-chat-message-user .cv-chat-bubble')).toHaveCSS('background-color','rgb(236, 253, 245)');
   // Quick replies belong to the composer, so the composer starts right below the transcript.
   const input=await page.locator('.cv-chat-composer-wrap').boundingBox();
   const history=await page.locator('.cv-chat-messages').boundingBox();
@@ -54,7 +54,7 @@ for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:3
   await expect(page.getByRole('progressbar',{name:'Review progress'})).toHaveAttribute('aria-valuemax','2');
   await expect(page.getByRole('button',{name:'Continue review'})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Review profile summary'})).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'Review profile',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'View Skills Profile',exact:true})).toHaveCount(0);
   await page.screenshot({path:testInfo.outputPath('chat-layout.png'),fullPage:true});
   await page.getByRole('textbox',{name:'Message elo'}).fill('I built the reporting screens.');
   await page.getByRole('button',{name:'Send message'}).click();
@@ -62,13 +62,13 @@ for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:3
   await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow','1');
   await page.getByRole('textbox',{name:'Message elo'}).fill('I helped with stakeholder interviews.');
   await page.getByRole('button',{name:'Send message'}).click();
-  await expect(page.getByRole('button',{name:'Review profile',exact:true})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'View Skills Profile',exact:true})).toBeEnabled();
   await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow','2');
   await page.reload();
-  await expect(page.getByRole('button',{name:'Review profile',exact:true})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'View Skills Profile',exact:true})).toBeEnabled();
   expect(turns).toBe(2);
   await page.screenshot({path:testInfo.outputPath('review-complete.png'),fullPage:true});
-  await page.getByRole('button',{name:'Review profile',exact:true}).click();
+  await page.getByRole('button',{name:'View Skills Profile',exact:true}).click();
   await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();
  });
 }

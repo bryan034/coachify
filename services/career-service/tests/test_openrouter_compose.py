@@ -63,12 +63,12 @@ def test_openrouter_template_renders_and_career_discovery_uses_strict_schema(tmp
 def test_openrouter_model_does_not_override_other_provider_models(tmp_path):
     services = render(tmp_path, '/dev/null', {
         'OPENROUTER_API_KEY': 'synthetic-openrouter', 'OPENROUTER_MODEL': '@preset/synthetic',
-        'CAREER_LLM_PROVIDER': 'gemini',
-        'CAREER_LLM_BASE_URL': 'https://generativelanguage.googleapis.com/v1beta/openai',
+        'CAREER_LLM_PROVIDER': 'compatible',
+        'CAREER_LLM_BASE_URL': 'https://openrouter.ai/api/v1',
         'CV_LLM_BASE_URL': 'https://api.openai.com/v1',
         'CV_LLM_MODEL': 'openai-specific-model',
     })
-    assert services['career-service']['environment']['CAREER_LLM_MODEL'] == 'gemini-3.5-flash-lite'
+    assert services['career-service']['environment']['CAREER_LLM_MODEL'] == 'openai/gpt-4o-mini'
     assert services['cv-service']['environment']['CV_LLM_MODEL'] == 'openai-specific-model'
     for service, prefix in [('assessment-service', 'ASSESSMENT'), ('roadmap-service', 'ROADMAP')]:
-        assert services[service]['environment'][prefix + '_LLM_MODEL'] == 'gemini-3.5-flash-lite'
+        assert services[service]['environment'][prefix + '_LLM_MODEL'] == 'openai/gpt-4o-mini'

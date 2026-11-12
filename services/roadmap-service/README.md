@@ -16,8 +16,8 @@ Prepares a personal study roadmap towards the user's career goal. A fixed planne
 
 [Specification](SPEC.md) · [API contract](../../contracts/api/roadmap.yaml) · [Setup](../../docs/setup.md#assessment-and-roadmap-adviser). Removed settings are cleaned from saved records at service start. The frontend task editor, period views, revision-review controls and dashboard are not implemented by this backend work. External calendars, automatic revision and direct session editing (E05) are not implemented. Live-model plan quality has not been evaluated.
 
-Model calls use the shared OpenAI Python SDK transport with Gemini as the cloud
-default. No Gemini SDK is required. SDK retries are disabled; existing response
+Model calls use the shared OpenAI Python SDK transport with OpenRouter as the cloud
+default. No provider-specific SDK is required. SDK retries are disabled; existing response
 limits, provider quota handling and schema repair attempts remain enforced.
 
 Local testing can use the shared 1.5B Ollama alias through this service's own

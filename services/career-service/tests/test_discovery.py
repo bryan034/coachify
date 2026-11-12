@@ -68,7 +68,7 @@ class AI:
             result=SourceAssessments(sources=[SourceAssessment(ref=i,relevant=True,score=3,quote='Software Engineer') for i,source in enumerate(data['sources'])])
         elif request.stage=='discovery_extract':
             count=self.calls.count('discovery_extract')
-            if count==self.quota_at:raise AIError('rate_limited',limit_scope='user',retry_after=1,provider='gemini')
+            if count==self.quota_at:raise AIError('rate_limited',limit_scope='user',retry_after=1,provider='compatible')
             result=Listings(listings=[] if self.empty else [Listing(ref=i,job_title='Software Engineer',location='Singapore',career_stage='entry_level',relevant=True,requirements=[Requirement(kind='skill',name='SQL',quote='SQL is required.'),Requirement(kind='skill',name='Python',quote='Python preferred.',preferred=True),Requirement(kind='responsibility',name='Build APIs',quote='Build APIs.')]) for i,s in enumerate(data['sources'])])
         elif request.stage=='discovery_summary':
             result=MarketSummary(responsibility_refs=[0] if data['responsibilities'] else [],skills=[RecommendedSkill(
@@ -471,7 +471,7 @@ def test_split_extraction_quota_resume_keeps_successful_children_and_searches(fl
         if request.stage!='discovery_extract':return
         if len(data['sources'])>1:raise AIError('incomplete_output')
         if len(singles)==1 and not blocked:
-            blocked=True;raise AIError('rate_limited',limit_scope='provider',retry_after=1,provider='gemini')
+            blocked=True;raise AIError('rate_limited',limit_scope='provider',retry_after=1,provider='compatible')
         singles.append(data['sources'][0]['title'])
     flow[2].hook=hook
     row=start(flow);waiting=wait(flow,row,'waiting');searches=len(flow[3].calls)
@@ -689,7 +689,7 @@ def test_invalid_evidence_gets_one_new_search_and_keeps_other_results(flow,failu
     assert row['listings_analysed']==(14 if failure=='irrelevant' else 12)
     stored=flow[1].research_contexts.find_one({'_id':row['id']})
     assert stored['replacement_searches']==1
-    # Invalid Gemini output is not regenerated with the same evidence.
+    # Invalid ContextModel output is not regenerated with the same evidence.
     attempts=[request.context for request,data in flow[2].contexts if request.stage in ('discovery_assess','discovery_extract')]
     assert len(attempts)==len(set(attempts))
 

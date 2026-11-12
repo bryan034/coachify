@@ -44,8 +44,6 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
  // Nothing is searched until Search is pressed. `applied` is the search that was last run; edits to the box, filters and sort only change the draft.
  const [applied,setApplied]=useState<{keywords:string;choices:Choices;sort:'recommended'|'newest'}|null>(null);
  const defaultsApplied=useRef(false),filtersTouched=useRef(false);
- // ?tab=applications opens the tracker directly, for links from Home.
- const [tab,setTab]=useState<'search'|'tracker'>(()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('tab')==='applications'?'tracker':'search');
  const [draft,setDraft]=useState('');
  const [choices,setChoices]=useState(NO_CHOICES);
  const [options,setOptions]=useState<FilterOptions|null>(null);
@@ -132,30 +130,26 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
  }
  function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setApplied({keywords:draft.trim(),choices,sort});}
  function change(next:Partial<Choices>){filtersTouched.current=true;setChoices(current=>({...current,...next}));}
- function tryTerm(term:string){setDraft(term);setTab('search');}
+ function tryTerm(term:string){setDraft(term);}
  function clear(){setDraft('');setApplied(null);setChoices(NO_CHOICES);}
  useEffect(()=>{if(defaultsApplied.current||goal.state.status!=='ready'||filtersTouched.current)return;defaultsApplied.current=true;const type=goal.state.data.goal?.employment_type;const suggested=type&&type!=='unknown'?type:profile?.occupational_status==='student'?'internship':null;if(suggested)setChoices(current=>({...current,jobTypes:[suggested]}));},[goal.state,profile]);
  const goalTerms=goal.state.status==='ready'&&goal.state.data.goal?[goal.state.data.goal.role,...goal.state.data.goal.skills.filter(skill=>skill.priority==='required').map(skill=>skill.name),...goal.state.data.goal.skills.filter(skill=>skill.priority!=='required').map(skill=>skill.name)].slice(0,4):[];
  const filtered=Boolean(draft)||JSON.stringify(choices)!==JSON.stringify(NO_CHOICES);
 
- return <section className={`page on job-search-page${items.length?' has-results':''}`}>
-  <h1 className="cv-visually-hidden">Search Jobs</h1>
-  <div className="job-tabs" role="group" aria-label="Job views">
-   <button type="button" aria-pressed={tab==='search'} onClick={()=>setTab('search')}>Search jobs</button>
-   <button type="button" aria-pressed={tab==='tracker'} aria-label={`My applications (${applications.length})`} onClick={()=>setTab('tracker')}>My applications<span className="job-tab-count" aria-hidden="true">{applications.length}</span></button>
-  </div>
-  {tab==='search'&&<div className="job-hero">
+ return <section className="page on job-search-page">
+  <div className="job-hero">
+   <h1>Search Jobs</h1>
    <form className="job-search-form" onSubmit={submit}>
-    <label htmlFor="job-keywords"><span>Role or skills</span><input id="job-keywords" name="keywords" value={draft} maxLength={120} placeholder="Job title or keywords" aria-label="Job title or keywords" onChange={event=>setDraft(event.target.value)}/></label>
-    <label htmlFor="job-location"><span>Location</span><input id="job-location" value="Singapore" readOnly aria-describedby="job-location-note"/></label>
-    <button className="btn pri job-find">Search</button>
+    <label htmlFor="job-keywords" className="job-field"><Icon name="search"/><span className="cv-visually-hidden">Role or skills</span><input id="job-keywords" name="keywords" value={draft} maxLength={120} placeholder="Job title or keywords" aria-label="Job title or keywords" onChange={event=>setDraft(event.target.value)}/></label>
+    <label htmlFor="job-location" className="job-field job-place"><Icon name="pin"/><span className="cv-visually-hidden">Location</span><input id="job-location" value="Singapore" readOnly title="Singapore listings only for now"/></label>
+    <button className="btn job-find">Find jobs</button>
    </form>
-   <p className="job-search-intro" id="job-location-note">Singapore listings only for now. Apply on the employer&rsquo;s own site; elo tracks your progress and sends nothing to employers.</p>
-   {goalTerms.length>0&&<div className="job-try"><span>From your goal</span>{goalTerms.map(term=><button type="button" key={term} onClick={()=>tryTerm(term)}>{term}</button>)}</div>}
-   {sites.length>0&&<div className="job-open-on" aria-label="Search other job sites" role="group"><span>Also search on</span>{sites.filter(site=>httpsOnly(site.url)).map(site=><a key={site.name} href={site.url} target="_blank" rel="noopener noreferrer">{site.name}<span aria-hidden="true"> ↗</span><span className="cv-visually-hidden">Opens in a new tab</span></a>)}<small>Only your search terms leave elo, and a site may ask you to sign in.</small></div>}
-  </div>}
+   {goalTerms.length>0&&<div className="job-try" role="group" aria-label="Searches from your goal"><span>Try</span>{goalTerms.map(term=><button type="button" key={term} onClick={()=>tryTerm(term)}>{term}</button>)}</div>}
+   {sites.length>0&&<div className="job-open-on" aria-label="Search other job sites" role="group"><span>Open on</span>{sites.filter(site=>httpsOnly(site.url)).map(site=><a key={site.name} href={site.url} target="_blank" rel="noopener noreferrer">{site.name}<span aria-hidden="true"> ↗</span><span className="cv-visually-hidden">Opens in a new tab</span></a>)}</div>}
+   <p className="job-hero-note" id="job-location-note"><Icon name="lock"/>Only your search terms leave elo. Your CV stays here.</p>
+  </div>
   {trackerError&&<p className="small" role="alert">{trackerError}</p>}
-  {tab==='tracker'?<Tracker items={applications} onStatus={changeStatus} onRemove={remove} onSaveLink={link=>saveJobLink(token,link)} onSaved={remember} onDetails={async(item,fields)=>{try{remember(await updateApplicationDetails(token,item,fields));}catch(problem){await recover(problem);throw problem;}}}/>:<div className="job-find-layout">
+  {applied&&<div className="job-panel job-find-layout">
    <div className="job-search-panel" aria-label="Filters" role="group">
     <h2>Filters</h2>
     <div className="job-filters">
@@ -181,23 +175,25 @@ function JobSearch({accountId,token}:{accountId:string;token:string}){
       </label>
      </div>
     </div>
+    <p className="small">Change filters or sort, then choose Find jobs.</p>
    </div>
    <div className="job-results">
     <div className="job-results-summary" aria-live="polite">
-     <span><strong>{!applied?'Choose your filters, then press Search':loading?'Searching…':error?'':`${total} ${total===1?'job':'jobs'} in Singapore`}</strong>{!loading&&!error&&options?.last_synced_at&&<small> Employer boards last read {day(options.last_synced_at)}</small>}</span>
+     <span><strong>{loading?'Searching…':error?'':`${total} ${total===1?'job':'jobs'} in Singapore`}</strong>{!loading&&!error&&options?.last_synced_at&&<small> Employer boards last read {day(options.last_synced_at)}</small>}</span>
      {filtered&&<button type="button" className="btn ghost sm" onClick={clear}>Clear filters</button>}
      <label>Sort results<select value={sort} onChange={event=>setSort(event.target.value as typeof sort)}><option value="recommended">Recommended</option><option value="newest">Newest first</option></select></label>
     </div>
     {error&&<div role="alert"><p>{error}</p><button type="button" className="btn ghost" onClick={()=>setRetry(value=>value+1)}>Retry</button></div>}
     {!loading&&unavailable.length>0&&<p role="status">Some employer boards could not be read. Results may be incomplete. Search again to retry.</p>}
-    {applied&&!loading&&!error&&!items.length&&<p>{filtered?'No jobs match these filters. Try removing one.':'No jobs are listed right now.'}</p>}
-    <ul className="job-list">
+    {!loading&&!error&&!items.length&&<p>{filtered?'No jobs match these filters. Try removing one.':'No jobs are listed right now.'}</p>}
+    <ul className="job-list" aria-label="Search results">
      {items.map(posting=><JobCard key={posting.id} posting={posting} item={tracked.get(posting.id)} onSave={()=>save(posting)} onApply={()=>visitEmployer(posting)}/>)}
     </ul>
     {cursor&&!loading&&<button type="button" className="btn ghost" disabled={more} onClick={loadMore}>{more?'Loading…':'Show more jobs'}</button>}
    </div>
   </div>}
-
+  <Tracker items={applications} onStatus={changeStatus} onRemove={remove} onSaveLink={link=>saveJobLink(token,link)} onSaved={remember} onDetails={async(item,fields)=>{try{remember(await updateApplicationDetails(token,item,fields));}catch(problem){await recover(problem);throw problem;}}}/>
+  <aside className="job-handoff"><p><strong>Found a role you like?</strong> Use its job description to set your Career Goal.</p><Link className="btn pri" href="/career-goal?new=1">Set as Career Goal<span aria-hidden="true"> ›</span></Link></aside>
  </section>;
 }
 
@@ -226,7 +222,7 @@ function JobCard({posting,item,onSave,onApply}:{posting:Posting;item?:Applicatio
    </div>
    {posting.excerpt&&<p className="job-excerpt">{posting.excerpt}</p>}
    <div className="job-card-actions">
-    {item?<span className="small">{STATUSES[item.status]} in My applications</span>:<button type="button" className="btn ghost" onClick={onSave}>Save job</button>}
+    {item?<span className="small">{STATUSES[item.status]} in Saved jobs</span>:<button type="button" className="btn ghost" onClick={onSave}>Save job</button>}
     {listing&&<Link className="btn ghost" href={`/career-goal?new=1&job_url=${encodeURIComponent(listing)}`}>Use as career goal</Link>}
     {apply&&<a className="btn pri" href={apply} target="_blank" rel="noopener noreferrer" onClick={onApply}>Apply on employer site<span aria-hidden="true"> ↗</span><span className="cv-visually-hidden">Opens in a new tab</span></a>}
    </div>
@@ -235,7 +231,7 @@ function JobCard({posting,item,onSave,onApply}:{posting:Posting;item?:Applicatio
  </li>;
 }
 
-const COLUMNS:{name:string;statuses:ApplicationStatus[]}[]=[{name:'Saved',statuses:['saved']},{name:'Applied',statuses:['applied']},{name:'Interviewing',statuses:['interviewing']},{name:'Offer',statuses:['offer']},{name:'Rejected or closed',statuses:['rejected','withdrawn']}];
+const COLUMNS:{name:string;statuses:ApplicationStatus[]}[]=[{name:'Saved',statuses:['saved']},{name:'Applied',statuses:['applied']},{name:'Interview',statuses:['interviewing']},{name:'Offer',statuses:['offer']},{name:'Closed',statuses:['rejected','withdrawn']}];
 
 function SaveLinkForm({onSubmit,onCancel}:{onSubmit:(link:JobLink)=>Promise<void>;onCancel:()=>void}){
  const [link,setLink]=useState<JobLink>({url:'',title:'',company:'',location:'',job_type:'unknown'});
@@ -266,9 +262,10 @@ function Tracker({items,onStatus,onRemove,onSaveLink,onSaved,onDetails}:{onDetai
   setMessage(items.some(other=>other.id===item.id)?`${item.snapshot.title} is already in your saved jobs.`:`Saved ${item.snapshot.title}.`);
   onSaved(item);close();
  }
- const columns=COLUMNS;
- return <section className="job-board" aria-labelledby="job-board-title">
-  <header><h2 id="job-board-title">My applications</h2><span>{items.length} tracked · Drag a card to move it.</span><button ref={opener} type="button" className="btn pri" aria-expanded={adding} onClick={()=>{setMessage('');setAdding(value=>!value);}}>+ Save a job</button></header>
+ // Closed only appears once a job is rejected or withdrawn.
+ const columns=COLUMNS.filter(column=>column.name!=='Closed'||items.some(item=>column.statuses.includes(item.status)));
+ return <section className="job-board" id="saved-jobs" aria-labelledby="job-board-title">
+  <header><h2 id="job-board-title">Saved jobs</h2><span>{items.length} tracked</span><button ref={opener} type="button" className="btn pri" aria-expanded={adding} onClick={()=>{setMessage('');setAdding(value=>!value);}}>+ Save a job</button></header>
   {message&&<p className="small job-link-message" role="status">{message}</p>}
   {adding&&<SaveLinkForm onSubmit={saveLink} onCancel={close}/>}
   <div className="job-board-columns" style={{gridTemplateColumns:`repeat(${columns.length},minmax(210px,1fr))`}}>{columns.map((column,index)=>{
@@ -299,7 +296,7 @@ function Tracker({items,onStatus,onRemove,onSaveLink,onSaved,onDetails}:{onDetai
        <button type="button" className="btn ghost" aria-label={`Remove ${item.snapshot.title}`} onClick={()=>onRemove(item)}>Remove</button>
       </div>
      </li>;
-    })}</ul>:<div className="job-column-empty">{index>0&&<p>Drop a card here</p>}{index===0&&<div>{!items.length&&<p>You haven&rsquo;t saved any jobs yet. Jobs you save or confirm you applied to will appear here.</p>}{!adding&&<button type="button" className="job-paste" onClick={()=>{setMessage('');setAdding(true);}}>Paste a job link</button>}</div>}</div>}
+    })}</ul>:<div className="job-column-empty">{index===0&&!adding&&<button type="button" className="job-paste" onClick={()=>{setMessage('');setAdding(true);}}><span><Icon name="bookmark"/></span>Paste a job link</button>}</div>}
    </section>;
   })}</div>
  </section>;

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from pymongo import MongoClient
 from app.main import create_app
 from app.ai.adapter import AIAdapter,AIError,Operation
-from app.ai.config import AISettings,GeminiSettings
+from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.routing import ModelRouter,opportunity_models
 from app.ai.opportunity_contracts import QueryPlan,StructuredFindings,structure_input
@@ -38,7 +38,7 @@ class Primary(AI):
         if request.stage=='jd_extraction':result.data.company=self.company;result.data.role='Data Analyst Intern';result.data.employment_type='internship'
         return result
 
-class Gemini:
+class ContextModel:
     def __init__(self):self.calls=[]
     async def generate(self,request,operation,**kwargs):
         self.calls.append(request);data=json.loads(request.context)
@@ -66,11 +66,11 @@ class Search:
 def opportunity_flow():
     uri=os.getenv('MONGODB_TEST_URI')
     if not uri:pytest.skip('Requires disposable MongoDB')
-    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_opportunity_test_'+uuid4().hex];primary=Primary();gemini=Gemini();search=Search()
+    mongo=MongoClient(uri,serverSelectionTimeoutMS=3000);db=mongo['elo_opportunity_test_'+uuid4().hex];primary=Primary();context_model=ContextModel();search=Search()
     def profile(req):return httpx.Response(200,json={'id':OTHER if req.headers.get('Authorization')=='Bearer other' else OWNER,'email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
     try:
-        with TestClient(create_app(database=db,ai=ModelRouter(primary,gemini),research_client=search,profile_client=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile)))) as client:
-            yield client,db,primary,gemini,search
+        with TestClient(create_app(database=db,ai=ModelRouter(primary,context_model),research_client=search,profile_client=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile)))) as client:
+            yield client,db,primary,context_model,search
     finally:mongo.drop_database(db.name);mongo.close()
 
 def research(flow,finished=True):
@@ -155,12 +155,12 @@ def test_quota_resume_does_not_repeat_paid_retrieval(opportunity_flow):
     assert result['status']=='completed' and len(flow[4].calls)==5
 
 
-def test_reasoning_and_planning_use_gemini_native_json_schema():
+def test_reasoning_and_planning_use_strict_json_schema():
     context=structure_input({},'internship_insights',[ResearchSource(source_id='synthetic',platform='other',url='https://example.test/intern',evidence='Example interns report SGD 1500 per month.')])
-    adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture',max_output_tokens=4096),None)
+    adapter=AIAdapter(AISettings(enabled=True,api_key='fixture',max_output_tokens=4096),None)
     for stage in ('opportunity_structure','opportunity_plan'):
         payload=adapter._payload(AIInput(stage=stage,context=json.dumps(context)))
-        assert payload['model']=='gemini-3.5-flash-lite' and payload['response_format']['type']=='json_schema'
+        assert payload['model']=='openai/gpt-4o-mini' and payload['response_format']['type']=='json_schema'
         assert 'max_tokens' in payload and 'max_completion_tokens' not in payload
         assert payload['response_format']['json_schema']['name']==stage
 
@@ -217,10 +217,10 @@ def test_optional_live_provider_contract_smoke():
     from app.ai.opportunity_config import OpportunitySettings
     from app.clients.search_sources import SourceAPIs
     async def run():
-        settings=OpportunitySettings.from_env();primary=AISettings.from_env();gemini=primary
+        settings=OpportunitySettings.from_env();primary=AISettings.from_env();context_model=primary
         assert settings.enabled and primary.enabled and (primary.provider=='local' or primary.api_key.get_secret_value().strip()),'Configure the research providers before opting into live checks.'
         async with httpx.AsyncClient(trust_env=False) as client:
-            router=opportunity_models(AIAdapter(primary,client),None,gemini,settings,client)
+            router=opportunity_models(AIAdapter(primary,client),None,context_model,settings,client)
             public={'company':None,'role':'Software engineering intern','field':'Software','location':'Singapore','employment_type':'internship','recruitment_year':now().year}
             plan=await router.generate(AIInput(stage='opportunity_plan',context=json.dumps(public)),Operation('live-public-smoke','public','opportunity_plan'),current_revision=lambda:'public')
             source=SourceAPIs.from_environment(client).for_opportunity()

@@ -6,8 +6,7 @@ type Outcome = { ref?: unknown; match_status?: unknown };
 type Group = { operator?: unknown; match_status?: unknown; requirement_refs?: unknown };
 
 /**
- * How the saved comparison rates each job skill, keyed by the goal skill's item_id. Read-only: it never starts
- * an analysis. Null means no fresh comparison exists or it could not be read, so callers show skills unmarked.
+ * How the saved comparison rates each job skill, keyed by the goal skill's item_id. The read never starts a comparison. Null means no fresh comparison exists or it could not be read, so callers show skills unmarked.
  */
 export async function currentSkillMatches(token: string, signal: AbortSignal): Promise<Record<string, SkillMatch> | null> {
  try {

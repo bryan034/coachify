@@ -4,7 +4,7 @@ Provider configuration: the service now reads its own `*_LLM_BASE_URL`,
 `*_LLM_MODEL`, `*_LLM_API_KEY` and `*_LLM_ALLOW_HTTP`. HTTPS is required outside
 explicit development HTTP mode. Local testing can share the 16K-context
 `elo-deepseek-r1:1.5b` Ollama alias, without sending preserved cloud keys.
-Non-Gemini providers receive JSON Output plus the schema in the prompt;
+Providers receive JSON Output plus the schema in the prompt;
 all responses still undergo the existing Pydantic and domain checks. Local calls
 serialize per service instance and use a 180-second HTTP timeout; operations use
 600-second budgets and 630-second leases. Cloud limits remain unchanged.
@@ -40,7 +40,7 @@ Current Opportunity reports are read from their interview category; archived `In
 
 ## Durability and limits
 
-Each accepted command has UUID mutation identity and expected workspace revision. Persist before model work; a per-owner leased CAS workspace fences replicas. Completed batch outputs and their captured inputs checkpoint durably, so quota/provider retries retain completed comparisons. Model requests use a configured OpenAI-compatible endpoint (Gemini HTTPS by default), service-scoped model/key settings, schema validation and up to two schema repairs. Provider quota errors expose safe retry delay; invalid output/failure cannot become successful uncertainty.
+Each accepted command has UUID mutation identity and expected workspace revision. Persist before model work; a per-owner leased CAS workspace fences replicas. Completed batch outputs and their captured inputs checkpoint durably, so quota/provider retries retain completed comparisons. Model requests use a configured OpenAI-compatible endpoint (OpenRouter HTTPS by default), service-scoped model/key settings, schema validation and up to two schema repairs. Provider quota errors expose safe retry delay; invalid output/failure cannot become successful uncertainty.
 
 A worker runs at most 210 seconds per execution, renewing its 240-second lease at checkpoints. Retry resumes completed batches. Restart recovery occurs when an authenticated GET reconnects after a lease expires; no bearer is persisted. Revocable sessions and exact source revisions are checked before publishing. Immutable result insertion precedes pointer CAS; an interrupted pointer update recovers the same request-bound result, and older writers cannot replace newer pointers.
 
@@ -50,7 +50,10 @@ Limits: 1 MiB upstream response, 120,000 UTF-8 bytes/model context, 512 KiB mode
 
 Each assessment batch allows one correction after an `assessment_output` evidence
 validation failure. The model receives the unchanged requirements and evidence,
-its rejected output and fixed local validation guidance. The corrected batch
+its rejected output and fixed local validation guidance. An unknown evidence
+reference names the requirement, component and exact rejected references in
+that guidance only; the user-facing error stays generic. A repeated reference
+within one component is collapsed rather than rejected. The corrected batch
 passes every original check before checkpointing. A second failure ends the
 operation without publishing a partial assessment. Provider, authentication and
 quota failures bypass this correction. Existing schema-level retries remain separate.
@@ -70,9 +73,82 @@ extraction and effective versions are nullable in the latter; selection, declara
 Profile, goal and research revisions still participate in staleness/publication checks.
 Historical input vectors without source_mode remain readable with the CV default.
 
-Each outcome reserves nullable `relevance`, `competence_score` (0–10),
+Each outcome reserves nullable `relevance`, `competence_score` (0–10), `required_score` (0–10, the role's stated level on the same scale, null when no level is stated),
 `score_explanation` and `scoring_rubric_version`, plus `score_status`.
 No scoring rubric has been approved: relevance/scores/rubric stay null, with an
 explicit explanation. Existing evidence statuses remain the implemented comparison;
 CV source-specific application levels remain unchanged. These fields do not claim
 measured mastery. Future score population requires rubric review.
+
+## Per-skill profile evaluation
+
+After every requirement batch is checkpointed, the worker asks the model to judge
+each distinct profile skill. Skills are merged by registry identity, else by name,
+across reviewed CV skill claims and Profile declarations. The model reads each
+skill's scoped sources: attribution, assistance, application level, review answers
+and the experience they came from. It also reads the goal's job-skill requirements
+with their priority, stated level and comparison status. Skills go in batches of at
+most 15. The result's `skill_profile` (`rubric_version: skill-profile-llm-v1`) holds,
+per skill:
+
+- `category`: one of the shared display categories (`elo_shared.skill_groups.GROUP_NAMES`).
+- `subcategory`: an optional short label, such as Languages, Frameworks or Tools.
+- `relevance`: `high`, `medium`, `low` or `none` for the goal.
+- `competence_score` and `required_score`: whole-number planning estimates on one
+  0–10 scale, where 3 is guided use, 6 is independent use and 9 is complex use.
+- `explanation`: a short user-facing explanation.
+- `evidence_refs` and `requirement_refs`: what the judgement relied on.
+
+Local validation requires one judgement per skill. Evidence references must come
+from that skill's own sources, and requirement references from the goal. A
+competence score needs at least one cited source that is personal and certain;
+team, observed, denied and uncertain sources cannot support one. `required_score`
+is dropped when relevance is `none`. A rejected batch gets one correction with
+fixed feedback. If it still fails, that batch is left out and `status` becomes
+`partial`, or `failed` when no batch passed. The requirement comparison is
+still published either way. A profile with no skills is `empty` and makes no
+model call. Provider and quota failures end the operation, and a retry resumes
+from the checkpointed requirement and skill batches. Results saved before this
+step have no `skill_profile`. These are planning estimates, not tested mastery.
+
+## Explicit evaluation and goal-skill competence
+
+A comparison starts only from the versioned `POST` command. Career Goal and Skills
+Profile send it from the **Evaluate skills with career goal** banner. No read starts
+one: `GET /current` resumes a pending operation, and `GET /dashboard-source` and
+`/context` are passive. Changed inputs mark the saved result stale until the user
+evaluates again.
+
+`GET /context` reports what the banner needs to show either the evaluate action or
+the one setup step still open:
+
+- `ready` and `issues` (each with `source` `career` or `cv` and an `href`): whether a
+  goal and a skills source exist;
+- `cv_reviewed`: the selected CV's review covers its current effective version (true
+  when there is no CV and saved declarations exist);
+- `research_pending`: goal research is still pending or processing;
+- `model_available`.
+
+`cv_reviewed` and `research_pending` are null until both sources exist. The client
+offers evaluation only when the inputs are ready, the review is finished and research
+has settled. The command itself does not require a finished review, because Roadmap
+also starts comparisons through it. Each result is saved immutably in
+`skill_gap_analyses`. Roadmap reads it through `GET /current` and plans from its
+`job_skill_gaps`.
+
+For each job skill, the requirement batch also returns `demonstrated_level` and
+`required_level`. These are whole numbers on one 1–10 scale (3 guided, 6
+independent, 9 complex use), plus a short `score_explanation`. A demonstrated level
+needs a cited component reference that is personal, certain and source-scoped.
+Otherwise the batch goes through the existing single correction. Outcomes then store
+`demonstrated_score`, `required_score` and `competence_score` (rubric v1: `min(10,
+round(10 × demonstrated / required))`, so 10 means the evidence meets the goal's
+level), with `scoring_rubric_version: llm-ratio-v1`. The model's levels are ignored
+for interview-preparation and constraint outcomes. Without both levels, the
+earlier `application-ratio-v1` estimate applies.
+
+After the per-skill evaluation, each job-skill outcome lists `profile_skills`: the
+Skills Profile skills whose judgement cited that requirement. An outcome still
+unscored takes the strongest linked profile skill's competence against the
+outcome's (or that skill's) required level (`profile-link-v1`). Scores never change
+match status, gaps or priorities.

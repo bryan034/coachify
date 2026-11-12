@@ -15,6 +15,8 @@ import {OTHER_SKILLS,groupSkills,type SkillGroupMap} from '@/lib/skill-groups';
 import {type SkillMatch} from '@/lib/api/assessment';
 import '@/styles/goal.css';
 import { useComparison } from '@/features/assessment/comparison';
+import { EvaluateBanner } from '@/features/assessment/evaluate-banner';
+import { ProcessingCard, SkeletonRows, type ProcessingStep } from '@/components/ui/processing-card';
 import type { Requirement } from '@/features/roadmap/types';
 import { formatDate } from '@/lib/format';
 import { PageSkeleton } from '@/components/ui/workspace-ui';
@@ -80,9 +82,18 @@ function ScoreChip({outcome,match,id}:{outcome?:Requirement;match?:SkillMatch;id
 }
 function CompetenceBar({outcome}:{outcome?:Requirement}){
  const score=outcome?.competence_score;
- if(score==null)return <p className="small">{outcome?.score_status==='insufficient_evidence'?'Level unknown from your CV review.':outcome?'Competence not recorded yet. Your CV review hasn’t covered this level.':'Compare with your skills to see where you stand.'}</p>;
+ if(score==null)return <p className="small">{outcome?.score_status==='insufficient_evidence'?'Level unknown from your CV review.':outcome?'Competence not recorded yet. Your CV review hasn’t covered this level.':'Evaluate your skills to see where you stand.'}</p>;
  return <><div className="competence-bar" role="img" aria-label={`Your competence ${score} out of 10 against the level this role needs`}><span className={`competence-fill score-${band(score)}`} style={{width:`${score*10}%`}}/><span className="competence-target"/></div>
+  {outcome?.demonstrated_score!=null&&outcome.required_score!=null&&<p className="small goal-skill-levels">You: about {outcome.demonstrated_score} / 10 · role needs about {outcome.required_score} / 10</p>}
   <p className="small">Planning estimate: {score} / 10. 10 means your evidence meets the level this role states.{outcome?.score_explanation?` ${outcome.score_explanation}`:''}</p></>;
+}
+/** Skills Profile skills the comparison linked to this goal skill, with their own level. */
+function ProfileLinks({outcome}:{outcome?:Requirement}){
+ if(!outcome)return null;
+ const linked=outcome.profile_skills??[];
+ return <><p className="briefing-detail-label">From your Skills Profile</p>
+  {linked.length?<ul className="goal-skill-profile-links">{linked.map(skill=><li key={skill.canonical_skill_id||skill.name}><Link href="/cv">{skill.name}</Link>{skill.competence_score!=null&&<span className="small"> · about {skill.competence_score} / 10</span>}</li>)}</ul>
+  :<p className="small">No skill in your Skills Profile covers this yet.</p>}</>;
 }
 function SkillRow({skill,match,outcome}:{skill:ReviewSkill;match?:SkillMatch;outcome?:Requirement}){
  const [expanded,setExpanded]=useState(false),id=useId();
@@ -103,6 +114,7 @@ function SkillRow({skill,match,outcome}:{skill:ReviewSkill;match?:SkillMatch;out
     {skill.group_id&&<p className="briefing-group">{skill.group_operator==='any'?'Alternative requirement — one of the linked skills is needed.':'Part of a combined requirement.'}</p>}
     {skill.evidence&&skill.origin!=='employer'&&<><p className="briefing-detail-label">Saved supporting detail</p><blockquote>{skill.evidence}</blockquote></>}
     <p className="briefing-detail-label">Your competence</p><CompetenceBar outcome={outcome}/>
+    <ProfileLinks outcome={outcome}/>
     <p className="briefing-origin">{originLabel(skill)}</p><RequirementSources urls={skill.source_urls}/>
    </div>
    <div>
@@ -128,7 +140,7 @@ export function LearningFocus({skills,categories,matches,outcomes}:{skills:Revie
  const kinds=new Set(skills.map(skillImportance));
  return <section id="priorities" className="card goal-skills" aria-labelledby="priorities-title">
   <div className="goal-skills-head">
-   <div><h2 id="priorities-title">Skills this role needs</h2><p className="small">{outcomes?'Your saved comparison is shown on each skill. Click a skill for details.':<>Click a skill for details. <Link href="/cv">Compare with your skills</Link> to see where you stand.</>}</p></div>
+   <div><h2 id="priorities-title">Skills needed</h2><p className="small">{outcomes?'Your competence out of 10, against the level this role needs. Click a skill for details.':'Click a skill for details. Evaluate your skills to see your competence in each one.'}</p></div>
    {skills.length>0&&<p className="goal-skills-summary">{scored.length>0?<><strong className="band-ready">{scored.filter(v=>band(v)==='ready').length} ready</strong> · <strong className="band-growing">{scored.filter(v=>band(v)==='growing').length} getting there</strong> · <strong className="band-build">{scored.filter(v=>band(v)==='build').length} to build</strong> · {skills.length-scored.length} not rated</>:counts.length?<>You have <strong>{counts[0][1]}</strong> of {skills.length}{counts.slice(1).filter(([,n])=>n).map(([status,n])=><span key={status}> · {n} {matchLabels[status].toLowerCase()}</span>)}</>:<>{skills.length} saved {skills.length===1?'skill':'skills'}</>}</p>}
   </div>
   {skills.length>0&&<div className="goal-skills-legend"><span>Importance:</span>{(['essential','important','nice','unclear'] as Importance[]).filter(kind=>kinds.has(kind)).map(kind=><span key={kind}><i className={`importance-square importance-${kind}`} aria-hidden="true"/>{importanceLabels[kind]}</span>)}{skills.some(inferredImportance)&&<span><InferredMark/>Inferred by elo</span>}{scored.length>0&&<><span className="legend-divider" aria-hidden="true"/><span>Competence:</span><span><i className="score-dot score-ready" aria-hidden="true"/>8.5+</span><span><i className="score-dot score-growing" aria-hidden="true"/>6 – 8.4</span><span><i className="score-dot score-build" aria-hidden="true"/>Below 6</span></>}</div>}
@@ -162,6 +174,14 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
  const goal={...saved,summary:saved.summary||null,responsibilities:saved.responsibilities||[],non_skill_requirements:saved.non_skill_requirements||[]};
  const confirmationKey=`${token}:${goal._id}:${goal.version}:${workspace.current.selection_version}`;
  const working=processing.includes(workspace.phase);
+ const comparing=!!comparison.current?.operation&&['pending','running'].includes(comparison.current.operation.status);
+ const waitingText=workspace.phase==='waiting_quota'?`Research is waiting for the service allowance and will resume automatically${workspace.retry_after?` in about ${workspace.retry_after} seconds`:''}.`:'Researching opportunity information. Your extracted goal is already saved.';
+ const processingSteps:ProcessingStep[]=[
+  {label:'Read the job description',state:'done'},
+  {label:'Listing the skills',state:goal.skills.length?'done':'now'},
+  {label:'Researching the role',state:working&&goal.skills.length?'now':working?'next':'done',note:working?(workspace.phase==='waiting_quota'?'Waiting to resume':'Checking interviews and similar roles'):undefined},
+  {label:'Rating your competence',state:matches?'done':comparing&&!working?'now':'next'},
+ ];
  async function retryResearch(){if(!token||retrying)return;setRetrying(true);setRetryError('');try{await careerApi('/workspace/retry',token,{method:'POST'});onReload();}catch{setRetryError('Research could not be resumed. Please retry.');}finally{setRetrying(false);}}
  const facts:{icon:string;text:string}[]=[
   goal.company?{icon:'building',text:goal.company}:null,
@@ -175,7 +195,7 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   {card_id:'work',title:'What you would work on',icon:'code',items:[...(goal.summary?[{ref:'summary',text:goal.summary}]:[]),...goal.responsibilities.map((text,index)=>({ref:`resp:${index}`,text}))].map((item,index)=>index===0&&goal.job_url?{...item,urls:[goal.job_url]}:item)},
  ];
  const research=(section:'interview'|'role')=><OpportunityIntelligence key={`${goal._id}:${section}`} section={section} goalId={goal._id} version={goal.version} selectionVersion={workspace.current.selection_version} roleCards={section==='role'?roleCards:undefined}/>;
- return <section className="page on goal-overview career-briefing">
+ return <section className={`page on goal-overview career-briefing${view==='role'?' is-wide':''}`}>
   <section className="briefing-target goal-header" id="target" aria-label="Your target role">
    <div className="briefing-target-copy"><p className="briefing-eyebrow">Working towards</p><h1>{goal.role}</h1>{facts.length>0&&<ul className="briefing-target-meta">{facts.map(fact=><li key={fact.text}><Icon name={fact.icon}/>{fact.text}</li>)}</ul>}</div>
    <div className="briefing-target-actions"><Link className="btn goal-header-btn" href="/career-goal/chat?refine=1">Refine goal</Link><button type="button" className="btn goal-header-btn" onClick={()=>{session.chooseJD(null);router.push('/career-goal?new=1');}}>Set a new goal</button></div>
@@ -184,9 +204,12 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   <nav className="goal-tabs" aria-label="Career goal pages"><div className="goal-tab-group">{tabs.map(tab=><Link key={tab.view} href={tab.href} className={tab.view===view?'on':''} aria-current={tab.view===view?'page':undefined}>{tab.label}</Link>)}</div><span className="goal-saved">Saved automatically</span></nav>
   {loadError&&<div className="notice" role="alert">{loadError} <button className="btn ghost sm" onClick={onReload}>Retry loading goal</button></div>}
   {goal.requirements_need_review&&<p className="notice">Your role context changed. Refine your goal to review which requirements still apply.</p>}
-  {working&&<p className="notice" role="status">{workspace.phase==='waiting_quota'?`Research is waiting for the service allowance and will resume automatically${workspace.retry_after?` in about ${workspace.retry_after} seconds`:''}.`:'Researching opportunity information. Your extracted goal is already saved.'}</p>}
+  {working&&view!=='skills'&&<p className="notice" role="status">{waitingText}</p>}
+  {view==='skills'&&(working||comparing)&&<ProcessingCard title="Skills needed" intro="elo is working out what this role needs and how your skills compare." progressLabel={working?'Working out the skills needed':'Rating your competence'} steps={processingSteps}
+   footer={<p>{working&&workspace.phase==='waiting_quota'?waitingText:'You can leave this page. elo keeps working, and your skills will be here when it’s done.'}</p>}>{!goal.skills.length&&<SkeletonRows rows={4}/>}</ProcessingCard>}
   {workspace.phase==='research_failed'&&<div className="notice" role="alert"><p>Opportunity research could not finish. Your saved goal remains available.</p><button className="btn ghost sm" disabled={retrying} onClick={()=>void retryResearch()}>{retrying?'Resuming research…':'Retry research'}</button>{retryError&&<p>{retryError}</p>}</div>}
   {view==='skills'&&<>
+   {!working&&!comparing&&<EvaluateBanner comparison={comparison} here="/career-goal"/>}
    <CvGoalConfirmationCard key={confirmationKey} goal={goal} selectionVersion={workspace.current.selection_version} token={token} onReload={onReload}/>
    <div className="briefing-grid briefing-grid-confirmed">
     <div className="briefing-learning"><LearningFocus key={`${goal._id}:${goal.version}`} skills={goal.skills} categories={workspace.current.skill_groups} matches={matches} outcomes={outcomes}/></div>

@@ -7,6 +7,7 @@ from app.ai.contracts import AIInput
 from app.ai.routing import chat_models
 from app.repositories.goals import now
 from app.schemas.interview_prep import Gap,InterviewSuggestions,Suggestion
+from app.schemas.opportunity import plain_text
 from app.workflows.structured import structured_node
 
 GAP_FIELDS=('interview_questions','preparation_topics')
@@ -32,7 +33,7 @@ def find_gaps(findings):
 
 
 def research_catalogue(findings):
-    return [{'field':f.field,'value':f.value,'round_number':f.round_number,'round_name':f.round_name,'evidence_type':f.evidence_type} for f in findings]
+    return [{'field':f.field,'value':plain_text(f.value),'round_number':f.round_number,'round_name':f.round_name,'evidence_type':f.evidence_type} for f in findings]
 
 
 def goal_catalogue(goal):
@@ -96,8 +97,8 @@ async def generate(request,account,goal,record):
         seen=set();items=[]
         for fill in output.fills:
             for value in fill.items:
-                if (fill.round_number,fill.field,value.casefold()) in seen:continue
-                seen.add((fill.round_number,fill.field,value.casefold()))
+                if (fill.round_number,fill.field,plain_text(value).casefold()) in seen:continue
+                seen.add((fill.round_number,fill.field,plain_text(value).casefold()))
                 items.append(Suggestion(round_number=fill.round_number,field=fill.field,value=value))
         suggestions.items=items
     await thread(collection(request).replace_one,{'_id':key_for(account,goal)},

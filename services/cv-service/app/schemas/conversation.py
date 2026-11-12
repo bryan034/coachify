@@ -17,10 +17,20 @@ class ConversationMutation(StrictModel):
     mutation_id: UUID
 
 
+TOPIC_COMMANDS = {'skip_topic', 'review_topic'}
+
+
 class ConversationSend(ConversationMutation):
     text: Text
-    command: Literal['review', 'continue', 'skip', 'finish'] | None = None
+    # skip_topic/review_topic name one review topic; skip_remaining skips every uncovered topic.
+    command: Literal['review', 'continue', 'skip', 'finish', 'skip_topic', 'skip_remaining', 'review_topic'] | None = None
     item_id: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode='after')
+    def topic_named(self):
+        if self.command in TOPIC_COMMANDS and not self.item_id:
+            raise ValueError('Choose the topic to skip or review.')
+        return self
 
     @field_validator('text')
     @classmethod
@@ -78,6 +88,12 @@ class ActiveQuestion(StrictModel):
     item_id: str
     title: str
     question: str
+    # Position within the topic's question budget, e.g. question 1 of 3.
+    number: int | None = Field(default=None, ge=1)
+    limit: int | None = Field(default=None, ge=1)
+    # Short prompts for what an answer can cover, and why the question is asked.
+    hints: list[str] = Field(default_factory=list, max_length=4)
+    reason: str | None = None
 
 
 class ChatLimits(StrictModel):

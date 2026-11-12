@@ -299,6 +299,7 @@ def test_old_profile_refresh_preserves_a_newer_intake_question(harness, monkeypa
 
     monkeypatch.setattr(intake, 'read_profile', old_profile)
     refreshed = asyncio.run(service.refresh(app, {'id': 'owner-a'}, chat['id']))
-    assert refreshed['active_question'] == chat['active_question']
+    # The public view adds empty defaults for question numbering and hints that intake questions do not use.
+    assert {**refreshed['active_question'], 'number': None, 'limit': None, 'hints': [], 'reason': None} == chat['active_question']
     assert refreshed['intake_profile_version'] == profiles.records['Bearer owner-a']['version']
     assert refreshed['revision'] == chat['revision']

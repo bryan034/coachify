@@ -290,7 +290,7 @@ it('shows initial research activity in the chat and replaces it when research is
  }finally{view?.unmount();vi.useRealTimers();}
 });
 
-it('requests a Gemini overview after research completes',async()=>{
+it('requests an AI overview after research completes',async()=>{
  research.categories.interview_intelligence!.findings[0].value='Recruiter screen and 3 reported interview rounds';
  await chat();
  expect(screen.getByRole('log')).toHaveTextContent('3 reported interview rounds');

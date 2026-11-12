@@ -40,7 +40,7 @@ def test_local_ollama_is_keyless_and_never_forwards_cloud_credentials(monkeypatc
     provider=provider_class()
     assert provider.configured and provider._provider_headers()=={}
     assert provider._provider_options()=={}
-    assert provider._request_timeout(60)==120 and provider._request_timeout(20)==60
+    assert provider._request_timeout(90)==120 and provider._request_timeout(20)==60
 
 
 @pytest.mark.parametrize('provider_class',[Extractor,ConversationRouter,Interpreter])
@@ -109,8 +109,8 @@ def test_compatible_provider_contract_and_incomplete_output(monkeypatch, finish,
     ('https://api.deepseek.com/v1/', True),
     ('https://API.DEEPSEEK.COM', True),
     ('https://api.groq.com/openai/v1', False),
-    ('https://generativelanguage.googleapis.com/v1beta/openai', False),
-    ('https://generativelanguage.googleapis.com.example/v1', False),
+    ('https://openrouter.ai/api/v1', False),
+    ('https://openrouter.ai.example/v1', False),
     ('https://api.openai.com/v1', False),
     ('https://api.deepseek.com.example/v1', False),
     ('https://proxy.example/api.deepseek.com', False),
@@ -164,20 +164,15 @@ def test_vendor_options_are_host_scoped_for_all_cv_requests(monkeypatch, base_ur
         assert payload['thinking'] == {'type': 'disabled'}
     else:
         assert 'thinking' not in payload
-    if httpx.URL(base_url).host == 'generativelanguage.googleapis.com':
-        assert payload['reasoning_effort'] == 'minimal'
-    else:
-        assert 'reasoning_effort' not in payload
+    assert 'reasoning_effort' not in payload
 
 
-@pytest.mark.parametrize('base_url,gemini', [
-    ('https://generativelanguage.googleapis.com/v1beta/openai', True),
-    ('https://GENERATIVELANGUAGE.GOOGLEAPIS.COM/v1beta/openai', True),
-    ('https://api.openai.com/v1', False),
-    ('https://generativelanguage.googleapis.com.example/v1', False),
+@pytest.mark.parametrize('base_url', [
+    'https://openrouter.ai/api/v1',
+    'https://api.openai.com/v1',
 ])
 @pytest.mark.parametrize('repair', [False, True])
-def test_gemini_uses_simple_decoding_schema_with_full_prompt_limits(monkeypatch, base_url, gemini, repair):
+def test_decoding_schema_keeps_full_bounds_for_every_host(monkeypatch, base_url, repair):
     configure(monkeypatch)
     monkeypatch.setenv('CV_LLM_BASE_URL', base_url)
     captured = []
@@ -195,10 +190,10 @@ def test_gemini_uses_simple_decoding_schema_with_full_prompt_limits(monkeypatch,
     grammar = request['response_format']['json_schema']
     assert grammar['strict'] is True
     schema = grammar['schema']
-    assert ('maxItems' not in schema['properties']['items']) is gemini
+    assert 'maxItems' in schema['properties']['items']
     item = schema['properties']['items']['items']
-    assert ('maxItems' not in item['properties']['evidence']) is gemini
-    assert ('maximum' not in item['properties']['experience_months']['anyOf'][0]) is gemini
+    assert 'maxItems' in item['properties']['evidence']
+    assert 'maximum' in item['properties']['experience_months']['anyOf'][0]
     assert item['additionalProperties'] is False
     assert set(item['required']) == set(item['properties'])
     assert item['properties']['kind']['enum'] == ['education', 'experience', 'project', 'skill']

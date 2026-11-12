@@ -644,3 +644,127 @@ html { scroll-padding-top: var(--top-offset); }
 .competence-fill{position:absolute;left:0;top:0;height:10px;border-radius:5px}
 .competence-fill.score-ready{background:#16a34a}.competence-fill.score-growing{background:#eab308}.competence-fill.score-build{background:#dc2626}
 .competence-target{position:absolute;top:-4px;right:-1px;width:2px;height:18px;background:var(--ink)}
+
+/* Standard chat: one taller input and full-width layout shared by CV review, career chats and the roadmap adviser. */
+:root { --chat-input-min: 168px; }
+.app .cv-review-screen .cv-chat-composer textarea,
+.app .career-agent-page .agent-compose-row textarea,
+.app .adviser-composer textarea,
+.app .helper-open .adviser-composer textarea { min-height: var(--chat-input-min); max-height: 360px; line-height: 1.5; }
+.app .cv-review-screen .cv-chat-composer, .app .career-agent-page .agent-compose-row { padding: 10px 14px 8px; }
+.cv-review-screen .cv-chat-composer { max-width: none; }
+.cv-review-screen .cv-chat-composer-wrap { padding-left: 24px; padding-right: 24px; }
+.page.cv-review-screen { --chat-chrome: 372px; }
+.page.on.career-agent-page { --chat-chrome: 337px; }
+.page.on.career-agent-page:has(.agent-cv-options) { --chat-chrome: 382px; }
+.app:has(.career-agent-page) > main { padding: 8px 0; }
+.career-agent-page .agent-page-header { padding: 0 24px; }
+.career-agent-page .agent-workspace { border-left: 0; border-right: 0; border-radius: 0; width: 100%; max-width: none; }
+
+.cv-topic-head { justify-content: space-between; }
+
+.cv-review-rail { position: relative; }
+.cv-rail-resizer { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; touch-action: none; }
+.cv-rail-resizer:hover, .cv-rail-resizer:focus-visible { background: var(--mint-mist, #e6f4ec); outline: 0; }
+@media (max-width: 899px) { .cv-rail-resizer { display: none; } }
+
+.cv-review-screen .cv-chat:has(.cv-review-rail) { position: relative; }
+.cv-review-screen .cv-chat:has(.cv-review-rail) > .cv-rail-resizer { grid-column: 1 / -1; grid-row: 2 / -1; justify-self: start; width: 10px; margin-left: calc(var(--cv-rail-w, 260px) - 5px); position: relative; right: auto; top: auto; bottom: auto; z-index: 20; cursor: col-resize; touch-action: none; }
+body.cv-rail-dragging { cursor: col-resize; user-select: none; }
+
+/* A skipped topic shows a dash in its circle. */
+.cv-review-rail .cv-topic-checklist li.is-skipped .cv-topic-mark::after { content: ""; width: 8px; height: 2px; border-radius: 1px; background: var(--forest); }
+
+/* Chat input shape shared by every chat: a tall rounded box with a round send button at its bottom right. */
+.app .cv-chat-composer, .app .agent-compose-row { border: 1px solid var(--line); border-radius: 24px; background: #fff; box-shadow: 0 1px 2px rgba(17, 24, 39, .04); padding: 16px 18px 12px; }
+.app .cv-chat-composer:focus-within, .app .agent-compose-row:focus-within { border-color: rgb(71 85 105 / .5); box-shadow: 0 0 0 3px rgb(71 85 105 / .08); }
+.app .cv-chat-composer textarea, .app .agent-compose-row textarea, .app .adviser-composer textarea { font-size: 16px; line-height: 1.5; border: 0; outline: 0; background: transparent; }
+.app .agent-compose-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.app .agent-compose-row textarea { grid-column: 1 / -1; width: 100%; padding: 0; }
+.app .agent-compose-row button { grid-column: 2; }
+.app .adviser-composer textarea { padding: 16px 18px; border: 1px solid var(--line); border-radius: 24px; background: #fff; }
+.app .cv-chat-composer-footer > button[type="submit"],
+.app .agent-compose-row > button,
+.app .adviser-composer > div > button.btn { width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; flex: none; font-size: 0; display: inline-grid; place-items: center; }
+.app .cv-chat-composer-footer > button[type="submit"] > span { font-size: 22px; line-height: 1; }
+.app .agent-compose-row > button, .app .adviser-composer > div > button.btn { font-size: 22px; line-height: 1; }
+.app .adviser-composer > div > button.btn::after { content: "↑"; }
+.app .adviser-composer > div > button.btn { font-size: 0; }
+.app .adviser-composer > div > button.btn::after { font-size: 22px; }
+.app .cv-chat-composer-footer > button[type="submit"]:disabled,
+.app .agent-compose-row > button:disabled,
+.app .adviser-composer > div > button.btn:disabled { background: #e5e7eb; border-color: #e5e7eb; color: #6b7280; }
+
+/* CV review chat: skills.css pins the textarea height and styles its border, so these match its specificity. */
+.app .cv-workspace .cv-chat .cv-chat-composer { max-width: none; margin: 0; padding: 16px 18px 12px; border: 1px solid var(--line); border-radius: 24px; background: #fff; box-shadow: 0 1px 2px rgba(17, 24, 39, .04); }
+.app .cv-workspace .cv-chat .cv-chat-composer:focus-within { border-color: rgb(71 85 105 / .5); box-shadow: 0 0 0 3px rgb(71 85 105 / .08); }
+.app .cv-workspace .cv-chat .cv-chat-composer textarea { height: auto; min-height: var(--chat-input-min); max-height: 360px; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 16px; line-height: 1.5; }
+.app .cv-workspace .cv-chat .cv-chat-composer textarea:focus-visible { outline: 0; }
+.app .cv-workspace .cv-chat .cv-chat-composer-footer { margin-top: 8px; }
+.app .cv-workspace .cv-chat .cv-chat-composer-footer > button.btn[type="submit"] { width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; margin-left: auto; font-size: 0; display: inline-grid; place-items: center; }
+.app .cv-workspace .cv-chat .cv-chat-composer-footer > button.btn[type="submit"] > span { font-size: 22px; line-height: 1; }
+.app .cv-workspace .cv-chat .cv-chat-composer-footer > button.btn[type="submit"]:disabled { background: #e5e7eb; border-color: #e5e7eb; color: #6b7280; }
+
+/* Fit the screen: the chat never grows past the viewport, so the input stays visible without page scrolling.
+   The input is tall on large screens and shrinks on short ones; only the transcript scrolls. */
+:root { --chat-input-min: clamp(88px, 17dvh, 168px); }
+.page.cv-review-screen { height: 100dvh; }
+.page.on.career-agent-page { height: calc(100dvh - 16px); }
+
+/* Chat bubbles, in every chat UI: at most 75% of the container, from their own side (elo left, user right). */
+.app .cv-workspace .cv-chat .cv-chat-messages { padding-left: 24px; padding-right: 24px; }
+.app .cv-workspace .cv-chat .cv-chat-composer-wrap { padding-left: 24px; padding-right: 24px; }
+.app .cv-workspace .cv-chat .cv-chat-message,
+.app .cv-workspace .cv-chat .cv-chat-message-assistant,
+.app .cv-workspace .cv-chat .cv-chat-message-user,
+.app .career-agent-page .agent-message,
+.app .career-agent-page .agent-message.user,
+.app .agent-message, .app .agent-message.user,
+.app .roadmap-adviser .adviser-message { max-width: 75%; width: auto; box-sizing: border-box; }
+.app .cv-workspace .cv-chat .cv-chat-message-assistant, .app .agent-message.assistant, .app .roadmap-adviser .adviser-message { margin-right: auto; margin-left: 0; align-self: flex-start; }
+.app .cv-workspace .cv-chat .cv-chat-message-user, .app .agent-message.user, .app .roadmap-adviser .adviser-message.user { margin-left: auto; margin-right: 0; align-self: flex-end; }
+.app .cv-workspace .cv-chat .cv-chat-message-assistant { grid-template-columns: 30px minmax(0, 1fr); }
+.app .career-agent-page .agent-transcript, .app .career-agent-page .agent-composer { padding-left: 24px; padding-right: 24px; }
+
+/* The transcript was a centred 820px column; let it fill the same width as the input box. */
+.app .cv-workspace .cv-chat .cv-chat-transcript,
+.app .cv-workspace .cv-chat .cv-chat-inline-actions { max-width: none; width: 100%; margin-left: 0; margin-right: 0; }
+.app .cv-workspace .cv-chat .cv-chat-done { max-width: none; width: 100%; }
+
+/* More room between chat messages. */
+.app .cv-workspace .cv-chat .cv-chat-transcript { gap: 32px; }
+.app .cv-workspace .cv-chat .cv-chat-inline-actions { margin-top: 24px; }
+.app .career-agent-page .agent-message { margin-bottom: 32px; }
+
+/* Your CVs: one full-width list. Each CV is a row with its file type, state, review progress and actions. */
+.app .cv-library.cv-saved { position: static; contain: none; min-height: 0; height: auto; padding: 0; gap: 0; overflow: hidden; border-radius: 24px; }
+.app .cv-library .cv-library-scroll { overflow: visible; padding: 0; }
+.cv-library-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 24px; padding: 28px 32px 22px; }
+.cv-library-head h2 { margin: 0 0 4px; font-size: 24px; font-weight: 600; }
+.cv-library-head p { margin: 0; color: var(--slate, #475569); font-size: 14px; }
+.cv-library-count { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--slate, #475569); padding-top: 6px; }
+.cv-library-meter { display: block; width: 110px; height: 8px; border-radius: 4px; background: #e5e7eb; overflow: hidden; }
+.cv-library-meter > i { display: block; height: 100%; min-width: 4px; background: var(--forest, #2a5a47); border-radius: 4px; }
+.cv-library .cv-list { display: block; }
+.cv-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px 22px; padding: 22px 32px 24px; border-top: 1px solid var(--line); background: #fff; position: relative; }
+.cv-card.is-active { background: #f2faf5; }
+.cv-card.is-active::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--forest, #2a5a47); }
+.cv-card-tile { display: grid; place-items: center; width: 54px; height: 68px; margin-top: 4px; border: 1.5px solid #cbd5e1; border-radius: 12px; background: #fff; font-size: 12px; font-weight: 700; color: var(--slate, #475569); }
+.cv-card.is-active .cv-card-tile { border-color: #6ee7b7; color: var(--forest, #2a5a47); }
+.cv-card-main { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.cv-card-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cv-card-title h3 { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.cv-state-pill, .cv-active-pill { display: inline-flex; align-items: center; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.cv-state-pill { border: 1px solid #a7f3d0; background: #ecfdf5; color: var(--forest, #2a5a47); }
+.cv-state-pill.is-failed { border-color: #fca5a5; background: #fef2f2; color: #b91c1c; }
+.cv-state-pill.is-queued, .cv-state-pill.is-processing { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+.cv-active-pill { background: var(--forest, #2a5a47); color: #fff; }
+.cv-card-meta { margin: 0; color: var(--slate, #475569); font-size: 15px; }
+.cv-card .cv-card-details { font-size: 14px; color: var(--slate, #475569); }
+.cv-card .cv-actions { margin-top: 8px; gap: 10px; }
+.cv-card .cv-actions .btn { min-height: 48px; padding: 0 24px; font-size: 16px; border-radius: 999px; }
+.cv-card-side { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.cv-link { border: 0; background: none; padding: 0; font: inherit; font-size: 15px; font-weight: 600; color: var(--forest, #2a5a47); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.cv-link.is-danger { color: #b91c1c; }
+.cv-link:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 700px) { .cv-card { grid-template-columns: minmax(0, 1fr); padding: 18px 20px; } .cv-card-tile { display: none; } .cv-card-side { flex-direction: row; justify-content: flex-start; } .cv-library-head { padding: 20px; } }

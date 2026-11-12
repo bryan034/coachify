@@ -518,9 +518,43 @@ class RequirementOutcome {
     +String mapping_method
     +String mapping_reason
     +String recommendation?
+    +String relevance?
+    +Number competence_score? [rubric v1 ratio, 10 = meets goal level]
+    +Number demonstrated_score?
+    +Number required_score?
+    +String score_explanation?
+    +String scoring_rubric_version?
+    +LinkedProfileSkill[] profile_skills
 }
 skill_gap_analyses *-- RequirementOutcome : assessment-v1 outcomes
 RequirementOutcome *-- AssessmentComponent
+class SkillProfileEvaluation {
+    +String status [evaluated|partial|failed|empty]
+    +String rubric_version [skill-profile-llm-v1]
+    +EvaluatedSkill[] skills
+}
+class EvaluatedSkill {
+    +String name
+    +String canonical_skill_id?
+    +String category
+    +String subcategory?
+    +String relevance
+    +Integer competence_score?
+    +Integer required_score?
+    +String explanation
+    +String[] evidence_refs
+    +String[] requirement_refs
+}
+class LinkedProfileSkill {
+    +String name
+    +String canonical_skill_id?
+    +String category
+    +Integer competence_score?
+    +Integer required_score?
+}
+skill_gap_analyses *-- SkillProfileEvaluation : per-skill LLM judgement
+SkillProfileEvaluation *-- EvaluatedSkill
+RequirementOutcome *-- LinkedProfileSkill : linked Skills Profile skills
 class PlanningPreferences {
     +Date start_date?
     +Date target_date?
@@ -766,4 +800,4 @@ job_applications *-- JobStatusChange
 %% JobApplicationSnapshot persists independently of live job-provider results; availability is unknown on tracker reads.
 
 %% Assessment InputVersions: source_mode=cv_and_profile|profile_only; CV id/extraction/effective versions nullable for profile_only.
-%% Assessment outcomes reserve nullable relevance/competence_score/score_explanation/scoring_rubric_version; scores unpopulated pending approved rubric.
+%% Job-skill outcomes carry LLM-judged levels (llm-ratio-v1), a profile-linked fallback (profile-link-v1) or the application-ratio-v1 estimate; null means unknown, never zero.

@@ -47,7 +47,15 @@ async def listing(request: Request, account=Depends(authenticated),
                   limit: int = Query(default=25, ge=1, le=100), cursor: str | None = Query(default=None, max_length=256)):
     repo = request.app.state.repository
     records = await run_in_threadpool(repo.page, account['id'], limit, decode_cursor(cursor))
-    return {'cvs': [summary(doc) for doc in records[:limit]],
+    conversations = request.app.state.service.repository.conversations
+    def with_progress(doc):
+        value = summary(doc)
+        latest = conversations.latest(account['id'], doc['_id']) if value['status'] == 'ready' else None
+        progress = (latest or {}).get('interview_progress') or {}
+        if progress.get('total_items'):
+            value['review_progress'] = {'reviewed_topics': progress['reviewed_items'], 'total_topics': progress['total_items']}
+        return value
+    return {'cvs': [await run_in_threadpool(with_progress, doc) for doc in records[:limit]],
             'selection': selection_view(await run_in_threadpool(repo.selection, account['id'])),
             'next_cursor': encode_cursor(records[limit - 1]) if len(records) > limit else None}
 

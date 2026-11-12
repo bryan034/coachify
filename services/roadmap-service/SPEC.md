@@ -4,7 +4,7 @@ Provider configuration: the service now reads its own `*_LLM_BASE_URL`,
 `*_LLM_MODEL`, `*_LLM_API_KEY` and `*_LLM_ALLOW_HTTP`. HTTPS is required outside
 explicit development HTTP mode. Local testing can share the 16K-context
 `elo-deepseek-r1:1.5b` Ollama alias, without sending preserved cloud keys.
-Non-Gemini providers receive JSON Output plus the schema in the prompt;
+Providers receive JSON Output plus the schema in the prompt;
 all responses still undergo the existing Pydantic and domain checks. Local calls
 serialize per service instance and use a 180-second HTTP timeout; operations use
 600-second budgets and 630-second leases. Cloud limits remain unchanged.
@@ -55,6 +55,7 @@ The model owns gaps, priorities, prerequisite order, effort, milestones, assignm
 - **Assignments:** first-week dates, inside one eligible window, no overlap, not overlapping a blackout, not past and not after the target, within the week's remaining budget, and a known milestone. Backup needs permission and no free preferred window that could hold the session.
 - **Milestones:** unique keys, valid windows inside the runway, known acyclic prerequisites finishing first, assignment minutes within effort, and retained if they have completed sessions. For every date range, the remaining effort of milestones wholly inside it must fit usable capacity.
 - **Gaps:** `confirmed_gap` needs an Assessment `confirmed_shortfall` or a self-reported "no experience". `uncertain` and `partial` are `unknown`. Supported requirements, satisfied alternatives and non-learning constraints are not study gaps. Inferred requirements are labelled, explained and `unknown` unless the user says otherwise. A material unknown needs a diagnostic of at most 30 minutes or a confirmation question.
+- **Competence:** job-skill outcomes may carry Assessment's planning estimate (`competence_score`, where 10 means the evidence meets the goal's level), `demonstrated_score`/`required_score` and linked `profile_skills`. The model uses them to size effort and order work only; they never change a gap's status.
 - **Coverage:** every Assessment priority is in a milestone, in `beyond_deadline`, or excluded with an exact quote from the current user message. `fits_in_runway` is false exactly when work remains beyond the deadline.
 
 ## Proposals, progress and evidence

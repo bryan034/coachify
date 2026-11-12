@@ -22,7 +22,7 @@ GOAL = {'role':'Analyst','field':'Data','company':None,'skills':[SKILL]}
 
 
 def config():
-    return AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='synthetic',max_output_tokens=512)
+    return AISettings(enabled=True,model='openai/gpt-4o-mini',api_key='synthetic',max_output_tokens=512)
 
 
 def completion(output, usage=None):
@@ -54,11 +54,11 @@ def test_each_operation_has_only_its_own_prompt_and_schema():
             schema=extract['response_format']['json_schema']['schema']
             assert schema['additionalProperties'] is False
             assert schema['required']==list(schema['properties'])
-            assert len(json.dumps(schema)) < len(json.dumps(JDExtraction.model_json_schema()))
             assert 'job_url' not in schema['properties']
-            properties=schema['properties']['skills']['items']['properties']
+            deref=lambda node:schema['$defs'][node['$ref'].split('/')[-1]] if '$ref' in node else node
+            properties=deref(schema['properties']['skills']['items'])['properties']
             assert not {'skill_id','item_id','correction','source_urls'} & properties.keys()
-            conditions=schema['properties']['non_skill_requirements']['items']['properties']
+            conditions=deref(schema['properties']['non_skill_requirements']['items'])['properties']
             assert not {'requirement_id','correction','source_urls'} & conditions.keys()
             for payload in (extract,chat,edit):
                 assert 'JSON schema:' not in payload['messages'][0]['content']

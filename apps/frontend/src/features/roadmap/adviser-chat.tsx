@@ -26,6 +26,7 @@ export function AdviserChat({ workspace, runway, text, setText, partial, setPart
  const failed = workspace.operation?.status === 'failed';
  const missing = required.filter(item => runway?.issues.some(issue => issue.code === item.code));
  const next = missing[0];
+ const blocker = !context.ready ? (context.issues[0]?.message || 'Select an extracted CV and a Career goal before sending messages.') : !context.model_available ? 'The helper is unavailable right now, so messages can’t be sent.' : frozen ? 'Please wait for the current request to finish before sending.' : '';
  return <section className="adviser-conversation" aria-label="Chat helper" onKeyDown={event => { if (event.key === 'Escape') close(); }}>
   <div className="adviser-intro"><div className="adviser-avatar" aria-hidden="true"><BrandLogo compact decorative /></div><div><h2>{editing ? 'Roadmap planner' : 'Plan helper'}</h2><p>{editing ? 'Add or change tasks. You review every change first.' : 'I’ll guide you through the planner and fill it in as we talk.'}</p></div><button type="button" className="btn ghost adviser-close" aria-label="Close chat helper" onClick={close}>Close</button></div>
   {!editing && <p className="helper-needed" role="status">{missing.length ? <>Still needed: <strong>{missing.map(item => item.label).join(', ')}</strong></> : 'All required details are filled in. Review the planner, then generate your roadmap.'}</p>}
@@ -39,8 +40,9 @@ export function AdviserChat({ workspace, runway, text, setText, partial, setPart
   <form className="adviser-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); send(); }}>
    {!validResearch && context.ready && <p className="small">Using available evidence. Interview research is {context.research_coverage || 'unavailable'}; the comparison will be labelled partial.</p>}
    {!context.model_available && <p className="small">Your helper is unavailable. Your saved plan remains available, and you can still fill in the planner yourself.</p>}
-   <label htmlFor="adviser-message">{editing ? 'Ask for a change' : 'Answer here'}</label><textarea ref={input} id="adviser-message" rows={2} maxLength={4000} value={text} disabled={!context.ready} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (text.trim() && context.ready && context.model_available && !frozen) send(); } }} placeholder={editing ? 'Move Thursday’s session to Saturday morning…' : 'I can do six hours a week, mostly on Saturdays…'} />
-   <div><span className="small">{editing ? 'Changes appear as a preview first.' : 'Everything I fill in stays yours to change.'}</span> <span className="cv-visually-hidden">Enter to send · Shift+Enter for a new line</span><button className="btn primary" disabled={!text.trim() || !context.ready || !context.model_available || frozen}>Send message</button></div>
+   {!!blocker && !!text.trim() && <p className="small" role="status">{blocker}</p>}
+   <label htmlFor="adviser-message">{editing ? 'Ask for a change' : 'Answer here'}</label><textarea ref={input} id="adviser-message" rows={2} maxLength={4000} value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (text.trim() && !frozen) send(); } }} placeholder={editing ? 'Move Thursday’s session to Saturday morning…' : 'I can do six hours a week, mostly on Saturdays…'} />
+   <div><span className="small">{editing ? 'Changes appear as a preview first.' : 'Everything I fill in stays yours to change.'}</span> <span className="cv-visually-hidden">Enter to send · Shift+Enter for a new line</span><button className="btn primary" disabled={!text.trim() || frozen}>Send message</button></div>
   </form>
  </section>;
 }

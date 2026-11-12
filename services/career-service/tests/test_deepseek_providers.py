@@ -57,7 +57,7 @@ def test_local_settings_are_explicit_and_cloud_credentials_never_use_brave_or_ge
     with pytest.raises(ValidationError):AISettings(provider='local',base_url='http://user:secret@localhost/v1')
     monkeypatch.setenv('CAREER_LLM_PROVIDER','deepseek')
     monkeypatch.setenv('AI_ENABLED','true')
-    monkeypatch.setenv('GEMINI_API_KEY','synthetic-gemini')
+    monkeypatch.setenv('GEMINI_API_KEY','synthetic-key')
     with pytest.raises(ValueError):AISettings.from_env()
     monkeypatch.setenv('CAREER_RESEARCH_PROVIDER','deepseek')
     monkeypatch.setenv('BRAVE_API_KEY','synthetic-brave')

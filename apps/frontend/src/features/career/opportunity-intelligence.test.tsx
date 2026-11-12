@@ -14,12 +14,12 @@ it('keeps role research visible when interviews fail, with claims, labels and ci
  render(<OpportunityIntelligence section="role" goalId="goal" version={1} selectionVersion={2}/>);
  const card=(await screen.findByRole('heading',{name:'Salary'})).closest('article')!;
  expect(within(card).getByText('SGD 1500 per month')).toBeVisible();
- expect(within(card).getByText('low confidence')).toBeVisible();
+ expect(within(card).queryByText('low confidence')).toBeNull();
  expect(within(card).getByText('Conflicting reports')).toBeVisible();
  expect(within(card).getByRole('link',{name:'Intern report ↗'})).toHaveAttribute('href','https://example.test/intern');
  expect(screen.getByRole('note')).toHaveTextContent('may be inaccurate or out of date');
- const benefits=screen.getByRole('heading',{name:'Benefits'}).closest('article')!;
- expect(within(benefits).getByText('Not filled yet.')).toBeVisible();
+  const empty=within(screen.getByRole('region',{name:'Not filled yet'}));
+  expect(empty.getByText('Benefits')).toBeVisible();
 });
 const roleCards=[{card_id:'work',title:'What you would work on',icon:'code',items:[{ref:'summary',text:'Build reporting for finance. Partner with analysts on weekly reviews.',urls:['https://example.test/job']}]}];
 it('splits role text into bullets per card until the AI summary is ready',async()=>{
@@ -32,19 +32,24 @@ it('splits role text into bullets per card until the AI summary is ready',async(
 it('shows the cited AI digest as bullets once research settles',async()=>{
  digest={status:'missing',summary:null};
  const ready:RoleSummaryView={status:'ready',summary:{goal_id:'goal',goal_version:1,research_id:'research',generated_at:'2026-11-11T00:00:00Z',
-  cards:[{card_id:'work',bullets:[{text:'Finance reporting with weekly analyst reviews',refs:['summary']}]},{card_id:'compensation',bullets:[{text:'About SGD 1500 a month (reported)',refs:['f0000000000000001']}]}],
-  generated:[{card_id:'benefits',bullets:['Not publicly reported; typically medical cover and leave']}]}};
+  cards:[{card_id:'work',bullets:[{text:'Finance reporting with weekly analyst reviews',refs:['summary']}]},{card_id:'compensation',headline:'SGD 1500 a month',bullets:[{text:'About **SGD 1500** a month (reported) <b>x</b>',refs:['f0000000000000001']}]}],
+  generated:[{card_id:'benefits',headline:'Typically standard cover',bullets:['Not publicly reported; typically **medical cover** and leave']}]}};
  vi.mocked(careerApi).mockImplementation(async(path:string,_t,init)=>(path.endsWith('/role-summary')?init?.method==='POST'?ready:digest:value) as never);
  render(<OpportunityIntelligence section="role" goalId="goal" version={1} selectionVersion={2} roleCards={roleCards}/>);
  expect(await screen.findByText('Finance reporting with weekly analyst reviews')).toBeVisible();
  const salary=screen.getByRole('heading',{name:'Salary'}).closest('article')!;
- expect(within(salary).getByText('About SGD 1500 a month (reported)')).toBeVisible();
- expect(within(salary).getByText('low confidence')).toBeVisible();
+ expect(within(salary).getByText('SGD 1500 a month')).toBeVisible();
+ expect(within(salary).getByText('SGD 1500',{selector:'strong'})).toBeVisible();
+ expect(salary.querySelector('b')).toBeNull();
+ expect(within(salary).getByText(/a month \(reported\) <b>x<\/b>/)).toBeVisible();
+ expect(within(salary).queryByText('low confidence')).toBeNull();
  expect(within(salary).getByText('Summarised by AI from the sources')).toBeVisible();
  expect(within(salary).getByRole('link',{name:'Intern report ↗'})).toBeVisible();
  expect(screen.queryByText('Build reporting for finance.')).not.toBeInTheDocument();
  const benefits=screen.getByRole('heading',{name:/Benefits/}).closest('article')!;
- expect(within(benefits).getByText('Not publicly reported; typically medical cover and leave')).toBeVisible();
+ expect(within(benefits).getByText('Typically standard cover')).toBeVisible();
+ expect(within(benefits).getByText('medical cover',{selector:'strong'})).toBeVisible();
+ expect(benefits).toHaveTextContent('Not publicly reported; typically medical cover and leave');
  expect(within(benefits).getByRole('img',{name:/not found in any sources/})).toBeInTheDocument();
  expect(within(salary).queryByRole('img',{name:/not found in any sources/})).not.toBeInTheDocument();
  expect(screen.getByText(/Fields marked with this icon were made by an AI model/)).toBeVisible();
@@ -66,6 +71,23 @@ it('groups interview findings by round, keeping process-wide facts as headlines'
  expect(screen.getAllByText('Not filled yet.')).toHaveLength(2);
  expect(within(headlines).getAllByText('Not filled yet')).toHaveLength(2);
  expect(screen.getAllByText('Three stages are reported.')).toHaveLength(1);
+});
+it('bolds key terms in interview findings and AI predictions without showing asterisks',async()=>{
+ value.categories.interview_intelligence=interview([
+  finding('f0000000000000010','recruitment_stages','**Online test**, then **panel**'),
+  finding('f0000000000000011','round_format','**45-minute** video call',{round_number:1,round_name:'Online assessment'}),
+  finding('f0000000000000012','interview_questions','Explain a **SQL join**.',{round_number:1,round_name:'Online assessment'}),
+ ]);
+ suggestions={status:'ready',suggestions:{goal_id:'goal',goal_version:1,research_id:'research',generated_at:'2026-11-11T00:00:00Z',
+  gaps:[],items:[{round_number:1,field:'preparation_topics',value:'Practise **window functions**'}]}};
+ render(<OpportunityIntelligence goalId="goal" version={1} selectionVersion={2}/>);
+ const question=await screen.findByText('SQL join');
+ expect(question.tagName).toBe('STRONG');
+ expect(screen.getByText('45-minute').tagName).toBe('STRONG');
+ expect(screen.getByText('window functions').tagName).toBe('STRONG');
+ const headlines=screen.getByRole('list',{name:'Interview headline facts'});
+ expect(within(headlines).getByText('Online test, then panel')).toBeVisible();
+ expect(document.body.textContent).not.toContain('**');
 });
 it('shows a single round when that is all the sources describe, and says when rounds are unknown',async()=>{
  value.categories.interview_intelligence=interview([finding('f0000000000000011','round_format','A single coding test.',{round_number:1,round_name:'Coding test'})]);
@@ -109,7 +131,7 @@ it('shows provider configuration and general-target states honestly',async()=>{
  value={...value,available:false,availability_issues:['brave_llm_context_required'],categories:{company_intelligence:{...result,status:'not_applicable',findings:[],warnings:[]}}};vi.mocked(careerApi).mockResolvedValue(value);
  render(<OpportunityIntelligence section="role" goalId="goal" version={1} selectionVersion={2}/>);
  expect(await screen.findByText('The Brave connection needs LLM Context mode for opportunity research.')).toBeVisible();
- expect(screen.queryByText('Gemini is not connected to the Career service.')).not.toBeInTheDocument();
+ expect(screen.queryByText('The configured model is not connected to the Career service.')).not.toBeInTheDocument();
  expect(screen.getByRole('button',{name:'Refresh research'})).toBeDisabled();
  expect(screen.getByText('No company is specified, so employer-specific research was skipped.')).toBeVisible();
 });

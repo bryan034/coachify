@@ -16,7 +16,6 @@ const words=(value:string)=>value.replaceAll('_',' ');
 const availabilityMessages:Record<OpportunityAvailabilityIssue,string>={
  research_disabled:'Opportunity research is turned off on the server.',
  reasoning_disabled:'The research reasoning provider is disabled on the server.',
- gemini_not_configured:'Gemini is not connected to the Career service.',
  brave_not_configured:'Brave is not connected to the Career service.',
  model_not_configured:'The configured model is not connected to the Career service.',
  search_not_configured:'The configured search provider is not connected to the Career service.',
@@ -35,7 +34,7 @@ const AiLegend=()=><p className="ai-made-legend" role="note"><AiMark/>Fields mar
 function Slot({label,sourced,generated,round,field,list}:{label:string;sourced:IntelligenceFinding[];generated:Generated;round:number|null;field:PrepGapField;list:(items:IntelligenceFinding[])=>ReactNode}){
  const predicted=generated.items.filter(item=>item.round_number===round&&item.field===field);
  return <div><p className="briefing-detail-label">{label}{!sourced.length&&predicted.length>0&&<AiMark/>}</p>
-  {sourced.length?list(sourced):predicted.length?<ul className="round-list is-ai-made">{predicted.map(item=><li key={item.value}>{item.value}</li>)}</ul>:<NotFilled busy={generated.busy}/>}
+  {sourced.length?list(sourced):predicted.length?<ul className="round-list is-ai-made">{predicted.map(item=><li key={item.value}><Rich text={item.value}/></li>)}</ul>:<NotFilled busy={generated.busy}/>}
  </div>;
 }
 /** Headline facts are process-wide; everything tied to one round sits under that round. All rounds stay open. */
@@ -48,16 +47,16 @@ function InterviewRounds({findings,links,generated}:{findings:IntelligenceFindin
  // Without rounds, the questions and preparation slots belong to the whole process.
  const otherGeneral=general.filter(f=>!headline.includes(f)&&(numbers.length>0||!slotFields.includes(f.field)));
  const rounds=numbers.map(n=>{const items=findings.filter(f=>f.round_number===n);return {n,name:items.find(f=>f.round_name)?.round_name||`Round ${n}`,items};});
- const list=(items:IntelligenceFinding[])=><ul className="round-list">{items.map(f=><li key={f.finding_id}><span>{f.value}</span><FindingLabels finding={f}/> {links(f.source_ids)}</li>)}</ul>;
+ const list=(items:IntelligenceFinding[])=><ul className="round-list">{items.map(f=><li key={f.finding_id}><span><Rich text={f.value}/></span><FindingLabels finding={f}/> {links(f.source_ids)}</li>)}</ul>;
  const slots=(items:IntelligenceFinding[],round:number|null)=><>
   <Slot label="Questions to expect" sourced={items.filter(f=>f.field===roundFields.questions)} generated={generated} round={round} field={roundFields.questions} list={list}/>
   <Slot label="How to prepare" sourced={items.filter(f=>f.field===roundFields.prepare)} generated={generated} round={round} field={roundFields.prepare} list={list}/>
  </>;
  return <>
   <ul className="fact-tiles" aria-label="Interview headline facts">
-   {headline.map(f=><li key={f.finding_id} className="fact-tile"><strong>{f.value}</strong><span className="small">{fieldTitles[f.field]??words(f.field)}</span><FindingLabels finding={f}/>{links(f.source_ids)}</li>)}
+   {headline.map(f=><li key={f.finding_id} className="fact-tile"><strong>{plain(f.value)}</strong><span className="small">{fieldTitles[f.field]??words(f.field)}</span><FindingLabels finding={f}/>{links(f.source_ids)}</li>)}
    {missingHeadline.map(field=>{const made=generated.items.find(item=>item.round_number==null&&item.field===field);
-    return made?<li key={field} className="fact-tile is-ai-made"><strong>{made.value}</strong><span className="small">{fieldTitles[field]} <AiMark/></span></li>
+    return made?<li key={field} className="fact-tile is-ai-made"><strong>{plain(made.value)}</strong><span className="small">{fieldTitles[field]} <AiMark/></span></li>
      :<li key={field} className="fact-tile is-empty"><strong>{generated.busy?'Generating…':'Not filled yet'}</strong><span className="small">{fieldTitles[field]}</span></li>;})}
   </ul>
   {generated.error&&<p className="notice" role="alert">{generated.error}</p>}
@@ -65,7 +64,7 @@ function InterviewRounds({findings,links,generated}:{findings:IntelligenceFindin
   {rounds.length?<><p className="small">{rounds.length===1?'Sources describe one round.':`Sources describe ${rounds.length} rounds.`}</p>
    <ol className="rounds">{rounds.map(round=>{const format=round.items.filter(f=>f.field==='round_format');const other=round.items.filter(f=>![...slotFields,'round_format'].includes(f.field));
     return <li key={round.n} className="round open">
-     <div className="round-head"><span className="round-num" aria-hidden="true">{round.n}</span><span><strong>{round.name}</strong>{format[0]&&<span className="small">{format[0].value}</span>}</span></div>
+     <div className="round-head"><span className="round-num" aria-hidden="true">{round.n}</span><span><strong>{round.name}</strong>{format[0]&&<span className="small"><Rich text={format[0].value}/></span>}</span></div>
      <div className="round-body">
       {format.length>1&&list(format.slice(1))}
       {slots(round.items,round.n)}
@@ -78,21 +77,26 @@ function InterviewRounds({findings,links,generated}:{findings:IntelligenceFindin
 }
 const fieldTitles:Record<string,string>={recruitment_stages:'Stages',application_timeline:'Timeline',difficulty:'Difficulty',compensation:'Salary',benefits:'Benefits',projects:'What interns work on',mentorship:'Mentorship',work_life_balance:'Hours and workload',full_time_role:'Role after the internship',career_path:'Career path',conversion_salary:'Full-time salary',conversion_rate:'Conversion rate',historical_cohort:'Intake',offer_acceptance:'Offers and acceptances',company_culture:'Company culture',team_culture:'Team culture',management:'Management',candidate_experience:'Candidate reports',interview_questions:'Questions',preparation_topics:'Preparation',round_format:'Format'};
 function FindingLabels({finding}:{finding:IntelligenceFinding}){
- return <>{finding.confidence==='low'&&<span className="finding-flag">low confidence</span>}{finding.scope!=='exact'&&<span className="finding-flag">{words(finding.scope)} context</span>}{finding.conflict_group&&<span className="finding-flag intelligence-conflict">Conflicting reports</span>}</>;
+ return <>{finding.conflict_group&&<span className="finding-flag intelligence-conflict">Conflicting reports</span>}</>;
 }
 /** A goal-derived card item; refs match the backend digest (req:<id>, summary, resp:<index>). */
 export type RoleItem={ref:string;text:string;note?:string;urls?:string[]};
 export type RoleCardInput={card_id:string;title:string;icon:string;items:RoleItem[]};
 type CardItem=RoleItem&{finding?:IntelligenceFinding};
 const fieldIcons:Record<string,string>={compensation:'money',conversion_salary:'money',benefits:'check',projects:'code',mentorship:'people',management:'people',team_culture:'people',company_culture:'building',work_life_balance:'cal',full_time_role:'up',career_path:'up',conversion_rate:'flag',historical_cohort:'flag',offer_acceptance:'flag'};
+/** Renders **bold** key terms as <strong>; everything else stays escaped text, so model output cannot inject markup. */
+export const Rich=({text}:{text:string})=><>{text.split(/\*\*([^*]+)\*\*/).map((part,i)=>i%2?<strong key={i}>{part}</strong>:part.replaceAll('*',''))}</>;
+/** Fact tiles are already bold, so their key-term markers are dropped. */
+const plain=(text:string)=>text.replaceAll('*','');
 /** Fallback before (or without) the digest: one bullet per sentence, never a paragraph. */
 export const toBullets=(text:string)=>text.split(/(?<=[.!?])\s+(?=[A-Z0-9"“(])|;\s+|\n+/).map(part=>part.trim()).filter(Boolean);
 type SourceLinks=(ids:string[])=>{key:string;href:string;label:string}[];
 /** One card per topic: scannable bullets, flags beside the bullet they qualify, sources once at the foot. */
-function RoleCard({title,icon,items,digest,made,busy=false,sourceLinks}:{title:string;icon:string;items:CardItem[];digest?:{text:string;refs:string[]}[];made?:string[];busy?:boolean;sourceLinks:SourceLinks}){
+function RoleCard({title,icon,items,digest,made,headline,busy=false,sourceLinks}:{title:string;icon:string;items:CardItem[];digest?:{text:string;refs:string[]}[];made?:string[];headline?:string|null;busy?:boolean;sourceLinks:SourceLinks}){
+ const lead=headline?<p className="role-card-headline">{headline.replaceAll('*','')}</p>:null;
  if(!items.length)return <article className={`fact-card role-card${made?.length?' is-ai-made':''}`}>
   <h3><span className="role-card-icon" aria-hidden="true"><Icon name={icon}/></span><span>{title}{made?.length?<AiMark/>:null}</span></h3>
-  {made?.length?<ul className="role-bullets">{made.map(text=><li key={text}>{text}</li>)}</ul>:<NotFilled busy={busy}/>}
+  {lead}{made?.length?<ul className="role-bullets">{made.map(text=><li key={text}><Rich text={text}/></li>)}</ul>:<NotFilled busy={busy}/>}
  </article>;
  const byRef=new Map(items.map(item=>[item.ref,item]));
  const usable=digest?.length&&digest.every(b=>b.refs.every(ref=>byRef.has(ref)))?digest:null;
@@ -101,14 +105,20 @@ function RoleCard({title,icon,items,digest,made,busy=false,sourceLinks}:{title:s
  const links=[...new Map(items.flatMap(item=>[...(item.urls??[]).map(sourceLink).filter(l=>l!==null).map(l=>({key:l.url,href:l.url,label:l.domain})),...(item.finding?sourceLinks(item.finding.source_ids):[])]).map(l=>[l.href,l])).values()];
  return <article className="fact-card role-card">
   <h3><span className="role-card-icon" aria-hidden="true"><Icon name={icon}/></span>{title}</h3>
+  {usable&&lead}
   <ul className="role-bullets">{bullets.map((b,i)=>{const flagged=b.items.map(item=>item.finding).filter((f):f is IntelligenceFinding=>!!f);
-   return <li key={i}><span>{b.text}</span>{flagged.slice(0,1).map(f=><FindingLabels key={f.finding_id} finding={f}/>)}</li>;})}</ul>
+   return <li key={i}><span><Rich text={b.text}/></span>{flagged.slice(0,1).map(f=><FindingLabels key={f.finding_id} finding={f}/>)}</li>;})}</ul>
   {(notes.length>0||usable)&&<p className="small role-card-note">{[...notes,...(usable?['Summarised by AI from the sources']:[])].join(' · ')}</p>}
   {links.length>0&&<p className="briefing-sources">{links.map(l=><a key={l.key} href={l.href} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>)}</p>}
  </article>;
 }
 // Every topic the page always shows, in page order (matches the backend digest).
 const roleFields=['compensation','benefits','projects','mentorship','work_life_balance','full_time_role','career_path','conversion_salary','conversion_rate','historical_cohort','offer_acceptance','company_culture','team_culture','management'];
+const roleGroups=[
+ {key:'pay',title:'Pay',fields:['compensation','conversion_salary','benefits']},
+ {key:'work',title:'Day to day',fields:['projects','mentorship','work_life_balance','management']},
+ {key:'future',title:'After the internship',fields:['full_time_role','career_path','conversion_rate','historical_cohort','offer_acceptance']},
+ {key:'culture',title:'Culture',fields:['company_culture','team_culture']}];
 /** Goal cards first, then every role topic: sourced bullets, AI-made bullets with the marker, or not filled. */
 function RoleFacts({findings,cards,digest,busy,loaded,sourceLinks}:{findings:IntelligenceFinding[];cards:RoleCardInput[];digest:RoleSummary|null;busy:boolean;loaded:boolean;sourceLinks:SourceLinks}){
  // Goal cards never wait for research; research topics appear once it has loaded.
@@ -117,7 +127,23 @@ function RoleFacts({findings,cards,digest,busy,loaded,sourceLinks}:{findings:Int
   items:findings.filter(f=>f.field===field).map(f=>({ref:f.finding_id,text:f.value,finding:f}))}))];
  const bulletsFor=(id:string)=>digest?.cards.find(card=>card.card_id===id)?.bullets;
  const madeFor=(id:string)=>digest?.generated?.find(card=>card.card_id===id)?.bullets;
- return <div className="fact-cards">{all.map(card=><RoleCard key={card.card_id} title={card.title} icon={card.icon} items={card.items} digest={bulletsFor(card.card_id)} made={madeFor(card.card_id)} busy={busy} sourceLinks={sourceLinks}/>)}</div>;
+ const headlineFor=(id:string)=>digest?.cards.find(card=>card.card_id===id)?.headline??digest?.generated?.find(card=>card.card_id===id)?.headline;
+ const empty=(card:typeof all[number])=>!card.items.length&&!madeFor(card.card_id)?.length;
+ const filled=all.filter(card=>!empty(card)),blank=all.filter(empty);
+ const groupOf=(id:string)=>roleGroups.find(g=>g.fields.includes(id))?.key??(cards.some(c=>c.card_id===id)?'role':'more');
+ const groups=[{key:'role',title:'The role',fields:[] as string[]},...roleGroups,{key:'more',title:'More findings',fields:[] as string[]}]
+  .map(g=>({...g,cards:filled.filter(card=>groupOf(card.card_id)===g.key)})).filter(g=>g.cards.length);
+ const render=(card:typeof all[number])=><RoleCard key={card.card_id} title={card.title} icon={card.icon} items={card.items} digest={bulletsFor(card.card_id)} made={madeFor(card.card_id)} headline={headlineFor(card.card_id)} busy={busy} sourceLinks={sourceLinks}/>;
+ return <div className="role-board">
+  <div className="role-groups">{groups.map(g=><section key={g.key} className="role-group" aria-label={g.title}>
+   <h3 className="role-group-title">{g.title}<span className="small">{g.cards.length}</span></h3>
+   <div className="fact-cards">{g.cards.map(render)}</div>
+  </section>)}
+  {blank.length>0&&<section className="role-group" aria-label="Not filled yet">
+   <h3 className="role-group-title">Not filled yet<span className="small">{blank.length}</span></h3>
+   <ul className="role-empty">{blank.map(card=><li key={card.card_id}><Icon name={card.icon}/>{card.title}{busy&&<span className="small" role="status"> Generating…</span>}</li>)}</ul>
+  </section>}</div>
+ </div>;
 }
 const sentenceCase=(value:string)=>value.charAt(0).toUpperCase()+value.slice(1);
 export function OpportunityIntelligence({goalId,version,selectionVersion,roleCards=[],section='interview'}:{goalId:string;version:number;selectionVersion:number;roleCards?:RoleCardInput[];section?:'interview'|'role'}){

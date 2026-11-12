@@ -25,8 +25,8 @@ gateway for its 610-second Career model-route read timeout. Alias creation reuse
 existing weights and does not run inference.
 
 Career service-specific credentials are named `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY`.
-Rename the previous `GEMINI_API_KEY` / `BRAVE_API_KEY` entries yourself, preserving
-values when retaining Gemini / Brave. Compose requires these canonical names; it no
+Rename the previous `BRAVE_API_KEY` entry yourself, preserving
+its value when retaining Brave. Compose requires these canonical names; it no
 longer relabels a legacy credential when providers change. Direct non-Compose
 processes still support each legacy alias only for its own provider and only when
 the canonical key is absent. An explicitly blank canonical key suppresses the old provider alias; when Career uses OpenRouter, a blank model key can still fall back to `OPENROUTER_API_KEY`. The research key remains exclusive to Career; the shared OpenRouter key is explicitly injected only into the four model services.

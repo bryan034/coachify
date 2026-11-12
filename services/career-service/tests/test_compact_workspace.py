@@ -226,15 +226,6 @@ def test_upgrade_removes_only_retired_reset_copies(opportunity_flow):
     ReviewStore(flow[1]);assert flow[1].career_goals.find_one({'_id':identifier})==stored
 
 
-def test_gemini_decoding_uses_storage_label_enums():
-    from app.ai.gemini_schema import gemini_schema
-    from app.schemas.opportunity import Finding
-    projected=gemini_schema(StructuredFindings.model_json_schema())['properties']['findings']['items']['properties']
-    stored=Finding.model_json_schema()['properties']
-    for field in ('scope','confidence','evidence_type'):
-        assert projected[field]['enum']==stored[field]['enum']
-
-
 def test_same_extract_with_different_summaries_keeps_one_stable_finding():
     from app.workflows.opportunity.domain import dedupe_findings
     text='Applications open between January and March.'

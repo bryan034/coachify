@@ -3407,6 +3407,49 @@
           "question": {
             "type": "string",
             "title": "Question"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "hints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Hints"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "additionalProperties": false,
@@ -4165,7 +4208,10 @@
                   "review",
                   "continue",
                   "skip",
-                  "finish"
+                  "finish",
+                  "skip_topic",
+                  "skip_remaining",
+                  "review_topic"
                 ]
               },
               {
@@ -4434,6 +4480,16 @@
       },
       "CvDetail": {
         "properties": {
+          "review_progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "processing_progress": {
             "anyOf": [
               {
@@ -4632,6 +4688,9 @@
           "review_required": {
             "type": "boolean",
             "title": "Review Required"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewSummary"
           }
         },
         "type": "object",
@@ -5009,6 +5068,16 @@
       },
       "CvSummary": {
         "properties": {
+          "review_progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "processing_progress": {
             "anyOf": [
               {
@@ -7028,6 +7097,76 @@
           "message"
         ],
         "title": "ValidationIssue"
+      },
+      "ReviewSummary": {
+        "properties": {
+          "answered_questions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Answered Questions",
+            "default": 0
+          },
+          "experiences": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Experiences",
+            "default": 0
+          },
+          "skills_added": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Skills Added",
+            "default": 0
+          },
+          "skills_corrected": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Skills Corrected",
+            "default": 0
+          },
+          "skills_removed": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Skills Removed",
+            "default": 0
+          },
+          "added_skill_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Added Skill Ids"
+          },
+          "skill_notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Skill Notes"
+          }
+        },
+        "type": "object",
+        "title": "ReviewSummary"
+      },
+      "ReviewProgress": {
+        "properties": {
+          "reviewed_topics": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reviewed Topics"
+          },
+          "total_topics": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Topics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reviewed_topics",
+          "total_topics"
+        ],
+        "title": "ReviewProgress"
       }
     },
     "securitySchemes": {

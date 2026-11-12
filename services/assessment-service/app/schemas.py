@@ -1,6 +1,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from elo_shared.skill_groups import GROUP_NAMES
 
 Text=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=2000)]
 class Contract(BaseModel):
@@ -23,8 +24,45 @@ class Interpreted(Contract):
     recommendation:Text|None=None
     mapping_method:Literal['canonical','semantic','unresolved']
     mapping_reason:Text
+    # Job skills only: the model's whole-number levels on one 0–10 scale (3 guided, 6 independent, 9 complex).
+    demonstrated_level:int|None=Field(default=None,ge=1,le=10)
+    required_level:int|None=Field(default=None,ge=1,le=10)
+    score_explanation:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]|None=None
 class Batch(Contract):
     outcomes:list[Interpreted]=Field(min_length=1,max_length=8)
+
+Short=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]
+Label=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=40)]
+Category=Literal[GROUP_NAMES]
+Relevance=Literal['high','medium','low','none']
+class SkillJudgement(Contract):
+    """One model judgement of a profile skill against the goal. Validated before it is saved."""
+    skill_key:str
+    category:Category
+    subcategory:Label|None=None
+    relevance:Relevance
+    competence_score:int|None=Field(default=None,ge=0,le=10)
+    required_score:int|None=Field(default=None,ge=0,le=10)
+    explanation:Short
+    evidence_refs:list[str]=Field(default_factory=list,max_length=20)
+    requirement_refs:list[str]=Field(default_factory=list,max_length=10)
+class SkillBatch(Contract):
+    skills:list[SkillJudgement]=Field(min_length=1,max_length=15)
+class EvaluatedSkill(Contract):
+    name:str
+    canonical_skill_id:str|None=None
+    category:Category
+    subcategory:str|None=None
+    relevance:Relevance
+    competence_score:int|None=None
+    required_score:int|None=None
+    explanation:str
+    evidence_refs:list[str]
+    requirement_refs:list[str]
+class SkillProfile(Contract):
+    status:Literal['evaluated','partial','failed','empty']
+    rubric_version:str
+    skills:list[EvaluatedSkill]
 
 class InputVersions(Contract):
     as_of_date:str|None=None
@@ -55,9 +93,13 @@ class Outcome(Contract):
     mapping_reason:str
     relevance:Literal['high','medium','low','none']|None=None
     competence_score:float|None=Field(default=None,ge=0,le=10)
+    required_score:float|None=Field(default=None,ge=0,le=10)
     score_status:Literal['estimated','not_reviewed','insufficient_evidence']='insufficient_evidence'
     score_explanation:str|None=None
     scoring_rubric_version:str|None=None
+    demonstrated_score:float|None=Field(default=None,ge=0,le=10)
+    # Skills Profile skills the per-skill evaluation linked to this requirement.
+    profile_skills:list[dict]=Field(default_factory=list)
 class Result(Contract):
     schema_version:Literal['assessment-v1']
     id:str
@@ -76,6 +118,8 @@ class Result(Contract):
     priorities:list[str]
     analysis_status:Literal['succeeded','partial']
     research_coverage:Literal['available','no_findings','unavailable','stale','partial']
+    # Absent on results saved before per-skill evaluation existed.
+    skill_profile:SkillProfile|None=None
 class Context(Contract):
     ready:bool
     issues:list[dict]|None=None
@@ -85,6 +129,9 @@ class Context(Contract):
     inputs:InputVersions|None=None
     research_coverage:str|None=None
     evidence:dict[str,dict]|None=None
+    # Setup state for the evaluate banner; null until a goal and skills source both exist.
+    cv_reviewed:bool|None=None
+    research_pending:bool|None=None
     model_available:bool
 class Current(Contract):
     version:int

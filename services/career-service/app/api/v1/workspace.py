@@ -156,10 +156,10 @@ async def answer_message(body,request,account,key):
     if w.get('expires_at',now())<=now():raise GoalError('Temporary workflow expired. Resume your saved career goal.')
     route=direct_route(body.message)
     if route is not None and route.topic=='off_topic':return {'reply':REFUSAL,'proposed_skills':None}
-    answer=None
-    if body.mode!='refine':
-        from app.workflows.chat import focused_chat
-        answer=await focused_chat(request,account,row,body)
+    # Questions are answered in both modes; focused_chat returns None for edit
+    # requests (and pending edit clarifications), which go to the guided edit flow.
+    from app.workflows.chat import focused_chat
+    answer=await focused_chat(request,account,row,body)
     if answer is not None:
         await thread(repo.check,account,body.session_id,body.expected_version)
         await thread(repo.touch,account,body.session_id)

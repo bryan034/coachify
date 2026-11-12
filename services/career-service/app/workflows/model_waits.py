@@ -15,6 +15,6 @@ def resume_obsolete_model_waits(rows,kind):
     elif kind=='career_discovery':
         eligible={'kind':kind,'status':'waiting','lease_until':{'$lte':stamp},'error_code':'rate_limited'}
     else:raise ValueError('Unsupported research job kind.')
-    eligible['$and']=[{'$or':[{'provider':{'$exists':True,'$nin':['gemini','brave',None]}},{'provider':None,'limit_scope':'user'}]}]
+    eligible['$and']=[{'$or':[{'provider':{'$exists':True,'$nin':['compatible','brave',None]}},{'provider':None,'limit_scope':'user'}]}]
     return rows.update_many(eligible,{'$set':{'next_attempt_at':stamp,'provider':None,
         'limit_scope':None,'updated_at':stamp}}).modified_count

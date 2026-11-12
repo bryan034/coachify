@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from elo_shared.runtime import MemoryStore, Problem, Upstream, Model, begin
 from elo_shared.skills import resolve
 from app.domain import aggregate, validate_batch
-from app.schemas import Batch, Generate
+from app.schemas import Batch, Generate, SkillBatch
 from app.main import create_app
 from app.inputs import capture
 
@@ -30,10 +30,18 @@ class Sources:
         if path=='/api/v1/profile/capabilities':return {'version':0,'declarations':[]}
         if path.endswith('/assessment-input'):return copy.deepcopy(self.source)
         return {'id':'cv1','version':self.source['cv_version'],'status':'ready','file_name':'synthetic.docx'}
+def judge(context):
+    """A deterministic per-skill judgement citing each skill's first source."""
+    return SkillBatch(skills=[{'skill_key':skill['key'],'category':'Technical coding','subcategory':'Languages','relevance':'high',
+        'competence_score':6,'required_score':7,'explanation':'Used independently in a project.','evidence_refs':[skill['sources'][0]['ref']],
+        'requirement_refs':[r['ref'] for r in context['goal']['requirements']][:1]} for skill in context['skills']])
 class Interpreter:
     configured=True
-    def __init__(self,sources=None):self.calls=0;self.sources=sources
+    # `calls` counts requirement comparisons; per-skill judgements are counted separately.
+    def __init__(self,sources=None):self.calls=0;self.skill_calls=0;self.sources=sources
     async def generate(self,schema,instructions,context):
+        if schema is SkillBatch:
+            self.skill_calls+=1;return judge(context)
         self.calls+=1
         if self.sources:self.sources.source['cv_version']+=1
         return Batch(outcomes=[{'requirement_ref':r['ref'],'components':[{'dimension':'capability','status':'supported','explanation':'Declared personal project use.','evidence_refs':['cv:item1:claim:0']}],
@@ -133,6 +141,7 @@ def test_quota_retry_resumes_completed_batches_without_repeating_model_calls(mon
         configured=True
         def __init__(self):self.calls=[];self.failed=False
         async def generate(self,schema,instructions,context):
+            if schema is SkillBatch:return judge(context)
             self.calls.append([r['ref'] for r in context['requirements']])
             if len(self.calls)==2 and not self.failed:
                 self.failed=True;raise Problem('Provider capacity.',429,'model_quota',30)
@@ -271,6 +280,8 @@ def test_evidence_repair_is_bounded_and_never_publishes_rejected_batch(repair_su
             self.contexts = []
 
         async def generate(self, schema, instructions, context):
+            if schema is SkillBatch:
+                return await super().generate(schema, instructions, context)
             self.contexts.append(copy.deepcopy(context))
             value = await super().generate(schema, instructions, context)
             if self.calls == 1 or not repair_succeeds:
@@ -296,6 +307,61 @@ def test_evidence_repair_is_bounded_and_never_publishes_rejected_batch(repair_su
     else:
         assert state['operation']['status'] == 'failed' and state['result'] is None
         assert state['operation']['error']['code'] == 'assessment_output'
+
+
+def test_unknown_evidence_ref_repair_names_the_exact_reference_without_leaking_it_to_the_user():
+    class Repairing(Interpreter):
+        def __init__(self):
+            super().__init__()
+            self.contexts = []
+
+        async def generate(self, schema, instructions, context):
+            if schema is SkillBatch:
+                return await super().generate(schema, instructions, context)
+            self.contexts.append(copy.deepcopy(context))
+            value = await super().generate(schema, instructions, context)
+            if self.calls == 1:
+                value.outcomes[0].components[0].evidence_refs = ['cv:item1:claim:0', 'b12']
+            return value
+
+    model = Repairing()
+    with TestClient(create_app(MemoryStore(), Sources(), model)) as client:
+        response = client.post('/api/v1/assessments', json={
+            'expected_version': 0, 'mutation_id': str(uuid4()), 'allow_partial': True,
+        }, headers=H)
+        assert response.status_code == 202
+        state = finish(client)
+    feedback = model.contexts[1]['validation_feedback']
+    assert "'b12'" in feedback and "'job:req1'" in feedback and 'component 0 (capability)' in feedback
+    assert "'cv:item1:claim:0'" not in feedback
+    assert state['operation']['status'] == 'succeeded'
+    assert state['result']['job_skill_gaps'][0]['components'][0]['evidence_refs'] == ['cv:item1:claim:0']
+
+
+def test_unrepaired_unknown_evidence_ref_keeps_a_generic_user_error():
+    class Forging(Interpreter):
+        async def generate(self, schema, instructions, context):
+            value = await super().generate(schema, instructions, context)
+            if schema is SkillBatch:
+                return value
+            value.outcomes[0].components[0].evidence_refs = ['invented-ref']
+            return value
+
+    with TestClient(create_app(MemoryStore(), Sources(), Forging())) as client:
+        client.post('/api/v1/assessments', json={
+            'expected_version': 0, 'mutation_id': str(uuid4()), 'allow_partial': True,
+        }, headers=H)
+        state = finish(client)
+    assert state['operation']['status'] == 'failed'
+    assert state['operation']['error']['detail'] == 'The assessment referenced unavailable evidence.'
+    assert 'invented-ref' not in str(state['operation']['error'])
+
+
+def test_repeated_evidence_ref_is_collapsed_instead_of_rejected():
+    output = Batch(outcomes=[{'requirement_ref': 'python', 'components': [{'dimension': 'capability', 'status': 'supported',
+        'explanation': 'Declared use.', 'evidence_refs': ['a', 'a']}], 'mapping_method': 'semantic', 'mapping_reason': 'Same skill.'}])
+    result = validate_batch(output, [{'ref': 'python'}], {'a': {'text': 'I used Python.', 'attribution': 'personal'}})
+    assert result[0]['components'][0]['evidence_refs'] == ['a']
 
 
 def test_manual_only_snapshot_uses_published_declarations_and_tracks_revision():
@@ -337,6 +403,7 @@ def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
     class ManualModel(Interpreter):
         async def generate(self,schema,instructions,context):
             output=await super().generate(schema,instructions,context)
+            if schema is SkillBatch:return output
             for outcome in output.outcomes:
                 outcome.components[0].evidence_refs=['declaration:m']
             return output
@@ -347,7 +414,10 @@ def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
         assert state['operation']['status']=='succeeded',state
         assert not state['stale']
         assert state['result']['inputs']['cv_id'] is None
-        assert state['result']['job_skill_gaps'][0]['competence_score'] is None
+        # The declaration has no application level, so the score comes from its linked Skills Profile judgement.
+        python=state['result']['job_skill_gaps'][0]
+        assert python['scoring_rubric_version']=='profile-link-v1' and python['competence_score']==9
+        assert python['profile_skills'][0]['name']=='Python'
 
 
 def test_selected_failed_cv_does_not_fall_back_to_saved_declarations():

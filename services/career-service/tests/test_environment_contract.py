@@ -21,8 +21,10 @@ def test_canonical_career_keys_take_precedence_including_explicit_blank(monkeypa
         if legacy is not None:monkeypatch.setenv(alias,legacy)
     settings=AISettings.from_env()
     sources=SourceAPIs.from_environment(None)
-    assert settings.api_key.get_secret_value()==expected
-    assert settings.enabled==bool(expected)
+    # Only the search key keeps a legacy alias; the model key is canonical-only.
+    model_expected=(new or '').strip()
+    assert settings.api_key.get_secret_value()==model_expected
+    assert settings.enabled==bool(model_expected)
     assert sources.brave_key==expected and sources.configured==bool(expected)
 
 

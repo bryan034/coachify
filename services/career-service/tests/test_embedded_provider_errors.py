@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.ai.adapter import AIAdapter, AIError, Operation
-from app.ai.config import GeminiSettings
+from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 
 
@@ -25,7 +25,7 @@ def test_embedded_rejection_bypasses_correction_and_provider_retries(embedded_st
                 body = {'choices': [{'finish_reason': 'stop', 'message': {'content': '{}'}, 'error': error}]}
             return httpx.Response(200, json=body)
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter = AIAdapter(GeminiSettings(enabled=True, api_key='synthetic'), client)
+            adapter = AIAdapter(AISettings(enabled=True, api_key='synthetic'), client)
             operation = Operation('synthetic', '1', 'jd_extraction')
             with pytest.raises(AIError) as raised:
                 await adapter.generate(AIInput(stage='jd_extraction', source_text='Analyst. SQL required.'),
@@ -40,7 +40,7 @@ def test_embedded_rejection_bypasses_correction_and_provider_retries(embedded_st
 
 
 def test_successful_responses_api_error_null_is_accepted():
-    adapter = AIAdapter(GeminiSettings(enabled=True, api_key='synthetic'), None)
+    adapter = AIAdapter(AISettings(enabled=True, api_key='synthetic'), None)
     body = {'object': 'response', 'status': 'completed', 'error': None, 'output': [
         {'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': '{"reply":"OK"}'}]}]}
     assert json.loads(adapter._content(json.dumps(body))) == {'reply': 'OK'}
@@ -60,7 +60,7 @@ def test_permanent_quota_rejection_does_not_enter_workflow_wait(code):
         token = quota_progress.set(progress.append)
         try:
             async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-                adapter = AIAdapter(GeminiSettings(enabled=True, api_key='synthetic'), client, sleep=no_wait)
+                adapter = AIAdapter(AISettings(enabled=True, api_key='synthetic'), client, sleep=no_wait)
                 with pytest.raises(AIError) as caught:
                     await adapter.generate(AIInput(stage='jd_extraction', source_text='Analyst. SQL required.'),
                         Operation('synthetic', '1', 'jd_extraction'), current_revision=lambda: '1')
@@ -77,7 +77,7 @@ def test_embedded_rate_limit_preserves_bounded_provider_cooldown(header, expecte
         def handler(request):
             return httpx.Response(200, headers={'retry-after': header}, json={'error': {'code': 429}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter = AIAdapter(GeminiSettings(enabled=True, api_key='synthetic'), client)
+            adapter = AIAdapter(AISettings(enabled=True, api_key='synthetic'), client)
             with pytest.raises(AIError) as caught:
                 await adapter._complete({'model': 'synthetic', 'messages': []}, owner='synthetic')
         assert caught.value.code == 'rate_limited' and caught.value.retry_after == expected

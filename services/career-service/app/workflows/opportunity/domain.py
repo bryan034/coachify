@@ -6,7 +6,7 @@ from app.ai.recovery import issues_for
 from urllib.parse import urlsplit,urlunsplit
 from datetime import timedelta
 from app.schemas.analysis import ResearchContext,InterviewSkill,InterviewProcess,InterviewStage,InterviewEvidence
-from app.schemas.opportunity import Finding,FIELDS,CATEGORIES
+from app.schemas.opportunity import Finding,FIELDS,CATEGORIES,plain_text
 from app.repositories.goals import fingerprint,now
 from app.ai.adapter import AIError
 
@@ -51,7 +51,7 @@ def numeric_support(value,evidence,index):
     """Numbers must be present verbatim in the cited source excerpts."""
     numbers=lambda text:re.findall(r'(?<![\d.,])[-+]?(?:\d+(?:[,.]\d+)*|[.,]\d+)(?:[eE][-+]?\d+)?(?:[KkMm](?!\w))?',text)
     available=set(numbers(evidence))
-    if any(number not in available for number in numbers(value)):
+    if any(number not in available for number in numbers(plain_text(value))):
         raise citation_error(index,'value','unsupported_number')
 
 
@@ -79,7 +79,7 @@ def validate_claims(output,category,sources,public=None):
         ids=[sources[i].source_id for i in item.refs]
         if values['evidence_type']=='official' and any(sources[i].reliability!='official' and sources[i].platform!='employer' for i in item.refs):values['evidence_type']='third_party'
         if values['confidence']=='high' and any(sources[i].reliability!='official' for i in item.refs):values['confidence']='medium'
-        try:record=Finding(**values,source_ids=ids,finding_id='f'+fingerprint({'category':category,'field':item.field,'value':item.value,'sources':sorted(ids),**({'round':values['round_number']} if values.get('round_number') else {})})[:16],last_verified_at=stamp)
+        try:record=Finding(**values,source_ids=ids,finding_id='f'+fingerprint({'category':category,'field':item.field,'value':plain_text(item.value),'sources':sorted(ids),**({'round':values['round_number']} if values.get('round_number') else {})})[:16],last_verified_at=stamp)
         except ValidationError as error:
             issues=issues_for(error,Finding)
             raise AIError('invalid_output',True,reason='schema_validation',
@@ -94,16 +94,16 @@ def compatibility(categories,sources=()):
     skills=[];stages=[]
     for finding in categories['interview_intelligence'].findings:
         if finding.field=='recruitment_stages':
-            stages.append(InterviewStage(name=finding.value[:160],evidence=InterviewEvidence(source_ids=finding.source_ids,text=finding.value)))
+            stages.append(InterviewStage(name=plain_text(finding.value)[:160],evidence=InterviewEvidence(source_ids=finding.source_ids,text=plain_text(finding.value))))
         elif finding.field in ('preparation_topics','interview_questions'):
-            skills.append(InterviewSkill(name=finding.value[:160],category='Interview preparation',question_patterns=[finding.value] if finding.field=='interview_questions' else [],source_ids=finding.source_ids,independent_report_count=len({s.report_group for s in sources if s.source_id in finding.source_ids and s.report_group})))
+            skills.append(InterviewSkill(name=plain_text(finding.value)[:160],category='Interview preparation',question_patterns=[plain_text(finding.value)] if finding.field=='interview_questions' else [],source_ids=finding.source_ids,independent_report_count=len({s.report_group for s in sources if s.source_id in finding.source_ids and s.report_group})))
     return skills,InterviewProcess(stages=stages[:8])
 
 
 def summary_input(categories):
     # Interleave categories so the bounded summary cannot lose later categories
     # when interview/internship evidence fills the first sixty slots.
-    return [{'id':f.finding_id,'category':category,'field':f.field,'value':f.value,'confidence':f.confidence,'scope':f.scope,'conflict_group':f.conflict_group}
+    return [{'id':f.finding_id,'category':category,'field':f.field,'value':plain_text(f.value),'confidence':f.confidence,'scope':f.scope,'conflict_group':f.conflict_group}
             for index in range(max((len(result.findings) for result in categories.values()),default=0))
             for category,result in categories.items() if index<len(result.findings)
             for f in [result.findings[index]]][:60]
@@ -128,7 +128,7 @@ def dedupe_findings(category,findings):
         identities[finding.finding_id]=combine(previous,finding) if previous else finding
     grouped={}
     for finding in identities.values():
-        key=(finding.field,' '.join(finding.value.casefold().split()),finding.scope,finding.conflict_group,finding.evidence_type)
+        key=(finding.field,' '.join(plain_text(finding.value).casefold().split()),finding.scope,finding.conflict_group,finding.evidence_type)
         grouped[key]=combine(grouped[key],finding) if key in grouped else finding
     return list(grouped.values())[:20]
 

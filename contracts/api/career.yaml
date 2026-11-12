@@ -3864,7 +3864,7 @@
               {
                 "type": "string",
                 "enum": [
-                  "gemini",
+                  "compatible",
                   "brave"
                 ]
               },
@@ -5249,7 +5249,7 @@
               {
                 "type": "string",
                 "enum": [
-                  "gemini",
+                  "compatible",
                   "brave"
                 ]
               },
@@ -5316,7 +5316,6 @@
               "enum": [
                 "research_disabled",
                 "reasoning_disabled",
-                "gemini_not_configured",
                 "brave_not_configured",
                 "model_not_configured",
                 "search_not_configured",
@@ -7681,7 +7680,7 @@
               {
                 "type": "string",
                 "enum": [
-                  "gemini",
+                  "compatible",
                   "brave"
                 ]
               },
@@ -7869,7 +7868,7 @@
               {
                 "type": "string",
                 "enum": [
-                  "gemini",
+                  "compatible",
                   "brave"
                 ]
               },

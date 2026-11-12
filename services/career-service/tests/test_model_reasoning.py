@@ -1,4 +1,4 @@
-"""Gemini-only production configuration and Brave-to-domain JSON conversion."""
+"""ContextModel-only production configuration and Brave-to-domain JSON conversion."""
 import asyncio
 import json
 
@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.ai.adapter import AIAdapter,AIError,MODEL_OUTPUTS,Operation
-from app.ai.config import GeminiSettings
+from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.opportunity_config import OpportunitySettings
 from app.ai.opportunity_contracts import StructuredFindings,FIELD_GUIDANCE,structure_input
@@ -24,26 +24,26 @@ def test_runtime_ignores_legacy_credentials_models_and_chat_switch(monkeypatch):
     for name,value in {'AI_ENABLED':'true','AI_PROVIDER':'retired-provider','AI_MODEL':'legacy-model',
         'AI_BASE_URL':'https://legacy.test/v1','AI_API_KEY':'synthetic-legacy',
         'GEMINI_ENABLED':'false','GEMINI_MODEL':'legacy-context-model',
-        'OPPORTUNITY_GEMINI_MODEL':'legacy-coordinator','GEMINI_API_KEY':'synthetic-gemini'}.items():
+        'OPPORTUNITY_GEMINI_MODEL':'legacy-coordinator','CAREER_LLM_API_KEY':'synthetic-key'}.items():
         monkeypatch.setenv(name,value)
-    settings=GeminiSettings.reasoning_from_env()
-    assert settings.enabled and settings.provider=='gemini' and settings.model=='gemini-3.5-flash-lite'
-    assert settings.api_key.get_secret_value()=='synthetic-gemini'
-    assert settings.base_url=='https://generativelanguage.googleapis.com/v1beta/openai'
-    assert settings.response_mode=='json_schema' and settings.token_parameter=='max_tokens'
-    assert OpportunitySettings.from_env().gemini_model=='gemini-3.5-flash-lite'
+    settings=AISettings.from_env()
+    assert settings.enabled and settings.provider=='compatible' and settings.model=='openai/gpt-4o-mini'
+    assert settings.api_key.get_secret_value()=='synthetic-key'
+    assert settings.base_url=='https://openrouter.ai/api/v1'
+    assert settings.response_mode=='json_schema_strict' and settings.token_parameter=='max_tokens'
+    assert OpportunitySettings.from_env().model=='openai/gpt-4o-mini'
     monkeypatch.setenv('AI_ENABLED','false')
-    assert not GeminiSettings.reasoning_from_env().enabled
-    monkeypatch.setenv('AI_ENABLED','true');monkeypatch.delenv('GEMINI_API_KEY')
-    with pytest.raises(ValueError) as error:GeminiSettings.reasoning_from_env()
+    assert not AISettings.from_env().enabled
+    monkeypatch.setenv('AI_ENABLED','true');monkeypatch.delenv('CAREER_LLM_API_KEY')
+    with pytest.raises(ValueError) as error:AISettings.from_env()
     assert 'synthetic-legacy' not in str(error.value)
 
 
 @pytest.mark.parametrize('stage',MODEL_OUTPUTS)
-def test_every_stage_routes_to_the_same_gemini_adapter(stage):
+def test_every_stage_routes_to_the_same_model_adapter(stage):
     async def run():
         class RecordingAdapter:
-            settings=GeminiSettings(enabled=True,api_key='synthetic')
+            settings=AISettings(enabled=True,api_key='synthetic')
             async def generate(self,request,operation,**kwargs):
                 assert request.stage==stage and operation.stage==stage
                 return self.settings.model
@@ -51,7 +51,7 @@ def test_every_stage_routes_to_the_same_gemini_adapter(stage):
         # Routing does not mutate requests; stage-specific contracts are tested by
         # the real adapter flows and by the research conversion below.
         from types import SimpleNamespace
-        assert await ModelRouter(adapter,adapter).generate(SimpleNamespace(stage=stage),Operation('synthetic','1',stage))=='gemini-3.5-flash-lite'
+        assert await ModelRouter(adapter,adapter).generate(SimpleNamespace(stage=stage),Operation('synthetic','1',stage))=='openai/gpt-4o-mini'
     asyncio.run(run())
 
 
@@ -75,10 +75,10 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
                 return httpx.Response(200,json={'grounding':{'generic':[
                     {'url':'https://example.test/report','snippets':list(passages.values())}]},
                     'sources':{'https://example.test/report':{'title':'Example internship report'}}})
-            assert request.url.host=='generativelanguage.googleapis.com'
-            assert request.headers['authorization']=='Bearer synthetic-gemini'
+            assert request.url.host=='openrouter.ai'
+            assert request.headers['authorization']=='Bearer synthetic-key'
             payload=json.loads(request.content)
-            assert payload['model']=='gemini-3.5-flash-lite' and payload['response_format']['type']=='json_schema'
+            assert payload['model']=='openai/gpt-4o-mini' and payload['response_format']['type']=='json_schema'
             schema=payload['response_format']['json_schema']
             assert schema['name']=='opportunity_structure'
             supplied=json.loads(payload['messages'][1]['content'])
@@ -93,7 +93,7 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
             selected=select_evidence(sources,OpportunitySettings().evidence_tokens)
             context=structure_input({},category,selected)
             public={'company':'Example','employment_type':'internship'}
-            adapter=AIAdapter(GeminiSettings(enabled=True,api_key='synthetic-gemini',max_output_tokens=4096),client)
+            adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic-key',max_output_tokens=4096),client)
             result=await adapter.generate(AIInput(stage='opportunity_structure',context=json.dumps(context)),
                 Operation('synthetic','1','opportunity_structure'),current_revision=lambda:'1',
                 validate_output=lambda output:supported_claims(output,category,selected,public))
@@ -102,7 +102,7 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
         categories={key:CategoryResult(status='completed',findings=findings if key==category else [],
             missing_fields=[] if key==category else list(FIELDS[key])) for key in CATEGORIES}
         report=OpportunityReport(fingerprint='0'*64,opportunity_id=None,categories=categories,
-            status='completed',researched_at=now(),expires_at=now(),models={'reasoning':'gemini-3.5-flash-lite'})
+            status='completed',researched_at=now(),expires_at=now(),models={'reasoning':'openai/gpt-4o-mini'})
         restored=OpportunityReport.model_validate_json(report.model_dump_json())
         assert restored==report and len(calls)==2
         assert all(f.source_ids==[sources[0].source_id] and f.quotes[0] in sources[0].evidence for f in findings)
@@ -113,7 +113,7 @@ def test_brave_snippets_convert_to_every_existing_research_json_field(category):
     asyncio.run(run())
 
 
-def test_larger_gemini_evidence_budget_still_respects_context_character_bounds():
+def test_larger_model_evidence_budget_still_respects_context_character_bounds():
     sources=[ResearchSource(source_id=f's{i}',platform='other',url=f'https://example.test/{i}',
         evidence='a'*2400) for i in range(24)]
     selected=select_evidence(sources,8192)
@@ -138,7 +138,7 @@ def test_only_unleased_obsolete_model_waits_resume_without_losing_work(kind):
         'finished':False,'lease_until':stamp,'worker_until':stamp,
         'evidence':{'saved':['synthetic public report']},'evaluated':['completed query']}
     values=[{'_id':'retired',**common},{'_id':'old-local',**common,'provider':None,'limit_scope':'user'},
-        {'_id':'gemini',**common,'provider':'gemini'},{'_id':'brave',**common,'provider':'brave'},
+        {'_id':'compatible',**common,'provider':'compatible'},{'_id':'brave',**common,'provider':'brave'},
         {'_id':'active',**common,'lease_until':future,'worker_until':future},
         {'_id':'complete',**common,'status':'completed','finished':True}]
     if kind=='opportunity_job':values.append({'_id':'parallel-brave',**common,
@@ -157,7 +157,7 @@ def test_only_unleased_obsolete_model_waits_resume_without_losing_work(kind):
 
 
 @pytest.mark.parametrize('provider,expected',[
-    ('gemini','gemini'),('brave','brave'),('retired-provider',None),(None,None)])
+    ('compatible','compatible'),('brave','brave'),('retired-provider',None),(None,None)])
 def test_public_responses_normalise_historical_provider_names(provider,expected):
     from pydantic import TypeAdapter
     from app.schemas.providers import ResearchProvider
