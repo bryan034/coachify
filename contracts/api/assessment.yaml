@@ -114,6 +114,7 @@
     "/api/v1/assessments/context": {
       "get": {
         "summary": "Context",
+        "description": "What an evaluation would read, and which setup step is still open. Never starts one.",
         "operationId": "context_api_v1_assessments_context_get",
         "responses": {
           "200": {
@@ -227,6 +228,7 @@
     "/api/v1/assessments/current": {
       "get": {
         "summary": "Current",
+        "description": "Read the saved comparison and resume a pending one. A new comparison starts only from the explicit command.",
         "operationId": "current_api_v1_assessments_current_get",
         "responses": {
           "200": {
@@ -975,6 +977,28 @@
             ],
             "title": "Evidence"
           },
+          "cv_reviewed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cv Reviewed"
+          },
+          "research_pending": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Pending"
+          },
           "model_available": {
             "type": "boolean",
             "title": "Model Available"
@@ -1168,6 +1192,113 @@
           "detail"
         ],
         "title": "ErrorView"
+      },
+      "EvaluatedSkill": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "AI & ML",
+              "Languages",
+              "Data & analytics",
+              "Cloud & DevOps",
+              "Technical coding",
+              "Software & project management",
+              "Design",
+              "Communication & leadership",
+              "Business & finance",
+              "Other skills"
+            ],
+            "title": "Category"
+          },
+          "subcategory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subcategory"
+          },
+          "relevance": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "none"
+            ],
+            "title": "Relevance"
+          },
+          "competence_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competence Score"
+          },
+          "required_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Score"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Refs"
+          },
+          "requirement_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requirement Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "category",
+          "relevance",
+          "explanation",
+          "evidence_refs",
+          "requirement_refs"
+        ],
+        "title": "EvaluatedSkill"
       },
       "Generate": {
         "properties": {
@@ -1433,6 +1564,19 @@
             ],
             "title": "Competence Score"
           },
+          "required_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Score"
+          },
           "score_status": {
             "type": "string",
             "enum": [
@@ -1464,6 +1608,43 @@
               }
             ],
             "title": "Scoring Rubric Version"
+          },
+          "demonstrated_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Demonstrated Score"
+          },
+          "profile_skills": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Profile Skills"
+          },
+          "score_confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Confidence"
           }
         },
         "additionalProperties": true,
@@ -1585,6 +1766,16 @@
               "partial"
             ],
             "title": "Research Coverage"
+          },
+          "skill_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -1609,6 +1800,39 @@
           "research_coverage"
         ],
         "title": "Result"
+      },
+      "SkillProfile": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "evaluated",
+              "partial",
+              "failed",
+              "empty"
+            ],
+            "title": "Status"
+          },
+          "rubric_version": {
+            "type": "string",
+            "title": "Rubric Version"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluatedSkill"
+            },
+            "type": "array",
+            "title": "Skills"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "rubric_version",
+          "skills"
+        ],
+        "title": "SkillProfile"
       }
     },
     "securitySchemes": {

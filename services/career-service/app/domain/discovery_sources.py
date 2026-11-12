@@ -45,7 +45,7 @@ def validate_assessments(output,sources):
     for item in output.sources:
         source=sources[item.ref]
         value=item.model_dump(mode='json')
-        # Gemini owns semantic relevance/faithful paraphrasing; Python does not
+        # The model owns semantic relevance/faithful paraphrasing; Python does not
         # impose a kind taxonomy, compare employer names, or require verbatim text.
         if excluded_kind(source):value.update(relevant=False)
         value['company']=getattr(source,'company',None)

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from elo_shared.runtime import Problem, digest
 from elo_shared.skills import identity, MAPPING_VERSION
+from app.competence import RUBRIC_VERSION
 
 async def capture(upstream,account):
     token=account['token']
@@ -56,6 +57,10 @@ async def capture(upstream,account):
                 **{k:claim.get(k) for k in ('attribution','assistance','proficiency','experience_months','support_uncertain','evidence_type')},
                 'application_level':next((estimate['level'] for estimate in (cv or {}).get('skill_estimates',[]) if estimate.get('item_id')==item['id'] and estimate.get('skill_name','').casefold()==claim['name'].casefold()),None),
                 'reviewed':bool(cv and cv.get('profile_reviewed_effective_version')==cv.get('effective_version')),**identity(claim['name'])}
+            evidence[key]['source_kind']=item['kind']
+            evidence[key]['review_facts']=[f for f in item.get('review_evidence',[])
+                if (not f.get('skill_name') and f['field'] not in {'complexity','problem_solving','frequency','recency'})
+                or (f.get('skill_name') or '').strip().casefold()==claim['name'].strip().casefold()]
     for declaration in source['declarations']:
         ref='declaration:'+declaration['id']
         evidence[ref]={'ref':ref,'kind':'user_declaration','name':declaration['name'],
@@ -83,6 +88,10 @@ async def capture(upstream,account):
             name=f.get('value') or f.get('name')
             requirements.append({**f,'ref':'interview:'+str(f.get('finding_id') or index),'kind':'interview_preparation',
                 'name':name,'priority':'suggested','origin':'interview_research',**identity(name)})
+    # Reported to the client, which offers evaluation once the CV review is finished and research has settled.
+    reviewed=not cv_id or bool(cv.get('profile_reviewed_effective_version') is not None and cv.get('profile_reviewed_effective_version')==cv.get('effective_version'))
+    interview_status=((research or {}).get('intelligence') or {}).get('categories',{}).get('interview_intelligence',{}).get('status')
+    research_pending=bool(research and (research.get('research_status') in ('pending','processing') or interview_status in ('pending','running')))
     time_sensitive=bool(goal.get('non_skill_requirements') or any(item.get('ongoing') for item in source['items']))
     vector={'source_mode':'cv_and_profile' if cv_id else 'profile_only','as_of_date':datetime.now(ZoneInfo('Asia/Singapore')).date().isoformat() if time_sensitive else None,'cv_id':cv_id,'cv_version':source['cv_version'],'extraction_version':source['extraction_version'],
         'effective_version':source['effective_version'],'cv_selection_version':source['selection_version'],
@@ -91,5 +100,6 @@ async def capture(upstream,account):
         'research_id':research['_id'] if research else None,'research_version':research['version'] if research else None,
         'research_coverage':coverage,'registry_version':MAPPING_VERSION}
     return {'ready':True,'issues':[],'goal':goal,'cv':{'id':cv_id,'name':cv['file_name']} if cv else None,'inputs':vector,
-        'input_hash':digest(vector),'requirements':requirements,'evidence':evidence,
-        'source_snapshot':{'capabilities':source,'goal':goal,'research':research,'education':education},'research_coverage':coverage}
+        'input_hash':digest({'inputs':vector,'scoring_rubric':RUBRIC_VERSION}),'requirements':requirements,'evidence':evidence,
+        'source_snapshot':{'capabilities':source,'goal':goal,'research':research,'education':education},'research_coverage':coverage,
+        'cv_reviewed':reviewed,'research_pending':research_pending}

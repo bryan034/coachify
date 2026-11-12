@@ -21,16 +21,14 @@ export async function mockEmptyConversation(page: Page) {
   });
 }
 
-/** Saved CVs sit under a disclosure below the CV card; open it before working with the list. */
+/** Saved CVs sit beside the upload panel; just confirm the list is showing. */
 export async function openCvLibrary(page: Page) {
   await expect(page.getByLabel('Selected CV', {exact:true})).toContainText(/No active CV yet|Active CV:/);
-  const library = page.locator('details.cv-library-disclosure');
-  await expect(library).toBeVisible();
-  if (await library.getAttribute('open') === null) await library.locator(':scope > summary').click();
   await expect(page.getByRole('heading', {name:'Your CVs', exact:true})).toBeVisible();
 }
 
 export async function openCvReviewTools(page: Page) {
+  await expect(page.locator('.cv-workspace')).toHaveAttribute('aria-busy','false');
   const review = new URL(page.url()).searchParams.get('review');
   if (review) {
     // Finish an already-started turn before editing the same CV version. If
@@ -41,15 +39,15 @@ export async function openCvReviewTools(page: Page) {
     }
     await page.getByRole('button', {name:review === 'manual' ? 'Back to Skills Profile' : 'Save and review later', exact:true}).click();
   }
-  await page.getByRole('button', {name:'Upload new CV', exact:true}).click();
+  // A first-time user lands on the upload screen; with saved CVs the upload form opens from the header.
+  const uploadNew = page.getByRole('button', {name:'Upload new CV', exact:true});
+  await expect(uploadNew.or(page.getByLabel('CV document', {exact:true})).first()).toBeVisible();
+  if (await uploadNew.count()) await uploadNew.click();
   await expect(page.getByLabel('CV document', {exact:true})).toBeVisible();
-  await openCvLibrary(page);
+  if(await page.getByRole('heading',{name:'Your CVs',exact:true}).count())await openCvLibrary(page);
   await expect(page.getByText('Loading saved CVs…', {exact: true})).toHaveCount(0);
-  for (const label of ['CV details and corrections']) {
-    const summary = page.locator('summary').filter({hasText: label});
-    await expect(summary).toHaveCount(1);
-    const details = summary.locator('..');
-    if (await details.getAttribute('open') === null) await summary.click();
-    await expect(details).toHaveAttribute('open', '');
-  }
+  const tools=page.getByRole('button',{name:'Review details and corrections',exact:true});
+  if(await tools.count()&&await tools.getAttribute('aria-expanded')==='false')await tools.click();
+  // The Skills Profile no longer has a "CV details and corrections" section.
+  await expect(page.locator('summary').filter({hasText: 'CV details and corrections'})).toHaveCount(0);
 }

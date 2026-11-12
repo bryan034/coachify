@@ -3,13 +3,7 @@ from copy import deepcopy
 from app.schemas.cv import Extraction
 
 
-# Gemini's decoding grammar can reject nested array/range combinations even
-# though they are valid JSON Schema. Domain models still enforce every bound.
-_DECODING_BOUNDS = frozenset({'minLength', 'maxLength', 'minItems', 'maxItems',
-    'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf'})
-
-
-def extraction_schema(*, gemini=False):
+def extraction_schema():
     schema = deepcopy(Extraction.model_json_schema())
     definitions = schema.pop('$defs', {})
 
@@ -24,7 +18,7 @@ def extraction_schema(*, gemini=False):
         # the properties mapping itself.
         result = {}
         for key, item in value.items():
-            if key in ('default', 'title') or (gemini and key in _DECODING_BOUNDS): continue
+            if key in ('default', 'title'): continue
             result[key] = ({name: normalize(field) for name, field in item.items()}
                            if key == 'properties' else normalize(item))
         if result.get('type') == 'object':

@@ -60,16 +60,16 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.reload();
  await expect(page.locator('.side-bottom .me')).toContainText('Synthetic College');
  await page.screenshot({path:testInfo.outputPath('home-desktop.png'),fullPage:true});
- for (const [label,heading] of [['Roadmap','Roadmap'],['Skills Profile','Skills Profile'],['Search Jobs','Search Jobs'],['Conversations','Conversations'],['Calendar','Calendar']]) {
+ for (const [label,heading] of [['Roadmap','Roadmap'],['Skills Profile','Skills Profile'],['Search Jobs','Search Jobs'],['Calendar','Calendar']]) {
   const link=page.getByRole('navigation').getByRole('link',{name:label,exact:true});
   await link.click();
   await expect(link).toHaveAttribute('aria-current','page');
   await expect(page.getByRole('heading',{level:1,name:heading})).toBeVisible();
-  if(label==='Skills Profile'){await page.screenshot({path:testInfo.outputPath('skills-desktop.png'),fullPage:true});await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveCount(0);}
+  if(label==='Skills Profile'){await page.screenshot({path:testInfo.outputPath('skills-desktop.png'),fullPage:true});await expect(page.getByRole('heading',{name:'Upload your CV'})).toBeVisible();await expect(page.getByRole('textbox',{name:'Message elo'})).toHaveCount(0);}
   else if(label==='Search Jobs'){
    await expect(page.getByRole('textbox',{name:'Job title or keywords'})).toBeVisible();
    await page.getByRole('textbox',{name:'Job title or keywords'}).fill('Data analyst');
-   await page.getByRole('button',{name:'Search',exact:true}).click();
+   await page.getByRole('button',{name:'Find jobs',exact:true}).click();
    await expect(page.getByRole('link',{name:/LinkedIn/})).toHaveAttribute('href',/keywords=Data\+analyst/);
    await expect(page.getByRole('link',{name:/LinkedIn/})).toHaveAttribute('target','_blank');
    await expect(page.getByRole('heading',{name:'Synthetic Data Intern'})).toBeVisible();
@@ -86,14 +86,14 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
    await page.screenshot({path:testInfo.outputPath('jobs-application-check.png')});
    await applicationCheck.getByRole('button',{name:'No',exact:true}).click();
    await expect(applicationCheck).toHaveCount(0);
-   await expect(page.getByRole('button',{name:'My applications (0)'})).toBeVisible();
+   await expect(page.getByText('0 tracked')).toBeVisible();
   }
   else if(label==='Roadmap') {
-   await expect(page.getByRole('heading',{name:'Bring your starting point and direction'})).toBeVisible();
-   await expect(page.getByRole('textbox',{name:'Answer here'})).toBeDisabled();
-   await expect(page.getByRole('button',{name:'Send message',exact:true})).toBeDisabled();
-  } else if(label==='Conversations') await expect(page.getByRole('heading',{name:'Socials are on the way'})).toBeVisible();
-  else await expect(page.getByText('Event discovery is coming soon.')).toBeVisible();
+   await expect(page.getByRole('heading',{name:'Finish these first'})).toBeVisible();
+   await expect(page.getByRole('link',{name:'Open CV'})).toHaveAttribute('href','/cv');
+   await expect(page.getByRole('link',{name:'Open Career Goal'})).toHaveAttribute('href','/career-goal');
+   await expect(page.getByRole('button',{name:'Generate roadmap'})).toHaveCount(0);
+  } else await expect(page.getByText('Event discovery is coming soon.')).toBeVisible();
  }
  await page.getByRole('button',{name:'Month',exact:true}).click();
  await expect(page.getByRole('button',{name:'Month',exact:true})).toHaveAttribute('aria-pressed','true');
@@ -101,9 +101,9 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  // Calendar shows no add or view-event controls until they work.
  await expect(page.getByRole('button',{name:'+ Add',exact:true})).toHaveCount(0);
  await page.getByRole('navigation').getByRole('link',{name:'Skills Profile'}).click();
- await page.getByRole('button',{name:'Upload new CV'}).click();await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
- await expect(page.getByRole('heading',{name:'What elo will use'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Finish these first'})).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/career-goal"]')).toBeVisible();
  await expect(page.getByRole('tab')).toHaveCount(0);
@@ -122,7 +122,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Home',exact:true}).focus();
  await page.keyboard.press('Escape');
  await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeFocused();
- for(const label of ['Home','Skills Profile','Search Jobs','Conversations','Calendar']) {
+ for(const label of ['Home','Skills Profile','Search Jobs','Calendar']) {
   await page.getByRole('button',{name:'Menu',exact:true}).click();
   await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();
   await page.locator('#workspace-sidebar').getByRole('link',{name:label,exact:true}).click();
@@ -131,7 +131,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   if(label==='Search Jobs'){
    await page.getByRole('textbox',{name:'Job title or keywords'}).fill('Data analyst');
-   await page.getByRole('button',{name:'Search',exact:true}).click();
+   await page.getByRole('button',{name:'Find jobs',exact:true}).click();
    await expect(page.getByRole('link',{name:/Indeed/})).toBeVisible();
    await page.screenshot({path:testInfo.outputPath('jobs-mobile.png'),fullPage:true});
   }

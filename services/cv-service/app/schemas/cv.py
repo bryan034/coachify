@@ -206,6 +206,12 @@ class SkillClaim(BaseModel):
     support_uncertain: bool
 
 
+class ValidationIssue(BaseModel):
+    status: Literal['unverified']
+    code: str = Field(description='The check this section failed after retrying; no CV content.')
+    message: str
+
+
 class CvItem(BaseModel):
     id: str
     source_fingerprint: str | None = None
@@ -229,6 +235,7 @@ class CvItem(BaseModel):
     uncertainties: list[str] = []
     skill_claims: list[SkillClaim] = []
     review_evidence: list[ReviewFact] = Field(default_factory=list, max_length=240)
+    validation_issue: ValidationIssue | None = None
 
 
 class SkillSource(BaseModel):
@@ -367,7 +374,14 @@ class ProcessingProgress(BaseModel):
     message: str
 
 
+class ReviewProgress(BaseModel):
+    reviewed_topics: int = Field(ge=0)
+    total_topics: int = Field(ge=0)
+
+
 class CvSummary(BaseModel):
+    # Topics covered so far in the guided review; null until a review has started.
+    review_progress: ReviewProgress | None = None
     processing_progress: ProcessingProgress | None = None
     profile_reviewed_effective_version: int | None = None
     id: str
@@ -384,6 +398,16 @@ class CvSummary(BaseModel):
     updated_at: str
     error: ErrorInfo | None
     source_available: bool
+
+
+class ReviewSummary(BaseModel):
+    answered_questions: int = Field(default=0, ge=0)
+    experiences: int = Field(default=0, ge=0)
+    skills_added: int = Field(default=0, ge=0)
+    skills_corrected: int = Field(default=0, ge=0)
+    skills_removed: int = Field(default=0, ge=0)
+    added_skill_ids: list[str] = Field(default_factory=list)
+    skill_notes: dict[str, str] = Field(default_factory=dict)
 
 
 class CvDetail(CvSummary):
@@ -406,6 +430,7 @@ class CvDetail(CvSummary):
     reconciliation: list[dict[str, str]]
     reconciliation_candidate_id: str | None = None
     review_required: bool
+    review_summary: ReviewSummary = Field(default_factory=ReviewSummary)
 
 
 class Selection(BaseModel):

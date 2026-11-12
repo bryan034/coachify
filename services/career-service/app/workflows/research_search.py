@@ -1,4 +1,4 @@
-"""Checkpoint-friendly Gemini search planning and useful-source assessment."""
+"""Checkpoint-friendly model search planning and useful-source assessment."""
 import re
 import asyncio
 from app.ai.recovery import validation_budget

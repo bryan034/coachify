@@ -13,7 +13,8 @@ export function CvProcessingProgress({cv}: {cv: CvSummary}) {
  return <PreparationProgress key={`${cv.id}:${cv.operation_id}`} cv={cv}/>;
 }
 
-function PreparationProgress({cv}: {cv: CvSummary}) {
+/** Smoothed, never-100-until-ready percentage shared by every processing view. */
+export function useProcessingPercent(cv: CvSummary) {
  const progress = cv.processing_progress;
  const actual = cv.status === 'ready' ? 100 : Math.min(progress?.percent ?? 0, 99);
  const [displayed, setDisplayed] = useState(actual);
@@ -37,6 +38,11 @@ function PreparationProgress({cv}: {cv: CvSummary}) {
  const percent = cv.status === 'ready' ? 100 : Math.min(99, Math.round(Math.max(actual, displayed)));
  const active = cv.status === 'queued' || cv.status === 'processing';
  const message = progress?.message ?? 'Reading your experience and skills…';
+ return {progress, actual, displayed, percent, active, message};
+}
+
+function PreparationProgress({cv}: {cv: CvSummary}) {
+ const {progress, actual, displayed, percent, active, message} = useProcessingPercent(cv);
  return <div className="cv-processing-progress">
   <div className="row between"><span>Preparing your review</span><strong>{progress ? `${percent}%` : 'In progress'}</strong></div>
   <div className={`cv-preparation-track${active ? ' is-active' : ''}${!progress ? ' is-indeterminate' : ''}`}

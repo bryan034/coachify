@@ -5,13 +5,13 @@ Career owns transient job inputs, the account's canonical goal and guided chat, 
 ## Model and search providers
 
 All Career stages share the configured model through the OpenAI Python SDK. The
-public template selects Gemini plus Brave LLM Context. Optional configurations
+public template selects OpenRouter plus Brave LLM Context. Optional configurations
 include local inference and DeepSeek cloud plus its Search API.
 Follow-up questions automatically retrieve public evidence when saved facts are
 missing or the answering model returns `not_found`, with up to three distinct scoped searches
 per unanswered turn and reuse during answer repairs. Ambiguous/off-topic/edit requests do not
 search. See [exact local/cloud settings](../../docs/setup.md#career-model-and-search-configuration).
-Older Gemini/Brave names below describe the original provider path; the same domain
+Older model/Brave names below describe the original provider path; the same domain
 validation and workflow apply to the selected providers. No live local/cloud quality
 or deployment verification is claimed by synthetic tests.
 
@@ -41,8 +41,8 @@ completion settings can still lower these budgets; agents never read/change them
 
 - `GET /api/v1/career/workspace` returns one owner-scoped saved workspace, with `current.skill_groups` mapping each goal skill to its display category; `/workspace/progress` supports lightweight polling.
 - `POST /api/v1/career/workspace/jd` starts or reconnects to versioned JD intake. A validated cloud identity overlaps full extraction with public-only retrieval; local R1 defers metadata and retrieval until full extraction. Successful extraction saves the goal; combined chat output waits for extraction and research to complete.
-- `POST /api/v1/career/workspace/summary` generates a concise Gemini overview from the saved goal and finished revision-linked research, including partial reports with explicit limitations. It supports the same owner-scoped background operations and snapshot retries.
-- `POST /api/v1/career/workspace/messages` asks scoped questions or refines the current goal. Ambiguous edits retain a private pending question; valid edits save with owner/version checks and retry receipts. While an edit is pending, clarification answers take precedence over direct public-question shortcuts; unrelated task execution remains refused.
+- `POST /api/v1/career/workspace/summary` generates a concise AI overview from the saved goal and finished revision-linked research, including partial reports with explicit limitations. It supports the same owner-scoped background operations and snapshot retries.
+- `POST /api/v1/career/workspace/messages` asks scoped questions or refines the current goal. Ambiguous edits retain a private pending question; valid edits save with owner/version checks and retry receipts. While an edit is pending, clarification answers take precedence over direct public-question shortcuts; unrelated task execution remains refused. With `mode=refine`, questions are answered first (edit requests fall through to the guided edit flow) and general career questions, including exploring new career paths, are allowed via the `career_guidance` route: unverified general guidance with no citations, never saved to the goal. `mode=question` stays limited to the saved goal.
 - `/api/v1/career/goals` and `/goals/current` expose canonical structured history/current state; `/goals/current` includes the same `skill_groups` as the workspace. Goals edit in place with versions. A replacement becomes current only after validated saving.
 
 Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
@@ -103,7 +103,7 @@ Career's CV transport/projection intake is bounded at **512 KiB**, separately fr
 
 `/api/v1/career/discoveries` provides conversational direction setting without requiring a CV. A clear direction automatically starts research; ambiguous directions receive a focused question. Bounded conversation context supports follow-up chat during research. Reviewed requirements still need explicit confirmation before publication through the same canonical goal store. See [CAREER_DISCOVERY.md](CAREER_DISCOVERY.md) for exact session/message/research routes and models.
 
-`GET` / `POST /api/v1/career/goals/{id}/opportunity-research` read/start/reuse/refresh owner-linked public research, with independently saved category outcomes. Interviews, internship experience, career progression/conversion salary, historical conversion rates and culture retain citations, uncertainty and missing fields. Progress is compact and evidence loads on demand. See [OPPORTUNITY_INTELLIGENCE.md](OPPORTUNITY_INTELLIGENCE.md) and [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md) for graph, models, bounded Gemini/Brave retrieval and version/quota recovery.
+`GET` / `POST /api/v1/career/goals/{id}/opportunity-research` read/start/reuse/refresh owner-linked public research, with independently saved category outcomes. Interviews, internship experience, career progression/conversion salary, historical conversion rates and culture retain citations, uncertainty and missing fields. Progress is compact and evidence loads on demand. See [OPPORTUNITY_INTELLIGENCE.md](OPPORTUNITY_INTELLIGENCE.md) and [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md) for graph, models, bounded model/Brave retrieval and version/quota recovery.
 
 Private research links and retry receipts bind the goal revision and public context. Default reads exclude older links after an edit; explicit historical IDs remain readable. Legacy unversioned links need refresh after the first goal revision. Chat and summary quota waits recheck the current workspace at least every five seconds before any further model call.
 
@@ -152,10 +152,10 @@ attachment's limitations. Choosing a direction automatically makes it current.
 - `GET /api/v1/career/goals/{id}/interview-prep` — Saved AI suggestions for interview slots (questions to expect, how to prepare) that the latest interview research left empty, for the current goal version and research revision. `status` is `ready`, `missing` or `researching`.
 - `POST /api/v1/career/goals/{id}/interview-prep` — Generate them with `expected_version` and optional `refresh`; 409 while research is still running. Missing headline facts (`recruitment_stages`, `application_timeline`, `difficulty`, one item each) and each round without sourced questions or preparation (or the whole process when sources give no rounds) become gaps; the model fills only listed gaps. Items are hedged predictions that may include typical estimates, never sourced facts; the frontend marks them as AI-made.
 - `GET /api/v1/career/goals/{id}/role-summary` — Saved About the role digest for the current goal version and research revision (`ready`, `missing` or `researching`).
-- `POST /api/v1/career/goals/{id}/role-summary` — Generate it with `expected_version` and optional `refresh`; 409 while research is still running. Each sourced card (eligibility, work, then one per researched role topic) gets one to five short bullets in `cards`; every bullet cites refs from its own card and may not introduce numbers its card does not state. Every card or role topic with no source is written by the model in `generated` (one to four hedged bullets, no refs) and marked AI-made by the frontend.
+- `POST /api/v1/career/goals/{id}/role-summary` — Generate it with `expected_version` and optional `refresh`; 409 while research is still running. Each sourced card (eligibility, work, then one per researched role topic) gets a 2–6 word `headline` and one to three short bullets (at most 12 words, up to three key terms in `**bold**`) in `cards`; every bullet cites refs from its own card and may not introduce numbers its card does not state. Every card or role topic with no source is written by the model in `generated` (a headline and one to three hedged bullets, no refs) and marked AI-made by the frontend. Summaries saved in an older `format` are regenerated.
 
-The configured path starts after goal validation. Gemini plans role-tailored queries, five LangGraph
-branches retrieve Brave LLM Context and use Gemini to structure cited findings,
+The configured path starts after goal validation. The model plans role-tailored queries, five LangGraph
+branches retrieve Brave LLM Context and use the model to structure cited findings,
 then Python builds overview references from saved findings. Each category saves progress independently;
 failed categories retain other results. The overview has expandable Interview Intelligence,
 Internship Insights, Career Progression, Historical Conversion Rates and Company and Team Culture with sources/confidence/context, dates,
@@ -163,7 +163,7 @@ missing information and targeted refresh. No-company targets research all five c
 
 Durable jobs and category cache use existing `research_contexts`; typed immutable reports
 extend `interview_research`. Worker leases, checkpoint/restart recovery and receipt/version
-checks prevent duplicate paid retrieval and stale publication. Gemini structures all categories
+checks prevent duplicate paid retrieval and stale publication. The model structures all categories
 against the existing JSON fields and exact citations. See [feature specification, graph, API models, limits and setup](OPPORTUNITY_INTELLIGENCE.md).
 
 Legacy interview endpoints remain readable/compatible:
@@ -173,7 +173,7 @@ Legacy interview endpoints remain readable/compatible:
 
 Legacy Search/Answers mode values are ignored. Opportunity Intelligence
 uses the existing `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY` when `OPPORTUNITY_ENABLED=true`
-(default), independently of the Gemini chat switch and legacy Brave mode. It calls the selected Brave LLM Context or DeepSeek Search adapter; no silent provider substitution occurs. Availability responses
+(default), independently of the legacy chat switch and legacy Brave mode. It calls the selected Brave LLM Context or DeepSeek Search adapter; no silent provider substitution occurs. Availability responses
 name the specific disabled/missing capability without exposing configuration values.
 Quota pauses retain successful evaluations and resume only unfinished calls; response
 repair budgets survive pauses. Workspace errors preserve the actual category/quota
@@ -211,7 +211,7 @@ this path never silently edits the goal. JD chat history remains temporary brows
 Provider rejections include safe `provider_error` metadata: HTTP status, known
 Google code and rejected field names. This distinguishes invalid keys, unavailable
 models, project access, schema and parameter failures without revealing provider prose.
-See [configuration and rejection diagnostics](ANALYSIS_CONTRACTS.md#safe-gemini-rejection-diagnostics).
+See [configuration and rejection diagnostics](ANALYSIS_CONTRACTS.md#safe-rejection-diagnostics).
 
 ## Compatibility and setup
 
@@ -278,7 +278,7 @@ Exact quotes allow whitespace-only normalization. Values may paraphrase cited ex
 from a single structuring pass that selects numbered, backend-owned passages.
 Request-specific enums constrain fields and source/passage references. Python copies
 quotes/source IDs, and every number in a new finding must occur in its selected passage. Quotes stay separate from displayed text. The final finding wording is shown directly
-in chat; no second Gemini grading, rewrite or overview-selection call is made. Generation and storage share label/text rules,
+in chat; no second model grading, rewrite or overview-selection call is made. Generation and storage share label/text rules,
 and rejected findings retain precise field-level repair feedback. Missing information
 is a successful “not found” result, not a category failure. See [the contract](ANALYSIS_CONTRACTS.md#canonical-goal-and-compact-reads--28-october-2026).
 
@@ -319,3 +319,5 @@ include schema field paths and issue codes, never rejected values. Employer adve
 with duties/qualification sections get one scope recheck after a negative
 classification; application instructions, resume references and AI duties are job
 content. Source grounding and unrelated-task rejection still apply.
+
+Career Goal skills include planning competence targets calibrated from JD wording and fresh cited public preparation research; see [the specification](SPECIFICATION.md#role-competence-targets).

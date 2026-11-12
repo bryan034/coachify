@@ -18,7 +18,7 @@ afterEach(()=>vi.useRealTimers());
 beforeEach(()=>{vi.resetAllMocks();vi.mocked(refreshWorkspace).mockImplementation(async(_previous,token,signal)=>careerApi('/workspace',token,{signal}));vi.mocked(getCvGoalConfirmation).mockResolvedValue({goal_id:'goal',goal_version:1,selection_version:1,confirmed:false,context:null,reason:null});params.forEach((_,key)=>params.delete(key));vi.mocked(careerApi).mockImplementation(async(path)=>path==='/workspace'?workspace as never:{status:'no_cv',cv_uploaded:false,skills_evaluated:false} as never);});
 it('shows saved skills in briefing accordions and keeps refinement and replacement',async()=>{
  overview();expect(screen.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
- expect(screen.getByRole('heading',{name:'Skills this role needs'})).toBeVisible();
+ expect(screen.getByRole('heading',{name:'Skills needed'})).toBeVisible();
  expect(screen.getByRole('button',{name:'SQL'})).toHaveAttribute('aria-expanded','false');
  fireEvent.click(screen.getByRole('button',{name:'SQL'}));
  expect(screen.getByRole('button',{name:'SQL'})).toHaveAttribute('aria-expanded','true');
@@ -39,7 +39,7 @@ it('links the three goal pages as tabs and keeps eligibility on About the role',
  cleanup();
  render(<CareerSessionProvider><CareerGoalOverview view="role" workspace={workspace} onReload={vi.fn()}/></CareerSessionProvider>);
  expect(within(screen.getByRole('navigation',{name:'Career goal pages'})).getByRole('link',{name:'About the role'})).toHaveAttribute('aria-current','page');
- expect(screen.queryByRole('heading',{name:'Skills this role needs'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('heading',{name:'Skills needed'})).not.toBeInTheDocument();
  fireEvent.click(screen.getByText('Eligibility and commitment'));
  expect(screen.getByText('A relevant degree')).toBeVisible();
  expect(screen.getByRole('heading',{name:'About the role'})).toBeVisible();
@@ -60,16 +60,43 @@ it('marks each needed skill from the saved comparison',async()=>{
  expect(screen.queryByText(/Not yet compared/)).not.toBeInTheDocument();
  vi.unstubAllGlobals();
 });
-it('leaves skills unmarked and explains how to compare when no saved comparison exists',async()=>{
- vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({version:0,ready:true,model_available:true,operation:null,stale:false,result:null}))));
- overview();
- expect(screen.getByRole('link',{name:'Compare with your skills'})).toHaveAttribute('href','/cv');
+const serve=(context:object,current:object={})=>vi.stubGlobal('fetch',vi.fn(async(url:string,init?:RequestInit)=>new Response(JSON.stringify(init?.method==='POST'?{version:1,operation:{id:'op',status:'pending'}}:String(url).endsWith('/context')?{ready:true,model_available:true,cv_reviewed:true,research_pending:false,goal:{role:'Backend Software Engineer'},...context}:{version:0,ready:true,operation:null,stale:false,result:null,issues:[],...current}),{status:init?.method==='POST'?202:200})));
+it('offers the evaluation, and nothing else, once the goal is set and the Skills Profile is reviewed',async()=>{
+ serve({});overview();
+ fireEvent.click(await screen.findByRole('button',{name:'Evaluate skills'}));
+ expect(screen.getByRole('heading',{name:'Evaluate skills with career goal'})).toBeVisible();
+ expect(screen.queryByRole('link',{name:/Skills Profile|CV review/})).not.toBeInTheDocument();
  expect(screen.queryByText('Have')).not.toBeInTheDocument();
+ await waitFor(()=>expect(vi.mocked(fetch).mock.calls.filter(call=>call[1]?.method==='POST')).toHaveLength(1));
+ expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(call=>call[1]?.method==='POST')![1]!.body))).toMatchObject({expected_version:0,allow_partial:true,mutation_id:expect.any(String)});
+ vi.unstubAllGlobals();
+});
+it.each([
+ ['an unreviewed CV',{cv_reviewed:false},'Finish your CV review first','Finish CV review'],
+ ['no skills source',{ready:false,cv_reviewed:null,issues:[{source:'cv',message:'Upload a CV.',href:'/cv'}]},'Add your skills first','Go to Skills Profile'],
+])('points to Skills Profile instead of offering the evaluation with %s',async(_case,context,title,action)=>{
+ serve(context);overview();
+ expect(await screen.findByRole('heading',{name:title})).toBeVisible();
+ expect(screen.getByRole('link',{name:action})).toHaveAttribute('href','/cv');
+ expect(screen.queryByRole('button',{name:'Evaluate skills'})).not.toBeInTheDocument();
+ vi.unstubAllGlobals();
+});
+it('hides the banner once a current evaluation exists and asks again when it is stale',async()=>{
+ const result={groups:[],job_skill_gaps:[{ref:'job:sql',match_status:'supported',competence_score:9}]};
+ serve({},{result});const view=overview();
+ expect(await within(skillRow('SQL')).findByText('9')).toBeVisible();
+ expect(screen.queryByRole('button',{name:/Evaluate/})).not.toBeInTheDocument();
+ view.unmount();serve({},{result,stale:true});overview();
+ expect(await screen.findByRole('heading',{name:'Your goal or skills changed'})).toBeVisible();
+ expect(screen.getByRole('button',{name:'Evaluate again'})).toBeEnabled();
+ expect(within(skillRow('SQL')).queryByText('9')).not.toBeInTheDocument();
  vi.unstubAllGlobals();
 });
 it('displays extracted categories while research is still running',async()=>{
  overview({...workspace,phase:'researching',research_id:null});expect(screen.getByText('SQL')).toBeVisible();
- expect(screen.getByText('Researching opportunity information. Your extracted goal is already saved.')).toBeVisible();
+ expect(screen.getByRole('progressbar',{name:'Working out the skills needed'})).toHaveAttribute('aria-valuenow','63');
+ expect(screen.getByText('Checking interviews and similar roles')).toBeVisible();
+ expect(screen.getByText(/You can leave this page\. elo keeps working/)).toBeVisible();
 });
 it('restores the overview after reload instead of showing a new input form',async()=>{
  render(<CareerSessionProvider><CareerGoalHome/></CareerSessionProvider>);
@@ -212,4 +239,28 @@ it('has no side rail: the skills fill the page and the three goal pages are one 
  expect(screen.queryByText('Explore other careers')).not.toBeInTheDocument();
  const tabs=screen.getByRole('navigation',{name:'Career goal pages'}).querySelector('.goal-tab-group')!;
  expect(within(tabs as HTMLElement).getAllByRole('link').map(link=>link.textContent)).toEqual(['Skills needed','Interview preparation','About the role']);
+});
+it('shows the model\'s levels and the linked Skills Profile skills on a goal skill',()=>{
+ const outcome={ref:'job:sql',name:'SQL',match_status:'partial' as const,components:[],competence_score:8,demonstrated_score:6,required_score:7,score_status:'estimated' as const,score_explanation:'You wrote reporting queries yourself.',
+  profile_skills:[{name:'PostgreSQL',competence_score:6,required_score:7}]};
+ render(<LearningFocus skills={[extraction.skills[0],extraction.skills[1]]} matches={{sql:'partial',team:'uncertain'}} outcomes={{sql:outcome,team:{ref:'job:team',name:'Teamwork',match_status:'uncertain',components:[],profile_skills:[]}}}/>);
+ fireEvent.click(screen.getByRole('button',{name:'SQL'}));
+ expect(screen.getByText('You: about 6 / 10 · role needs about 7 / 10')).toBeVisible();
+ expect(screen.getByText(/You wrote reporting queries yourself/)).toBeVisible();
+ expect(screen.getByRole('link',{name:'PostgreSQL'})).toHaveAttribute('href','/cv');
+ fireEvent.click(screen.getByRole('button',{name:'Teamwork'}));
+ expect(screen.getByText('No skill in your Skills Profile covers this yet.')).toBeVisible();
+});
+it('marks the current position before expansion and reserves target met for 10',()=>{
+ const outcome={ref:'job:sql',name:'SQL',match_status:'partial' as const,components:[],competence_score:6.2,demonstrated_score:5,required_score:8,score_confidence:'medium' as const,score_status:'estimated' as const};
+ const target={level:8,basis:'job_description' as const,explanation:'Familiarity requires role-ready application.',source_urls:[]};
+ render(<LearningFocus skills={[{...extraction.skills[0],competence_target:target}]} outcomes={{sql:outcome}}/>);
+ expect(screen.getByRole('meter',{name:'SQL progress towards this role'})).toHaveAttribute('aria-valuenow','6.2');
+ expect(screen.getByText('Current 6.2/10')).toBeVisible();
+ expect(screen.getByText('Goal 10/10')).toBeVisible();
+ expect(document.querySelector('.goal-skills-summary')).toHaveTextContent('0 ready');
+ fireEvent.click(screen.getByRole('button',{name:'SQL'}));
+ expect(screen.getByText('Role competence target: 8/10')).toBeVisible();
+ expect(screen.getByText('You: about 5 / 10 · role needs about 8 / 10')).toBeVisible();
+ expect(screen.getByText(/10\/10 means the goal is satisfied for this specific job role, based/)).toBeVisible();
 });

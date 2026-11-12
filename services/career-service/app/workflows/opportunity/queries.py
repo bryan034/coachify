@@ -1,4 +1,4 @@
-"""Five fixed research intents; Gemini owns the role-specific search wording."""
+"""Five fixed research intents; The model owns the role-specific search wording."""
 from app.schemas.opportunity import CATEGORIES
 
 ACTIVITIES={

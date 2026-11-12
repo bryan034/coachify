@@ -106,6 +106,7 @@ def test_cleanup_advances_past_a_full_page_of_poison_records(harness, monkeypatc
 
 def test_ingestion_advances_past_a_full_page_of_poison_records(harness, monkeypatch):
     _, app, *_ = harness
+    limits(app, max_saved_cvs_per_owner=20, max_saved_cvs_global=20)
     records = [send(app.state.service) for _ in range(11)]
     ordered = sorted(record['_id'] for record in records)
     poisoned = set(ordered[:10])

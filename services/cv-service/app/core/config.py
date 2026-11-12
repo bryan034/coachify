@@ -14,7 +14,7 @@ class Settings:
     extraction_auto_retries: int = 2
     extraction_retry_delays: tuple[int, ...] = (20, 40)
     storage_path: str = '/tmp/elo-cv'
-    max_saved_cvs_per_owner: int = 50
+    max_saved_cvs_per_owner: int = 3
     max_saved_cvs_global: int = 10_000
     max_original_bytes_per_owner: int = 100 * 1024 * 1024
     max_original_bytes_global: int = 10 * 1024 * 1024 * 1024
@@ -31,7 +31,7 @@ class Settings:
             raise RuntimeError('CV_MAX_FILE_BYTES must be between 1024 and 20971520.')
         limits = {}
         for name, default, upper in (
-            ('max_saved_cvs_per_owner', 50, 20_000), ('max_saved_cvs_global', 10_000, 20_000),
+            ('max_saved_cvs_per_owner', 3, 20_000), ('max_saved_cvs_global', 10_000, 20_000),
             ('max_original_bytes_per_owner', 100 * 1024 * 1024, 1024 ** 4),
             ('max_original_bytes_global', 10 * 1024 * 1024 * 1024, 1024 ** 4),
             ('model_calls_per_owner_per_day', 120, 1_000_000),

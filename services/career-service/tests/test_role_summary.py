@@ -43,14 +43,14 @@ def request(output):
 
 
 def output(*cards,fills=()):
-    return RoleDigest.model_validate({'cards':[{'card_id':c,'bullets':[{'text':t,'refs':r} for t,r in bullets]} for c,bullets in cards],
-        'fills':[{'card_id':c,'bullets':b} for c,b in fills]})
+    return RoleDigest.model_validate({'cards':[{'card_id':c,'headline':'Key takeaway','bullets':[{'text':t,'refs':r} for t,r in bullets]} for c,bullets in cards],
+        'fills':[{'card_id':c,'headline':'Not public','bullets':b} for c,b in fills]})
 
 
 def good():
     return output(('work',[('Builds finance reporting dashboards',['summary','resp:0','resp:0'])]),
-                  ('compensation',[('About SGD 1500 per month (reported)',['f1'])]),
-                  fills=(('conversion_rate',['Not publicly reported; typically 40 to 60% for this kind of programme']),))
+                  ('compensation',[('About **SGD 1500** per month (reported)',['f1'])]),
+                  fills=(('conversion_rate',['Not publicly reported; typically **40 to 60%** here']),))
 
 
 def run(coro):return asyncio.run(coro)
@@ -66,9 +66,9 @@ def test_cards_follow_page_order_and_skip_interview_research():
 def test_digest_keeps_cited_bullets_and_sends_no_account_data():
     req,calls=request(good())
     result=run(digest.generate(req,'owner',goal(),record()))
-    assert [(c.card_id,[b.text for b in c.bullets]) for c in result.cards]==[('work',['Builds finance reporting dashboards']),('compensation',['About SGD 1500 per month (reported)'])]
+    assert [(c.card_id,[b.text for b in c.bullets]) for c in result.cards]==[('work',['Builds finance reporting dashboards']),('compensation',['About **SGD 1500** per month (reported)'])]
     assert result.cards[0].bullets[0].refs==['summary','resp:0']
-    assert [(g.card_id,g.bullets) for g in result.generated]==[('conversion_rate',['Not publicly reported; typically 40 to 60% for this kind of programme'])]
+    assert [(g.card_id,g.bullets) for g in result.generated]==[('conversion_rate',['Not publicly reported; typically **40 to 60%** here'])]
     sent=json.loads(calls[0].context)
     assert [m['card_id'] for m in sent['missing']][:3]==['benefits','projects','full_time_role'] and 'compensation' not in [m['card_id'] for m in sent['missing']]
     assert calls[0].stage=='role_summary' and 'owner' not in calls[0].context
@@ -128,3 +128,32 @@ def test_route_generates_once_and_waits_for_research():
     http,calls=client({'research_id':'r1','finished':False})
     assert http.get(PATH).json()['status']=='researching'
     assert http.post(PATH,json={'expected_version':3}).status_code==409 and not calls
+
+
+def test_bold_rules_headline_and_length_are_enforced():
+    for text,issue in (('Pays **SGD 1500** **a** **month** **often**','too_much_bold'),('Pays *SGD 1500* monthly','unsupported_markup'),
+                       ('**Pays SGD 1500 monthly**','bold_dominates'),('# Pays SGD 1500','unsupported_markup'),('Pays **SGD 1500** in [a](http://x)','unsupported_markup')):
+        req,_=request(output(('compensation',[(text,['f1'])])))
+        with pytest.raises(AIError) as error:run(digest.generate(req,'owner',goal(),record()))
+        assert error.value.violations[0]['issue']==issue
+    with pytest.raises(Exception):RoleDigest.model_validate({'cards':[{'card_id':'work','headline':'**Bold**','bullets':[{'text':'Ok fact','refs':['summary']}]}]})
+    with pytest.raises(Exception):output(('work',[('x'*111,['summary'])]))
+    with pytest.raises(Exception):output(('work',[('One fact',['summary'])]*4))
+
+
+def test_headline_cannot_invent_numbers_and_is_saved():
+    bad=RoleDigest.model_validate({'cards':[{'card_id':'mentorship','headline':'5 buddies each','bullets':[{'text':'Named buddy','refs':['f2']}]}]})
+    req,_=request(bad)
+    with pytest.raises(AIError) as error:run(digest.generate(req,'owner',goal(),record()))
+    assert error.value.violations[0]['issue']=='unsupported_number'
+    req,_=request(good())
+    result=run(digest.generate(req,'owner',goal(),record()))
+    assert result.cards[0].headline=='Key takeaway' and result.generated[0].headline=='Not public'
+
+
+def test_digest_saved_in_an_older_format_is_regenerated():
+    req,_=request(good())
+    run(digest.generate(req,'owner',goal(),record()))
+    row=req.app.state.goal_store.goals.database['role_summaries'].rows[f"owner:{'a'*24}"]
+    del row['summary']['format']
+    assert run(digest.read_saved(req,'owner',goal(),record())) is None

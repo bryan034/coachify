@@ -2,7 +2,7 @@
 
 The implemented slice combines Profile/account access, saved conversational CV review and Career's canonical goal/research workspace. The broader seven-service scaffold remains future context. CV owns factual evidence, correction overlays, source-linked clarification and private resumable messages. Profile owns manual declarations. Career owns one current goal and public-context research; an explicit acknowledgement of its exact goal/version/selection makes it usable for CV clarification.
 
-Career JD/discovery/research uses configured Gemini/Brave adapters. CV extraction, conversation routing and clarification interpretation use its separate configurable OpenAI-compatible provider. Model output is validated before factual publication. Synthetic checks establish workflow and contract behavior, not live-model quality. Assessment and Roadmap now implement private versioned comparison and a user-directed planning adviser. Shared explicit skill identities are bundled across producers; live semantic quality remains unverified. See their service specifications for remaining scope.
+Career JD/discovery/research uses configured model/Brave adapters. CV extraction, conversation routing and clarification interpretation use its separate configurable OpenAI-compatible provider. Model output is validated before factual publication. Synthetic checks establish workflow and contract behavior, not live-model quality. Assessment and Roadmap now implement private versioned comparison and a user-directed planning adviser. Shared explicit skill identities are bundled across producers; live semantic quality remains unverified. See their service specifications for remaining scope.
 
 ## Working design references
 

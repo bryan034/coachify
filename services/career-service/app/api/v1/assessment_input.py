@@ -5,6 +5,7 @@ from starlette.concurrency import run_in_threadpool as thread
 from app.api.v1.goals import owner, store
 from app.repositories.goals import GoalError
 from elo_shared.skills import identity, MAPPING_VERSION
+from app.domain.competence import calibrated_goal
 
 router=APIRouter(prefix='/api/v1/career',tags=['Assessment handoff'])
 
@@ -19,7 +20,7 @@ async def assessment_input(request:Request,account=Depends(owner)):
     latest=await thread(goals.current,account)
     if latest['selection_version']!=first['selection_version'] or latest['goal'].version!=goal.version:
         raise GoalError('The selected goal changed during input assembly. Reload and retry.')
-    data=goal.model_dump(mode='json',by_alias=True)
+    data=calibrated_goal(goal,record).model_dump(mode='json',by_alias=True)
     for skill in data['skills']: skill.update(identity(skill['name'],skill['category']))
     # Mapping/importance uncertainty is an assessment outcome, not an empty goal.
     ready=bool(goal.skills or goal.non_skill_requirements) and goal.generation is not None and not goal.requirements_need_review

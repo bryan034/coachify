@@ -8,11 +8,12 @@ import { EvidenceProposals } from './evidence-proposals';
 import { AdviserChat } from './adviser-chat';
 import { RoadmapReview } from './roadmap-review';
 import { SettingsPanel, useSettingsDraft, type AutosaveState } from './settings-panel';
-import type { Workspace, MessageRequest, PlannerConfig } from './types';
+import type { Context, Workspace, MessageRequest, PlannerConfig } from './types';
 import '@/styles/roadmap.css';
 import { errorText, friendlyOperationError } from '@/lib/errors';
 import { loadSkills, useSection } from '@/lib/api/workspace-summary';
 import { PageSkeleton } from '@/components/ui/workspace-ui';
+import { ProcessingCard, SkeletonRoad, type ProcessingStep } from '@/components/ui/processing-card';
 import { formatDate } from '@/lib/format';
 
 const dayNumber = (value: string) => Math.round(Date.parse(`${value}T12:00:00Z`) / 86400000);
@@ -175,7 +176,7 @@ function Planner({ token }: { token: string }) {
   const value = request || { expected_version: latest.current!.version, mutation_id: crypto.randomUUID(), message: text.trim(), allow_partial_assessment: partial };
   setBusy(true); setError(''); setPending(value); pendingRef.current = value; if (!request) setText(''); sequence.current++;
   try { await roadmapApi('/messages', token, value); if (mounted.current) { setPending(null); pendingRef.current = null; await load(); } }
-  catch (failure) { if (mounted.current) setError(explanation(failure)); }
+  catch (failure) { if (mounted.current) { setError(explanation(failure)); if (!request && failure instanceof RoadmapError && failure.status < 500) { setText(current => current || value.message); setPending(null); pendingRef.current = null; } } }
   finally { if (mounted.current) setBusy(false); }
  }
  // The bar shows from the click (saving your settings, then the request), and the service's stage takes over once the work starts.
@@ -201,16 +202,18 @@ function Planner({ token }: { token: string }) {
  const plan = planner.candidate || planner.active; const preview = !!planner.candidate;
  const review = preview ? planner.candidate_review : planner.active_review;
  const showRoadmap = !!plan && !!review && !configuring;
+ // Without both an extracted CV and a Career goal there is nothing to plan from, so only the checklist is shown.
+ const blocked = !context.ready && context.availability !== 'unavailable' && !showRoadmap;
  const countdown = showRoadmap ? planCountdown(review!.remaining.resolved.today, plan!.config.start_date || plan!.first_planning_week, plan!.config.target_date) : null;
  const failedGeneration = workspace.operation?.status === 'failed' ? planner.retry_generate : null;
- const helper = helperOpen && <AdviserChat workspace={workspace} runway={settings.runway} text={text} setText={setText} partial={partial} setPartial={setPartial} showPartial={showRoadmap} busy={busy} running={running} frozen={frozen} editing={!!plan} takeFocus={helperTakesFocus.current} close={closeHelper} send={() => void send()}
+ const helper = helperOpen && !blocked && <AdviserChat workspace={workspace} runway={settings.runway} text={text} setText={setText} partial={partial} setPartial={setPartial} showPartial={showRoadmap} busy={busy} running={running} frozen={frozen} editing={!!plan} takeFocus={helperTakesFocus.current} close={closeHelper} send={() => void send()}
   retry={() => void send(workspace.operation?.error?.code === 'inputs_changed' ? { ...workspace.retry_request!, expected_version: workspace.version, mutation_id: crypto.randomUUID() } : workspace.retry_request!)} />;
  const legacy = earlier || earlierDraft;
  return <section className="roadmap-adviser">
   <div className={`roadmap-workspace${helperOpen ? ' helper-open' : ''}`}><div className="roadmap-main">
   <header className="roadmap-heading"><div><h1>Roadmap</h1>{countdown ? <p><strong>{countdown.days}</strong> until {formatDate(countdown.target)}{countdown.week ? ` · Week ${countdown.week} of ${countdown.weeks}` : ''}</p> : <p>Make room for the career you want.</p>}</div>
    <div className="roadmap-heading-side">
-    <button ref={launcher} type="button" className="btn ghost helper-launcher" hidden={helperOpen} aria-expanded={helperOpen} onClick={() => helperOpen ? closeHelper() : openHelper()}>{helperOpen ? 'Chat helper is open' : workspace.messages.length ? 'Continue with chat helper' : 'Start chat helper'}</button>
+    <button ref={launcher} type="button" className="btn ghost helper-launcher" hidden={helperOpen || blocked} aria-expanded={helperOpen} onClick={() => helperOpen ? closeHelper() : openHelper()}>{helperOpen ? 'Chat helper is open' : workspace.messages.length ? 'Continue with chat helper' : 'Start chat helper'}</button>
     {running && !helperOpen && <p className="small">Your request is still being worked on. Changes are paused until it finishes.</p>}
    </div>
   </header>
@@ -219,8 +222,8 @@ function Planner({ token }: { token: string }) {
   {unknown && !error && <div className="roadmap-notice"><p>The previous change is awaiting confirmation.</p><button className="btn" disabled={busy || running} onClick={() => void change('', {}, true)}>Recover saved change</button></div>}
   {planner.active&&<EvidenceProposals token={token} version={workspace.version} onSaved={()=>void load()}/>}
   {context.availability === 'unavailable' && <div className="roadmap-notice"><p>We can’t check your latest CV and Career goal right now. Your saved roadmap and conversation are still here; new plans and accepting a preview need this check.</p><button className="btn ghost" onClick={() => void load()}>Retry source check</button></div>}
-  {!context.ready && context.availability !== 'unavailable' && <div className="roadmap-prerequisites"><h2>Bring your starting point and direction</h2><p>Your roadmap needs your extracted CV and Career goal to personalise the plan.</p>{context.issues.map(issue => <div key={issue.source}><p>{issue.message}</p><Link className="btn ghost" href={issue.href}>Open {issue.source === 'cv' ? 'CV' : 'Career Goal'}</Link></div>)}</div>}
-  <GenerationProgress active={starting || running} stage={running ? workspace.operation?.stage : undefined} />
+  {blocked && <Prerequisites issues={context.issues} />}
+  <GenerationProgress active={starting || running} stage={running ? workspace.operation?.stage : undefined} context={context} />
   {failedGeneration && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your plan could not be prepared. Try again.')}</p>{!!workspace.operation?.retry_after && <p>Provider capacity: retry in {workspace.operation.retry_after} seconds.</p>}<button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={() => retryGenerate(failedGeneration, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
   <div id="plan-panel">
    {showRoadmap ? <RoadmapReview plan={plan!} review={review!} preview={preview} planner={planner} blockers={planner.candidate_blockers} frozen={frozen}
@@ -231,7 +234,7 @@ function Planner({ token }: { token: string }) {
     addTask={task => change('/planner/tasks/add', { task })}
     recordOutcome={(milestone, demonstrated, note) => void change('/planner/milestones/outcome', { milestone_id: milestone.id, demonstrated, note: note || null })}
     confirm={(gap, answer) => void change('/planner/confirmations', { gap_id: gap.id, answer })} />
-   : <SettingsPanel profileSkills={profileSkills.state} workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} autosave={autosave} returnToReview={plan ? () => setConfiguring(false) : null} />}
+   : blocked ? null : <SettingsPanel profileSkills={profileSkills.state} workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} autosave={autosave} returnToReview={plan ? () => setConfiguring(false) : null} />}
   </div>
   {!!legacy && <details className="plan-explanation earlier-plan"><summary>Earlier plan without session times</summary><p className="small">This plan was made before timed roadmaps. It stays here for reference and isn’t part of your current roadmap.</p><ul>{legacy.tasks.filter(task => !task.removed).map(task => <li key={task.id}>{task.title} · {task.status.replaceAll('_', ' ')}</li>)}</ul></details>}
   </div>{helper}</div>
@@ -245,14 +248,26 @@ export function generationProgress(stage?: string) {
  if (index < 0) return { percent: 8, label: 'Starting', step: 0 };
  return { percent: stages[index][2], label: stages[index][1], step: index + 1 };
 }
-function GenerationProgress({ active, stage }: { active: boolean; stage?: string }) {
+function GenerationProgress({ active, stage, context }: { active: boolean; stage?: string; context?: Context }) {
  const box = useRef<HTMLDivElement>(null);
  useEffect(() => { if (active) box.current?.scrollIntoView?.({ block: 'nearest', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, [active]);
  if (!active) return null;
- const { percent, label, step } = generationProgress(stage);
- const total = stage === 'correcting' ? 3 : 2;
- return <div ref={box} className="generation-progress" role="status"><p><strong>Preparing your roadmap.</strong> You can leave this page; it keeps going and reconnects when you return.</p>
-  <div className="generation-bar" role="progressbar" aria-label="Roadmap generation progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={step ? `Step ${step} of ${total}: ${label}` : label}><i style={{ width: `${percent}%` }} /></div>
-  <p className="generation-step">{step ? `Step ${step} of ${total}: ${label}` : 'Starting: saving your settings'}</p>
-  <ol>{stages.map(([key, name], index) => (index < 2 || stage === 'correcting') && <li key={key} className={index + 1 === step ? 'current' : index + 1 < step ? 'done' : ''}>{name}</li>)}</ol></div>;
+ const { percent, step } = generationProgress(stage);
+ const shown = stages.filter((_, index) => index < 2 || stage === 'correcting');
+ const steps: ProcessingStep[] = shown.map(([, name], index) => ({ label: name, state: index + 1 < step ? 'done' : index + 1 === step ? 'now' : 'next', note: index + 1 === step && stage === 'correcting' ? 'Now' : undefined }));
+ return <div ref={box}>{(context?.goal || context?.cv) && <section className="processing-using" aria-labelledby="using-h"><h2 id="using-h">What elo is using</h2>
+  {context.goal && <div className="processing-using-row"><h3>Career goal</h3><span className="processing-chip goal">{context.goal.role}</span>{context.goal.company && <span className="processing-chip">{context.goal.company}</span>}</div>}
+  {context.cv?.name && <div className="processing-using-row"><h3>CV</h3><span className="processing-chip">{context.cv.name}</span></div>}
+  <p className="small">Your plan is locked while elo generates. Nothing is lost if you leave this page.</p></section>}<ProcessingCard dark title="Generating your roadmap" progressLabel={step ? 'Building your plan' : 'Starting: saving your settings'} percent={percent} steps={steps}
+  footer={<p>You can leave this page. Your roadmap will be here when it’s done.</p>}/><SkeletonRoad /></div>;
+}
+
+const requirements = [
+ { source: 'cv', title: 'Extracted CV', done: 'Your CV is extracted and selected.', href: '/cv', action: 'Open CV' },
+ { source: 'career', title: 'Career goal', done: 'Your Career goal is set.', href: '/career-goal', action: 'Open Career Goal' },
+] as const;
+function Prerequisites({ issues }: { issues: { source: string; message: string; href: string }[] }) {
+ return <div className="roadmap-prerequisites"><h2>Finish these first</h2><p>Your roadmap is built from your extracted CV and your Career goal. Complete both to start planning.</p>
+  <ul className="prerequisite-list">{requirements.map(item => { const issue = issues.find(entry => entry.source === item.source);
+   return <li key={item.source} className={issue ? 'todo' : 'done'}><span className="prerequisite-mark" aria-hidden="true">{issue ? '○' : '✓'}</span><div><strong>{item.title}</strong><p>{issue ? issue.message : item.done}</p></div>{issue && <Link className="btn ghost" href={issue.href || item.href}>{item.action}</Link>}</li>; })}</ul></div>;
 }

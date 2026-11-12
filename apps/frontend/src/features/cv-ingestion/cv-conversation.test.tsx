@@ -31,9 +31,12 @@ describe('saved CV conversation', () => {
   const composer=screen.getByRole('textbox',{name:'Message elo'});
   fireEvent.change(composer,{target:{value:'My next draft'}});
   expect(composer).toHaveValue('My next draft');
-  expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+  // Typing stays open while elo works; sending is held until the saved turn finishes.
+  expect(composer).toBeEnabled();
   fireEvent.keyDown(composer,{key:'Enter'});
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
+  expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+  expect(screen.getByText('Your message will send as soon as elo finishes.')).toBeVisible();
  });
  it('offers skip and continue after a failed next-step decision without an active question', async () => {
   const failed=action({id:'route-failed',kind:'route',status:'failed',title:'Continue review',summary:'Could not continue.',changes:[],error:'The interview could not choose a valid next step. Its proposed next steps did not pass the review checks.'});
@@ -96,15 +99,15 @@ describe('saved CV conversation', () => {
   vi.mocked(cvApi.sendMessage).mockResolvedValue({...reviewing,revision:2,active_question:null,interview:{...reviewing.interview!,status:'reviewed_with_gaps',reviewed_items:2,topics:[{id:'one',title:'First experience',status:'reviewed'},{id:'two',title:'Second experience',status:'reviewed_with_gaps'}]},messages:[message('m2','Your review is complete.')]});
   render(<CvConversationPanel {...options} purpose="skills_profile" autoReview/>);
   expect(await screen.findByRole('progressbar',{name:'Review progress'})).toHaveAttribute('aria-valuenow','1');
-  expect(screen.getByText('50% · Experience review')).toBeInTheDocument();
-  expect(screen.queryByRole('button',{name:'Review profile'})).not.toBeInTheDocument();
+  expect(screen.getByText('50% of your experience reviewed')).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'View Skills Profile'})).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'I handled reporting.'}});
   fireEvent.click(screen.getByRole('button',{name:'Send message'}));
-  const button=await screen.findByRole('button',{name:'Review profile'});
+  const button=await screen.findByRole('button',{name:'View Skills Profile'});
   await waitFor(()=>expect(button).toBeEnabled());
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow','2');
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax','2');
-  expect(screen.getByText('100% · Review complete')).toBeInTheDocument();
+  expect(screen.getByText('100% of your experience reviewed · Review complete')).toBeInTheDocument();
   fireEvent.click(button);expect(options.onOpenSummary).toHaveBeenCalledOnce();
  });
  it('keeps topic progress visible and unchanged through followups until a topic transition', async () => {
@@ -121,18 +124,18 @@ describe('saved CV conversation', () => {
   await waitFor(()=>expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled());
   expect(screen.getByRole('progressbar')).toBe(bar);
   expect(bar).toHaveAttribute('aria-valuenow','0');
-  expect(screen.getByText('0% · Experience review')).toBeVisible();
+  expect(screen.getByText('0% of your experience reviewed')).toBeVisible();
   fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'It generated weekly reports.'}});
   fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   await screen.findByText('Moving to your second experience: what did you do?');
   expect(screen.getByRole('progressbar')).toBe(bar);
   expect(bar).toHaveAttribute('aria-valuenow','1');
-  expect(screen.getByText('50% · Experience review')).toBeVisible();
+  expect(screen.getByText('50% of your experience reviewed')).toBeVisible();
  });
  it('does not restart a completed review when reopened', async () => {
   vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',interview:{status:'reviewed',reviewed_items:1,total_items:1,estimates:[]},messages:[message('m1','Your review is complete.')]}));
   render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
-  expect(await screen.findByRole('button',{name:'Review profile'})).toBeEnabled();
+  expect(await screen.findByRole('button',{name:'View Skills Profile'})).toBeEnabled();
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
  });
  it('shows one line and one action when an answer could not be processed', async () => {
@@ -209,7 +212,7 @@ describe('saved CV conversation', () => {
   fireEvent.click(retry);
   await waitFor(() => expect(exit).toHaveAccessibleName('Save and review later'));
   expect(exit).toBeEnabled();
-  expect(input).toBeDisabled();
+  expect(input).toBeEnabled();
   expect(vi.mocked(cvApi.sendMessage).mock.calls[1][1]).toEqual(vi.mocked(cvApi.sendMessage).mock.calls[0][1]);
   expect(input).toHaveValue('');
   fireEvent.click(exit);
@@ -227,16 +230,16 @@ describe('saved CV conversation', () => {
   expect(input).toBeEnabled();
   expect(cvApi.sendMessage).toHaveBeenCalledTimes(2);
  });
- it('explains a review question without sending another message or changing the answer draft', async () => {
+ it('offers shortcut replies under the question and no why-this-question button', async () => {
   const question = {id:'question',item_id:'project-one',title:'ShopTrack',question:'What did you build yourself?'};
   vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({purpose:'skills_profile',active_question:question,messages:[message('m1',question.question)]}));
   render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
   await screen.findByText(question.question);
   const input = screen.getByRole('textbox',{name:'Message elo'});
   fireEvent.change(input,{target:{value:'My draft answer'}});
-  fireEvent.click(screen.getByRole('button',{name:'Why this question?'}));
-  expect(screen.getByText(/what you personally did in ShopTrack/)).toBeVisible();
-  expect(input).toHaveValue('My draft answer');
+  expect(screen.queryByRole('button',{name:'Why this question?'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Not sure'}));
+  expect(input).toHaveValue('Not sure');
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
  });
  it('retains an interrupted draft and retries the same message identity', async () => {
@@ -282,7 +285,7 @@ describe('saved CV conversation', () => {
    fireEvent.change(input,{target:{value:text}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByRole('alert');
    fireEvent.click(screen.getByRole('button',{name:'Check saved messages'}));await waitFor(()=>expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   }
-  fireEvent.click(screen.getByRole('button',{name:'Why this question?'}));await screen.findByText('Why are you asking this question?');await waitFor(()=>expect(input).toBeEnabled());
+  fireEvent.change(input,{target:{value:'Why are you asking this question?'}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByText('Why are you asking this question?');await waitFor(()=>expect(input).toBeEnabled());
   for(const text of ['I built the screens.','I also wrote the tests.']){
    fireEvent.change(input,{target:{value:text}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));await waitFor(()=>expect(input).toHaveValue(''));
    expect(screen.getAllByText(text)).toHaveLength(1);
@@ -309,14 +312,6 @@ describe('saved CV conversation', () => {
   render(<CvConversationPanel {...props()}/>); const input=await screen.findByRole('textbox',{name:'Message elo'}); await waitFor(()=>expect(input).toBeEnabled());
   fireEvent.change(input,{target:{value:'My new explanation'}}); fireEvent.click(screen.getByRole('button',{name:'Send message'}));
   expect(await screen.findByText('A newer saved response.')).toBeVisible(); expect(input).toHaveValue('My new explanation'); expect(cvApi.sendMessage).toHaveBeenCalledTimes(1);
- });
- it('asks a side question without losing the current answer draft',async()=>{
-  const initial=conversation({active_question:{id:'q1',item_id:'project-one',title:'ShopTrack',question:'What did you build?'},messages:[message('m1','What did you build?')]});
-  vi.mocked(cvApi.openConversation).mockResolvedValue(initial); vi.mocked(cvApi.sendMessage).mockResolvedValue({...initial,revision:2,messages:[...initial.messages,message('m2','This helps describe your own work.')]});
-  render(<CvConversationPanel {...props()}/>); const input=await screen.findByRole('textbox',{name:'Message elo'}); await waitFor(()=>expect(input).toBeEnabled());
-  fireEvent.change(input,{target:{value:'I built the screens'}}); fireEvent.click(screen.getByRole('button',{name:'Why this question?'}));
-  await screen.findByText('This helps describe your own work.'); expect(input).toHaveValue('I built the screens'); expect(screen.queryByText(/Current topic:/)).not.toBeInTheDocument(); expect(screen.getAllByText('What did you build?')).toHaveLength(1); expect(screen.getByRole('button',{name:'Why this question?'}).closest('.cv-chat-messages')).not.toBeNull();
-  expect(vi.mocked(cvApi.sendMessage).mock.calls[0][1]).toMatchObject({text:'Why are you asking this question?'});
  });
  it('requires an explicit save or cancel for a proposed correction',async()=>{
   const proposal=action(); vi.mocked(cvApi.openConversation).mockResolvedValue(conversation({messages:[message('m1','Review this correction.',[proposal])]}));

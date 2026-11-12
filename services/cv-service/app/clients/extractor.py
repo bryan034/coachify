@@ -87,7 +87,7 @@ class Extractor:
         self.response_mode = os.getenv('CV_LLM_RESPONSE_MODE', 'json_schema')
         if self.response_mode not in ('json_schema', 'json_object'):
             raise RuntimeError('CV_LLM_RESPONSE_MODE must be json_schema or json_object.')
-        self.base_url = os.getenv('CV_LLM_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/openai').rstrip('/')
+        self.base_url = os.getenv('CV_LLM_BASE_URL', 'https://openrouter.ai/api/v1').rstrip('/')
         parsed = urlparse(self.base_url)
         development_http = os.getenv('APP_ENV') == 'development' and os.getenv('CV_LLM_ALLOW_HTTP') == 'true' and parsed.scheme == 'http'
         self.local=development_http and parsed.hostname in ('localhost','127.0.0.1','::1','host.docker.internal')
@@ -103,14 +103,12 @@ class Extractor:
 
     def _request_timeout(self,cloud_seconds):
         # Stay below ingestion's 180s and clarification/chat's 90s leases.
-        return (120 if cloud_seconds==60 else 60) if self.local else cloud_seconds
+        return (120 if cloud_seconds==90 else 60) if self.local else cloud_seconds
 
     def _provider_options(self):
         # DeepSeek defaults to thinking; CV requests need bounded JSON answers.
         if urlparse(self.base_url).hostname == 'api.deepseek.com':
             return {'thinking': {'type': 'disabled'}}
-        if urlparse(self.base_url).hostname == 'generativelanguage.googleapis.com':
-            return {'reasoning_effort': 'minimal'}
         return {}
 
     def extract(self, blocks, *, timeout_seconds=None, previous_failure=None):
@@ -153,9 +151,7 @@ class Extractor:
             raise ExtractionFailure('CV extraction is not configured. Ask the administrator to configure the CV model, then retry this saved upload.',
                                     'model_request', 'not_configured')
         schema = extraction_schema()
-        # Keep full domain constraints in the prompt and backend, but avoid
-        # compiling Gemini's combinatorial nested bounds into its decoder.
-        decoding_schema = extraction_schema(gemini=urlparse(self.base_url).hostname == 'generativelanguage.googleapis.com')
+        decoding_schema = schema
         response_format = ({'type': 'json_schema', 'json_schema': {'name': 'cv_extraction', 'strict': True, 'schema': decoding_schema}}
                            if self.response_mode == 'json_schema' else {'type': 'json_object'})
         payload = {'model': self.model, 'temperature': 0,
@@ -170,7 +166,7 @@ class Extractor:
         stage = 'model_request'
         unavailable = 'CV extraction is temporarily unavailable or returned an invalid result. Your saved inputs are safe; retry later.'
         try:
-            timeout = min(self._request_timeout(60), timeout_seconds) if timeout_seconds is not None else self._request_timeout(60)
+            timeout = min(self._request_timeout(90), timeout_seconds) if timeout_seconds is not None else self._request_timeout(90)
             if timeout <= 0:
                 raise ExtractionFailure('CV extraction timed out. Your upload is saved; retry later.', stage, 'timeout')
             deadline = time.monotonic() + timeout

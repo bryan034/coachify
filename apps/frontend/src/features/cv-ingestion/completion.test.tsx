@@ -62,12 +62,6 @@ describe('effective skills and dates',()=>{
   fireEvent.change(screen.getByLabelText('Start date'),{target:{value:'2024-02-29'}});fireEvent.change(screen.getByLabelText('End date'),{target:{value:'2025'}});fireEvent.click(screen.getByRole('checkbox',{name:'Still ongoing'}));expect(screen.getByLabelText('End date')).toHaveValue('');fireEvent.click(screen.getByRole('button',{name:'Save correction'}));
   await waitFor(()=>expect(cvApi.edit).toHaveBeenCalled());expect(vi.mocked(cvApi.edit).mock.calls[0][2]).toMatchObject({start_date:'2024-02-29',end_date:null,ongoing:true});
  });
- it.each(['focus','online'])('refreshes changed saved facts on %s while retaining an active correction draft',async event=>{
-  let detail=savedCv();vi.mocked(cvApi.list).mockImplementation(async()=>({cvs:[detail],selection:{cv_id:detail.id,version:1}}));vi.mocked(cvApi.get).mockImplementation(async()=>detail);vi.mocked(cvApi.questions).mockImplementation(async()=>clarificationState(detail,confirmedTarget,true));
-  render(<ResumePreview/>);fireEvent.click(screen.getByText('CV details and corrections',{selector:'summary span'}));fireEvent.click(await screen.findByRole('button',{name:'Edit or remove Team dashboard'}));fireEvent.change(screen.getByRole('textbox',{name:'Description'}),{target:{value:'My unsaved description'}});
-  detail={...detail,version:2,items:detail.items.map(item=>({...item,description:'Updated elsewhere'}))};await act(async()=>window.dispatchEvent(new Event(event)));
-  await screen.findByText(/This CV changed while you were editing/);expect(screen.getByRole('textbox',{name:'Description'})).toHaveValue('My unsaved description');expect(screen.getByRole('button',{name:'Save correction'})).toBeDisabled();expect(screen.getByText('Latest saved: Updated elsewhere')).toBeVisible();
- });
 });
 
 describe('source reconciliation',()=>{

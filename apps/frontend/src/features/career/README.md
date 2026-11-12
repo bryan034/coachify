@@ -116,11 +116,11 @@ reload/navigation; failed or incomplete research is never presented as completed
 
 ## Skills needed and skills you have
 
-The saved goal lists the skills a role needs by the backend's categories, with jump links, importance tags and a count per category. When `GET /assessments/current` returns a fresh comparison, each skill also shows its result: in your profile, covered by an alternative, partly in your profile, not clear yet, or to build. This read never starts an analysis. With no fresh comparison, skills stay unmarked and the page points to Roadmap, which runs the comparison. A result reflects saved evidence, not proficiency, and missing proof is never shown as a gap.
+The saved goal lists the skills a role needs by the backend's categories, with jump links, importance tags and a count per category. When `GET /assessments/current` returns a fresh comparison, each skill also shows its result: in your profile, covered by an alternative, partly in your profile, not clear yet, or to build. Reads never start a comparison. Until a fresh result exists, skills stay unmarked and the [evaluate banner](../assessment/README.md) shows above the list: **Evaluate skills with career goal** once the goal is set, the selected CV's review is finished (or saved Profile declarations exist without a CV) and research is no longer running; otherwise a link to Skills Profile to finish that step. A scored skill shows its planning estimate, "You: about X / 10 · role needs about Y / 10", the model's explanation and, under **From your Skills Profile**, the profile skills it was linked to. A result reflects saved evidence, not proficiency, and missing proof is never shown as a gap.
 
 
-**Compare with my skills** starts the versioned Assessment operation directly from
-the saved goal. Have / Partial / Gap / Unknown reflect its current evidence outcomes;
+The banner's **Evaluate skills** button starts the versioned Assessment operation
+from the saved goal. Have / Partial / Gap / Unknown reflect its current evidence outcomes;
 satisfied OR alternatives keep their own label. Stale or mismatched goal revisions
 receive no skill markings. Goal confirmation remains explicit and version-bound,
 and is also available inside CV review.
@@ -141,10 +141,12 @@ Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview
 - Interview preparation is always shown, never inside a disclosure: the Stages, Timeline and
   Difficulty tiles, then one always-open card per researched round with questions to expect,
   how to prepare and sources (with no round data, those slots cover the whole process).
+  Key terms in findings and AI-made items arrive as `**…**` and render as bold; the tiles
+  are already bold, so they show plain text.
 - About the role always shows eligibility, work and every role topic (salary, benefits,
   projects, mentorship, hours, progression, conversion and culture), as bullets, not
   extracted paragraphs. Sourced cards are condensed by an AI digest
-  (`/goals/{id}/role-summary`) into one to five cited bullets marked "Summarised by AI from
+  (`/goals/{id}/role-summary`) into a short headline and one to three cited bullets (key terms in bold) marked "Summarised by AI from
   the sources"; until then, or if it fails, each item is split into one bullet per sentence.
   Confidence and conflict flags sit beside their bullet; sources are listed once per card.
 - Every field the sources leave empty is written by the AI once research settles
@@ -156,3 +158,11 @@ Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview
   card was removed on 11 November 2026.
 - Both research tabs carry the accuracy warning. The per-finding quote disclosure and the
   per-category refresh buttons were removed; refresh covers the tab's research.
+
+After **Extract career goal**, the goal conversation (`job-review-chat.tsx`) shows the shared
+"Skills needed" processing screen (`ProcessingCard`) while the goal is extracted, the role is
+researched and the summary is prepared. Steps and progress come from the observed workspace phase
+and server activities. The chat and composer open once the summary is ready; refinement
+(`?refine=1`) and failed or empty states go straight to the chat.
+
+Skill rows show a current-position marker and a labelled 10/10 goal endpoint before expansion. Details separate the evidence level from the stricter role target, show estimate confidence and target-source links, and explain that 10/10 satisfies this specific role’s goal. Only 10 receives the target-met band. Old rubric comparisons are stale until explicitly evaluated again.

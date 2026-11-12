@@ -11,6 +11,8 @@ import {careerOperation,type CareerOperation} from '@/lib/api/career-operation';
 import {retryCareerRead} from '@/lib/api/career-polling';
 import {careerApi,refreshWorkspace,type OpportunityView,type CareerWorkspace} from '@/lib/api/career';
 import { errorText } from '@/lib/errors';
+import { ProcessingCard, SkeletonRows, type ProcessingStep } from '@/components/ui/processing-card';
+import '@/styles/goal.css';
 
 type QueuedMessage={id:string;input:string;key:string;body?:string;session?:string|null};
 function researchPending(workspace:CareerWorkspace){
@@ -167,6 +169,27 @@ export function JobReviewChat(){
    .catch(cause=>{if(!abort.signal.aborted){failedJobs.current.set(job.id,job);failedTurn.current=job.id;setFailedMessage(job.input);setTurns(current=>current.map(turn=>turn.id===job.id?{...turn,failed:true}:turn));setMessage(current=>current||job.input);reportError(cause,'Could not answer. Your message is retained.');}})
    .finally(()=>{sending.current=false;if(!abort.signal.aborted){setBusy(false);setPendingMessage(null);setPendingTurn(null);setOperation(null);setQueueRevision(value=>value+1);}});
  },[token,workspace,busy,queueRevision,chatCooldown]);
+ const processing=!ready&&!error&&!refining.current&&workspace?.phase!=='empty'&&(!workspace||researchPending(workspace)||loadingResearch||(researchReady&&!ready));
+ if(processing){
+  const waiting=activeOperation?.status==='waiting_quota'||workspace?.phase==='waiting_quota';
+  const steps:ProcessingStep[]=[
+   {label:'Read the job description',state:goal?'done':'now',note:goal?undefined:'Extracting your career goal'},
+   {label:'Listing the skills',state:goal?'done':'next'},
+   {label:'Researching the role',state:researchReady?'done':goal?'now':'next',note:researchReady?undefined:goal?(waiting?'Waiting to resume':'Checking interviews and similar roles'):undefined},
+   {label:'Preparing your summary',state:researchReady?'now':'next',note:researchReady&&activeOperation?.status==='repairing'?'Refining the response…':undefined},
+  ];
+  return <section className="page on goal-overview career-briefing" aria-busy="true">
+   <section className="briefing-target goal-header" aria-label="Your target role">
+    <div className="briefing-target-copy"><p className="briefing-eyebrow">Working towards</p><h1>{goal?.role||'Working out your career goal'}</h1></div>
+    <div className="briefing-target-actions"><button type="button" className="btn goal-header-btn" onClick={()=>router.push('/career-goal')}>← Career Goal</button></div>
+   </section>
+   <ProcessingCard title="Skills needed" intro="elo is working out what this role needs." progressLabel={goal?'Researching the role':'Reading the job description'} steps={steps}
+    footer={<p>{waiting?(secondsLeft>0?`${waitLabel}. Resuming in ${secondsLeft} seconds.`:`${waitLabel}.`):connectionIssue?'Connection interrupted. Reconnecting to task updates…':'You can leave this page. elo keeps working, and your goal conversation will open here when it’s done.'}</p>}>
+    <AgentProgress steps={[...extractionSteps,...(activeOperation?.activities||[]),...(workspace?.activities||[])]}/>
+    {!goal?.skills.length&&<SkeletonRows rows={4}/>}
+   </ProcessingCard>
+  </section>;
+ }
  return <section className="page on career-agent-page">
   <header className="agent-page-header"><div><p className="small">Your direction, one conversation</p><h1>Goal conversation</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>{if(!dirty.current||window.confirm('Leave and discard unsent edits? Your saved goal stays current.'))router.push('/career-goal');}}>← Career Goal</button></header>
   {refining.current&&<p className="notice">Your saved progress is kept as you refine this goal. You can leave and return to the saved refinement.</p>}

@@ -44,9 +44,9 @@ def test_embedded_rate_limit_keeps_provider_cooldown(monkeypatch, prefix):
     asyncio.run(run())
 
 @pytest.mark.parametrize('prefix',['ASSESSMENT','ROADMAP'])
-@pytest.mark.parametrize('provider',['local','gemini','deepseek'])
+@pytest.mark.parametrize('provider',['local','openrouter','deepseek'])
 def test_model_endpoint_json_contract_and_credential_isolation(monkeypatch,prefix,provider):
-    base={'local':'http://host.docker.internal:11434/v1','gemini':'https://generativelanguage.googleapis.com/v1beta/openai','deepseek':'https://api.deepseek.com/v1'}[provider]
+    base={'local':'http://host.docker.internal:11434/v1','openrouter':'https://openrouter.ai/api/v1','deepseek':'https://api.deepseek.com/v1'}[provider]
     monkeypatch.setenv('APP_ENV','development')
     monkeypatch.setenv(prefix+'_LLM_BASE_URL',base)
     monkeypatch.setenv(prefix+'_LLM_MODEL','elo-deepseek-r1:1.5b' if provider=='local' else 'synthetic-cloud-model')
@@ -66,11 +66,9 @@ def test_model_endpoint_json_contract_and_credential_isolation(monkeypatch,prefi
             assert 'authorization' not in request.headers
             assert payload['model']=='elo-deepseek-r1:1.5b' and model.timeout==180
         else:assert request.headers['authorization']=='Bearer preserved-cloud-key' and model.timeout==55
-        if provider=='gemini':
-            assert payload['response_format']['type']=='json_schema' and payload['reasoning_effort']=='minimal'
-        else:
-            assert payload['response_format']=={'type':'json_object'}
-            assert 'JSON schema:' in payload['messages'][0]['content']
+        assert payload['response_format']=={'type':'json_object'}
+        assert 'JSON schema:' in payload['messages'][0]['content']
+        assert 'reasoning_effort' not in payload
         assert ('thinking' in payload)==(provider=='deepseek')
     asyncio.run(run())
 

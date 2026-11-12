@@ -25,11 +25,11 @@ test('uploaded CV review saves and resumes the same question after leaving and r
   await expect(page).toHaveURL(/\/cv\?review=/);
   const cvId = new URL(page.url()).searchParams.get('review')!;
   const chat = page.getByRole('region', {name: 'CV conversation', exact: true});
-  await expect(chat.getByRole('button', {name: 'Why this question?'})).toBeVisible({timeout: 40_000});
+  await expect(chat.getByRole('button', {name: 'Skip this question',exact:true})).toBeEnabled({timeout: 40_000});
   const firstQuestion = (await readChat(account, cvId)).active_question;
   expect(firstQuestion).toBeTruthy();
   expect(sent).toHaveLength(1);
-  await chat.getByRole('button', {name: 'Why this question?'}).click();
+  await expect(chat.getByText(firstQuestion!.question,{exact:true})).toBeVisible();
   await sendChat(page, chatAnswer);
   expect(sent).toEqual([expect.stringMatching(/review my cv/i), chatAnswer]);
 
@@ -40,7 +40,7 @@ test('uploaded CV review saves and resumes the same question after leaving and r
   await chat.getByRole('button', {name: 'Save and review later'}).click();
   await expect(page).toHaveURL(/\/cv$/);
   await page.reload();
-  await page.getByRole('button', {name: /Review.*synthetic-clarification-cv\.docx/i}).click();
+  await page.getByRole('button', {name: 'Continue review', exact: true}).click();
   await expect(page).toHaveURL(new RegExp(`/cv\\?review=${cvId}$`));
   await expect(chat.getByText(chatAnswer, {exact: true})).toBeVisible();
   await expect(chat.locator('.cv-chat-message-assistant').last()).toContainText(before.active_question!.question);
@@ -50,5 +50,5 @@ test('uploaded CV review saves and resumes the same question after leaving and r
   expect(after.active_question).toEqual(before.active_question);
   expect(after.messages).toEqual(before.messages);
   expect(sent).toHaveLength(2);
-  expect((await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBeNull();
+  expect((await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBe(cvId);
 });

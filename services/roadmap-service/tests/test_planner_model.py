@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from elo_shared.runtime import MemoryStore, Model
 from planner_fixtures import NOW, assessment, draft, settings
 from app.main import create_app
-from app.schemas import ChatTurn, PlanDraft
 
 H={'Authorization':'Bearer synthetic'}
 class Sources:
@@ -16,9 +15,6 @@ class Sources:
     async def read(self,service,path,token,params=None):
         if path.endswith('/context'):return {'ready':True,'issues':[],'input_hash':'hash1','research_coverage':'no_findings','goal':{'role':'Developer','target_type':'specific_job'},'cv':{'id':'cv1','name':'synthetic.docx'},'evidence':assessment()['evidence']}
         return {'version':0,'ready':True,'result':assessment(),'stale':False,'operation':None}
-def references(value):
-    if isinstance(value,dict):return any(k in ('$ref','$defs') or references(v) for k,v in value.items())
-    return isinstance(value,list) and any(references(v) for v in value)
 def run_flow(monkeypatch,base,*,parameter=None):
     monkeypatch.setenv('ROADMAP_LLM_API_KEY','synthetic-key');monkeypatch.setenv('ROADMAP_LLM_BASE_URL',base);monkeypatch.setenv('ROADMAP_LLM_MODEL','synthetic-model')
     if parameter:monkeypatch.setenv('ROADMAP_LLM_TOKEN_PARAMETER',parameter)
@@ -44,16 +40,15 @@ def run_flow(monkeypatch,base,*,parameter=None):
         assert state['planner']['candidate']['summary']=='Build Python depth first.'
     return requests
 
-def test_gemini_requests_use_the_openai_sdk_and_a_provider_ready_schema(monkeypatch):
-    requests=run_flow(monkeypatch,'https://generativelanguage.googleapis.com/v1beta/openai')
+def test_openrouter_requests_use_the_openai_sdk_and_json_output(monkeypatch):
+    requests=run_flow(monkeypatch,'https://openrouter.ai/api/v1')
     assert len(requests)==2
     for request,body in requests:
-        assert str(request.url)=='https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+        assert str(request.url)=='https://openrouter.ai/api/v1/chat/completions'
         assert request.headers['authorization']=='Bearer synthetic-key'
         assert request.headers['user-agent'].startswith('AsyncOpenAI/Python') and request.headers['x-stainless-lang']=='python'
-        assert body['model']=='synthetic-model' and body['response_format']['type']=='json_schema' and body['response_format']['json_schema']['strict'] is True
-        assert not references(body['response_format']['json_schema']['schema'])
-    assert [body['response_format']['json_schema']['name'] for _,body in requests]==[ChatTurn.__name__,PlanDraft.__name__]
+        assert body['model']=='synthetic-model' and body['response_format']=={'type':'json_object'} and 'reasoning_effort' not in body
+        assert 'JSON schema' in body['messages'][0]['content']
     assert requests[0][1]['max_tokens']==8192 and requests[1][1]['max_tokens']==24000
 
 def test_openai_requests_use_the_selected_token_parameter_and_json_output(monkeypatch):

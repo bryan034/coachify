@@ -126,6 +126,7 @@ class skill_gap_analyses {
     +String[] priorities
     +String analysis_status
     +String research_coverage
+    +SkillProfileEvaluation skill_profile?
     +String created_at
     +String request_hash
 }
@@ -159,7 +160,7 @@ note for interview_research "Immutable public-context revisions; shared seven-da
 
 %% Career Discovery: private sessions/jobs and immutable public-evidence snapshots in research_contexts.
 %% Both JD and discovery publish via ReviewStore.goal / GoalStore.persist_target.
-%% Generic legacy quota tests retain ledger coverage; production model stages use one Gemini client.
+%% Generic legacy quota tests retain ledger coverage; production model stages use one model client.
 
 %% JD job identity and speculative retrieval are transient until full extraction validates.
 %% Matching public-only seeds reuse research_contexts job history/evidence; activities are fixed stage IDs.
@@ -321,3 +322,7 @@ note for job_applications "Private and owner-scoped. Snapshot keeps the record r
 %% Public job results are fetched live and remain transient; legacy catalogue collections are ignored.
 
 %% Assessment skill_gap_analyses may capture Profile-only declarations with null CV identities; exact selection/declaration/goal/research versions remain pinned.
+
+%% Evidence-role-v2: Career skill targets retain planning provenance; fresh research enriches read projections.
+%% CV-owned review facts retain skill self-ratings without creating a separate score store.
+%% Assessment pins the scoring rubric in its input hash; historical assessments become stale after rubric changes.

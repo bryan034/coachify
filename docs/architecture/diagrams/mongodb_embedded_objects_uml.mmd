@@ -18,6 +18,7 @@ class CvSkill {
 }
 
 class TargetSkill {
+    +CompetenceTarget competence_target?
     +String item_id?
     +String skill_id? [legacy registry]
     +String canonical_skill_id?
@@ -377,7 +378,14 @@ class CvItem {
     +Boolean ongoing
     +SkillClaim[] skill_claims
     +ReviewFact[] review_evidence [extraction_and_clarification]
+    +ValidationIssue validation_issue? [unverified section kept after failed validation]
     +Boolean removed
+}
+
+class ValidationIssue {
+    +String status [unverified]
+    +String code
+    +String message
 }
 
 class SkillClaim {
@@ -511,9 +519,44 @@ class RequirementOutcome {
     +String mapping_method
     +String mapping_reason
     +String recommendation?
+    +String relevance?
+    +Number competence_score? [evidence-role-v2, 10 = meets role target]
+    +String score_confidence?
+    +Number demonstrated_score?
+    +Number required_score?
+    +String score_explanation?
+    +String scoring_rubric_version?
+    +LinkedProfileSkill[] profile_skills
 }
 skill_gap_analyses *-- RequirementOutcome : assessment-v1 outcomes
 RequirementOutcome *-- AssessmentComponent
+class SkillProfileEvaluation {
+    +String status [evaluated|partial|failed|empty]
+    +String rubric_version [evidence-role-v2]
+    +EvaluatedSkill[] skills
+}
+class EvaluatedSkill {
+    +String name
+    +String canonical_skill_id?
+    +String category
+    +String subcategory?
+    +String relevance
+    +Integer competence_score?
+    +Integer required_score?
+    +String explanation
+    +String[] evidence_refs
+    +String[] requirement_refs
+}
+class LinkedProfileSkill {
+    +String name
+    +String canonical_skill_id?
+    +String category
+    +Integer competence_score?
+    +Integer required_score?
+}
+skill_gap_analyses *-- SkillProfileEvaluation : per-skill LLM judgement
+SkillProfileEvaluation *-- EvaluatedSkill
+RequirementOutcome *-- LinkedProfileSkill : linked Skills Profile skills
 class PlanningPreferences {
     +Date start_date?
     +Date target_date?
@@ -759,4 +802,14 @@ job_applications *-- JobStatusChange
 %% JobApplicationSnapshot persists independently of live job-provider results; availability is unknown on tracker reads.
 
 %% Assessment InputVersions: source_mode=cv_and_profile|profile_only; CV id/extraction/effective versions nullable for profile_only.
-%% Assessment outcomes reserve nullable relevance/competence_score/score_explanation/scoring_rubric_version; scores unpopulated pending approved rubric.
+%% Job-skill outcomes carry LLM-judged levels (llm-ratio-v1), a profile-linked fallback (profile-link-v1) or the application-ratio-v1 estimate; null means unknown, never zero.
+
+class CompetenceTarget {
+    +Integer level [1..10; familiarity_minimum_8]
+    +String basis [job_description|research|inferred]
+    +String explanation
+    +String[] source_urls
+}
+TargetSkill *-- CompetenceTarget
+note for CompetenceTarget "Career prepares role targets; current workspace and Assessment handoff enrich them from fresh cited public preparation research. Public research never reads private CV evidence."
+note for ReviewFact "self_rating is an explicitly stated skill-specific whole number 1..10, saved as a string with an exact answer quote. It informs review but never overrides evidence-based competence."

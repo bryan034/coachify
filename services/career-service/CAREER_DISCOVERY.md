@@ -2,7 +2,7 @@
 
 Current provider configuration (31 October 2026): all model stages use the selected
 Career model, including local OpenAI-compatible or DeepSeek cloud inference. Retrieval
-uses Brave LLM Context for testing or DeepSeek Search for production. Earlier Gemini/Brave
+uses Brave LLM Context for testing or DeepSeek Search for production. Earlier model/Brave
 names below describe the original path. DeepSeek retrieval accepts original page content
 only, leaves missing employer metadata unknown and uses a distinct cache policy. See
 [model/search setup](../../docs/setup.md#career-model-and-search-configuration).
@@ -73,13 +73,13 @@ These lists are ordered oldest to newest: case/whitespace-equivalent duplicates 
 not use another slot or renew an entry's age; overflow keeps the newest distinct
 entries. Every supplied entry is validated before trimming, so invalid entries
 cannot be hidden by overflow. Character limits and citation-reference caps stay strict.
-Gemini can suggest up to five career directions, each explaining its work and differences.
+The model can suggest up to five career directions, each explaining its work and differences.
 
 `open_questions` tracks useful unresolved clarifications, for example whether a user
 prefers building applications or analysing data. It is not a required questionnaire.
-Gemini is instructed to remove answered, declined, superseded or irrelevant questions,
+The model is instructed to remove answered, declined, superseded or irrelevant questions,
 while continuing research with unknown optional context. The backend validates this
-list's format, deduplication and capacity; semantic resolution relies on Gemini.
+list's format, deduplication and capacity; semantic resolution relies on the model.
 
 Research readiness is explicit and enforced in Python after model interpretation.
 The agent naturally asks one useful missing topic at a time, using existing answers:
@@ -110,13 +110,13 @@ Older dictionaries are ignored on read, preserving an earlier explicit broad cho
 when the role was unspecified or simply repeated the field. New `other_interests`
 answers still need to be collected for older chats. Location is optional, captured
 only if volunteered; it does not add a seventh question or block research.
-`skill_ambiguity` remains an internal Gemini assessment, not a required user answer.
+`skill_ambiguity` remains an internal model assessment, not a required user answer.
 A material ambiguity prompts the role/keep-it-broad question; explicit broad choice
 allows a comparative sample without pretending every role requires the same skills.
 
 Python grounds proposed answers in this session's USER statements and requires
 explicit uncertainty/skip wording for unsure/skipped answers. Semantic interpretation
-still relies on Gemini; a matching quotation is not a proof of correct interpretation.
+still relies on the model; a matching quotation is not a proof of correct interpretation.
 Saved answers survive the bounded recent-message window. A viable field must be
 identified before research; otherwise the conversation continues with options.
 The readiness gate also applies to the compatibility `/research` endpoint.
@@ -146,7 +146,7 @@ Discovery uses its own stage-specific system prompts; these scope instructions a
 sent in that prompt, rather than relying on the generic Career prompt.
 All five Discovery model stages request schema-constrained generation from their
 Pydantic contracts. Local inference uses native JSON Schema through the compatible
-Chat Completions transport; Gemini receives its supported schema projection.
+Chat Completions transport.
 DeepSeek Discovery uses `/responses` with `text.format.type=json_schema`, independently
 of the JSON-only Chat Completions setting used by other Career workflows.
 DeepSeek's standard `/v1` base alias is normalized to its documented provider root
@@ -219,7 +219,7 @@ direction. Synthesis checks the conversation version and recomputes if new answe
 arrive before publication. Research progress never overwrites user messages/memory.
 The output publishes the validated goal automatically; readiness and the separate CV-context acknowledgement remain independent.
 
-Gemini plans related titles and searches. Brave LLM Context retrieves bounded
+The model plans related titles and searches. Brave LLM Context retrieves bounded
 excerpts, with at most four initial queries and two targeted follow-ups, two requests
 at once. Searches retain the selected field and area, optional location/stage and
 current year; field context disambiguates similarly named occupations.
@@ -232,24 +232,24 @@ paths retain their existing budgets. No top-five cutoff
 is used for the Discovery evidence sample.
 
 The five contexts are Brave's relevance-filtered selection from its search results,
-not a local slice of the first five unassessed pages. Gemini still validates every
+not a local slice of the first five unassessed pages. The model still validates every
 returned candidate; an irrelevant or invalid context is excluded, so a query may
 contribute fewer than five useful sources. The existing bounded follow-up queries
 can improve coverage; no additional same-query retrieval bypasses the five-URL cap.
 All returned candidates across queries are deduplicated before evidence selection.
-Known search-index/template URL shapes are excluded in code. Gemini assesses the
+Known search-index/template URL shapes are excluded in code. The model assesses the
 remaining candidates against field, area, stage and location. Its assessment schema
 contains ref/relevant/score/quote, without a kind taxonomy or employer field. Legacy
 model-supplied kind/company fields are ignored rather than validated. Only
 positively relevant individual listings enter the target; rejected sources are not
 relabeled relevant. Python checks source references and schema bounds, not literal
-quote/name equality. Gemini may paraphrase Brave evidence faithfully, preserving
+quote/name equality. The model may paraphrase Brave evidence faithfully, preserving
 negations, required/preferred wording, conditions and alternatives. Semantic fidelity
 is model-interpreted, not independently proven by Python string checks.
 
 Employer names come only from explicit `hiringOrganization` data in structured
 snippets returned by Brave; missing or ambiguous names stay null. Brave's `site_name`
-is a publisher, potentially a job board, and is not treated as an employer. Gemini
+is a publisher, potentially a job board, and is not treated as an employer. The model
 neither supplies nor verifies companies. Known employer/title/location reposts are
 deduplicated, and ranking prefers employer diversity when metadata supports it.
 Unknown employer coverage is disclosed without guessing names. The selected sample
@@ -271,11 +271,11 @@ Ordinary coverage follow-ups and the existing output-limit splitting below are
 separate from this error retry. Rejected pages remain excluded and are disclosed in
 coverage warnings. Explicit refresh starts fresh under the new research policy.
 
-Gemini extracts batches of at most three sources. Supporting evidence can be a
+The model extracts batches of at most three sources. Supporting evidence can be a
 faithful paraphrase; exact requirement-name/quote matching is not required. Role title
 and location still have source checks, and stage mismatches/senior roles are excluded
 from internship/entry-level samples. Schema/reference errors trigger replacement.
-If Gemini returns truncated output or a batch exceeds its input budget, the worker
+If the model returns truncated output or a batch exceeds its input budget, the worker
 checkpoints a split and processes smaller batches instead of repeating the same
 oversized request. A single source gets one compact retry with at most eight
 representative requirements; a persistently incomplete source is excluded with a
@@ -287,7 +287,7 @@ Deterministic aggregation deduplicates source URLs and employer/title/location
 reposts, maps known taxonomy aliases, counts each skill once per listing and retains
 original terms and source IDs. Frequencies describe the sample, not the whole market.
 
-Gemini consolidates this validated inventory into a coherent recommended skill set,
+The model consolidates this validated inventory into a coherent recommended skill set,
 separating foundations, specialisation-dependent skills and optional tools. It gives
 each recommendation a learning priority and relevance explanation, with checked
 references to observations. These are saved as suggested `generated_guidance`, with
@@ -408,40 +408,40 @@ is governed by `OPPORTUNITY_ENABLED`. Optional tuning values are passed by Compo
 | Brave URL contexts per query | At most 5 |
 | Brave context per query | At most 16,384 approximate tokens total |
 | Brave context per URL | 2,048 approximate tokens |
-| Gemini input, including instructions/schema/context | At most 32,768 estimated tokens per call |
-| Gemini extraction output | At most 8,192 tokens per call |
-| Gemini discovery conversation output | At most 4,096 tokens, bounded by shared configured output cap |
-| Gemini relevance assessment output | At most 2,048 tokens |
+| The model input, including instructions/schema/context | At most 32,768 estimated tokens per call |
+| The model extraction output | At most 8,192 tokens per call |
+| The model discovery conversation output | At most 4,096 tokens, bounded by shared configured output cap |
+| The model relevance assessment output | At most 2,048 tokens |
 
-Gemini input uses the existing tokenizer as an estimate, not a byte-count proxy;
+The model input uses the existing tokenizer as an estimate, not a byte-count proxy;
 actual provider counts can differ. The effective input budget is the smaller of
 32,768 and `AI_CONTEXT_TOKENS` minus the output allowance and safety margin.
 Evidence is split rather than silently shortened at this boundary. Discovery extraction
 always sends an explicit 8,192-token maximum, independently of the shared
 `AI_MAX_OUTPUT_TOKENS` default. This is a ceiling, not a target length or minimum:
-Gemini may finish earlier. Other stages/workflows retain their existing caps and
+The model may finish earlier. Other stages/workflows retain their existing caps and
 shared configuration behavior. There is no new setting, provider, dependency or
 local tokens-per-minute limit.
 
 Brave currently documents a 32,768-token total context maximum and 8,192 per URL.
-Gemini 3.5 Flash-Lite documents 1,048,576 input and 65,536 output tokens; these are
+Model context limits depend on the configured OpenRouter model; they are
 provider maxima, not the amounts elo sends or requests.
 
 Model IDs/endpoints follow the provider documentation:
-[Gemini 3.5 Flash Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),
+[OpenRouter models](https://openrouter.ai/models),
 [Brave LLM Context](https://api-dashboard.search.brave.com/documentation/services/llm-context).
 Configured account access still needs live verification; synthetic tests do not prove billing/plan access.
 
 ## Provider waits and research reliability
 
-There is no local token-per-minute admission limit. Gemini and Brave may still return HTTP 429 with a retry
+There is no local token-per-minute admission limit. The model and Brave may still return HTTP 429 with a retry
 delay. Background work checkpoints completed searches/evaluations and resumes the
 unfinished step after that provider delay. A 407/600-second provider cooldown is not
 shortened or presented as a local token reset.
 
-Saved-goal questions remain available while research runs or waits. The same Gemini
+Saved-goal questions remain available while research runs or waits. The same model
 model handles coordination, reasoning and validated edits regardless of the retired
-Gemini-chat switch. Missing interview evidence is reported
+legacy chat switch. Missing interview evidence is reported
 as missing. Workspace polling does not restart the legacy graph after the durable
 Opportunity worker has taken ownership. One invalid opportunity claim no longer
 throws away other independently valid citations; wholly invalid batches still fail

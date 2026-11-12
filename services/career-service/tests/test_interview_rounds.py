@@ -72,7 +72,7 @@ def test_only_interview_research_offers_round_fields_to_the_model():
     assert {'round_number', 'round_name'} <= set(interview['$defs']['ReferencedClaim']['properties'])
     assert not {'round_number', 'round_name'} & set(other['$defs']['ReferencedClaim']['properties'])
     assert 'round_format' in FIELDS['interview_intelligence']
-    payload = AIAdapter(AISettings(provider='gemini', response_mode='json_schema'), None)._payload(
+    payload = AIAdapter(AISettings(provider='compatible', response_mode='json_schema'), None)._payload(
         AIInput(stage='opportunity_structure', context=json.dumps(structure_input({}, 'internship_insights', sources))))
     schema = payload['response_format']['json_schema']['schema']
     item = schema['properties']['findings']['items']

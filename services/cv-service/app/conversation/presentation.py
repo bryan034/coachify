@@ -18,3 +18,9 @@ def review_reply(text):
     text = re.sub(rf'\b(?:(?:fact|evidence|source|item):[a-f0-9]{{24,64}}|answer:{_UUID})\b', '', text, flags=re.I)
     text = re.sub(r'\s*[\[(]\s*[\])]', '', text)
     return re.sub(r' +([,.;:!?])', r'\1', re.sub(r' {2,}', ' ', text)).strip()
+
+
+def unverified_notice(title):
+    """Fixed wording; only the section's own title is inserted."""
+    return (f'Heads up: I couldn’t automatically verify “{title}” against your CV, so I’ve kept what I extracted '
+            'but treated it as unconfirmed. It would be better if you explain this section to me here in the chat.')

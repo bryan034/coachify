@@ -5,7 +5,7 @@ from typing import get_args
 from app.domain.capabilities import effective_items, digest, normalized_name
 from app.domain.attachments import source_fingerprint
 from app.domain.review_context import clarification_context, evidence_for, review_target_skipped
-from app.domain.baseline import baseline_estimates
+from app.domain.baseline import baseline_estimates, skill_facts
 from app.schemas.interview import InterviewProgress
 from app.schemas.interview_evidence import fact_key, ReviewField, fact_groups, facts_closed, fact_group_value
 
@@ -77,10 +77,36 @@ def question_options(item, memory):
     return result
 
 
+def ownership_established(item):
+    """Supported personal or shared ownership and at least one concrete task fact for this topic."""
+    supported = [f for f in evidence_for(item) if f['status'] == 'supported']
+    return (any(f['field'] == 'personal_contribution' and f.get('attribution') in {'personal', 'shared'} for f in supported)
+            and any(f['field'] in {'task_scope', 'skill_use', 'responsibilities'} for f in supported)
+            and not any(f['field'] in {'personal_contribution', 'responsibilities'} and f['status'] == 'conflicting'
+                        for f in evidence_for(item)))
+
+
+def enough_context(item):
+    """Personal ownership and concrete use of every listed skill are known, so further questions are optional.
+
+    Assistance and other optional details may remain unknown; skill levels stay uncertain where unproven.
+    """
+    if not ownership_established(item): return False
+    claims = item.get('skill_claims') or [{'name': name} for name in item.get('skill_names', [])]
+    for claim in claims:
+        if claim.get('attribution') in {'team', 'observed', 'denied'}: continue
+        facts = skill_facts(item, claim['name'])
+        if not any(f['field']=='self_rating' and f['status'] in {'supported','unknown','skipped','not_applicable'} for f in facts): return False
+        if any(f['field'] in {'personal_contribution', 'skill_use'} and f['status'] in {'unknown', 'skipped', 'not_applicable'}
+               for f in facts): continue
+        if not any(f['field'] == 'skill_use' and f['status'] == 'supported' for f in facts): return False
+    return True
+
+
 def topic_ids(items):
-    """Only experiences/projects with concrete clarification needs enter review."""
-    return [item['id'] for item in items if item['kind'] in {'project', 'experience'}
-            and clarification_context(item, evidence_for(item))['clarification_targets']]
+    """Experiences/projects with concrete clarification needs, and any section that failed validation."""
+    return [item['id'] for item in items if item.get('validation_issue') or (item['kind'] in {'project', 'experience'}
+            and clarification_context(item, evidence_for(item))['clarification_targets'])]
 
 
 def reconcile_memory(conversation, document):
@@ -100,14 +126,19 @@ def reconcile_memory(conversation, document):
     if old.get('status') not in {'reviewed', 'reviewed_with_gaps'}:
         coverage.pop(old.get('focus_item_id'), None)
     attempts = {k: v for k, v in old.get('attempts', {}).items() if any(k.startswith(i + ':') for i in stable_sources)}
-    answers = {q['id']: q['status'] for q in document['clarifications'] if not q.get('reconciliation_required')}
+    # A skipped question the user reopened no longer counts as a skip or against the topic's question budget.
+    answers = {q['id']: 'reopened' if q.get('reopened') else q['status'] for q in document['clarifications'] if not q.get('reconciliation_required')}
     # Rebuild from durable CV questions, not the bounded recent-memory window.
     question_counts, discussed_topics = {}, set()
     known_questions = {q['id'] for q in old.get('questions', [])}
     for q in document['clarifications']:
         if q['item_id'] in signatures and ('_interview_targets' in q or q['id'] in known_questions):
-            question_counts[q['item_id']] = question_counts.get(q['item_id'], 0) + 1
+            question_counts[q['item_id']] = question_counts.get(q['item_id'], 0) + (0 if q.get('reopened') else 1)
             if q['status'] in {'answered', 'skipped'}: discussed_topics.add(q['item_id'])
+    # Never let a rebuild lower a topic's count: the asked questions are the budget, and the number shown
+    # to the user must keep rising to the limit. Reopening a topic resets its count after this rebuild.
+    for item_id, count in old.get('question_counts', {}).items():
+        if item_id in signatures and count > question_counts.get(item_id, 0): question_counts[item_id] = min(count, MAX_TOPIC_QUESTIONS)
     needed = set(topic_ids(items))
     retained_topics = [i for i in old.get('topic_ids', []) if i in signatures
                        and (i in needed or i in coverage or i in discussed_topics or topic_discussed(old, i))]
@@ -133,7 +164,8 @@ def progress(memory, document):
         reviewed_items=sum(i['id'] in memory['coverage'] for i in sources), total_items=len(sources),
         topics=[{'id': i['id'], 'title': i['title'],
                  'status': memory['coverage'][i['id']]['status'] if i['id'] in memory['coverage'] else
-                           'current' if i['id'] == memory.get('focus_item_id') else 'pending'} for i in sources],
+                           'current' if i['id'] == memory.get('focus_item_id') else 'pending',
+                 'validation': 'unverified' if i.get('validation_issue') else None} for i in sources],
         estimates=memory.get('estimates', [])).model_dump(mode='json')
 
 
@@ -175,6 +207,7 @@ def build_context(conversation, document, memory, *, focus_id=None, recall_ids=(
             'questions_remaining': max(0, MAX_TOPIC_QUESTIONS - topic_question_count(memory, i['id'])),
             'review_dispositions': i.get('_review_skips', []),
             'listed_skills': [c['name'] for c in i.get('skill_claims', [])],
+            'enough_context': enough_context(i),
             'clarification_targets': clarification_context(i, evidence_for(i))['clarification_targets'],
             'fields': [{'field': f['field'], 'skill_name': f.get('skill_name'), 'status': f['status']}
                        for f in evidence_for(i)], 'coverage': memory['coverage'].get(i['id'])} for i in items],

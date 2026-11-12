@@ -59,10 +59,11 @@ it('shows live summary steps and automatically replaces them with the completed 
    return original(path,token,options);
   });
   await act(async()=>{view=mount();});
-  expect(screen.getByRole('log')).toHaveTextContent('Current step');
+  expect(screen.getByRole('region',{name:'Skills needed'})).toHaveTextContent('Preparing your summary');
   expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Preparing your career-goal summary');
+  expect(screen.queryByRole('textbox',{name:'Message elo'})).toBeNull();
   await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
-  expect(screen.getByRole('log')).toHaveTextContent('Refining the response');
+  expect(screen.getByRole('region',{name:'Skills needed'})).toHaveTextContent('Refining the response');
   await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
   expect(screen.getByRole('log')).toHaveTextContent('Your automatic career summary.');
   expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
@@ -76,7 +77,7 @@ it('reloads an early research snapshot when the workspace completes with the sam
   active={...initial(),phase:'researching'};
   research={...report(),finished:true,status:'partial',categories:{interview_intelligence:{...report().categories.interview_intelligence!,status:'pending',findings:[]}}};
   await act(async()=>{view=mount();});
-  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+  expect(screen.queryByRole('textbox',{name:'Message elo'})).toBeNull();
   active=initial();research=report();
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
   expect(screen.getByRole('log')).toHaveTextContent('Ask me anything about this goal set!');
@@ -140,11 +141,10 @@ describe('single career conversation',()=>{
   const body=JSON.parse(vi.mocked(careerApi).mock.calls.find(v=>v[0]==='/workspace/messages')![2]!.body as string);
   expect(body).toMatchObject({session_id:active.session_id,expected_version:1});expect(body).not.toHaveProperty('context');expect(body).not.toHaveProperty('text');
  });
- it('keeps the composer open while interview research waits',async()=>{
+ it('shows the processing screen instead of the composer while interview research waits',async()=>{
   active={...active,phase:'waiting_quota',research_id:null,retry_after:60};mount();
-  await screen.findByText('Waiting for the research service to resume');
-  expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
-  expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();
+  await screen.findByText(/Waiting for the research service to resume/);
+  expect(screen.queryByRole('textbox',{name:'Message elo'})).toBeNull();
   expect(screen.queryByText(/Let’s look at Engineer/)).toBeNull();
   expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
  });
@@ -305,27 +305,21 @@ it('shows initial research activity in the chat and replaces it when research is
  try{
   active={...active,phase:'researching',research_id:null};
   await act(async()=>{view=mount();});
-  const log=screen.getByRole('log');
-  expect(log).toContainElement(screen.getByRole('status'));
-  expect(log).toHaveTextContent('Researching interview expectations');
-  expect(log).not.toHaveTextContent('Brave');
-  expect(log).not.toHaveTextContent('Let’s look at Engineer');
-  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
-  expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
-  expect(screen.getByRole('button',{name:'Role and research details'})).toBeEnabled();
-  fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
+  const card=screen.getByRole('region',{name:'Skills needed'});
+  expect(card).toHaveTextContent('Researching the role');
+  expect(card).not.toHaveTextContent('Brave');
   expect(screen.getByRole('heading',{name:'Engineer'})).toBeVisible();
-  expect(screen.getByText('Python · required')).toBeVisible();
-  expect(screen.getByText('Research is incomplete. Your saved goal details remain available.')).toBeVisible();
-  fireEvent.click(screen.getByRole('button',{name:'Hide details'}));
+  expect(screen.queryByRole('log')).toBeNull();
+  expect(screen.queryByRole('textbox',{name:'Message elo'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
   active=initial();
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
-  expect(log).toHaveTextContent('Let’s look at Engineer');
-  expect(screen.queryByText('Researching interview expectations…')).toBeNull();
+  expect(screen.getByRole('log')).toHaveTextContent('Let’s look at Engineer');
+  expect(screen.queryByRole('region',{name:'Skills needed'})).toBeNull();
  }finally{view?.unmount();vi.useRealTimers();}
 });
 
-it('requests a Gemini overview after research completes',async()=>{
+it('requests an AI overview after research completes',async()=>{
  research.categories.interview_intelligence!.findings[0].value='Recruiter screen and 3 reported interview rounds';
  await chat();
  expect(screen.getByRole('log')).toHaveTextContent('3 reported interview rounds');
@@ -377,10 +371,10 @@ it('keeps the JD receipt across chat remounts and reconnects to its pending oper
  api.mockImplementation(async(path,token,options)=>path==='/workspace/jd'?{operation_id:'d'.repeat(32),status:'waiting_quota',retry_after:600,result:null} as never:original(path,token,options));
  const view=render(<CareerSessionProvider><Journey/></CareerSessionProvider>);
  fireEvent.click(screen.getByRole('button',{name:'Open extraction'}));
- await screen.findByText('Waiting for the research service to resume');
+ await screen.findByText(/Waiting for the research service to resume/);
  fireEvent.click(screen.getByRole('button',{name:'Leave extraction'}));
  fireEvent.click(screen.getByRole('button',{name:'Open extraction'}));
- await screen.findByText('Waiting for the research service to resume');
+ await screen.findByText(/Waiting for the research service to resume/);
  const calls=api.mock.calls.filter(call=>call[0]==='/workspace/jd');
  expect(calls).toHaveLength(2);
  expect(calls[0][2]?.headers).toEqual(calls[1][2]?.headers);
@@ -479,7 +473,7 @@ it('shows observed research steps during JD extraction without exposing provider
   view=render(<CareerSessionProvider><Import/></CareerSessionProvider>);
   await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));});
   expect(screen.getByRole('status',{name:'Career goal progress'})).toHaveTextContent('Searching for relevant interview experiences');
-  expect(screen.getByRole('log')).not.toHaveTextContent(/Brave|API/);
+  expect(screen.getByRole('region',{name:'Skills needed'})).not.toHaveTextContent(/Brave|API/);
   await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});
   expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
   expect(replace).not.toHaveBeenCalledWith('/career-goal');
@@ -492,7 +486,7 @@ it('publishes no initial JD text until the completed research snapshot arrives, 
  try{
   active={...active,phase:'researching',research_id:null};
   await act(async()=>{view=mount();});
-  expect(screen.getByRole('log')).not.toHaveTextContent('Build backend services');
+  expect(screen.queryByRole('log')).toBeNull();
   expect(screen.queryByRole('heading',{name:'Your career goal'})).toBeNull();
   expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
   expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
@@ -514,7 +508,7 @@ it('also holds research text when the JD review is not ready yet',async()=>{
   await act(async()=>{view=mount();});
   expect(screen.queryByRole('heading',{name:'Your career goal'})).toBeNull();
   expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
-  expect(screen.getByRole('log')).not.toHaveTextContent('Technical interview');
+  expect(screen.queryByRole('log')).toBeNull();
   active=initial();
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
   expect(screen.getByRole('log')).toHaveTextContent('Let’s look at Engineer');
@@ -524,12 +518,12 @@ it('also holds research text when the JD review is not ready yet',async()=>{
 
 it('does not publish a failed research record belonging to a different goal',async()=>{
  research={...research,status:'failed',career_target_id:'000000000000000000000082'};active={...active,phase:'ready'};mount();
- await screen.findByRole('textbox',{name:'Message elo'});
+ await screen.findByRole('region',{name:'Skills needed'});
  await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.some(([path])=>path.includes('/opportunity-research'))).toBe(true));
  expect(screen.queryByRole('heading',{name:'Your career goal'})).toBeNull();
  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
- expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ expect(screen.queryByRole('textbox',{name:'Message elo'})).toBeNull();
 });
 
 
@@ -561,9 +555,10 @@ it('waits for the generated overview and sends its exact saved snapshot',async()
   if(path==='/workspace/summary')await new Promise<void>(resolve=>{complete=resolve;});
   return original(path,token,options);
  });
- mount();await screen.findByText('Preparing your career-goal summary…');
+ mount();await waitFor(()=>expect(api.mock.calls.some(([path])=>path==='/workspace/summary')).toBe(true));
+ expect(screen.getByRole('region',{name:'Skills needed'})).toHaveTextContent('Preparing your summary');
  expect(screen.queryByText(/Let’s look at Engineer/)).toBeNull();
- expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ expect(screen.queryByRole('textbox',{name:'Message elo'})).toBeNull();
  const call=api.mock.calls.find(([path])=>path==='/workspace/summary')!;
  expect(JSON.parse(call[2]!.body as string)).toEqual({session_id:active.session_id,expected_version:1,research_id:active.research_id});
  await act(async()=>complete());
@@ -613,7 +608,8 @@ it('loads saved research before automatically summarising without flashing Resum
   if(path.includes('/opportunity-research'))await new Promise<void>(resolve=>{complete=resolve;});
   return original(path,token,options);
  });
- mount();await screen.findByText('Loading your saved research…');
+ mount();await screen.findByRole('region',{name:'Skills needed'});
+ await waitFor(()=>expect(api.mock.calls.some(([path])=>path.includes('/opportunity-research'))).toBe(true));
  expect(screen.queryByRole('button',{name:'Resume research'})).toBeNull();
  expect(api.mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
  await act(async()=>complete());
@@ -739,7 +735,7 @@ it('queues multiple messages and dispatches them with the latest goal version an
  expect(bodies[2].conversation[0].content).toBe('What skills matter?');
 });
 
-it.each(['researching','research_failed'] as const)('answers saved-goal questions while research is %s',async phase=>{
+it.each(['research_failed'] as const)('answers saved-goal questions while research is %s',async phase=>{
  active={...active,phase,research_id:null};mount();
  const box=await screen.findByRole('textbox',{name:'Message elo'});
  fireEvent.change(box,{target:{value:'Explain the Python requirement'}});
@@ -749,22 +745,18 @@ it.each(['researching','research_failed'] as const)('answers saved-goal question
  expect(vi.mocked(careerApi).mock.calls.some(([path])=>path==='/workspace/summary')).toBe(false);
 });
 
-it('keeps messages queued during initial JD extraction and sends them once the goal is saved',async()=>{
+it('shows no composer during initial JD extraction and opens the chat once the goal is ready',async()=>{
  let finish!:(value:never)=>void;
  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
  api.mockImplementation((path,token,options)=>path==='/workspace/jd'?new Promise(resolve=>{finish=resolve;}):original(path,token,options));
  render(<CareerSessionProvider><Import/></CareerSessionProvider>);
  fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));
- const box=screen.getByRole('textbox',{name:'Message elo'});
- fireEvent.change(box,{target:{value:'Explain the qualifications'}});
- fireEvent.click(screen.getByRole('button',{name:'Send message'}));
- expect(screen.getByText('Message queued…')).toBeInTheDocument();
+ expect(screen.getByRole('region',{name:'Skills needed'})).toHaveTextContent('Reading the job description');
+ expect(screen.queryByRole('textbox',{name:'Message elo'})).toBeNull();
  expect(api.mock.calls.some(([path])=>path==='/workspace/messages')).toBe(false);
- fireEvent.change(box,{target:{value:'My newer draft'}});
- await act(async()=>finish({...active,phase:'researching',research_id:null} as never));
- await screen.findByText('Practise Python for the reported coding exercise.');
- expect(box).toHaveValue('My newer draft');
- expect(screen.getAllByText('Explain the qualifications')).toHaveLength(1);
+ await act(async()=>finish({...initial()} as never));
+ expect(await screen.findByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ expect(screen.queryByRole('region',{name:'Skills needed'})).toBeNull();
 });
 
 it('continues queued messages after a failure and retries the failed turn with its original receipt',async()=>{
@@ -851,9 +843,9 @@ it('recovers interrupted JD progress polling and shows completion without a refr
   await act(async()=>{view=render(<CareerSessionProvider><Import/></CareerSessionProvider>);});
   await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Import test JD'}));});
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
-  expect(screen.getByRole('log')).toHaveTextContent('Reconnecting to task updates');
+  expect(screen.getByRole('region',{name:'Skills needed'})).toHaveTextContent('Reconnecting to task updates');
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
-  expect(screen.getByRole('log')).toHaveTextContent('Checking sources against this career goal');
+  expect(screen.getByRole('region',{name:'Skills needed'})).toHaveTextContent('Checking sources against this career goal');
   expect(screen.queryByText(/Reconnecting to task updates/)).toBeNull();
   active=initial();
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
@@ -871,7 +863,7 @@ it('automatically reloads finished research after an interrupted read and displa
    return original(path,token,options);
   });
   await act(async()=>{view=mount();});
-  expect(screen.getByRole('log')).toHaveTextContent('Reconnecting to task updates');
+  expect(screen.getByRole('region',{name:'Skills needed'})).toHaveTextContent('Reconnecting to task updates');
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
   expect(screen.getByRole('log')).toHaveTextContent('Let’s look at Engineer');
   expect(screen.queryByText(/Reconnecting to task updates/)).toBeNull();

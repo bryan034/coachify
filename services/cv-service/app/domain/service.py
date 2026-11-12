@@ -13,6 +13,7 @@ from app.domain.storage import UploadCapacity
 from app.domain.answer_capacity import reserved_bytes, release as release_answer_capacity, CAPACITY_MESSAGE
 from app.domain.model_usage import ModelUsage
 from app.domain.deletion import CvDeletion
+from app.domain.review_summary import review_summary
 from app.domain.baseline import baseline_estimates, visible_baseline_estimates
 
 
@@ -83,6 +84,7 @@ def detail(document):
         'clarifications': document['clarifications'], 'extraction': document['extraction'],
         'notices': document.get('notices', []), 'reconciliation': document.get('reconciliation', []),
         'review_required': document['effective_version'] > 1,
+        'review_summary': review_summary(document, items),
         'reconciliation_candidate_id': document.get('candidate', {}).get('id')}
 
 
@@ -116,6 +118,28 @@ class CvService:
                 raise Conflict('Finish or retry saved interpretations before saving this reviewed profile.')
             document['profile_reviewed_effective_version'] = document['effective_version']
         return self.mutate(owner, identifier, mutation, 'profile-review', transform)
+
+    def mark_reviewed_when_ready(self, owner, identifier):
+        """A finished guided review is the user's review of this CV. Best effort: pending interpretations leave it unmarked."""
+        from app.schemas.cv import Mutation
+        from uuid import uuid5
+        current = self.get(owner, identifier)
+        if current.get('profile_reviewed_effective_version') == current['effective_version']: return current
+        mutation_id = uuid5(NAMESPACE_URL, f"elo:review-complete:{identifier}:{current['version']}")
+        try: return self.mark_profile_reviewed(owner, identifier, Mutation(expected_version=current['version'], mutation_id=mutation_id))
+        except Conflict: return current
+
+    def reopen_topic_skips(self, owner, identifier, item_id, mutation_id):
+        """Let a skipped topic be reviewed again. The skipped questions stay in history but stop closing its targets."""
+        from app.schemas.cv import Mutation
+        def transform(document):
+            for question in document['clarifications']:
+                if question['item_id'] == item_id and question['status'] == 'skipped': question['reopened'] = True
+            # The review is open again, so the CV is no longer reviewed until it is finished and saved.
+            document['profile_reviewed_effective_version'] = None
+        current = self.get(owner, identifier)
+        return self.mutate(owner, identifier, Mutation(expected_version=current['version'], mutation_id=mutation_id),
+                           'reopen-skips:' + item_id, transform)
 
     def operation(self, owner, identifier):
         document = self.repository.by_operation(owner, identifier)

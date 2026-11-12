@@ -1,8 +1,15 @@
 # Shared comparison
 
 `useComparison` reads the current owner-scoped Assessment and its admissible source
-context. `ComparisonPanel` starts an explicit versioned comparison, independently
-of Roadmap. Home, Career Goal and Skills Profile reuse this result.
+context. Reads never start a comparison. Home, Career Goal and Skills Profile reuse
+this result.
+
+`EvaluateBanner` sits on Career Goal and Skills Profile until a current evaluation
+exists. It shows exactly one of: the setup step still open (set a goal, add skills, or
+finish the CV review, linking to the other page when the step lives there), a wait
+for goal research, progress, or the **Evaluate skills** button that submits the
+versioned command. A stale result brings it back as “Your goal or skills changed”.
+`ComparisonPanel` remains Home's entry point.
 
 Reads restore pending work without submitting a new comparison. Polling resumes
 running operations; failed retries restore their command/checkpoint. Ambiguous

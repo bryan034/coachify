@@ -1,4 +1,4 @@
-"""Focused, public-only Brave retrieval for a Gemini-selected goal question."""
+"""Focused, public-only Brave retrieval for a model-selected goal question."""
 import asyncio
 import re
 from app.schemas.analysis import ResearchContext

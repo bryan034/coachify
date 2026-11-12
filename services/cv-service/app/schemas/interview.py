@@ -1,5 +1,5 @@
 """Typed proposals; the agent cannot supply persistence or execution controls."""
-from typing import Literal
+from typing import Annotated, Literal
 from pydantic import Field, model_validator
 from app.schemas.cv import StrictModel, InterpretedClaim, InterpretedDates
 from app.schemas.conversation import ConversationRoute, SkillEstimate, InterviewProgress
@@ -53,3 +53,6 @@ class InterviewDecision(StrictModel):
     targets: list[InterviewTarget] = Field(default_factory=list, max_length=3)
     coverage: list[InterviewCoverage] = Field(default_factory=list, max_length=160)
     estimates: list[SkillEstimate] = Field(default_factory=list, max_length=20)
+    # Only for ask: short noun phrases the answer can cover, and one plain sentence on why it is asked.
+    answer_hints: list[Annotated[str, Field(min_length=1, max_length=90)]] = Field(default_factory=list, max_length=4)
+    reason: str | None = Field(default=None, min_length=1, max_length=300)

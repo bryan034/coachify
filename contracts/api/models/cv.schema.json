@@ -369,6 +369,17 @@
           "maxItems": 240,
           "title": "Review Evidence",
           "type": "array"
+        },
+        "validation_issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValidationIssue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1001,7 +1012,8 @@
             "recency",
             "frequency",
             "limitations",
-            "replication_confidence"
+            "replication_confidence",
+            "self_rating"
           ],
           "title": "Field",
           "type": "string"
@@ -1084,6 +1096,26 @@
       "title": "ReviewFact",
       "type": "object"
     },
+    "ReviewProgress": {
+      "properties": {
+        "reviewed_topics": {
+          "minimum": 0,
+          "title": "Reviewed Topics",
+          "type": "integer"
+        },
+        "total_topics": {
+          "minimum": 0,
+          "title": "Total Topics",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reviewed_topics",
+        "total_topics"
+      ],
+      "title": "ReviewProgress",
+      "type": "object"
+    },
     "ReviewQuote": {
       "additionalProperties": false,
       "properties": {
@@ -1104,6 +1136,56 @@
         "quote"
       ],
       "title": "ReviewQuote",
+      "type": "object"
+    },
+    "ReviewSummary": {
+      "properties": {
+        "answered_questions": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Answered Questions",
+          "type": "integer"
+        },
+        "experiences": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Experiences",
+          "type": "integer"
+        },
+        "skills_added": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Skills Added",
+          "type": "integer"
+        },
+        "skills_corrected": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Skills Corrected",
+          "type": "integer"
+        },
+        "skills_removed": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Skills Removed",
+          "type": "integer"
+        },
+        "added_skill_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Added Skill Ids",
+          "type": "array"
+        },
+        "skill_notes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Skill Notes",
+          "type": "object"
+        }
+      },
+      "title": "ReviewSummary",
       "type": "object"
     },
     "SavedInterpretation": {
@@ -1451,9 +1533,45 @@
       ],
       "title": "SkillSource",
       "type": "object"
+    },
+    "ValidationIssue": {
+      "properties": {
+        "status": {
+          "const": "unverified",
+          "title": "Status",
+          "type": "string"
+        },
+        "code": {
+          "description": "The check this section failed after retrying; no CV content.",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "code",
+        "message"
+      ],
+      "title": "ValidationIssue",
+      "type": "object"
     }
   },
   "properties": {
+    "review_progress": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReviewProgress"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "processing_progress": {
       "anyOf": [
         {
@@ -1656,6 +1774,9 @@
     "review_required": {
       "title": "Review Required",
       "type": "boolean"
+    },
+    "review_summary": {
+      "$ref": "#/$defs/ReviewSummary"
     }
   },
   "required": [

@@ -1,4 +1,4 @@
-"""Transient Gemini presentation; canonical goal and research stay unchanged."""
+"""Transient model presentation; canonical goal and research stay unchanged."""
 import json
 import hashlib
 from fastapi.encoders import jsonable_encoder
@@ -12,6 +12,7 @@ from app.workflows.activity import activity
 from app.workflows.structured import structured_node
 from app.workflows.current import workspace_revision
 from app.workflows.citations import summary_text, source_links
+from app.schemas.opportunity import plain_text
 
 CATEGORY_LABELS={
     'interview_intelligence':'Interview expectations',
@@ -43,7 +44,7 @@ def failed_research_summary(goal,record):
         for finding in category.findings:
             citations=source_links(finding.source_ids,sources)
             qualifier=' (related context)' if getattr(finding,'scope','exact')!='exact' else ''
-            points.append(summary_text(finding.value)+qualifier+(' '+citations if citations else ''))
+            points.append(summary_text(plain_text(finding.value))+qualifier+(' '+citations if citations else ''))
         explanation=FAILURE_EXPLANATIONS.get(getattr(category,'error_code',None),'The research provider could not complete this category.')
         points.append('**Status:** '+explanation)
     points.extend(['### Next steps','Your career goal remains saved. Use **Resume research** to try again. Context-limit failures may require a smaller research evidence budget or a larger model context allowance.',SUMMARY_CLOSING])
@@ -81,7 +82,7 @@ def saved_evidence_summary(goal,record):
             if getattr(finding,'scope','exact')!='exact':qualifiers.append('related context')
             if getattr(finding,'confidence',None):qualifiers.append(finding.confidence.replace('_',' ')+' confidence')
             citations=source_links(finding.source_ids,sources)
-            points.append('- '+summary_text(finding.value)+(' ('+', '.join(qualifiers)+')' if qualifiers else '')+(' '+citations if citations else ''))
+            points.append('- '+summary_text(plain_text(finding.value))+(' ('+', '.join(qualifiers)+')' if qualifiers else '')+(' '+citations if citations else ''))
         if len(findings)>2:points.append('More findings are available in **Role and research details**.')
         if category.status in ('failed','partial'):
             points.append('**Coverage:** '+FAILURE_EXPLANATIONS.get(getattr(category,'error_code',None),'Research coverage is incomplete for this category.'))

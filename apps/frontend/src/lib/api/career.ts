@@ -61,7 +61,8 @@ export async function importExplorationCV(file:File,token:string,signal:AbortSig
 }
 
 export type LearningItem={item_id:string;name:string;importance:'high'|'medium'|'low';importance_origin:'stated'|'inferred';reason:string;evidence?:string|null;source_urls:string[]};
-export type ReviewSkill={learning_items?:LearningItem[];canonical_skill_id?:string|null;skill_registry_version?:string;item_id?:string|null;skill_id?:string|null;group_id?:string|null;group_operator?:'all'|'any';correction?:'extracted'|'user';source_urls?:string[];name:string;category:string;priority:'required'|'preferred'|'unspecified'|'conflicting'|'suggested';priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|'market_research'|null;required_proficiency?:string|null;required_experience_months?:number|null;context?:string|null;evidence?:string|null;origin:'employer'|'generated_guidance'|'user_declaration'|'market_research'};
+export type CompetenceTarget={level:number;basis:'job_description'|'research'|'inferred';explanation:string;source_urls:string[]};
+export type ReviewSkill={competence_target?:CompetenceTarget|null;learning_items?:LearningItem[];canonical_skill_id?:string|null;skill_registry_version?:string;item_id?:string|null;skill_id?:string|null;group_id?:string|null;group_operator?:'all'|'any';correction?:'extracted'|'user';source_urls?:string[];name:string;category:string;priority:'required'|'preferred'|'unspecified'|'conflicting'|'suggested';priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|'market_research'|null;required_proficiency?:string|null;required_experience_months?:number|null;context?:string|null;evidence?:string|null;origin:'employer'|'generated_guidance'|'user_declaration'|'market_research'};
 export type ReviewCondition={requirement_id:string;category:string;description:string;priority:string;priority_evidence?:string|null;priority_origin?:'employer'|'generated_guidance'|'user_declaration'|'market_research'|null;evidence:string;group_id:string|null;group_operator:'all'|'any';origin?:'employer'|'generated_guidance'|'user_declaration'|'market_research';correction?:'extracted'|'user';source_urls?:string[];minimum_months?:number|null;maximum_months?:number|null;completion_status?:'completed'|'in_progress'|'unspecified'};
 export type JobDate={kind:'application_deadline'|'interview'|'job_start';text:string;evidence:string;date:string|null};
 export type JDExtraction={job_dates?:JobDate[];role:string|null;field:string|null;employment_type?:'internship'|'full_time'|'part_time'|'contract'|'unknown';company:string|null;location:string|null;seniority_level:string|null;job_url:string|null;
@@ -86,7 +87,7 @@ export type IntelligenceFinding={finding_id:string;field:string;value:string;con
 export type ResearchOutcome='findings_found'|'no_relevant_sources'|'information_not_found'|'validation_failed'|'provider_failed';
 export type IntelligenceResult={source_ids?:string[];outcome?:ResearchOutcome|null;status:'pending'|'running'|'completed'|'partial'|'failed'|'not_applicable';findings:IntelligenceFinding[];missing_fields:string[];warnings:string[];error_code:string|null;researched_at:string|null;expires_at:string|null;searches:number;model_calls:number;latency_ms:number;estimated_cost_usd:number|null};
 export type IntelligenceSummary={overview_refs:string[];key_takeaway_refs:string[];consideration_refs:string[]};
-export type OpportunityAvailabilityIssue='research_disabled'|'reasoning_disabled'|'gemini_not_configured'|'brave_not_configured'|'brave_llm_context_required'|'model_not_configured'|'search_not_configured';
+export type OpportunityAvailabilityIssue='research_disabled'|'reasoning_disabled'|'brave_not_configured'|'brave_llm_context_required'|'model_not_configured'|'search_not_configured';
 export type SavedQuestionResearch={research_id:string;research_version:number;focus:string;findings:IntelligenceFinding[];sources:ResearchSource[];updated_at:string};
 export type OpportunityView={available:boolean;availability_issues?:OpportunityAvailabilityIssue[];job_id:string|null;career_target_id:string;status:'pending'|'running'|'partial'|'completed'|'failed';finished?:boolean;historical?:boolean;question_research?:SavedQuestionResearch[];categories:Partial<Record<IntelligenceCategory,IntelligenceResult>>;sources?:ResearchSource[];summary?:IntelligenceSummary;research_id?:string|null;research_version?:number|null;updated_at?:string|null;error_code:string|null;retry_after?:number|null};
 
@@ -96,9 +97,9 @@ export type InterviewSuggestions={goal_id:string;goal_version:number;research_id
  gaps:{round_number:number|null;round_name:string|null;field:PrepGapField}[];items:{round_number:number|null;field:PrepGapField;value:string}[]};
 export type InterviewSuggestionsView={status:'ready'|'missing'|'researching';suggestions:InterviewSuggestions|null};
 /** About the role digest: short bullets per card, each citing the card items it summarises. */
-export type RoleSummary={goal_id:string;goal_version:number;research_id:string|null;generated_at:string;cards:{card_id:string;bullets:{text:string;refs:string[]}[]}[];
+export type RoleSummary={goal_id:string;goal_version:number;research_id:string|null;generated_at:string;cards:{card_id:string;headline?:string|null;bullets:{text:string;refs:string[]}[]}[];
  /** Topics no source covered, written by the model: always shown with the AI-made marker. */
- generated:{card_id:string;bullets:string[]}[]};
+ generated:{card_id:string;headline?:string|null;bullets:string[]}[]};
 export type RoleSummaryView={status:'ready'|'missing'|'researching';summary:RoleSummary|null};
 
 export type WorkspaceProgress=Pick<CareerWorkspace,'session_id'|'phase'|'revision'|'activities'|'error'|'error_code'|'retry_after'|'limit_scope'|'provider'|'research_id'|'edit_question'>&{goal_id:string|null;selection_version:number;result_version:string|null;categories?:Partial<Record<IntelligenceCategory,{status:IntelligenceResult['status'];error_code:string|null}>>};

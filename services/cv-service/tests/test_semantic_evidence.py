@@ -91,6 +91,43 @@ def test_review_quotes_keep_case_spacing_and_unicode_tolerance(quote):
     assert items[0]['review_evidence'][0]['evidence'][0]['quote'] == quote
 
 
+@pytest.mark.parametrize('source,quote', [
+    # A PDF line break after a hyphen, rejoined by the model.
+    ('Built a proof-of-\nconcept pipeline.', 'built a proof-of-concept pipeline'),
+    ('Wrote evi-\ndence summaries.', 'wrote evidence summaries'),
+    ('Wrote evi-\ndence summaries.', 'wrote evi-dence summaries'),
+    # A quote keeping the wrap still matches a source without it.
+    ('Built a proof-of-concept pipeline.', 'proof-of- concept'),
+])
+def test_review_quotes_tolerate_line_wrapped_hyphens(source, quote):
+    value, blocks = review_evidence_candidate()
+    blocks[0]['text'] = source
+    value['items'][0]['evidence'][0]['excerpt'] = source
+    value['items'][0]['review_evidence'][0].update(skill_name=None, evidence=[{'source_id': 'b1', 'quote': quote}])
+    value['items'][0]['skill_names'] = []
+    pending = evidence_requiring_semantic_check(value, blocks)
+    support = frozenset((ref['block_id'], ref['excerpt']) for ref in pending)
+    items = validate_extraction(value, blocks, 'synthetic-cv', support)
+    assert items[0]['review_evidence'][0]['evidence'][0]['quote'] == quote
+
+
+@pytest.mark.parametrize('source,quote', [
+    # Spaced separators are not line-wrapped words.
+    ('Python - SQL', 'Python-SQL'),
+    ('Python - SQL', 'PythonSQL'),
+    # Words and punctuation must still match.
+    ('Built a proof-of-\nconcept pipeline.', 'built a proof of concept pipeline'),
+    ('Built a proof-of-\nconcept pipeline.', 'built a proof-of-product pipeline'),
+])
+def test_review_quotes_still_reject_changed_words_or_separators(source, quote):
+    value, blocks = review_evidence_candidate()
+    blocks[0]['text'] = source
+    value['items'][0]['review_evidence'][0]['evidence'][0]['quote'] = quote
+    with pytest.raises(EvidenceValidationError) as caught:
+        evidence_requiring_semantic_check(value, blocks)
+    assert caught.value.rule == 'review_quote'
+
+
 @pytest.mark.parametrize('field,text', [('quote', ''), ('source_id', '')])
 def test_review_anchor_schema_feedback_matches_its_quotation_rule(field, text):
     value, _ = review_evidence_candidate()

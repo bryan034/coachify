@@ -75,7 +75,7 @@ use synthetic HTTP transport; these checks do not measure live token savings.
 
 
 `test_jd_generation_failures.py` covers the provider JSON-failure/deadline sequence,
-Gemini minimal reasoning, insufficient follow-up time, specific API errors and
+Bounded output, insufficient follow-up time, specific API errors and
 safe reasoning/cache/finish-reason metrics. No live credentials are used.
 
 Brave-only research checks verify that acquisition contacts only the Brave API,
@@ -84,7 +84,7 @@ is refreshed without deleting historical evidence, and quota/restart recovery
 does not repeat completed searches. No Reddit credentials or live calls are used.
 
 `test_user_usage.py` verifies prompt/schema size estimates, repeated concurrent
-Gemini requests beyond 8,000 input tokens without local admission or output reduction,
+Model requests beyond 8,000 input tokens without local admission or output reduction,
 provider HTTP 429 handling and distinct context-versus-provider-limit messages.
 Frontend checks cover countdowns, retained drafts and retry readiness.
 
@@ -92,13 +92,13 @@ Frontend checks cover countdowns, retained drafts and retry readiness.
 excerpt separation and summary-rich input budgets. Connector tests cover fragmented
 streaming and plan-access failures; workspace tests cover MongoDB persistence/reuse.
 
-Research regressions cover Gemini requests beyond 8,000 input tokens, concurrent requests
+Research regressions cover model requests beyond 8,000 input tokens, concurrent requests
 without a local minute quota and independent provider 429s, late interview passages, full assessment
 excerpts, deadline-aware early stopping, no-progress limits, partial cache reuse and
 preserving assessed evidence after later retrieval timeouts. Workflow/cache checks
 require disposable MongoDB; all provider responses use synthetic fixtures.
 
-`test_five_category_queries.py` verifies Gemini-written initial queries for finance
+`test_five_category_queries.py` verifies model-written initial queries for finance
 and engineering roles, all five required intents, no template fallback, preserved
 legacy reports/jobs, and historical conversion-rate evidence. Opportunity tests
 exercise five parallel branches, partial failures, bounded follow-ups and paid-evidence
@@ -353,7 +353,7 @@ and failed-turn receipt reuse while preserving newer drafts. All use synthetic
 providers; these tests do not establish live model classification/research quality.
 
 `test_opportunity_evidence_refs.py` verifies category-specific decoding enums across
-local, Gemini and JSON Object providers; source/passages with different indexes;
+local, OpenRouter and JSON Object providers; source/passages with different indexes;
 exact Unicode passage copying; forged/coerced references; partial preservation;
 selected-passage numeric support; bounded repairs and content-free diagnostics. Its
 isolated-MongoDB test uses the real provider adapter with a mock HTTP transport and

@@ -131,8 +131,11 @@ def test_valid_first_pass_needs_no_repair(harness, monkeypatch):
 @pytest.mark.parametrize('failure', ['schema', 'evidence'])
 def test_failed_repair_is_bounded_and_cannot_publish(harness, monkeypatch, failure):
     invalid, valid = candidates()
+    # Nothing in the final candidate verifies, so even the last attempt cannot keep a partial extraction.
+    for item in invalid['items']: item['description'] = 'D' * 4001
     second = invalid if failure == 'schema' else deepcopy(valid)
-    if failure == 'evidence': second['items'][0]['evidence'][0]['excerpt'] = 'Invented quotation'
+    if failure == 'evidence':
+        for item in second['items']: item['evidence'][0]['excerpt'] = 'Invented quotation'
     client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, second] + ([{'supported': []}] if failure == 'evidence' else []))
     app.state.worker.run_once()
     result = read_result(client, queued)
@@ -228,6 +231,8 @@ def test_review_quote_repair_uses_exact_anchor_and_preserves_fact(harness, monke
 
 def test_repeated_nonexact_review_quote_fails_without_publishing(harness, monkeypatch):
     invalid, _ = review_quote_candidates()
+    # Only the unverifiable item remains, so there is nothing to keep.
+    invalid['items'] = [{**invalid['items'][1], 'supporting_items': []}]
     client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, invalid])
     app.state.worker.run_once()
     result = read_result(client, queued)
@@ -357,7 +362,9 @@ def test_other_information_rejects_invented_source_text(harness, monkeypatch):
     client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, {'supported': []}, invalid, {'supported': []}])
     app.state.worker.run_once()
     result = read_result(client, queued)
-    assert result['status'] == 'failed' and result['other_information'] == []
+    # The verified items are kept; the invented text never is, and the user is told it was left out.
+    assert result['status'] == 'ready' and result['other_information'] == []
+    assert any('left out' in notice for notice in result['notices'])
     assert len(calls) == 4
 
 
@@ -388,23 +395,27 @@ def test_failed_reprocessing_preserves_other_information(harness, monkeypatch):
 
 
 @pytest.mark.parametrize('defect', ['items_count', 'citation_count', 'duration', 'other_count', 'extra', 'enum'])
-def test_gemini_simple_schema_keeps_all_backend_constraints(harness, monkeypatch, defect):
+def test_decoding_schema_keeps_all_backend_constraints(harness, monkeypatch, defect):
     _, invalid = candidates()
     if defect == 'items_count': invalid['items'] *= 81
-    elif defect == 'citation_count': invalid['items'][0]['evidence'] = [{'block_id': 'b1', 'excerpt': 'A'}] * 7
-    elif defect == 'duration': invalid['items'][0]['experience_months'] = -1
+    # Every item carries the defect, so nothing verifies and the whole extraction fails.
+    elif defect == 'citation_count':
+        for item in invalid['items']: item['evidence'] = [{'block_id': 'b1', 'excerpt': 'A'}] * 7
+    elif defect == 'duration':
+        for item in invalid['items']: item['experience_months'] = -1
     elif defect == 'other_count': invalid['other_information'] = [{'block_id': 'b1', 'excerpt': 'A'}] * 161
-    elif defect == 'extra': invalid['items'][0]['invented_field'] = 'untrusted'
-    elif defect == 'enum': invalid['items'][0]['kind'] = 'invented'
+    elif defect == 'extra':
+        for item in invalid['items']: item['invented_field'] = 'untrusted'
+    elif defect == 'enum':
+        for item in invalid['items']: item['kind'] = 'invented'
     client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, invalid])
-    app.state.worker.extractor.base_url = 'https://generativelanguage.googleapis.com/v1beta/openai'
     app.state.worker.run_once()
     result = read_result(client, queued)
     assert result['status'] == 'failed' and result['error']['failure_category'] == 'schema_validation'
     assert result['items'] == [] and result['extraction_version'] == 0
     assert len(calls) == 2
     for request in calls:
-        assert 'maxItems' not in request['response_format']['json_schema']['schema']['properties']['items']
+        assert 'maxItems' in request['response_format']['json_schema']['schema']['properties']['items']
 
 
 @pytest.mark.parametrize('other', [False, True])

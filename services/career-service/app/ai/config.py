@@ -6,18 +6,19 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from elo_shared.model_sdk import resolve_model_api_key
 
 
-REASONING_MODEL='gemini-3.5-flash-lite'
+OPENROUTER_BASE_URL='https://openrouter.ai/api/v1'
+REASONING_MODEL='openai/gpt-4o-mini'
 
 
 class AISettings(BaseModel):
     """OpenAI-compatible adapter configuration; credentials remain server-only."""
     model_config = ConfigDict(extra='forbid', frozen=True)
     enabled: bool = False
-    provider: str = Field(default='gemini', min_length=1, max_length=80)
-    base_url: str = 'https://generativelanguage.googleapis.com/v1beta/openai'
+    provider: str = Field(default='compatible', min_length=1, max_length=80)
+    base_url: str = OPENROUTER_BASE_URL
     model: str = Field(default=REASONING_MODEL, min_length=1, max_length=160)
     api_key: SecretStr = SecretStr('')
-    response_mode: Literal['json_object', 'json_schema', 'json_schema_strict'] = 'json_schema'
+    response_mode: Literal['json_object', 'json_schema', 'json_schema_strict'] = 'json_schema_strict'
     token_parameter: Literal['max_tokens', 'max_completion_tokens'] = 'max_tokens'
     timeout_seconds: float = Field(default=60, ge=1, le=300)
     retries: int = Field(default=1, ge=0, le=2)
@@ -39,14 +40,13 @@ class AISettings(BaseModel):
     def from_env(cls):
         """Load the single configured model used by every Career stage."""
         # An explicitly empty canonical key overrides the deprecated alias.
-        provider=os.getenv('CAREER_LLM_PROVIDER','gemini').strip()
-        defaults={'gemini':('https://generativelanguage.googleapis.com/v1beta/openai',REASONING_MODEL,'json_schema'),
-                  'deepseek':('https://api.deepseek.com/v1','deepseek-flash','json_object'),
+        provider=os.getenv('CAREER_LLM_PROVIDER','compatible').strip()
+        defaults={'deepseek':('https://api.deepseek.com/v1','deepseek-flash','json_object'),
                   'local':('http://host.docker.internal:11434/v1','deepseek-r1:1.5b','json_schema_strict'),
-                  'compatible':('https://api.deepseek.com/v1','deepseek-flash','json_object')}
-        if provider not in defaults:raise ValueError('Invalid CAREER_LLM_PROVIDER. Use local, deepseek, compatible or gemini.')
+                  'compatible':(OPENROUTER_BASE_URL,REASONING_MODEL,'json_schema_strict')}
+        if provider not in defaults:raise ValueError('Invalid CAREER_LLM_PROVIDER. Use local, deepseek or compatible (OpenRouter).')
         base,model,mode=defaults[provider]
-        key=os.getenv('CAREER_LLM_API_KEY',os.getenv('GEMINI_API_KEY','') if provider=='gemini' else '').strip()
+        key=os.getenv('CAREER_LLM_API_KEY','').strip()
         configured_base=os.getenv('CAREER_LLM_BASE_URL','').strip() or base
         if provider != 'local':key=resolve_model_api_key(configured_base,key)
         values={'api_key':key,'enabled':os.getenv('AI_ENABLED','true' if key else 'false'),
@@ -64,7 +64,3 @@ class AISettings(BaseModel):
         try:return cls(**values)
         except ValueError:raise ValueError('Invalid Career model configuration. Check AI_ENABLED, CAREER_LLM_PROVIDER, CAREER_LLM_BASE_URL, CAREER_LLM_RESPONSE_MODE, CAREER_LLM_TOKEN_PARAMETER, CAREER_LLM_API_KEY, CAREER_LLM_MODEL, CAREER_LOCAL_TIMEOUT_SECONDS and AI task limits.') from None
 
-
-class GeminiSettings(AISettings):
-    """Named Gemini settings for production composition."""
-    reasoning_from_env = classmethod(AISettings.from_env.__func__)

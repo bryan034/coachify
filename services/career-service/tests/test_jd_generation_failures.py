@@ -12,17 +12,17 @@ from app.main import create_app
 
 
 def settings(**values):
-    return AISettings(enabled=True,model='gemini-3.5-flash-lite',api_key='synthetic',max_output_tokens=512,**values)
+    return AISettings(enabled=True,model='openai/gpt-4o-mini',api_key='synthetic',max_output_tokens=512,**values)
 
 
 @pytest.mark.parametrize('stage',['jd_extraction','jd_chat','jd_edit','chat'])
-def test_gemini_tasks_use_minimal_reasoning_and_bounded_output(stage):
+def test_model_tasks_use_bounded_output(stage):
     adapter=AIAdapter(AISettings(),None)
     request=AIInput(stage=stage,source_text='SQL required') if stage=='jd_extraction' else AIInput(
         stage=stage,context='{}',conversation=[{'role':'user','content':'Explain SQL'}])
     payload=adapter._payload(request)
-    assert payload['reasoning_effort']=='minimal'
-    assert payload['model']=='gemini-3.5-flash-lite'
+    assert 'reasoning_effort' not in payload
+    assert payload['model']=='openai/gpt-4o-mini'
     assert payload['max_tokens']==(1024 if stage=='jd_chat' else 8192)
 
 

@@ -446,3 +446,5 @@ h2,h3{font-family:var(--font-heading);letter-spacing:-.02em}
 .cv-review-screen .cv-chat-composer{max-width:900px;margin-left:auto;margin-right:auto}
 @media(max-width:900px){.cv-upload-panel{min-height:0}.cv-library.cv-saved{position:relative;top:auto;contain:none;min-height:0;height:clamp(380px,65dvh,600px)}}
 @media(max-width:700px){.cv-review-screen .cv-chat-header>.btn{margin-left:0}.cv-review-screen .cv-chat-header{flex-wrap:nowrap}.cv-review-screen .cv-chat-header h2{font-size:16px}}
+
+.cv-chat-composer-footer>button[type="submit"]{margin-left:auto}

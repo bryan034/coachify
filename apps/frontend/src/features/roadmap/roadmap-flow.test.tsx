@@ -127,10 +127,10 @@ it('explains why generation is disabled when dates or study time are missing', a
  for (const reason of ['Choose a target date or a duration.', 'Set a weekly study budget above zero.', 'Add at least one recurring study block.']) expect(screen.getByText(reason)).toBeInTheDocument();
 });
 
-it('disables generation when the career goal or CV is missing', async () => {
+it('hides generation and links to the missing CV or Career goal', async () => {
  const state = workspace(); state.context.ready = false; state.context.issues = [{ source: 'career', message: 'Extract and review a Career goal first.', href: '/career-goal' }];
- serve(state); render(<RoadmapPlanner />); await screen.findByRole('heading', { name: 'Before you can generate' });
- expect(screen.getByRole('button', { name: 'Generate roadmap' })).toBeDisabled();
+ serve(state); render(<RoadmapPlanner />); await screen.findByRole('heading', { name: 'Finish these first' });
+ expect(screen.queryByRole('button', { name: 'Generate roadmap' })).toBeNull();
  expect(screen.getByRole('link', { name: 'Open Career Goal' })).toHaveAttribute('href', '/career-goal');
 });
 

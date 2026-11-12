@@ -44,6 +44,7 @@ def test_baseline_has_explicit_unknown_for_every_project_skill_and_no_topic_coun
 
 def test_clear_supported_skill_baseline_does_not_require_repeating_the_cv():
     item = project('independent')
+    item['review_evidence'].append(fact('self_rating','6',skill='Python'))
     assert topic_ids([item]) == []
     assert baseline_estimates([item])[0]['level'] == 'independent_application'
 
@@ -61,17 +62,38 @@ def test_review_targets_establish_relevant_application_before_support_details():
     item['review_evidence'] = []
     item['skill_claims'] = [{'name': 'Python', 'attribution': 'unknown', 'assistance': 'unknown'}]
     assert {(t['field'], t['skill_name']) for t in baseline_targets(item)} == {
-        ('personal_contribution', None), ('skill_use', 'Python')}
+        ('personal_contribution', None), ('skill_use', 'Python'), ('self_rating','Python')}
     item['review_evidence'] = [fact('personal_contribution', 'Implemented the pipeline'),
                                fact('skill_use', 'Built the data pipeline', skill='Python')]
-    assert [(t['field'], t['skill_name']) for t in baseline_targets(item)] == [('assistance', 'Python')]
+    assert [(t['field'], t['skill_name']) for t in baseline_targets(item)] == [('self_rating','Python'), ('assistance', 'Python')]
 
 
 def test_peripheral_missing_or_partial_fields_do_not_become_review_questions():
     from app.domain.review_context import clarification_context
     item = project('independent')
+    item['review_evidence'].append(fact('self_rating','6',skill='Python'))
     item['review_evidence'] += [fact(field, 'Some peripheral detail is incomplete', status='partial')
         for field in ('recency', 'frequency', 'replication_confidence', 'limitations', 'role', 'outcome')]
     assert clarification_context(item)['clarification_targets'] == []
     assert topic_ids([item]) == []
     assert baseline_estimates([item])[0]['level'] == 'independent_application'
+
+
+def test_review_invites_a_skill_self_rating_without_changing_the_evidence_level():
+    from app.domain.baseline import baseline_targets
+    item=project('independent')
+    assert any(t['field']=='self_rating' and t['skill_name']=='Python' for t in baseline_targets(item))
+    before=baseline_estimates([item])
+    item['review_evidence'].append(fact('self_rating','10',skill='Python'))
+    assert not any(t['field']=='self_rating' for t in baseline_targets(item))
+    assert baseline_estimates([item])[0]['level']==before[0]['level']
+
+
+def test_self_ratings_require_an_explicit_named_skill_and_numeric_baseline():
+    import pytest
+    from pydantic import ValidationError
+    from app.schemas.interview_evidence import ReviewFact
+    assert ReviewFact.model_validate(fact('self_rating','7',skill='Python')).value=='7'
+    for value in ('11','0','very confident'):
+        with pytest.raises(ValidationError): ReviewFact.model_validate(fact('self_rating',value,skill='Python'))
+    with pytest.raises(ValidationError): ReviewFact.model_validate(fact('self_rating','7'))

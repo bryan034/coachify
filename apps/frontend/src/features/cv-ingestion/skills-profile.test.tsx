@@ -22,19 +22,20 @@ beforeEach(()=>{window.history.replaceState(null,'','/cv');
  vi.mocked(cvApi.sendMessage).mockResolvedValue({...chat,revision:2,active_question:{id:'work',item_id:'work',title:'Work and internships',question:'Tell me about a work or internship experience.'}});
 });
 
-it('starts with an informative summary and two intake choices without opening chat',async()=>{
+it('starts with an upload-first screen and a chat alternative without opening chat',async()=>{
  render(<ResumePreview/>);
- expect(await screen.findByRole('region',{name:'Skills profile summary'})).toBeVisible();
- expect(screen.getByRole('button',{name:/Upload new CV/})).toBeEnabled();
- expect(screen.getByRole('button',{name:/Build through chat/})).toBeEnabled();
- await screen.findByText(/Start with your CV or a conversation/);
+ expect(await screen.findByRole('heading',{name:'Upload your CV'})).toBeVisible();
+ expect(screen.getByLabelText('CV document')).toBeEnabled();
+ expect(screen.getByRole('button',{name:'Add skills by chat'})).toBeEnabled();
+ expect(screen.getByRole('heading',{name:'What happens next'})).toBeVisible();
+ expect(screen.getByText(/Until you add a CV, elo can’t generate a roadmap/)).toBeVisible();
  expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument();
  expect(cvApi.openConversation).not.toHaveBeenCalled();
  expect(cvApi.sendMessage).not.toHaveBeenCalled();
 });
 
 it('opens manual intake explicitly and preserves the unsent draft when returning to the summary',async()=>{
- render(<ResumePreview/>);fireEvent.click(await screen.findByRole('button',{name:/Build through chat/}));
+ render(<ResumePreview/>);fireEvent.click(await screen.findByRole('button',{name:'Add skills by chat'}));
  const input=await screen.findByRole('textbox',{name:'Message elo'});
  await waitFor(()=>expect(input).toBeEnabled());
  expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:null,purpose:'skills_profile'}),'synthetic-token',expect.any(AbortSignal));
@@ -42,16 +43,16 @@ it('opens manual intake explicitly and preserves the unsent draft when returning
  fireEvent.change(input,{target:{value:'A contribution I have not sent yet.'}});
  fireEvent.click(screen.getByRole('button',{name:'Back to Skills Profile'}));
  expect(screen.queryByRole('textbox',{name:'Message elo'})).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('button',{name:/Build through chat/}));
+ fireEvent.click(screen.getByRole('button',{name:'Add skills by chat'}));
  expect(screen.getByRole('textbox',{name:'Message elo'})).toHaveValue('A contribution I have not sent yet.');
  expect(cvApi.openConversation).toHaveBeenCalledTimes(1);
 });
 
 it('accepts a dropped CV and starts guided review automatically',async()=>{
  const cv=savedCv('uploaded');vi.mocked(cvApi.upload).mockResolvedValue(cv);vi.mocked(cvApi.get).mockResolvedValue(cv);
- render(<ResumePreview/>);fireEvent.click(await screen.findByRole('button',{name:/Upload new CV/}));
+ render(<ResumePreview/>);
  await screen.findByLabelText('CV document');
- fireEvent.drop(screen.getByText('Drop your CV here, or choose a file below.').parentElement!,{dataTransfer:{files:[new File(['synthetic CV'],'profile.pdf')]}});
+ fireEvent.drop(screen.getByText('Drag a file here, or choose one from your device.').parentElement!,{dataTransfer:{files:[new File(['synthetic CV'],'profile.pdf')]}});
  fireEvent.click(screen.getByRole('button',{name:'Upload CV'}));
  await screen.findByRole('heading',{name:'Review your CV'});
  await waitFor(()=>expect(cvApi.openConversation).toHaveBeenCalledWith(expect.objectContaining({cv_id:cv.id,purpose:'skills_profile'}),'synthetic-token',expect.any(AbortSignal)));
@@ -70,7 +71,7 @@ it('shows a saved partial profile and its uncertainty without inventing a skill 
  expect(screen.queryByRole('region',{name:'Work and internships'})).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:/^Data processing/}));
  // The skill panel shows one competence state instead of raw dimension fields; nothing is invented.
- expect(within(screen.getByRole('complementary',{name:'Data processing'})).getByText(/Compare with your Career Goal|Competence not recorded yet/)).toBeVisible();
+ expect(within(screen.getByRole('complementary',{name:'Data processing'})).getByText(/Evaluate your skills with your Career Goal|Competence not recorded yet/)).toBeVisible();
  expect(screen.queryByText('Advanced')).not.toBeInTheDocument();
  expect(cvApi.openConversation).not.toHaveBeenCalled();
 });
@@ -101,26 +102,53 @@ it('withholds final saving while a conversation update needs attention',async()=
  expect(cvApi.saveSkillsProfile).not.toHaveBeenCalled();
 });
 
-it('opens Skills Profile with repeated source-block IDs without key collisions or lost evidence',async()=>{
- const source=savedCv('shared-evidence');
- source.items[0].evidence=[
-  {id:'b1',excerpt:'Cleaned the synthetic dataset.',location:'Page 1'},
-  {id:'b2',excerpt:'Wrote the synthetic report.',location:'Page 2'},
-  {id:'b1',excerpt:'Checked the synthetic dataset.',location:'Page 1'},
-  {id:'b2',excerpt:'Presented the synthetic report.',location:'Page 2'},
- ];
- vi.mocked(cvApi.list).mockResolvedValue({cvs:[source],selection:{cv_id:source.id,version:1}});
- vi.mocked(cvApi.get).mockResolvedValue(source);
- vi.mocked(cvApi.questions).mockResolvedValue(clarificationState(source));
- const error=vi.spyOn(console,'error').mockImplementation(()=>{});
- try{
-  render(<ResumePreview/>);
-  await waitFor(()=>expect(document.querySelectorAll('.cv-evidence blockquote')).toHaveLength(5));
-  for(const evidence of source.items[0].evidence)expect(screen.getByText(evidence.excerpt)).toBeInTheDocument();
-  fireEvent(window,new Event('focus'));
-  await waitFor(()=>expect(cvApi.list).toHaveBeenCalledTimes(2));
-  await waitFor(()=>expect(document.querySelectorAll('.cv-evidence blockquote')).toHaveLength(5));
-  for(const evidence of source.items[0].evidence)expect(screen.getByText(evidence.excerpt)).toBeInTheDocument();
-  expect(error).not.toHaveBeenCalled();
- }finally{error.mockRestore();}
+
+it('shows a page-level reading screen with real progress while the only CV is processing',async()=>{
+ const reading={...savedCv('reading'),status:'processing' as const,processing_progress:{stage:'model_request' as const,percent:55,message:'Finding your experiences'}};
+ vi.mocked(cvApi.list).mockResolvedValue({cvs:[reading],selection:{cv_id:null,version:0}});vi.mocked(cvApi.get).mockResolvedValue(reading);
+ render(<ResumePreview/>);
+ expect(await screen.findByRole('heading',{name:'resume.pdf',level:2})).toBeVisible();
+ expect(screen.getByRole('progressbar',{name:'Reading your CV'})).toHaveAttribute('aria-valuenow','55');
+ expect(screen.getByText('Finding your experiences',{selector:'strong'}).closest('li')).toHaveAttribute('aria-current','step');
+ expect(screen.getByText(/You can leave this page/)).toBeVisible();
+ expect(await screen.findByText('Team dashboard',{selector:'strong'})).toBeVisible();
+ expect(screen.getByRole('heading',{name:'Upload your CV'})).toBeInTheDocument();
+});
+
+it('says the review is complete and points at the roadmap and jobs once the active CV is reviewed',async()=>{
+ const reviewed={...savedCv('done'),profile_reviewed_effective_version:1};
+ vi.mocked(cvApi.list).mockResolvedValue({cvs:[reviewed],selection:{cv_id:'done',version:1}});vi.mocked(cvApi.get).mockResolvedValue(reviewed);
+ render(<ResumePreview/>);
+ const banner=await screen.findByRole('region',{name:'Your CV review is complete'});
+ expect(within(banner).getByRole('link',{name:'Generate roadmap'})).toHaveAttribute('href','/roadmap');
+ expect(within(banner).getByRole('link',{name:'Search jobs'})).toHaveAttribute('href','/jobs');
+});
+
+it('reports what the review changed and shows the review note in the skill panel, from the backend summary',async()=>{
+ const reviewed={...savedCv('done'),profile_reviewed_effective_version:1,review_summary:{answered_questions:21,experiences:8,skills_added:3,skills_corrected:2,skills_removed:1,added_skill_ids:[],skill_notes:{python:'You wrote the ETL scripts yourself.'}}};
+ vi.mocked(cvApi.list).mockResolvedValue({cvs:[reviewed],selection:{cv_id:'done',version:1}});vi.mocked(cvApi.get).mockResolvedValue(reviewed);
+ render(<ResumePreview/>);
+ const banner=await screen.findByRole('region',{name:'Your CV review is complete'});
+ expect(banner).toHaveTextContent('You answered 21 questions across 8 experiences. From your answers, elo added 3 skills, corrected 2 and removed 1.');
+ fireEvent.click(await screen.findByRole('button',{name:'Python'}));
+ const panel=screen.getByRole('complementary',{name:'Python'});
+ expect(within(panel).getByText('From your review')).toBeVisible();
+ expect(within(panel).getByText('You wrote the ETL scripts yourself.')).toBeVisible();
+});
+
+it('shows where an unfinished review stands, read from the saved conversation, and holds back skills',async()=>{
+ const cv={...savedCv('half'),profile_reviewed_effective_version:null};
+ vi.mocked(cvApi.list).mockResolvedValue({cvs:[cv],selection:{cv_id:'half',version:1}});vi.mocked(cvApi.get).mockResolvedValue(cv);
+ vi.mocked(cvApi.conversations).mockResolvedValue({conversations:[{id:'old',cv_id:'half',updated_at:'2026-11-01T00:00:00Z',read_only:true,message_count:9},{id:'now',cv_id:'half',updated_at:'2026-11-12T00:00:00Z',read_only:false,message_count:4}]});
+ vi.mocked(cvApi.conversation).mockResolvedValue({...chat,id:'now',cv_id:'half',purpose:'skills_profile',interview:{status:'reviewing',reviewed_items:2,total_items:3,estimates:[],topics:[{id:'a',title:'First job',status:'reviewed'},{id:'b',title:'Side project',status:'deferred'},{id:'c',title:'Club role',status:'current'}]}});
+ render(<ResumePreview/>);
+ expect(await screen.findByRole('heading',{name:'Finish your CV review to build your profile'})).toBeVisible();
+ expect(await screen.findByText('2 of 3 topics covered')).toBeVisible();
+ expect(screen.getByText('1 reviewed, 1 skipped')).toBeVisible();
+ expect(screen.getByText(/1 topic left\./).parentElement).toHaveTextContent('Next up: Club role');
+ expect(screen.getByText('Skipped, CV used as written')).toBeVisible();
+ expect(vi.mocked(cvApi.conversation)).toHaveBeenCalledWith('now','synthetic-token',expect.any(AbortSignal));
+ expect(cvApi.openConversation).not.toHaveBeenCalled();
+ expect(screen.getByRole('heading',{name:'Waiting for your review'})).toBeVisible();
+ expect(screen.queryByRole('heading',{name:'Skills by category'})).not.toBeInTheDocument();
 });

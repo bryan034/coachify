@@ -37,10 +37,10 @@ def generate(stage,context,responses,provider='local',**overrides):
     return asyncio.run(run()),calls
 
 
-@pytest.mark.parametrize('provider',['local','gemini','deepseek'])
+@pytest.mark.parametrize('provider',['local','compatible','deepseek'])
 @pytest.mark.parametrize('stage',list(OUTPUTS))
 def test_every_discovery_stage_uses_schema_constraints(provider,stage):
-    payload=AIAdapter(settings(provider),None)._payload(AIInput(stage=stage,context='{}'))
+    payload=AIAdapter(settings(provider,**({'response_mode':'json_schema_strict'} if provider=='compatible' else {})),None)._payload(AIInput(stage=stage,context='{}'))
     response=payload['response_format']
     assert response['type']=='json_schema'
     schema=response['json_schema']['schema']

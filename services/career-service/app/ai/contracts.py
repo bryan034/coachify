@@ -43,7 +43,7 @@ class GapOutput(Contract):
 
 
 class AIInput(Contract):
-    stage: Literal['goal_summary', 'interview_prep', 'role_summary', 'jd_scope', 'extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'research_plan', 'research_assess', 'opportunity_plan','opportunity_structure','discovery_turn','discovery_plan','discovery_assess','discovery_extract','discovery_summary']
+    stage: Literal['goal_summary', 'interview_prep', 'role_summary', 'jd_scope', 'extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'career_guidance', 'research_plan', 'research_assess', 'opportunity_plan','opportunity_structure','discovery_turn','discovery_plan','discovery_assess','discovery_extract','discovery_summary']
     source_text: str | None = Field(default=None, min_length=1, max_length=8000, repr=False)
     conversation: list[Message | DiscoveryHistoryMessage] = Field(default_factory=list, max_length=30, repr=False)
     # Callers build this from authenticated, approved structured snapshots.
@@ -73,9 +73,9 @@ class AIInput(Contract):
             raise ValueError('Extraction requires transient JD text.')
         if self.stage not in ('extraction','jd_extraction','jd_scope') and self.source_text is not None:
             raise ValueError('Raw JD text is only accepted by extraction stages.')
-        if self.stage in ('chat', 'jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer') and not self.conversation:
+        if self.stage in ('chat', 'jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'career_guidance') and not self.conversation:
             raise ValueError('Chat requires a conversation.')
-        if self.stage in ('jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer') and not self.context:
+        if self.stage in ('jd_chat', 'jd_edit', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'career_guidance') and not self.context:
             raise ValueError('JD chat requires extracted career-goal context.')
         if self.stage == 'gap_analysis' and self.versions is None:
             raise ValueError('Gap analysis requires pinned input versions.')

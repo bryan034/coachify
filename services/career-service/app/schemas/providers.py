@@ -4,7 +4,7 @@ from pydantic import BeforeValidator
 
 
 def public_provider(value):
-    return value if isinstance(value,str) and value in ('gemini','brave') else None
+    return value if isinstance(value,str) and value in ('compatible','brave') else None
 
 
-ResearchProvider = Annotated[Literal['gemini','brave'] | None, BeforeValidator(public_provider)]
+ResearchProvider = Annotated[Literal['compatible','brave'] | None, BeforeValidator(public_provider)]

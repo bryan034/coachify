@@ -16,10 +16,9 @@ test('manual-only chat persists without a fake CV and recovers saved failed mess
   const account = await createLocalAccount(page, 'Synthetic manual-only chat');
   const profile = await (await account.get('/api/v1/profile')).json();
   expect((await account.finish({expected_version: profile.version, occupational_status: 'employed', no_previous_education: true})).ok()).toBeTruthy();
-  await page.goto('/cv');
-  await page.getByRole('button', {name: /^Build through chat/}).click();
+  await page.goto('/cv?review=manual');
   await expect(page.getByRole('list',{name:'Saved conversation messages'})).toContainText('What can you share about your work?');
-  expect((await readChat(account,null)).active_question?.question).toContain('What can you share about your work?');
+  expect((await readChat(account,null)).messages.filter(message=>message.role==='assistant').map(message=>message.text).join('\n')).toContain('What can you share about your work?');
   await sendChat(page, manualMessage);
   const draft = await (await account.get('/api/v1/profile/skills-profile')).json();
   expect(draft.status).toBe('draft');
@@ -60,7 +59,7 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   const {account, cvId} = await setupChatScenario(page);
   const cv = async () => (await account.get(`/api/v1/cv/${cvId}`)).json();
   await page.goto('/cv');
-  await page.getByRole('region', {name: 'Your CV', exact: true}).getByRole('button', {name: /^(Continue review|Refine)$/, exact: true}).click();
+  await page.getByRole('button', {name: /^(Continue review|Start review|Refine)$/}).first().click();
   await expect(page.getByRole('list',{name:'Saved conversation messages'})).toContainText('Team dashboard');
   expect((await readChat(account,cvId)).active_question?.title).toBe('Team dashboard');
   const before = await cv();

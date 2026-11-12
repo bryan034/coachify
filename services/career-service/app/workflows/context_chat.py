@@ -33,6 +33,7 @@ async def semantic_chat(request,account,row,body):
     store=QuestionStore(repo,request.app.state.research_store)
     revision=str(body.expected_version)
     searches=set()
+    refining=getattr(body,'mode','question')=='refine'
     async def public_facts(title,focus,terms):
         current=workspace_revision(repo,account,body.session_id,body.expected_version)
         async def check():
@@ -59,6 +60,7 @@ async def semantic_chat(request,account,row,body):
         index=context_index(goal,research,row['workspace'].get('edit_draft'))
         direct=direct_public_plan(body.message)
         if direct:return {'plan':direct,'title':index['goal'],'direct':True}
+        if refining:index['scope']='career'
         allowed={item['ref'] for item in index['items']}
         def validate(plan):
             if not set(plan.item_refs)<=allowed or any(topic not in GOAL_FIELDS for topic in plan.related_topics):
@@ -66,11 +68,12 @@ async def semantic_chat(request,account,row,body):
         history=[m.model_copy(update={'content':m.content[:400]}) for m in body.conversation[-6:]]
         plan=ContextPlan.model_validate((await generate('context_route',{'index':index},history,validate=validate)).model_dump())
         validate(plan)
-        return {'plan':plan,'title':index['goal']}
+        if plan.topic=='career_guidance' and not refining:plan=plan.model_copy(update={'topic':'off_topic'})
+        return {'plan':plan,'title':index['goal'],'skills':[str(s.get('name'))[:80] for s in goal.get('skills',[])[:20] if s.get('name')]}
 
     async def retrieve(state):
         plan=state['plan']
-        if plan.topic in ('edit','off_topic') or plan.clarification:return state
+        if plan.topic in ('edit','off_topic','career_guidance') or plan.clarification:return state
         # Fixed projections and owner/linked-research checks remain backend-owned.
         from app.domain.context import PREFIXES
         topics=list(dict.fromkeys([plan.topic,*plan.related_topics,*[PREFIXES[ref[0]][0] for ref in plan.item_refs]]))
@@ -119,6 +122,13 @@ async def semantic_chat(request,account,row,body):
         if plan.topic=='off_topic':return {'result':JDReply(reply=REFUSAL,proposed_skills=None)}
         if plan.topic=='edit':return {'result':None}  # Existing validated edit workflow.
         if plan.clarification:return {'result':JDReply(reply=plan.clarification,proposed_skills=None)}
+        if plan.topic=='career_guidance':
+            activity('answering_question')
+            history=[m.model_copy(update={'content':m.content[:300]}) for m in body.conversation[-2:]] if plan.followup else []
+            result=await generate('career_guidance',{'goal':state['title'],'saved_skills':state.get('skills',[]),'scope':'career'},history)
+            if result.status!='answered':return {'result':JDReply(reply=REFUSAL,proposed_skills=None)}
+            await thread(repo.check,account,body.session_id,body.expected_version)
+            return {'result':JDReply(reply=result.reply,proposed_skills=None),'needs_search':False}
         def missing():
             return 'I could not verify that detail in the public sources retrieved for this goal. What would you like to clarify or research next?' if searches else MISSING
         if not state.get('facts'):

@@ -21,7 +21,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
  const initialContext=await confirmCanonicalGoal(page,account,target);
  expect(initialContext).toMatchObject({id:targetId,confirmed:true,role:'Synthetic data analyst'});
  await page.reload();
- await expect(page.getByRole('heading',{name:'Goal confirmed',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Goal confirmation for CV review'})).toHaveCount(0);
  expect(await (await account.get('/api/v1/career/goals/current/confirmed-context')).json()).toEqual(initialContext);
 
  await page.goto('/cv');await openCvReviewTools(page);
@@ -35,7 +35,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
  }, { timeout: 30_000 }).toBe('ready');
  await openCvReviewTools(page);
  await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // Skills Profile rechecks saved CVs when the window regains focus.
- await page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByRole('button', { name: 'Make active', exact: true }).click();
+ await expect(page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByText('Active CV',{exact:true})).toBeVisible();
  await expect(page.getByLabel('Confirmed clarification target', { exact: true })).toContainText('Synthetic data analyst');
  await page.getByRole('button', { name: 'Prepare relevant questions', exact: true }).click();
  const project = page.locator('.cv-question').filter({ has: page.getByRole('heading', { name: 'What did you personally contribute, and what did teammates or guidance cover?', exact: true }) });

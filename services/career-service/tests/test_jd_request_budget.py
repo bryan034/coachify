@@ -75,7 +75,7 @@ def test_explicit_global_output_ceiling_is_still_respected():
         assert adapter._payload(AIInput(stage=stage,source_text=jd_text()))['max_tokens']==2048
 
 
-@pytest.mark.parametrize('provider',['gemini','deepseek','compatible'])
+@pytest.mark.parametrize('provider',['deepseek','compatible'])
 def test_cloud_identification_keeps_its_existing_output_budget(provider):
     adapter=AIAdapter(AISettings(provider=provider,response_mode='json_object'),None)
     assert adapter._payload(AIInput(stage='jd_scope',source_text=jd_text()))['max_tokens']==4096

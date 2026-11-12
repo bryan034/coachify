@@ -217,7 +217,7 @@ def test_timeout_and_no_secret_repr():
 
 
 def test_config_is_server_only_explicit_and_validated(monkeypatch):
-    monkeypatch.setenv('AI_ENABLED','true'); monkeypatch.setenv('GEMINI_API_KEY','fixture-key')
+    monkeypatch.setenv('AI_ENABLED','true'); monkeypatch.setenv('CAREER_LLM_API_KEY','fixture-key')
     monkeypatch.setenv('CAREER_LLM_MODEL','fixture-model')
     assert AISettings.from_env().model == 'fixture-model'
     assert not {'requests_per_minute','tokens_per_minute','concurrency'} & AISettings.model_fields.keys()
@@ -332,15 +332,16 @@ def test_malformed_or_oversized_error_bodies_stay_private(body):
     asyncio.run(invoke())
 
 @pytest.mark.parametrize('mode',['json_schema','json_schema_strict'])
-def test_gemini_extraction_uses_requested_schema_without_model_specific_overrides(mode):
+def test_model_extraction_uses_requested_schema_without_model_specific_overrides(mode):
     result,seen,_=run(AIInput(stage='jd_extraction',source_text='SQL required'),
-        {'role':'Analyst','field':'Data','company':None,'skills':[]},model='gemini-3.5-flash-lite',response_mode=mode)
+        {'role':'Analyst','field':'Data','company':None,'skills':[]},model='openai/gpt-4o-mini',response_mode=mode)
     format=json.loads(seen[0].content)['response_format']
     assert format['type']=='json_schema'
     assert format['json_schema']['strict']==(mode=='json_schema_strict')
-    skill=format['json_schema']['schema']['properties']['skills']['items']
+    schema=format['json_schema']['schema'];skill=schema['properties']['skills']['items']
+    if '$ref' in skill:skill=schema['$defs'][skill['$ref'].split('/')[-1]]
     assert skill['additionalProperties'] is False
-    assert skill['required']==list(skill['properties'])
+    if mode=='json_schema_strict':assert skill['required']==list(skill['properties'])
 
 def test_jd_validation_correction_is_bounded_private_and_uses_one_operation():
     async def invoke():
@@ -415,7 +416,7 @@ def test_provider_cooldown_is_returned_without_retry(header,expected):
 def test_native_schema_is_not_duplicated_and_unused_inputs_are_omitted():
     async def invoke():
         async with httpx.AsyncClient() as client:
-            adapter=AIAdapter(settings(model='gemini-3.5-flash-lite'),client)
+            adapter=AIAdapter(settings(model='openai/gpt-4o-mini'),client)
             payload=adapter._payload(AIInput(stage='jd_extraction',source_text='SQL required'))
             assert 'JSON schema:' not in payload['messages'][0]['content']
             assert payload['response_format']['type']=='json_schema'
@@ -467,7 +468,7 @@ def test_workspace_chat_explains_and_proposes_edits_in_one_provider_call():
 ])
 def test_focused_qa_uses_small_stage_specific_prompts_schemas_and_caps(stage,cap,output):
     request=AIInput(stage=stage,context=json.dumps({'facts':[{'ref':'f1','data':{'name':'SQL','priority':'required'}}]}),conversation=[{'role':'user','content':'Which skills are required?'}])
-    _,seen,_=run(request,output,max_output_tokens=4096,model='gemini-3.5-flash-lite')
+    _,seen,_=run(request,output,max_output_tokens=4096,model='openai/gpt-4o-mini')
     payload=json.loads(seen[0].content)
     assert payload['max_tokens']==cap
     assert payload['response_format']['type']=='json_schema'

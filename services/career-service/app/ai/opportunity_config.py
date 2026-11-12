@@ -1,4 +1,4 @@
-"""Bounded Gemini public research configuration."""
+"""Bounded public research configuration."""
 import os
 from app.ai.config import REASONING_MODEL
 from pydantic import BaseModel,ConfigDict,Field
@@ -6,7 +6,7 @@ from pydantic import BaseModel,ConfigDict,Field
 class OpportunitySettings(BaseModel):
     model_config=ConfigDict(extra='forbid',frozen=True)
     enabled:bool=True
-    gemini_model:str=Field(default=REASONING_MODEL,min_length=1,max_length=160)
+    model:str=Field(default=REASONING_MODEL,min_length=1,max_length=160)
     max_searches:int=Field(default=2,ge=1,le=4)
     max_followups:int=Field(default=1,ge=0,le=2)
     concurrency:int=Field(default=3,ge=1,le=3)
@@ -19,7 +19,7 @@ class OpportunitySettings(BaseModel):
     run_seconds:int=Field(default=300,ge=60,le=600)
     @classmethod
     def from_env(cls):
-        values={key:os.environ['OPPORTUNITY_'+key.upper()] for key in cls.model_fields if key!='gemini_model' and 'OPPORTUNITY_'+key.upper() in os.environ}
+        values={key:os.environ['OPPORTUNITY_'+key.upper()] for key in cls.model_fields if key!='model' and 'OPPORTUNITY_'+key.upper() in os.environ}
         if os.getenv('CAREER_LLM_PROVIDER','').strip()=='local':values.setdefault('run_seconds',600)
         try:return cls(**values)
         except ValueError:raise ValueError('Invalid Opportunity Intelligence settings. Check OPPORTUNITY_* server configuration.') from None

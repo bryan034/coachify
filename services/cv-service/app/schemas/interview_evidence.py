@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ReviewField = Literal['role', 'responsibilities', 'personal_contribution', 'assistance',
-    'task_scope', 'complexity', 'problem_solving', 'outcome', 'skill_use', 'recency', 'frequency', 'limitations', 'replication_confidence']
+    'task_scope', 'complexity', 'problem_solving', 'outcome', 'skill_use', 'recency', 'frequency', 'limitations', 'replication_confidence', 'self_rating']
 EvidenceStatus = Literal['supported', 'partial', 'unknown', 'conflicting', 'skipped', 'not_applicable']
 
 
@@ -24,6 +24,9 @@ class ReviewFact(BaseModel):
 
     @model_validator(mode='after')
     def status_value(self):
+        if self.field=='self_rating' and self.status in {'supported','partial','conflicting'}:
+            if self.value not in {str(i) for i in range(1,11)} or not self.skill_name:
+                raise ValueError('A self-rating needs a named skill and a whole-number value from 1 to 10.')
         if self.status in {'supported', 'partial', 'conflicting'} and self.value is None:
             raise ValueError('Known or conflicting evidence needs its supported description.')
         if self.status in {'unknown', 'skipped', 'not_applicable'} and self.value is not None:

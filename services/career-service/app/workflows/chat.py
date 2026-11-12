@@ -41,11 +41,12 @@ async def focused_chat(request,account,row,body):
         chosen=direct_route(body.message)
         if chosen is None:
             previous=[m.model_copy(update={'content':m.content[:200]}) for m in body.conversation[-2:]]
-            chosen=QuestionRoute.model_validate((await generate('question_route',{'goal':title},previous)).model_dump())
+            chosen=QuestionRoute.model_validate((await generate('question_route',{'goal':title,**({'scope':'career'} if getattr(body,'mode','question')=='refine' else {})},previous)).model_dump())
+            if chosen.topic=='career_guidance' and getattr(body,'mode','question')!='refine':chosen=QuestionRoute(topic='off_topic')
         return {'route':chosen}
     async def retrieve(state):
         chosen=state['route']
-        if chosen.topic in ('off_topic','edit'):return state
+        if chosen.topic in ('off_topic','edit','career_guidance'):return state
         include_evidence=bool(re.search(r'\b(why|evidence|source|quote|explain|detail|mean)\b',body.message,re.I))
         goal,research=await thread(store.fetch,account,row,chosen.topic,include_evidence)
         facts,links,truncated=facts_for(chosen,goal,research,include_evidence)
@@ -57,6 +58,11 @@ async def focused_chat(request,account,row,body):
         chosen=state['route']
         if chosen.topic=='edit':return {'result':None}
         if chosen.topic=='off_topic':return {'result':JDReply(reply=REFUSAL,proposed_skills=None)}
+        if chosen.topic=='career_guidance':
+            history=[m.model_copy(update={'content':m.content[:300]}) for m in body.conversation[-2:]] if chosen.followup else []
+            result=await generate('career_guidance',{'goal':title,'scope':'career'},history)
+            if result.status!='answered':return {'result':JDReply(reply=REFUSAL,proposed_skills=None)}
+            return {'result':JDReply(reply=result.reply,proposed_skills=None)}
         facts=state['facts']
         if not facts:return {'result':JDReply(reply=MISSING,proposed_skills=None)}
         if chosen.topic=='interview_process' and chosen.terms==['round_count']:

@@ -264,6 +264,7 @@ def test_real_adapter_accepts_structured_summary_points_and_supplies_json_contex
             schema=payload['response_format']['json_schema']['schema']
             assert 'blocks' in schema['properties'] and 'reply' not in schema['properties']
             block_schema=schema['properties']['blocks']['items']
+            if '$ref' in block_schema:block_schema=schema['$defs'][block_schema['$ref'].split('/')[-1]]
             assert 'label' in block_schema['required']
             assert 'Field' in block_schema['properties']['label']['enum']
             output={'blocks':[{'label':'Interview expectations','text':'Reported interview experience.','references':['research_0']}]}

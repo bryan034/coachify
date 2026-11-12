@@ -70,6 +70,22 @@ def view(document, before=None, limit=40):
         'next_before': window[0]['sequence'] if len(messages) > len(window) else None}
 
 
+def topic_request_allowed(conversation, mutation):
+    """Refuse topic skips/reviews that cannot apply before saving the message; the harness re-checks."""
+    if conversation.get('purpose') != 'skills_profile' or not conversation.get('cv_id'):
+        raise Conflict('Topics can be skipped only in a CV review.')
+    memory = conversation.get('interview_memory') or {}
+    coverage, topics = memory.get('coverage', {}), memory.get('topic_ids', [])
+    if mutation.command == 'review_topic':
+        if mutation.item_id not in memory.get('deferred_topics', {}):
+            raise Conflict('Only a skipped topic can be reviewed again.')
+    elif mutation.command == 'skip_topic':
+        if mutation.item_id not in topics or mutation.item_id in coverage:
+            raise Conflict('This topic is already covered. Refresh to see the latest topics.')
+    elif not any(topic not in coverage for topic in topics):
+        raise Conflict('No topics are left to skip.')
+
+
 def action_in(document, identifier):
     for message in document['messages']:
         for action in message.get('actions', []):
@@ -298,6 +314,8 @@ class ConversationService:
         snapshot = await run_in_threadpool(self.snapshot, owner, previous, context)
         if mutation.item_id:
             self.source(owner, previous, mutation.item_id)
+        if mutation.command in {'skip_topic', 'review_topic', 'skip_remaining'}:
+            topic_request_allowed(previous, mutation)
         token, route_id = str(uuid4()), key(identifier + ':' + receipt_id + ':route')
         def save(document):
             if receipt_id in document['receipts']:

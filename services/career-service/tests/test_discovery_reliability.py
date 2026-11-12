@@ -150,7 +150,7 @@ def test_discovery_does_not_silently_shorten_evidence_to_fit_small_context():
     asyncio.run(run())
 
 
-def test_employer_is_copied_from_brave_structured_data_not_publisher_or_gemini():
+def test_employer_is_copied_from_brave_structured_data_not_publisher_or_the_model():
     async def run():
         def handler(request):
             url='https://example.test/job/1'

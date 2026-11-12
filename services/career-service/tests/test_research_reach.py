@@ -1,5 +1,5 @@
 from tests.api_views import saved_research
-"""Gemini query planning and useful-source coverage; synthetic public API fixtures."""
+"""ContextModel query planning and useful-source coverage; synthetic public API fixtures."""
 import json
 from types import SimpleNamespace
 from urllib.parse import parse_qs
@@ -7,7 +7,7 @@ import asyncio
 import httpx
 import pytest
 from app.ai.adapter import AIAdapter,AIError,Operation
-from app.ai.config import GeminiSettings
+from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.research_planning import ResearchPlan,ResearchAssessment
 from app.ai.routing import ModelRouter
@@ -31,7 +31,7 @@ class Search:
         return self.batches[min(len(self.calls)-1,len(self.batches)-1)]
 
 
-class Gemini:
+class ContextModel:
     def __init__(self,quota=False):self.calls=[];self.quota=quota
     async def generate(self,request,operation,**kwargs):
         self.calls.append(request)
@@ -48,10 +48,10 @@ class Gemini:
 
 
 def configure(flow,batches,quota=False):
-    search=Search(batches);gemini=Gemini(quota)
+    search=Search(batches);context_model=ContextModel(quota)
     flow[0].app.state.research_client=search
-    flow[0].app.state.ai=ModelRouter(flow[2],gemini)
-    return search,gemini
+    flow[0].app.state.ai=ModelRouter(flow[2],context_model)
+    return search,context_model
 
 
 def test_search_planning_payloads_are_public_bounded_and_country_matches_address():
@@ -59,12 +59,12 @@ def test_search_planning_payloads_are_public_bounded_and_country_matches_address
         seen=[]
         def provider(req):
             data=json.loads(req.content);seen.append(data)
-            assert req.url.host=='generativelanguage.googleapis.com'
+            assert req.url.host=='openrouter.ai'
             output={'queries':['DBS technology internship Singapore interview process']} if len(seen)==1 else {'useful_sources':[{'ref':'s0','quote':TEXT}],'next_queries':[]}
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
         context=ResearchContext(company='DBS Bank Ltd',role='Internship',field='Technology and AI & Data Science',location='DBS Asia Central, Singapore')
         async with httpx.AsyncClient(transport=httpx.MockTransport(provider)) as client:
-            adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture'),client)
+            adapter=AIAdapter(AISettings(enabled=True,api_key='fixture'),client)
             for stage in ('research_plan','research_assess'):
                 request=AIInput(stage=stage,public_context=context,sources=[source('a')]*5 if stage=='research_assess' else [],research_hints=['Python','Machine learning'])
                 await adapter.generate(request,Operation('owner','1',stage),current_revision=lambda:'1')
@@ -86,30 +86,30 @@ def test_search_planning_payloads_are_public_bounded_and_country_matches_address
 def test_research_expands_past_irrelevant_and_duplicate_results_until_three_useful_sources(flow):
     a,b,c=source('a'),source('b'),source('c')
     duplicate=source('repost',url='https://another.test/repost',evidence=a.evidence)
-    search,gemini=configure(flow,[[source(f'noise{i}',False) for i in range(4)]+[a],[duplicate,b,c]])
+    search,context_model=configure(flow,[[source(f'noise{i}',False) for i in range(4)]+[a],[duplicate,b,c]])
     assert ingest(flow).status_code==202
     current=wait(flow)
     assert len(search.calls)==2 and len(set(search.calls))==2
     assert {s['source_id'] for s in saved_research(flow,current)['sources']}=={'a','b','c'}
     assert current['coverage'][-1]['useful_sources']==3 and not current['coverage'][-1]['limit_reached']
-    assert len([v for v in gemini.calls if v.stage=='research_assess'])==2
+    assert len([v for v in context_model.calls if v.stage=='research_assess'])==2
     # Adequate public research is reused without new searches for the same context.
     ingest(flow,'Another source JD. SQL is required.');wait(flow)
     assert len(search.calls)==2
 
 
 def test_repeated_single_source_does_not_fake_three_sources_or_repeat_assessment(flow):
-    search,gemini=configure(flow,[[source('a')]])
+    search,context_model=configure(flow,[[source('a')]])
     ingest(flow);current=wait(flow)
     assert len(search.calls)==3 and len(set(search.calls))==3
     assert len(saved_research(flow,current)['sources'])==1
     assert current['coverage'][-1]['useful_sources']==1 and current['coverage'][-1]['limit_reached']
-    assert len([v for v in gemini.calls if v.stage=='research_assess'])==1
+    assert len([v for v in context_model.calls if v.stage=='research_assess'])==1
     assert all('Analyst' in q for q in search.calls)
 
 
 def test_no_useful_evidence_finishes_as_no_findings_without_synthesis(flow):
-    search,gemini=configure(flow,[[source('noise',False)]])
+    search,context_model=configure(flow,[[source('noise',False)]])
     ingest(flow);current=wait(flow)
     assert len(search.calls)==2 and saved_research(flow,current)['research_status']=='no_findings'
     assert saved_research(flow,current)['sources']==[] and current['coverage'][-1]['useful_sources']==0
@@ -117,11 +117,11 @@ def test_no_useful_evidence_finishes_as_no_findings_without_synthesis(flow):
 
 
 def test_assessment_quota_resumes_without_repeating_successful_search(flow):
-    search,gemini=configure(flow,[[source('a'),source('b'),source('c')]],quota=True)
+    search,context_model=configure(flow,[[source('a'),source('b'),source('c')]],quota=True)
     ingest(flow);current=wait(flow)
     assert current['coverage'][-1]['useful_sources']==3
     assert len(search.calls)==1
-    assert len([v for v in gemini.calls if v.stage=='research_assess'])==2
+    assert len([v for v in context_model.calls if v.stage=='research_assess'])==2
 
 
 def test_partial_evidence_is_reused_instead_of_repeating_exhausted_searches(flow):

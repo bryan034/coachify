@@ -1,4 +1,4 @@
-"""Public-only query planning and source usefulness decisions, executed through Gemini."""
+"""Public-only query planning and source usefulness decisions, executed through the configured model."""
 from urllib.parse import urlsplit
 from typing import Annotated
 from pydantic import Field,StringConstraints

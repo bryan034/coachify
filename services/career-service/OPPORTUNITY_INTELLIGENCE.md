@@ -2,7 +2,7 @@
 
 Current provider configuration (31 October 2026): all model stages use the selected
 Career model, including local OpenAI-compatible or DeepSeek cloud inference. Retrieval
-uses Brave LLM Context for testing or DeepSeek Search for production. Earlier Gemini/Brave
+uses Brave LLM Context for testing or DeepSeek Search for production. Earlier model/Brave
 names below describe the original path. DeepSeek retrieval accepts original page content
 only, leaves missing employer metadata unknown and uses a distinct cache policy. See
 [model/search setup](../../docs/setup.md#career-model-and-search-configuration).
@@ -20,7 +20,7 @@ outside this feature.
 
 ```mermaid
 flowchart TD
-  A[Load structured opportunity / category cache] --> B[Gemini: targeted public queries]
+  A[Load structured opportunity / category cache] --> B[the model: targeted public queries]
   B --> C[Interview branch]
   B --> D[Internship branch]
   B --> E[Company and team culture branch]
@@ -37,15 +37,15 @@ flowchart TD
 ```
 
 Each branch retrieves Brave LLM Context, saves the successful bounded retrieval,
-structures findings through the configured Gemini model, and can make a bounded targeted
+structures findings through the configured model, and can make a bounded targeted
 follow-up. Branches return separate category values at fan-in. No-company targets still research all five areas using general role queries; findings
 are marked general context with low confidence, never employer-specific claims.
 Employment type is extracted into saved JD metadata only when established; otherwise
 it remains `unknown`. Related employment/location/role reports remain qualified.
 
 All stages use the existing HTTPS OpenAI-compatible adapter with the server-only
-`CAREER_LLM_API_KEY` and requested `gemini-3.5-flash-lite` identifier. Planning, structuring,
-summaries, discovery and chat share the same enabled Gemini client. `AI_ENABLED`
+`CAREER_LLM_API_KEY` and requested the configured `OPENROUTER_MODEL` identifier. Planning, structuring,
+summaries, discovery and chat share the same enabled the model client. `AI_ENABLED`
 is the master switch; `OPPORTUNITY_ENABLED` (true by default) enables public research.
 Every stage uses the same configured Career model; see [setup](../../docs/setup.md#career-model-and-search-configuration).
 The Brave client always uses LLM Context with the existing key.
@@ -63,7 +63,7 @@ Requests use 8,192 total context tokens, 2,048 per URL,
 without fallback, spellcheck off, local results off and source metadata on.
 No SDK or other dependency was added. No environment files are read or edited.
 
-There is no local token-per-minute admission limit. Gemini/Brave provider quotas still apply. Exact evidence passages fit
+There is no local token-per-minute admission limit. model/Brave provider quotas still apply. Exact evidence passages fit
 within the configured model evidence budget (8,192 tokens by default, configurable
 256–32,768), with a 24,000-character evidence guard for the existing request contract. Larger passages are shortened rather than discarded wholesale.
 Context/output limits, timeouts, provider retry delays and bounded repairs remain.
@@ -130,7 +130,7 @@ identical public contexts across users; private goal access remains owner-scoped
 
 Each successful evidence evaluation commits its findings, next query and completion
 cursor together. A quota pause resumes the unfinished evaluation without repeating
-earlier successful Gemini calls. Invalid-response counts and safe correction feedback
+earlier successful the model calls. Invalid-response counts and safe correction feedback
 also survive pauses, so a quota wait cannot reset the bounded repair budget.
 
 Fresh categories last seven days by default; incomplete/missing/failed coverage has
@@ -162,7 +162,7 @@ All routes require the existing verified session/completed onboarding and no-sto
   work. Optional `research_id` reads an exact owner-linked immutable version.
   `available` indicates configured capability, not verified provider billing/access.
   `availability_issues` contains only fixed codes: `research_disabled`,
-  `reasoning_disabled`, `gemini_not_configured`, `brave_not_configured`, or
+  `reasoning_disabled`, `model_not_configured`, `brave_not_configured`, or
   `brave_llm_context_required`. The interface names the unavailable capability
   rather than claiming all credentials are missing; no configuration values leak.
 - `POST /api/v1/career/goals/{goal_id}/opportunity-research` — Start/reuse or refresh;
@@ -184,8 +184,7 @@ and recreate the service yourself; no credentials go into the frontend.
 
 | Setting | Default | Meaning |
 |---|---:|---|
-| `OPPORTUNITY_ENABLED` | true | Enable when primary, Gemini and LLM Context are available |
-| `OPPORTUNITY_GEMINI_MODEL` | Deprecated | Ignored; all reasoning uses Gemini 3.5 Flash Lite |
+| `OPPORTUNITY_ENABLED` | true | Enable when primary, the model and LLM Context are available |
 | `OPPORTUNITY_MAX_SEARCHES` | 2 | Maximum distinct successful queries/category |
 | `OPPORTUNITY_MAX_FOLLOWUPS` | 1 | Maximum targeted follow-ups/category |
 | `OPPORTUNITY_CONCURRENCY` | 3 | Concurrent Brave requests across branches |
@@ -198,8 +197,8 @@ and recreate the service yourself; no credentials go into the frontend.
 | `OPPORTUNITY_RUN_SECONDS` | 300 | Execution deadline per durable worker attempt |
 
 Also requires enabled `AI_*`, the separate `CAREER_LLM_API_KEY`, `CAREER_RESEARCH_API_KEY`
-with LLM Context access, and Career MongoDB configuration. Legacy `GEMINI_ENABLED`
-is ignored; `AI_ENABLED` controls all model operations. Legacy Search/Answers
+with LLM Context access, and Career MongoDB configuration. Obsolete `GEMINI_*` settings
+are ignored; `AI_ENABLED` controls all model operations. Legacy Search/Answers
 mode likewise does not disable the dedicated LLM Context client. All stages request the configured application model constant; model-not-found/auth
 failures are surfaced without guessed fallbacks.
 Content-free logs and durable metrics track model attempts/provider numeric tokens,
@@ -252,7 +251,7 @@ value is shortened to pretend a provider quota has reset.
 A transient, evidence-checked job identity may start one template query per applicable
 category while the full JD is extracted. The normal goal is saved before these results
 can be adopted or published. Identity mismatch discards early evidence. Matching seeds
-populate existing job queries/history/evidence; Gemini plans the remaining queries and
+populate existing job queries/history/evidence; the model plans the remaining queries and
 continues normal evaluation, citation validation, caching and summary selection.
 Successful initial retrieval counts toward each category's search bound. An empty first
 result can use the next planned query. Provider retry times survive adoption, and source
@@ -269,7 +268,7 @@ categories are retried instead of being mistaken for completed research on a new
 
 ## Five role-tailored research categories (report schema v2)
 
-Every employer-specific JD plans all five categories through the configured Gemini
+Every employer-specific JD plans all five categories through the configured model
 model before any initial Brave retrieval: interview experiences/stages/actual questions,
 internship experience, career progression/full-time conversion compensation, historical
 full-time conversion rates, and company/team culture. The first searches overlap full
@@ -316,7 +315,7 @@ Finding values may paraphrase those excerpts. Every accepted
 source ID is copied from the exact cited source record, never generated by the model.
 Opportunity excerpts retain up to 8,000 characters per source, then fit fairly within
 the existing evidence-token/input-character budgets. The structuring request supplies numbered exact passages once, with separate source metadata.
-Gemini structures Brave excerpts directly into the final user-facing `value` for each
+The model structures Brave excerpts directly into the final user-facing `value` for each
 finding. There is no second semantic-grading call or optional rewritten-summary field.
 The structuring prompt requires faithful meaning, relevance to the requested category,
 clear related-role context and no facts beyond the supplied evidence. Python validates
@@ -339,7 +338,7 @@ Legacy quote/ref validation also retains its original issue codes.
 Generation and storage share the same allowed confidence/evidence/scope labels and
 600-character value and quote bounds. Values use the full
 storage allowance instead of the former 320-character generation limit. The prompt
-states these limits; Gemini decoding includes the allowed labels. Storage validation
+states these limits; the model decoding includes the allowed labels. Storage validation
 errors retain their claim path and issue code instead of becoming an empty provenance
 error. Feedback contains no source text or private data. Independently valid claims survive a bad
 citation elsewhere in the batch. The structuring call uses bounded schema/citation repairs and existing quota handling.

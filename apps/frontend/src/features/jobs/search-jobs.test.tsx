@@ -38,7 +38,7 @@ const VISITS='elo.job-apply-visits.synthetic-account';
 const renderWithCheck=()=>render(<><SearchJobs/><JobApplicationCheck/></>);
 async function visitEmployer(title:string){
  await runSearch();
- const card=(await screen.findByRole('heading',{name:title})).closest('li')!;
+ const card=(await within(await screen.findByRole('list',{name:'Search results'})).findByRole('heading',{name:title})).closest('li')!;
  const apply=within(card).getByRole('link',{name:/Apply on employer site/});
  apply.addEventListener('click',event=>event.preventDefault());
  fireEvent.click(apply);
@@ -46,11 +46,10 @@ async function visitEmployer(title:string){
 }
 const returnToElo=()=>fireEvent.focus(window);
 // Nothing is searched until the user presses Search.
-const runSearch=async()=>fireEvent.click(await screen.findByRole('button',{name:'Search'}));
+const runSearch=async()=>fireEvent.click(await screen.findByRole('button',{name:'Find jobs'}));
 
 describe('Search Jobs',()=>{
  async function openLinkForm(){
-  fireEvent.click(await screen.findByRole('button',{name:/My applications/}));
   fireEvent.click(screen.getByRole('button',{name:'+ Save a job'}));
   return within(screen.getByRole('form',{name:'Save a job from a link'}));
  }
@@ -71,7 +70,7 @@ describe('Search Jobs',()=>{
   expect(within(screen.getByRole('region',{name:'Saved'})).getByText('Example Bank')).toBeVisible();
   expect(screen.queryByRole('form',{name:'Save a job from a link'})).toBeNull();
   expect(JSON.parse(writes().at(-1)!.body!)).toEqual({url:'https://careers.example.com/roles/42',title:'Markets Intern',company:'Example Bank',location:'',job_type:'internship'});
-  expect(screen.getByRole('button',{name:'My applications (1)'})).toBeVisible();
+  expect(screen.getByText('1 tracked')).toBeVisible();
  });
  it('keeps the pasted details and shows why a link was refused',async()=>{
   render(<SearchJobs/>);
@@ -84,7 +83,6 @@ describe('Search Jobs',()=>{
  });
  it('offers to paste a link from the empty Saved column',async()=>{
   render(<SearchJobs/>);
-  fireEvent.click(await screen.findByRole('button',{name:/My applications/}));
   fireEvent.click(screen.getByRole('button',{name:'Paste a job link'}));
   expect(screen.getByRole('form',{name:'Save a job from a link'})).toBeVisible();
  });
@@ -104,10 +102,13 @@ describe('Search Jobs',()=>{
  });
  it('searches nothing on load, and sends each chosen filter only when Search is pressed',async()=>{
   render(<SearchJobs/>);
-  await screen.findByRole('checkbox',{name:'Internship (2)'});
+  await screen.findByRole('textbox',{name:'Job title or keywords'});
   expect(searches()).toHaveLength(0);
-  expect(screen.getByText('Choose your filters, then press Search')).toBeVisible();
+  expect(screen.queryByRole('group',{name:'Filters'})).toBeNull();
   expect(screen.queryByText(/No jobs are listed/)).toBeNull();
+  await runSearch();
+  await screen.findByRole('checkbox',{name:'Internship (2)'});
+  await waitFor(()=>expect(searches()).toHaveLength(1));
   fireEvent.click(screen.getByRole('checkbox',{name:'Internship (2)'}));
   fireEvent.click(screen.getByRole('checkbox',{name:'Full-time (1)'}));
   fireEvent.click(screen.getByRole('checkbox',{name:'Fintech (3)'}));
@@ -115,9 +116,9 @@ describe('Search Jobs',()=>{
   fireEvent.change(screen.getByRole('combobox',{name:'Employer'}),{target:{value:'Synthetic Pay'}});
   fireEvent.change(screen.getByRole('combobox',{name:'Date posted'}),{target:{value:'7'}});
   fireEvent.change(screen.getByRole('combobox',{name:'Sort results'}),{target:{value:'newest'}});
-  expect(searches()).toHaveLength(0);
+  expect(searches()).toHaveLength(1);
   await runSearch();
-  await waitFor(()=>expect(searches()).toHaveLength(1));
+  await waitFor(()=>expect(searches()).toHaveLength(2));
   const sent=lastSearch();
   expect(sent.getAll('job_type')).toEqual(['internship','full_time']);
   expect(sent.getAll('industry')).toEqual(['fintech']);
@@ -127,11 +128,11 @@ describe('Search Jobs',()=>{
   expect(sent.get('sort')).toBe('newest');
   // Editing a filter after a search does not search again until Search is pressed.
   fireEvent.click(screen.getByRole('checkbox',{name:'Fintech (3)'}));
-  expect(searches()).toHaveLength(1);
+  expect(searches()).toHaveLength(2);
   // Clearing filters returns to the waiting state instead of searching.
   fireEvent.click(screen.getByRole('button',{name:'Clear filters'}));
-  expect(searches()).toHaveLength(1);
-  expect(await screen.findByText('Choose your filters, then press Search')).toBeVisible();
+  expect(searches()).toHaveLength(2);
+  await waitFor(()=>expect(screen.queryByRole('group',{name:'Filters'})).toBeNull());
   await runSearch();
   // Sort is a display order, not a filter: clearing filters keeps the chosen order.
   await waitFor(()=>expect([...lastSearch().entries()]).toEqual([['sort','newest']]));
@@ -157,7 +158,7 @@ describe('Search Jobs',()=>{
   const before=searches().length;
   fireEvent.change(screen.getByRole('textbox',{name:'Job title or keywords'}),{target:{value:'  C++ & SQL #1  '}});
   expect(searches()).toHaveLength(before);
-  fireEvent.click(screen.getByRole('button',{name:'Search'}));
+  fireEvent.click(screen.getByRole('button',{name:'Find jobs'}));
   await waitFor(()=>expect(lastSearch().get('q')).toBe('C++ & SQL #1'));
   const linkedin=await screen.findByRole('link',{name:/LinkedIn/}),indeed=screen.getByRole('link',{name:/Indeed/});
   const first=new URL(linkedin.getAttribute('href')!),second=new URL(indeed.getAttribute('href')!);
@@ -180,7 +181,7 @@ describe('Search Jobs',()=>{
   expect(apply).toHaveAttribute('target','_blank');expect(apply).toHaveAttribute('rel','noopener noreferrer');
   expect(prompt()).toBeNull();
   expect(writes()).toEqual([]);
-  expect(within(card).queryByText(/in My applications/)).toBeNull();
+  expect(within(card).queryByText(/in Saved jobs/)).toBeNull();
   returnToElo();
   expect(await screen.findByText(/Did you apply to/)).toHaveTextContent('Did you apply to Data Intern at Synthetic Pay?');
   expect(writes()).toEqual([]);
@@ -190,9 +191,9 @@ describe('Search Jobs',()=>{
   const card=await visitEmployer('Data Intern');
   returnToElo();
   fireEvent.click(await screen.findByRole('button',{name:'Yes, I applied'}));
-  await within(card).findByText('Applied in My applications');
+  await within(card).findByText('Applied in Saved jobs');
   expect(JSON.parse(calls.find(call=>call.method==='PATCH')!.body!)).toEqual({expected_version:1,status:'applied'});
-  expect(screen.getByRole('button',{name:'My applications (1)'})).toBeVisible();
+  expect(screen.getByText('1 tracked')).toBeVisible();
   expect(prompt()).toBeNull();
   expect(localStorage.getItem(VISITS)).toBeNull();
  });
@@ -206,7 +207,7 @@ describe('Search Jobs',()=>{
   expect(prompt()).toBeNull();
   expect(writes()).toEqual([]);
   expect(within(card).getByRole('button',{name:'Save job'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'My applications (0)'})).toBeVisible();
+  expect(screen.getByText('0 tracked')).toBeVisible();
   expect(localStorage.getItem(VISITS)).toBeNull();
  });
  it('asks about each visited job in turn',async()=>{
@@ -246,22 +247,22 @@ describe('Search Jobs',()=>{
   vi.mocked(fetch).mockImplementation(original);
   fireEvent.click(screen.getByRole('button',{name:'Yes, I applied'}));
   await waitFor(()=>expect(prompt()).toBeNull());
-  expect(screen.getByRole('button',{name:'My applications (1)'})).toBeVisible();
+  expect(screen.getByText('1 tracked')).toBeVisible();
  });
  it('promotes an already saved job on yes and leaves a further status alone',async()=>{
   saved=[application('saved',1)];
   const view=renderWithCheck();
   await runSearch();
-  await screen.findByText('Saved in My applications');
+  await screen.findByText('Saved in Saved jobs');
   await visitEmployer('Data Intern');
   returnToElo();
   fireEvent.click(await screen.findByRole('button',{name:'Yes, I applied'}));
-  await screen.findByText('Applied in My applications');
+  await screen.findByText('Applied in Saved jobs');
   view.unmount();
   saved=[application('interviewing',3)];
   renderWithCheck();
   await runSearch();
-  await screen.findByText('Interviewing in My applications');
+  await screen.findByText('Interviewing in Saved jobs');
   await visitEmployer('Data Intern');
   returnToElo();
   expect(prompt()).toBeNull();
@@ -270,13 +271,12 @@ describe('Search Jobs',()=>{
  it('tracks, updates and removes saved jobs',async()=>{
   saved=[application('saved',1)];
   render(<SearchJobs/>);
-  fireEvent.click(await screen.findByRole('button',{name:'My applications (1)'}));
-  const status=screen.getByRole('combobox',{name:'Status'});
+  const status=await screen.findByRole('combobox',{name:'Status'});
   fireEvent.change(status,{target:{value:'interviewing'}});
   await waitFor(()=>expect(screen.getByRole('combobox',{name:'Status'})).toHaveValue('interviewing'));
   expect(JSON.parse(calls.find(call=>call.method==='PATCH')!.body!)).toEqual({expected_version:1,status:'interviewing'});
   fireEvent.click(screen.getByRole('button',{name:'Remove Data Intern'}));
-  await screen.findByText(/haven.t saved any jobs/);
+  await waitFor(()=>expect(screen.getByText('0 tracked')).toBeVisible());
   expect(calls.find(call=>call.method==='DELETE')!.url.search).toBe('?expected_version=2');
  });
  it('shows a stale update and reloads the saved state',async()=>{
@@ -284,8 +284,7 @@ describe('Search Jobs',()=>{
   const original=vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation(async(input,init)=>(init as RequestInit|undefined)?.method==='PATCH'?(saved=[application('offer',5)],json({detail:'This saved job changed in another session. Reload and retry.',code:'conflict'},409)):original(input,init));
   render(<SearchJobs/>);
-  fireEvent.click(await screen.findByRole('button',{name:'My applications (1)'}));
-  fireEvent.change(screen.getByRole('combobox',{name:'Status'}),{target:{value:'rejected'}});
+  fireEvent.change(await screen.findByRole('combobox',{name:'Status'}),{target:{value:'rejected'}});
   expect(await screen.findByRole('alert')).toHaveTextContent('changed in another session');
   await waitFor(()=>expect(screen.getByRole('combobox',{name:'Status'})).toHaveValue('offer'));
  });
@@ -344,7 +343,7 @@ describe('Search Jobs',()=>{
   await screen.findByRole('heading',{name:'Data Intern'});
   const before=searches().length;
   search=()=>json({items:[posting('c','New live job')],total:1,next_cursor:null});
-  fireEvent.click(screen.getByRole('button',{name:'Search'}));
+  fireEvent.click(screen.getByRole('button',{name:'Find jobs'}));
   await screen.findByRole('heading',{name:'New live job'});
   expect(searches().length).toBeGreaterThan(before);
  });
@@ -353,7 +352,6 @@ describe('Search Jobs',()=>{
   render(<SearchJobs/>);
   await runSearch();
   await screen.findByRole('heading',{name:'Data Intern'});
-  fireEvent.click(screen.getByRole('button',{name:'My applications (1)'}));
   expect(screen.getByText('Check employer site for availability')).toBeVisible();
   expect(screen.queryByText('No longer listed')).not.toBeInTheDocument();
  });

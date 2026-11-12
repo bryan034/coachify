@@ -1,11 +1,11 @@
-"""Gemini requests have bounded context/output, without a local minute quota."""
+"""ContextModel requests have bounded context/output, without a local minute quota."""
 import asyncio
 import json
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 from app.ai.adapter import AIAdapter, AIError
-from app.ai.config import GeminiSettings
+from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.usage import input_tokens
 from app.main import create_app
@@ -25,7 +25,7 @@ def test_large_requests_repeat_without_local_token_admission_or_output_reduction
             calls.append(json.loads(request.content))
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{}'}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture'),client)
+            adapter=AIAdapter(AISettings(enabled=True,api_key='fixture'),client)
             request=AIInput(stage='context_answer',context=json.dumps({'facts':['x '*9000]}),
                 conversation=[{'role':'user','content':'Explain these career requirements.'}])
             payload=adapter._payload(request)
@@ -36,16 +36,16 @@ def test_large_requests_repeat_without_local_token_admission_or_output_reduction
     asyncio.run(run())
 
 
-def test_gemini_provider_quota_is_still_enforced_without_immediate_retry():
+def test_model_provider_quota_is_still_enforced_without_immediate_retry():
     async def run():
         calls=[]
         def handler(request):
             calls.append(request)
             return httpx.Response(429,headers={'Retry-After':'3'})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(GeminiSettings(enabled=True,api_key='fixture'),client)
+            adapter=AIAdapter(AISettings(enabled=True,api_key='fixture'),client)
             with pytest.raises(AIError) as error:await adapter._complete({'model':'fixture','messages':[]},owner='alice')
-            assert error.value.limit_scope=='provider' and error.value.provider=='gemini'
+            assert error.value.limit_scope=='provider' and error.value.provider=='compatible'
             assert error.value.retry_after==3 and len(calls)==1
     asyncio.run(run())
 
@@ -55,7 +55,7 @@ def test_gemini_provider_quota_is_still_enforced_without_immediate_retry():
     ('rate_limited','provider',429,'AI provider')])
 def test_api_explains_context_and_provider_limits(code,scope,status,fragment):
     def profile(req):return httpx.Response(200,json={'id':'synthetic','email_verified':True} if req.url.path.endswith('/session') else {'onboarding_complete':True})
-    def processor(*args):raise AIError(code,limit_scope=scope,input_count=4100,retry_after=23 if scope else None,provider='gemini')
+    def processor(*args):raise AIError(code,limit_scope=scope,input_count=4100,retry_after=23 if scope else None,provider='compatible')
     upstream=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(profile))
     with TestClient(create_app(profile_client=upstream,processor=processor)) as client:
         response=client.post('/api/v1/career/imports/url',headers={'Authorization':'Bearer synthetic'},json={'url':'https://example.test/job'})

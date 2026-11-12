@@ -93,7 +93,9 @@ test('planning preferences persist, detect conflicts, prorate capacity and never
  expect(workspace.context.planning_defaults.weekly_hours).toBe(6);
  expect(workspace.context.planning_defaults.application_date).toBe(future(100));
  expect(workspace.context.planning_defaults.availability_periods).toHaveLength(2);
- await expect(page.getByRole('button',{name:'Use saved 6 hours a week',exact:true})).toBeVisible();
+ // Without a CV and goal Roadmap shows its prerequisites instead of the settings road;
+ // the saved defaults above are what its planner reads once those exist.
+ await expect(page.getByRole('heading',{name:'Finish these first',exact:true})).toBeVisible();
  await page.getByRole('link',{name:/My profile/}).click();
  await expect(page.getByText('Saved course',{exact:true})).toBeVisible();
  // Baseline planning defaults remain on the standalone editor; the profile

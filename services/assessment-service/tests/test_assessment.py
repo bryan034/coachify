@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from elo_shared.runtime import MemoryStore, Problem, Upstream, Model, begin
 from elo_shared.skills import resolve
 from app.domain import aggregate, validate_batch
-from app.schemas import Batch, Generate
+from app.schemas import Batch, Generate, SkillBatch
 from app.main import create_app
 from app.inputs import capture
 
@@ -30,10 +30,18 @@ class Sources:
         if path=='/api/v1/profile/capabilities':return {'version':0,'declarations':[]}
         if path.endswith('/assessment-input'):return copy.deepcopy(self.source)
         return {'id':'cv1','version':self.source['cv_version'],'status':'ready','file_name':'synthetic.docx'}
+def judge(context):
+    """A deterministic per-skill judgement citing each skill's first source."""
+    return SkillBatch(skills=[{'skill_key':skill['key'],'category':'Technical coding','subcategory':'Languages','relevance':'high',
+        'competence_score':6,'required_score':7,'explanation':'Used independently in a project.','evidence_refs':[skill['sources'][0]['ref']],
+        'requirement_refs':[r['ref'] for r in context['goal']['requirements']][:1]} for skill in context['skills']])
 class Interpreter:
     configured=True
-    def __init__(self,sources=None):self.calls=0;self.sources=sources
+    # `calls` counts requirement comparisons; per-skill judgements are counted separately.
+    def __init__(self,sources=None):self.calls=0;self.skill_calls=0;self.sources=sources
     async def generate(self,schema,instructions,context):
+        if schema is SkillBatch:
+            self.skill_calls+=1;return judge(context)
         self.calls+=1
         if self.sources:self.sources.source['cv_version']+=1
         return Batch(outcomes=[{'requirement_ref':r['ref'],'components':[{'dimension':'capability','status':'supported','explanation':'Declared personal project use.','evidence_refs':['cv:item1:claim:0']}],
@@ -133,6 +141,7 @@ def test_quota_retry_resumes_completed_batches_without_repeating_model_calls(mon
         configured=True
         def __init__(self):self.calls=[];self.failed=False
         async def generate(self,schema,instructions,context):
+            if schema is SkillBatch:return judge(context)
             self.calls.append([r['ref'] for r in context['requirements']])
             if len(self.calls)==2 and not self.failed:
                 self.failed=True;raise Problem('Provider capacity.',429,'model_quota',30)
@@ -271,6 +280,8 @@ def test_evidence_repair_is_bounded_and_never_publishes_rejected_batch(repair_su
             self.contexts = []
 
         async def generate(self, schema, instructions, context):
+            if schema is SkillBatch:
+                return await super().generate(schema, instructions, context)
             self.contexts.append(copy.deepcopy(context))
             value = await super().generate(schema, instructions, context)
             if self.calls == 1 or not repair_succeeds:
@@ -298,6 +309,61 @@ def test_evidence_repair_is_bounded_and_never_publishes_rejected_batch(repair_su
         assert state['operation']['error']['code'] == 'assessment_output'
 
 
+def test_unknown_evidence_ref_repair_names_the_exact_reference_without_leaking_it_to_the_user():
+    class Repairing(Interpreter):
+        def __init__(self):
+            super().__init__()
+            self.contexts = []
+
+        async def generate(self, schema, instructions, context):
+            if schema is SkillBatch:
+                return await super().generate(schema, instructions, context)
+            self.contexts.append(copy.deepcopy(context))
+            value = await super().generate(schema, instructions, context)
+            if self.calls == 1:
+                value.outcomes[0].components[0].evidence_refs = ['cv:item1:claim:0', 'b12']
+            return value
+
+    model = Repairing()
+    with TestClient(create_app(MemoryStore(), Sources(), model)) as client:
+        response = client.post('/api/v1/assessments', json={
+            'expected_version': 0, 'mutation_id': str(uuid4()), 'allow_partial': True,
+        }, headers=H)
+        assert response.status_code == 202
+        state = finish(client)
+    feedback = model.contexts[1]['validation_feedback']
+    assert "'b12'" in feedback and "'job:req1'" in feedback and 'component 0 (capability)' in feedback
+    assert "'cv:item1:claim:0'" not in feedback
+    assert state['operation']['status'] == 'succeeded'
+    assert state['result']['job_skill_gaps'][0]['components'][0]['evidence_refs'] == ['cv:item1:claim:0']
+
+
+def test_unrepaired_unknown_evidence_ref_keeps_a_generic_user_error():
+    class Forging(Interpreter):
+        async def generate(self, schema, instructions, context):
+            value = await super().generate(schema, instructions, context)
+            if schema is SkillBatch:
+                return value
+            value.outcomes[0].components[0].evidence_refs = ['invented-ref']
+            return value
+
+    with TestClient(create_app(MemoryStore(), Sources(), Forging())) as client:
+        client.post('/api/v1/assessments', json={
+            'expected_version': 0, 'mutation_id': str(uuid4()), 'allow_partial': True,
+        }, headers=H)
+        state = finish(client)
+    assert state['operation']['status'] == 'failed'
+    assert state['operation']['error']['detail'] == 'The assessment referenced unavailable evidence.'
+    assert 'invented-ref' not in str(state['operation']['error'])
+
+
+def test_repeated_evidence_ref_is_collapsed_instead_of_rejected():
+    output = Batch(outcomes=[{'requirement_ref': 'python', 'components': [{'dimension': 'capability', 'status': 'supported',
+        'explanation': 'Declared use.', 'evidence_refs': ['a', 'a']}], 'mapping_method': 'semantic', 'mapping_reason': 'Same skill.'}])
+    result = validate_batch(output, [{'ref': 'python'}], {'a': {'text': 'I used Python.', 'attribution': 'personal'}})
+    assert result[0]['components'][0]['evidence_refs'] == ['a']
+
+
 def test_manual_only_snapshot_uses_published_declarations_and_tracks_revision():
     class ManualSources(Sources):
         revision=2
@@ -317,15 +383,16 @@ def test_manual_only_snapshot_uses_published_declarations_and_tracks_revision():
     assert asyncio.run(capture(source,account))['input_hash']!=snapshot['input_hash']
 
 
-def test_score_remains_unknown_without_explicit_evidence_and_required_levels():
+def test_independence_without_success_gets_a_conservative_level_against_role_target():
     sources=Sources()
     snapshot=asyncio.run(capture(sources,asyncio.run(sources.account('synthetic'))))
     output=asyncio.run(Interpreter().generate(Batch,'',snapshot))
     outcome=validate_batch(output,snapshot['requirements'],snapshot['evidence'])[0]
-    assert outcome['competence_score'] is None
+    assert outcome['competence_score']==5
+    assert outcome['demonstrated_score']==4 and outcome['required_score']==8
     assert outcome['relevance']=='high'
-    assert outcome['scoring_rubric_version']=='application-ratio-v1'
-    assert outcome['score_status']=='insufficient_evidence'
+    assert outcome['scoring_rubric_version']=='evidence-role-v2'
+    assert outcome['score_status']=='estimated'
 
 
 def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
@@ -337,6 +404,7 @@ def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
     class ManualModel(Interpreter):
         async def generate(self,schema,instructions,context):
             output=await super().generate(schema,instructions,context)
+            if schema is SkillBatch:return output
             for outcome in output.outcomes:
                 outcome.components[0].evidence_refs=['declaration:m']
             return output
@@ -347,7 +415,10 @@ def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
         assert state['operation']['status']=='succeeded',state
         assert not state['stale']
         assert state['result']['inputs']['cv_id'] is None
-        assert state['result']['job_skill_gaps'][0]['competence_score'] is None
+        # The declaration supplies basic personal use, not evidence of independent successful delivery.
+        python=state['result']['job_skill_gaps'][0]
+        assert python['scoring_rubric_version']=='evidence-role-v2' and python['competence_score']==3.7
+        assert python['profile_skills'][0]['name']=='Python'
 
 
 def test_selected_failed_cv_does_not_fall_back_to_saved_declarations():
@@ -369,3 +440,45 @@ def test_reserved_score_contract_rejects_out_of_range_values():
     output=asyncio.run(Interpreter().generate(Batch,'',snapshot))
     outcome=validate_batch(output,snapshot['requirements'],snapshot['evidence'])[0]
     with pytest.raises(ValidationError):Outcome.model_validate({**outcome,'competence_score':11})
+
+
+def test_previous_rubric_results_are_stale_without_rewriting_history():
+    from elo_shared.runtime import digest
+    store=MemoryStore();model=Interpreter()
+    with TestClient(create_app(store,Sources(),model)) as client:
+        client.post('/api/v1/assessments',headers=H,json={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True})
+        saved=finish(client)
+        row=store.load(OWNER)
+        row['result']['input_hash']=digest(row['result']['inputs'])
+        row['result']['job_skill_gaps'][0]['competence_score']=10
+        store.cas(OWNER,row['version'],row)
+        current=client.get('/api/v1/assessments/current',headers=H).json()
+        assert current['stale'] and current['result']['job_skill_gaps'][0]['competence_score']==10
+        assert model.calls==1
+
+
+def test_retry_discards_pre_v2_scores_only_when_source_revisions_still_match():
+    from elo_shared.runtime import digest
+    class Failing(Interpreter):
+        fail=True
+        async def generate(self,schema,instructions,context):
+            if schema is SkillBatch and self.fail: raise Problem('Synthetic failure.',503,'model_provider')
+            return await super().generate(schema,instructions,context)
+    model=Failing();store=MemoryStore()
+    body={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True}
+    with TestClient(create_app(store,Sources(),model)) as client:
+        client.post('/api/v1/assessments',headers=H,json=body)
+        assert finish(client)['operation']['status']=='failed'
+        row=store.load(OWNER)
+        checkpoint=row['last_operation']['checkpoint']
+        checkpoint.pop('scoring_rubric')
+        checkpoint['input_hash']=digest(checkpoint['snapshot']['inputs'])
+        checkpoint['outcomes'][0]['competence_score']=10
+        # Preserve the failed-at version, just as loading an existing saved row would.
+        with store.lock: store.data[OWNER]=copy.deepcopy(row)
+        model.fail=False
+        client.post('/api/v1/assessments',headers=H,json=body)
+        current=finish(client)
+        assert current['operation']['status']=='succeeded'
+        assert current['result']['job_skill_gaps'][0]['competence_score']==5
+        assert model.calls==2

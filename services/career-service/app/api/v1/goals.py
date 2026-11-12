@@ -205,7 +205,13 @@ async def answer(draft_id: str, body: SendAnswer, request: Request, account=Depe
 
 @router.get('/goals/current')
 async def current(request: Request, account=Depends(owner)):
-    return jsonable_encoder(await run_in_threadpool(store(request).current,account),by_alias=True)
+    current=await run_in_threadpool(store(request).current,account)
+    if current['goal']:
+        from app.domain.competence import calibrated_goal
+        goal=current['goal'];research_store=request.app.state.research_store
+        record=await run_in_threadpool(research_store.read,account,goal.id,current=True,goal_version=goal.version) if research_store else None
+        current['goal']=calibrated_goal(goal,record)
+    return jsonable_encoder(current,by_alias=True)
 
 
 @router.get('/goals')

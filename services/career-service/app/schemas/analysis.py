@@ -157,7 +157,14 @@ class LearningItem(Contract):
         if self.importance_origin=='stated' and not self.evidence:raise ValueError('Stated learning detail needs source evidence.')
         return self
 
+class CompetenceTarget(Contract):
+    level: int = Field(ge=1, le=10, strict=True)
+    basis: Literal['job_description', 'research', 'inferred']
+    explanation: Evidence
+    source_urls: list[SourceUrl] = Field(default_factory=list, max_length=10)
+
 class TargetSkill(Contract):
+    competence_target: CompetenceTarget | None = None
     learning_items: list[LearningItem] = Field(default_factory=list,max_length=12)
     canonical_skill_id: str | None = None
     skill_registry_version: str = MAPPING_VERSION

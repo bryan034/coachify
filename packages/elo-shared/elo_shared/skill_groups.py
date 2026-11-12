@@ -57,6 +57,8 @@ _GROUPS = (
                                   'market research', 'strategy', 'operations', 'procurement', 'seo', 'budgeting',
                                   'consulting'), re.compile(r'business|finance|marketing')),
 )
+# Every display category, in display order; model-assigned categories must be one of these.
+GROUP_NAMES = tuple(group for group, _, _ in _GROUPS) + (OTHER_SKILLS,)
 # Short names that would match inside ordinary phrases, so they must be the whole name.
 _EXACT_CODING = {'c', 'r', 'go', 'matlab'}
 

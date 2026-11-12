@@ -25,7 +25,6 @@ it('lays out one row per category with its skills as chips', () => {
  expect(within(group('Technical coding')).getByRole('heading', {name: 'Technical coding'})).toBeVisible();
  expect(chips('Technical coding')).toEqual(['Python', 'FastAPI']);
  expect(chips('Data & analytics')).toEqual(['SQL']);
- expect(screen.getByText(/in 2 categories/)).toBeVisible();
  expect(profileSkillList(cv([skill('Python')],[estimate('Python','independent_application')]),null,null)[0].label).toBe('Independent');
 });
 
@@ -44,7 +43,7 @@ it('opens a short panel with where the skill was used and one competence state',
  open('Python');
  expect(screen.getByRole('button', {name: /^Python/})).toHaveAttribute('aria-pressed', 'true');
  expect(within(panel()).getByText('Reporting API')).toBeVisible();
- expect(within(panel()).getByText('Compare with your Career Goal to see how this skill counts for it.')).toBeVisible();
+ expect(within(panel()).getByText('Evaluate your skills with your Career Goal to see how this skill counts for it.')).toBeVisible();
  expect(screen.queryByText(/private-ref|Used Python on a synthetic project/)).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button', {name: 'Close skill panel'}));
  expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
@@ -97,4 +96,30 @@ it('merges the same skill from several sources into one chip', () => {
  open('Python');
  expect(within(panel()).getByText('Reporting API')).toBeInTheDocument();
  expect(within(panel()).getByText('Weekly reports')).toBeInTheDocument();
+});
+
+const judged = (skills: Partial<NonNullable<Assessment['skill_profile']>['skills'][number]>[]) => ({job_skill_gaps: [], evidence: {}, skill_profile: {status: 'evaluated', rubric_version: 'skill-profile-llm-v1',
+ skills: skills.map(item => ({name: 'Python', canonical_skill_id: null, category: 'Technical coding', subcategory: null, relevance: 'high', competence_score: null, required_score: null, explanation: 'Synthetic explanation.', evidence_refs: [], requirement_refs: [], ...item}))}} as unknown as Assessment);
+
+it('uses the comparison\'s per-skill judgement for category, sub-category, relevance and competence', () => {
+ view(cv([skill('Python'), skill('SQL'), skill('Tableau')]), null, null, judged([
+  {name: 'Python', subcategory: 'Languages', competence_score: 7, required_score: 8, explanation: 'You wrote the ETL scripts yourself.'},
+  {name: 'SQL', category: 'Technical coding', subcategory: 'Data stores', relevance: 'medium'},
+  {name: 'Tableau', category: 'Data & analytics', relevance: 'none'}]));
+ expect(chips('Technical coding · Languages')).toEqual(['Python, High relevance']);
+ expect(chips('Data stores')).toEqual(['SQL, Medium relevance']);
+ expect(chips('Data & analytics')).toEqual(['Tableau, Not needed']);
+ open('Python');
+ expect(within(panel()).getByText('Goal needs about 8 / 10')).toBeVisible();
+ expect(within(panel()).getByText('You wrote the ETL scripts yourself.')).toBeVisible();
+ open('SQL');
+ expect(within(panel()).getByText('Level unknown from your CV review.')).toBeVisible();
+ open('Tableau');
+ expect(within(panel()).getByText('Not needed for your current goal.')).toBeVisible();
+});
+
+it('falls back to requirement outcomes for skills the judgement does not cover', () => {
+ const value = {...judged([{name: 'SQL'}]), job_skill_gaps: [outcome({canonical_skill_id: 'python', relevance: 'low', competence_score: 4, score_status: 'estimated'})]} as Assessment;
+ view(cv([{...skill('Python'), canonical_skill_id: 'python'}, skill('SQL')]), null, null, value);
+ expect(screen.getByRole('button', {name: /^Python/})).toHaveClass('relevance-low');
 });

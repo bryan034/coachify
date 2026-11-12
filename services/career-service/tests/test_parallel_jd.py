@@ -174,7 +174,7 @@ def test_rejected_document_does_not_replace_the_existing_goal(flow):
 
 
 def test_combined_readiness_waits_for_structuring_without_another_retrieval(opportunity_flow):
-    client,db,primary,gemini,search=opportunity_flow
+    client,db,primary,context_model,search=opportunity_flow
     original=primary.generate;entered=threading.Event();release=threading.Event()
     async def generate(request,operation,**kwargs):
         if request.stage=='opportunity_structure' and json.loads(request.context)['category']=='interview_intelligence':
@@ -198,12 +198,12 @@ def test_combined_readiness_waits_for_structuring_without_another_retrieval(oppo
 
 def test_structuring_quota_resumes_automatically_without_opening_chat_early(opportunity_flow):
     from app.ai.adapter import AIError
-    client,db,primary,gemini,search=opportunity_flow
+    client,db,primary,context_model,search=opportunity_flow
     original=primary.generate;attempts=[]
     async def generate(request,operation,**kwargs):
         if request.stage=='opportunity_structure' and json.loads(request.context)['category']=='interview_intelligence':
             attempts.append(1)
-            if len(attempts)==1:raise AIError('rate_limited',limit_scope='provider',retry_after=1,provider='gemini')
+            if len(attempts)==1:raise AIError('rate_limited',limit_scope='provider',retry_after=1,provider='compatible')
         return await original(request,operation,**kwargs)
     primary.generate=generate
     assert ingest(opportunity_flow).status_code==202
@@ -218,7 +218,7 @@ def test_structuring_quota_resumes_automatically_without_opening_chat_early(oppo
 
 def test_structuring_provider_failure_preserves_other_categories_and_can_retry(opportunity_flow):
     from app.ai.adapter import AIError
-    client,db,primary,gemini,search=opportunity_flow
+    client,db,primary,context_model,search=opportunity_flow
     original=primary.generate;attempts=[]
     async def generate(request,operation,**kwargs):
         if request.stage=='opportunity_structure' and json.loads(request.context)['category']=='interview_intelligence':
@@ -261,7 +261,7 @@ def test_structuring_configuration_failure_keeps_goal_and_other_findings(opportu
 
 
 def test_retry_recovers_failed_cached_category_instead_of_reusing_failure(opportunity_flow):
-    client,db,primary,gemini,search=opportunity_flow
+    client,db,primary,context_model,search=opportunity_flow
     search.fail='internship_insights'
     assert ingest(opportunity_flow).status_code==202
     research(opportunity_flow);wait(opportunity_flow,'research_failed')
@@ -274,7 +274,7 @@ def test_retry_recovers_failed_cached_category_instead_of_reusing_failure(opport
 
 def test_old_cached_missing_overview_is_built_without_another_model_call_or_retrieval(opportunity_flow):
     from app.schemas.opportunity import Summary
-    client,db,primary,gemini,search=opportunity_flow
+    client,db,primary,context_model,search=opportunity_flow
     assert ingest(opportunity_flow).status_code==202
     current=wait(opportunity_flow,'ready')
     engine=client.app.state.opportunities
@@ -283,9 +283,9 @@ def test_old_cached_missing_overview_is_built_without_another_model_call_or_retr
         'warnings':['Overall summary unavailable; validated category findings remain available.'],
         'summary':Summary()})})
     engine.store.cached=lambda context:cached
-    before=len(search.calls);model_calls=len(gemini.calls)+len(primary.calls)
+    before=len(search.calls);model_calls=len(context_model.calls)+len(primary.calls)
     assert client.post(BASE+'/retry',headers=headers()).status_code==202
     current=wait(opportunity_flow,'ready')
     assert saved_research(opportunity_flow,current)['intelligence']['summary']['overview_refs']
     assert len(search.calls)==before
-    assert len(gemini.calls)+len(primary.calls)==model_calls
+    assert len(context_model.calls)+len(primary.calls)==model_calls
