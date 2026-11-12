@@ -167,3 +167,7 @@ lower the target. Weak, stale or unrelated findings do not calibrate it. Related
 sources remain labelled advisory. No private CV or user self-ratings enter research.
 Original goal wording and research revision ownership remain unchanged; Assessment
 pins the goal/research versions and owns the evidence comparison.
+
+The canonical `GET /goals/current`, workspace and Assessment handoff reads use the
+same calibrated target projection. Reading the current goal cannot disagree with
+its workspace simply because public research enriched its displayed target.

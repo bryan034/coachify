@@ -547,3 +547,20 @@ after an explicit successful retry. Career, Assessment and Roadmap reject these
 provider failures without treating them as schema corrections. Existing per-service
 transfer limits and transport timeouts remain in force. Tests use synthetic errors;
 a live saved-CV retry is separate evidence of the configured provider workflow.
+
+### Current browser journey boundaries
+
+CV helpers wait for the Skills Profile's initial reads (`aria-busy=false`) before
+choosing upload/library controls. **Review details and corrections** exposes the
+existing CV editor, target-bound clarification questions and manual declarations.
+Extracted results remains a separate read-only page. First upload has no saved
+library yet. The newest ready upload is activated automatically; full-stack tests
+verify the active source through both the UI and service API. Manual changes and
+retry/ownership assertions remain separate checks.
+
+Career confirmation disappears after the exact version is confirmed; tests verify
+that state alongside the confirmed-context API. Processing shows the progress
+screen before opening chat. Manual intake persists its question in the transcript,
+without inventing a CV-owned active question. Chat layout checks retain the 70%
+transcript-height requirement, composer visibility, mobile overflow checks and
+reduced-motion behavior.

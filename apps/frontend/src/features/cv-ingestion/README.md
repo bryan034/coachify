@@ -295,3 +295,12 @@ competence score against the goal's level, plus its explanation. Older results f
 back to the backend's `skill_groups` and requirement outcomes. Existing CV application
 levels remain unchanged.
 
+
+Skills Profile exposes **Review details and corrections** beside the upload/library
+controls. It opens the existing source-bound clarification/editor and manual
+capability controls without replacing the read-only Extracted results page.
+The page marks its initial API loads with `aria-busy`; navigation helpers wait for
+that state before choosing between first-upload and saved-CV layouts. Viewing the
+Skills Profile after completing review returns to its summary. Equal upload
+creation timestamps prefer the active CV, avoiding accidental selection changes
+on reload. The saved library scrolls internally on desktop and mobile.

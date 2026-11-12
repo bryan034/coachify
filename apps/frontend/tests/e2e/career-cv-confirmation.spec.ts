@@ -25,7 +25,8 @@ test('canonical goal confirmation is explicit, survives reload and must follow t
  await page.goto('/career-goal');const panel=page.getByRole('region',{name:'Goal confirmation for CV review'});
  await expect(panel.getByRole('button',{name:'Confirm goal'})).toBeEnabled();expect(writes).toBe(0);await expect(page.getByText('Saved automatically',{exact:true})).toBeVisible();
  await panel.getByRole('button',{name:'Confirm goal'}).click();await expect(panel).toHaveCount(0);expect(writes).toBe(1);
- await page.reload();await expect(panel).toHaveCount(0);expect(writes).toBe(1);
+ const restored=page.waitForResponse(response=>response.url().endsWith('/cv-confirmation')&&response.request().method()==='GET');
+ await page.reload();await restored;await expect(page.getByRole('heading',{level:1,name:'Synthetic analyst'})).toBeVisible();await expect(panel).toHaveCount(0);expect(writes).toBe(1);
  // Focus refreshes both the confirmation and workspace. Hold the workspace
  // response so the stale-revision guard can be checked before the new goal loads.
  let releaseWorkspace!:()=>void;

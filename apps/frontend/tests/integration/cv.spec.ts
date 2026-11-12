@@ -6,6 +6,7 @@ import { createLocalAccount } from './account-helpers';
 
 test('saved CVs retain corrections, require explicit selection and compose manual inputs through real services', async ({ page, browser }) => {
  test.setTimeout(210_000);
+ page.setDefaultTimeout(15_000);
  const account = await createLocalAccount(page, 'Synthetic CV reviewer');
  const before = await (await account.get('/api/v1/profile')).json();
  const complete = await account.finish({ expected_version: before.version, occupational_status: 'employed', no_previous_education: true });
@@ -105,7 +106,8 @@ test('saved CVs retain corrections, require explicit selection and compose manua
  await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true})).toHaveCount(0);
  await expect(page.getByRole('region', {name:'Projects',exact:true}).locator('.cv-copy')).toHaveText(project.description);
  await page.getByRole('button', {name:'Show more saved CVs',exact:true}).click();
- await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Active CV',exact:true})).toBeDisabled();
+ await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByText('Active CV',{exact:true})).toBeVisible();
+ await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByRole('button', {name:'Make active',exact:true})).toHaveCount(0);
  await expect(page.getByRole('button', {name:'Show more saved CVs',exact:true})).toHaveCount(0);
 
  // A different authenticated account sees neither the original nor its saved
