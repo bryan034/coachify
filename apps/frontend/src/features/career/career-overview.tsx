@@ -15,7 +15,6 @@ import {OTHER_SKILLS,groupSkills,type SkillGroupMap} from '@/lib/skill-groups';
 import {type SkillMatch} from '@/lib/api/assessment';
 import '@/styles/goal.css';
 import { announceInputsChanged, useComparison } from '@/features/assessment/comparison';
-import { EvaluationStatusPanel } from '@/features/assessment/evaluation-status';
 import { EvaluateBanner } from '@/features/assessment/evaluate-banner';
 import { ProcessingCard, SkeletonRows, type ProcessingStep } from '@/components/ui/processing-card';
 import type { Requirement } from '@/features/roadmap/types';
@@ -223,7 +222,6 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
    footer={<p>{working&&workspace.phase==='waiting_quota'?waitingText:'You can leave this page. elo keeps working, and your skills will be here when it’s done.'}</p>}>{!goal.skills.length&&<SkeletonRows rows={4}/>}</ProcessingCard>}
   {workspace.phase==='research_failed'&&<div className="notice" role="alert"><p>Opportunity research could not finish. Your saved goal remains available.</p><button className="btn ghost sm" disabled={retrying} onClick={()=>void retryResearch()}>{retrying?'Resuming research…':'Retry research'}</button>{retryError&&<p>{retryError}</p>}</div>}
   {view==='skills'&&<>
-   <EvaluationStatusPanel comparison={comparison} />
    {!working&&!comparing&&<EvaluateBanner comparison={comparison} here="/career-goal"/>}
    <CvGoalConfirmationCard hideWhenConfirmed key={confirmationKey} goal={goal} selectionVersion={workspace.current.selection_version} token={token} onReload={onReload}/>
    <div className="briefing-grid briefing-grid-confirmed">

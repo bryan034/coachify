@@ -27,14 +27,12 @@ function setupStep(c: Comparison): Step | null {
 export function EvaluateBanner({ comparison: c, here }: { comparison: Comparison; here: Page }) {
  if (c.error && !c.current) return <section className="evaluate-banner is-setup" role="alert"><div><h2>Your evaluation could not be loaded</h2><p>{c.error}</p></div><div className="evaluate-banner-actions"><button type="button" className="btn" onClick={c.retry}>Reload</button></div></section>;
  if (!c.current || !c.context || c.result) return null;
- // An earlier evaluation from changed inputs is announced on every page by ChangeBanner.
+ // An earlier evaluation from changed inputs is updated automatically by ChangeBanner.
  if (c.current.result && c.context.ready && c.current.result.input_hash !== c.context.input_hash) return null;
  const role = c.context.goal?.role;
  const operation = c.current.operation;
- if (operation && ['pending', 'running'].includes(operation.status)) return <section className="evaluate-banner" aria-busy="true" aria-labelledby="evaluate-banner-title">
-  <span className="evaluate-banner-mark is-busy" aria-hidden="true"/>
-  <div><h2 id="evaluate-banner-title">Evaluating your skills{role ? ` against ${role}` : ''}</h2><p role="status">This usually takes a minute or two. You can leave this page and come back.</p></div>
- </section>;
+ // Progress is shown once, at the top of the page, by ChangeBanner.
+ if (operation && ['pending', 'running'].includes(operation.status)) return null;
  const step = setupStep(c);
  if (step) return <section className="evaluate-banner is-setup" aria-labelledby="evaluate-banner-title">
   <span className="evaluate-banner-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 8v5M12 16.5v.01M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18"/></svg></span>
