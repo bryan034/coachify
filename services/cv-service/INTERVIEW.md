@@ -159,6 +159,12 @@ Source additions/removals may change the topic set; a reviewed topic does not va
 just because its clarification filled the original gaps. Manual intake reports its
 four background areas as topics through the same progress response.
 
+A section that failed extraction validation is always a topic, of any kind, with
+`validation: "unverified"`. Its extracted text reaches the planner as unconfirmed
+context (`focused_source.validation_issue`). Before the first question about it the
+backend adds a fixed notice that it is better explained in chat. The user's answer
+or correction clears the flag.
+
 The chat starts/resumes questions automatically on opening; completed reviews do
 not restart. Ordinary clarification receipts are hidden, and genuine processing
 failures use compact recovery. An old evidence-alignment failure gets one automatic

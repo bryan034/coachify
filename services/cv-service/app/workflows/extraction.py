@@ -9,6 +9,7 @@ from app.domain.extraction_errors import ExtractionFailure
 from app.domain.model_usage import ModelAdmissionError
 from app.domain.extraction_feedback import feedback_for
 from app.domain.review_context import prepare_review_items
+from app.domain.partial_validation import salvage
 
 WORKFLOW_VERSION = 'cv-extraction-6'
 
@@ -19,15 +20,16 @@ class ExtractionState(TypedDict, total=False):
     metadata: dict
     items: list
     other_information: list
+    partial_notices: list
     feedback: list
     needs_repair: bool
     repair_attempts: int
 
 
 class ExtractionHarness:
-    def __init__(self, cv_id, parse, call_model, observe, *, checkpointer, thread_id, verify_evidence=None, rewind_rejected=False):
+    def __init__(self, cv_id, parse, call_model, observe, *, checkpointer, thread_id, verify_evidence=None, rewind_rejected=False, allow_partial=False):
         self.cv_id, self.parse, self.call_model, self.observe = cv_id, parse, call_model, observe
-        self.thread_id, self.rewind_rejected = thread_id, rewind_rejected
+        self.thread_id, self.rewind_rejected, self.allow_partial = thread_id, rewind_rejected, allow_partial
         self.original = None
         self.verify_evidence = verify_evidence
         self.repair_attempted = False
@@ -56,8 +58,8 @@ class ExtractionHarness:
 
     def _validate(self, state):
         self.observe('extraction_validation')
+        blocks, support = state['parsed']['blocks'], None
         try:
-            blocks = state['parsed']['blocks']
             pending = evidence_requiring_semantic_check(state['candidate'], blocks)
             support = self.verify_evidence(blocks, pending) if pending and self.verify_evidence else frozenset()
             # Approval is scoped to the exact source/summary pair, never a broad
@@ -68,7 +70,12 @@ class ExtractionHarness:
         except (ExtractionFailure, ModelAdmissionError):
             raise
         except (ValidationError, ValueError) as error:
-            if state['repair_attempts'] >= 1: raise
+            if state['repair_attempts'] >= 1:
+                # Out of retries: keep what verified, flag what did not, rather than losing the upload.
+                kept = salvage(state['candidate'], blocks, self.cv_id, self.verify_evidence, support) if self.allow_partial else None
+                if kept is None: raise
+                return {'items': kept.items, 'other_information': kept.other_information,
+                        'partial_notices': kept.notices, 'needs_repair': False}
             return {'feedback': feedback_for(error), 'needs_repair': True}
         return {'items': items, 'other_information': other, 'needs_repair': False}
 

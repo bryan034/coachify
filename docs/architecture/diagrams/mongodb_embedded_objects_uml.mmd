@@ -377,7 +377,14 @@ class CvItem {
     +Boolean ongoing
     +SkillClaim[] skill_claims
     +ReviewFact[] review_evidence [extraction_and_clarification]
+    +ValidationIssue validation_issue? [unverified section kept after failed validation]
     +Boolean removed
+}
+
+class ValidationIssue {
+    +String status [unverified]
+    +String code
+    +String message
 }
 
 class SkillClaim {

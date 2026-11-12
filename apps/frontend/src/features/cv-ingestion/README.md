@@ -203,7 +203,12 @@ Uploaded-CV review resumes persistent interview progress from the CV service.
 Reopening an active review restores its current question. A paused review offers
 **Continue review**. A completed review offers **Review profile**, which opens the
 classified results. A segmented progress bar counts experience and project topics.
-Follow-up questions stay in the same topic. Processing and failed evidence updates
+A topic whose section failed extraction validation is highlighted yellow in the sidebar
+with a "Warning · could not be verified" label, and a summary above the list says how
+many sections need explaining, which stays visible when the list is hidden on small
+screens. The same sections carry a "Warning · unverified" pill and note in the extracted
+review, with their extracted text kept. The chat says again, once, that the section is
+better explained there. Follow-up questions stay in the same topic. Processing and failed evidence updates
 offer explicit retry. Agent questions, evidence updates and stopping
 decisions are backend-owned. Chat displays source-specific skill estimates as
 conversation-based judgments, while the summary exposes structured roles,

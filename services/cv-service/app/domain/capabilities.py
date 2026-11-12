@@ -325,6 +325,8 @@ def effective_items(document):
         active = [claim for claim in claims if claim['attribution'] not in {'team', 'observed', 'denied'}]
         item['skill_ids'], item['skill_names'] = [c['skill_id'] for c in active], [c['name'] for c in active]
         item['support_uncertain'] = any(claim['support_uncertain'] for claim in active)
+        # The user's own explanation or correction resolves an unverified section.
+        if item['provenance'] in {'user_clarified', 'user_corrected'}: item.pop('validation_issue', None)
         # The item-wide legacy fields only describe a single skill unambiguously.
         if len(active) == 1:
             item['proficiency'], item['experience_months'] = active[0]['proficiency'], active[0]['experience_months']

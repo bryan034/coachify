@@ -205,3 +205,12 @@
 }
 /* Phones keep the transcript tall: the segmented bar stands in for the topic list. */
 @media (max-width:899px){.cv-review-rail{padding:6px 14px;gap:4px}.cv-review-rail .cv-topic-checklist{display:none}.cv-review-rail .cv-inline-confirmation{padding:0;border:0;background:none;font-size:12px;line-height:1.4}}
+
+/* Sections that could not be verified: yellow, with a text label so colour is never the only cue. */
+.cv-review-rail,.cv-item{--flag-bg:#fff6d6;--flag-line:#e3bd3c;--flag-ink:#5c4600}
+.cv-rail-warning{margin:0;padding:10px 12px;border:1px solid var(--flag-line);border-radius:10px;background:var(--flag-bg);color:var(--flag-ink);font-size:13px;line-height:1.5}
+.cv-topic-checklist li.is-warning .cv-topic-mark{background:var(--flag-bg);border-color:var(--flag-line);color:var(--flag-ink);font-weight:700}
+.cv-topic-checklist li.is-warning small.cv-topic-warning{color:var(--flag-ink)}
+.cv-review-rail .cv-topic-checklist li.is-warning{margin:-6px -8px;padding:6px 8px;border:1px solid var(--flag-line);border-radius:10px;background:var(--flag-bg)}
+.cv-flag{margin:8px 0;padding:10px 12px;border:1px solid var(--flag-line);border-radius:10px;background:var(--flag-bg);color:var(--flag-ink);font-size:13px;line-height:1.5}
+.cv-flag-pill{background:var(--flag-bg);color:var(--flag-ink);border:1px solid var(--flag-line)}
