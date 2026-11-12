@@ -20,13 +20,11 @@ def batch(refs, **levels):
         'components': [{'dimension': 'capability', 'status': 'uncertain', 'explanation': 'Synthetic.', 'evidence_refs': refs}], **levels}])
 
 
-def test_model_levels_become_a_rubric_v1_ratio():
-    [outcome] = validate_batch(batch(['cv:item1:claim:0'], demonstrated_level=6, required_level=8, score_explanation='You built an API alone.'), [REQUIREMENT], EVIDENCE)
-    assert (outcome['competence_score'], outcome['demonstrated_score'], outcome['required_score']) == (8, 6, 8)
-    assert outcome['scoring_rubric_version'] == 'llm-ratio-v1' and outcome['score_explanation'] == 'You built an API alone.'
+def test_model_levels_cannot_inflate_the_evidence_or_lower_the_role_target():
+    [outcome] = validate_batch(batch(['cv:item1:claim:0'], demonstrated_level=10, required_level=2), [REQUIREMENT], EVIDENCE)
+    assert (outcome['competence_score'], outcome['demonstrated_score'], outcome['required_score']) == (3.7, 3, 8)
+    assert outcome['scoring_rubric_version'] == 'evidence-role-v2'
     assert outcome['relevance'] == 'high' and outcome['score_status'] == 'estimated'
-    [capped] = validate_batch(batch(['cv:item1:claim:0'], demonstrated_level=9, required_level=6), [REQUIREMENT], EVIDENCE)
-    assert capped['competence_score'] == 10
 
 
 def test_a_demonstrated_level_needs_cited_personal_evidence():
@@ -37,7 +35,7 @@ def test_a_demonstrated_level_needs_cited_personal_evidence():
 
 def test_only_a_required_level_leaves_the_score_unknown():
     [outcome] = validate_batch(batch([], required_level=8), [REQUIREMENT], EVIDENCE)
-    assert outcome['competence_score'] is None and outcome['scoring_rubric_version'] == 'application-ratio-v1'
+    assert outcome['competence_score'] is None and outcome['scoring_rubric_version'] == 'evidence-role-v2'
 
 
 def test_levels_are_ignored_outside_job_skills():
@@ -58,7 +56,7 @@ def test_goal_skills_link_to_profile_skills_and_borrow_their_estimate_only_when_
                 {'ref': 'interview:1', 'kind': 'interview_preparation'}]
     testing, python, docker, interview = link_profile(outcomes, profile)
     assert [s['name'] for s in testing['profile_skills']] == ['pytest'] and testing['competence_score'] == 5
-    assert testing['scoring_rubric_version'] == 'profile-link-v1' and 'pytest' in testing['score_explanation']
+    assert testing['scoring_rubric_version'] == 'evidence-role-v2' and 'pytest' in testing['score_explanation']
     assert python['competence_score'] == 9 and python['scoring_rubric_version'] == 'llm-ratio-v1'
     assert python['profile_skills'][0]['name'] == 'Python'
     assert docker['profile_skills'] == [] and docker['competence_score'] is None

@@ -319,3 +319,5 @@ include schema field paths and issue codes, never rejected values. Employer adve
 with duties/qualification sections get one scope recheck after a negative
 classification; application instructions, resume references and AI duties are job
 content. Source grounding and unrelated-task rejection still apply.
+
+Career Goal skills include planning competence targets calibrated from JD wording and fresh cited public preparation research; see [the specification](SPECIFICATION.md#role-competence-targets).

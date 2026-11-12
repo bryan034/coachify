@@ -16,10 +16,9 @@ test('manual-only chat persists without a fake CV and recovers saved failed mess
   const account = await createLocalAccount(page, 'Synthetic manual-only chat');
   const profile = await (await account.get('/api/v1/profile')).json();
   expect((await account.finish({expected_version: profile.version, occupational_status: 'employed', no_previous_education: true})).ok()).toBeTruthy();
-  await page.goto('/cv');
-  await page.getByRole('button', {name: /^Build through chat/}).click();
+  await page.goto('/cv?review=manual');
   await expect(page.getByRole('list',{name:'Saved conversation messages'})).toContainText('What can you share about your work?');
-  expect((await readChat(account,null)).active_question?.question).toContain('What can you share about your work?');
+  expect((await readChat(account,null)).messages.filter(message=>message.role==='assistant').map(message=>message.text).join('\n')).toContain('What can you share about your work?');
   await sendChat(page, manualMessage);
   const draft = await (await account.get('/api/v1/profile/skills-profile')).json();
   expect(draft.status).toBe('draft');
@@ -33,7 +32,7 @@ test('manual-only chat persists without a fake CV and recovers saved failed mess
   await page.getByRole('button', {name: /^Update through chat/}).click();
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   await expect(page.getByRole('list',{name:'Saved conversation messages'})).toContainText('What can you share about your work?');
-  expect((await readChat(account,null)).active_question?.question).toContain('What can you share about your work?');
+  expect((await readChat(account,null)).messages.filter(message=>message.role==='assistant').map(message=>message.text).join('\n')).toContain('What can you share about your work?');
   const resumed = await readChat(account, null);
   // Publishing changes Profile's revision; reopening asks the current question
   // again while preserving every saved factual turn and its action receipts.

@@ -1629,6 +1629,22 @@
             },
             "type": "array",
             "title": "Profile Skills"
+          },
+          "score_confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Confidence"
           }
         },
         "additionalProperties": true,

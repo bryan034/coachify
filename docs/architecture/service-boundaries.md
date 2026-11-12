@@ -239,5 +239,7 @@ Jobs owns live public board aggregation and private application snapshots in its
 Phase 2 allows Assessment to capture saved Profile declarations without a selected
 CV. Its source-mode and nullable CV revisions distinguish that snapshot from the
 CV-plus-Profile path; a selected invalid CV never silently falls back. Goal-relative
-comparison/scoring belongs to Assessment. The additive score fields remain null
-pending an approved rubric; CV continues owning goal-independent source estimates.
+comparison/scoring belongs to Assessment. Assessment applies the approved evidence-role-v2 rubric; CV continues owning
+goal-independent source estimates.
+
+Career owns role competence targets and public-research calibration; CV owns quoted skill self-rating facts. Assessment reads both through the existing APIs and enforces evidence-role-v2 ceilings, with absolute evidence levels separate from role-relative progress. Self-ratings never override assessed evidence. No new service, collection or cross-database access is introduced.

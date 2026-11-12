@@ -29,7 +29,7 @@ def public_opportunity(goal):
     employment=employment if employment!='unknown' else next((value for pattern,value in [(r'\bintern(?:ship)?\b','internship'),(r'\bfull[ -]time\b','full_time'),(r'\bpart[ -]time\b','part_time'),(r'\bcontract\b','contract')] if re.search(pattern,text,re.I)),'unknown')
     context={'company':goal.company,'role':goal.role,'field':goal.field,'location':goal.location,'seniority_level':goal.seniority_level,
              'employment_type':employment,'job_url':public_job_url(goal.job_url),
-             'skill_hints':sorted({s.name for s in goal.skills if s.origin!='user_declaration'})[:8]}
+             'skill_hints':sorted({s.name for s in goal.skills if s.origin!='user_declaration'})[:60]}
     # Never send interests, preferences, CV, account details, raw JD or chat to shared research.
     canonical={k:' '.join(v.casefold().split()) if isinstance(v,str) else v for k,v in context.items()}
     canonical['requirements_hash']=fingerprint({'responsibilities':goal.responsibilities,'conditions':[v.model_dump(mode='json') for v in goal.non_skill_requirements]})

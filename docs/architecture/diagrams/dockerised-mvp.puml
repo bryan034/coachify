@@ -87,6 +87,10 @@ Roadmap --> LLM : Settings chat and schema-constrained plans, with bounded valid
 
 note bottom of Career
   One career_goals model: specific_job or career_exploration.
+  Career calibrates skill targets from JD wording and fresh cited public role research.
+  CV review captures optional 1-10 skill self-ratings in source-owned facts.
+  Assessment applies evidence ceilings (ambiguous project 3, independent successful delivery 5)
+  and role-relative progress; self-ratings cannot override assessed evidence.
   Discovery synthesis/refinements publish automatically with selection/conversation guards; no chat save action.
   CV acknowledgement binds the exact current goal/version/selection.
   Automatic goal saves do not silently confirm CV context.

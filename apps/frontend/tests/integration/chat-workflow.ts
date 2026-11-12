@@ -53,7 +53,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   await chapter('1. Review your saved CV through a conversation', 'This is a synthetic account and model, using real local services and saves. The CV and Career target were explicitly selected before this walkthrough.', chat);
   await expect(chat.locator('.cv-chat-transcript .cv-chat-message-assistant').last()).toContainText('Team dashboard');
-  await expect(chat).toContainText('You can review your experience now.');
+  await expect(chat.getByRole('button',{name:'Skip this question',exact:true})).toBeEnabled();
   await chapter('2. One focused question', 'elo asks about the project contribution independently of the saved Career target. You can answer naturally, ask why, or skip.', chat.locator('.cv-chat-transcript .cv-chat-message-assistant').last());
   await sendChat(page, chatAnswer);
   await expect.poll(async () => (await readCv()).skills.find(skill => skill.skill_id === 'skill:python')?.experience_months).toBe(6);

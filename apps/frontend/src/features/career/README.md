@@ -158,3 +158,11 @@ Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview
   card was removed on 11 November 2026.
 - Both research tabs carry the accuracy warning. The per-finding quote disclosure and the
   per-category refresh buttons were removed; refresh covers the tab's research.
+
+After **Extract career goal**, the goal conversation (`job-review-chat.tsx`) shows the shared
+"Skills needed" processing screen (`ProcessingCard`) while the goal is extracted, the role is
+researched and the summary is prepared. Steps and progress come from the observed workspace phase
+and server activities. The chat and composer open once the summary is ready; refinement
+(`?refine=1`) and failed or empty states go straight to the chat.
+
+Skill rows show a current-position marker and a labelled 10/10 goal endpoint before expansion. Details separate the evidence level from the stricter role target, show estimate confidence and target-source links, and explain that 10/10 satisfies this specific role’s goal. Only 10 receives the target-met band. Old rubric comparisons are stale until explicitly evaluated again.

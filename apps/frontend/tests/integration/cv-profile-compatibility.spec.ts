@@ -47,7 +47,7 @@ for (const scenario of cases) {
     await openCvReviewTools(page);
     await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // Skills Profile rechecks saved CVs when the window regains focus.
     page.once('dialog', dialog => dialog.accept());
-    await page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByRole('button', { name: 'Make active', exact: true }).click();
+    await expect(page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByText('Active CV',{exact:true})).toBeVisible();
     await expect(page.getByLabel('Selected CV', { exact: true })).toContainText(cvId);
     await expect(page.getByText(`Source Profile version ${background.version}`, { exact: false })).toBeVisible();
     const saved = await (await account.get(`/api/v1/cv/${cvId}`)).json();

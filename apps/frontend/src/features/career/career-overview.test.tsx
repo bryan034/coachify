@@ -251,3 +251,16 @@ it('shows the model\'s levels and the linked Skills Profile skills on a goal ski
  fireEvent.click(screen.getByRole('button',{name:'Teamwork'}));
  expect(screen.getByText('No skill in your Skills Profile covers this yet.')).toBeVisible();
 });
+it('marks the current position before expansion and reserves target met for 10',()=>{
+ const outcome={ref:'job:sql',name:'SQL',match_status:'partial' as const,components:[],competence_score:6.2,demonstrated_score:5,required_score:8,score_confidence:'medium' as const,score_status:'estimated' as const};
+ const target={level:8,basis:'job_description' as const,explanation:'Familiarity requires role-ready application.',source_urls:[]};
+ render(<LearningFocus skills={[{...extraction.skills[0],competence_target:target}]} outcomes={{sql:outcome}}/>);
+ expect(screen.getByRole('meter',{name:'SQL progress towards this role'})).toHaveAttribute('aria-valuenow','6.2');
+ expect(screen.getByText('Current 6.2/10')).toBeVisible();
+ expect(screen.getByText('Goal 10/10')).toBeVisible();
+ expect(document.querySelector('.goal-skills-summary')).toHaveTextContent('0 ready');
+ fireEvent.click(screen.getByRole('button',{name:'SQL'}));
+ expect(screen.getByText('Role competence target: 8/10')).toBeVisible();
+ expect(screen.getByText('You: about 5 / 10 · role needs about 8 / 10')).toBeVisible();
+ expect(screen.getByText(/10\/10 means the goal is satisfied for this specific job role, based/)).toBeVisible();
+});

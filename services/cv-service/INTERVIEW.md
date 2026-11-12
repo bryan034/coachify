@@ -198,7 +198,7 @@ parent receipt’s private `_interview_planning` list (at most six events per at
 with a content-free log event. No reply, question, skill name, CV text, raw provider
 output or schema input is logged. Exhaustion returns a fixed explanation of its last
 rejection category. Earlier failures without diagnostics cannot be reconstructed
-from the generic saved error. Prompt provenance is `cv-interview-13`.
+from the generic saved error. Prompt provenance is `cv-interview-14`.
 
 Internal IDs remain in structured backend fields. Prompts prohibit IDs in visible
 replies/estimate explanations; the frontend also filters opaque source references
@@ -387,3 +387,17 @@ is `reviewed` only with proven ownership; a topic that used all three questions
 closes `reviewed_with_gaps`. The planner sees per-source `enough_context` and the
 titles in `just_completed_topics`, and the focus stays on the closed topic for that
 turn so its evidence can be cited in the handover.
+
+## Skill self-ratings during review
+
+Within the existing three-question topic budget, review also invites a 1–10 baseline
+for each named personal skill, grouped with a relevant application/independence
+question where possible. `self_rating` facts require the explicit skill name, a
+whole-number string 1–10 and an exact answer quote. General confidence is never
+converted into a rating. Skips remain unknown; answered/skipped ratings are not
+asked again. An otherwise complete source can still invite its missing baseline;
+early completion now includes a supplied or explicitly declined baseline. Existing
+exhausted/completed topics are not silently reopened. CV baseline levels continue
+to derive from capability facts; a self-rating cannot change them. Assessment reads
+these review facts through the existing versioned handoff and applies its own
+evidence-based rubric, which takes precedence over the user's rating.

@@ -109,3 +109,5 @@ Users may skip review questions, leaving targeted ownership/details uncertain.
 Skipped ownership can close with gaps and does not block moving to another project.
 A failed planner step offers Skip and continue without resubmitting saved answers.
 See [skip recovery](INTERVIEW.md#skips-uncertain-ownership-and-recovery).
+
+Guided review also invites a quoted 1–10 skill self-rating as a rough baseline within its existing question budget; evidence-based assessment takes precedence. See [the interview policy](INTERVIEW.md#skill-self-ratings-during-review).

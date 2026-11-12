@@ -383,15 +383,16 @@ def test_manual_only_snapshot_uses_published_declarations_and_tracks_revision():
     assert asyncio.run(capture(source,account))['input_hash']!=snapshot['input_hash']
 
 
-def test_score_remains_unknown_without_explicit_evidence_and_required_levels():
+def test_independence_without_success_gets_a_conservative_level_against_role_target():
     sources=Sources()
     snapshot=asyncio.run(capture(sources,asyncio.run(sources.account('synthetic'))))
     output=asyncio.run(Interpreter().generate(Batch,'',snapshot))
     outcome=validate_batch(output,snapshot['requirements'],snapshot['evidence'])[0]
-    assert outcome['competence_score'] is None
+    assert outcome['competence_score']==5
+    assert outcome['demonstrated_score']==4 and outcome['required_score']==8
     assert outcome['relevance']=='high'
-    assert outcome['scoring_rubric_version']=='application-ratio-v1'
-    assert outcome['score_status']=='insufficient_evidence'
+    assert outcome['scoring_rubric_version']=='evidence-role-v2'
+    assert outcome['score_status']=='estimated'
 
 
 def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
@@ -414,9 +415,9 @@ def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
         assert state['operation']['status']=='succeeded',state
         assert not state['stale']
         assert state['result']['inputs']['cv_id'] is None
-        # The declaration has no application level, so the score comes from its linked Skills Profile judgement.
+        # The declaration supplies basic personal use, not evidence of independent successful delivery.
         python=state['result']['job_skill_gaps'][0]
-        assert python['scoring_rubric_version']=='profile-link-v1' and python['competence_score']==9
+        assert python['scoring_rubric_version']=='evidence-role-v2' and python['competence_score']==3.7
         assert python['profile_skills'][0]['name']=='Python'
 
 
@@ -439,3 +440,45 @@ def test_reserved_score_contract_rejects_out_of_range_values():
     output=asyncio.run(Interpreter().generate(Batch,'',snapshot))
     outcome=validate_batch(output,snapshot['requirements'],snapshot['evidence'])[0]
     with pytest.raises(ValidationError):Outcome.model_validate({**outcome,'competence_score':11})
+
+
+def test_previous_rubric_results_are_stale_without_rewriting_history():
+    from elo_shared.runtime import digest
+    store=MemoryStore();model=Interpreter()
+    with TestClient(create_app(store,Sources(),model)) as client:
+        client.post('/api/v1/assessments',headers=H,json={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True})
+        saved=finish(client)
+        row=store.load(OWNER)
+        row['result']['input_hash']=digest(row['result']['inputs'])
+        row['result']['job_skill_gaps'][0]['competence_score']=10
+        store.cas(OWNER,row['version'],row)
+        current=client.get('/api/v1/assessments/current',headers=H).json()
+        assert current['stale'] and current['result']['job_skill_gaps'][0]['competence_score']==10
+        assert model.calls==1
+
+
+def test_retry_discards_pre_v2_scores_only_when_source_revisions_still_match():
+    from elo_shared.runtime import digest
+    class Failing(Interpreter):
+        fail=True
+        async def generate(self,schema,instructions,context):
+            if schema is SkillBatch and self.fail: raise Problem('Synthetic failure.',503,'model_provider')
+            return await super().generate(schema,instructions,context)
+    model=Failing();store=MemoryStore()
+    body={'expected_version':0,'mutation_id':str(uuid4()),'allow_partial':True}
+    with TestClient(create_app(store,Sources(),model)) as client:
+        client.post('/api/v1/assessments',headers=H,json=body)
+        assert finish(client)['operation']['status']=='failed'
+        row=store.load(OWNER)
+        checkpoint=row['last_operation']['checkpoint']
+        checkpoint.pop('scoring_rubric')
+        checkpoint['input_hash']=digest(checkpoint['snapshot']['inputs'])
+        checkpoint['outcomes'][0]['competence_score']=10
+        # Preserve the failed-at version, just as loading an existing saved row would.
+        with store.lock: store.data[OWNER]=copy.deepcopy(row)
+        model.fail=False
+        client.post('/api/v1/assessments',headers=H,json=body)
+        current=finish(client)
+        assert current['operation']['status']=='succeeded'
+        assert current['result']['job_skill_gaps'][0]['competence_score']==5
+        assert model.calls==2

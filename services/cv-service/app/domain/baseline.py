@@ -65,8 +65,10 @@ def baseline_targets(item):
     result, owner_missing = [], False
     claims = item.get('skill_claims') or [{'name': name} for name in item.get('skill_names', [])]
     for claim in claims:
+        facts=skill_facts(item,claim['name'])
+        if claim.get('attribution') not in {'team','observed','denied'} and not any(f['field']=='self_rating' for f in facts):
+            result.append({'field':'self_rating','skill_name':claim['name'],'reason':'self_reported_baseline'})
         if estimate_skill(item, claim)['level'] != 'insufficient_evidence': continue
-        facts = skill_facts(item, claim['name'])
         if claim.get('attribution') in {'team', 'observed', 'denied'}: continue
         if any(f['status'] in {'unknown', 'skipped', 'not_applicable'} and f['field'] in
                {'personal_contribution', 'assistance', 'skill_use'} for f in facts): continue

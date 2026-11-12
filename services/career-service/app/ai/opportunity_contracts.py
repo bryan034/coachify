@@ -171,7 +171,7 @@ FIELD_GUIDANCE={
   'interview_questions':'Actual reported questions or assessment tasks; never generated practice questions. Write one question or task per finding, phrased directly.',
   'difficulty':'Explicitly reported interview difficulty; do not infer from a job title. State the level first; add a reason only when the excerpt gives one.',
   'application_timeline':'Application windows, recruitment dates or reported response/process duration; not page retrieval time. Put the duration or date first.',
-  'preparation_topics':'Skills or subjects explicitly tested or recommended for this interview. Write one verb-led action naming a specific subject per finding.',
+  'preparation_topics':'Skills or subjects explicitly tested or recommended for this role/interview. Use skill_hints to research expected competence depth: familiarity, independent successful application, advanced/complex work or expert mastery. Name the exact skill and preserve the depth stated by its cited passage. Never invent a numeric employer pass mark. Write one subject per finding.',
   'round_format':'What one interview round consists of as reported: its format, length, interviewers or tasks. State only those details, not the round name again.'},
  'internship_insights':{
   'compensation':'Intern salary/stipend, currency and pay period; express pay per month, converting any annual figure to monthly (divide by 12, keep currency, note it is converted); do not convert employee pay into intern pay.',
@@ -205,7 +205,7 @@ field, division/programme, company, location and seniority; preserve the meaning
 identity. Use relevant role-specific vocabulary, never default every role to technology.
 For example investment banking may need valuation/accounting/deals, while software
 engineering may need coding/algorithms/APIs. Never mix banking divisions or programmes.
-1 interview_intelligence: every interview round and its order, the format of each round, and actual questions asked in each.
+1 interview_intelligence: every interview round and its order, the format of each round, actual questions asked, and expected depth/competence of the named skill_hints. Include a complementary query about role-specific skill proficiency and practical expectations; prefer official employer descriptions and role competency frameworks. Never search private CV facts.
 2 internship_insights: interns' actual work, projects, responsibilities, mentorship and workload.
 3 career_progression: roles/progression after internship and rough full-time conversion salary;
 search graduate pay if conversion pay is unavailable but distinguish it during extraction.

@@ -3,6 +3,7 @@ import asyncio
 import copy
 import hashlib
 import json
+import logging
 import math
 import os
 import time
@@ -323,6 +324,8 @@ async def run_operation(app,owner,token,worker):
         except asyncio.CancelledError: raise
         except Exception as exc:
             error=exc if isinstance(exc,Problem) else Problem('The operation could not finish. Retry your saved request.',503,'operation_failed')
+            # Only the fixed problem code and message are logged, never request content.
+            logging.getLogger('uvicorn.error').warning('Operation %s failed: %s (%s)',pending.get('kind'),error.detail,error.code,**({'exc_info':exc} if not isinstance(exc,Problem) else {}))
             current=await run_in_threadpool(app.state.store.load,owner)
             if (current.get('pending') or {}).get('token')!=nonce: return
             failed_pending=current['pending']

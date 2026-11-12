@@ -18,6 +18,7 @@ class CvSkill {
 }
 
 class TargetSkill {
+    +CompetenceTarget competence_target?
     +String item_id?
     +String skill_id? [legacy registry]
     +String canonical_skill_id?
@@ -519,7 +520,8 @@ class RequirementOutcome {
     +String mapping_reason
     +String recommendation?
     +String relevance?
-    +Number competence_score? [rubric v1 ratio, 10 = meets goal level]
+    +Number competence_score? [evidence-role-v2, 10 = meets role target]
+    +String score_confidence?
     +Number demonstrated_score?
     +Number required_score?
     +String score_explanation?
@@ -530,7 +532,7 @@ skill_gap_analyses *-- RequirementOutcome : assessment-v1 outcomes
 RequirementOutcome *-- AssessmentComponent
 class SkillProfileEvaluation {
     +String status [evaluated|partial|failed|empty]
-    +String rubric_version [skill-profile-llm-v1]
+    +String rubric_version [evidence-role-v2]
     +EvaluatedSkill[] skills
 }
 class EvaluatedSkill {
@@ -801,3 +803,13 @@ job_applications *-- JobStatusChange
 
 %% Assessment InputVersions: source_mode=cv_and_profile|profile_only; CV id/extraction/effective versions nullable for profile_only.
 %% Job-skill outcomes carry LLM-judged levels (llm-ratio-v1), a profile-linked fallback (profile-link-v1) or the application-ratio-v1 estimate; null means unknown, never zero.
+
+class CompetenceTarget {
+    +Integer level [1..10; familiarity_minimum_8]
+    +String basis [job_description|research|inferred]
+    +String explanation
+    +String[] source_urls
+}
+TargetSkill *-- CompetenceTarget
+note for CompetenceTarget "Career prepares role targets; current workspace and Assessment handoff enrich them from fresh cited public preparation research. Public research never reads private CV evidence."
+note for ReviewFact "self_rating is an explicitly stated skill-specific whole number 1..10, saved as a string with an exact answer quote. It informs review but never overrides evidence-based competence."

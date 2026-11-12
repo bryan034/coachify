@@ -1012,7 +1012,8 @@
             "recency",
             "frequency",
             "limitations",
-            "replication_confidence"
+            "replication_confidence",
+            "self_rating"
           ],
           "title": "Field",
           "type": "string"

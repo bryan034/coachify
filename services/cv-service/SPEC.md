@@ -20,7 +20,7 @@ Corrections retain original evidence and source item identity. Canonical skill I
 
 Default maximum is 10 MiB, returned by `/policy` and enforced against file bytes inclusively. The API accepts PDF/DOCX multipart uploads with a UUID `mutation_id`; renamed/empty/unsupported files fail clearly. Complete parsing happens in a child process with a 20-second wall deadline, Linux CPU/address-space limits, at most 100 PDF pages, 1,000 ZIP entries, 32 MiB expanded DOCX content, and 100,000 extracted characters. Encrypted files, unsafe XML, macros and image-only CVs fail with recovery guidance. OCR is unsupported.
 
-Upload admission also reserves saved-record and original-byte capacity before writing a file. Defaults are 50 saved CVs and 100 MiB of retained original bytes per account, with 10,000 saved CVs and 10 GiB of originals across the service. Saved-record capacity includes failed uploads and remains charged after the original expires; byte capacity is returned only after physical deletion. Exact upload retries reuse the same CV identity/reservation. Exact-byte resupply of an existing original does not consume a second file allowance. `/policy` exposes `max_saved_cvs` and `max_stored_original_bytes`. A full limit returns 409 with `code=cv_capacity_exceeded` and recovery guidance; uncertain admission returns 503 with `code=cv_capacity_unavailable`.
+Upload admission also reserves saved-record and original-byte capacity before writing a file. Defaults are 3 saved CVs and 100 MiB of retained original bytes per account, with 10,000 saved CVs and 10 GiB of originals across the service. Saved-record capacity includes failed uploads and remains charged after the original expires; byte capacity is returned only after physical deletion. Exact upload retries reuse the same CV identity/reservation. Exact-byte resupply of an existing original does not consume a second file allowance. `/policy` exposes `max_saved_cvs` and `max_stored_original_bytes`. A full limit returns 409 with `code=cv_capacity_exceeded` and recovery guidance; uncertain admission returns 503 with `code=cv_capacity_unavailable`.
 
 `GET /api/v1/cv` returns lightweight metadata, the unchanged explicit selection and `next_cursor`. `limit` defaults to 25 and accepts 1–100; the opaque `cursor` advances by creation time and CV identity. MongoDB projects summary fields before loading the page, without reading full evidence/history aggregates. A selected CV may be outside the current page and remains directly readable by ID. Clients must follow `next_cursor` when they need the remaining list.
 
@@ -458,3 +458,11 @@ related failed planning receipts and proceeds to another uncovered project or
 completes with gaps. It neither resubmits answers nor skips failed evidence writes.
 CV versions/extraction generations/source fingerprints fence retry and correction
 races. Existing user history, ownership, leases and three-question budgets remain.
+
+### Skill self-rating baseline
+
+CV review invites quoted, skill-specific 1–10 `self_rating` facts within its existing
+three-question project budget. A rating is optional and never becomes independently
+assessed proficiency. Original answers and source scope are retained in existing
+review evidence; the Assessment API handoff includes these facts. See
+[the interview policy](INTERVIEW.md#skill-self-ratings-during-review).

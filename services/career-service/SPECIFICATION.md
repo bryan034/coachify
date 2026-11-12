@@ -152,3 +152,18 @@ The canonical goal stays the single active Career authority. Its automatic save 
 Projection preserves all bounded goal skills/requirements, their provenance and AND/OR groups. Qualification conditions may support neutral education clarification. Other categories remain generic requirements with conservative exact-description relevance; the service does not infer eligibility/location from unrelated CV text. Unknown values stay unknown. See the [Career README](README.md#explicit-cv-clarification-context--c-series-integration) for endpoints and the generated contract for exact schemas.
 
 CV context is read through its owner-authenticated API. The Career projection has a 512 KiB streaming/document admission bound, preserves complete evidence within that bound and rejects oversize clearly without truncation. It preserves source IDs rather than claiming registry equivalence or assessed mastery. Older UUID target records remain retained history; canonical storage metadata preserves compatibility with the old uniqueness index without index deletion or data migration.
+
+## Role competence targets
+
+Career prepares each skill's `competence_target` (level, basis, explanation, public
+source URLs). Familiarity means at least 8; advanced/proficient expectations 9 and
+expert mastery 10 on elo's planning scale. Explicit beginner expectations target 7;
+unstated expectations default to 8. These are planning estimates, never invented
+employer pass marks. The existing public interview research queries also seek the
+expected practical depth of named role skills. Current workspace and Assessment
+handoff projections use fresh, nonconflicting medium/high-confidence preparation
+findings with that exact skill in their cited passages; research can raise but not
+lower the target. Weak, stale or unrelated findings do not calibrate it. Related-role
+sources remain labelled advisory. No private CV or user self-ratings enter research.
+Original goal wording and research revision ownership remain unchanged; Assessment
+pins the goal/research versions and owns the evidence comparison.

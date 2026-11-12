@@ -76,7 +76,7 @@ export function SkillsProfileSummary({token, title, profile, cv, recentReview, d
   <EvaluateBanner comparison={comparison} here="/cv"/>
   {cv && reviewed && cv.status === 'ready' && <ReviewComplete cv={cv}/>}
   {cvCard}
-  {<div className="skills-entry-actions">{recentReview && recentReview.id !== cv?.id && <button type="button" className="btn ghost sm" onClick={() => review(recentReview.id)}>Review {recentReview.display_name ?? recentReview.file_name}</button>}<button type="button" className="btn ghost sm" onClick={build}>{profile?.status === 'draft' ? 'Continue building your profile through chat' : profile?.entries.length ? 'Update through chat' : 'Build through chat, no CV needed'}</button></div>}
+  {<div className="skills-entry-actions">{recentReview && recentReview.id !== cv?.id && <button type="button" className="btn ghost sm" onClick={() => review(recentReview.id)}>Review {recentReview.display_name ?? recentReview.file_name}</button>}{(profile?.status === 'draft' || !!profile?.entries.length) && <button type="button" className="btn ghost sm" onClick={build}>{profile?.status === 'draft' ? 'Continue building your profile through chat' : 'Update through chat'}</button>}</div>}
   <section className="skills-summary" id="your-skills" aria-label="Skills profile summary">
    {profile && profile.status !== 'empty' && <p className="small skills-saved-state">{profile.status === 'saved' ? 'Saved profile' : 'Draft saved'}</p>}
    {error && <div role="alert" className="cv-error"><p>{error}</p><button type="button" className="btn ghost sm" onClick={retry}>Retry skills profile</button></div>}

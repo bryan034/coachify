@@ -122,7 +122,7 @@ test('research tabs keep partial results, citations and refresh on mobile',async
  await expect(salary).toContainText('SGD 1500 per month');await expect(salary).not.toContainText('low confidence');
  await expect(salary.getByRole('link',{name:'Public intern report ↗'})).toHaveAttribute('href','https://example.test/report');
  await expect(page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Full-time salary'})})).toContainText('SGD 5000 monthly base salary, 2025');
- await expect(page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Conversion rate'})})).toContainText('Not filled yet.');
+ await expect(page.getByRole('region',{name:'Not filled yet',exact:true})).toContainText('Conversion rate');
  await expect(page.getByRole('note')).toContainText('may be inaccurate or out of date');
  await page.getByRole('button',{name:'Refresh research'}).click();
  await expect.poll(()=>refreshed).toBe(null);

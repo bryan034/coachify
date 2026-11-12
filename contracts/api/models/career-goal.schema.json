@@ -639,6 +639,17 @@
           "maxItems": 10,
           "title": "Source Urls",
           "type": "array"
+        },
+        "competence_target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompetenceTarget"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -648,6 +659,47 @@
         "origin"
       ],
       "title": "TargetSkill",
+      "type": "object"
+    },
+    "CompetenceTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Level",
+          "type": "integer"
+        },
+        "basis": {
+          "enum": [
+            "job_description",
+            "research",
+            "inferred"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "explanation": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "source_urls": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Source Urls",
+          "type": "array"
+        }
+      },
+      "required": [
+        "level",
+        "basis",
+        "explanation"
+      ],
+      "title": "CompetenceTarget",
       "type": "object"
     }
   },

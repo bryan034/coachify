@@ -112,7 +112,7 @@ it('shows a page-level reading screen with real progress while the only CV is pr
  expect(screen.getByText('Finding your experiences',{selector:'strong'}).closest('li')).toHaveAttribute('aria-current','step');
  expect(screen.getByText(/You can leave this page/)).toBeVisible();
  expect(await screen.findByText('Team dashboard',{selector:'strong'})).toBeVisible();
- expect(screen.queryByRole('heading',{name:'Upload your CV'})).not.toBeInTheDocument();
+ expect(screen.getByRole('heading',{name:'Upload your CV'})).toBeInTheDocument();
 });
 
 it('says the review is complete and points at the roadmap and jobs once the active CV is reviewed',async()=>{

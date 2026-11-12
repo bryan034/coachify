@@ -34,8 +34,8 @@ test('saved CV upload, explicit selection, correction, declaration and reload',a
  await page.goto('/cv');await openCvReviewTools(page);await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
  await page.getByLabel('CV document',{exact:true}).setInputFiles({name:'resume.pdf',mimeType:'application/pdf',buffer:Buffer.from('synthetic fixture; API mocked')});await page.getByRole('button',{name:'Upload CV',exact:true}).click();
  await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();await page.getByRole('button',{name:'Save and review later'}).click();
- await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'View extracted results',exact:true}).click();await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
- await expect(page.getByLabel('CV cv-two',{exact:true})).toBeVisible();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
+ await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'View extracted results',exact:true}).click();await expect(page.getByRole('heading',{name:'Extracted results',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Skills Profile',exact:true}).click();await expect(page.getByLabel('CV cv-two',{exact:true})).toBeVisible();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
  page.once('dialog',async dialog=>{expect(dialog.message()).toContain('If any roles or responsibilities are not clearly stated in your CV details');await dialog.dismiss();});await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'Make active'}).click();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');
  page.once('dialog',dialog=>dialog.accept());await page.getByLabel('CV cv-two',{exact:true}).getByRole('button',{name:'Make active'}).click();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-two');
  await page.getByRole('button',{name:'Edit or remove Team dashboard'}).click();await page.getByRole('textbox',{name:'Description',exact:true}).fill('I cleaned the data. My teammate built the dashboard.');await page.getByRole('button',{name:'Save correction'}).click();await expect(page.getByRole('main').getByRole('alert')).toContainText('interrupted');await expect(page.getByRole('textbox',{name:'Description',exact:true})).toHaveValue('I cleaned the data. My teammate built the dashboard.');await page.getByRole('button',{name:'Save correction'}).click();await expect(page.getByText('Your correction',{exact:true})).toBeVisible();
@@ -52,7 +52,7 @@ test('saved CV upload, explicit selection, correction, declaration and reload',a
 test('failed pending replacement preserves the selected source and offers processing retry',async({page})=>{
  await workspace(page);await page.route('**/api/v1/profile/capabilities',route=>route.fulfill({json:emptyDeclarations}));const first=savedCv('cv-one'),failed={...savedCv('cv-failed'),status:'failed' as const,error:{code:'provider_timeout',message:'Extraction timed out. Retry this file.',retryable:true}};
  await page.route('**/api/v1/cv{,/**}',route=>{const path=new URL(route.request().url()).pathname;if(path.includes('/conversations'))return route.fallback();if(path.endsWith('/policy'))return route.fulfill({json:policy});if(path==='/api/v1/cv')return route.fulfill({json:{cvs:[first,failed],selection:{cv_id:first.id,version:1}}});if(path.endsWith('/clarifications'))return route.fulfill({json:clarificationState(path.includes(first.id)?first:failed)});return route.fulfill({json:path.endsWith(first.id)?first:failed});});
- await page.goto('/cv');await openCvReviewTools(page);await page.getByLabel('CV cv-failed',{exact:true}).getByRole('button',{name:'View processing status'}).click();await expect(page.getByRole('heading',{name:'Processing failed: resume.pdf'})).toBeVisible();await expect(page.getByRole('button',{name:'Retry processing'})).toBeEnabled();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');await expect(page.getByLabel('CV cv-failed',{exact:true}).getByRole('button',{name:'Make active'})).toBeDisabled();
+ await page.goto('/cv');await openCvReviewTools(page);await page.getByLabel('CV cv-failed',{exact:true}).getByRole('button',{name:'View processing status'}).click();await expect(page.getByRole('heading',{name:'Processing failed: resume.pdf'})).toBeVisible();await expect(page.getByRole('button',{name:'Retry processing'})).toBeEnabled();await page.getByRole('button',{name:'Back to Skills Profile',exact:true}).click();await expect(page.getByLabel('Selected CV',{exact:true})).toContainText('cv-one');await expect(page.getByLabel('CV cv-failed',{exact:true}).getByRole('button',{name:'Make active'})).toBeDisabled();
 });
 
 
@@ -83,7 +83,7 @@ test('upload opens the review and save for later restores the same question afte
  const firstQuestion='Which parts of the dashboard did you personally build?';
  const nextQuestion='How did you check that the dashboard was accurate?';
  const answer='I wrote the data import script and checked the totals.';
- const conversation={id:'explicit-review',cv_id:'uploaded-profile-cv',purpose:'skills_profile',revision:1,read_only:false,previous_conversation_id:null,active_question:null as null|{id:string;item_id:string;title:string;question:string},context:null,messages:[] as object[],next_before:null,limits:{max_message_chars:4000,max_messages:500}};
+ const conversation={id:'explicit-review',cv_id:'uploaded-profile-cv',purpose:'skills_profile',revision:1,read_only:false,previous_conversation_id:null,active_question:null as null|{id:string;item_id:string;title:string;question:string;reason?:string},context:null,messages:[] as object[],next_before:null,limits:{max_message_chars:4000,max_messages:500}};
  const addMessage=(role:'user'|'assistant',text:string)=>{
   const sequence=conversation.messages.length+1;
   conversation.messages.push({id:`message-${sequence}`,sequence,role,text,created_at:'2026-11-02T00:00:00Z',actions:[]});
@@ -100,7 +100,7 @@ test('upload opens the review and save for later restores the same question afte
     if(body.command==='review'){
      reviewStarts++;
      addMessage('assistant',firstQuestion);
-     conversation.active_question={id:'personal-work',item_id:source!.items[0].id,title:'Team dashboard',question:firstQuestion};
+     conversation.active_question={id:'personal-work',item_id:source!.items[0].id,title:'Team dashboard',question:firstQuestion,reason:'This clarifies what you personally did in Team dashboard.'};
     }else{
      expect(body.text).toBe(answer);
      answers++;
@@ -137,13 +137,13 @@ test('upload opens the review and save for later restores the same question afte
  await expect(page.getByRole('progressbar',{name:'Reading your CV'})).toBeVisible();
  expect(opens).toBe(0);expect(reviewStarts).toBe(0);
  source={...source!,status:'ready'};
- await page.getByRole('button',{name:'Check progress'}).click();
+ // Processing polls the saved source and opens review automatically when ready.
  await page.setViewportSize({width:390,height:844});
  await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
  await expect(page.getByRole('list',{name:'Saved conversation messages'}).getByText(firstQuestion,{exact:true})).toBeVisible();
  expect(opens).toBe(1);expect(reviewStarts).toBe(1);
- await page.getByRole('button',{name:'Why this question?'}).click();
- await expect(page.getByText(/what you personally did in Team dashboard/)).toBeVisible();
+ await expect(page.getByRole('button',{name:'Why this question?'})).toHaveCount(0);
+ await expect(page.getByRole('list',{name:'Saved conversation messages'})).toContainText('Team dashboard');
  await page.getByRole('textbox',{name:'Message elo'}).fill(answer);
  await page.getByRole('button',{name:'Send message'}).click();
  await expect(page.getByText(nextQuestion,{exact:true})).toBeVisible();
@@ -154,12 +154,14 @@ test('upload opens the review and save for later restores the same question afte
  await openCvLibrary(page);
  await page.getByRole('article',{name:'CV uploaded-profile-cv',exact:true}).getByRole('button',{name:'View extracted results',exact:true}).click();
  await expect(page).toHaveURL(/\?cv=uploaded-profile-cv$/);
- await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Extracted results',exact:true})).toBeVisible();
  const opensBeforeResultsReload=opens;
  await page.reload();
- await expect(page.getByRole('heading',{name:'Review extracted information'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Extracted results',exact:true})).toBeVisible();
  expect(opens).toBe(opensBeforeResultsReload);expect(reviewStarts).toBe(1);
- await reviewShortcut.click();
+ await page.getByRole('button',{name:'Skills Profile',exact:true}).click();
+ await openCvLibrary(page);
+ await page.getByRole('article',{name:'CV uploaded-profile-cv',exact:true}).getByRole('button',{name:'Review CV',exact:true}).click();
  await expect(page.getByText(answer,{exact:true})).toBeVisible();
  await expect(page.getByText(nextQuestion,{exact:true})).toBeVisible();
  expect(reviewStarts).toBe(1);expect(answers).toBe(1);

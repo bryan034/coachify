@@ -45,7 +45,8 @@
           "evidence": "SQL is required.",
           "origin": "employer",
           "source_urls": [],
-          "learning_items": []
+          "learning_items": [],
+          "competence_target": null
         }
       ],
       "non_skill_requirements": [],

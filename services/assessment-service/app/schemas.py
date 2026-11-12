@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
 from elo_shared.skill_groups import GROUP_NAMES
 
 Text=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=2000)]
@@ -30,6 +30,22 @@ class Interpreted(Contract):
     score_explanation:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]|None=None
 class Batch(Contract):
     outcomes:list[Interpreted]=Field(min_length=1,max_length=8)
+
+def batch_schema(requirements, evidence):
+    """Bind the private model response schema to this captured batch's references.
+
+    Nested source IDs are context, not evidence handles. Enumerating the permitted
+    handles makes that distinction explicit in the prompt and schema validation.
+    The public API and persisted evidence continue to use the original schemas.
+    """
+    evidence_type=Literal[tuple(evidence)] if evidence else str
+    component=create_model('EvidenceComponent',__base__=Component,
+        evidence_refs=(list[evidence_type],Field(max_length=30 if evidence else 0)))
+    outcome=create_model('RequirementOutcome',__base__=Interpreted,
+        requirement_ref=(Literal[tuple(r['ref'] for r in requirements)],...),
+        components=(list[component],Field(min_length=1,max_length=8)))
+    return create_model('EvidenceBatch',__base__=Batch,
+        outcomes=(list[outcome],Field(min_length=1,max_length=8)))
 
 Short=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]
 Label=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=40)]
@@ -95,6 +111,7 @@ class Outcome(Contract):
     competence_score:float|None=Field(default=None,ge=0,le=10)
     required_score:float|None=Field(default=None,ge=0,le=10)
     score_status:Literal['estimated','not_reviewed','insufficient_evidence']='insufficient_evidence'
+    score_confidence:Literal['low','medium','high']|None=None
     score_explanation:str|None=None
     scoring_rubric_version:str|None=None
     demonstrated_score:float|None=Field(default=None,ge=0,le=10)

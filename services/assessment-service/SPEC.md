@@ -48,6 +48,13 @@ Limits: 1 MiB upstream response, 120,000 UTF-8 bytes/model context, 512 KiB mode
 
 ### Evidence-validation correction
 
+Requirement batches use a private response schema that enumerates the exact
+evidence keys and requirement references in the captured batch. Nested source IDs
+cannot pass schema validation as evidence references; an empty evidence set allows
+only an empty reference list. The shared model adapter's bounded schema repairs
+handle invalid references before domain validation. Public contracts and saved
+source references are unchanged.
+
 Each assessment batch allows one correction after an `assessment_output` evidence
 validation failure. The model receives the unchanged requirements and evidence,
 its rejected output and fixed local validation guidance. An unknown evidence
@@ -75,10 +82,8 @@ Historical input vectors without source_mode remain readable with the CV default
 
 Each outcome reserves nullable `relevance`, `competence_score` (0–10), `required_score` (0–10, the role's stated level on the same scale, null when no level is stated),
 `score_explanation` and `scoring_rubric_version`, plus `score_status`.
-No scoring rubric has been approved: relevance/scores/rubric stay null, with an
-explicit explanation. Existing evidence statuses remain the implemented comparison;
-CV source-specific application levels remain unchanged. These fields do not claim
-measured mastery. Future score population requires rubric review.
+The approved `evidence-role-v2` rubric below populates these planning estimates.
+Historical results remain immutable and retain their earlier rubric identifier.
 
 ## Per-skill profile evaluation
 
@@ -88,21 +93,22 @@ across reviewed CV skill claims and Profile declarations. The model reads each
 skill's scoped sources: attribution, assistance, application level, review answers
 and the experience they came from. It also reads the goal's job-skill requirements
 with their priority, stated level and comparison status. Skills go in batches of at
-most 15. The result's `skill_profile` (`rubric_version: skill-profile-llm-v1`) holds,
+most 15. The result's `skill_profile` (`rubric_version: evidence-role-v2`) holds,
 per skill:
 
 - `category`: one of the shared display categories (`elo_shared.skill_groups.GROUP_NAMES`).
 - `subcategory`: an optional short label, such as Languages, Frameworks or Tools.
 - `relevance`: `high`, `medium`, `low` or `none` for the goal.
 - `competence_score` and `required_score`: whole-number planning estimates on one
-  0–10 scale, where 3 is guided use, 6 is independent use and 9 is complex use.
+  0–10 scale, subject to the evidence ceilings below.
 - `explanation`: a short user-facing explanation.
 - `evidence_refs` and `requirement_refs`: what the judgement relied on.
 
 Local validation requires one judgement per skill. Evidence references must come
 from that skill's own sources, and requirement references from the goal. A
-competence score needs at least one cited source that is personal and certain;
-team, observed, denied and uncertain sources cannot support one. `required_score`
+competence score needs a cited source. Team, observed and denied sources cannot
+support personal competence; ambiguous project participation has only a provisional
+level 3, with low confidence, and does not establish capability match status. `required_score`
 is dropped when relevance is `none`. A rejected batch gets one correction with
 fixed feedback. If it still fails, that batch is left out and `status` becomes
 `partial`, or `failed` when no batch passed. The requirement comparison is
@@ -136,19 +142,43 @@ also starts comparisons through it. Each result is saved immutably in
 `skill_gap_analyses`. Roadmap reads it through `GET /current` and plans from its
 `job_skill_gaps`.
 
-For each job skill, the requirement batch also returns `demonstrated_level` and
-`required_level`. These are whole numbers on one 1–10 scale (3 guided, 6
-independent, 9 complex use), plus a short `score_explanation`. A demonstrated level
-needs a cited component reference that is personal, certain and source-scoped.
-Otherwise the batch goes through the existing single correction. Outcomes then store
-`demonstrated_score`, `required_score` and `competence_score` (rubric v1: `min(10,
-round(10 × demonstrated / required))`, so 10 means the evidence meets the goal's
-level), with `scoring_rubric_version: llm-ratio-v1`. The model's levels are ignored
-for interview-preparation and constraint outcomes. Without both levels, the
-earlier `application-ratio-v1` estimate applies.
+For each job skill, Career supplies a `competence_target` with a level, basis,
+explanation and source URLs. Familiarity requires at least level 8; advanced or
+proficient work targets 9, expert mastery 10. Explicit beginner requirements target
+7; unstated legacy requirements default to 8 (advanced 9). These are elo planning
+standards, not claimed employer pass marks. Fresh, nonconflicting medium/high-confidence
+public preparation findings naming the same skill can raise the target from their
+cited passages; stale, weak or unrelated findings cannot. Research never lowers a
+stated target. Without qualifying research the target is labelled inferred or JD-based.
 
-After the per-skill evaluation, each job-skill outcome lists `profile_skills`: the
-Skills Profile skills whose judgement cited that requirement. An outcome still
-unscored takes the strongest linked profile skill's competence against the
-outcome's (or that skill's) required level (`profile-link-v1`). Scores never change
-match status, gaps or priorities.
+Both requirement and per-profile-skill judgements use these backend ceilings:
+
+- Ambiguous project/experience participation or guided application: 3. Unclear personal
+  contribution is explicitly provisional, with low confidence; it never proves a match.
+- Explicit independent application without a recorded successful outcome: 4.
+- Independent successful delivery: 5.
+- Additional skill-specific complexity and problem solving: up to 7.
+- Complex successful work with explicit frequency/recency and at least 24 months of
+  skill experience: up to 9. Ten is not awarded from these self-reported sources.
+
+Explicit low replication confidence, conflicting facts or failed outcomes constrain
+estimates. Team-only, observed or denied work remains unscored. Review `self_rating`
+is an optional, quoted skill-specific 1–10 user baseline; it cannot replace the analysis
+or inflate the evidence ceiling. General project complexity cannot inflate all skills.
+The model can propose a lower level above the basic tiers, but cannot exceed the
+backend ceiling or choose a weaker role target. Scores remain planning estimates.
+
+Outcomes store `demonstrated_score` (the evidence level), `required_score` (the role
+target), `score_confidence`, and role-relative `competence_score`:
+`min(10, floor(100 × demonstrated / required) / 10)`. Level 5 against target 8 is
+6.2/10; a provisional 3 is 3.7/10. Only actually meeting/exceeding the role target
+reaches 10/10. Profile skill scores remain absolute evidence levels, not this ratio.
+
+`scoring_rubric_version` and the profile `rubric_version` are `evidence-role-v2`.
+The input hash includes this version, making older comparisons stale without changing
+history. Pre-v2 pending checkpoints restart under v2 only if the exact source revision
+vector still matches; changed sources retain the normal rejection. New checkpoints
+resume completed v2 work normally. Profile links retain the same ceilings and role
+target when filling an unscored requirement. Scores never change match status, gaps
+or priorities. The Career Goal page marks current progress on each skill line and
+explains that 10/10 satisfies this specific role's goal, based on available evidence.

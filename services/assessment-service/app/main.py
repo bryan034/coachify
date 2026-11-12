@@ -1,11 +1,12 @@
 from uuid import uuid5, NAMESPACE_URL
 from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
-from elo_shared.runtime import application, authenticated, Problem, begin, launch, operation_view, stamp
-from app.schemas import Generate, Batch, Result, Context, Current, DashboardSource
+from elo_shared.runtime import application, authenticated, Problem, begin, launch, operation_view, stamp, digest
+from app.schemas import Generate, Result, Context, Current, DashboardSource, batch_schema
 from app.inputs import capture
 from app.domain import INSTRUCTIONS, validate_batch, group_outcome
 from app.skills import evaluate_skills, link_profile
+from app.competence import RUBRIC_VERSION
 
 def create_app(store=None,upstream=None,model=None):
     app=application('elo Assessment API','ASSESSMENT',store=store,upstream=upstream,model=model)
@@ -15,12 +16,16 @@ def create_app(store=None,upstream=None,model=None):
         if snapshot['research_coverage'] not in ('available','no_findings') and not row['pending']['body']['allow_partial']:
             raise Problem('Interview research is unavailable, incomplete or stale. Retry research or choose a labelled target-only analysis.',409,'research_partial')
         checkpoint=row['pending'].get('checkpoint')
+        # A pre-v2 checkpoint can restart with the new rubric only when the exact
+        # source revisions still match. Never reuse its already inflated scores.
+        if checkpoint and checkpoint.get('scoring_rubric')!=RUBRIC_VERSION and checkpoint['input_hash']==digest(snapshot['inputs']):
+            checkpoint=None
         if checkpoint and checkpoint['input_hash']!=snapshot['input_hash']:raise Problem('The captured inputs changed. Start a new assessment with the latest inputs.',409,'inputs_changed')
         if checkpoint:
             snapshot=checkpoint['snapshot'];outcomes=checkpoint['outcomes']
         else:
             outcomes=[]
-            row['pending']['checkpoint']={'input_hash':snapshot['input_hash'],'snapshot':snapshot,'outcomes':outcomes}
+            row['pending']['checkpoint']={'input_hash':snapshot['input_hash'],'scoring_rubric':RUBRIC_VERSION,'snapshot':snapshot,'outcomes':outcomes}
             await thread(app.state.store.checkpoint,account['id'],row)
         for start in range(len(outcomes),len(snapshot['requirements']),8):
             verified=await app.state.upstream.account(account['token'])
@@ -29,8 +34,9 @@ def create_app(store=None,upstream=None,model=None):
             if live.get('input_hash')!=snapshot['input_hash']:raise Problem('Your inputs changed before the next comparison step.',409,'inputs_changed')
             requirements=snapshot['requirements'][start:start+8]
             model_context={'requirements':requirements,'evidence':snapshot['evidence']}
+            schema=batch_schema(requirements,snapshot['evidence'])
             for attempt in range(2):
-                output=await app.state.model.generate(Batch,INSTRUCTIONS,model_context)
+                output=await app.state.model.generate(schema,INSTRUCTIONS,model_context)
                 try:
                     validated=validate_batch(output,requirements,snapshot['evidence'])
                     break

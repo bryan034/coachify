@@ -66,4 +66,12 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
             if item['priority_origin'] == 'generated_guidance' and item['priority'] != 'suggested':
                 raise GoalError('AI planning importance must stay advisory.', 422)
             item['correction'] = 'extracted' if extracted else old.get(item[key], {}).get('correction', 'user') if comparable == original else 'user'
-    return JDExtraction.model_validate(data)
+    result=JDExtraction.model_validate(data)
+    from app.domain.competence import target_for
+    for skill in result.skills:
+        prior=old.get(skill.item_id)
+        unchanged=prior and all(getattr(skill,key)==prior.get(key) for key in ('name','evidence','context','required_proficiency'))
+        skill.competence_target=prior.get('competence_target') if unchanged and not extracted else target_for(skill)
+    # Revalidate retained nested target dictionaries as well as freshly derived ones.
+    result=JDExtraction.model_validate(result.model_dump(mode='json'))
+    return result

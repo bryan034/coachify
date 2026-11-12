@@ -84,7 +84,7 @@ it('bolds key terms in interview findings and AI predictions without showing ast
  const question=await screen.findByText('SQL join');
  expect(question.tagName).toBe('STRONG');
  expect(screen.getByText('45-minute').tagName).toBe('STRONG');
- expect(screen.getByText('window functions').tagName).toBe('STRONG');
+ expect((await screen.findByText('window functions')).tagName).toBe('STRONG');
  const headlines=screen.getByRole('list',{name:'Interview headline facts'});
  expect(within(headlines).getByText('Online test, then panel')).toBeVisible();
  expect(document.body.textContent).not.toContain('**');

@@ -96,6 +96,7 @@ def enough_context(item):
     for claim in claims:
         if claim.get('attribution') in {'team', 'observed', 'denied'}: continue
         facts = skill_facts(item, claim['name'])
+        if not any(f['field']=='self_rating' and f['status'] in {'supported','unknown','skipped','not_applicable'} for f in facts): return False
         if any(f['field'] in {'personal_contribution', 'skill_use'} and f['status'] in {'unknown', 'skipped', 'not_applicable'}
                for f in facts): continue
         if not any(f['field'] == 'skill_use' and f['status'] == 'supported' for f in facts): return False

@@ -28,6 +28,7 @@ export async function openCvLibrary(page: Page) {
 }
 
 export async function openCvReviewTools(page: Page) {
+  await expect(page.locator('.cv-workspace')).toHaveAttribute('aria-busy','false');
   const review = new URL(page.url()).searchParams.get('review');
   if (review) {
     // Finish an already-started turn before editing the same CV version. If
@@ -43,8 +44,10 @@ export async function openCvReviewTools(page: Page) {
   await expect(uploadNew.or(page.getByLabel('CV document', {exact:true})).first()).toBeVisible();
   if (await uploadNew.count()) await uploadNew.click();
   await expect(page.getByLabel('CV document', {exact:true})).toBeVisible();
-  await openCvLibrary(page);
+  if(await page.getByRole('heading',{name:'Your CVs',exact:true}).count())await openCvLibrary(page);
   await expect(page.getByText('Loading saved CVs…', {exact: true})).toHaveCount(0);
+  const tools=page.getByRole('button',{name:'Review details and corrections',exact:true});
+  if(await tools.count()&&await tools.getAttribute('aria-expanded')==='false')await tools.click();
   // The Skills Profile no longer has a "CV details and corrections" section.
   await expect(page.locator('summary').filter({hasText: 'CV details and corrections'})).toHaveCount(0);
 }

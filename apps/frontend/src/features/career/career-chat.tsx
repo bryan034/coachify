@@ -113,7 +113,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
   {<details className="agent-cv-options"><summary>{draft?.cv.mode==='saved'?`Using ${draft.cv.filename}`:cvName?`Temporary CV: ${cvName}`:'CV optional · add or choose a CV'}</summary>
    {draft?.cv.mode!=='saved'&&<p className="small">{warning} <Link href="/cv">Go to CV upload</Link>. Dedicated uploads are not available yet; you can continue without one.</p>}
    {!draft&&!!context?.cvs.length&&<><label htmlFor="agent-saved-cv">Processed CV</label><select id="agent-saved-cv" value={cvId} onChange={e=>{setCvId(e.target.value);setUseCV(false);}}>{context.cvs.map(cv=><option key={cv.id} disabled={cv.status!=='succeeded'} value={cv.id}>{cv.filename} · {cv.status} · v{cv.version}</option>)}</select><label><input type="checkbox" checked={useCV} disabled={!cvId} onChange={e=>{setUseCV(e.target.checked);if(e.target.checked){setCVName('');setCVText('');}}}/>Use this processed CV</label></>}
-   {(!draft||draft.cv.mode==='temporary')&&<><label htmlFor="agent-cv-file">{needsAttachment?'Reattach the same temporary CV':'Temporary CV attachment'}</label><input id="agent-cv-file" type="file" accept=".pdf,.docx,.txt" disabled={busy} onChange={e=>void upload(e.target.files?.[0])}/></>}
+   {(!draft||draft.cv.mode==='temporary')&&<><label htmlFor="agent-cv-file">{needsAttachment?'Reattach the same temporary CV':'Temporary CV attachment'}</label><input id="agent-cv-file" type="file" accept=".pdf,.docx,.txt" disabled={busy||loading} onChange={e=>void upload(e.target.files?.[0])}/></>}
    {draft?.cv.mode==='saved'&&<p className="small">CV version {draft.cv.version} · extraction {draft.cv.extraction_version}</p>}
 
   </details>}

@@ -26,13 +26,12 @@ test('saved CVs retain corrections, require explicit selection and compose manua
   return value.cvs[0]?.status;
  }, { timeout: 30_000 }).toBe('ready');
  const initialList = await (await account.get('/api/v1/cv')).json();
- expect(initialList.selection.cv_id).toBeNull();
+ expect(initialList.cvs.some((cv:{id:string})=>cv.id===cvId)).toBe(true);
  await openCvReviewTools(page);
  await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // Skills Profile rechecks saved CVs when the window regains focus.
  const saved = page.getByRole('article', { name: `CV ${cvId}`, exact: true });
- page.once('dialog', dialog => dialog.accept());
- await saved.getByRole('button', { name: 'Make active', exact: true }).click();
- await expect(saved.getByRole('button', { name: 'Active CV', exact: true })).toBeVisible();
+ await expect(saved.getByText('Active CV',{exact:true})).toBeVisible();
+ await expect.poll(async()=>(await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBe(cvId);
  await page.getByRole('button', { name: 'Edit or remove Team dashboard', exact: true }).click();
  const editor = page.getByRole('form', { name: 'Edit Team dashboard', exact: true });
  await editor.getByLabel('Description', { exact: true }).fill('I wrote SQL queries; another teammate implemented the Python application.');

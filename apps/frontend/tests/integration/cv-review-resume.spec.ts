@@ -50,5 +50,5 @@ test('uploaded CV review saves and resumes the same question after leaving and r
   expect(after.active_question).toEqual(before.active_question);
   expect(after.messages).toEqual(before.messages);
   expect(sent).toHaveLength(2);
-  expect((await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBeNull();
+  expect((await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBe(cvId);
 });

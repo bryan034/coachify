@@ -195,6 +195,16 @@
 .goal-skill-profile-links{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 14px}
 .goal-skill-profile-links a{font-weight:600;color:var(--forest);text-decoration:none}
 .goal-skill-levels{margin-top:4px}
+.goal-inline-progress{display:block;max-width:320px;margin:10px 0 2px;font-weight:400}
+.goal-inline-track{display:block;position:relative;height:10px;border-radius:5px;background:var(--cloud)}
+.goal-current-marker{position:absolute;top:50%;width:12px;height:12px;border:2px solid var(--white);border-radius:50%;background:var(--ink);transform:translate(-50%,-50%)}
+.goal-target-marker{position:absolute;right:0;top:-3px;height:16px;width:2px;background:var(--forest)}
+.goal-progress-labels{display:flex;justify-content:space-between;gap:12px;margin-top:7px;font-size:11px;color:var(--slate)}
+.goal-competence-bar{background:var(--cloud)}
+.goal-competence-bar .competence-target{right:0;left:auto;background:var(--forest)}
+.goal-inline-track .competence-fill.score-ready,.goal-competence-bar .competence-fill.score-ready{background:var(--ready-ink)}
+.goal-inline-track .competence-fill.score-growing,.goal-competence-bar .competence-fill.score-growing{background:var(--growing-ink)}
+.goal-inline-track .competence-fill.score-build,.goal-competence-bar .competence-fill.score-build{background:var(--build-ink)}
 .goal-skills-more{width:100%;margin-top:18px;min-height:44px;border-radius:999px}
 @media (max-width:900px){.goal-skill-row .skill-row-toggle{grid-template-columns:12px minmax(0,1fr) auto 16px;gap:10px;padding:10px 4px}.goal-skill-importance{display:none}.score-chip{min-width:0;padding:3px 8px}}
 @media (max-width:700px){.career-briefing .card{padding:18px 14px}.goal-skill-importance{display:none}.goal-skill-details{margin-left:0}.career-briefing .goal-header{padding:20px}}

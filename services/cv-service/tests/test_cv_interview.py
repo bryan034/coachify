@@ -738,7 +738,7 @@ def test_real_provider_adapter_uses_the_typed_interview_protocol(monkeypatch, ta
     original = deepcopy(context)
     output, metadata = ConversationRouter().route(context)
     assert output.reply == result['reply']
-    assert metadata['prompt_version'] == 'cv-interview-13'
+    assert metadata['prompt_version'] == 'cv-interview-14'
     assert len(requests) == 1 and requests[0]['max_tokens'] == 5000
     assert 'untrusted' in requests[0]['messages'][0]['content'].lower()
     assert 'synthetic-secret-for-test' not in json.dumps(requests[0]['messages'])
@@ -1142,10 +1142,11 @@ def test_review_clarifies_only_ambiguous_ownership_then_finishes_without_three_q
                                 'evidence_excerpt': context['message']} for name in ('Python', 'SQL')],
                     'review_evidence': [fact('personal_contribution', context['message'], 'Personally coordinated testing', attribution='personal'),
                                         fact('responsibilities', context['message'], 'Coordinated testing and reported issues'),
-                                        *[fact('skill_use', context['message'], 'Implemented testing support', skill_name=name, attribution='personal') for name in ('Python', 'SQL')]],
+                                        *[fact('skill_use', context['message'], 'Implemented testing support', skill_name=name, attribution='personal') for name in ('Python', 'SQL')],
+                                        *[fact('self_rating', context['message'], '5', skill_name=name) for name in ('Python', 'SQL')]],
                     'resolved_uncertainties': ['personal_contribution', 'claim'], 'remaining_uncertainties': []}]}
     provider.evaluation = resolve
-    chat = send(client, chat, 'I personally used Python and SQL to coordinate testing with guidance and reported the issues.')
+    chat = send(client, chat, 'I personally used Python and SQL to coordinate testing with guidance and reported the issues. I rate both skills 5/10.')
     assert chat['active_question'] is None, chat['messages'][-1]
     assert chat['interview']['reviewed_items'] == chat['interview']['total_items'] == 1
     assert chat['interview']['status'] in {'reviewed', 'reviewed_with_gaps'}
@@ -1163,10 +1164,10 @@ def test_context_distinguishes_known_cv_skills_from_unresolved_personal_responsi
     assert source['description'] and source['evidence']
     assert context['sources'][1]['listed_skills']
     targets = context['clarification_context']['clarification_targets']
-    assert {t['field'] for t in targets} == {'personal_contribution', 'skill_use'}
+    assert {t['field'] for t in targets} == {'personal_contribution', 'skill_use', 'self_rating'}
     assert {t['skill_name'] for t in targets if t['field'] == 'skill_use'} == {'Python', 'SQL'}
     clear = {**source, 'review_evidence': known_cv_review_facts(), 'uncertainties': ['proficiency', 'duration']}
-    assert {t['field'] for t in clarification_context(clear, known_cv_review_facts())['clarification_targets']} == {'skill_use'}
+    assert {t['field'] for t in clarification_context(clear, known_cv_review_facts())['clarification_targets']} == {'skill_use','self_rating'}
     context['focused_source'] = clear
     with pytest.raises(ValueError, match='already known'):
         validate_decision({'action': 'ask', 'reply': 'Repeat your responsibilities.', 'item_id': clear['id'],
@@ -1497,14 +1498,15 @@ def test_topic_ends_early_once_ownership_and_skill_use_are_known(harness):
                             'changed_fields': ['attribution'], 'evidence_excerpt': text} for n in names],
                 'review_evidence': [fact('personal_contribution', text, 'Built the pipeline', attribution='personal'),
                                     fact('responsibilities', text, 'Built and tested the pipeline'),
-                                    *[fact('skill_use', text, 'Wrote the pipeline', skill_name=n, attribution='personal') for n in names]],
+                                    *[fact('skill_use', text, 'Wrote the pipeline', skill_name=n, attribution='personal') for n in names],
+                                    *[fact('self_rating',text,'5',skill_name=n) for n in names]],
                 'resolved_uncertainties': ['personal_contribution'], 'remaining_uncertainties': []}]}
 
     provider.evaluation = complete
     # The planner would keep asking about assistance; the backend ends the topic first.
     provider.plans = [{'action': 'ask', 'item_id': first, 'reply': 'Did anyone help?', 'targets': [{'field': 'assistance', 'skill_name': 'Python'}]},
                       {'action': 'ask', 'item_id': second, 'reply': 'What did you personally analyse?', 'targets': [{'field': 'personal_contribution'}]}]
-    chat = send(client, chat, 'I personally built the Python and SQL pipeline and wrote its tests.')
+    chat = send(client, chat, 'I personally built the Python and SQL pipeline and wrote its tests. I rate both skills 5/10.')
     assert topic_status(chat, first) == 'reviewed'
     assert chat['active_question']['item_id'] == second
     raw = app.state.conversations.cv.get('owner-a', cv['id'])

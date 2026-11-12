@@ -31,6 +31,7 @@ for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:3
      {id:'m2',sequence:2,role:'user',text:'I built the screens.',actions:[],created_at:'2026-10-28T09:01:00Z'}],
     next_before:null,limits:{max_message_chars:4000,max_messages:500},
    }});}
+   if(turns>=2)cv.profile_reviewed_effective_version=cv.effective_version;
    if(path.endsWith('/policy')) return route.fulfill({json:policy});
    if(path==='/api/v1/cv') return route.fulfill({json:{cvs:[cv],selection:{cv_id:cv.id,version:1}}});
    if(path.endsWith('/clarifications')) return route.fulfill({json:clarificationState(cv)});

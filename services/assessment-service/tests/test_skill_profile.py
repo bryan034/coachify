@@ -42,8 +42,8 @@ def test_valid_judgements_keep_category_scores_and_drop_a_goal_level_for_unneede
         judgement('s1', subcategory='Languages', competence_score=6, evidence_refs=['cv:item1:claim:0'], requirement_refs=['job:req1']),
         judgement('s2', category='Cloud & DevOps', relevance='none', required_score=5)])
     python, docker = validate_skill_batch(output, skills, {'job:req1'}, EVIDENCE)
-    assert python['subcategory'] == 'Languages' and python['competence_score'] == 6
-    assert python['required_score'] == 7 and python['canonical_skill_id'] == 'language.python'
+    assert python['subcategory'] == 'Languages' and python['competence_score'] == 4
+    assert python['required_score'] == 8 and python['canonical_skill_id'] == 'language.python'
     assert docker['category'] == 'Cloud & DevOps' and docker['required_score'] is None and docker['evidence_refs'] == []
 
 
@@ -77,10 +77,12 @@ def test_completed_assessment_publishes_the_skill_profile():
         client.post('/api/v1/assessments', json={'expected_version': 0, 'mutation_id': str(uuid4()), 'allow_partial': True}, headers=H)
         state = finish(client)
     profile = state['result']['skill_profile']
-    assert profile['status'] == 'evaluated' and profile['rubric_version'] == 'skill-profile-llm-v1'
-    assert profile['skills'] == [{'name': 'Python', 'canonical_skill_id': 'language.python', 'category': 'Technical coding',
-        'subcategory': 'Languages', 'relevance': 'high', 'competence_score': 6, 'required_score': 7,
-        'explanation': 'Used independently in a project.', 'evidence_refs': ['cv:item1:claim:0'], 'requirement_refs': ['job:req1']}]
+    assert profile['status'] == 'evaluated' and profile['rubric_version'] == 'evidence-role-v2'
+    [skill]=profile['skills']
+    assert skill['name']=='Python' and skill['canonical_skill_id']=='language.python'
+    assert skill['competence_score']==4 and skill['required_score']==8
+    assert skill['evidence_refs']==['cv:item1:claim:0'] and skill['requirement_refs']==['job:req1']
+    assert 'Self-ratings do not override' in skill['explanation']
     assert model.calls == 1 and model.skill_calls == 1
 
 
@@ -147,4 +149,14 @@ def test_large_profiles_are_judged_in_bounded_batches_and_checkpointed():
 def test_a_profile_without_skills_is_empty_without_a_model_call():
     model = Interpreter()
     profile = asyncio.run(evaluate_skills(model, {'evidence': {}, 'goal': {}, 'requirements': []}, [], [], None))
-    assert profile == {'status': 'empty', 'rubric_version': 'skill-profile-llm-v1', 'skills': []} and model.skill_calls == 0
+    assert profile == {'status': 'empty', 'rubric_version': 'evidence-role-v2', 'skills': []} and model.skill_calls == 0
+
+
+def test_ambiguous_project_has_a_provisional_baseline_even_if_model_leaves_it_unknown():
+    evidence={'cv:p:claim:0':{'kind':'skill','name':'Python','source_kind':'project',
+        'attribution':'unknown','text':'A Python team project.'}}
+    output=SkillBatch(skills=[judgement('s1',competence_score=None,evidence_refs=[])])
+    [skill]=validate_skill_batch(output,profile_skills(evidence),set(),evidence)
+    assert skill['competence_score']==3
+    assert skill['evidence_refs']==['cv:p:claim:0']
+    assert 'Provisional' in skill['explanation'] and 'not verified capability' in skill['explanation']

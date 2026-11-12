@@ -318,7 +318,7 @@
           "Career discovery"
         ],
         "summary": "Message",
-        "description": "Converse/refine; completed validated synthesis automatically updates the current goal.",
+        "description": "Converse/refine; validated synthesis updates this chat's own goal, but replacing another goal awaits /publish.",
         "operationId": "message_api_v1_career_discoveries__session_id__messages_post",
         "security": [
           {
@@ -6657,6 +6657,16 @@
               "market_research"
             ],
             "title": "Origin"
+          },
+          "competence_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompetenceTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -7395,6 +7405,16 @@
             "type": "array",
             "maxItems": 10,
             "title": "Source Urls"
+          },
+          "competence_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompetenceTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -7967,6 +7987,47 @@
           "expected_version"
         ],
         "title": "SummaryCommand"
+      },
+      "CompetenceTarget": {
+        "properties": {
+          "level": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Level"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "job_description",
+              "research",
+              "inferred"
+            ],
+            "title": "Basis"
+          },
+          "explanation": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Explanation"
+          },
+          "source_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Source Urls"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "level",
+          "basis",
+          "explanation"
+        ],
+        "title": "CompetenceTarget"
       }
     },
     "securitySchemes": {

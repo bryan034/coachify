@@ -25,7 +25,7 @@ export async function confirmCanonicalGoal(page:Page,account:Account,goal:Seeded
  if(throughUI){
   await page.goto('/career-goal');const panel=page.getByRole('region',{name:'Goal confirmation for CV review'});
   await panel.getByRole('button',{name:'Confirm goal',exact:true}).click();
-  await expect(panel.getByRole('link',{name:'Review CV clarifications',exact:true})).toBeVisible();
+  await expect(panel).toHaveCount(0);
  }else{
   const response=await page.request.post('/api/v1/career/goals/current/cv-confirmation',{headers:account.headers,data:{expected_goal_id:goal.id,expected_goal_version:goal.version,expected_selection_version:goal.selection_version,mutation_id:crypto.randomUUID()}});
   expect(response.ok()).toBeTruthy();
