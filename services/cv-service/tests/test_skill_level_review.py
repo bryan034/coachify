@@ -1,10 +1,20 @@
 """Review-time skill levels: rated by the model per skill, including skipped topics, from conclusive evidence."""
+import time
 import pytest
 from app.domain.service import detail
 from app.domain.skill_levels import apply_skill_level_reviews, coverage, pending_sources, ratable, review_source, validate_level_review
 from tests.test_cv_interview import send, start_two_topics
 
 METADATA = {'provider': 'synthetic', 'model': 'fixture', 'prompt_version': 'cv-skill-levels-1', 'schema_version': '1'}
+
+
+def stored_when(app, cv, ready):
+    """Rating and the reviewed mark run after the chat reply is saved, so wait for them instead of racing."""
+    deadline = time.monotonic() + 5
+    while True:
+        stored = app.state.conversations.cv.get('owner-a', cv['id'])
+        if ready(stored) or time.monotonic() > deadline: return stored
+        time.sleep(.01)
 
 
 def item(**changes):
@@ -110,7 +120,7 @@ def test_skipped_topics_are_rated_from_the_cv(harness):
     provider.rate_skill_levels = rater = Rater()
     first = chat['active_question']['item_id']
     chat = send(client, chat, 'Skip this topic.', command='skip_topic', item_id=first)
-    stored = app.state.conversations.cv.get('owner-a', cv['id'])
+    stored = stored_when(app, cv, lambda d: len(d.get('skill_level_reviews') or {}) == 1)
     # Only the closed (skipped) topic is rated so far, with its skipped status as context.
     assert list(stored['skill_level_reviews']) == [first]
     assert rater.calls[0]['sources'][0]['review_status'] == 'deferred'
@@ -123,7 +133,8 @@ def test_skipped_topics_are_rated_from_the_cv(harness):
     # Levels are an overlay: the evidence version and fingerprints are untouched.
     assert stored['effective_version'] == cv['effective_version']
     chat = send(client, chat, 'Skip all remaining topics.', command='skip_remaining', item_id=None)
-    stored = app.state.conversations.cv.get('owner-a', cv['id'])
+    stored = stored_when(app, cv, lambda d: len(d.get('skill_level_reviews') or {}) == 2
+                         and d.get('profile_reviewed_effective_version') == d['effective_version'])
     assert len(stored['skill_level_reviews']) == 2 and chat['interview']['status'] == 'reviewed_with_gaps'
     assert stored['profile_reviewed_effective_version'] == stored['effective_version']
     assert len(rater.calls) == 2  # The first topic is not rated twice.
@@ -137,7 +148,7 @@ def test_rating_failure_never_loses_the_turn(harness):
     provider.rate_skill_levels = Rater(fail=True)
     chat = send(client, chat, 'Skip all remaining topics.', command='skip_remaining', item_id=None)
     assert chat['interview']['status'] == 'reviewed_with_gaps'
-    stored = app.state.conversations.cv.get('owner-a', cv['id'])
+    stored = stored_when(app, cv, lambda d: d.get('profile_reviewed_effective_version') == d['effective_version'])
     assert 'skill_level_reviews' not in stored  # Missing persisted reviews remain eligible for a model retry.
     assert coverage(detail(stored)['items'])['share'] >= 0.9
     assert pending_sources(stored, detail(stored)['items'])
