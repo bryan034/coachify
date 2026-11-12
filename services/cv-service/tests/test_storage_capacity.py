@@ -266,7 +266,7 @@ def test_list_uses_bounded_projection_and_validates_cursor(harness, monkeypatch)
 def test_policy_reports_owner_limits(harness):
     client, *_ = harness
     policy = client.get('/api/v1/cv/policy').json()
-    assert policy['max_saved_cvs'] == 50
+    assert policy['max_saved_cvs'] == 3
     assert policy['max_stored_original_bytes'] == 100 * 1024 * 1024
 
 

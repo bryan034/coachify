@@ -45,11 +45,6 @@ export async function openCvReviewTools(page: Page) {
   await expect(page.getByLabel('CV document', {exact:true})).toBeVisible();
   await openCvLibrary(page);
   await expect(page.getByText('Loading saved CVs…', {exact: true})).toHaveCount(0);
-  for (const label of ['CV details and corrections']) {
-    const summary = page.locator('summary').filter({hasText: label});
-    await expect(summary).toHaveCount(1);
-    const details = summary.locator('..');
-    if (await details.getAttribute('open') === null) await summary.click();
-    await expect(details).toHaveAttribute('open', '');
-  }
+  // The Skills Profile no longer has a "CV details and corrections" section.
+  await expect(page.locator('summary').filter({hasText: 'CV details and corrections'})).toHaveCount(0);
 }

@@ -103,7 +103,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await page.getByRole('navigation').getByRole('link',{name:'Skills Profile'}).click();
  await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
  await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
- await expect(page.getByRole('heading',{name:'What elo will use'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Finish these first'})).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/career-goal"]')).toBeVisible();
  await expect(page.getByRole('tab')).toHaveCount(0);
