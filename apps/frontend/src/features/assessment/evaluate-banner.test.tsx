@@ -41,11 +41,11 @@ it('waits for goal research before offering the evaluation', async () => {
  expect(await screen.findByRole('heading', {name: 'elo is still researching your goal'})).toBeVisible();
  expect(screen.queryByRole('button', {name: /Evaluate/})).not.toBeInTheDocument();
 });
-it('shows progress while the evaluation runs and no second button', async () => {
+it('leaves progress to the page banner while the evaluation runs', async () => {
  serve({}, {operation: {id: 'op', status: 'running', stage: 'assessed_8'}});
- render(<View/>);
- expect(await screen.findByRole('heading', {name: 'Evaluating your skills against Synthetic Analyst'})).toBeVisible();
- expect(screen.queryByRole('button')).not.toBeInTheDocument();
+ const view = render(<View/>);
+ await waitFor(() => expect(api.mock.calls.some(call => call[0] === '/context')).toBe(true));
+ await waitFor(() => expect(view.container).toBeEmptyDOMElement());
 });
 it('explains a failed evaluation and offers it again', async () => {
  serve({}, {operation: {id: 'op', status: 'failed', stage: 'assessed_0', error: {detail: 'Provider unavailable.', code: 'model_provider'}}});

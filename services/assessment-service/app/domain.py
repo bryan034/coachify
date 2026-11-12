@@ -142,14 +142,6 @@ def validate_batch(output,requirements,evidence):
                     f'{where} is supported but support_quote is not an exact substring of a cited evidence text. Copy the exact supporting wording, or use status "uncertain".')
         if requirement.get('kind')!='job_skill':
             outcome.demonstrated_level=outcome.required_level=outcome.score_explanation=None
-        elif outcome.demonstrated_level is not None:
-            cited=[evidence[ref] for c in outcome.components for ref in c.evidence_refs]
-            provisional=any(item.get('source_kind') in {'project','experience'} and item.get('attribution') not in ('team','observed','denied') and not item.get('unscoped_item') for item in cited)
-            if (not provisional and not any(item.get('attribution')=='personal' and not item.get('support_uncertain') and not item.get('unscoped_item') for item in cited)
-                    and reviewed_estimate(cited,outcome.demonstrated_level) is None):
-                raise OutputProblem('Finish your CV review so elo can rate your competence.' if unreviewed(cited) else 'A competence level needs personal evidence.',
-                    f'requirement {outcome.requirement_ref!r} has a demonstrated_level without cited personal, certain, source-scoped evidence. '
-                    'Cite the supporting skill claim in a component, or set demonstrated_level to null.')
         if outcome.mapping_method=='canonical':
             canonical=requirement.get('canonical_skill_id')
             references={ref for c in outcome.components for ref in c.evidence_refs}

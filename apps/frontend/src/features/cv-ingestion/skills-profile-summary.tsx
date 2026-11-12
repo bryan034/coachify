@@ -1,6 +1,5 @@
 "use client";
-import { useComparison } from '@/features/assessment/comparison';
-import { EvaluationStatusPanel } from '@/features/assessment/evaluation-status';
+import { announceInputsChanged, useComparison } from '@/features/assessment/comparison';
 import { EvaluateBanner } from '@/features/assessment/evaluate-banner';
 import {SkillBaseline} from './skill-baseline';
 import {ReviewEvidence} from './review-evidence';
@@ -57,6 +56,9 @@ export function SkillsProfileSummary({token, title, profile, cv, recentReview, d
  // Every topic is covered but the CV was never marked reviewed (e.g. finished before this was automatic): mark it once.
  const topicList = reviewTopics?.topics ?? [];
  const allCovered = topicList.length > 0 && topicList.every(topic => ['reviewed', 'reviewed_with_gaps', 'deferred'].includes(topic.status));
+ // A finished review rates the new skills: let the automatic skill-gap update see it.
+ const reviewedKey = reviewed ? `${cv?.id}:${cv?.effective_version}` : '';
+ useEffect(() => { if (reviewedKey) announceInputsChanged(); }, [reviewedKey]);
  const autoSaved = useRef('');
  useEffect(() => {
   if (!notFinished || !cv || !allCovered || pending || savingCv || busy || autoSaved.current === `${cv.id}:${cv.effective_version}`) return;
@@ -74,7 +76,7 @@ export function SkillsProfileSummary({token, title, profile, cv, recentReview, d
    {skills.length > 0 && <p className="skills-hero-line"><strong>{skills.length} {skills.length === 1 ? 'skill' : 'skills'}</strong> from <strong>{experiences} {experiences === 1 ? 'experience' : 'experiences'}</strong>{goalRole ? <> · compared with <Link href="/career-goal">{goalRole}</Link></> : null}</p>}
   </div>
   <div className="skills-hero-actions"><button type="button" className="btn ghost" onClick={upload}><Icon name="up"/>Upload new CV</button><button type="button" className="btn pri" aria-expanded={chatOpen} onClick={chat ?? build}><Icon name="chat"/>{chatOpen ? 'Close chat' : 'Chat to edit'}</button></div></header>
-  <EvaluationStatusPanel comparison={comparison} /><EvaluateBanner comparison={comparison} here="/cv"/>
+  <EvaluateBanner comparison={comparison} here="/cv"/>
   {cv && reviewed && cv.status === 'ready' && <ReviewComplete cv={cv}/>}
   {cvCard}
   {<div className="skills-entry-actions">{recentReview && recentReview.id !== cv?.id && <button type="button" className="btn ghost sm" onClick={() => review(recentReview.id)}>Review {recentReview.display_name ?? recentReview.file_name}</button>}{(profile?.status === 'draft' || !!profile?.entries.length) && <button type="button" className="btn ghost sm" onClick={build}>{profile?.status === 'draft' ? 'Continue building your profile through chat' : 'Update through chat'}</button>}</div>}

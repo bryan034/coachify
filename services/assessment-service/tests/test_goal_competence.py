@@ -27,10 +27,9 @@ def test_model_levels_cannot_inflate_the_evidence_or_lower_the_role_target():
     assert outcome['relevance'] == 'high' and outcome['score_status'] == 'estimated'
 
 
-def test_a_demonstrated_level_needs_cited_personal_evidence():
-    with pytest.raises(OutputProblem) as error:
-        validate_batch(batch(['cv:item1:claim:1'], demonstrated_level=6, required_level=8), [REQUIREMENT], EVIDENCE)
-    assert 'demonstrated_level' in error.value.feedback
+def test_a_demonstrated_level_without_personal_evidence_stays_unrated():
+    [outcome] = validate_batch(batch(['cv:item1:claim:1'], demonstrated_level=6, required_level=8), [REQUIREMENT], EVIDENCE)
+    assert outcome['demonstrated_score'] is None and outcome['competence_score'] is None
 
 
 def test_only_a_required_level_leaves_the_score_unknown():
@@ -164,17 +163,16 @@ def test_a_finished_review_with_skipped_topics_keeps_the_models_capped_level():
     assert 'rough estimate' in outcome['score_explanation']
 
 
-def test_an_unfinished_review_still_asks_for_the_review_before_rating():
+def test_an_unfinished_review_leaves_the_level_unrated_without_failing():
     evidence = {ref: {**record, 'reviewed': False} for ref, record in SKIPPED.items()}
-    with pytest.raises(OutputProblem) as error:
-        validate_batch(batch(['cv:item2:claim:0'], demonstrated_level=6, required_level=8), [REQUIREMENT], evidence)
-    assert error.value.detail == 'Finish your CV review so elo can rate your competence.'
+    [outcome] = validate_batch(batch(['cv:item2:claim:0'], demonstrated_level=6, required_level=8), [REQUIREMENT], evidence)
+    assert outcome['demonstrated_score'] is None and outcome['score_status'] == 'insufficient_evidence'
 
 
 def test_team_only_work_stays_unrated_even_after_review():
     evidence = {'cv:item1:claim:1': {**EVIDENCE['cv:item1:claim:1'], 'reviewed': True}}
-    with pytest.raises(OutputProblem):
-        validate_batch(batch(['cv:item1:claim:1'], demonstrated_level=6, required_level=8), [REQUIREMENT], evidence)
+    [outcome] = validate_batch(batch(['cv:item1:claim:1'], demonstrated_level=6, required_level=8), [REQUIREMENT], evidence)
+    assert outcome['demonstrated_score'] is None
 
 
 def test_a_dimension_the_model_left_out_is_recorded_as_not_judged():
