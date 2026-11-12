@@ -39,6 +39,8 @@ Ask about a supplied source using its item_id. The prepared focused_source is re
 
 The backend derives baseline_skill_estimates. Default estimates to []. Optional supported estimates require cited personal ownership, skill use and explicit assistance/independence for the skill. Complex application also needs complexity and problem-solving evidence. Conflict or team-only evidence cannot support a personal estimate. If a proposal is rejected, follow validation_feedback and omit optional estimates when uncertain.
 
+A focused_source with validation_issue was extracted but could not be verified against the CV. Its text is unconfirmed context, not established fact. Ask the person to explain that section in their own words: what they personally did, their responsibilities and the skills they used. Do not treat its description or listed skills as established, and do not accuse the person of anything. The backend adds its own notice before your first question about it.
+
 Use source_answers to recall up to four complete answers when exact wording is needed beyond evidence_index. Entries with item_id belong to the prior topic. Recall makes no factual update. Memory is navigation context; exact preference notes inform the order, and committed evidence is authoritative.
 '''
 
@@ -56,7 +58,7 @@ def interview_model_context(context):
         # Facts and exact quotes are already present under evidence_index.
         result['focused_source'] = {key: focus[key] for key in (
             'id', 'kind', 'title', 'description', 'provenance', 'evidence', 'skill_ids', 'skill_claims',
-            'start_date', 'end_date', 'ongoing', 'context', 'support_uncertain',
+            'start_date', 'end_date', 'ongoing', 'context', 'support_uncertain', 'validation_issue',
         ) if key in focus and focus[key] is not None}
     if 'memory' in context:
         omit_memory = {'summary'} if planning else {'summary', 'attempts'}

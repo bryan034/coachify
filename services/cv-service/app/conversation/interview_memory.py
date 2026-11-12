@@ -78,9 +78,9 @@ def question_options(item, memory):
 
 
 def topic_ids(items):
-    """Only experiences/projects with concrete clarification needs enter review."""
-    return [item['id'] for item in items if item['kind'] in {'project', 'experience'}
-            and clarification_context(item, evidence_for(item))['clarification_targets']]
+    """Experiences/projects with concrete clarification needs, and any section that failed validation."""
+    return [item['id'] for item in items if item.get('validation_issue') or (item['kind'] in {'project', 'experience'}
+            and clarification_context(item, evidence_for(item))['clarification_targets'])]
 
 
 def reconcile_memory(conversation, document):
@@ -133,7 +133,8 @@ def progress(memory, document):
         reviewed_items=sum(i['id'] in memory['coverage'] for i in sources), total_items=len(sources),
         topics=[{'id': i['id'], 'title': i['title'],
                  'status': memory['coverage'][i['id']]['status'] if i['id'] in memory['coverage'] else
-                           'current' if i['id'] == memory.get('focus_item_id') else 'pending'} for i in sources],
+                           'current' if i['id'] == memory.get('focus_item_id') else 'pending',
+                 'validation': 'unverified' if i.get('validation_issue') else None} for i in sources],
         estimates=memory.get('estimates', [])).model_dump(mode='json')
 
 

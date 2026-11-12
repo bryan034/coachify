@@ -369,6 +369,17 @@
           "maxItems": 240,
           "title": "Review Evidence",
           "type": "array"
+        },
+        "validation_issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValidationIssue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1450,6 +1461,31 @@
         "support_uncertain"
       ],
       "title": "SkillSource",
+      "type": "object"
+    },
+    "ValidationIssue": {
+      "properties": {
+        "status": {
+          "const": "unverified",
+          "title": "Status",
+          "type": "string"
+        },
+        "code": {
+          "description": "The check this section failed after retrying; no CV content.",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "code",
+        "message"
+      ],
+      "title": "ValidationIssue",
       "type": "object"
     }
   },

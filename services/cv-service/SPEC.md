@@ -64,6 +64,16 @@ A failed run returns to the queue twice automatically, after 20 and then 40 seco
 
 Retried automatically: output rejected after repair, invalid or incomplete responses, timeouts, connection errors, HTTP 429, provider 5xx responses and busy model slots. Not retried automatically: authentication, permission, schema or other HTTP 4xx rejections, missing configuration, reached daily budgets, unreadable documents, unexpected errors, changed source identities and history capacity.
 
+### Partly verified extractions
+
+Validation rejects a whole run only while retries remain. On the last automatic run, after its repair also failed, the backend keeps the part that verified instead of discarding the upload (`app/domain/partial_validation.py`). Each item is judged alone: an item that verifies is published exactly as before, with the same ID. An item that cannot be verified, whether for unsupported evidence, an unstated explicit skill, an unmatched review quote or a schema error, is kept as unconfirmed context with `validation_issue: {status: "unverified", code, message}`. `code` names the failed check and `message` is fixed wording; neither holds CV or model text.
+
+A flagged item keeps its extracted title, description and cited excerpts (only those whose block exists). It drops dates, proficiency, durations and review facts, has `provenance: "inferred"` and `support_uncertain: true`, so its skills never count as demonstrated capability, and carries the `claim` uncertainty so the review asks about it. An entry with no usable kind, title or description is dropped and counted. `other_information` entries that do not verify are left out and counted. Both counts appear in `notices`.
+
+The whole run still fails when the problem is not one item's fault or nothing verifies: no item passes, a claim is duplicated, relationships are circular, or either list exceeds 160 entries. Semantic support already obtained for the candidate is reused; otherwise one verification call is made, so a run still makes at most four provider calls. A user's explanation or correction of a flagged item removes its flag.
+
+Every flagged item is a review topic of any kind. `InterviewProgress.topics[].validation` is `"unverified"` for it, the planner is told the source is unconfirmed, and the backend puts a fixed notice before the first question about it, saying the section is better explained in chat.
+
 Automatic and manual retries tell the model why the previous run failed, in `previous_attempt_failure`. It holds the failure category, a fixed sentence and, for rejected output, the same allowlisted validation issues used for repair. It never holds provider prose, exception text, the rejected output or CV content. The operation keeps this record until a run succeeds or the CV is reuploaded, and it is not returned by the API.
 
 ### Extraction failure diagnostics

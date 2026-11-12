@@ -91,6 +91,7 @@ class InterviewTopic(StrictModel):
     id: str
     title: str
     status: Literal['pending', 'current', 'reviewed', 'reviewed_with_gaps', 'deferred']
+    validation: Literal['unverified'] | None = None
 
 
 class InterviewProgress(StrictModel):

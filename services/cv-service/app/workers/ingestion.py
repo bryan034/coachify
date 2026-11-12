@@ -177,9 +177,12 @@ class IngestionWorker:
                 checkpointer=LatestStateSaver(self.repository.extraction_states, claimed['_id'], claimed['user_id'], holds_lease),
                 # A retry keeps the operation and resumes. A reupload or new workflow version starts fresh.
                 thread_id=f"{claimed['operation']['id']}:{WORKFLOW_VERSION}",
-                rewind_rejected=bool(previous_failure and previous_failure['category'] in REJECTED_OUTPUT))
+                rewind_rejected=bool(previous_failure and previous_failure['category'] in REJECTED_OUTPUT),
+                # Only the last automatic attempt keeps a partly verified extraction; earlier ones retry in full.
+                allow_partial=claimed['operation'].get('auto_retries', 0) >= self.settings.extraction_auto_retries)
             result = harness.run(original)
             parsed, items, metadata = result['parsed'], result['items'], result['metadata']
+            parsed = {**parsed, 'notices': [*parsed.get('notices', []), *result.get('partial_notices', [])]}
             observe('publication')
             error = None
         except StaleExtraction:

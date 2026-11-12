@@ -18,7 +18,7 @@ from app.schemas.interview import InterviewTurn
 from app.schemas.interview_evidence import fact_key, fact_groups, fact_group_value
 from app.conversation.interview_memory import (build_context, reconcile_memory, progress, evidence_for, target_key,
     topic_question_count, topic_ids, question_options, MAX_TOPIC_QUESTIONS, MAX_TARGET_ATTEMPTS)
-from app.conversation.presentation import review_reply
+from app.conversation.presentation import review_reply, unverified_notice
 from app.conversation.interview_policy import validate_decision, DecisionRejected
 
 logger = logging.getLogger(__name__)
@@ -385,7 +385,7 @@ class InterviewHarness:
         memory['coverage'] = coverage
         memory['summary'] = [{'item_id': i, 'status': v['status']} for i, v in coverage.items()]
         memory['estimates'] = baseline_estimates(current_items)
-        active, targets = None, []
+        active, targets, reply_text = None, [], decision.reply
         if decision.action == 'ask':
             memory.update(status='reviewing', focus_item_id=decision.item_id)
             active = {'id': key(route['id'] + ':interview-question'), 'item_id': decision.item_id,
@@ -400,6 +400,10 @@ class InterviewHarness:
                 memory['attempts'][identity] = {'signature': signature, 'count': previous.get('count', 0) + 1
                     if previous.get('signature') == signature else 1}
             memory.setdefault('question_counts', {})[decision.item_id] = topic_question_count(memory, decision.item_id) + 1
+            unverified = next((i for i in current_items if i['id'] == decision.item_id and i.get('validation_issue')), None)
+            # Say it again in the chat, once, before the first question about a section that failed validation.
+            if unverified and memory['question_counts'][decision.item_id] == 1:
+                reply_text = unverified_notice(unverified['title']) + '\n\n' + decision.reply
             memory['questions'].append({**active, 'targets': targets, 'evidence_version': document['effective_version']})
             memory['questions'] = memory['questions'][-120:]
         elif decision.action == 'finish':
@@ -427,7 +431,7 @@ class InterviewHarness:
             def retain_plan(current):
                 action = action_in(current, route['id'])
                 self.service.check_lease(action, token)
-                action['_interview_plan'] = {'memory': memory, 'reply': decision.reply, 'active': active, 'targets': targets,
+                action['_interview_plan'] = {'memory': memory, 'reply': reply_text, 'active': active, 'targets': targets,
                     'question': question, 'expected_version': document['version']}
             await run_in_threadpool(self.service.update, account['id'], conversation['_id'], retain_plan)
             def add(current):
@@ -437,7 +441,7 @@ class InterviewHarness:
             await run_in_threadpool(self.service.cv.mutate, account['id'], document['_id'],
                 Mutation(expected_version=document['version'], mutation_id=key(route['id'] + ':interview-question')),
                 'interview-question', add)
-        return await self.publish(account, conversation['_id'], route['id'], token, memory, decision.reply, active, targets)
+        return await self.publish(account, conversation['_id'], route['id'], token, memory, reply_text, active, targets)
 
     async def pause(self, account, identifier, route_id, token, memory, reply):
         memory['status'] = 'paused'

@@ -206,6 +206,12 @@ class SkillClaim(BaseModel):
     support_uncertain: bool
 
 
+class ValidationIssue(BaseModel):
+    status: Literal['unverified']
+    code: str = Field(description='The check this section failed after retrying; no CV content.')
+    message: str
+
+
 class CvItem(BaseModel):
     id: str
     source_fingerprint: str | None = None
@@ -229,6 +235,7 @@ class CvItem(BaseModel):
     uncertainties: list[str] = []
     skill_claims: list[SkillClaim] = []
     review_evidence: list[ReviewFact] = Field(default_factory=list, max_length=240)
+    validation_issue: ValidationIssue | None = None
 
 
 class SkillSource(BaseModel):
