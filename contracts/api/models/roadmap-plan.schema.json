@@ -580,6 +580,70 @@
             }
           ],
           "default": null
+        },
+        "skills": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TaskSkill"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Chosen skills; null derives them from the task's requirement links.",
+          "title": "Skills"
+        },
+        "anytime_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day of a task without a set time; its schedule is then empty.",
+          "title": "Anytime Date"
+        },
+        "original": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskOriginal"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "self_rating": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SelfRating"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backlog_moved_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backlog Moved At"
         }
       },
       "required": [
@@ -696,6 +760,19 @@
           "title": "Milestone Key",
           "type": "string"
         },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The short to-do name; null on sessions saved before names existed.",
+          "title": "Title"
+        },
         "gap_id": {
           "anyOf": [
             {
@@ -708,6 +785,17 @@
           ],
           "default": null,
           "title": "Gap Id"
+        },
+        "gap_ids": {
+          "description": "Every listed gap this session practises.",
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 6,
+          "title": "Gap Ids",
+          "type": "array"
         },
         "kind": {
           "default": "study",
@@ -885,6 +973,47 @@
         }
       },
       "title": "PlanChanges",
+      "type": "object"
+    },
+    "PlanCheckpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "reached_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reached At"
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "date"
+      ],
+      "title": "PlanCheckpoint",
       "type": "object"
     },
     "PlanGap": {
@@ -1092,6 +1221,13 @@
           "minLength": 1,
           "title": "Demonstrable Outcome",
           "type": "string"
+        },
+        "checkpoints": {
+          "items": {
+            "$ref": "#/$defs/PlanCheckpoint"
+          },
+          "title": "Checkpoints",
+          "type": "array"
         },
         "id": {
           "title": "Id",
@@ -1313,6 +1449,54 @@
       "title": "Run",
       "type": "object"
     },
+    "SelfRating": {
+      "additionalProperties": false,
+      "description": "Self-reported after a session. Never an input to skill scores.",
+      "properties": {
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "difficulty": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty"
+        },
+        "recorded_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recorded At"
+        }
+      },
+      "title": "SelfRating",
+      "type": "object"
+    },
     "SourceAssignment": {
       "additionalProperties": true,
       "properties": {
@@ -1435,6 +1619,33 @@
           ],
           "default": null,
           "title": "Completion Criterion"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "gap_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gap Ids"
         },
         "status": {
           "anyOf": [
@@ -1670,6 +1881,26 @@
       "title": "TaskHistory",
       "type": "object"
     },
+    "TaskOriginal": {
+      "additionalProperties": false,
+      "description": "The generated wording kept when the user rewrites a task, so it can be restored.",
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "completion_outcome": {
+          "title": "Completion Outcome",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "completion_outcome"
+      ],
+      "title": "TaskOriginal",
+      "type": "object"
+    },
     "TaskPrevious": {
       "additionalProperties": true,
       "properties": {
@@ -1777,6 +2008,33 @@
           ],
           "default": null,
           "title": "Schedule"
+        },
+        "skills": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TaskSkill"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skills"
+        },
+        "anytime_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anytime Date"
         }
       },
       "title": "TaskPrevious",
@@ -1811,6 +2069,47 @@
         }
       },
       "title": "TaskRemoval",
+      "type": "object"
+    },
+    "TaskSkill": {
+      "additionalProperties": false,
+      "description": "A skill a task works on. Identity is canonical_skill_id; gap_id links a skill gap of this plan.",
+      "properties": {
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "canonical_skill_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Skill Id"
+        },
+        "gap_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gap Id"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "TaskSkill",
       "type": "object"
     },
     "TaskSlot": {

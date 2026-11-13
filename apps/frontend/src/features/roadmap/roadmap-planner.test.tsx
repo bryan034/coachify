@@ -85,7 +85,7 @@ it('has no Starting point tab or panel, before or after a roadmap exists', async
  first.unmount();
  const value = state(); const plan = roadmap(); value.planner = planner({ active: plan, active_review: review(plan) });
  api.mockResolvedValue(value); render(<RoadmapPlanner />);
- await screen.findByRole('region', { name: 'To-do list' });
+ await screen.findByRole('navigation', { name: 'Roadmap views' });
  expect(screen.queryByRole('tab', { name: 'Starting point' })).not.toBeInTheDocument();
 });
 

@@ -33,7 +33,7 @@ node "Docker Compose — focused design" {
       artifact "Version-pinned comparison and source evidence\nSeparate role, interview and constraint outcomes\n/api/v1/assessments" as AssessmentAPI
     }
     node "Roadmap and task service\nservices/roadmap-service" as Roadmap <<Docker container>> {
-      artifact "Chat-assisted settings and calculated runway\nValidated LLM plans with reviewed previews\nTimed sessions and progress history\n/api/v1/roadmaps" as RoadmapAPI
+      artifact "Chat-assisted settings and calculated runway\nValidated LLM plans with reviewed previews\nTimed or anytime tasks, backlog moves and checkpoints\n/api/v1/roadmaps" as RoadmapAPI
     }
     node "Job search and application tracking\nservices/jobs-service" as Jobs <<Docker container>> {
       artifact "Singapore listing search and filters\nSelf-reported application tracking\n/api/v1/jobs" as JobsAPI

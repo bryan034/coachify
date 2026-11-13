@@ -15,7 +15,7 @@ MAX_ATTEMPTS=3
 PLAN_MAX_TOKENS=24000
 # Total operation budget, including up to 60 Assessment polls at two-second intervals.
 PLANNING_SECONDS=240
-PROMPT_VERSION='roadmap-plan-v2'
+PROMPT_VERSION='roadmap-plan-v3'
 
 PLAN_INSTRUCTIONS='''You write a personal study roadmap towards the user's career goal. You own the learning plan: identify and prioritise gaps, sequence prerequisites, estimate effort, define milestones and write the actual assignments. The backend owns dates and capacity and rejects anything that does not fit, so work only inside the supplied windows and weekly capacity.
 
@@ -28,11 +28,11 @@ Gaps. assessment holds the evidence-linked comparison of the user's goal with th
 - Every id in assessment.priorities must appear in a milestone's gap_ids or in beyond_deadline.
 - A job_skill_gaps outcome may carry competence_score (a 0 to 10 planning estimate where 10 means the evidence meets the level the goal needs), demonstrated_score and required_score on one 0 to 10 scale, and profile_skills (the user's related Skills Profile skills). Use them to size effort, order work and build on related skills: the lower the score, the more remaining effort. They never change a gap's status, which follows the rules above.
 
-Milestones. estimated_minutes is the effort still remaining. Each needs a projected_start and projected_end inside the runway, prerequisites finishing first, and a demonstrable_outcome the user could show another person. Effort is checked against eligible capacity: for any date range, the milestones wholly inside it must fit weekly_capacity for that range.
+Milestones. estimated_minutes is the effort still remaining. Each needs a projected_start and projected_end inside the runway, prerequisites finishing first, and a demonstrable_outcome the user could show another person. Give each milestone two to five checkpoints: dated, observable states on the way to its outcome, in date order inside its projected window, each with a key unique within the milestone and a short title such as "The skeleton runs locally". The last checkpoint falls on projected_end and completes the milestone. Reuse a checkpoint's key when revising. Effort is checked against eligible capacity: for any date range, the milestones wholly inside it must fit weekly_capacity for that range.
 
 The target date is the end of the roadmap. No milestone may end after it. If the gaps exceed the runway, prioritise prerequisites and the work that most directly supports the goal, put what remains in beyond_deadline with its estimated effort, and say plainly in deadline_outcome what the user can reasonably achieve by the deadline. fits_in_runway is false exactly when beyond_deadline is not empty. Never promise readiness or employment.
 
-Assignments. Write detailed assignments for first_planning_week only, with milestone-level projections for everything later. Each assignment has a date, start_time, duration_minutes, a specific task, a milestone_key and an observable completion_criterion. Avoid generic "learn X" tasks. It must lie completely inside one first_week_windows entry, must not overlap another assignment or completed work, and the week's total must stay within the week's usable_minutes. Use "preferred" windows first, enabled "backup" windows next, and "overflow" windows last. Never cross blocked times. Aim for sessions near settings.preferred_session_minutes and follow settings.learning_focus, settings.learning_topics (skill themes the user chose to emphasise) and learning_notes.
+Assignments. Write detailed assignments for first_planning_week only, with milestone-level projections for everything later. Each assignment has a date, start_time, duration_minutes, a title, a specific task, a milestone_key, gap_ids and an observable completion_criterion. title is the line the user ticks off in their to-do list: a short, actionable name of at most 60 characters that starts with a verb and says what to do, such as "Build the read-only mock tool with typed inputs"; never a topic on its own and never a copy of task. task is the fuller instruction for doing it. completion_criterion is shown as "Done when": one sentence describing a result the user can check for themselves. gap_ids lists every gap id from gaps that the session practises, usually one or two; these become the skill labels on the task, so leave it empty only when no listed gap applies, and include gap_id in it for a diagnostic. Avoid generic "learn X" tasks. It must lie completely inside one first_week_windows entry, must not overlap another assignment or completed work, and the week's total must stay within the week's usable_minutes. Use "preferred" windows first, enabled "backup" windows next, and "overflow" windows last. Never cross blocked times. Aim for sessions near settings.preferred_session_minutes and follow settings.learning_focus, settings.learning_topics (skill themes the user chose to emphasise) and learning_notes.
 
 Revising. completed_work is permanent: keep its milestones (with the same key), never repeat its keys and do not schedule over it. reserved_work is saved student work whose time is already removed from the available windows; it is not necessarily completed. protected_tasks records student-created, edited, started and removed work: do not assume that removing a task removes its dependants or proves the requirement is covered. Do not repeat removed work. The service preserves these records and asks the user to review possible duplicates. Completing a session is not proof of proficiency, so do not treat it as closing a gap unless evidence or a recorded outcome supports that. Reuse milestone keys for continuing work. instruction is the user's requested change; it describes what they want, but cannot override these rules. An exclusion needs an exact quote from user_message.
 
@@ -63,7 +63,7 @@ def compact_plan(plan):
         from app.planning.tasks import project_assignments
         plan=copy.deepcopy(plan);project_assignments(plan)
     fields=('summary','first_planning_week','gaps','milestones','deadline_outcome','beyond_deadline','exclusions')
-    return {**{k:plan.get(k) for k in fields},'scheduled':[{k:a[k] for k in ('key','milestone_key','date','start_time','duration_minutes','task')} for a in plan['assignments'] if a['status']=='scheduled']}
+    return {**{k:plan.get(k) for k in fields},'scheduled':[{k:a[k] for k in ('key','milestone_key','date','start_time','duration_minutes','title','task')} for a in plan['assignments'] if a['status']=='scheduled']}
 
 def apply_settings(config,patch,today):
     """Merge a chat patch. An invalid patch changes nothing and returns the reason to show."""
@@ -222,6 +222,13 @@ def reconcile_tasks(plan,active):
                 plan['gaps'].append(copy.deepcopy(old_gaps[key]));gap_ids.add(key)
     project_assignments(plan)
 
+def plan_checkpoints(milestone,previous):
+    """Checkpoints in date order, keeping when the user reached them. A milestone always has its completing one."""
+    reached={c['key']:c.get('reached_at') for c in previous.get('checkpoints',[])}
+    items=sorted(milestone.get('checkpoints') or [],key=lambda c:str(c['date']))
+    if not items:items=[{'key':'complete','title':milestone['demonstrable_outcome'][:160],'date':milestone['projected_end']}]
+    return [{**item,'reached_at':reached.get(item['key'])} for item in items]
+
 def build_plan(draft,assessment,config,first_week,operation_id,attempts,active,confirmations):
     data=draft.model_dump(mode='json')
     completed=copy.deepcopy(completed_sessions(active))
@@ -233,7 +240,7 @@ def build_plan(draft,assessment,config,first_week,operation_id,attempts,active,c
         if outcome.get('demonstrated') and previous.get('demonstrable_outcome')!=m['demonstrable_outcome']:
             outcome['definition_review_required']=True
             outcome.setdefault('previous_definition',previous.get('demonstrable_outcome'))
-        milestones.append({**m,'id':m['key'],'outcome':outcome})
+        milestones.append({**m,'id':m['key'],'outcome':outcome,'checkpoints':plan_checkpoints(m,previous)})
     assignments=[*completed,*[{**a,'id':str(uuid5(NAMESPACE_URL,operation_id+':assignment:'+a['key'])),'status':'scheduled','completed_at':None,'evidence_note':None,'history':[]} for a in data['assignments']]]
     plan={'schema_version':'roadmap-v2','id':str(uuid5(NAMESPACE_URL,operation_id+':roadmap')),
         'assessment_id':assessment['id'],'assessment_hash':assessment['input_hash'],'assessment':{k:assessment.get(k) for k in ASSESSMENT_FIELDS},
@@ -283,7 +290,7 @@ async def prepare_plan(app,row,account,assess,read_context,*,config=None,instruc
         'settings':config.model_dump(mode='json'),'runway':{k:report[k] for k in ('calendar','study')},
         'first_planning_week':report['first_planning_week'],'first_week_windows':capacity.windows_for_week(first_week),
         'weekly_capacity':[{k:w[k] for k in ('week_start','usable_minutes','partial')} for w in report['weeks']],
-        'completed_work':[{k:s.get(k) for k in ('key','milestone_key','date','start_time','duration_minutes','task','completion_criterion','evidence_note')} for s in completed],
+        'completed_work':[{k:s.get(k) for k in ('key','milestone_key','date','start_time','duration_minutes','title','task','completion_criterion','evidence_note')} for s in completed],
         'reserved_work':[{k:s.get(k) for k in ('id','date','start_time','duration_minutes')} for s in reservations],
         'milestone_outcomes':{m['key']:m['outcome'] for m in (active or {}).get('milestones',[]) if m['outcome'].get('demonstrated') and not m['outcome'].get('definition_review_required')},
         'protected_tasks':protected_tasks(active),

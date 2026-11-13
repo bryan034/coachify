@@ -3,8 +3,17 @@ import copy
 from datetime import date
 from uuid import NAMESPACE_URL, uuid5
 from elo_shared.runtime import Problem, stamp
+from elo_shared.skills import resolve
 from app.planning.capacity import Capacity, to_minute, week_of
 from app.schemas.roadmap import PlannerConfig
+
+
+def gap_skill(plan,gap):
+    """A plan gap as a task skill. The assessed requirement's identity wins over a name lookup."""
+    assessment=plan.get('assessment') or {}
+    outcome=next((item for section in ('job_skill_gaps','interview_prep_gaps') for item in assessment.get(section) or []
+        if gap.get('requirement_ref') and item.get('ref')==gap['requirement_ref']),{})
+    return {'name':gap['name'],'canonical_skill_id':outcome.get('canonical_skill_id') or resolve(gap['name']),'gap_id':gap['id']}
 
 
 def ensure_tasks(plan):
@@ -14,7 +23,9 @@ def ensure_tasks(plan):
         result=[]
         for a in plan.get('assignments',[]):
             gap=gaps.get(a.get('gap_id'),{})
-            result.append({'id':a['id'],'title':a['task'],'instructions':a['task'],
+            named=[gaps[key] for key in dict.fromkeys(a.get('gap_ids') or []) if key in gaps]
+            result.append({'id':a['id'],'title':a.get('title') or a['task'],'instructions':a['task'],
+                'skills':[gap_skill(plan,item) for item in named] or None,
                 'completion_outcome':a['completion_criterion'],'estimated_minutes':a['duration_minutes'],
                 'requirement_refs':[gap['requirement_ref']] if gap.get('requirement_ref') else [],
                 'requirement_source_hash':plan.get('assessment_hash'),
@@ -115,7 +126,7 @@ def project_assignments(plan):
             key=primary[task['id']] if i==0 else split[(task['id'],i)]
             output.append({'id':ident,'key':key,'milestone_key':task['milestone_key'],
                 'gap_id':gap_id,'skill_gap_ids':skill_gap_ids,'kind':source.get('kind','study'),**slot,
-                'task':task['instructions'],'completion_criterion':task['completion_outcome'],
+                'title':task.get('title') or task.get('instructions'),'task':task['instructions'],'completion_criterion':task['completion_outcome'],
                 'status':'completed' if task['status']=='completed' else 'scheduled',
                 'completed_at':task.get('completed_at'),'evidence_note':task.get('evidence_note'),
                 'history':copy.deepcopy(history),'task_id':task['id']})
@@ -206,7 +217,7 @@ def schedule_warnings(plan,now):
     capacity=Capacity(PlannerConfig.model_validate(plan['config']),now)
     for task in tasks:
         scheduled=sum(s['duration_minutes'] for s in task['schedule'])
-        if scheduled<task['estimated_minutes']:add('unscheduled_remainder','Some estimated minutes are unscheduled. See each task for the remaining minutes.',[task['id']])
+        if scheduled<task['estimated_minutes'] and not task.get('anytime_date'):add('unscheduled_remainder','Some estimated minutes are unscheduled. See each task for the remaining minutes.',[task['id']])
         if scheduled>task['estimated_minutes']:add('effort_exceeded','Scheduled time exceeds the estimate.',[task['id']])
         for slot in task['schedule']:
             day=date.fromisoformat(str(slot['date']));begin=to_minute(slot['start_time']);end=begin+slot['duration_minutes']

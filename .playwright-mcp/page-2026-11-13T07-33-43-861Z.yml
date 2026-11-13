@@ -1,0 +1,33 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "Skip to content" [ref=e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - complementary "Workspace" [ref=e4]:
+      - 'link "elo: back to Roadmap" [ref=e5] [cursor=pointer]':
+        - /url: /roadmap
+        - img "Elo" [ref=e6]
+      - navigation "Main navigation" [ref=e7]:
+        - link "Home" [ref=e8] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Career Goal" [ref=e11] [cursor=pointer]:
+          - /url: /career-goal
+        - link "Skills Profile" [ref=e15] [cursor=pointer]:
+          - /url: /cv
+        - link "Roadmap" [ref=e18] [cursor=pointer]:
+          - /url: /roadmap
+        - link "Search Jobs" [ref=e23] [cursor=pointer]:
+          - /url: /jobs
+      - separator [ref=e27]
+      - navigation "More" [ref=e28]:
+        - link "Calendar" [ref=e29] [cursor=pointer]:
+          - /url: /calendar
+      - generic [ref=e33]:
+        - link "My profile" [ref=e34] [cursor=pointer]:
+          - /url: /profile
+        - generic [ref=e43]:
+          - strong [ref=e44]: Your workspace
+          - generic [ref=e45]: Loading your background…
+        - button "Sign out" [ref=e46] [cursor=pointer]
+    - main [ref=e47]:
+      - status "Checking your session and setup…" [ref=e49]
+  - button "Open Next.js Dev Tools" [ref=e68] [cursor=pointer]

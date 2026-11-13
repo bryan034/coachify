@@ -128,3 +128,21 @@ If an explicit evaluation is already pending/running, Roadmap can reconnect with
 polls at two-second intervals. The total operation budget remains 240 seconds for cloud and
 local models; Assessment's timeouts are unchanged. Publication rechecks the exact source
 fingerprint, and accepting a preview requires a current evaluation and unchanged inputs.
+
+### Roadmap views and session planning
+
+The active roadmap offers Today, Week, Month, Milestones and Progress. Plan settings
+returns to configuration, source notices and adviser chat. A new candidate remains a
+separate read-only preview until accepted. Generation supplies short actionable task
+names, explicit skill-gap links and dated milestone checkpoints. Legacy plans derive
+names/skills from saved assignments and retain readable progress.
+
+Session writes under `/planner/sessions` reuse the owner's workspace CAS and mutation
+receipts: `add`, `save`, `move` and `skip`. Timed and anytime tasks are supported.
+Names, done-when criteria, chosen Skills Profile/plan skills, notes and optional
+confidence/difficulty self-ratings persist on editable tasks. Original generated
+wording is retained for restoration. Notes and ratings never change assessed skills.
+`free-times` and `backlog-plan` calculate proposals without persisting them; only an
+explicit move applies a proposal. Moves are validated together against the saved
+schedule and capacity. Checkpoint reached timestamps are explicit user reports,
+separate from demonstrated milestone outcomes.

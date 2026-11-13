@@ -4,8 +4,10 @@ from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from .base import Contract, Mutation, Text
-from .tasks import EditableTask, RevisionReview, TaskReadiness
+from .notes import NotesDocument
+from .tasks import EditableTask, RevisionReview, TaskReadiness, TaskSkill
 
+Day=date
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
 Key=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
 Title=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160)]
@@ -111,6 +113,11 @@ class DraftGap(Contract):
     resolution:Literal['diagnostic','confirm_experience']|None=None
     confirmation_question:str|None=Field(default=None,max_length=500)
     rationale:Text
+class DraftCheckpoint(Contract):
+    """A dated, observable check inside a milestone. The last one completes the milestone."""
+    key:Key
+    title:Title
+    date:date
 class DraftMilestone(Contract):
     key:Key
     title:Title
@@ -120,10 +127,13 @@ class DraftMilestone(Contract):
     projected_start:date
     projected_end:date
     demonstrable_outcome:Text
+    checkpoints:list[DraftCheckpoint]=Field(default_factory=list,max_length=8)
 class DraftAssignment(Contract):
     key:Key
     milestone_key:Key
+    title:Title=Field(description='A short, actionable name for the to-do list, at most 80 characters.')
     gap_id:str|None=Field(default=None,max_length=80)
+    gap_ids:list[Key]=Field(default_factory=list,max_length=6,description='Every listed gap this session practises.')
     kind:Literal['study','diagnostic']='study'
     date:date
     start_time:Clock
@@ -162,6 +172,10 @@ class AssignmentStatus(Mutation):
     assignment_id:str=Field(min_length=1,max_length=80)
     status:Literal['scheduled','completed']
     evidence_note:str|None=Field(default=None,max_length=2000)
+class CheckpointReached(Mutation):
+    milestone_id:str=Field(min_length=1,max_length=80)
+    checkpoint_key:Key
+    reached:bool
 class MilestoneOutcome(Mutation):
     milestone_id:str=Field(min_length=1,max_length=80)
     demonstrated:bool
@@ -288,13 +302,17 @@ class LearningPlan(Contract):
     steps:list[LearningStep]
 class PlanGap(DraftGap):
     pass
+class PlanCheckpoint(DraftCheckpoint):
+    reached_at:str|None=None
 class PlanMilestone(DraftMilestone):
     model_config=ConfigDict(extra='forbid')
     id:str
     outcome:MilestoneOutcomeRecord
+    checkpoints:list[PlanCheckpoint]=Field(default_factory=list)
 class PlanAssignment(DraftAssignment):
     model_config=ConfigDict(extra='forbid')
     id:str
+    title:str|None=Field(default=None,description='The short to-do name; null on sessions saved before names existed.')
     skill_gap_ids:list[str]|None=Field(default=None,description='Exactly one known skill gap, or an empty list when no unambiguous link is available. Null indicates a legacy assignment without a projected link.')
     status:Literal['scheduled','completed']
     completed_at:str|None=None
@@ -334,6 +352,34 @@ class PlanReview(Contract):
     missed_assignment_ids:list[str]
     remaining:Runway
     milestones:dict[str,MilestoneProgress]
+class SessionOriginal(Contract):
+    title:str
+    completion_criterion:str
+class SessionView(Contract):
+    """One to-do row: a scheduled slot, or an anytime day, of a current task."""
+    id:str
+    task_id:str
+    title:str
+    instructions:str
+    completion_criterion:str
+    date:str
+    start_time:str|None=Field(description='Null when the task can be done at any time that day.')
+    duration_minutes:int
+    status:Literal['scheduled','completed']
+    completed_at:str|None=None
+    missed:bool=Field(description='Not done and its day has passed, so it waits in the backlog.')
+    origin:Literal['generated','user']
+    kind:Literal['study','diagnostic']='study'
+    milestone_key:str|None=None
+    skills:list[TaskSkill]=Field(default_factory=list)
+    edited:bool=Field(default=False,description='The name or completion criterion differs from the generated wording.')
+    original:SessionOriginal|None=None
+    notes:NotesDocument|None=None
+    confidence:int|None=Field(default=None,description='Self-reported, 1 to 10. Never used for skill scores.')
+    difficulty:int|None=Field(default=None,description='Self-reported, 1 to 10. Never used for skill scores.')
+    rated_at:str|None=None
+    moved_from_backlog:bool=False
+    slots:int=1
 class DashboardSource(Contract):
     version:int
     active:PlannedRoadmap|None
@@ -375,6 +421,67 @@ class PlannerView(Contract):
     active:PlannedRoadmap|None
     active_review:PlanReview|None
     task_warnings:list[dict]=Field(default_factory=list)
+    active_sessions:list[SessionView]=Field(default_factory=list)
+    candidate_sessions:list[SessionView]=Field(default_factory=list)
     confirmations:dict[str,ConfirmationRecord]
     signals:list[Signal]
     retry_generate:GeneratePlan|None=None
+
+class SessionChanges(Contract):
+    """Only the fields sent are changed. A null start_time makes the task anytime on its day."""
+    title:Title|None=None
+    completion_criterion:Text|None=None
+    skills:list[Title]|None=Field(default=None,max_length=8)
+    date:Day|None=None
+    start_time:Clock|None=None
+    duration_minutes:int|None=Field(default=None,strict=True,ge=5,le=480)
+    notes:NotesDocument|None=None
+    confidence:int|None=Field(default=None,strict=True,ge=1,le=10)
+    difficulty:int|None=Field(default=None,strict=True,ge=1,le=10)
+    restore_original:bool|None=None
+class SaveSession(Mutation):
+    session_id:str=Field(min_length=1,max_length=80)
+    changes:SessionChanges
+    allow_overlap:bool=False
+class NewSession(Contract):
+    title:Title
+    completion_criterion:str=Field(default='',max_length=4000)
+    skills:list[Title]=Field(default_factory=list,max_length=8)
+    date:date
+    start_time:Clock|None=None
+    duration_minutes:int=Field(strict=True,ge=5,le=480)
+    notes:NotesDocument|None=None
+class AddSession(Mutation):
+    session:NewSession
+    allow_overlap:bool=False
+class SessionMove(Contract):
+    session_id:str=Field(min_length=1,max_length=80)
+    date:date
+    start_time:Clock
+class MoveSessions(Mutation):
+    moves:list[SessionMove]=Field(min_length=1,max_length=50)
+class SkipSession(Mutation):
+    session_id:str=Field(min_length=1,max_length=80)
+class FreeTimesRequest(Contract):
+    duration_minutes:int=Field(strict=True,ge=5,le=480)
+    session_id:str|None=Field(default=None,max_length=80)
+class FreeDay(Contract):
+    date:str
+    rest_day:bool
+    kind:Literal['study','after_block','rest_day','none']
+    starts:list[str]
+class FreeTimes(Contract):
+    version:int
+    today:str
+    days:list[FreeDay]
+class BacklogPlanRequest(Contract):
+    session_ids:list[Annotated[str,StringConstraints(min_length=1,max_length=80)]]|None=Field(default=None,max_length=50)
+class BacklogProposal(Contract):
+    session_id:str
+    title:str
+    duration_minutes:int
+    date:str|None
+    start_time:str|None
+class BacklogPlan(Contract):
+    version:int
+    moves:list[BacklogProposal]

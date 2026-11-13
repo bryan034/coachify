@@ -36,8 +36,8 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
    return respond(route, { version: state.version, operation: state.operation }, 202);
   }
   if (path === '/planner/accept') { const active = state.planner.candidate!; state = { ...state, version: state.version + 1, planner: { ...state.planner, active, active_review: review(active), candidate: null, candidate_review: null, signals: [] } }; return respond(route, state); }
-  if (path === '/planner/assignments/status') {
-   const active = { ...state.planner.active!, assignments: state.planner.active!.assignments.map(a => a.id === body.assignment_id ? { ...a, status: body.status, evidence_note: body.evidence_note, completed_at: '2030-01-09T12:00:00+00:00' } : a) };
+  if (path === '/planner/tasks/status') {
+   const active = { ...state.planner.active!, assignments: state.planner.active!.assignments.map(a => a.id === body.task_id ? { ...a, status: body.status === 'completed' ? 'completed' as const : 'scheduled' as const, evidence_note: body.evidence_note, completed_at: '2030-01-09T12:00:00+00:00' } : a) };
    state = { ...state, version: state.version + 1, planner: { ...state.planner, active, active_review: { ...review(active), next_assignment_id: null }, signals: [{ kind: 'progress', message: 'You’ve completed 1 session(s) since this roadmap was prepared.' }] } };
    return respond(route, state);
   }
@@ -96,66 +96,52 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await page.screenshot({ path: test.info().outputPath('roadmap-configure.png'), fullPage: true });
 
  await page.getByRole('button', { name: 'Generate roadmap' }).click();
- await expect(page.getByText('Preview: not active until you accept it')).toBeVisible();
- const timeline = page.getByRole('region', { name: 'Milestone timeline' });
- await expect(timeline).toContainText('Sun, 27 Jan 2030');
- await expect(page.getByRole('heading', { name: 'Beyond your deadline' })).toBeVisible();
- await expect(page.getByRole('region', { name: 'Where you are now' })).toContainText('Wed, 9 Jan 2030, 19:00–20:00');
+ await expect(page.getByText('Preview · not active until you accept it')).toBeVisible();
+ await expect(page.getByRole('region', { name: 'Your first week' })).toContainText('Write one tested Python endpoint.');
+ await expect(page.getByRole('complementary', { name: 'Milestones in this plan' })).toContainText('Build a Python API');
  await page.screenshot({ path: test.info().outputPath('roadmap-review.png'), fullPage: true });
  await page.setViewportSize({ width: 390, height: 844 });
  expect(await noOverflow(page)).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-review-mobile.png'), fullPage: true });
  await page.setViewportSize({ width: 1280, height: 900 });
 
- await page.getByRole('button', { name: 'Back to configuration' }).click();
+ await page.getByRole('button', { name: 'Back to settings' }).click();
  await expect(page.getByRole('heading', { name: 'Your runway' })).toBeVisible();
  await page.setViewportSize({ width: 390, height: 844 });
  expect(await noOverflow(page)).toBe(true);
  await page.setViewportSize({ width: 1280, height: 900 });
  await page.getByRole('button', { name: 'Return to roadmap' }).click();
  await page.getByRole('button', { name: 'Accept plan' }).click();
- await expect(page.getByText('Your active roadmap')).toBeVisible();
-
- const toDo = page.getByRole('region', { name: 'To-do list' });
- await page.screenshot({ path: test.info().outputPath('roadmap-week.png'), fullPage: true });
- await toDo.getByRole('button', { name: 'Daily' }).click();
- await expect(toDo.getByRole('heading', { name: 'Today' })).toBeVisible();
- await page.screenshot({ path: test.info().outputPath('roadmap-day.png') });
- await toDo.getByRole('button', { name: 'Monthly' }).click();
- await expect(toDo.getByRole('heading', { name: 'January 2030' })).toBeVisible();
- await page.screenshot({ path: test.info().outputPath('roadmap-month.png') });
- await page.setViewportSize({ width: 390, height: 844 });
- expect(await noOverflow(page)).toBe(true);
- await page.screenshot({ path: test.info().outputPath('roadmap-month-mobile.png'), fullPage: true });
- await page.setViewportSize({ width: 1280, height: 900 });
- await toDo.getByRole('button', { name: /^Open week of Mon, 7 Jan 2030/ }).click();
- await toDo.getByRole('checkbox', { name: 'Mark complete: Write one tested Python endpoint.' }).check();
- await expect(toDo.getByRole('checkbox', { name: 'Mark complete: Write one tested Python endpoint.' })).toBeChecked();
- await toDo.getByText('Add what you produced').click();
- await page.getByRole('textbox', { name: 'What did you produce? (optional)' }).fill('The endpoint test passes.');
- await page.getByRole('button', { name: 'Save note' }).click();
- await expect(page.getByText('Your note: The endpoint test passes.')).toBeVisible();
- await expect(timeline).toContainText('Outcome not yet demonstrated.');
-
+ await expect(page.getByRole('navigation', { name: 'Roadmap views' })).toBeVisible();
+ for (const view of ['Today', 'Week', 'Month', 'Milestones', 'Progress']) {
+  await page.getByRole('navigation', { name: 'Roadmap views' }).getByRole('button', { name: view, exact: true }).click();
+  await page.screenshot({ path: test.info().outputPath(`roadmap-${view.toLowerCase()}.png`), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await noOverflow(page)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath(`roadmap-${view.toLowerCase()}-mobile.png`), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 });
+ }
+ await page.getByRole('navigation', { name: 'Roadmap views' }).getByRole('button', { name: 'Today', exact: true }).click();
+ await page.getByRole('button', { name: 'Mark done: Write one tested Python endpoint.' }).click();
+ await expect(page.getByRole('button', { name: 'Mark not done: Write one tested Python endpoint.' })).toHaveAttribute('aria-pressed', 'true');
  await page.reload();
- await expect(page.getByText('Your active roadmap')).toBeVisible();
- await page.getByRole('button', { name: 'Change settings' }).click();
+ await expect(page.getByRole('button', { name: 'Mark not done: Write one tested Python endpoint.' })).toBeVisible();
+ await page.getByRole('button', { name: /Plan settings/ }).click();
  await page.getByLabel('Weekly budget in hours').fill('4');
  await expect(page.getByText('All changes saved')).toBeVisible();
  await page.reload();
- await expect(page.getByText('Your active roadmap')).toBeVisible();
- await page.getByRole('button', { name: 'Change settings' }).click();
+ await page.getByRole('button', { name: /Plan settings/ }).click();
  await expect(page.getByLabel('Weekly budget in hours')).toHaveValue('4');
  await page.getByRole('button', { name: 'Preview updated roadmap' }).click();
- const changes = page.getByRole('region', { name: 'What this preview changes' });
- await expect(changes).toContainText('1 completed session stays exactly as recorded.');
- await expect(changes).toContainText('Add input validation to the endpoint.');
- await expect(page.getByText('Your note: The endpoint test passes.')).toBeVisible();
+ await expect(page.getByText('completed session stays as recorded')).toBeVisible();
+ await expect(page.getByRole('region', { name: 'Your first week' })).toContainText('Add input validation to the endpoint.');
  expect(state.planner.active!.id).toBe('plan1');
  await page.getByRole('button', { name: 'Accept plan' }).click();
- await expect(page.getByText('Moved the next session to Thursday.')).toBeVisible();
-
- await page.getByRole('button', { name: 'Continue with chat helper' }).click();
+ await expect(page.getByRole('navigation', { name: 'Roadmap views' })).toBeVisible();
+ expect(state.planner.active!.id).toBe('plan2');
+ await page.getByRole('button', { name: /Plan settings/ }).click();
+ await page.setViewportSize({ width: 390, height: 844 });
+ if (!await page.getByRole('region', { name: 'Chat helper' }).isVisible()) await page.getByRole('button', { name: 'Continue with chat helper' }).click();
  await expect(page.getByRole('textbox', { name: 'Ask for a change' })).toBeVisible();
  await page.setViewportSize({ width: 390, height: 844 });
  expect(await noOverflow(page)).toBe(true);
