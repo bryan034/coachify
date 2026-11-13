@@ -25,6 +25,7 @@ def check_assignments(draft,capacity,completed,first_week,milestones):
         label=f"Assignment '{item.key}' at {item.date} {item.start_time}"
         begin=to_minute(item.start_time);end=begin+item.duration_minutes
         if item.key in completed_keys:errors.append(issue('completed_assignment_rewritten',f"{label} reuses a completed session key. Completed sessions cannot change."))
+        if len(item.title)>80:errors.append(issue('assignment_title_too_long',f"{label} needs a title of at most 80 characters; put the detail in task."))
         if item.milestone_key not in milestones:errors.append(issue('unknown_milestone',f"{label} references unknown milestone '{item.milestone_key}'."))
         if not first_week<=item.date<=last:errors.append(issue('assignment_outside_first_week',f"{label} is outside the first planning week ({first_week} to {last})."));continue
         if item.date>capacity.target:errors.append(issue('assignment_after_target',f"{label} is after the target date {capacity.target}."));continue
@@ -67,6 +68,10 @@ def check_milestones(draft,capacity,completed,retained):
         label=f"Milestone '{milestone.key}'"
         if milestone.projected_end<milestone.projected_start:errors.append(issue('milestone_window_invalid',f'{label} ends before it starts.'))
         if capacity.target and milestone.projected_end>capacity.target:errors.append(issue('milestone_after_target',f'{label} ends after the target date {capacity.target}. List that work in beyond_deadline instead.'))
+        marks=[c.key for c in milestone.checkpoints]
+        for key in sorted({k for k in marks if marks.count(k)>1}):errors.append(issue('duplicate_checkpoint',f"{label} uses checkpoint key '{key}' more than once."))
+        for checkpoint in milestone.checkpoints:
+            if not milestone.projected_start<=checkpoint.date<=milestone.projected_end:errors.append(issue('checkpoint_outside_milestone',f"{label} has checkpoint '{checkpoint.key}' on {checkpoint.date}, outside its projected window."))
         if milestone.estimated_minutes==0 and milestone.key not in finished:errors.append(issue('milestone_effort_missing',f'{label} needs an estimated effort above zero.'))
         if milestone.key not in finished and milestone.projected_start<capacity.start:errors.append(issue('milestone_before_start',f'{label} starts before {capacity.start}.'))
         for prerequisite in milestone.prerequisite_keys:
@@ -112,6 +117,7 @@ def check_gaps(draft,assessment,confirmations,instruction):
             if item.gap_id not in known:errors.append(issue('diagnostic_without_gap',f"Diagnostic '{item.key}' must reference a listed gap."))
             if item.duration_minutes>30:errors.append(issue('diagnostic_too_long',f"Diagnostic '{item.key}' must take 30 minutes or less."))
         elif item.gap_id and item.gap_id not in known:errors.append(issue('unknown_gap',f"Assignment '{item.key}' references unknown gap '{item.gap_id}'."))
+        for gap_id in sorted(set(item.gap_ids)-known):errors.append(issue('unknown_gap',f"Assignment '{item.key}' lists unknown gap '{gap_id}' in gap_ids."))
     placed={g for m in draft.milestones for g in m.gap_ids}|{g for b in draft.beyond_deadline for g in b.gap_ids}
     for gap_id in sorted(placed-known):errors.append(issue('unknown_gap',f"Plan references unknown gap '{gap_id}'."))
     excluded=set()

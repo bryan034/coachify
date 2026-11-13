@@ -207,6 +207,7 @@ def planner_view(row,source,now,default_zone=None):
     # Legacy snapshots are converted only in the response. A read never saves an
     # upgrade; the next explicit task mutation persists the canonical task data.
     from app.planning.tasks import ensure_tasks, project_assignments, schedule_warnings
+    from app.planning.sessions import session_views
     active,candidate=copy.deepcopy(state['active']),copy.deepcopy(state['candidate'])
     for plan in (active,candidate):
         if plan is not None:
@@ -218,5 +219,6 @@ def planner_view(row,source,now,default_zone=None):
         'runway':capacity.report(allow_past_start=bool(active)),'inputs':plan_inputs(source),
         'candidate':candidate,'candidate_review':plan_review(candidate,now),'candidate_blockers':candidate_blockers(state,source,now),
         'active':active,'active_review':plan_review(active,now),
-        'task_warnings':schedule_warnings(active,now) if active else [],'confirmations':state['confirmations'],
+        'task_warnings':schedule_warnings(active,now) if active else [],
+        'active_sessions':session_views(active,now) if active else [],'candidate_sessions':session_views(candidate,now) if candidate else [],'confirmations':state['confirmations'],
         'signals':revision_signals(state,source,now),'retry_generate':retry_body(row,'generate')}

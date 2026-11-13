@@ -1479,6 +1479,747 @@
         ]
       }
     },
+    "/api/v1/roadmaps/planner/sessions/free-times": {
+      "post": {
+        "summary": "Times",
+        "description": "Free start times for one task from today to the end of next week.",
+        "operationId": "times_api_v1_roadmaps_planner_sessions_free_times_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreeTimesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreeTimes"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/roadmaps/planner/sessions/backlog-plan": {
+      "post": {
+        "summary": "Propose",
+        "description": "Suggested times for missed sessions. Nothing moves until they are sent to /move.",
+        "operationId": "propose_api_v1_roadmaps_planner_sessions_backlog_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacklogPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacklogPlan"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/roadmaps/planner/sessions/move": {
+      "post": {
+        "summary": "Move",
+        "operationId": "move_api_v1_roadmaps_planner_sessions_move_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveSessions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/roadmaps/planner/sessions/save": {
+      "post": {
+        "summary": "Save",
+        "description": "Save a task's details in one step. Notes and ratings never change status or assessed skills.",
+        "operationId": "save_api_v1_roadmaps_planner_sessions_save_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSession"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/roadmaps/planner/sessions/add": {
+      "post": {
+        "summary": "Add",
+        "operationId": "add_api_v1_roadmaps_planner_sessions_add_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSession"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/roadmaps/planner/sessions/skip": {
+      "post": {
+        "summary": "Skip",
+        "operationId": "skip_api_v1_roadmaps_planner_sessions_skip_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkipSession"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/roadmaps/learning": {
       "get": {
         "summary": "Learning",
@@ -2821,6 +3562,130 @@
         ]
       }
     },
+    "/api/v1/roadmaps/planner/milestones/checkpoint": {
+      "post": {
+        "summary": "Checkpoint",
+        "description": "Self-reported: tick or untick one checkpoint inside a milestone.",
+        "operationId": "checkpoint_api_v1_roadmaps_planner_milestones_checkpoint_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckpointReached"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/roadmaps/planner/confirmations": {
       "post": {
         "summary": "Confirmation",
@@ -3079,6 +3944,36 @@
   },
   "components": {
     "schemas": {
+      "AddSession": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "session": {
+            "$ref": "#/components/schemas/NewSession"
+          },
+          "allow_overlap": {
+            "type": "boolean",
+            "title": "Allow Overlap",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "session"
+        ],
+        "title": "AddSession"
+      },
       "AddTask": {
         "properties": {
           "expected_version": {
@@ -3211,6 +4106,100 @@
           "status"
         ],
         "title": "AssignmentStatus"
+      },
+      "BacklogPlan": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/BacklogProposal"
+            },
+            "type": "array",
+            "title": "Moves"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "moves"
+        ],
+        "title": "BacklogPlan"
+      },
+      "BacklogPlanRequest": {
+        "properties": {
+          "session_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 80,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BacklogPlanRequest"
+      },
+      "BacklogProposal": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "title": "Duration Minutes"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "title",
+          "duration_minutes",
+          "date",
+          "start_time"
+        ],
+        "title": "BacklogProposal"
       },
       "BlackoutRule": {
         "properties": {
@@ -3408,6 +4397,46 @@
           "type"
         ],
         "title": "CheckboxBlock"
+      },
+      "CheckpointReached": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "milestone_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Milestone Id"
+          },
+          "checkpoint_key": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Checkpoint Key"
+          },
+          "reached": {
+            "type": "boolean",
+            "title": "Reached"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "milestone_id",
+          "checkpoint_key",
+          "reached"
+        ],
+        "title": "CheckpointReached"
       },
       "ChoiceBlock": {
         "properties": {
@@ -4012,6 +5041,65 @@
                 "type": "null"
               }
             ]
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TaskSkill"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills",
+            "description": "Chosen skills; null derives them from the task's requirement links."
+          },
+          "anytime_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anytime Date",
+            "description": "The day of a task without a set time; its schedule is then empty."
+          },
+          "original": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskOriginal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "self_rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelfRating"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "backlog_moved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backlog Moved At"
           }
         },
         "additionalProperties": false,
@@ -4101,6 +5189,99 @@
           "answer"
         ],
         "title": "ExperienceConfirmation"
+      },
+      "FreeDay": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "rest_day": {
+            "type": "boolean",
+            "title": "Rest Day"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "study",
+              "after_block",
+              "rest_day",
+              "none"
+            ],
+            "title": "Kind"
+          },
+          "starts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Starts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "rest_day",
+          "kind",
+          "starts"
+        ],
+        "title": "FreeDay"
+      },
+      "FreeTimes": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "today": {
+            "type": "string",
+            "title": "Today"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/FreeDay"
+            },
+            "type": "array",
+            "title": "Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "today",
+          "days"
+        ],
+        "title": "FreeTimes"
+      },
+      "FreeTimesRequest": {
+        "properties": {
+          "duration_minutes": {
+            "type": "integer",
+            "maximum": 480.0,
+            "minimum": 5.0,
+            "title": "Duration Minutes"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "duration_minutes"
+        ],
+        "title": "FreeTimesRequest"
       },
       "GeneratePlan": {
         "properties": {
@@ -4657,6 +5838,37 @@
         ],
         "title": "MilestoneProgress"
       },
+      "MoveSessions": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/SessionMove"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Moves"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "moves"
+        ],
+        "title": "MoveSessions"
+      },
       "Mutation": {
         "properties": {
           "expected_version": {
@@ -4677,6 +5889,73 @@
           "mutation_id"
         ],
         "title": "Mutation"
+      },
+      "NewSession": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "completion_criterion": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Completion Criterion",
+            "default": ""
+          },
+          "skills": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Skills"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "maximum": 480.0,
+            "minimum": 5.0,
+            "title": "Duration Minutes"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotesDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "date",
+          "duration_minutes"
+        ],
+        "title": "NewSession"
       },
       "NotesDocument": {
         "properties": {
@@ -4879,6 +6158,18 @@
             "minLength": 1,
             "title": "Milestone Key"
           },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "The short to-do name; null on sessions saved before names existed."
+          },
           "gap_id": {
             "anyOf": [
               {
@@ -4890,6 +6181,17 @@
               }
             ],
             "title": "Gap Id"
+          },
+          "gap_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Gap Ids",
+            "description": "Every listed gap this session practises."
           },
           "kind": {
             "type": "string",
@@ -5065,6 +6367,46 @@
         "additionalProperties": true,
         "type": "object",
         "title": "PlanChanges"
+      },
+      "PlanCheckpoint": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "reached_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reached At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "date"
+        ],
+        "title": "PlanCheckpoint"
       },
       "PlanGap": {
         "properties": {
@@ -5324,6 +6666,13 @@
             "maxLength": 4000,
             "minLength": 1,
             "title": "Demonstrable Outcome"
+          },
+          "checkpoints": {
+            "items": {
+              "$ref": "#/components/schemas/PlanCheckpoint"
+            },
+            "type": "array",
+            "title": "Checkpoints"
           },
           "id": {
             "type": "string",
@@ -5788,6 +7137,20 @@
             },
             "type": "array",
             "title": "Task Warnings"
+          },
+          "active_sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionView"
+            },
+            "type": "array",
+            "title": "Active Sessions"
+          },
+          "candidate_sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionView"
+            },
+            "type": "array",
+            "title": "Candidate Sessions"
           },
           "confirmations": {
             "additionalProperties": {
@@ -6413,6 +7776,43 @@
         ],
         "title": "SaveConfig"
       },
+      "SaveSession": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "session_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Session Id"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/SessionChanges"
+          },
+          "allow_overlap": {
+            "type": "boolean",
+            "title": "Allow Overlap",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "session_id",
+          "changes"
+        ],
+        "title": "SaveSession"
+      },
       "SaveTaskNotes": {
         "properties": {
           "expected_version": {
@@ -6573,6 +7973,424 @@
         ],
         "title": "Schedule"
       },
+      "SelfRating": {
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SelfRating",
+        "description": "Self-reported after a session. Never an input to skill scores."
+      },
+      "SessionChanges": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "completion_criterion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Criterion"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 160,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "duration_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 480.0,
+                "minimum": 5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Minutes"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotesDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "restore_original": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Original"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SessionChanges",
+        "description": "Only the fields sent are changed. A null start_time makes the task anytime on its day."
+      },
+      "SessionMove": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Session Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "start_time": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Start Time"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "date",
+          "start_time"
+        ],
+        "title": "SessionMove"
+      },
+      "SessionOriginal": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "completion_criterion": {
+            "type": "string",
+            "title": "Completion Criterion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "completion_criterion"
+        ],
+        "title": "SessionOriginal"
+      },
+      "SessionView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "instructions": {
+            "type": "string",
+            "title": "Instructions"
+          },
+          "completion_criterion": {
+            "type": "string",
+            "title": "Completion Criterion"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time",
+            "description": "Null when the task can be done at any time that day."
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "title": "Duration Minutes"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "completed"
+            ],
+            "title": "Status"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "missed": {
+            "type": "boolean",
+            "title": "Missed",
+            "description": "Not done and its day has passed, so it waits in the backlog."
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "generated",
+              "user"
+            ],
+            "title": "Origin"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "study",
+              "diagnostic"
+            ],
+            "title": "Kind",
+            "default": "study"
+          },
+          "milestone_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Key"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/TaskSkill"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "edited": {
+            "type": "boolean",
+            "title": "Edited",
+            "description": "The name or completion criterion differs from the generated wording.",
+            "default": false
+          },
+          "original": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionOriginal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotesDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "Self-reported, 1 to 10. Never used for skill scores."
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty",
+            "description": "Self-reported, 1 to 10. Never used for skill scores."
+          },
+          "rated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rated At"
+          },
+          "moved_from_backlog": {
+            "type": "boolean",
+            "title": "Moved From Backlog",
+            "default": false
+          },
+          "slots": {
+            "type": "integer",
+            "title": "Slots",
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "task_id",
+          "title",
+          "instructions",
+          "completion_criterion",
+          "date",
+          "start_time",
+          "duration_minutes",
+          "status",
+          "missed",
+          "origin"
+        ],
+        "title": "SessionView",
+        "description": "One to-do row: a scheduled slot, or an anytime day, of a current task."
+      },
       "Signal": {
         "properties": {
           "kind": {
@@ -6597,6 +8415,34 @@
           "message"
         ],
         "title": "Signal"
+      },
+      "SkipSession": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "session_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Session Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "session_id"
+        ],
+        "title": "SkipSession"
       },
       "SourceAssignment": {
         "properties": {
@@ -6709,6 +8555,31 @@
               }
             ],
             "title": "Completion Criterion"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "gap_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Ids"
           },
           "status": {
             "anyOf": [
@@ -7291,6 +9162,26 @@
         ],
         "title": "TaskList"
       },
+      "TaskOriginal": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "completion_outcome": {
+            "type": "string",
+            "title": "Completion Outcome"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "completion_outcome"
+        ],
+        "title": "TaskOriginal",
+        "description": "The generated wording kept when the user rewrites a task, so it can be restored."
+      },
       "TaskPrevious": {
         "properties": {
           "title": {
@@ -7389,6 +9280,31 @@
               }
             ],
             "title": "Schedule"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TaskSkill"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
+          },
+          "anytime_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anytime Date"
           }
         },
         "additionalProperties": true,
@@ -7445,6 +9361,45 @@
         "additionalProperties": true,
         "type": "object",
         "title": "TaskRemoval"
+      },
+      "TaskSkill": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "gap_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TaskSkill",
+        "description": "A skill a task works on. Identity is canonical_skill_id; gap_id links a skill gap of this plan."
       },
       "TaskSlot": {
         "properties": {
@@ -7672,6 +9627,65 @@
                 "type": "null"
               }
             ]
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TaskSkill"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills",
+            "description": "Chosen skills; null derives them from the task's requirement links."
+          },
+          "anytime_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anytime Date",
+            "description": "The day of a task without a set time; its schedule is then empty."
+          },
+          "original": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskOriginal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "self_rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelfRating"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "backlog_moved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backlog Moved At"
           },
           "readiness": {
             "$ref": "#/components/schemas/TaskReadiness"

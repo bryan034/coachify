@@ -29,8 +29,8 @@ function serve(state: Workspace, handlers: Record<string, (body: never) => unkno
 const calls = (path: string) => api.mock.calls.filter(call => call[0] === path);
 const withCandidate = (plan: PlannedRoadmap = roadmap(), overrides = {}) => workspace({ planner: planner({ candidate: plan, candidate_review: review(plan), ...overrides }) });
 const withActive = (plan: PlannedRoadmap = roadmap(), overrides = {}) => workspace({ planner: planner({ active: plan, active_review: review(plan), ...overrides }) });
-const openHelper = async () => fireEvent.click(await screen.findByRole('button', { name: /(Start|Continue with) chat helper/ }));
-beforeEach(() => { api.mockReset(); });
+const openHelper = async () => { await screen.findByRole('heading', { name: 'Roadmap' }); if (!screen.queryByRole('button', { name: /(Start|Continue with) chat helper/ })) { const settings = await screen.findByRole('button', { name: /Plan settings/ }); fireEvent.click(settings); } fireEvent.click(await screen.findByRole('button', { name: /(Start|Continue with) chat helper/ })); };
+beforeEach(() => { api.mockReset(); window.history.replaceState({}, '', '/roadmap'); });
 
 it('asks for the device time zone so unsaved settings use local dates', async () => {
  serve(workspace()); render(<RoadmapPlanner />); await screen.findByRole('heading', { name: 'Your runway' });
@@ -262,7 +262,7 @@ it('closes the docked helper when the screen narrows, so it never covers the pag
 
 it('keeps the helper closed on the generated roadmap until asked for', async () => {
  wideScreen(); serve(withActive()); render(<RoadmapPlanner />);
- await screen.findByText('Your active roadmap');
+ await screen.findByRole('navigation', { name: 'Roadmap views' });
  expect(screen.queryByRole('region', { name: 'Chat helper' })).not.toBeInTheDocument();
 });
 
@@ -386,31 +386,19 @@ it('shows generation stages, then opens the review', async () => {
  await screen.findByRole('button', { name: 'Accept plan' }, { timeout: 3000 });
 });
 
-it('reviews a plan: next assignment, remaining time, timeline, outcome and remaining gaps', async () => {
+it('reviews the first scheduled week, milestone summary and experience questions', async () => {
  serve(withCandidate()); render(<RoadmapPlanner />);
- await screen.findByText('Preview: not active until you accept it');
- const now = screen.getByRole('region', { name: 'Where you are now' });
- expect(now).toHaveTextContent('Wed, 9 Jan 2030, 19:00–20:00');
- expect(within(now).getByText('2 weeks, 5 days')).toBeVisible();
- expect(within(now).getByText('11 hours 30 minutes of usable study time')).toBeVisible();
- const timeline = screen.getByRole('region', { name: 'Milestone timeline' });
- expect(within(timeline).getByText('Sun, 27 Jan 2030')).toBeVisible();
- expect(within(timeline).getByText(/projected Wed, 9 Jan 2030 to Sun, 20 Jan 2030/)).toBeVisible();
- expect(within(timeline).getByText('Show this: A small API you can walk through.')).toBeVisible();
+ const preview = await screen.findByRole('region', { name: 'Plan preview' });
+ expect(within(preview).getByRole('button', { name: 'Accept plan' })).toBeEnabled();
+ expect(screen.getByRole('region', { name: 'Your first week' })).toHaveTextContent('Write one tested Python endpoint.');
+ expect(screen.getByRole('complementary', { name: 'Milestones in this plan' })).toHaveTextContent('Build a Python API');
  expect(screen.getByText('By your target you can show a basic API, but not advanced Python.')).toBeVisible();
- expect(screen.getByRole('heading', { name: 'Beyond your deadline' })).toBeVisible();
- expect(screen.getByText('Advanced Python')).toBeVisible();
- expect(screen.getByText('Stated in your goal')).toBeVisible();
- expect(screen.getByText('Inferred requirement')).toBeVisible();
- expect(screen.getByRole('heading', { name: 'Confirmed gaps' })).toBeVisible();
- expect(screen.getByRole('heading', { name: 'Unknown skills' })).toBeVisible();
- expect(within(screen.getByRole('region', { name: 'Gaps this plan works on' })).getByText('Work authorisation')).toBeVisible();
- expect(screen.getByRole('button', { name: 'Accept plan' })).toBeEnabled();
+ expect(screen.getByRole('group', { name: 'Have you run a service in Docker?' })).toBeVisible();
 });
 
 it('returns to configuration without losing the preview and can go back', async () => {
  serve(withCandidate()); render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('button', { name: 'Back to configuration' }));
+ fireEvent.click(await screen.findByRole('button', { name: 'Back to settings' }));
  await screen.findByRole('heading', { name: 'Your runway' });
  expect(calls('/planner/discard')).toHaveLength(0);
  fireEvent.click(screen.getByRole('button', { name: 'Return to roadmap' }));
@@ -421,7 +409,7 @@ it('stays in configuration when saving settings returns the same preview', async
  const state = withCandidate();
  serve(state, { '/planner/config': () => ({ ...state, version: state.version + 1 }) });
  render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('button', { name: 'Back to configuration' }));
+ fireEvent.click(await screen.findByRole('button', { name: 'Back to settings' }));
  fireEvent.change(await screen.findByLabelText('Preferred session in minutes'), { target: { value: '45' } });
  await waitFor(() => expect(calls('/planner/config')).toHaveLength(1), { timeout: 3000 });
  expect(await screen.findByText('All changes saved')).toBeVisible();
@@ -432,145 +420,121 @@ it('stays in configuration when saving settings returns the same preview', async
  expect(await screen.findByRole('button', { name: 'Accept plan' })).toBeVisible();
 });
 
-it('draws the route with a numbered stop per milestone, today and reached outcomes', async () => {
+it('shows reached milestone stops and the route to the goal', async () => {
  const base = roadmap().milestones[0];
- const plan = roadmap({ milestones: [{ ...base, id: 'm2', key: 'm2', title: 'Second', projected_end: '2030-01-24' }, { ...base, outcome: { demonstrated: true, note: 'Shown.' } }] });
- const state = withActive(plan); state.planner.active_review = { ...review(plan), remaining: runway({ resolved: { today: '2030-01-18', start_date: '2030-01-18', target_date: '2030-01-27', matched_duration: null } }) };
- serve(state); const { container } = render(<RoadmapPlanner />);
- await screen.findByText('Your active roadmap');
- const route = container.querySelector('.route-map')!;
- expect(route).toHaveAttribute('aria-hidden', 'true');
- expect(within(route as HTMLElement).getByText('Today')).toBeInTheDocument();
- const stops = [...route.querySelectorAll('.route-stop')];
- expect(stops.map(stop => [stop.textContent, stop.classList.contains('reached')])).toEqual([['1', true], ['2', false]]);
- expect(stops[0].getAttribute('title')).toMatch(/Build a Python API.*Sun, 20 Jan 2030/);
- expect(route.querySelector('.route-walked')).toBeInTheDocument();
+ const plan = roadmap({ milestones: [{ ...base, outcome: { demonstrated: true, note: 'Shown.' } }, { ...base, id: 'm2', key: 'm2', title: 'Second' }] });
+ serve(withActive(plan)); render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: 'Milestones' }));
+ const route = screen.getByRole('region', { name: 'Your route to Backend developer' });
+ expect(route).toHaveTextContent('1 of 2 milestones reached');
+ expect(route.querySelectorAll('.stop')).toHaveLength(3);
+ expect(route.querySelectorAll('.rv-stop.reached')).toHaveLength(2);
 });
 
 it('accepts a preview and explains when it cannot be accepted', async () => {
  const accepted = withActive();
  serve(withCandidate(), { '/planner/accept': () => accepted }); const view = render(<RoadmapPlanner />);
  fireEvent.click(await screen.findByRole('button', { name: 'Accept plan' }));
- await screen.findByText('Your active roadmap'); expect(calls('/planner/accept')).toHaveLength(1);
+ await screen.findByRole('navigation', { name: 'Roadmap views' }); expect(calls('/planner/accept')).toHaveLength(1);
  view.unmount(); api.mockReset();
  serve(withCandidate(roadmap(), { candidate_blockers: [{ code: 'settings_changed', message: 'Your settings changed after this preview was prepared. Generate a fresh plan.' }] })); render(<RoadmapPlanner />);
  await screen.findByText('Your settings changed after this preview was prepared. Generate a fresh plan.');
  expect(screen.getByRole('button', { name: 'Accept plan' })).toBeDisabled();
 });
 
-const taskName = 'Mark complete: Write one tested Python endpoint.';
+const taskName = 'Mark done: Write one tested Python endpoint.';
 const completed = (note: string | null) => { const plan = roadmap(); return roadmap({ assignments: [{ ...plan.assignments[0], status: 'completed', completed_at: '2030-01-09T12:00:00+00:00', evidence_note: note }] }); };
 
 it('ticks a session off the to-do list, then adds what was produced, separately from proficiency', async () => {
- const replies = [withActive(completed(null)), withActive(completed('Test passed.'))];
- serve(withActive(), { '/planner/assignments/status': () => replies.shift() }); render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('checkbox', { name: taskName }));
- await waitFor(() => expect(screen.getByRole('checkbox', { name: taskName })).toBeChecked());
- expect(calls('/planner/assignments/status')[0][2]).toMatchObject({ assignment_id: 'a1', status: 'completed', evidence_note: null });
- expect(screen.getByText('Ticking a session records what you did. It doesn’t change your assessed skills.')).toBeVisible();
- fireEvent.click(screen.getByText('Add what you produced'));
- expect(screen.getByRole('button', { name: 'Save note' })).toBeDisabled();
- fireEvent.change(screen.getByRole('textbox', { name: 'What did you produce? (optional)' }), { target: { value: 'Test passed.' } });
- fireEvent.click(screen.getByRole('button', { name: 'Save note' }));
- await screen.findByText('Your note: Test passed.');
- expect(calls('/planner/assignments/status')[1][2]).toMatchObject({ assignment_id: 'a1', status: 'completed', evidence_note: 'Test passed.' });
- expect(screen.getByText('Outcome not yet demonstrated.', { exact: false })).toBeVisible();
- expect(screen.getByText(/Finishing sessions records progress, not proficiency/)).toBeVisible();
+ serve(withActive(), { '/planner/tasks/status': () => withActive(completed(null)) }); render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: taskName }));
+ await screen.findByRole('button', { name: 'Mark not done: Write one tested Python endpoint.' });
+ expect(calls('/planner/tasks/status')[0][2]).toMatchObject({ task_id: 'a1', status: 'completed' });
+ expect(screen.getByText('Ticking records what you did. It doesn’t change your assessed skills.')).toBeVisible();
+ fireEvent.click(screen.getByRole('button', { name: 'Write one tested Python endpoint.' }));
+ expect(screen.getByRole('textbox', { name: 'Notes for Write one tested Python endpoint.' })).toBeVisible();
 });
 
 it('shows a tick at once and undoes it when saving fails', async () => {
  let fail: (reason: Error) => void = () => {};
- serve(withActive(), { '/planner/assignments/status': () => new Promise((_, reject) => { fail = reject; }) }); render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('checkbox', { name: taskName }));
- expect(screen.getByRole('checkbox', { name: taskName })).toBeChecked();
+ serve(withActive(), { '/planner/tasks/status': () => new Promise((_, reject) => { fail = reject; }) }); render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: taskName }));
+ expect(screen.getByRole('button', { name: 'Mark not done: Write one tested Python endpoint.' })).toHaveAttribute('aria-pressed', 'true');
  await act(async () => { fail(new Error('Your plan could not be saved.')); });
  expect(await screen.findByRole('alert')).toHaveTextContent('Your plan could not be saved.');
- expect(screen.getByRole('checkbox', { name: taskName })).not.toBeChecked();
+ expect(screen.getByRole('button', { name: taskName })).not.toHaveAttribute('aria-pressed', 'true');
 });
 
 it('reopens a ticked session', async () => {
- serve(withActive(completed('Done.')), { '/planner/assignments/status': () => withActive() }); render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('checkbox', { name: taskName }));
- await waitFor(() => expect(calls('/planner/assignments/status')[0][2]).toMatchObject({ assignment_id: 'a1', status: 'scheduled' }));
- await waitFor(() => expect(screen.getByRole('checkbox', { name: taskName })).not.toBeChecked());
+ serve(withActive(completed('Done.')), { '/planner/tasks/status': () => withActive() }); render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: 'Mark not done: Write one tested Python endpoint.' }));
+ await waitFor(() => expect(calls('/planner/tasks/status')[0][2]).toMatchObject({ task_id: 'a1', status: 'not_started' }));
+ expect(await screen.findByRole('button', { name: taskName })).toHaveAttribute('aria-pressed', 'false');
 });
 
 const toDoPlan = () => { const base = roadmap(); const session = base.assignments[0]; return roadmap({ assignments: [session, { ...session, id: 'a2', key: 'a2', date: '2030-01-11', start_time: '18:00', task: 'Add input validation.' }, { ...session, id: 'a3', key: 'a3', date: '2030-01-08', start_time: '18:00', task: 'Read the framework guide.', status: 'completed', completed_at: 'x', evidence_note: 'Notes taken.' }] }); };
 
-it('leads with this week as a to-do list, with each session showing its skill', async () => {
+it('opens on Today and shows each session and skill in Week', async () => {
  serve(withActive(toDoPlan())); render(<RoadmapPlanner />);
- const list = await screen.findByRole('region', { name: 'To-do list' });
- expect(within(list).getByRole('heading', { name: 'This week' })).toBeVisible();
- expect(within(list).getByRole('button', { name: 'Weekly' })).toHaveAttribute('aria-pressed', 'true');
- expect(within(list).getByText('1 of 3 sessions done, 2 hours left')).toBeVisible();
- expect(within(list).getAllByRole('checkbox').map(box => box.getAttribute('aria-label'))).toEqual(['Mark complete: Read the framework guide.', taskName, 'Mark complete: Add input validation.']);
- expect(within(list).getAllByText('Python')).toHaveLength(3);
- expect(within(list).getByText('Next')).toBeVisible();
+ await screen.findByRole('button', { name: taskName });
+ fireEvent.click(screen.getByRole('button', { name: 'Week' }));
+ const list = screen.getByRole('region', { name: /This week/ });
+ expect(within(list).getByText('Write one tested Python endpoint.')).toBeVisible();
+ expect(within(list).getByText('Add input validation.')).toBeVisible();
+ expect(within(list).getAllByText('Python').length).toBeGreaterThan(1);
 });
 
 it('switches to one day at a time and can pick another day', async () => {
  serve(withActive(toDoPlan())); render(<RoadmapPlanner />);
- const list = await screen.findByRole('region', { name: 'To-do list' });
- fireEvent.click(within(list).getByRole('button', { name: 'Daily' }));
- expect(within(list).getByRole('heading', { name: 'Today' })).toBeVisible();
- expect(within(list).getAllByRole('checkbox')).toHaveLength(1);
- fireEvent.click(within(list).getByRole('button', { name: 'Thu, 10 Jan 2030, 0 sessions' }));
- expect(within(list).getByText('Nothing is planned for Thu, 10 Jan 2030.')).toBeVisible();
- fireEvent.click(within(list).getByRole('button', { name: 'Next day' }));
- expect(within(list).getByText('Add input validation.')).toBeVisible();
+ await screen.findByRole('button', { name: taskName });
+ fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+ expect(screen.queryByRole('button', { name: taskName })).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+ expect(screen.getByRole('button', { name: 'Mark done: Add input validation.' })).toBeVisible();
+ expect(window.location.search).toContain('date=2030-01-11');
 });
 
-it('shows the month as a calendar of week summaries that open the week', async () => {
+it('opens a calendar day from Month in Today', async () => {
  serve(withActive(toDoPlan())); render(<RoadmapPlanner />);
- const list = await screen.findByRole('region', { name: 'To-do list' });
- fireEvent.click(within(list).getByRole('button', { name: 'Monthly' }));
- expect(within(list).getByRole('heading', { name: 'January 2030' })).toBeVisible();
- expect(within(list).queryByRole('checkbox')).toBeNull();
- const weeks = within(list).getAllByRole('button', { name: /^Open week of/ });
- expect(weeks).toHaveLength(5);
- expect(weeks[1]).toHaveAccessibleName(expect.stringContaining('Open week of Mon, 7 Jan 2030. 3 sessions, 1 done'));
- expect(weeks[1]).toHaveAccessibleName(expect.stringContaining('Build a Python API'));
- expect(weeks[2]).toHaveAccessibleName(expect.stringContaining('Sessions not planned yet'));
- const bars = weeks[1].querySelectorAll('.month-bar');
- expect(bars).toHaveLength(1);
- expect((bars[0] as HTMLElement).style.gridColumn).toBe('3 / 8');
- fireEvent.click(weeks[2]);
- expect(within(list).getByRole('heading', { name: 'Week of 14 Jan' })).toBeVisible();
- expect(within(list).getByText(/Sessions for this week aren’t planned yet/)).toBeVisible();
- expect(within(list).getByText('Build a Python API')).toBeVisible();
+ fireEvent.click(await screen.findByRole('button', { name: 'Month' }));
+ expect(screen.getByRole('heading', { name: 'January 2030' })).toBeVisible();
+ fireEvent.click(screen.getByRole('button', { name: 'Open Fri, 11 Jan 2030 in Today' }));
+ expect(screen.getByRole('button', { name: 'Mark done: Add input validation.' })).toBeVisible();
 });
 
 it('stops the to-do list moving past the plan and offers a way back to today', async () => {
  serve(withActive()); render(<RoadmapPlanner />);
- const list = await screen.findByRole('region', { name: 'To-do list' });
- expect(within(list).getByRole('button', { name: 'Previous week' })).toBeDisabled();
- expect(within(list).queryByRole('button', { name: 'Today' })).toBeNull();
- for (let step = 0; step < 2; step++) fireEvent.click(within(list).getByRole('button', { name: 'Next week' }));
- expect(within(list).getByRole('heading', { name: 'Week of 21 Jan' })).toBeVisible();
- expect(within(list).getByRole('button', { name: 'Next week' })).toBeDisabled();
- fireEvent.click(within(list).getByRole('button', { name: 'Today' }));
- expect(within(list).getByRole('heading', { name: 'This week' })).toBeVisible();
+ await screen.findByRole('button', { name: taskName });
+ expect(screen.getByRole('button', { name: 'Previous day' })).toBeDisabled();
+ fireEvent.click(screen.getByRole('button', { name: 'Week' }));
+ expect(screen.getByRole('button', { name: 'Previous week' })).toBeDisabled();
+ fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
+ fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
+ expect(screen.getByRole('button', { name: 'Next week' })).toBeDisabled();
+ fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+ expect(screen.getByRole('button', { name: taskName })).toBeVisible();
 });
 
 it('shows each skill the plan builds with its sessions', async () => {
  serve(withActive(toDoPlan())); render(<RoadmapPlanner />);
- const skills = await screen.findByRole('region', { name: 'Skills this plan builds' });
- expect(within(skills).getByText('Python')).toBeVisible();
+ fireEvent.click(await screen.findByRole('button', { name: 'Milestones' }));
+ expect(screen.getByRole('region', { name: 'Skills these build' })).toHaveTextContent('Python');
 });
 
 it('does not let a preview be ticked off', async () => {
  serve(withCandidate()); render(<RoadmapPlanner />);
- const list = await screen.findByRole('region', { name: 'To-do list' });
- expect(within(list).queryByRole('checkbox')).toBeNull();
- expect(within(list).getByText('Accept this plan to start ticking off sessions.')).toBeVisible();
+ await screen.findByRole('region', { name: 'Your first week' });
+ expect(screen.queryByRole('button', { name: /Mark done/ })).not.toBeInTheDocument();
+ expect(screen.getByText('Accept the plan to start ticking these off.')).toBeVisible();
 });
 
 it('records a demonstrated outcome with a note', async () => {
  serve(withActive(), { '/planner/milestones/outcome': () => withActive() }); render(<RoadmapPlanner />);
- fireEvent.click(await screen.findByRole('button', { name: 'Record how you demonstrated it' }));
- expect(screen.getByRole('button', { name: 'Save outcome' })).toBeDisabled();
- fireEvent.change(screen.getByRole('textbox', { name: /How did you demonstrate/ }), { target: { value: 'Showed a mentor.' } });
- fireEvent.click(screen.getByRole('button', { name: 'Save outcome' }));
+ fireEvent.click(await screen.findByRole('button', { name: 'Milestones' }));
+ fireEvent.click(screen.getByRole('button', { name: 'Record how you showed it' }));
+ expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+ fireEvent.change(screen.getByRole('textbox', { name: /How did you show/ }), { target: { value: 'Showed a mentor.' } });
+ fireEvent.click(screen.getByRole('button', { name: 'Save' }));
  await waitFor(() => expect(calls('/planner/milestones/outcome')[0][2]).toMatchObject({ milestone_id: 'm1', demonstrated: true, note: 'Showed a mentor.' }));
 });
 
@@ -578,31 +542,30 @@ it('asks experience questions and offers to regenerate once answered', async () 
  const answered = withCandidate(roadmap(), { confirmations: { docker: { answer: 'no_experience' } }, signals: [{ kind: 'evidence', message: 'You answered experience questions after this plan was prepared.' }] });
  serve(withCandidate(), { '/planner/confirmations': () => answered, '/planner/generate': () => ({ version: 3, operation: null }) }); render(<RoadmapPlanner />);
  fireEvent.click(within(await screen.findByRole('group', { name: 'Have you run a service in Docker?' })).getByRole('radio', { name: 'No' }));
- await screen.findByRole('button', { name: 'Regenerate' });
+ fireEvent.click(screen.getByRole('button', { name: 'Back to settings' }));
+ await screen.findByRole('button', { name: 'Generate roadmap' });
  expect(calls('/planner/confirmations')[0][2]).toMatchObject({ gap_id: 'docker', answer: 'no_experience' });
- fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+ fireEvent.click(screen.getByRole('button', { name: 'Generate roadmap' }));
  await waitFor(() => expect(calls('/planner/generate')).toHaveLength(1));
 });
 
 it('shows what a revision changes, keeps completed work and applies only on accept', async () => {
- const active = roadmap({ id: 'old', assignments: [{ ...roadmap().assignments[0], status: 'completed', completed_at: 'x', evidence_note: 'Done.' }] });
- const revised = roadmap({ id: 'new', base_active_id: 'old', assignments: [active.assignments[0], { ...roadmap().assignments[0], id: 'a2', key: 'a2', date: '2030-01-10', start_time: '18:00', task: 'Add input validation.' }], changes: { completed_preserved: 1, assignments_added: ['Add input validation.'], assignments_moved: [], assignments_removed: [], milestones_added: [], milestones_moved: ['Build a Python API'], milestones_removed: [] } });
+ const active = completed('Done.');
+ const revised = roadmap({ id: 'new', base_active_id: active.id, changes: { completed_preserved: 1, assignments_added: ['Add validation'], assignments_moved: [], assignments_removed: [], milestones_added: [], milestones_moved: [], milestones_removed: [] } });
  serve(workspace({ planner: planner({ active, active_review: review(active), candidate: revised, candidate_review: review(revised) }) }), { '/planner/discard': () => withActive(active) });
  render(<RoadmapPlanner />);
- const changes = await screen.findByRole('region', { name: 'What this preview changes' });
- expect(within(changes).getByText('1 completed session stays exactly as recorded.')).toBeVisible();
- expect(within(changes).getByText('Add input validation.')).toBeVisible();
- expect(within(changes).getByText('Build a Python API')).toBeVisible();
- expect(screen.getByText('Your note: Done.')).toBeVisible();
- expect(screen.queryByRole('checkbox', { name: /Mark complete/ })).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('button', { name: 'Discard preview' }));
- await screen.findByText('Your active roadmap');
+ await screen.findByText('What changes from your current plan');
+ expect(screen.getByText('completed session stays as recorded')).toBeVisible();
+ expect(screen.getByText('Add validation')).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+ await screen.findByRole('navigation', { name: 'Roadmap views' });
  expect(calls('/planner/accept')).toHaveLength(0);
 });
 
 it('offers an updated preview when settings, progress or evidence change', async () => {
  serve(withActive(roadmap(), { signals: [{ kind: 'settings', message: 'Your study settings changed since this roadmap was accepted.' }] }), { '/planner/generate': () => ({ version: 3, operation: null }) });
  render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: /Plan settings/ }));
  await screen.findByText('Your study settings changed since this roadmap was accepted.');
  fireEvent.click(screen.getByRole('button', { name: 'Preview updated roadmap' }));
  await waitFor(() => expect(calls('/planner/generate')).toHaveLength(1));
@@ -616,12 +579,13 @@ it.each(['CV', 'career goal'])('replaces source notices with a roadmap banner af
  fresh.context.input_hash = state.context.input_hash;
  serve(state, { '/planner/generate': () => fresh });
  render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: /Plan settings/ }));
  expect(await screen.findByRole('heading', { name: 'Your roadmap is out of date' })).toBeVisible();
  expect(screen.queryByText('Your CV, skills or Career goal changed since this roadmap was prepared.')).not.toBeInTheDocument();
- expect(screen.queryByRole('button', { name: 'Preview updated roadmap' })).not.toBeInTheDocument();
+ expect(screen.getByRole('button', { name: 'Preview updated roadmap' })).toBeEnabled();
  expect(calls('/planner/generate')).toHaveLength(0);
  fireEvent.click(screen.getByRole('button', { name: 'Regenerate roadmap' }));
- await screen.findByText('Preview: not active until you accept it');
+ await screen.findByText('Preview · not active until you accept it');
  expect(calls('/planner/generate')).toHaveLength(1);
  expect(screen.queryByRole('heading', { name: 'Your roadmap is out of date' })).not.toBeInTheDocument();
  expect(calls('/planner/accept')).toHaveLength(0);
@@ -639,6 +603,7 @@ it('replaces an outdated preview source blocker while keeping acceptance blocked
 it('disables banner regeneration when the latest inputs are not ready', async () => {
  const state = withActive(); state.context = { ...state.context, input_hash: 'new-inputs', ready: false };
  serve(state); render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: /Plan settings/ }));
  expect(await screen.findByRole('button', { name: 'Regenerate roadmap' })).toBeDisabled();
  expect(calls('/planner/generate')).toHaveLength(0);
 });
@@ -646,7 +611,7 @@ it('disables banner regeneration when the latest inputs are not ready', async ()
 it('keeps the outdated banner hidden for a current roadmap', async () => {
  const state = withActive(); state.context.input_hash = state.planner.active!.assessment_hash;
  serve(state); render(<RoadmapPlanner />);
- await screen.findByText('Your active roadmap');
+ await screen.findByRole('navigation', { name: 'Roadmap views' });
  expect(screen.queryByRole('heading', { name: 'Your roadmap is out of date' })).not.toBeInTheDocument();
 });
 
@@ -655,16 +620,16 @@ it('keeps the plan and offers an exact retry when generation fails', async () =>
  const state = withActive(roadmap(), { retry_generate: retry }); state.operation = { id: 'failed-one', status: 'failed', stage: 'failed', error: { code: 'plan_validation', detail: 'We could not produce a plan that fits your schedule after 3 attempts. Your last valid plan is unchanged.' } };
  serve(state, { '/planner/generate': () => ({ version: 3, operation: null }) }); render(<RoadmapPlanner />);
  await screen.findByText(/Your last valid plan is unchanged/);
- expect(screen.getByText('Your active roadmap')).toBeVisible();
+ expect(screen.getByRole('heading', { name: 'Roadmap' })).toBeVisible();
  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
  await waitFor(() => expect(calls('/planner/generate')[0][2]).toEqual(retry));
 });
 
-it('opens the chat helper from a button for edits on the roadmap page', async () => {
+it('opens the chat helper through Plan settings to request edits', async () => {
  serve(withActive(), { '/messages': () => ({ version: 2, operation: null }) }); render(<RoadmapPlanner />);
  await openHelper();
  expect(screen.queryByRole('tab', { name: 'Chat' })).not.toBeInTheDocument();
- expect(screen.getByText('Your active roadmap')).toBeVisible();
+ expect(screen.getByRole('heading', { name: 'Roadmap' })).toBeVisible();
  const box = screen.getByRole('textbox', { name: 'Ask for a change' });
  expect(box).toBeVisible(); expect(screen.getByText('Changes appear as a preview first.')).toBeVisible();
  fireEvent.change(box, { target: { value: 'Move Wednesday to Thursday.' } });
@@ -672,7 +637,7 @@ it('opens the chat helper from a button for edits on the roadmap page', async ()
  await waitFor(() => expect(calls('/messages')[0][2]).toMatchObject({ message: 'Move Wednesday to Thursday.' }));
 });
 
-it('labels partial research while allowing the helper to prepare a plan change', async () => {
+it('labels partial research in the settings helper while allowing a plan change', async () => {
  const state = withActive(); state.context.research_coverage = 'unavailable';
  serve(state); render(<RoadmapPlanner />); await openHelper();
  fireEvent.change(screen.getByRole('textbox', { name: 'Ask for a change' }), { target: { value: 'Move it.' } });
@@ -680,7 +645,7 @@ it('labels partial research while allowing the helper to prepare a plan change',
  expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
 });
 
-it('a new preview from chat opens on the roadmap, which has no tabs', async () => {
+it('a new preview from settings chat opens outside the active roadmap views', async () => {
  let state = withActive();
  api.mockImplementation((path: string) => path === '/messages' ? Promise.resolve({ version: 2, operation: null }) : Promise.resolve(state));
  render(<RoadmapPlanner />);
@@ -688,7 +653,7 @@ it('a new preview from chat opens on the roadmap, which has no tabs', async () =
  fireEvent.change(screen.getByRole('textbox', { name: 'Ask for a change' }), { target: { value: 'Move it.' } });
  const preview = roadmap({ id: 'preview', base_active_id: 'plan1' }); state = workspace({ planner: planner({ active: roadmap(), active_review: review(), candidate: preview, candidate_review: review(preview) }) });
  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Send message' })); });
- await screen.findByText('Preview: not active until you accept it');
+ await screen.findByText('Preview · not active until you accept it');
  expect(screen.queryByRole('tab')).not.toBeInTheDocument();
  expect(screen.queryByRole('region', { name: 'Chat helper' })).not.toBeInTheDocument();
 });
@@ -743,4 +708,35 @@ it('requires an explicit evaluation update before generating from outdated skill
  await waitFor(() => expect(evaluationApi.mock.calls.filter(call => call[0] === '' && call[2])).toHaveLength(1));
  expect(calls('/planner/generate')).toHaveLength(0);
  expect(await screen.findByText(/Skill evaluation: Outdated/)).toBeVisible();
+});
+
+it('adds an anytime task from Today with the saved workspace version', async () => {
+ serve(withActive(), { '/planner/sessions/add': () => withActive() }); render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
+ const form = screen.getByRole('group', { name: 'New task' });
+ fireEvent.change(within(form).getByRole('textbox', { name: 'Task' }), { target: { value: 'Review API tests' } });
+ fireEvent.change(within(form).getByRole('textbox', { name: 'Done when' }), { target: { value: 'All tests pass' } });
+ fireEvent.click(within(form).getByRole('button', { name: 'Anytime' }));
+ fireEvent.click(within(form).getByRole('button', { name: 'Add task' }));
+ await waitFor(() => expect(calls('/planner/sessions/add')[0][2]).toMatchObject({ expected_version: 0, session: { title: 'Review API tests', completion_criterion: 'All tests pass', date: '2030-01-09', start_time: null, duration_minutes: 30 } }));
+});
+
+it('records a generated checkpoint without recording the milestone outcome', async () => {
+ const base = roadmap();
+ const plan = roadmap({ milestones: [{ ...base.milestones[0], checkpoints: [{ key: 'runs', title: 'The API runs locally', date: '2030-01-10', reached_at: null }] }] });
+ serve(withActive(plan), { '/planner/milestones/checkpoint': () => withActive(plan) }); render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: 'Milestones' }));
+ fireEvent.click(screen.getByRole('button', { name: 'Mark reached: The API runs locally' }));
+ await waitFor(() => expect(calls('/planner/milestones/checkpoint')[0][2]).toMatchObject({ milestone_id: 'm1', checkpoint_key: 'runs', reached: true, expected_version: 0 }));
+ expect(calls('/planner/milestones/outcome')).toHaveLength(0);
+});
+
+it('switches progress measures without making a model request', async () => {
+ serve(withActive(toDoPlan())); render(<RoadmapPlanner />);
+ fireEvent.click(await screen.findByRole('button', { name: 'Progress' }));
+ expect(screen.getByRole('img', { name: /^Tasks by day this week:/ })).toBeVisible();
+ fireEvent.click(screen.getByRole('button', { name: 'Hours' }));
+ fireEvent.click(screen.getByRole('button', { name: 'By week' }));
+ expect(screen.getByRole('img', { name: /^Hours by week:/ })).toBeVisible();
+ expect(calls('/planner/generate')).toHaveLength(0);
 });

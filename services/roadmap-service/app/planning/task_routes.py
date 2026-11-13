@@ -81,6 +81,7 @@ def register_task_routes(app,context,mutate):
                 if 'completion_outcome' in changed and task['status']=='completed':task['definition_review_required']=True
                 if 'requirement_refs' in changed:
                     task['requirement_source_hash']=plan.get('assessment_hash');task['requirement_source_id']=plan.get('assessment_id')
+                if changes.get('schedule'):task['anytime_date']=None
                 task.update(changes);task['overrides']=sorted(set(task.get('overrides',[]))|set(changed))
                 if old_milestone!=task.get('milestone_key'):
                     mark_membership_review(plan,[old_milestone,task.get('milestone_key')])

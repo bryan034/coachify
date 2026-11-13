@@ -463,7 +463,7 @@ def test_a_generated_roadmap_returns_only_declared_fields_through_the_frontend_f
         assert progress['operation']['status']=='succeeded' and progress['operation']['stage']=='complete'
         planner=state['planner'];candidate=planner['candidate']
         assert candidate.keys()<=declared_keys(PlannedRoadmap)
-        assert candidate['generation']=={'prompt_version':'roadmap-plan-v2','attempts':1}
+        assert candidate['generation']=={'prompt_version':'roadmap-plan-v3','attempts':1}
         assert candidate['milestones'][0]['outcome'].keys()=={'demonstrated','note','recorded_at','source'}
         assert planner['candidate_review']['milestones']['m1']=={
             'sessions_total':1,'sessions_completed':0,'completed_minutes':0,

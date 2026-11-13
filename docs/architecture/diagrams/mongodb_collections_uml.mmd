@@ -329,3 +329,5 @@ note for job_applications "Private and owner-scoped. Snapshot keeps the record r
 %% Assessment pins the scoring rubric in its input hash; historical assessments become stale after rubric changes.
 
 %% Assessment evidence_hash pins reviewed CV skill-level overlays; freshness is derived on API reads, never persisted as a boolean.
+
+note for roadmap_workspaces "Milestones embed dated checkpoints with reached timestamps. Editable tasks retain original wording, skill links, anytime dates, structured notes, optional self-ratings and backlog move timestamps. Session rows and free-time proposals are derived on read. No new collection. Tasks and batch moves use workspace CAS and mutation receipts."

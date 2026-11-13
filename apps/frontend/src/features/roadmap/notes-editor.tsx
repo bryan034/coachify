@@ -110,7 +110,8 @@ function insertAtCaret(root: HTMLElement, html: string) {
 
 type Tool = { label: string; text: string; run: () => void; pressed?: string };
 
-export function NotesEditor({ value, label, disabled = false, onSave }: { value: NotesDocument | null | undefined; label: string; disabled?: boolean; onSave: (doc: NotesDocument) => Promise<unknown> }) {
+/** With `onDraft`, the editor reports each change and saves nothing itself: the surrounding form owns Save. */
+export function NotesEditor({ value, label, disabled = false, onSave, onDraft }: { value: NotesDocument | null | undefined; label: string; disabled?: boolean; onSave?: (doc: NotesDocument) => Promise<unknown>; onDraft?: (doc: NotesDocument) => void }) {
  const editor = useRef<HTMLDivElement>(null);
  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
  const savedJson = useRef(JSON.stringify(value ?? { blocks: [] }));
@@ -119,7 +120,7 @@ export function NotesEditor({ value, label, disabled = false, onSave }: { value:
  useEffect(() => { if (editor.current && document.activeElement !== editor.current) { editor.current.innerHTML = toHtml(value); savedJson.current = JSON.stringify(value ?? { blocks: [] }); } }, [value]);
  useEffect(() => () => clearTimeout(timer.current), []);
  const save = async () => {
-  if (!editor.current) return;
+  if (!editor.current || !onSave) return;
   const doc = fromElement(editor.current), json = JSON.stringify(doc);
   if (json === savedJson.current) { setState('saved'); return; }
   if (textLength(doc) > MAX_TEXT) { setState('too_long'); return; }
@@ -128,7 +129,10 @@ export function NotesEditor({ value, label, disabled = false, onSave }: { value:
   if (ok === false) { setState('failed'); return; }
   savedJson.current = json; setState('saved');
  };
- const changed = () => { setState('unsaved'); clearTimeout(timer.current); timer.current = setTimeout(() => void save(), 900); };
+ const changed = () => {
+  if (onDraft) { if (editor.current) { const doc = fromElement(editor.current); setState(textLength(doc) > MAX_TEXT ? 'too_long' : 'saved'); onDraft(doc); } return; }
+  setState('unsaved'); clearTimeout(timer.current); timer.current = setTimeout(() => void save(), 900);
+ };
  const command = (name: string, arg?: string) => { editor.current?.focus(); document.execCommand(name, false, arg); changed(); };
  const insert = (html: string) => { if (!editor.current) return; editor.current.focus(); insertAtCaret(editor.current, html); changed(); };
  const tools: Tool[][] = [
@@ -144,9 +148,9 @@ export function NotesEditor({ value, label, disabled = false, onSave }: { value:
    {state === 'failed' && <button type="button" className="btn ghost sm" onClick={() => void save()}>Try again</button>}
   </div>
   <div ref={editor} className="notes-page" role="textbox" aria-multiline="true" aria-label={label} contentEditable={!disabled} suppressContentEditableWarning
-   onInput={changed} onBlur={() => { clearTimeout(timer.current); void save(); }}
+   onInput={changed} onBlur={() => { if (onDraft) return; clearTimeout(timer.current); void save(); }}
    onClick={event => { if ((event.target as HTMLElement).tagName === 'INPUT') changed(); }}
    onPaste={event => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); }}/>
-  <p className="small notes-status" role="status">{status}</p>
+  {(!onDraft || state === 'too_long') && <p className="small notes-status" role="status">{status}</p>}
  </div>;
 }

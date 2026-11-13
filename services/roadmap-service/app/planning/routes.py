@@ -10,7 +10,8 @@ from app.planning.milestone_membership import mark_plan_membership_changes
 from app.planning.state import candidate_blockers, completed_sessions, learning_view, planner_state, saved_config
 from app.planning.tasks import change_status, ensure_tasks, project_assignments
 from app.planning.task_routes import register_task_routes
-from app.schemas.roadmap import (AssignmentStatus, ExperienceConfirmation, GeneratePlan, LearningPlan, OperationAccepted, Runway, MilestoneOutcome,
+from app.planning.session_routes import register_session_routes
+from app.schemas.roadmap import (AssignmentStatus, CheckpointReached, ExperienceConfirmation, GeneratePlan, LearningPlan, OperationAccepted, Runway, MilestoneOutcome,
     PlannerConfig, RunwayRequest, SaveConfig)
 from app.schemas.planner import Mutation, Workspace
 
@@ -41,6 +42,7 @@ def evidence_proposals(row):
 def register_planner(app,context,mutate,worker):
     prefix='/api/v1/roadmaps/planner'
     register_task_routes(app,context,mutate)
+    register_session_routes(app,context,mutate)
     @app.get('/api/v1/roadmaps/learning',response_model=LearningPlan)
     async def learning(request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id'])
@@ -163,6 +165,17 @@ def register_planner(app,context,mutate,worker):
             if history:milestone['outcome']['history']=history
             return row
         return await mutate(body,account,apply)
+
+    @app.post(prefix+'/milestones/checkpoint',response_model=Workspace)
+    async def checkpoint(body:CheckpointReached,request:Request,account=Depends(authenticated)):
+        """Self-reported: tick or untick one checkpoint inside a milestone."""
+        def apply(row,source):
+            milestone=next((m for m in active_plan(row)['milestones'] if m['id']==body.milestone_id),None)
+            item=next((c for c in (milestone or {}).get('checkpoints',[]) if c['key']==body.checkpoint_key),None)
+            if not item:raise Problem('This checkpoint was not found.',404,'not_found')
+            if bool(item.get('reached_at'))!=body.reached:item['reached_at']=stamp() if body.reached else None
+            return row
+        return await mutate(body,account,apply,operation='milestones.checkpoint')
 
     @app.post(prefix+'/confirmations',response_model=Workspace)
     async def confirmation(body:ExperienceConfirmation,request:Request,account=Depends(authenticated)):

@@ -844,3 +844,19 @@ class EvaluationStatus {
     +String[] reasons
 }
 note for EvaluationStatus "Read-only Assessment API projection; not persisted. InputVersions.evidence_hash pins reviewed evidence and skill levels, alongside CV/goal/research versions and scoring rubric."
+
+class RoadmapCheckpoint {
+    +String key
+    +String title
+    +Date date
+    +DateTime reached_at?
+}
+class RoadmapTaskDetails {
+    +TaskSkill[] skills?
+    +Date anytime_date?
+    +Object original? [title_completion_criterion]
+    +Object self_rating? [confidence_difficulty]
+    +DateTime backlog_moved_at?
+}
+note for RoadmapCheckpoint "Embedded in roadmap milestones; dates and names are model-generated and validated. Reached timestamps are explicit user reports."
+note for RoadmapTaskDetails "Embedded editable task fields in Roadmap workspaces and accepted snapshots. Sessions are derived API projections; notes and ratings do not update Assessment."

@@ -30,7 +30,7 @@ def milestone(key='m1',**changes):
         'projected_end':'2030-01-20','demonstrable_outcome':'A small API running locally that you can walk through.',**changes}
 def assignment(key='a1',**changes):
     return {'key':key,'milestone_key':'m1','gap_id':None,'kind':'study','date':'2030-01-09','start_time':'19:00','duration_minutes':60,
-        'task':'Write one tested Python endpoint.','completion_criterion':'The endpoint test passes.',**changes}
+        'title':'Write one tested endpoint','task':'Write one tested Python endpoint.','completion_criterion':'The endpoint test passes.',**changes}
 def draft(**changes):
     return {'summary':'Build Python depth first.','gaps':[gap()],'milestones':[milestone()],'assignments':[assignment()],
         'deadline_outcome':{'summary':'You can show a working API by the target date.','achievable_by_target':['A working API'],'fits_in_runway':True},

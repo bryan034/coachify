@@ -18,6 +18,21 @@ class TaskSlot(Contract):
         if hour*60+minute+self.duration_minutes>1440:raise ValueError('A scheduled segment must end by midnight.')
         return self
 
+class TaskSkill(Contract):
+    """A skill a task works on. Identity is canonical_skill_id; gap_id links a skill gap of this plan."""
+    name:Title
+    canonical_skill_id:str|None=None
+    gap_id:str|None=None
+class TaskOriginal(Contract):
+    """The generated wording kept when the user rewrites a task, so it can be restored."""
+    title:str
+    completion_outcome:str
+class SelfRating(Contract):
+    """Self-reported after a session. Never an input to skill scores."""
+    confidence:int|None=Field(default=None,ge=1,le=10)
+    difficulty:int|None=Field(default=None,ge=1,le=10)
+    recorded_at:str|None=None
+
 class TaskDefinition(Contract):
     title:Title
     instructions:Text
@@ -84,6 +99,8 @@ class TaskPrevious(SavedTaskObject):
     prerequisites:list[str]|None=None
     milestone_key:str|None=None
     schedule:list[TaskSlot]|None=None
+    skills:list[TaskSkill]|None=None
+    anytime_date:str|None=None
 
 class TaskHistory(SavedTaskObject):
     at:str|None=None
@@ -113,6 +130,8 @@ class SourceAssignment(SavedTaskObject):
     duration_minutes:int|None=None
     task:str|None=None
     completion_criterion:str|None=None
+    title:str|None=None
+    gap_ids:list[str]|None=None
     status:str|None=None
     completed_at:str|None=None
     evidence_note:str|None=None
@@ -143,6 +162,11 @@ class EditableTask(Contract):
     origin:Literal['generated','user']
     overrides:list[str]=Field(default_factory=list)
     source_assignment:SourceAssignment|None=None
+    skills:list[TaskSkill]|None=Field(default=None,description='Chosen skills; null derives them from the task\'s requirement links.')
+    anytime_date:date|None=Field(default=None,description='The day of a task without a set time; its schedule is then empty.')
+    original:TaskOriginal|None=None
+    self_rating:SelfRating|None=None
+    backlog_moved_at:str|None=None
 
 class ReadinessReason(Contract):
     code:str
