@@ -1,5 +1,6 @@
 """Contracts for the timed roadmap: confirmed settings, model output and saved plans."""
 from datetime import date
+import json
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
@@ -146,6 +147,38 @@ class PlanDraft(Contract):
     deadline_outcome:DeadlineOutcome
     beyond_deadline:list[DraftBeyond]=Field(default_factory=list,max_length=20)
     exclusions:list[DraftExclusion]=Field(default_factory=list,max_length=20)
+
+class RoutineRule(Contract):
+    id:Key
+    revision:int=Field(default=1,strict=True,ge=1)
+    milestone_key:Key
+    activity:Text
+    weekdays:list[Annotated[int,Field(strict=True,ge=0,le=6)]]=Field(min_length=1,max_length=7)
+    duration_minutes:int=Field(strict=True,ge=1,le=480)
+    topic_progression:list[Text]=Field(default_factory=list,max_length=31)
+    difficulty:str=Field(default='',max_length=160)
+    start_date:date
+    end_date:date
+    user_wording:str=Field(default='',max_length=1000)
+    @model_validator(mode='after')
+    def coherent(self):
+        if self.start_date>self.end_date:raise ValueError('Routine end date must not precede its start date.')
+        if len(set(self.weekdays))!=len(self.weekdays):raise ValueError('Choose each weekday once.')
+        return self
+
+class OutlineDraft(Contract):
+    summary:Text
+    gaps:list[DraftGap]=Field(default_factory=list,max_length=40)
+    milestones:list[DraftMilestone]=Field(default_factory=list,max_length=16)
+    routine_rules:list[RoutineRule]=Field(default_factory=list,max_length=20)
+    deadline_outcome:DeadlineOutcome
+    beyond_deadline:list[DraftBeyond]=Field(default_factory=list,max_length=20)
+    exclusions:list[DraftExclusion]=Field(default_factory=list,max_length=20)
+    @model_validator(mode='after')
+    def bounded_payload(self):
+        if len(json.dumps(self.model_dump(mode='json'),ensure_ascii=True,separators=(',',':')).encode())>48*1024:
+            raise ValueError('The outline is too large; shorten its details before saving.')
+        return self
 
 class RunwayRequest(Contract):
     config:PlannerConfig
@@ -357,6 +390,54 @@ class PlanInputs(Contract):
     skills:list[InputSkill]
     experience:list[InputExperience]
     skill_groups:dict[str,str]
+class SavedOutline(SavedRecord):
+    id:str
+    revision:int
+    status:Literal['preview','accepted']
+    assessment_id:str
+    assessment_hash:str
+    assessment:dict
+    config:PlannerConfig
+    config_hash:str
+    confirmations_hash:str
+    base_active_id:str|None
+    base_progress_hash:str
+    created_at:str
+    accepted_at:str|None=None
+    first_planning_week:str
+    summary:str
+    gaps:list[DraftGap]
+    milestones:list[PlanMilestone]
+    routine_rules:list[RoutineRule]
+    deadline_outcome:DeadlineOutcome
+    beyond_deadline:list[DraftBeyond]
+    exclusions:list[DraftExclusion]
+    generation:PlanGeneration
+class SavedMonth(SavedRecord):
+    id:str
+    month:str
+    status:Literal['preview','accepted']
+    outline_id:str
+    outline_revision:int
+    start_date:str
+    end_exclusive:str
+    time_zone:str
+    config_hash:str
+    assessment_hash:str
+    created_at:str
+    accepted_at:str|None=None
+    basis:str|None=None
+    tasks:list[EditableTask]|None=None
+    task_ids:list[str]|None=None
+    needs_review:bool=False
+    revision:int=1
+    replaces_block_id:str|None=None
+    replaced_task_ids:list[str]|None=None
+    generation:PlanGeneration
+class RetryMonth(Mutation):
+    month:Annotated[str,StringConstraints(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')]
+    revision:bool=False
+
 class PlannerView(Contract):
     config:PlannerConfig
     config_saved:bool
@@ -368,6 +449,12 @@ class PlannerView(Contract):
     active:PlannedRoadmap|None
     active_review:PlanReview|None
     task_warnings:list[dict]=Field(default_factory=list)
+    outline_candidate:SavedOutline|None=None
+    outline_active:SavedOutline|None=None
+    month_candidate:SavedMonth|None=None
+    month_blocks:list[SavedMonth]=Field(default_factory=list)
     confirmations:dict[str,ConfirmationRecord]
     signals:list[Signal]
     retry_generate:GeneratePlan|None=None
+    retry_outline:GeneratePlan|None=None
+    retry_month:RetryMonth|None=None

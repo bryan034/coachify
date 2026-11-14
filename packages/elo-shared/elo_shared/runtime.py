@@ -286,8 +286,8 @@ def operation_view(row):
     if source.get('retry_at'):value['retry_after']=max(0,math.ceil(source['retry_at']-time.time()))
     return value or None
 
-def begin(store,owner,body,kind,work_seconds=None):
-    row=store.load(owner); payload=body.model_dump(mode='json'); key=payload['mutation_id']; fingerprint=digest(payload)
+def begin(store,owner,body,kind,work_seconds=None,bind_kind=False):
+    row=store.load(owner); payload=body.model_dump(mode='json'); key=payload['mutation_id']; fingerprint=digest({'kind':kind,'payload':payload}) if bind_kind else digest(payload)
     receipt=next((r for r in row['receipts'] if r['id']==key),None)
     if receipt:
         if receipt['hash']!=fingerprint: raise Problem('This request key was used with different content.')

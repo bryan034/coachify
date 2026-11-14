@@ -141,6 +141,7 @@ class EditableTask(Contract):
     definition_review_required:bool=False
     removal:TaskRemoval|None=None
     generated_key:str|None=None
+    routine_rule_id:str|None=None
     origin:Literal['generated','user']
     overrides:list[str]=Field(default_factory=list)
     source_assignment:SourceAssignment|None=None

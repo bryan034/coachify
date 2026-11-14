@@ -433,6 +433,18 @@
           "default": null,
           "title": "Generated Key"
         },
+        "routine_rule_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Routine Rule Id"
+        },
         "origin": {
           "enum": [
             "generated",

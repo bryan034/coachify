@@ -11,8 +11,9 @@ ASSESSMENT_FIELDS=('id','input_hash','role','target_type','job_skill_gaps','inte
 
 def planner_state(row):
     state=row.setdefault('planner',{})
-    for key,value in (('config',None),('candidate',None),('active',None)):state.setdefault(key,value)
+    for key,value in (('config',None),('candidate',None),('active',None),('outline_candidate',None),('outline_active',None),('month_candidate',None)):state.setdefault(key,value)
     state.setdefault('confirmations',{})
+    state.setdefault('month_blocks',[])
     return state
 def saved_config(state,default_zone=None):
     if state['config'] is None and default_zone:
@@ -216,5 +217,8 @@ def planner_view(row,source,now,default_zone=None):
         'runway':capacity.report(allow_past_start=bool(active)),'inputs':plan_inputs(source),
         'candidate':candidate,'candidate_review':plan_review(candidate,now),'candidate_blockers':candidate_blockers(state,source,now),
         'active':active,'active_review':plan_review(active,now),
+        'outline_candidate':copy.deepcopy(state['outline_candidate']),'outline_active':copy.deepcopy(state['outline_active']),
+        'month_candidate':copy.deepcopy(state['month_candidate']),'month_blocks':copy.deepcopy(state['month_blocks']),
         'task_warnings':schedule_warnings(active,now) if active else [],'confirmations':state['confirmations'],
-        'signals':revision_signals(state,source,now),'retry_generate':retry_body(row,'generate')}
+        'signals':revision_signals(state,source,now),'retry_generate':retry_body(row,'generate'),
+        'retry_outline':retry_body(row,'outline_generate'),'retry_month':retry_body(row,'month_generate')}

@@ -16,13 +16,48 @@ The timed roadmap supersedes the 30 October chat-first direction and its "no exa
 
 Jira references: G01/SCRUM-34, R01/SCRUM-41, R02–R09/SCRUM-42–49, E01–E07/SCRUM-50–56 and T01–T06/SCRUM-57–62. Retain existing identifiers/hierarchy/statuses. These stories were not re-read for this slice because Jira was not accessible; check them for conflicts.
 
-## Flow
+## Legacy weekly flow
+
+This flow remains for existing workspaces until an outline is created. The
+outline/month API is described below.
 
 1. **Configure.** The planner form has fixed sections: Timeline and Study time (required), Blackout days and times, and Learning focus (optional). It is the confirmed record and shows the goal and skills sent to the model. The chat helper asks for whatever `runway.issues` reports as missing (`missing_target`, `no_budget`, `no_blocks`), then offers the optional details once. It proposes settings through a validated patch; an invalid patch changes nothing and is explained. Chat never starts generation.
 2. **Runway.** `POST /planner/runway` calculates calendar time and usable hours without a model call. Generation is disabled, with reasons, when the goal or CV is missing, dates are invalid, no usable time exists or the model is unavailable. Incomplete interview research needs the existing explicit partial choice.
 3. **Generate.** One durable operation reuses or runs Assessment, then asks the model for a structured `PlanDraft`, validates it and stores it as a candidate. Reads make no model calls. Stages are `assessing`, `writing` and `correcting`.
 4. **Review.** Shows the next assignment, remaining calendar time and study hours, a milestone timeline with a target-date marker, the projected outcome, work beyond the deadline, gaps and confirmation questions. The user accepts, or returns to configuration with the candidate retained.
 5. **Revise.** Reads report signals for changed settings, progress, evidence or a finished week. The user requests a preview, from a button or the chat helper, and nothing applies until accepted.
+
+## Outline and monthly previews
+
+The outline/month API is an additional reviewed path alongside the existing weekly
+plan endpoints. `POST /planner/outlines/generate` starts a leased, source-checked
+operation. The model produces only milestones, gap resolution intentions and
+optional routine rules; it does not create assignments. The owner can edit the
+complete preview via `PATCH /planner/outlines/{id}` and explicitly accept it with
+`POST /planner/outlines/{id}/accept`. Validation checks provenance, prerequisite
+graph and order, dates, milestone effort and capacity. A material unknown can
+carry diagnostic intent before a diagnostic task exists. Routine rules specify
+weekdays, duration, topic progression and difficulty, link to a milestone, and
+are checked against available windows and weekly budget. Outline content is bounded
+to 48 KiB in JSON, so ordinary edits fit the 64 KiB request limit. Their effort is included
+in the milestone estimate. A conflict requires an adjustment rather than adding
+hours. Revisions retain accepted outline history and never rewrite active tasks;
+affected future month blocks are marked for review.
+
+`POST /planner/months/generate` starts an explicit preview for an accepted outline
+and calendar month. The local interval is clipped to the remaining runway, with
+an exclusive end boundary. Rules expand to dated tasks using stable rule/date IDs.
+Generation reserves saved work, checks weekly capacity across month boundaries,
+and does not recreate removed routine tasks. `POST /planner/months/{id}/accept`
+rechecks source, outline, progress and schedule and publishes the complete preview
+as canonical editable tasks. Generating an accepted month requires an explicit `revision` request; its
+preview preserves started, completed, edited, removed and note-bearing work.
+Failed operations retain earlier work. Previewed tasks are bounded to 128 KiB
+and the active plan to 512 KiB to keep the saved projection manageable. Workspace exposes `outline_candidate`,
+`outline_active`, `month_candidate` and `month_blocks` alongside legacy fields.
+Existing weekly endpoints remain available for legacy-only workspaces; once an
+outline exists, legacy generation and acceptance reject new requests. The outline
+path requires acceptance before monthly generation. Reads do not generate tasks.
 
 ## Capacity (`app/planning/capacity.py`)
 
@@ -81,7 +116,7 @@ Split-session compatibility keys are generated without colliding with primary as
 
 Revisions retain student-created, edited, started, completed and removed tasks and related dependency records. Model-generated keys do not establish semantic identity. A preview flags new work that might repeat student-created, removed, edited, started or completed work, including reused protected keys; `/planner/tasks/reconcile` records an explicit keep/discard decision before acceptance. A changed active plan invalidates an earlier preview. This conservative review can include work that is actually unrelated.
 
-## Reading a generated roadmap
+## Reading a legacy generated roadmap
 
 `POST /planner/generate` returns `{version, operation}` straight away. Poll `GET /progress` until `operation.status` is `succeeded` or `failed`, then read `GET /workspace`: the preview is `planner.candidate`, with `planner.candidate_review` and `planner.candidate_blockers`. `POST /planner/accept` makes it `planner.active`. `roadmap.yaml` and `models/roadmap-plan.schema.json` publish these shapes.
 
@@ -109,4 +144,4 @@ See setup for required service-scoped credentials. All model calls go through th
 
 ## Remaining scope
 
-No external calendar or course integrations, automatic revision without a user request, scheduled reviews, actual-time recording, conversation continuation or modelled non-zero reduced periods. Task editing, period views, review decisions and recovery still need frontend implementation. The dashboard backend provides read-only projections; its frontend remains unimplemented. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.
+No external calendar or course integrations, automatic revision without a user request, scheduled reviews, actual-time recording, conversation continuation or modelled non-zero reduced periods. The frontend supports task title, instructions and completion-outcome editing; task schedule editing, review decisions and recovery remain incomplete. The dashboard backend provides read-only projections; its frontend remains unimplemented. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.

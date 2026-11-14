@@ -115,7 +115,7 @@ def project_assignments(plan):
             key=primary[task['id']] if i==0 else split[(task['id'],i)]
             output.append({'id':ident,'key':key,'milestone_key':task['milestone_key'],
                 'gap_id':gap_id,'skill_gap_ids':skill_gap_ids,'kind':source.get('kind','study'),**slot,
-                'task':task['instructions'],'completion_criterion':task['completion_outcome'],
+                'task':task['title'] if source.get('calendar_uses_title') else task['instructions'],'completion_criterion':task['completion_outcome'],
                 'status':'completed' if task['status']=='completed' else 'scheduled',
                 'completed_at':task.get('completed_at'),'evidence_note':task.get('evidence_note'),
                 'history':copy.deepcopy(history)})

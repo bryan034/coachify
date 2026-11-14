@@ -59,6 +59,12 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         raise Problem('Assessment is still processing. Retry this saved planning message to reconnect.',503,'assessment_processing')
     async def worker(row,account):
         if row['pending']['kind']=='generate':await prepare_plan(app,row,account,assessment,context)
+        elif row['pending']['kind']=='outline_generate':
+            from app.planning.outlines import prepare_outline
+            await prepare_outline(app,row,account,assessment,context)
+        elif row['pending']['kind']=='month_generate':
+            from app.planning.months import prepare_month
+            await prepare_month(app,row,account,context)
         else:await chat_turn(app,row,account,assessment,context)
         return row
 
