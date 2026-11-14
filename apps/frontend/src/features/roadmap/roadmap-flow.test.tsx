@@ -38,7 +38,9 @@ it('shows the goal and skills that will be used before any generation', async ()
  expect(within(section).queryByText('Git')).not.toBeInTheDocument();
  fireEvent.click(within(section).getByRole('button', { name: /1 skill, 1 experience/ }));
  expect(within(section).getByText('Git')).toBeVisible();
- expect(calls('/planner/generate')).toHaveLength(0);
+ expect(calls('/planner/outlines/generate')).toHaveLength(0);
+ expect(calls('/planner/months/generate')).toHaveLength(0);
+ expect(calls('/planner/roll-forward')).toHaveLength(0);
 });
 
 it('closes a What elo will use panel with Escape, returning focus, and with a click elsewhere', async () => {
@@ -151,7 +153,7 @@ it('shows calculated runway with the extra capacity from backup blocks', async (
 it('edits recurring blocks and saves settings before generating', async () => {
  const order: string[] = []; const state = workspace();
  const generated = { version: 2, operation: { id: 'g', status: 'pending', stage: 'preparing' } };
- serve(state, { '/planner/config': () => { order.push('config'); return { ...state, version: 1 }; }, '/planner/generate': () => { order.push('generate'); return generated; } });
+ serve(state, { '/planner/config': () => { order.push('config'); return { ...state, version: 1 }; }, '/planner/outlines/generate': () => { order.push('generate'); return generated; } });
  render(<RoadmapPlanner />);
  await screen.findByRole('button', { name: 'Add study block' });
  fireEvent.click(screen.getByRole('button', { name: 'Add study block' }));
@@ -161,7 +163,7 @@ it('edits recurring blocks and saves settings before generating', async () => {
  fireEvent.click(screen.getByRole('button', { name: 'Generate roadmap' }));
  await waitFor(() => expect(order).toEqual(['config', 'generate']));
  expect(calls('/planner/config')[0][2].config.blocks.at(-1)).toEqual({ day: 0, start_time: '19:00', duration_minutes: 60, kind: 'backup' });
- expect(calls('/planner/generate')[0][2].expected_version).toBe(1);
+ expect(calls('/planner/outlines/generate')[0][2].expected_version).toBe(1);
 });
 
 function wideScreen() { vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('min-width') })); }
@@ -568,12 +570,12 @@ it('records a demonstrated outcome with a note', async () => {
 
 it('asks experience questions and offers to regenerate once answered', async () => {
  const answered = withCandidate(roadmap(), { confirmations: { docker: { answer: 'no_experience' } }, signals: [{ kind: 'evidence', message: 'You answered experience questions after this plan was prepared.' }] });
- serve(withCandidate(), { '/planner/confirmations': () => answered, '/planner/generate': () => ({ version: 3, operation: null }) }); render(<RoadmapPlanner />);
+ serve(withCandidate(), { '/planner/confirmations': () => answered, '/planner/outlines/generate': () => ({ version: 3, operation: null }) }); render(<RoadmapPlanner />);
  fireEvent.click(within(await screen.findByRole('group', { name: 'Have you run a service in Docker?' })).getByRole('radio', { name: 'No' }));
  await screen.findByRole('button', { name: 'Regenerate' });
  expect(calls('/planner/confirmations')[0][2]).toMatchObject({ gap_id: 'docker', answer: 'no_experience' });
  fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
- await waitFor(() => expect(calls('/planner/generate')).toHaveLength(1));
+ await waitFor(() => expect(calls('/planner/outlines/generate')).toHaveLength(1));
 });
 
 it('shows what a revision changes, keeps completed work and applies only on accept', async () => {
@@ -593,11 +595,11 @@ it('shows what a revision changes, keeps completed work and applies only on acce
 });
 
 it('offers an updated preview when settings, progress or evidence change', async () => {
- serve(withActive(roadmap(), { signals: [{ kind: 'settings', message: 'Your study settings changed since this roadmap was accepted.' }] }), { '/planner/generate': () => ({ version: 3, operation: null }) });
+ serve(withActive(roadmap(), { signals: [{ kind: 'settings', message: 'Your study settings changed since this roadmap was accepted.' }] }), { '/planner/outlines/generate': () => ({ version: 3, operation: null }) });
  render(<RoadmapPlanner />);
  await screen.findByText('Your study settings changed since this roadmap was accepted.');
  fireEvent.click(screen.getByRole('button', { name: 'Preview updated roadmap' }));
- await waitFor(() => expect(calls('/planner/generate')).toHaveLength(1));
+ await waitFor(() => expect(calls('/planner/outlines/generate')).toHaveLength(1));
 });
 
 it('keeps the plan and offers an exact retry when generation fails', async () => {

@@ -1,0 +1,9 @@
+.task-editor-list{list-style:none;padding:0;margin:14px 0}
+.task-editor-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.task-editor-list li div{display:grid;gap:2px;min-width:0;overflow-wrap:anywhere}
+.task-editor form{display:grid;gap:12px;margin-top:16px}
+.task-editor form label{display:grid;gap:4px;font-size:13px}
+.task-editor form input,.task-editor form textarea,.task-editor form select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--white);font:inherit}
+.task-editor form textarea{min-height:72px;resize:vertical}
+.task-editor form p{margin:0}
+.task-editor-actions{display:flex;gap:8px;flex-wrap:wrap}
