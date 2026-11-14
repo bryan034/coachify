@@ -3,16 +3,59 @@
 Only allowlisted numeric usage and identifiers enter logs. Provider bodies and
 prompts are held only until the response is consumed and are never logged.
 """
+import hashlib
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 import logging
 import math
 import re
 import time
 from uuid import uuid4
 
-logger = logging.getLogger('elo.model_usage')
+logger = logging.getLogger('uvicorn.error.model_usage')
 _MAX_BODY = 1024 * 1024
 _IDENTIFIER = re.compile(r'^[A-Za-z0-9_./:-]{1,100}$')
+
+_operation_id = ContextVar('elo_model_operation_id', default=None)
+
+
+def fingerprint(value):
+    """Stable content-free version of a prompt or schema, without storing it."""
+    raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), default=str).encode()
+    return 'sha256:' + hashlib.sha256(raw).hexdigest()[:24]
+
+
+@contextmanager
+def operation_scope(identifier):
+    # The caller's durable ID is never logged; hash it into a scoped opaque ID.
+    # IDs supplied here must be random application operation IDs, not owner IDs.
+    opaque = fingerprint('elo-model-operation:' + identifier) if isinstance(identifier, str) and identifier else None
+    token = _operation_id.set(opaque)
+    try:
+        yield
+    finally:
+        _operation_id.reset(token)
+
+
+def schema_fingerprint(payload):
+    response_format = payload.get('response_format') or payload.get('text') or {}
+    if not isinstance(response_format, dict):
+        return None
+    schema = (response_format.get('json_schema') or {}).get('schema') if isinstance(response_format.get('json_schema'), dict) else None
+    fmt = response_format.get('format')
+    if schema is None and isinstance(fmt, dict): schema = fmt.get('schema')
+    if schema is None:
+        # JSON-object compatibility sends its schema as the final system suffix.
+        for message in payload.get('messages', payload.get('input', [])):
+            if isinstance(message, dict) and message.get('role') == 'system' and isinstance(message.get('content'), str):
+                parts = message['content'].rsplit('\nJSON schema: ', 1)
+                if len(parts) == 2:
+                    try: schema = json.loads(parts[1])
+                    except (ValueError, TypeError): pass
+                    break
+    return fingerprint(schema) if isinstance(schema, dict) else None
+
 
 
 def _identifier(value):
@@ -41,10 +84,10 @@ class Measurement:
             'request_id': uuid4().hex,
             'service': _identifier(labels.get('service')),
             'stage': _identifier(labels.get('stage')),
-            'operation_id': _identifier(labels.get('operation_id')),
+            'operation_id': _operation_id.get(),
             'attempt_reason': _identifier(labels.get('attempt_reason')),
             'prompt_version': _identifier(labels.get('prompt_version')),
-            'schema_version': _identifier(labels.get('schema_version')),
+            'schema_version': _identifier(labels.get('schema_version')) or schema_fingerprint(payload),
             'requested_model': _identifier(payload.get('model')),
             'requested_provider': _identifier(labels.get('provider')),
             'request_bytes': _size(payload),

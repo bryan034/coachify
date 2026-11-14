@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from elo_shared.model_sdk import async_model_response, resolve_model_api_key
+from elo_shared.model_telemetry import fingerprint, operation_scope
 from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
 from bson import BSON
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -119,7 +120,8 @@ class Model:
                          self.token_parameter:max_tokens,**options,'response_format':response_format}
                 async with async_model_response(self.client,self.base_url,
                     self.api_key,self.timeout,payload,local=self.local, telemetry={"service": self.prefix.lower(),
-                    "stage": schema.__name__, "attempt_reason": "initial" if attempt == 0 else "schema_retry"}) as response:
+                    "stage": schema.__name__, "prompt_version": fingerprint(instructions),
+                    "schema_version": fingerprint(original), "attempt_reason": "initial" if attempt == 0 else "schema_retry"}) as response:
                     if response.status_code == 429:
                         delay=response.headers.get('retry-after','30')
                         delay=int(delay) if delay.isdigit() else 30
@@ -320,7 +322,8 @@ async def run_operation(app,owner,token,worker):
             account=await app.state.upstream.account(token)
             if account['id']!=owner: raise Problem('The account changed.',401,'session')
             working=copy.deepcopy(row)
-            updated=await asyncio.wait_for(worker(working,account),timeout=worker_seconds)
+            with operation_scope(pending['id']):
+                updated=await asyncio.wait_for(worker(working,account),timeout=worker_seconds)
             # Revalidate the revocable bearer before publication, never store it.
             account=await app.state.upstream.account(token)
             if account['id']!=owner: raise Problem('The account changed.',401,'session')

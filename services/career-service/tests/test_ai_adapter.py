@@ -490,3 +490,22 @@ def test_qa_preserves_all_fact_references_in_one_provider_response(stage,refs):
     result,seen,_=run(request,{'status':'answered','reply':reply,'references':refs})
     assert result.data.references==refs and result.data.reply==reply
     assert len(seen)==1
+
+
+def test_usage_correlates_career_retries_without_logging_operation_or_content(caplog):
+    import logging
+    async def invoke():
+        async def no_sleep(_): pass
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(503, text='private provider body'))) as client:
+            adapter = AIAdapter(settings(response_mode='json_schema', provider='compatible'), client, sleep=no_sleep)
+            operation = Operation('synthetic-owner', '1', 'chat', id='synthetic-operation')
+            with pytest.raises(AIError):
+                await adapter.generate(AIInput(stage='chat', conversation=[{'role': 'user', 'content': 'private question'}]), operation, current_revision=lambda: '1')
+    with caplog.at_level(logging.INFO, logger='uvicorn.error.model_usage'):
+        asyncio.run(invoke())
+    events = [json.loads(record.getMessage().removeprefix('model_usage ')) for record in caplog.records if record.name == 'uvicorn.error.model_usage']
+    assert len(events) == 2 and events[0]['operation_id'] == events[1]['operation_id']
+    assert events[0]['operation_id'].startswith('sha256:')
+    assert events[0]['prompt_version'] == 'career-ai-v23'
+    assert events[0]['schema_version'].startswith('sha256:')
+    assert 'synthetic-operation' not in caplog.text and 'private question' not in caplog.text and 'private provider body' not in caplog.text

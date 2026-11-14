@@ -30,6 +30,7 @@ from app.ai.research_planning import ResearchPlan,ResearchAssessment,PLAN_PROMPT
 from app.ai.config import AISettings
 from app.ai.sdk import model_client, completion_response
 from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
+from elo_shared.model_telemetry import operation_scope
 from app.ai.discovery_config import EXTRACTION_OUTPUT_TOKENS
 from app.ai.usage import input_tokens
 from app.ai.rejections import classify,safe_diagnostic
@@ -437,22 +438,23 @@ class AIAdapter:
 
     async def generate(self, request: AIInput, operation: Operation, *,
                        current_revision: Callable[[], str | Awaitable[str]], current_versions: Callable[[], InputVersions | None] = lambda: None, validate_output: Callable | None = None):
-        if self.local_slot is None:
-            return await self._generate(request,operation,current_revision=current_revision,current_versions=current_versions,validate_output=validate_output)
-        try:
-            # Preserve the submitted snapshot while waiting for local hardware.
-            try:request=AIInput.model_validate(request.model_dump(mode='python'))
-            except ValueError:
-                operation.status,operation.error_code='failed','invalid_operation'
-                raise AIError('invalid_operation') from None
-            async with self.local_slot:
-                if operation.status=='cancelled':raise AIError('cancelled')
-                # _generate rechecks cancellation and current versions after the
-                # queue. Its inference deadline starts only after acquiring it.
+        with operation_scope(operation.id):
+            if self.local_slot is None:
                 return await self._generate(request,operation,current_revision=current_revision,current_versions=current_versions,validate_output=validate_output)
-        except asyncio.CancelledError:
-            operation.cancel()
-            raise
+            try:
+                # Preserve the submitted snapshot while waiting for local hardware.
+                try:request=AIInput.model_validate(request.model_dump(mode='python'))
+                except ValueError:
+                    operation.status,operation.error_code='failed','invalid_operation'
+                    raise AIError('invalid_operation') from None
+                async with self.local_slot:
+                    if operation.status=='cancelled':raise AIError('cancelled')
+                    # _generate rechecks cancellation and current versions after the
+                    # queue. Its inference deadline starts only after acquiring it.
+                    return await self._generate(request,operation,current_revision=current_revision,current_versions=current_versions,validate_output=validate_output)
+            except asyncio.CancelledError:
+                operation.cancel()
+                raise
 
     async def _generate(self, request: AIInput, operation: Operation, *,
                         current_revision: Callable[[], str | Awaitable[str]], current_versions: Callable[[], InputVersions | None], validate_output: Callable | None):
@@ -861,7 +863,7 @@ class AIAdapter:
                 'text':{'format':{'type':'json_schema','name':schema['name'],'schema':schema['schema']}},
                 'max_output_tokens':payload[self.settings.token_parameter],'reasoning':{'effort':'none'}}
         for provider_attempt in range(self.settings.retries + 1):
-            async with completion_response(self.sdk, payload, local=self.settings.provider == 'local',responses=responses, telemetry={"service": "career", "stage": stage,
+            async with completion_response(self.sdk, payload, local=self.settings.provider == 'local',responses=responses, telemetry={"service": "career", "stage": stage, "prompt_version": PROMPT_VERSION,
                     "attempt_reason": "initial" if attempt == 1 and provider_attempt == 0 else "retry"}) as response:
                 status = response.status_code
                 if status in (400,401,403,404,422):
