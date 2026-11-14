@@ -289,6 +289,9 @@ class CvService:
         document['operation'].update(status='queued', attempt=0, lease_until=0, lease_token=None, error=None, auto_retries=0)
         document['operation'].pop('retry_at', None)
         document['operation'].pop('retry_reason', None)
+        # An explicit retry is a new bounded attempt, while automatic retries
+        # and worker recovery retain the existing operation budget.
+        document['operation'].pop('model_call_attempts', None)
         document['receipts'][key] = fingerprint
         bump(document)
         return self.repository.replace(previous, document)

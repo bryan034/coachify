@@ -27,6 +27,7 @@ def test_paraphrase_and_other_information_accept_supported_meaning(harness, monk
     assert [block['id'] for block in request['source_blocks']] == ['b1']
     assert [ref['index'] for ref in request['summaries']] == [0, 1]
     saved = app.state.repository.get('owner-a', queued['id'])
+    assert saved['operation']['model_call_attempts'] == 2
     assert 'source_blocks' not in saved and 'semantic_support' not in saved
 
 
@@ -154,6 +155,23 @@ def test_semantic_verification_uses_shared_daily_budget(harness, monkeypatch):
     assert result['status'] == 'failed' and result['items'] == []
     assert result['error']['failure_category'] == 'model_admission' and len(calls) == 1
     assert not result['error']['repair_attempted']
+
+
+def test_semantic_verification_shares_the_operation_call_limit(harness, monkeypatch):
+    from copy import deepcopy
+    _, value = candidates()
+    value['items'][0]['evidence'][0]['excerpt'] = 'Studied at Synthetic University.'
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [value])
+    current = app.state.repository.get('owner-a', queued['id'])
+    updated = deepcopy(current)
+    updated['operation']['model_call_attempts'] = 5
+    updated['revision'] += 1
+    app.state.repository.replace(current, updated)
+    app.state.worker.run_once()
+    result = read_result(client, queued)
+    assert result['status'] == 'failed' and result['items'] == []
+    assert result['error']['failure_category'] == 'operation_budget'
+    assert len(calls) == 1
 
 
 def test_approved_long_summary_is_kept_whole(harness, monkeypatch):

@@ -204,5 +204,19 @@ def test_gemini_uses_simple_decoding_schema_with_full_prompt_limits(monkeypatch,
     assert item['properties']['kind']['enum'] == ['education', 'experience', 'project', 'skill']
     assert {'type': 'null'} in item['properties']['end_date']['anyOf']
     assert 'other_information' in schema['required']
-    assert '"maxItems": 160' in request['messages'][0]['content']
-    assert '"maxLength": 500' in request['messages'][0]['content']
+    assert ('"maxItems": 160' in request['messages'][0]['content']) is gemini
+    assert ('"maxLength": 500' in request['messages'][0]['content']) is gemini
+
+
+def test_json_object_compatibility_keeps_schema_in_prompt(monkeypatch):
+    configure(monkeypatch)
+    monkeypatch.setenv('CV_LLM_RESPONSE_MODE', 'json_object')
+    requests = []
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': '{"items":[]}'}}]})
+    original = httpx.Client
+    monkeypatch.setattr('app.clients.extractor.Client', lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs))
+    Extractor().extract([])
+    assert requests[0]['response_format'] == {'type': 'json_object'}
+    assert '"maxItems": 160' in requests[0]['messages'][0]['content']

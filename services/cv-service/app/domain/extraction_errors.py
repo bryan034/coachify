@@ -6,7 +6,7 @@ FailureStage = Literal['source_read', 'document_parse', 'model_request', 'model_
 FailureCategory = Literal['source_unavailable', 'invalid_document', 'not_configured',
     'model_admission', 'provider_http_error', 'timeout', 'connection_error', 'transport_error',
     'response_too_large', 'invalid_json', 'invalid_response', 'incomplete_output',
-    'schema_validation', 'evidence_validation', 'unexpected_error', 'history_capacity', 'source_changed']
+    'schema_validation', 'evidence_validation', 'unexpected_error', 'history_capacity', 'source_changed', 'operation_budget']
 ProviderReason = Literal['schema_too_complex', 'schema_rejected', 'structured_output_unsupported',
     'unsupported_parameter', 'invalid_request', 'authentication_failed', 'permission_denied',
     'not_found', 'rate_limit_or_quota', 'provider_unavailable', 'http_error']

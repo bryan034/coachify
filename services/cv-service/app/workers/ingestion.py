@@ -34,6 +34,9 @@ _ERROR_TYPES = frozenset({'missing', 'extra_forbidden', 'literal_error', 'model_
 _MAX_DIAGNOSTIC_ERRORS = 16
 # The saved state itself may be the cause, so these retries start from the document.
 _RESTART_AFTER = frozenset({'unexpected_error'})
+# Shared across extraction, repair and semantic checks, including interrupted
+# attempts. Reserving before dispatch bounds work even when a response is lost.
+_OPERATION_MODEL_CALL_LIMIT = 6
 
 
 def _diagnostic_path(location, error_type):
@@ -148,10 +151,32 @@ class IngestionWorker:
                                         stage, 'timeout')
             return remaining - 10  # Leave time for validation and fenced publication.
 
+        def reserve_operation_call():
+            for _ in range(10):
+                current = self.repository.get(claimed['user_id'], claimed['_id'])
+                if (not current or current['operation']['lease_token'] != token
+                        or current['operation']['status'] != 'processing'
+                        or current['operation']['lease_until'] <= now()):
+                    raise StaleExtraction()
+                used = current['operation'].get('model_call_attempts', 0)
+                if type(used) is not int or used < 0 or used >= _OPERATION_MODEL_CALL_LIMIT:
+                    raise ExtractionFailure('CV processing reached its model-call limit. Your upload is saved; retry when ready.',
+                                            stage, 'operation_budget')
+                updated = deepcopy(current)
+                updated['operation']['model_call_attempts'] = used + 1
+                bump(updated, visible=False, operational=True)
+                try:
+                    self.repository.replace(current, updated)
+                    return
+                except Conflict:
+                    continue
+            raise StaleExtraction()
+
         def call_model(blocks, candidate, feedback):
             remaining_time()  # Deny stale work before reserving a provider attempt.
             def invoke():
                 timeout = remaining_time()  # Revalidate after admission/concurrency I/O.
+                if getattr(self.extractor, 'configured', True): reserve_operation_call()
                 if feedback is not None:
                     return self.extractor.repair(blocks, candidate, feedback, timeout_seconds=timeout, **told)
                 return self.extractor.extract(blocks, timeout_seconds=timeout, **told)
@@ -161,6 +186,7 @@ class IngestionWorker:
         def verify_evidence(blocks, refs):
             remaining_time()
             def invoke():
+                if getattr(self.extractor, 'configured', True): reserve_operation_call()
                 return self.extractor.verify_evidence(blocks, refs, timeout_seconds=remaining_time())
             return self.model_usage.run(claimed['user_id'], invoke,
                 configured=getattr(self.extractor, 'configured', True))

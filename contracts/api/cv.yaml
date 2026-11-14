@@ -5208,7 +5208,8 @@
                   "evidence_validation",
                   "unexpected_error",
                   "history_capacity",
-                  "source_changed"
+                  "source_changed",
+                  "operation_budget"
                 ]
               },
               {
