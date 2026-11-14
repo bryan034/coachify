@@ -861,7 +861,8 @@ class AIAdapter:
                 'text':{'format':{'type':'json_schema','name':schema['name'],'schema':schema['schema']}},
                 'max_output_tokens':payload[self.settings.token_parameter],'reasoning':{'effort':'none'}}
         for provider_attempt in range(self.settings.retries + 1):
-            async with completion_response(self.sdk, payload, local=self.settings.provider == 'local',responses=responses) as response:
+            async with completion_response(self.sdk, payload, local=self.settings.provider == 'local',responses=responses, telemetry={"service": "career", "stage": stage,
+                    "attempt_reason": "initial" if attempt == 1 and provider_attempt == 0 else "retry"}) as response:
                 status = response.status_code
                 if status in (400,401,403,404,422):
                     error=await self._rejection(response)

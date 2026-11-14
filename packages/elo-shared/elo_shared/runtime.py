@@ -118,7 +118,8 @@ class Model:
                 payload={'model':os.getenv(self.prefix+'_LLM_MODEL','gemini-3.5-flash-lite'), 'messages':messages,
                          self.token_parameter:max_tokens,**options,'response_format':response_format}
                 async with async_model_response(self.client,self.base_url,
-                    self.api_key,self.timeout,payload,local=self.local) as response:
+                    self.api_key,self.timeout,payload,local=self.local, telemetry={"service": self.prefix.lower(),
+                    "stage": schema.__name__, "attempt_reason": "initial" if attempt == 0 else "schema_retry"}) as response:
                     if response.status_code == 429:
                         delay=response.headers.get('retry-after','30')
                         delay=int(delay) if delay.isdigit() else 30

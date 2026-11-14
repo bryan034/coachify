@@ -40,7 +40,9 @@ class Interpreter(Extractor):
             deadline = time.monotonic() + timeout + 5
             with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=not self.local) as client:
                 with sync_model_response(client, self.base_url, self.api_key,
-                                         httpx.Timeout(timeout, connect=5), payload, local=self.local) as response:
+                                         httpx.Timeout(timeout, connect=5), payload, local=self.local,
+                                         telemetry={"service": "cv", "stage": "clarification_interpretation",
+                                                    "prompt_version": PROMPT_VERSION, "schema_version": SCHEMA_VERSION}) as response:
                     response.raise_for_status()
                     data = bytearray()
                     for chunk in response.iter_bytes():
