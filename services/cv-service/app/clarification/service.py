@@ -1,4 +1,5 @@
 from copy import deepcopy
+from elo_shared.model_telemetry import operation_scope
 from functools import partial
 import re
 from uuid import uuid4
@@ -187,6 +188,15 @@ def _question(document, question_id):
 
 
 def _interpret(service, owner, identifier, question_id, saved, interpreter, prepared=None):
+    question, _ = _question(saved, question_id)
+    # The source/question/revision identity stays stable across retries. Preserve
+    # the parent chat turn when this interpretation originates in conversation.
+    operation_id = f"cv-answer:{identifier}:{question_id}:{question['answer_revision']}"
+    with operation_scope(operation_id, inherit=True):
+        return _interpret_scoped(service, owner, identifier, question_id, saved, interpreter, prepared)
+
+
+def _interpret_scoped(service, owner, identifier, question_id, saved, interpreter, prepared=None):
     question, item = _question(saved, question_id)
     acquired = False
     try:

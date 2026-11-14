@@ -27,10 +27,11 @@ def fingerprint(value):
 
 
 @contextmanager
-def operation_scope(identifier):
+def operation_scope(identifier, *, inherit=False):
     # The caller's durable ID is never logged; hash it into a scoped opaque ID.
     # IDs supplied here must be random application operation IDs, not owner IDs.
-    opaque = fingerprint('elo-model-operation:' + identifier) if isinstance(identifier, str) and identifier else None
+    opaque = (_operation_id.get() if inherit and _operation_id.get() is not None else
+              fingerprint('elo-model-operation:' + identifier) if isinstance(identifier, str) and identifier else None)
     token = _operation_id.set(opaque)
     try:
         yield

@@ -51,6 +51,8 @@ BYOK status remain null. Provider cost is a reported estimate, not a credit debi
 The event contains no request/response text, credentials or owner identity. Each
 request has a random identifier. Assessment and Roadmap worker calls share an
 opaque digest of their durable operation ID; Career calls share one for the
-AI operation, including its retries. CV operation correlation remains unavailable.
-Prompt and schema fingerprints distinguish versions without recording their contents. Configure the deployment's normal log collector
+AI operation, including its retries. CV upload stages share an upload-operation
+identity; chat interpretation and planning share their turn identity, including
+recovered actions; direct answer interpretation retries share an answer revision
+identity. All are hashed before logging. Prompt and schema fingerprints distinguish versions without recording their contents. Configure the deployment's normal log collector
 to retain INFO for `uvicorn.error.model_usage`; this does not enable provider I/O logging.

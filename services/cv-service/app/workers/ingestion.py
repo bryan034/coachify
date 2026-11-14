@@ -3,6 +3,7 @@ import asyncio
 import logging
 import time
 from copy import deepcopy
+from elo_shared.model_telemetry import operation_scope
 from uuid import UUID, uuid4
 from pydantic import ValidationError
 from app.domain.capabilities import effective_fingerprint
@@ -204,7 +205,8 @@ class IngestionWorker:
                 # A retry keeps the operation and resumes. A reupload or new workflow version starts fresh.
                 thread_id=f"{claimed['operation']['id']}:{WORKFLOW_VERSION}",
                 rewind_rejected=bool(previous_failure and previous_failure['category'] in REJECTED_OUTPUT))
-            result = harness.run(original)
+            with operation_scope(claimed['operation']['id']):
+                result = harness.run(original)
             parsed, items, metadata = result['parsed'], result['items'], result['metadata']
             observe('publication')
             error = None

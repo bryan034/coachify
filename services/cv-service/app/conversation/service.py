@@ -9,6 +9,7 @@ import httpx
 from bson import BSON
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
+from elo_shared.model_telemetry import operation_scope
 from app.conversation.presentation import review_reply
 from app.domain.review_context import clarification_context
 from app.domain.baseline import visible_baseline_estimates
@@ -360,6 +361,10 @@ class ConversationService:
         return result
 
     async def process(self, app, account, identifier, route_id, token):
+        with operation_scope(route_id):
+            return await self._process(app, account, identifier, route_id, token)
+
+    async def _process(self, app, account, identifier, route_id, token):
         owner = account['id']
         conversation = self.get(owner, identifier)
         route = deepcopy(action_in(conversation, route_id))
@@ -571,6 +576,13 @@ class ConversationService:
         return action_in(saved, action_id)[field]
 
     async def execute(self, app, account, identifier, action_id, decision=None):
+        conversation = self.get(account['id'], identifier)
+        message = action_message(conversation, action_id)
+        parent = next((action for action in message.get('actions', []) if action['kind'] == 'route'), None)
+        with operation_scope(parent['id'] if parent else action_id, inherit=True):
+            return await self._execute(app, account, identifier, action_id, decision)
+
+    async def _execute(self, app, account, identifier, action_id, decision=None):
         owner, token = account['id'], str(uuid4())
         conversation = self.get(owner, identifier)
         original = deepcopy(action_in(conversation, action_id))
