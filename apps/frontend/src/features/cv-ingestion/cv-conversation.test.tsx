@@ -131,6 +131,9 @@ describe('saved CV conversation', () => {
   render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
   expect(await screen.findByRole('button',{name:'Review profile'})).toBeEnabled();
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
+  vi.mocked(cvApi.sendMessage).mockResolvedValue(conversation({purpose:'skills_profile',revision:2,messages:[message('m2','Your review is complete.')]}));
+  fireEvent.click(screen.getByRole('button',{name:'Review again'}));
+  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat-one',expect.objectContaining({command:'review'}),'synthetic-session',expect.any(AbortSignal)));
  });
  it('automatically recovers one old evidence-alignment failure', async () => {
   const failed=action({kind:'clarify',status:'failed',error:'Some interpreted skill details are not supported by your answer. Your answer is saved; clarify or retry interpretation.'});

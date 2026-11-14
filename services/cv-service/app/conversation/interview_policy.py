@@ -1,6 +1,8 @@
 """Validate agent questions, completion and skill estimates against saved evidence."""
 from copy import deepcopy
 import logging
+import re
+from difflib import SequenceMatcher
 from app.domain.capabilities import normalized_name
 from app.schemas.interview import InterviewDecision
 from app.domain.review_context import clarification_context
@@ -83,7 +85,13 @@ def validate_decision(decision, context, memory, *, user_stop=False, max_attempt
         if not clarification_context(focused, evidence_for(focused))['clarification_targets']:
             raise DecisionRejected('question_no_ambiguity', 'This source has no material clarification remaining. Use its CV context and move to an ambiguous topic or finish.')
         if topic_question_count(memory, decision.item_id) >= MAX_TOPIC_QUESTIONS:
-            raise DecisionRejected('question_topic_limit', 'This topic already has three questions. Move to another topic with questions remaining, or finish with gaps if all topics are covered.')
+            raise DecisionRejected('question_topic_limit', 'This review group already has two questions. Move to another topic with questions remaining, or finish with gaps if all topics are covered.')
+        wording = ' '.join(re.findall(r'\w+', decision.reply.casefold()))
+        for prior in memory.get('intent_history', []):
+            if prior['item_id'] != decision.item_id: continue
+            previous_wording = ' '.join(re.findall(r'\w+', prior.get('question', '').casefold()))
+            if previous_wording and (wording == previous_wording or SequenceMatcher(None, wording, previous_wording).ratio() >= .9):
+                raise DecisionRejected('question_repeat', 'That question was already asked. Choose a distinct unresolved detail or finish with gaps.')
         open_targets = [target for target in decision.targets
                         if target_availability(focused, memory, target.field, target.skill_name,
                                                max_attempts=max_attempts) == 'open']
@@ -98,8 +106,8 @@ def validate_decision(decision, context, memory, *, user_stop=False, max_attempt
             # A user skip is accepted as a gap even if the planner omits this topic's coverage.
             skipped = any(q['item_id'] == item_id and (q.get('answer_status') == 'skipped' or q.get('skipped'))
                           for q in memory.get('questions', []))
-            if item_id not in coverage and (skipped or (topic_question_count(memory, item_id) >= MAX_TOPIC_QUESTIONS
-                                                        and topic_discussed(memory, item_id))):
+            if item_id not in coverage and (skipped or topic_question_count(memory, item_id) >= MAX_TOPIC_QUESTIONS
+                                                        ):
                 coverage[item_id] = {'item_id': item_id, 'status': 'reviewed_with_gaps', 'evidence_refs': []}
         missing = [s['id'] for s in sources.values() if s['id'] in memory.get('topic_ids', [i['id'] for i in sources.values() if i['kind'] in {'project', 'experience'}]) and s['id'] not in coverage]
         if missing: raise DecisionRejected('finish_unvisited', 'Unvisited work/projects remain. Explore them or acknowledge their gaps after discussion.')

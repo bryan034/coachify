@@ -538,7 +538,7 @@ class ConversationService:
                 operation = await run_in_threadpool(self.remember_guided, owner, conversation['_id'], route['id'],
                     '_guided_prepare', operation, token)
                 prepared = await run_in_threadpool(prepare, self.cv, owner, conversation['cv_id'],
-                    PrepareMutation.model_validate(operation), context)
+                    PrepareMutation.model_validate(operation), context, account.get('cv_review_policy'))
                 again = await self.context(app, account['authorization'])
                 if again != context: raise Conflict('Your Career target changed while preparing questions. Refresh to continue.')
                 document = self.cv.get(owner, conversation['cv_id'])
@@ -759,7 +759,7 @@ class ConversationService:
                 context = conversation.get('context') or {}
                 doc['clarifications'].append({'id': question_id, 'item_id': item['id'],
                     'kind': 'project' if item['kind'] == 'project' else 'work' if item['kind'] == 'experience' else 'other',
-                    'question': 'What additional or corrected facts are you stating about this source?',
+                    'question': 'What additional or corrected facts are you stating about this source?', '_synthetic_statement': True,
                     'uncertainty_key': digest({'conversation_action': action['id']}), 'uncertainty': 'claim',
                     'status': 'unanswered', 'answer': None, 'career_target_id': context.get('id'),
                     'career_target_version': context.get('version'), 'career_target_type': context.get('type'),

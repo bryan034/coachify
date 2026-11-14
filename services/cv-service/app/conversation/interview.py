@@ -56,6 +56,39 @@ class InterviewHarness:
         document = service.cv.get(owner, conversation['cv_id'])
         if document['operation']['status'] != 'ready' or document.get('candidate'):
             raise CvError('Finish CV processing or source reconciliation before reviewing. Your conversation is saved.', 409)
+        prior = conversation.get('interview_memory') or {}
+        saved_policy = (document.get('review_policy_snapshot') or next(
+            (q['_interview_policy'] for q in document['clarifications'] if q.get('_interview_policy')), None)
+            or prior.get('review_policy'))
+        entitlement = account.get('cv_review_policy', {'scope': 'section', 'version': 1})
+        if (saved_policy and saved_policy != entitlement and route.get('_command') == 'review'
+                and prior.get('status') in {'reviewed', 'reviewed_with_gaps'}
+                and not conversation.get('active_question')):
+            # Migration is an explicit start of a new review, never a mid-review
+            # reset. Original question IDs remain the basis for both groupings.
+            from app.conversation.interview_memory import issued_review_question
+            receipt_ids = sorted(q['id'] for q in document['clarifications'] if issued_review_question(q))
+            def migrate(current):
+                if current.get('review_policy_snapshot', saved_policy) != saved_policy:
+                    raise Conflict('Your review policy changed. Continue with the latest review.')
+                migrations = current.setdefault('review_policy_migrations', [])
+                migrations.append({'from': saved_policy, 'to': entitlement,
+                                   'question_count': len(receipt_ids), 'receipt_basis': digest(receipt_ids)})
+                current['review_policy_snapshot'] = entitlement
+            await run_in_threadpool(service.cv.mutate, owner, document['_id'],
+                Mutation(expected_version=document['version'], mutation_id=key(route['id'] + ':review-policy')),
+                'review-policy-migration', migrate)
+            document = service.cv.get(owner, document['_id'])
+        policy = (document.get('review_policy_snapshot') or next(
+            (q['_interview_policy'] for q in document['clarifications'] if q.get('_interview_policy')), None)
+            or prior.get('review_policy') or account.get('cv_review_policy', {'scope': 'section', 'version': 1}))
+        if (prior.get('review_policy') and prior['review_policy'] != policy and route.get('_command') == 'review'
+                and prior.get('status') in {'reviewed', 'reviewed_with_gaps'}):
+            # Also applies when publication was interrupted after migration.
+            prior = {**prior, 'review_policy': policy, 'status': 'reviewing', 'focus_item_id': None,
+                     'coverage': {i: v for i, v in prior.get('coverage', {}).items()
+                                  if v.get('status') == 'reviewed'}}
+        conversation = {**conversation, 'interview_memory': {**prior, 'review_policy': policy}}
         memory = reconcile_memory(conversation, document)
         memory['max_target_attempts'] = service.cv.settings.interview_max_target_attempts
         retained = route.get('_interview_plan')
@@ -65,6 +98,9 @@ class InterviewHarness:
             if document['extraction_version'] != retained['memory']['extraction_version']:
                 raise Conflict('Your source changed while saving the question. Continue from the latest evidence.')
             def add(current):
+                saved_policy = current.setdefault('review_policy_snapshot', retained['memory']['review_policy'])
+                if saved_policy != retained['memory']['review_policy']:
+                    raise Conflict('Your review policy changed. Continue with the current review.')
                 if not any(q['id'] == question['id'] for q in current['clarifications']):
                     if len(current['clarifications']) >= 800: raise CvError('This CV has reached its question history limit.', 409)
                     current['clarifications'].append(question)
@@ -82,6 +118,13 @@ class InterviewHarness:
         if command == 'finish':
             return await self.pause(account, identifier, route['id'], token, memory,
                 'We can stop here. Your answers are saved; remaining details stay uncertain.')
+        if command == 'continue' and conversation.get('active_question') and memory.get('no_progress', {}).get(conversation['active_question']['id']):
+            command = 'skip'
+            route = {**route, '_command': command}
+        if command in {'review', 'continue'} and conversation.get('active_question'):
+            return await self.publish(account, identifier, route['id'], token, memory,
+                'Your current question is still open. You can answer it or skip.',
+                conversation['active_question'], conversation.get('interview_targets', []))
         if command == 'skip':
             active = conversation.get('active_question')
             if active:
@@ -165,9 +208,7 @@ class InterviewHarness:
                     except ValidationError:
                         if attempt:
                             active = conversation.get('active_question')
-                            reply = 'Could you clarify that in a little more detail?' + (' ' + active['question'] if active else '')
-                            return await self.publish(account, identifier, route['id'], token, memory,
-                                reply, active, conversation.get('interview_targets', []))
+                            return await self.no_progress(app, account, conversation, document, route, token, memory, active)
                 evaluated = {'result': result.model_dump(mode='json'), 'metadata': metadata}
                 def remember(current):
                     service.check_lease(action_in(current, route['id']), token)
@@ -176,9 +217,7 @@ class InterviewHarness:
             result = InterviewTurn.model_validate(evaluated['result'])
             if not result.topic_relevant:
                 active = conversation.get('active_question')
-                reply = 'Let’s stay with your experience and skills.' + (' ' + active['question'] if active else ' Which experience would you like to discuss?')
-                return await self.publish(account, identifier, route['id'], token, memory,
-                    reply, active, conversation.get('interview_targets', []))
+                return await self.no_progress(app, account, conversation, document, route, token, memory, active)
             for note in result.memory_notes:
                 if note.source_id != 'answer' or note.quote not in route['_text']:
                     continue  # Ignore unusable optional notes without blocking the answer.
@@ -191,8 +230,13 @@ class InterviewHarness:
             if result.intent == 'skip' or (result.actions and all(a.kind == 'skip' for a in result.actions)):
                 return await self.process(app, account, conversation, {**route, '_command': 'skip'}, token)
             if result.intent == 'side_question':
+                # Side answers do not have a question receipt or consume a slot.
+                # Do not let model prose sneak an uncounted request for evidence in.
+                reply = 'I use your CV and answers to understand your experience.'
+                if conversation.get('active_question'):
+                    reply += ' Your current question is still open; you can answer it or skip.'
                 return await self.publish(account, identifier, route['id'], token, memory,
-                    result.reply, conversation.get('active_question'), conversation.get('interview_targets', []))
+                    reply, conversation.get('active_question'), conversation.get('interview_targets', []))
             payload = service.routing_payload(owner, conversation, route)
             items = {i['id']: i for i in effective_items(document) if not i['removed']}
             questions = {q['id']: q for q in payload['questions']}
@@ -240,7 +284,7 @@ class InterviewHarness:
                 def waiting(current):
                     action_in(current, route['id'])['_interview_waiting'] = True
                 await run_in_threadpool(service.update, owner, identifier, waiting)
-                reply = 'Your answer is saved. We couldn’t finish processing it yet.' if any(a['status'] in {'failed', 'stale'} for a in remaining) else result.reply
+                reply = 'Your answer is saved. We couldn’t finish processing it yet.' if any(a['status'] in {'failed', 'stale'} for a in remaining) else 'Your answer is saved and is still being processed.'
                 return await self.publish(account, identifier, route['id'], token, memory,
                     reply, latest.get('active_question'), latest.get('interview_targets', []))
             conversation = latest
@@ -350,7 +394,7 @@ class InterviewHarness:
             reason = diagnostics[-1]['reason'] if diagnostics else ''
             explanations = {
                 'question_no_ambiguity': 'It tried to ask about an experience whose CV details are already clear.',
-                'question_topic_limit': 'It tried to ask more than three questions about the same topic.',
+                'question_topic_limit': 'It tried to ask more than two questions in the same review group.',
                 'question_targets_closed': 'It kept selecting details that are already answered, skipped or exhausted.',
                 'question_targets_mixed': 'It kept mixing open questions with details that are already closed.',
                 'finish_unvisited': 'It tried to finish before all review topics were covered.',
@@ -388,7 +432,8 @@ class InterviewHarness:
                 previous = memory['attempts'].get(identity, {})
                 memory['attempts'][identity] = {'signature': signature, 'count': previous.get('count', 0) + 1
                     if previous.get('signature') == signature else 1}
-            memory.setdefault('question_counts', {})[decision.item_id] = topic_question_count(memory, decision.item_id) + 1
+            group = memory.get('item_groups', {}).get(decision.item_id, decision.item_id)
+            memory.setdefault('group_question_counts', {})[group] = topic_question_count(memory, decision.item_id) + 1
             memory['questions'].append({**active, 'targets': targets, 'evidence_version': document['effective_version']})
             memory['questions'] = memory['questions'][-120:]
         elif decision.action == 'finish':
@@ -412,7 +457,8 @@ class InterviewHarness:
                 'extraction_version': document['extraction_version'], 'reconciliation_required': False,
                 'answer_revision': 0, 'answer_sequence': 0, 'interpretation_status': 'not_requested',
                 'interpretation_error': None, 'resolution': 'unresolved', 'interpretation': None, 'followup_of': None,
-                '_interview_targets': targets}
+                '_interview_targets': targets, '_interview_group': group, '_interview_policy': memory['review_policy'],
+                '_interview_section': context['focused_source']['kind']}
             def retain_plan(current):
                 action = action_in(current, route['id'])
                 self.service.check_lease(action, token)
@@ -420,6 +466,9 @@ class InterviewHarness:
                     'question': question, 'expected_version': document['version']}
             await run_in_threadpool(self.service.update, account['id'], conversation['_id'], retain_plan)
             def add(current):
+                saved_policy = current.setdefault('review_policy_snapshot', memory['review_policy'])
+                if saved_policy != memory['review_policy']:
+                    raise Conflict('Your review policy changed. Continue with the current review.')
                 if any(q['id'] == question['id'] for q in current['clarifications']): return
                 if len(current['clarifications']) >= 800: raise CvError('This CV has reached its question history limit.', 409)
                 current['clarifications'].append(question)
@@ -427,6 +476,19 @@ class InterviewHarness:
                 Mutation(expected_version=document['version'], mutation_id=key(route['id'] + ':interview-question')),
                 'interview-question', add)
         return await self.publish(account, conversation['_id'], route['id'], token, memory, decision.reply, active, targets)
+
+    async def no_progress(self, app, account, conversation, document, route, token, memory, active):
+        # Keep the original question visible in the transcript without issuing it
+        # again. A repeated failed interpretation defers it rather than looping.
+        if active:
+            failures = memory.setdefault('no_progress', {})
+            failures[active['id']] = failures.get(active['id'], 0) + 1
+            if failures[active['id']] >= 2:
+                return await self.process(app, account, {**conversation, 'interview_memory': memory},
+                                          {**route, '_command': 'skip'}, token)
+        return await self.publish(account, conversation['_id'], route['id'], token, memory,
+            'I could not connect that answer to the current question. You can edit your answer, skip, or continue.',
+            active, conversation.get('interview_targets', []))
 
     async def pause(self, account, identifier, route_id, token, memory, reply):
         memory['status'] = 'paused'

@@ -11,7 +11,7 @@ from app.schemas.interview_evidence import fact_key, ReviewField, fact_groups, f
 
 MAX_CONTEXT_BYTES = 96 * 1024
 MAX_TARGET_ATTEMPTS = 2
-MAX_TOPIC_QUESTIONS = 3
+MAX_TOPIC_QUESTIONS = 2
 RECENT_MESSAGES = 4
 
 
@@ -40,15 +40,54 @@ def topic_discussed(memory, item_id):
         for q in memory.get('questions', []))
 
 
+def review_group(item, policy):
+    # Group by the structured source kind, never by editable CV headings.
+    kind = item.get('kind')
+    if policy.get('scope') == 'item' and kind in {'project', 'experience'}:
+        return 'item:' + item['id']
+    return 'section:' + str(kind or 'other')
+
+
+def issued_review_question(question):
+    # Older synthetic statement receipts predate an explicit marker.
+    return not (question.get('_synthetic_statement') or question.get('question') ==
+                'What additional or corrected facts are you stating about this source?')
+
+
+def question_groups(question, item_groups, policy):
+    item_id = question['item_id']
+    if policy.get('scope') == 'item' and question.get('kind') in {'project', 'work'}:
+        return ['item:' + item_id]
+    section = question.get('_interview_section') or {'project': 'project', 'work': 'experience'}.get(question.get('kind'))
+    if section:
+        return ['section:' + section]
+    if item_id in item_groups:
+        return [item_groups[item_id]]
+    # Legacy unknown "other" sources cannot be attributed to one section safely.
+    return ['section:education', 'section:skill']
+
+
 def topic_question_count(memory, item_id):
-    return memory.get('question_counts', {}).get(item_id,
-        len({q['id'] for q in memory.get('questions', []) if q['item_id'] == item_id}))
+    group = memory.get('item_groups', {}).get(item_id, item_id)
+    return memory.get('group_question_counts', {}).get(group,
+        memory.get('question_counts', {}).get(item_id,
+            len({q['id'] for q in memory.get('questions', []) if q['item_id'] == item_id})))
 
 
 def target_availability(item, memory, field, skill_name=None, *, max_attempts=MAX_TARGET_ATTEMPTS):
     """One target-admission policy shared by planner context and validation."""
     if review_target_skipped(item, field, skill_name): return 'declined'
     if topic_question_count(memory, item['id']) >= MAX_TOPIC_QUESTIONS: return 'topic_limit'
+    # Answered and skipped intents cannot be reopened by paraphrasing the same
+    # ownership question. Distinct sources retain their own attribution.
+    ownership = {'personal_contribution', 'responsibilities'}
+    for q in memory.get('intent_history', []):
+        if q.get('item_id') != item['id'] or q.get('status') != 'skipped' and q.get('resolution') != 'resolved':
+            continue
+        for target in q.get('targets', []):
+            same_field = target.get('field') == field or {target.get('field'), field} <= ownership
+            if same_field and normalized_name(target.get('skill_name') or '') == normalized_name(skill_name or ''):
+                return 'closed'
     facts = fact_groups(evidence_for(item)).get((field, normalized_name(skill_name or '')), [])
     if facts_closed(facts):
         return 'closed'
@@ -78,9 +117,8 @@ def question_options(item, memory):
 
 
 def topic_ids(items):
-    """Only experiences/projects with concrete clarification needs enter review."""
-    return [item['id'] for item in items if item['kind'] in {'project', 'experience'}
-            and clarification_context(item, evidence_for(item))['clarification_targets']]
+    """Only sources with a concrete material clarification need enter review."""
+    return [item['id'] for item in items if clarification_context(item, evidence_for(item))['clarification_targets']]
 
 
 def reconcile_memory(conversation, document):
@@ -102,11 +140,20 @@ def reconcile_memory(conversation, document):
     attempts = {k: v for k, v in old.get('attempts', {}).items() if any(k.startswith(i + ':') for i in stable_sources)}
     answers = {q['id']: q['status'] for q in document['clarifications'] if not q.get('reconciliation_required')}
     # Rebuild from durable CV questions, not the bounded recent-memory window.
-    question_counts, discussed_topics = {}, set()
-    known_questions = {q['id'] for q in old.get('questions', [])}
+    policy = (document.get('review_policy_snapshot') or old.get('review_policy')
+              or {'scope': 'section', 'version': 1})
+    # Include original and removed sources when rebuilding historical receipts.
+    source_items = {i['id']: i for i in document.get('original_items', [])}
+    source_items.update({i['id']: i for i in items})
+    item_groups = {i: review_group(item, policy) for i, item in source_items.items()}
+    question_counts, group_question_counts, discussed_topics, intent_history = {}, {}, set(), []
     for q in document['clarifications']:
-        if q['item_id'] in signatures and ('_interview_targets' in q or q['id'] in known_questions):
+        if issued_review_question(q):
             question_counts[q['item_id']] = question_counts.get(q['item_id'], 0) + 1
+            for group in question_groups(q, item_groups, policy):
+                group_question_counts[group] = group_question_counts.get(group, 0) + 1
+            intent_history.append({'item_id': q['item_id'], 'status': q['status'],
+                                   'targets': q.get('_interview_targets', []), 'resolution': q.get('resolution'), 'question': q.get('question', '')})
             if q['status'] in {'answered', 'skipped'}: discussed_topics.add(q['item_id'])
     needed = set(topic_ids(items))
     retained_topics = [i for i in old.get('topic_ids', []) if i in signatures
@@ -120,6 +167,8 @@ def reconcile_memory(conversation, document):
         'topic_ids': list(dict.fromkeys((retained_topics if same_generation else []) + topic_ids(items))),
         'deferred_topics': {i: value for i, value in old.get('deferred_topics', {}).items() if i in stable_sources},
         'coverage': coverage, 'estimates': estimates, 'attempts': attempts, 'question_counts': question_counts,
+        'review_policy': policy, 'item_groups': item_groups, 'group_question_counts': group_question_counts,
+        'intent_history': intent_history, 'no_progress': old.get('no_progress', {}),
         'discussed_topic_ids': sorted(discussed_topics),
         'questions': history,
         'notes': old.get('notes', [])[-24:],
@@ -143,7 +192,8 @@ def build_context(conversation, document, memory, *, focus_id=None, recall_ids=(
     focus_id = focus_id or memory.get('focus_item_id')
     focus = next((i for i in items if i['id'] == focus_id), None)
     if focus is None:
-        focus = next((i for i in items if i['id'] in memory.get('topic_ids', []) and i['id'] not in memory['coverage']), None)
+        focus = next((i for i in items if i['id'] in memory.get('topic_ids', []) and i['id'] not in memory['coverage']
+                      and topic_question_count(memory, i['id']) < MAX_TOPIC_QUESTIONS), None)
     if focus is None and items: focus = items[0]
     index = {}
     # A transition may close the previous topic while asking about a new source.
@@ -164,7 +214,7 @@ def build_context(conversation, document, memory, *, focus_id=None, recall_ids=(
                and not q.get('reconciliation_required')]
     active = conversation.get('active_question')
     active_record = next((q for q in document['clarifications'] if active and q['id'] == active['id']), None)
-    context = {'goal': 'Establish a source-specific baseline for every project skill using CV context and targeted questions about personal responsibilities, concrete skill application, assistance, complexity and problem solving. At most three questions per project, with no overall topic cap.',
+    context = {'goal': 'Use the CV as evidence and ask specific questions only where a useful detail remains uncertain. Ask at most two questions per review group including the opening question; finish earlier when enough is known. Do not infer another source’s facts from an answer.',
         'cv_version': document['version'], 'evidence_version': document['effective_version'],
         'active_question': {**active, 'uncertainty': active_record['uncertainty']} if active and active_record else active,
         'review_topic_ids': memory.get('topic_ids', []),

@@ -557,8 +557,8 @@ def test_lost_guided_prepare_response_replays_exact_operation(harness, monkeypat
     if command == 'skip': chat = send(client, chat, 'Review my CV', command='review')
     import app.conversation.service as service_module
     actual_prepare, attempts = service_module.prepare, []
-    def prepare_then_crash(service, owner, identifier, body, context):
-        result = actual_prepare(service, owner, identifier, body, context)
+    def prepare_then_crash(service, owner, identifier, body, context, policy=None):
+        result = actual_prepare(service, owner, identifier, body, context, policy)
         attempts.append(body.model_dump(mode='json'))
         if len(attempts) == 1:
             raise RuntimeError('Synthetic lost response after durable question preparation')

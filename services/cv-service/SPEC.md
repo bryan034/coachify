@@ -345,21 +345,14 @@ private receipt diagnostics retain at most six allowlisted reason/action events.
 Content-free logs contain those codes and attempt numbers only, never model prose,
 CV data, skill names or raw schema errors. See [planner diagnostics](INTERVIEW.md#planner-rejection-diagnostics).
 
-### Three questions per review topic
+### Two questions per review group
 
-Uploaded-CV review permits at most three issued questions per source topic. The
-review starts from CV context and asks only about material ambiguity. Scope,
-personally handled responsibilities and confidence in replicating the task are
-possible areas, not a required questionnaire. The last answer is stored as source-scoped
-`review_evidence.field=replication_confidence`, with its original quote and explicit
-uncertainty/support needs. It is self-reported confidence, not proficiency proof.
-Already answered areas need not be repeated; three is a maximum, not a minimum.
-Skipped questions count; failed proposals/retries and side explanations do not.
-Counts derive from retained CV interview questions across conversation segments,
-including older/source-corrected records of the same source identity. The validator
-rejects a fourth question, and exposes the budget in transient planner context.
-After the third answer/skip, move on or finish with gaps; completion still requires
-all review topics to have been covered. No new configuration or collection is added.
+Uploaded-CV review snapshots the authenticated Profile scope: section scope shares
+two issued questions across sources of the same structured kind, and item scope
+allows two per project/experience. Opening and skipped questions count. Saved CV
+clarification receipts rebuild counts across conversation segments; a source with
+an exhausted group can close with gaps. The active answer remains saveable even
+when older history exceeds the limit. See [interview policy](INTERVIEW.md#review-question-budget).
 
 Assistant reply publication and conversation read projections remove internal
 evidence/fact/source IDs from prose and active question text. Read filtering also
@@ -384,9 +377,9 @@ context; all sources expose known skills and clarification targets. Planner
 required checklist. Named people/team achievements never become personal ownership
 without explicit source context or a user clarification.
 
-The three-question cap remains a maximum. CV sources with a supported skill baseline need zero questions. Clear wording
+The two-question group cap remains a maximum. CV sources with a supported skill baseline need zero questions. Clear wording
 alone is not enough when personal skill application/support is still unknown;
-responsibility and skill evidence gaps are reviewed within the per-project budget. Discussed
+responsibility and skill evidence gaps are reviewed within the applicable group budget. Discussed
 topics retain stable progress through completion. Known, unvisited optional-only
 topics and obsolete active questions can retire on conversation reconciliation.
 Original CV evidence, user overrides and explicit source corrections retain their
@@ -395,14 +388,9 @@ older CVs; they reuse their saved facts and source text.
 
 ### Baseline skill evaluation — per-project question budgets
 
-A review topic means a whole project or experience. Each has its own maximum of
-three issued questions; there is no overall three-question/three-topic limit.
-The existing retained CV/history capacity is not a conversational topic cap.
-Questions use known CV scope and skills to establish personal responsibilities,
-concrete skill application/depth and assistance/independence or limitations.
-Related skills may be covered by one focused question. The review proceeds to
-remaining projects after a topic is covered/exhausted and can finish earlier if
-all project skills already have sufficient baseline evidence.
+A source topic is one project or experience. The review policy chooses whether
+its allowance is shared across the section or held per item. Questions focus on
+material uncertainty and may finish early; answers remain source-specific.
 
 `GET /api/v1/cv/{id}` exposes `skill_estimates` for supported source-scoped
 project/experience skill levels. The complete per-skill projection, including
@@ -412,7 +400,7 @@ its source item ID, skill name, fixed evidence-based explanation and references.
 References are structured provenance, never printed in assistant prose. Estimates
 recompute from effective evidence on read; no provider call, separate collection
 or competing skill store is introduced. Confidence/tenure alone cannot establish
-competence. After three answers, unsupported fields remain unknown rather than
+competence. After the allowance is exhausted, unsupported fields remain unknown rather than
 receiving a fabricated score. This is a CV/conversation baseline, separate from
 practical testing and target-specific Assessment comparisons.
 
@@ -425,7 +413,7 @@ does not mutate those records. Frontend summary/chat defensively filter older
 responses too and show no empty diagnostic section. Supported skill levels remain
 visible. No API fields are removed and existing level enums stay compatible.
 
-A topic’s maximum of three questions addresses relevant project responsibilities
+A group’s maximum of two questions addresses relevant project responsibilities
 and skill application gaps; it is not a request to fill every empty field. Backend
 target selection offers concrete skill use before probing support/independence,
 and consolidates missing personal ownership at project scope. Partial peripheral
@@ -447,4 +435,4 @@ current known project. This saves a source-bound deferred-topic receipt, cancels
 related failed planning receipts and proceeds to another uncovered project or
 completes with gaps. It neither resubmits answers nor skips failed evidence writes.
 CV versions/extraction generations/source fingerprints fence retry and correction
-races. Existing user history, ownership, leases and three-question budgets remain.
+races. Existing user history, ownership, leases and group budgets remain.

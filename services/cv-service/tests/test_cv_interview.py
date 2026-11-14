@@ -225,9 +225,10 @@ def test_review_latest_answer_overrides_cv_and_earlier_answer(harness):
         output['interpretations'][0]['claims'][0]['attribution'] = 'observed'
         return output
     provider.evaluation = revised
+    item_id = chat['active_question']['item_id']
     chat = send(client, chat, 'Actually, I only watched the team build the API.')
     saved = client.get('/api/v1/cv/' + cv['id']).json()
-    item = next(i for i in saved['items'] if i['id'] == chat['active_question']['item_id'])
+    item = next(i for i in saved['items'] if i['id'] == item_id)
     assert next(f for f in item['review_evidence'] if f['field'] == 'personal_contribution')['value'] == 'Only observed the API work'
     assert next(c for c in item['skill_claims'] if c['name'] == 'Python')['attribution'] == 'observed'
     assert len([q for q in saved['clarifications'] if q['answer']]) == 2
@@ -280,7 +281,7 @@ def test_repeated_invalid_schema_asks_for_clarification_without_failure_card(har
     before = client.get('/api/v1/cv/' + cv['id']).json()
     chat = send(client, chat, 'A relevant but unstructured answer.')
     assert chat['active_question'] == active
-    assert 'Could you clarify' in chat['messages'][-1]['text']
+    assert 'edit your answer, skip, or continue' in chat['messages'][-1]['text']
     assert not any(a['status'] == 'failed' for a in chat['messages'][-1]['actions'])
     assert client.get('/api/v1/cv/' + cv['id']).json() == before
     assert len([c for c in provider.calls if c['task'] == 'cv_interview_interpret']) == 2
@@ -290,6 +291,7 @@ def test_old_evidence_failure_retries_under_review_policy_and_resumes(harness, m
     client, app, *_ = harness
     cv, chat, provider = start(harness)
     provider.evaluation = evaluate
+    topic = chat['active_question']['item_id']
     from app.clarification import service as clarification
     original = clarification.validate_review_interpretation
     def rejected(*args):
@@ -299,6 +301,8 @@ def test_old_evidence_failure_retries_under_review_policy_and_resumes(harness, m
     action = next(a for a in chat['messages'][-1]['actions'] if a['kind'] == 'clarify')
     assert action['status'] == 'failed'
     monkeypatch.setattr(clarification, 'validate_review_interpretation', original)
+    provider.plans = [{'action': 'ask', 'reply': 'What was the scope?',
+                       'item_id': topic, 'targets': [{'field': 'task_scope'}]}]
     coordinator = app.state.conversations
     resume = coordinator.resume_interview
     continuation_states = []
@@ -724,9 +728,9 @@ def test_followup_updates_only_addressed_fields_and_preserves_known_ownership(ha
                 'review_evidence': [fact('outcome', context['message'], 'Released the reporting API')],
                 'resolved_uncertainties': ['claim'], 'remaining_uncertainties': []}]}
     provider.evaluation = outcome
+    source = chat['active_question']['item_id']
     chat = send(client, chat, 'We released the reporting API.')
     after = client.get('/api/v1/cv/'+cv['id']).json()
-    source = chat['active_question']['item_id']
     previous = next(i for i in before['items'] if i['id'] == source)
     current = next(i for i in after['items'] if i['id'] == source)
     assert current['skill_claims'] == previous['skill_claims']
@@ -756,7 +760,8 @@ def test_answer_recall_does_not_spend_planner_validation_retries(harness):
     assert app.state.interpreter.calls == 0
 
 
-def start_two_topics(harness):
+def start_two_topics(harness, scope='item'):
+    harness[-1].cv_review_scope = scope
     from tests.conftest import TEXT
     harness[2].payload = {'items': [
         {'kind': 'project', 'title': 'Team application', 'description': TEXT[1], 'explicit': True,
@@ -781,7 +786,7 @@ def test_topic_stays_current_when_model_marks_it_covered_during_followups(harnes
                               'evidence_refs': list(context['evidence_index'])}]}
 
     provider.plans = [followup, followup]
-    for _ in range(2):
+    for _ in range(1):
         chat = send(client, chat, 'I built the Python API with guidance.')
         assert chat['active_question']['item_id'] == topic, chat['messages'][-1]
         assert chat['interview']['reviewed_items'] == 0
@@ -922,79 +927,49 @@ def test_provider_schema_rejection_replans_without_resubmitting_saved_answer(har
     assert app.state.interpreter.calls == 0
 
 
-@pytest.mark.parametrize('skip_third', [False, True])
-def test_three_questions_per_topic_then_transition_without_a_fourth(harness, skip_third):
+@pytest.mark.parametrize('skip_second', [False, True])
+def test_two_questions_per_paid_item_then_transition_without_a_third(harness, skip_second):
     client, app, *_ = harness
     cv, chat, provider = start_two_topics(harness)
     first = chat['active_question']['item_id']
     second = next(t['id'] for t in chat['interview']['topics'] if t['id'] != first)
     provider.evaluation = evaluate
-
-    def ask(field, question, item_id=first):
-        return {'action': 'ask', 'reply': question, 'item_id': item_id, 'targets': [{'field': field}]}
-
-    provider.plans = [ask('task_scope', 'What was the scope?')]
+    def ask(item, field, text):
+        return {'action': 'ask', 'reply': text, 'item_id': item, 'targets': [{'field': field}]}
+    provider.plans = [ask(first, 'task_scope', 'What was the scope?')]
     chat = send(client, chat, 'I built the Python API with guidance.')
-    provider.plans = [ask('replication_confidence', 'How confident are you about repeating a similar task?')]
-    chat = send(client, chat, 'I built the Python API with guidance.')
-    assert chat['active_question']['question'] == 'How confident are you about repeating a similar task?'
-    assert chat['interview']['reviewed_items'] == 0
-    provider.plans = [ask('complexity', 'A fourth question must not be published.'),
-                      ask('personal_contribution', 'What did you handle in the next project?', second),
-                      ask('personal_contribution', 'What did you handle in the next project?', second)]
-    chat = (send(client, chat, 'Skip this question.', command='skip') if skip_third
-            else send(client, chat, 'I could repeat it with guidance.'))
+    provider.plans = [ask(first, 'complexity', 'A third question must not be published.'),
+                      ask(second, 'personal_contribution', 'What did you handle in the next project?'),
+                      ask(second, 'personal_contribution', 'What did you handle in the next project?')]
+    chat = (send(client, chat, 'Skip this question.', command='skip') if skip_second
+            else send(client, chat, 'I built the Python API with guidance.'))
     assert chat['active_question']['item_id'] == second, chat['messages'][-1]
-    assert chat['interview']['reviewed_items'] == 1
-    assert all('fourth question' not in m['text'] for m in chat['messages'])
+    assert all('third question' not in m['text'] for m in chat['messages'])
     document = app.state.conversations.cv.get('owner-a', cv['id'])
-    assert len([q for q in document['clarifications'] if q['item_id'] == first and '_interview_targets' in q]) == 3
-    stored = app.state.conversations.get('owner-a', chat['id'])
-    assert stored['interview_memory']['question_counts'][first] == 3
-    # Counts survive bounded memory loss/segment rollover because CV owns all issued questions.
-    inherited = deepcopy(stored)
+    assert len([q for q in document['clarifications'] if q['item_id'] == first and '_interview_targets' in q]) == 2
+    inherited = deepcopy(app.state.conversations.get('owner-a', chat['id']))
     inherited['messages'] = []
     inherited['interview_memory']['questions'] = []
-    inherited['interview_memory']['question_counts'] = {}
     rebuilt = reconcile_memory(inherited, document)
     context = build_context(inherited, document, rebuilt, focus_id=first)
-    assert context['topic_question_budget'] == {'asked': 3, 'remaining': 0}
-    assert all(not option['open_fields'] for option in context['question_options'])
-    with pytest.raises(ValueError, match='three questions'):
-        validate_decision(ask('complexity', 'Try a fourth after reload.'), context, rebuilt)
-    assert client.get(PREFIX + '/' + chat['id']).json()['active_question']['item_id'] == second
+    assert context['topic_question_budget'] == {'asked': 2, 'remaining': 0}
+    with pytest.raises(ValueError, match='two questions'):
+        validate_decision(ask(first, 'complexity', 'Try a third after reload.'), context, rebuilt)
 
 
-def test_third_answer_records_replication_confidence_and_finishes_with_gaps(harness):
+def test_second_answer_is_saved_when_question_budget_is_exhausted(harness):
     client, app, *_ = harness
     cv, chat, provider = start(harness)
     provider.evaluation = evaluate
     topic = chat['active_question']['item_id']
     provider.plans = [{'action': 'ask', 'reply': 'What was the scope?', 'item_id': topic, 'targets': [{'field': 'task_scope'}]}]
     chat = send(client, chat, 'I built the Python API with guidance.')
-    provider.plans = [{'action': 'ask', 'reply': 'Could you repeat a similar task today?', 'item_id': topic,
-                       'targets': [{'field': 'replication_confidence'}]}]
     chat = send(client, chat, 'I built the Python API with guidance.')
-
-    def confidence(context):
-        result = evaluate(context)
-        result['interpretations'][0]['review_evidence'].append(
-            fact('replication_confidence', context['message'], 'Confident in repeating a similar task with guidance.'))
-        return result
-
-    provider.evaluation = confidence
-    provider.plans = [{'action': 'finish', 'reply': 'The review is complete.'}]
-    chat = send(client, chat, 'I am confident I could repeat a similar task with guidance.')
-    assert chat['interview']['status'] == 'reviewed_with_gaps', chat['messages'][-1]
-    assert chat['interview']['reviewed_items'] == chat['interview']['total_items'] == 1
+    assert chat['interview']['status'] == 'reviewed_with_gaps'
     assert chat['active_question'] is None
-    detail = client.get('/api/v1/cv/' + cv['id']).json()
-    item = next(item for item in detail['items'] if item['id'] == topic)
-    assert next(f for f in item['review_evidence'] if f['field'] == 'replication_confidence')['value'] == 'Confident in repeating a similar task with guidance.'
-    assert len(detail['clarifications']) == 3
-    assert all('_interview_targets' not in q for q in detail['clarifications'])
     raw = app.state.conversations.cv.get('owner-a', cv['id'])
-    assert len([q for q in raw['clarifications'] if '_interview_targets' in q]) == 3
+    assert len([q for q in raw['clarifications'] if '_interview_targets' in q]) == 2
+    assert all(q['status'] == 'answered' for q in raw['clarifications'])
 
 
 def test_evidence_references_are_removed_from_delivered_prose_not_structured_data(harness):
@@ -1102,53 +1077,21 @@ def test_context_distinguishes_known_cv_skills_from_unresolved_personal_responsi
                            'targets': [{'field': 'responsibilities'}]}, context, memory)
 
 
-def test_three_questions_for_each_project_not_three_for_the_entire_baseline_review(harness):
-    client, app, *_ = harness
-    cv, chat, provider = start_two_topics(harness)
-    first = chat['active_question']['item_id']
-    second = next(t['id'] for t in chat['interview']['topics'] if t['id'] != first)
-
-    def rich(context):
-        active, text = context['active_question'], context['message']
-        names = [c['name'] for c in context['focused_source']['skill_claims']]
-        return {'intent': 'answer', 'reply': 'Your personal contribution is captured.',
-            'actions': [{'kind': 'clarify', 'item_id': active['item_id'], 'question_id': active['id'], 'excerpt': text}],
-            'interpretations': [{'item_id': active['item_id'], 'resolution': 'partial',
-                'claims': [{'skill_id': 'skill:' + name.lower(), 'name': name, 'attribution': 'personal',
-                            'assistance': 'assisted', 'changed_fields': ['attribution', 'assistance'], 'evidence_excerpt': text}
-                           for name in names],
-                'review_evidence': [fact('personal_contribution', text, 'Personally implemented the pipeline', attribution='personal'),
-                                    fact('responsibilities', text, 'Implemented and tested the pipeline'),
-                                    fact('task_scope', text, 'The scope still has a small ambiguity', status='partial'),
-                                    *[fact('skill_use', text, 'Implemented the pipeline', skill_name=name, attribution='personal') for name in names]],
-                'resolved_uncertainties': [], 'remaining_uncertainties': ['claim']}]}
-
-    provider.evaluation = rich
-    def ask(item, field):
-        return {'action': 'ask', 'item_id': item, 'reply': f'Clarify your personal {field.replace("_", " ")} in this project.',
-                'targets': [{'field': field}]}
-    provider.plans = [ask(first, 'task_scope')]
-    chat = send(client, chat, 'I personally implemented the Python and SQL pipeline with guidance.')
-    provider.plans = [ask(first, 'complexity')]
-    chat = send(client, chat, 'I personally implemented the Python and SQL pipeline with guidance.')
-    provider.plans = [ask(second, 'personal_contribution'), ask(second, 'personal_contribution')]
-    chat = send(client, chat, 'I personally implemented the Python and SQL pipeline with guidance.')
-    assert chat['active_question']['item_id'] == second
-    assert chat['interview']['reviewed_items'] == 1
-    provider.plans = [ask(second, 'task_scope')]
-    chat = send(client, chat, 'I personally implemented the SQL pipeline with guidance.')
-    provider.plans = [ask(second, 'complexity')]
-    chat = send(client, chat, 'I personally implemented the SQL pipeline with guidance.')
-    chat = send(client, chat, 'I personally implemented the SQL pipeline with guidance.')
-    assert chat['active_question'] is None
-    assert chat['interview']['reviewed_items'] == chat['interview']['total_items'] == 2
-    raw = app.state.conversations.cv.get('owner-a', cv['id'])
-    assert {item: len([q for q in raw['clarifications'] if q['item_id'] == item]) for item in (first, second)} == {first: 3, second: 3}
-    assert len(raw['clarifications']) == 6
-    saved = client.get('/api/v1/cv/' + cv['id']).json()
-    baseline = {(e['item_id'], e['skill_name']): e['level'] for e in saved['skill_estimates']}
-    assert baseline == {(first, 'Python'): 'guided_application', (first, 'SQL'): 'guided_application', (second, 'SQL'): 'guided_application'}
-    assert {(e['item_id'], e['skill_name']) for e in chat['interview']['estimates']} == set(baseline)
+@pytest.mark.parametrize('scope, expected', [('section', [2, 2]), ('item', [1, 1])])
+def test_question_counts_rebuild_from_all_group_receipts(harness, scope, expected):
+    from app.conversation.interview_memory import topic_question_count
+    _, app, *_ = harness
+    cv, chat, _ = start_two_topics(harness, scope=scope)
+    document = app.state.conversations.cv.get('owner-a', cv['id'])
+    topics = [i['id'] for i in effective_items(document) if i['kind'] == 'project']
+    # A durable receipt from another conversation still consumes its group's allowance.
+    existing = document['clarifications'][0]
+    document['clarifications'].append({**existing, 'id': 'other-receipt', 'item_id': topics[1], 'status': 'skipped'})
+    stored = app.state.conversations.get('owner-a', chat['id'])
+    stored['interview_memory']['questions'] = []
+    memory = reconcile_memory(stored, document)
+    assert [topic_question_count(memory, item_id) for item_id in topics] == expected
+    assert memory['review_policy']['scope'] == scope
 
 
 def test_published_baseline_memory_is_canonical_before_status_polling(harness):
@@ -1274,3 +1217,69 @@ def test_explicit_unknown_ownership_allows_finish_with_gaps_without_verified_own
         'coverage': [{'item_id': source, 'status': 'reviewed', 'evidence_refs': ['bad-model-reference']}]}, context, memory)
     assert decision.action == 'finish'
     assert coverage[source] == {'item_id': source, 'status': 'reviewed_with_gaps', 'evidence_refs': []}
+
+
+def test_off_topic_misclassification_never_repeats_and_eventually_defers(harness):
+    client, app, *_ = harness
+    cv, chat, provider = start(harness)
+    original = deepcopy(chat['active_question'])
+    provider.evaluation = {'topic_relevant': False, 'intent': 'side_question',
+                           'reply': 'Back to your experience.', 'actions': []}
+    chat = send(client, chat, 'I handled the deployment.')
+    assert chat['active_question'] == original
+    assert original['question'] not in chat['messages'][-1]['text']
+    chat = send(client, chat, 'I managed deployment myself.')
+    assert original['question'] not in chat['messages'][-1]['text']
+    raw = app.state.conversations.cv.get('owner-a', cv['id'])
+    original_receipt = next(q for q in raw['clarifications'] if q['id'] == original['id'])
+    assert original_receipt['status'] == 'skipped'
+    assert len([q for q in raw['clarifications'] if q['id'] == original['id']]) == 1
+
+
+def test_old_section_receipts_count_after_source_replacement_and_statements_do_not(harness):
+    from app.conversation.interview_memory import topic_question_count
+    _, app, *_ = harness
+    cv, chat, _ = start_two_topics(harness, scope='section')
+    document = app.state.conversations.cv.get('owner-a', cv['id'])
+    topic = chat['active_question']['item_id']
+    receipt = document['clarifications'][0]
+    document['clarifications'].extend([
+        {**receipt, 'id': 'old', 'item_id': 'old-source', 'kind': 'project', 'status': 'skipped'},
+        {**receipt, 'id': 'statement', '_synthetic_statement': True, 'status': 'answered'},
+    ])
+    memory = reconcile_memory(app.state.conversations.get('owner-a', chat['id']), document)
+    assert topic_question_count(memory, topic) == 2
+
+
+def test_side_question_cannot_publish_an_unreceipted_evidence_question(harness):
+    client, app, *_ = harness
+    cv, chat, provider = start(harness)
+    original = deepcopy(chat['active_question'])
+    provider.evaluation = {'topic_relevant': True, 'intent': 'side_question',
+                           'reply': 'What else did you personally build?', 'actions': []}
+    chat = send(client, chat, 'Why are you asking?')
+    assert chat['active_question'] == original
+    assert '?' not in chat['messages'][-1]['text']
+    raw = app.state.conversations.cv.get('owner-a', cv['id'])
+    assert len(raw['clarifications']) == 1
+
+
+def test_explicit_review_migrates_policy_using_old_question_receipts(harness):
+    client, app, *_ = harness
+    cv, chat, _ = start_two_topics(harness, scope='section')
+    first = chat['active_question']['item_id']
+    chat = send(client, chat, 'Skip this question.', command='skip')
+    chat = send(client, chat, 'Skip this question.', command='skip')
+    assert chat['interview']['status'] == 'reviewed_with_gaps'
+    assert chat['active_question'] is None
+    before = app.state.conversations.cv.get('owner-a', cv['id'])
+    ids = {q['id'] for q in before['clarifications']}
+    assert len(ids) == 2
+    harness[-1].cv_review_scope = 'item'
+    chat = send(client, chat, 'Review my CV', command='review')
+    after = app.state.conversations.cv.get('owner-a', cv['id'])
+    assert after['review_policy_snapshot']['scope'] == 'item'
+    assert after['review_policy_migrations'][-1]['question_count'] == 2
+    assert ids <= {q['id'] for q in after['clarifications']}
+    assert chat['active_question'] and chat['active_question']['item_id'] != first
+    assert len([q for q in after['clarifications'] if q['item_id'] == first]) == 2
