@@ -920,6 +920,18 @@ components:
           type: string
           format: date-time
           title: Expires At
+        cv_review_scope:
+          type: string
+          enum:
+          - section
+          - item
+          default: section
+          title: Cv Review Scope
+        cv_review_policy_version:
+          const: 1
+          type: integer
+          default: 1
+          title: Cv Review Policy Version
       type: object
       required:
       - id
