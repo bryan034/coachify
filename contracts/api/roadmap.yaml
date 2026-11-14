@@ -6122,7 +6122,8 @@
               {
                 "type": "string",
                 "maxLength": 160,
-                "minLength": 1
+                "minLength": 1,
+                "description": "One to 19 whitespace-separated words, up to 160 characters."
               },
               {
                 "type": "null"
@@ -6242,7 +6243,8 @@
             "type": "string",
             "maxLength": 160,
             "minLength": 1,
-            "title": "Title"
+            "title": "Title",
+            "description": "One to 19 whitespace-separated words, up to 160 characters."
           },
           "instructions": {
             "type": "string",
