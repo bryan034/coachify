@@ -29,31 +29,30 @@ def test_pause_cannot_publish_an_unaccounted_question(harness):
     assert not app.state.conversations.cv.get('owner-a', cv['id'])['clarifications']
 
 
-def test_free_section_can_finish_after_one_informative_answer(harness):
+def test_free_review_keeps_unvisited_projects_open_after_one_answer(harness):
     client, app, *_ = harness
     cv, chat, provider = start_two_topics(harness, scope='section')
     provider.evaluation = evaluate
     provider.plans = [{'action': 'finish', 'reply': 'Your review is complete.'}]
+    first_question = chat['active_question']['id']
     chat = send(client, chat, 'I built the Python API with guidance.')
-    assert chat['interview']['status'] == 'reviewed_with_gaps'
-    assert chat['active_question'] is None
-    assert chat['interview']['reviewed_items'] == chat['interview']['total_items'] == 2
-    assert len(app.state.conversations.cv.get('owner-a', cv['id'])['clarifications']) == 1
+    assert chat['interview']['status'] == 'reviewing'
+    assert chat['active_question'] and chat['active_question']['id'] != first_question
+    assert len(app.state.conversations.cv.get('owner-a', cv['id'])['clarifications']) == 2
 
 
-def test_invalid_answers_defer_the_entire_free_section(harness):
+def test_invalid_answers_defer_only_the_current_project(harness):
     client, app, *_ = harness
     cv, chat, provider = start_two_topics(harness, scope='section')
     original = deepcopy(chat['active_question'])
     provider.evaluation = {'intent': 'invalid', 'reply': 'Malformed'}
     chat = send(client, chat, 'First unstructured answer.')
     chat = send(client, chat, 'Second unstructured answer.')
-    assert chat['active_question'] is None
-    assert chat['interview']['status'] == 'reviewed_with_gaps'
+    assert chat['active_question'] and chat['active_question']['item_id'] != original['item_id']
+    assert chat['interview']['status'] == 'reviewing'
     document = app.state.conversations.cv.get('owner-a', cv['id'])
-    assert len(document['clarifications']) == 1
-    assert document['clarifications'][0]['id'] == original['id']
-    assert document['clarifications'][0]['status'] == 'skipped'
+    original_receipts = [q for q in document['clarifications'] if q['id'] == original['id']]
+    assert len(original_receipts) == 1 and original_receipts[0]['status'] == 'skipped'
 
 
 def test_multiple_questions_and_injected_hints_are_not_published(harness):

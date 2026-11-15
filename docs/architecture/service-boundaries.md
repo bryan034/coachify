@@ -213,15 +213,15 @@ personal/team responsibilities receive specific clarification. No new service,
 collection, provider call or cross-database dependency is introduced.
 
 CV baseline review evaluates source-specific project skill application from CV
-and review facts. One whole project/experience has a three-question budget; other
-projects retain independent budgets. CV detail derives `skill_estimates` on read
-with explicit insufficient evidence and no model call or separate skill store.
+and review facts. One whole project or job has a two-question budget; other
+projects and jobs retain independent budgets. CV detail derives `skill_estimates` on read
+from saved evidence and reviews, without a separate skill store.
 This baseline does not create an Assessment result or assert practical mastery.
 
 The complete CV baseline projection and insufficient-evidence diagnostics remain
 CV-owned backend/planner data. Public CV/conversation projections expose only
 supported estimates; UI filters legacy entries too. Relevant responsibility and
-application gaps drive the three-question project budget, not a field checklist.
+application gaps drive the two-question project budget, not a field checklist.
 
 CV keeps question skips as source-scoped uncertain review dispositions derived
 from its saved clarification receipts. Explicitly skipped/unknown ownership may

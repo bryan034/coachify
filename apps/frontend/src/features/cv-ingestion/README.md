@@ -248,7 +248,7 @@ references, including previously saved replies. Experience titles remain visible
 structured source IDs, original saved messages and literal user text are retained.
 The backend prompt also keeps IDs out of visible prose.
 
-Uploaded-CV topics have a backend-enforced maximum of three questions, normally
+Uploaded-CV project and job topics have a backend-enforced maximum of two questions each, normally
 clarifying only material ambiguities after using the CV’s known facts. Scope,
 personal responsibilities and confidence are possible areas, not mandatory prompts.
 The agent can finish earlier when details are already known. Confidence is shown
@@ -262,7 +262,7 @@ require users to repeat the CV. Discussed topics remain in progress at completio
 older unvisited optional-only topics can disappear after reconciliation.
 
 Baseline review treats each whole project/experience as one topic, with its own
-three-question maximum and no overall topic cap. The saved Skills Profile project
+two-question maximum and no overall topic cap. The saved Skills Profile project
 summary displays supported `skill_estimates` returned by CV detail; insufficient-
 evidence diagnostics remain backend-only. Questions focus on personal responsibilities and concrete
 application/depth/support of the project’s known skills. A clear project description

@@ -1286,7 +1286,7 @@ def test_two_questions_per_item_preserve_source_scoped_skill_evidence(harness):
     assert {(e['item_id'], e['skill_name']) for e in chat['interview']['estimates']} == set(baseline)
 
 
-@pytest.mark.parametrize('scope, expected', [('section', [2, 2]), ('item', [1, 1])])
+@pytest.mark.parametrize('scope, expected', [('section', [1, 1]), ('item', [1, 1])])
 def test_question_counts_rebuild_from_all_group_receipts(harness, scope, expected):
     from app.conversation.interview_memory import topic_question_count
     _, app, *_ = harness
@@ -1300,7 +1300,7 @@ def test_question_counts_rebuild_from_all_group_receipts(harness, scope, expecte
     stored['interview_memory']['questions'] = []
     memory = reconcile_memory(stored, document)
     assert [topic_question_count(memory, item_id) for item_id in topics] == expected
-    assert memory['review_policy']['scope'] == scope
+    assert memory['review_policy'] == {'scope': 'item', 'version': 1}
 
 
 def test_published_baseline_memory_is_canonical_before_status_polling(harness):
@@ -1651,7 +1651,8 @@ def test_old_section_receipts_count_after_source_replacement_and_statements_do_n
         {**receipt, 'id': 'statement', '_synthetic_statement': True, 'status': 'answered'},
     ])
     memory = reconcile_memory(app.state.conversations.get('owner-a', chat['id']), document)
-    assert topic_question_count(memory, topic) == 2
+    assert topic_question_count(memory, topic) == 1
+    assert memory['group_question_counts']['item:old-source'] == 1
 
 
 def test_side_question_cannot_publish_an_unreceipted_evidence_question(harness):
@@ -1710,14 +1711,26 @@ def test_explicit_review_migrates_policy_using_old_question_receipts(harness):
     client, app, *_ = harness
     cv, chat, _ = start_two_topics(harness, scope='section')
     first = chat['active_question']['item_id']
-    chat = send(client, chat, 'Skip this question.', command='skip')
-    chat = send(client, chat, 'Skip this question.', command='skip')
-    assert chat['interview']['status'] == 'reviewed_with_gaps'
-    assert chat['active_question'] is None
-    before = app.state.conversations.cv.get('owner-a', cv['id'])
+    service = app.state.conversations
+    before = service.cv.get('owner-a', cv['id'])
+    previous = deepcopy(before)
+    receipt = previous['clarifications'][0]
+    receipt.update(status='skipped', _interview_policy={'scope': 'section', 'version': 1})
+    previous['clarifications'].append({**deepcopy(receipt), 'id': 'old-second-question', 'uncertainty_key': 'old-second-question'})
+    previous['review_policy_snapshot'] = {'scope': 'section', 'version': 1}
+    previous['revision'] += 1
+    service.cv.repository.replace(before, previous)
+    second = next(topic['id'] for topic in chat['interview']['topics'] if topic['id'] != first)
+    def completed(conversation):
+        memory = conversation['interview_memory']
+        memory.update(review_policy={'scope': 'section', 'version': 1}, status='reviewed_with_gaps', focus_item_id=None,
+                      coverage={item: {'item_id': item, 'status': 'reviewed_with_gaps', 'evidence_refs': []} for item in (first, second)})
+        conversation['active_question'] = None
+    service.update('owner-a', chat['id'], completed)
+    chat = client.get(PREFIX + '/' + chat['id']).json()
+    before = service.cv.get('owner-a', cv['id'])
     ids = {q['id'] for q in before['clarifications']}
     assert len(ids) == 2
-    harness[-1].cv_review_scope = 'item'
     chat = send(client, chat, 'Review my CV', command='review')
     after = app.state.conversations.cv.get('owner-a', cv['id'])
     assert after['review_policy_snapshot']['scope'] == 'item'

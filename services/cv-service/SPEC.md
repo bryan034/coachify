@@ -283,7 +283,7 @@ titles and topic states; its counts represent stable experience/project topics
 needing clarification, not question counts. Follow-ups do not add topics. Manual
 intake reports its four background areas. Completion is announced in chat, with a
 completion-only Review profile button opening the Skills Profile summary. Opening
-a paused review resumes automatically; completed reviews do not auto-restart. Review again explicitly begins another review and can migrate an entitlement change using existing question receipts. The existing explicit summary review stamp
+a paused review resumes automatically; completed reviews do not auto-restart. Review again explicitly begins another review using existing question receipts. The existing explicit summary review stamp
 remains separate. `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` defaults to 2 (1–5), limiting
 unproductive probes of an unchanged target. Context is capped at 96 KiB with four
 recent non-placeholder messages, a deterministic per-source discussion summary,
@@ -362,9 +362,9 @@ CV data, skill names or raw schema errors. See [planner diagnostics](INTERVIEW.m
 
 ### Two questions per review group
 
-Uploaded-CV review snapshots the authenticated Profile scope: section scope shares
-two issued questions across sources of the same structured kind, and item scope
-allows two per project/experience. Opening and skipped questions count. Saved CV
+Uploaded-CV review gives free and paid users the same allowance: at most two issued
+questions for each individual project or experience, and a shared two-question
+allowance for each other structured section. Opening and skipped questions count. Saved CV
 clarification receipts rebuild counts across conversation segments; a source with
 an exhausted group can close with gaps. The active answer remains saveable even
 when older history exceeds the limit. See [interview policy](INTERVIEW.md#review-question-budget).
@@ -403,8 +403,8 @@ older CVs; they reuse their saved facts and source text.
 
 ### Baseline skill evaluation — per-project question budgets
 
-A source topic is one project or experience. The review policy chooses whether
-its allowance is shared across the section or held per item. Questions focus on
+A source topic is one project or experience. Its allowance is held per item for
+all accounts. Questions focus on
 material uncertainty and may finish early; answers remain source-specific.
 
 `GET /api/v1/cv/{id}` exposes `skill_estimates` for supported source-scoped
