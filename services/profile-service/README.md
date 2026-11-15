@@ -87,9 +87,11 @@ and password (8–128 characters for registration and password reset). The curre
 accept any valid email address and require an emailed OTP before an account is created.
 Pending details live in the expiring verification attempt; resume that attempt or
 start registration again. Verified accounts keep their existing sign-in behavior.
-The authenticated account response includes the server-owned CV review scope and
-policy version. Accounts without an entitlement use section scope; item scope can
-only come from trusted account data. There is no payment or self-service tier API.
+The authenticated account response exposes the server-owned CV review policy:
+all accounts use item scope. Its existing version 1 wire contract keeps older CV
+deployments compatible while the CV service upgrades saved policy snapshots.
+Existing account records need no update.
+There is no payment or self-service tier API.
 Duplicate registration returns 409 with an explicit email-already-registered message.
 Signing in with an unregistered email returns 404 and offers **Create new account**
 on the sign-in screen. An existing account with an incorrect password returns 401.

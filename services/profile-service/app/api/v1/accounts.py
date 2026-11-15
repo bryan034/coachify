@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from app.core.auth import bearer, verify_google
 from app.core.mail import normalize_email
 
@@ -44,10 +44,22 @@ class AccountView(BaseModel):
     email_verified: bool
     provider: Literal['google', 'local_test', 'email']
     expires_at: datetime
-    # These values are read from the server-owned account record, never an
-    # account-creation or profile-edit request. Existing accounts default free.
-    cv_review_scope: Literal['section', 'item'] = 'section'
+    # The current service-wide policy gives every account the same item scope.
+    # Keep these server-owned fields in the response for CV service consumers.
+    cv_review_scope: Literal['item'] = 'item'
+    # Item scope keeps its existing v1 wire contract, so older CV deployments
+    # can authenticate while the CV service upgrades its saved policy state.
     cv_review_policy_version: Literal[1] = 1
+
+    @model_validator(mode='before')
+    @classmethod
+    def current_review_policy(cls, value):
+        # Legacy accounts can carry the earlier tier-specific settings. Project
+        # the current policy without mutating stored account data or accepting
+        # a browser-supplied entitlement.
+        if isinstance(value, dict):
+            return {**value, 'cv_review_scope': 'item', 'cv_review_policy_version': 1}
+        return value
 
 class PendingVerification(BaseModel):
     verification_required: Literal[True]
