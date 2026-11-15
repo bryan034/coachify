@@ -12,6 +12,9 @@ import { RoadmapViews, skillCatalog } from './roadmap-views';
 import { PlanPreview } from './plan-preview';
 import { planSessions } from './roadmap-day';
 import type { RoadmapActions } from './day-list';
+import { OutlineMonths } from './outline-months';
+import { TaskEditor, type EditableRoadmapTask } from './task-editor';
+
 import { SettingsPanel, useSettingsDraft, type AutosaveState } from './settings-panel';
 import type { BacklogPlan, Context, FreeTimes, Workspace, MessageRequest, PlannerConfig } from './types';
 import '@/styles/roadmap.css';
@@ -43,8 +46,9 @@ function Planner({ token }: { token: string }) {
  const [pending, setPending] = useState<MessageRequest | null>(null);
  const mounted = useRef(true); const latest = useRef<Workspace | null>(null); const sequence = useRef(0);
  const pendingRef = useRef<MessageRequest | null>(null);
- const unknownMutation = useRef<{ path: string; body: unknown } | null>(null); const [unknown, setUnknown] = useState(false);
+ const unknownMutation = useRef<{ path: string; body: unknown; method?: 'PATCH' } | null>(null); const [unknown, setUnknown] = useState(false);
  const idle = useRef(false);
+
  const settings = useSettingsDraft(workspace, token);
  const [autosave, setAutosave] = useState<AutosaveState>('idle');
  const saving = useRef<Promise<void> | null>(null); const draftRef = useRef<PlannerConfig | null>(null); const unsafeDraft = useRef(false);
@@ -54,9 +58,10 @@ function Planner({ token }: { token: string }) {
   if (!mounted.current) return;
   // Choose the view in the same update as the new preview. A later effect can
   // otherwise override a Back click made just after the preview appears.
-  const candidateId = value.planner.candidate?.id;
-  if (candidateId && candidateId !== latest.current?.planner.candidate?.id) {
+  const candidateId = value.planner.outline_candidate?.id || value.planner.candidate?.id;
+  if (candidateId && candidateId !== (latest.current?.planner.outline_candidate?.id || latest.current?.planner.candidate?.id)) {
    setConfiguring(false); setHelperOpen(false);
+
   }
   latest.current = value; setWorkspace(value);
  }
@@ -140,7 +145,7 @@ function Planner({ token }: { token: string }) {
  function openHelper() { helperTakesFocus.current = true; helperDismissed.current = false; setHelperOpen(true); }
  // Before a roadmap is shown the helper stays docked beside the planner, unless the user closed it.
  const current = workspace?.planner; const currentReview = current?.candidate ? current.candidate_review : current?.active_review;
- const planning = !!workspace && !((current?.candidate || current?.active) && currentReview && !configuring);
+ const planning = !!workspace && !((current?.outline_candidate || current?.outline_active || ((current?.candidate || current?.active) && currentReview)) && !configuring);
  useEffect(() => {
   const wide = window.matchMedia?.('(min-width: 1101px)');
   if (!planning || !wide) return;
@@ -153,12 +158,12 @@ function Planner({ token }: { token: string }) {
   fit(); wide.addEventListener?.('change', fit);
   return () => wide.removeEventListener?.('change', fit);
  }, [planning]);
- async function change(path: string, data: Record<string, unknown>, retry = false) {
+ async function change(path: string, data: Record<string, unknown>, retry = false, method?: 'PATCH') {
   if (busy || running || !latest.current) return false;
-  const call = retry && unknownMutation.current ? unknownMutation.current : { path, body: { ...data, expected_version: latest.current.version, mutation_id: crypto.randomUUID() } };
+  const call = retry && unknownMutation.current ? unknownMutation.current : { path, body: { ...data, expected_version: latest.current.version, mutation_id: crypto.randomUUID() }, method };
   unknownMutation.current = call; setBusy(true); setError(''); sequence.current++;
   try {
-   const value = await roadmapApi<Workspace | Pick<Workspace, 'version' | 'operation'>>(call.path, token, call.body);
+   const value = await roadmapApi<Workspace | Pick<Workspace, 'version' | 'operation'>>(call.path, token, call.body, undefined, call.method ? { method: call.method } : undefined);
    if (mounted.current) { unknownMutation.current = null; setUnknown(false); if ('messages' in value) receive(value); else await load(); }
    return true;
   } catch (failure) {
@@ -189,29 +194,29 @@ function Planner({ token }: { token: string }) {
  const [starting, setStarting] = useState(false);
  async function generate() {
   setStarting(true);
-  try { if (await saveSettings()) await change('/planner/generate', { allow_partial_assessment: partial }); } finally { if (mounted.current) setStarting(false); }
+  try { if (await saveSettings()) await change('/planner/outlines/generate', { allow_partial_assessment: partial }); } finally { if (mounted.current) setStarting(false); }
+
  }
  function retryGenerate(body: Record<string, unknown>, renew: boolean) {
   if (renew) { void change('/planner/generate', { allow_partial_assessment: partial }); return; }
   unknownMutation.current = { path: '/planner/generate', body }; void change('', {}, true);
  }
- const rolling = useRef<string | null>(null);
- useEffect(()=>{
-  if(workspace?.context.evaluation && workspace.context.evaluation.freshness!=='current')return;
-  if(!workspace?.planner.active||workspace.planner.candidate||!settled||!workspace.planner.signals.some(signal=>signal.kind==='next_week'))return;
-  const key=`${workspace.planner.active.id}:${workspace.planner.runway.first_planning_week}`;
-  if(rolling.current===key)return;rolling.current=key;
-  void change('/planner/roll-forward',{allow_partial_assessment:true});
- },[workspace,settled]);
+ function retryPlanning(path: string, body: Record<string, unknown>, renew: boolean) {
+  if (renew) { const { expected_version: _version, mutation_id: _id, ...data } = body; void change(path, data); return; }
+  unknownMutation.current = { path, body }; void change('', {}, true);
+ }
  if (!workspace) return <section className="roadmap-adviser"><h1>Roadmap</h1>{error ? <><p role="alert">{error}</p><button className="btn" onClick={() => void load()}>Retry loading</button></> : <PageSkeleton label="Loading your planner…" cards={3}/>}</section>;
  const { context, active: earlier, draft: earlierDraft, planner } = workspace;
+
  const frozen = busy || running || !!error || unknown || !!pending || !!workspace.operation?.retry_after;
  const plan = planner.candidate || planner.active; const preview = !!planner.candidate;
- const sourceChanged = !!plan && !!context.input_hash && plan.assessment_hash !== context.input_hash;
+ const sourceHash = planner.outline_candidate?.assessment_hash || plan?.assessment_hash;
+ const sourceChanged = !!sourceHash && !!context.input_hash && sourceHash !== context.input_hash;
  const review = preview ? planner.candidate_review : planner.active_review;
+ const showOutline = !!(planner.outline_candidate || planner.outline_active) && !configuring;
  const showRoadmap = !!plan && !!review && !configuring;
  // Without both an extracted CV and a Career goal there is nothing to plan from, so only the checklist is shown.
- const blocked = !context.ready && context.availability !== 'unavailable' && !showRoadmap;
+ const blocked = !context.ready && context.availability !== 'unavailable' && !showRoadmap && !showOutline;
  // The accepted roadmap has its own header and keeps plan notices on the planning page; a count on Plan settings points to them.
  const activeView = showRoadmap && !preview;
  const signals = planner.signals.filter(signal => !sourceChanged || signal.kind !== 'evidence');
@@ -231,7 +236,10 @@ function Planner({ token }: { token: string }) {
   confirm: (gap, answer) => void change('/planner/confirmations', { gap_id: gap.id, answer }),
  };
  const failedGeneration = workspace.operation?.status === 'failed' ? planner.retry_generate : null;
- const helper = helperOpen && !blocked && <AdviserChat workspace={workspace} runway={settings.runway} text={text} setText={setText} partial={partial} setPartial={setPartial} showPartial={showRoadmap} busy={busy} running={running} frozen={frozen} editing={!!plan} takeFocus={helperTakesFocus.current} close={closeHelper} send={() => void send()}
+ const failedOutline = workspace.operation?.status === 'failed' ? planner.retry_outline : null;
+ const failedMonth = workspace.operation?.status === 'failed' ? planner.retry_month : null;
+ const helper = helperOpen && !blocked && <AdviserChat workspace={workspace} runway={settings.runway} text={text} setText={setText} partial={partial} setPartial={setPartial} showPartial={showRoadmap} busy={busy} running={running} frozen={frozen} editing={!!(plan || planner.outline_candidate || planner.outline_active)} takeFocus={helperTakesFocus.current} close={closeHelper} send={() => void send()}
+
   retry={() => void send(workspace.operation?.error?.code === 'inputs_changed' ? { ...workspace.retry_request!, expected_version: workspace.version, mutation_id: crypto.randomUUID() } : workspace.retry_request!)} />;
  const legacy = earlier || earlierDraft;
  return <section className="roadmap-adviser">
@@ -256,13 +264,17 @@ function Planner({ token }: { token: string }) {
   {blocked && <Prerequisites issues={context.issues} />}
   <GenerationProgress active={starting || running} stage={running ? workspace.operation?.stage : undefined} context={context} />
   {failedGeneration && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your plan could not be prepared. Try again.')}</p>{!!workspace.operation?.retry_after && <p>Provider capacity: retry in {workspace.operation.retry_after} seconds.</p>}<button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after || (!!context.evaluation && context.evaluation.freshness !== 'current')} onClick={() => retryGenerate(failedGeneration, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
+  {(failedOutline || failedMonth) && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your preview could not be prepared. Your saved work is unchanged.')}</p><button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={() => retryPlanning(failedOutline ? '/planner/outlines/generate' : '/planner/months/generate', (failedOutline || failedMonth)!, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
   <div id="plan-panel">
+   {showOutline && <OutlineMonths planner={planner} frozen={frozen} change={(path, data, method) => change(path, data, false, method)} revise={() => void generate()} settings={() => setConfiguring(true)} />}
    {activeView ? <RoadmapViews plan={plan!} review={review!} planner={planner} goal={goalName} version={workspace.version} frozen={frozen} updates={updates} openSettings={() => setConfiguring(true)} actions={actions} />
    : showRoadmap ? <PlanPreview planner={planner} blockers={planner.candidate_blockers} goal={goalName} sourceChanged={sourceChanged}
      context={{ plan: plan!, review: review!, sessions: planSessions(planner, plan!, true, review!.remaining.resolved.today), today: review!.remaining.resolved.today, nowMinute: null, version: workspace.version, catalog: skillCatalog(plan!, planner), frozen, actions, go: () => {} }}
      accept={() => void change('/planner/accept', {})} discard={() => void change('/planner/discard', {})} backToSettings={() => setConfiguring(true)}
      keepTasks={decisions => void change('/planner/tasks/reconcile', { candidate_id: plan!.id, decisions })} />
-   : blocked ? null : <>{!!plan && !preview && signals.length > 0 && <ul className="plan-updates" aria-label="Changes since this roadmap was prepared">{signals.map(signal => <li key={signal.kind + signal.message}>{signal.message}</li>)}</ul>}<SettingsPanel profileSkills={profileSkills.state} workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} autosave={autosave} returnToReview={plan ? () => setConfiguring(false) : null} /></>}
+   : blocked || showOutline ? null : <>{!!plan && !preview && signals.length > 0 && <ul className="plan-updates" aria-label="Changes since this roadmap was prepared">{signals.map(signal => <li key={signal.kind + signal.message}>{signal.message}</li>)}</ul>}<SettingsPanel profileSkills={profileSkills.state} workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} autosave={autosave} returnToReview={plan || planner.outline_active || planner.outline_candidate ? () => setConfiguring(false) : null} /></>}
+   {activeView && <TaskEditor tasks={(planner.active?.editable_tasks || []).filter((task): task is EditableRoadmapTask & typeof task => typeof task.title === 'string' && typeof task.instructions === 'string' && typeof task.completion_outcome === 'string' && typeof task.estimated_minutes === 'number' && Array.isArray(task.schedule) && !!task.status && task.milestone_key !== undefined)} milestones={planner.active!.milestones} frozen={frozen} change={(path, data) => change(path, data)} />}
+
   </div>
   {!showRoadmap && !!legacy && <details className="plan-explanation earlier-plan"><summary>Earlier plan without session times</summary><p className="small">This plan was made before timed roadmaps. It stays here for reference and isn’t part of your current roadmap.</p><ul>{legacy.tasks.filter(task => !task.removed).map(task => <li key={task.id}>{task.title} · {task.status.replaceAll('_', ' ')}</li>)}</ul></details>}
   </div>{helper}</div>

@@ -43,8 +43,10 @@ def test_corrected_source_archives_old_facts_and_accepts_fresh_questions(harness
     reverted = client.patch(f"/api/v1/cv/{cv['id']}/items/{question['item_id']}",
         json=mutation(repeated['version'], action='update', title=original_title)).json()
     _, questions = prepare_context(harness, reverted)
-    next_generation = next(q for q in questions if q['item_id'] == question['item_id'] and not q['reconciliation_required'])
-    assert next_generation['id'] not in {question['id'], current['id']}
+    # Editing a source cannot reset the two issued-question allowance. The
+    # original answers remain in history even though both need reconciliation.
+    assert not any(q['item_id'] == question['item_id'] and not q['reconciliation_required'] for q in questions)
+    assert {q['id'] for q in questions if q['item_id'] == question['item_id']} == {question['id'], current['id']}
 
 
 def test_chat_can_add_new_context_after_a_source_correction(harness):
@@ -284,3 +286,74 @@ def test_result_reservation_covers_schema_utf8_maximum_and_worker_allowance():
             'prompt_version': '🧪' * 100, 'schema_version': '🧪' * 30},
         'applied_sequence': 2 ** 53, 'extraction_version': 2 ** 53}).model_dump()
     assert len(BSON.encode(maximal)) + OPERATIONAL_ALLOWANCE_BYTES + 16 * 1024 < RESULT_BYTES
+
+
+def test_legacy_excess_questions_are_not_republished_and_saved_answer_still_works(harness):
+    client, app, *_ = harness
+    cv, question, path = project_question(harness)
+    saved = app.state.service.get('owner-a', cv['id'])
+    updated = deepcopy(saved)
+    original = next(q for q in updated['clarifications'] if q['id'] == question['id'])
+    extra = []
+    for suffix in ('second', 'third'):
+        clone = deepcopy(original)
+        clone.update(id=question['id'] + suffix, uncertainty_key=question['id'] + suffix,
+                     question='Synthetic question ' + suffix + '?')
+        extra.append(clone)
+    updated['clarifications'].extend(extra)
+    updated['revision'] += 1
+    app.state.service.repository.replace(saved, updated)
+    visible = client.get('/api/v1/cv/' + cv['id'] + '/clarifications').json()['questions']
+    assert question['id'] in {q['id'] for q in visible}
+    assert extra[0]['id'] in {q['id'] for q in visible}
+    assert extra[1]['id'] not in {q['id'] for q in visible}
+    # A client that already holds an older question can still submit its answer.
+    response = client.put('/api/v1/cv/' + cv['id'] + '/clarifications/' + extra[1]['id'],
+                          json=mutation(cv['version'], action='skip'))
+    assert response.status_code == 200
+    assert next(q for q in response.json()['clarifications'] if q['id'] == extra[1]['id'])['status'] == 'skipped'
+
+
+def test_target_prepare_keeps_the_original_trusted_policy_snapshot(harness):
+    from app.clarification.service import prepare
+    from app.schemas.cv import PrepareMutation
+    client, app, *_ = harness
+    cv = ready(harness)
+    context = {'id': 'target-a', 'version': 1, 'type': 'specific_job', 'confirmed': True,
+               'skill_ids': ['skill:python', 'skill:sql']}
+    request = PrepareMutation.model_validate(mutation(cv['version'], career_target_id='target-a', career_target_version=1))
+    first = prepare(app.state.service, 'owner-a', cv['id'], request, context, {'scope': 'item', 'version': 1})
+    saved = app.state.service.get('owner-a', cv['id'])
+    assert saved['review_policy_snapshot'] == {'scope': 'item', 'version': 1}
+    assert all(q['_interview_policy'] == saved['review_policy_snapshot'] for q in saved['clarifications'])
+    request = PrepareMutation.model_validate(mutation(first['cv_version'], career_target_id='target-a', career_target_version=1))
+    prepare(app.state.service, 'owner-a', cv['id'], request, context, {'scope': 'section', 'version': 1})
+    assert app.state.service.get('owner-a', cv['id'])['review_policy_snapshot'] == {'scope': 'item', 'version': 1}
+
+
+@pytest.mark.parametrize('scope,expected', [('section', 2), ('item', 4)])
+def test_target_prepare_groups_multiple_projects_by_trusted_scope(harness, scope, expected):
+    from app.clarification.service import prepare
+    from app.schemas.cv import PrepareMutation
+    _, app, *_ = harness
+    cv = ready(harness)
+    original = app.state.service.get('owner-a', cv['id'])
+    updated = deepcopy(original)
+    project = next(item for item in updated['original_items'] if item['kind'] == 'project')
+    project['uncertainties'] = ['personal_contribution', 'claim']
+    second = deepcopy(project)
+    second['id'] = project['id'] + '-second'
+    second['title'] = 'Another synthetic project'
+    updated['original_items'].append(second)
+    updated['revision'] += 1
+    app.state.service.repository.replace(original, updated)
+    context = {'id': 'target-a', 'version': 1, 'type': 'specific_job', 'confirmed': True,
+               'skill_ids': ['skill:python', 'skill:sql']}
+    for _ in range(2):
+        latest = app.state.service.get('owner-a', cv['id'])
+        request = PrepareMutation.model_validate(mutation(latest['version'], career_target_id='target-a', career_target_version=1))
+        prepare(app.state.service, 'owner-a', cv['id'], request, context, {'scope': scope, 'version': 1})
+    latest = app.state.service.get('owner-a', cv['id'])
+    project_questions = [q for q in latest['clarifications'] if q['kind'] == 'project']
+    assert len(project_questions) == expected
+    assert {q['item_id'] for q in project_questions} == {project['id'], second['id']}

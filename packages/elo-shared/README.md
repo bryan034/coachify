@@ -41,3 +41,20 @@ privacy, malformed/oversized error details, unchanged successful output, and
 provider failures bypassing schema-correction retries. Permanent payment/quota failures
 do not enter Career's cooldown loop; temporary rate limits retain the bounded
 provider `Retry-After` value.
+
+## Model usage observations
+
+The `uvicorn.error.model_usage` INFO logger emits one content-free JSON event per SDK
+request for CV, Career, Assessment and Roadmap, including failed or malformed
+responses. It records service and operation stage, prompt/schema versions when
+provided, request and component byte sizes, latency, HTTP/finish status, and
+allowlisted provider token/cost fields. Missing counters, timeouts and unknown
+BYOK status remain null. Provider cost is a reported estimate, not a credit debit.
+The event contains no request/response text, credentials or owner identity. Each
+request has a random identifier. Assessment and Roadmap worker calls share an
+opaque digest of their durable operation ID; Career calls share one for the
+AI operation, including its retries. CV upload stages share an upload-operation
+identity; chat interpretation and planning share their turn identity, including
+recovered actions; direct answer interpretation retries share an answer revision
+identity. All are hashed before logging. Prompt and schema fingerprints distinguish versions without recording their contents. Configure the deployment's normal log collector
+to retain INFO for `uvicorn.error.model_usage`; this does not enable provider I/O logging.

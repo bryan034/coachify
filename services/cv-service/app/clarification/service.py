@@ -1,4 +1,5 @@
 from copy import deepcopy
+from elo_shared.model_telemetry import operation_scope
 from functools import partial
 import re
 from uuid import uuid4
@@ -8,6 +9,7 @@ from app.domain.errors import Conflict, Missing
 from app.domain.service import bump, now
 from app.schemas.cv import ConfirmedContext, SavedInterpretation
 from app.domain.answer_capacity import reserve, release, CAPACITY_MESSAGE
+from app.conversation.interview_memory import MAX_TOPIC_QUESTIONS, durable_review_questions, question_groups, review_group
 
 
 class DeferredTargetProvider:
@@ -53,19 +55,52 @@ def relevant(item, context, uncertainty):
     return bool(set(item['skill_ids']) & set(context.skill_ids) or matching_conditions(item, context, uncertainty))
 
 
-def envelope(document, raw_context=None):
+def review_policy(document, supplied=None):
+    def valid(value):
+        return isinstance(value, dict) and value.get('scope') in {'section', 'item'} and value.get('version') == 1
+    saved = document.get('review_policy_snapshot')
+    if saved is not None:
+        if not valid(saved): raise Conflict('The saved CV review policy is invalid. Your evidence is retained.')
+        return saved
+    for question in document['clarifications']:
+        value = question.get('_interview_policy')
+        if valid(value): return value
+    return supplied if valid(supplied) else {'scope': 'section', 'version': 1}
+
+
+def group_counts(document, policy):
+    items = {i['id']: i for i in document.get('original_items', [])}
+    items.update({i['id']: i for i in effective_items(document)})
+    groups = {identifier: review_group(item, policy) for identifier, item in items.items()}
+    counts = {}
+    for question in durable_review_questions(document):
+        for group in question_groups(question, groups, policy):
+            counts[group] = counts.get(group, 0) + 1
+    return groups, counts
+
+
+def envelope(document, raw_context=None, policy=None):
     context = ConfirmedContext.model_validate(raw_context) if raw_context is not None else None
     ready = document['operation']['status'] == 'ready'
     prepared = bool(context and ready and document.get('prepared_context') == prepared_snapshot(document, context))
     items = {item['id']: item for item in effective_items(document)}
     questions = []
+    policy = review_policy(document, policy)
+    groups, _ = group_counts(document, policy)
+    issued, admitted = {}, set()
+    for question in durable_review_questions(document):
+        within_allowance = True
+        for group in question_groups(question, groups, policy):
+            issued[group] = issued.get(group, 0) + 1
+            if issued[group] > MAX_TOPIC_QUESTIONS: within_allowance = False
+        if within_allowance: admitted.add(question['id'])
     for question in document['clarifications']:
         # Saved explanations and skip history remain facts about this source.
         if question['status'] in {'answered', 'skipped'}:
             questions.append(question)
             continue
         item = items.get(question['item_id'])
-        if (context and ready and item and not item['removed'] and not question.get('reconciliation_required')
+        if (question['id'] in admitted and context and ready and item and not item['removed'] and not question.get('reconciliation_required')
                 and question['uncertainty'] in item.get('uncertainties', [])
                 and relevant(item, context, question['uncertainty'])):
             questions.append(question)
@@ -81,11 +116,11 @@ def envelope(document, raw_context=None):
             'prepared': prepared}
 
 
-def prepare(service, owner, identifier, mutation, raw_context):
+def prepare(service, owner, identifier, mutation, raw_context, policy=None):
     if raw_context is None:
         document = service.get(owner, identifier)
         if document['version'] != mutation.expected_version: raise Conflict()
-        return envelope(document)
+        return envelope(document, policy=policy)
     context = ConfirmedContext.model_validate(raw_context)
     if context.id != mutation.career_target_id or context.version != mutation.career_target_version:
         raise Conflict('The confirmed career context changed. Refresh it before preparing questions.')
@@ -93,11 +128,15 @@ def prepare(service, owner, identifier, mutation, raw_context):
             and context.selection_version != mutation.career_target_selection_version):
         raise Conflict('Your selected Career target changed. Refresh before preparing questions.')
     def transform(document):
+        active_policy = review_policy(document, policy)
+        document.setdefault('review_policy_snapshot', deepcopy(active_policy))
         document['prepared_context'] = prepared_snapshot(document, context)
+        _, counts = group_counts(document, active_policy)
         existing = {question['uncertainty_key']: question for question in document['clarifications']
                     if not question.get('reconciliation_required')}
         for item in effective_items(document):
             if item['removed']: continue
+            group = review_group(item, active_policy)
             source_questions = [q for q in document['clarifications']
                                 if q['item_id'] == item['id'] and not q.get('reconciliation_required')]
             if any(q.get('interpretation_status') in {'pending', 'failed'} for q in source_questions): continue
@@ -108,6 +147,7 @@ def prepare(service, owner, identifier, mutation, raw_context):
                 if not relevant(item, context, uncertainty): continue
                 key = question_key(document, item['id'], uncertainty)
                 if key in existing: continue
+                if counts.get(group, 0) >= MAX_TOPIC_QUESTIONS: break
                 # An explicit inability to clarify ends this line of questioning.
                 # Other previously prepared questions remain voluntarily available.
                 if any(q.get('resolution') == 'unanswerable' for q in source_questions): continue
@@ -128,11 +168,14 @@ def prepare(service, owner, identifier, mutation, raw_context):
                     'extraction_version': document['extraction_version'], 'reconciliation_required': False,
                     'answer_revision': 0, 'answer_sequence': 0, 'interpretation_status': 'not_requested',
                     'interpretation_error': None, 'resolution': 'unresolved', 'interpretation': None,
-                    'followup_of': parent['id'] if parent else None}
+                    'followup_of': parent['id'] if parent else None,
+                    '_interview_policy': deepcopy(active_policy), '_interview_group': group,
+                    '_interview_section': item['kind']}
                 document['clarifications'].append(question)
                 existing[key] = question
+                counts[group] = counts.get(group, 0) + 1
     document = service.mutate(owner, identifier, mutation, 'prepare', transform)
-    return envelope(document, context)
+    return envelope(document, context, policy)
 
 
 def _question(document, question_id):
@@ -145,6 +188,15 @@ def _question(document, question_id):
 
 
 def _interpret(service, owner, identifier, question_id, saved, interpreter, prepared=None):
+    question, _ = _question(saved, question_id)
+    # The source/question/revision identity stays stable across retries. Preserve
+    # the parent chat turn when this interpretation originates in conversation.
+    operation_id = f"cv-answer:{identifier}:{question_id}:{question['answer_revision']}"
+    with operation_scope(operation_id, inherit=True):
+        return _interpret_scoped(service, owner, identifier, question_id, saved, interpreter, prepared)
+
+
+def _interpret_scoped(service, owner, identifier, question_id, saved, interpreter, prepared=None):
     question, item = _question(saved, question_id)
     acquired = False
     try:

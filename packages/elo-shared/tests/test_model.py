@@ -167,3 +167,36 @@ def test_adviser_models_use_shared_key_only_for_openrouter(monkeypatch,prefix,ba
                 with pytest.raises(Problem):await model.generate(Answer,'Answer.',{})
                 assert calls==[]
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('prefix', ['ASSESSMENT', 'ROADMAP'])
+def test_worker_correlates_requests_and_records_prompt_and_schema_versions(monkeypatch, caplog, prefix):
+    import logging
+    from types import SimpleNamespace
+    from elo_shared.runtime import MemoryStore, begin, run_operation
+    class Body(BaseModel):
+        expected_version: int
+        mutation_id: str
+    class Upstream:
+        async def account(self, token): return {'id': 'owner'}
+    monkeypatch.setenv(prefix + '_LLM_API_KEY', 'synthetic-key')
+    async def run():
+        store = MemoryStore()
+        begin(store, 'owner', Body(expected_version=0, mutation_id='opaque-operation'), 'plan')
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': '{"reply":"ok"}'}}]}))) as client:
+            model = Model(client, prefix)
+            app = SimpleNamespace(state=SimpleNamespace(store=store, upstream=Upstream(), model=model, slots=asyncio.Semaphore(1)))
+            async def worker(row, account):
+                await model.generate(Answer, 'Fixed prompt.', {'question': 'private synthetic question'})
+                await model.generate(Answer, 'Fixed prompt.', {'question': 'different private question'})
+                return row
+            await run_operation(app, 'owner', 'synthetic-token', worker)
+        assert store.load('owner')['last_operation']['status'] == 'succeeded'
+    with caplog.at_level(logging.INFO, logger='uvicorn.error.model_usage'):
+        asyncio.run(run())
+    events = [json.loads(record.getMessage().removeprefix('model_usage ')) for record in caplog.records if record.name == 'uvicorn.error.model_usage']
+    assert len(events) == 2 and events[0]['operation_id'] == events[1]['operation_id']
+    assert events[0]['operation_id'].startswith('sha256:')
+    assert events[0]['prompt_version'] == events[1]['prompt_version'] and events[0]['prompt_version'].startswith('sha256:')
+    assert events[0]['schema_version'] == events[1]['schema_version'] and events[0]['schema_version'].startswith('sha256:')
+    assert 'opaque-operation' not in caplog.text and 'private synthetic question' not in caplog.text and 'Fixed prompt' not in caplog.text

@@ -19,7 +19,7 @@ Each listed ready CV carries `review_progress` (`reviewed_topics` of `total_topi
 
 The saved-CV list uses the exact path `GET /api/v1/cv` with no trailing slash. It returns projected metadata in pages of 25 by default (`limit` 1–100 and opaque `cursor`), with `next_cursor` and the explicit selection retained on every page. Upload storage and saved-record quotas preserve existing records and report clear capacity errors; see the specification for defaults and recovery.
 
-Extraction runs a LangGraph with at most one model repair. Each state change is saved in `cv_extraction_states`, so an interrupted or retried run continues from its first unfinished step. The state stays until replaced by a later run or erased with the CV. Temporary failures and rejected output retry automatically twice, and each retry tells the model why the last run failed. See [SPEC.md](SPEC.md#automatic-retries). Evidence accepts equivalent meaning: formatting differences pass locally, while paraphrases/summaries are checked against their cited source blocks by the configured model. Missing sources, unsupported facts, changed negation/attribution and malformed verification results are rejected. Each semantic check shares the existing model budget, concurrency slots and worker lease. Exact/formatting-equivalent evidence needs no extra call; a candidate can require one semantic check (up to four model calls including repair). This is model judgment, not independently verified evidence.
+Extraction runs a LangGraph with at most one model repair. Each state change is saved in `cv_extraction_states`, so an interrupted or retried run continues from its first unfinished step. The state stays until replaced by a later run or erased with the CV. Transient failures retry automatically up to twice. Output rejected after repair and malformed or incomplete responses stop with an explicit retry option; they do not restart extraction automatically. Extraction, repair and semantic checks share a durable six-call limit across automatic retries and worker recovery; an explicit retry starts a new allowance. See [SPEC.md](SPEC.md#automatic-retries). Evidence accepts equivalent meaning: formatting differences pass locally, while paraphrases/summaries are checked against their cited source blocks by the configured model. Missing sources, unsupported facts, changed negation/attribution and malformed verification results are rejected. Each semantic check shares the existing model budget, concurrency slots and worker lease. Exact/formatting-equivalent evidence needs no extra call; a candidate can require one semantic check (up to four model calls including repair). This is model judgment, not independently verified evidence.
 
 `CV_LLM_RESPONSE_MODE=json_schema` requests strict decoding; full backend limits remain enforced. Evidence has no character limit. `other_information` retains uncategorised source-linked content through retries/reconciliation and review. Dates are best effort: unclear, invalid, conflicting or unsupported dates become null without failing other facts. Manual corrections and clarification interpretation retain their existing validation. See [harness details](SPEC.md#extraction-runtime-harness).
 
@@ -85,25 +85,14 @@ Interview planning supplies exact open targets and retains bounded, content-free
 rejection codes for debugging; exhausted plans explain the last rejection category.
 See [planner diagnostics](INTERVIEW.md#planner-rejection-diagnostics).
 
-Uploaded-CV review uses the CV as context and asks at most three clarification
-questions per ambiguous topic. Clear experiences and listed skills need no repeat
-questionnaire; confidence is optional, not a prerequisite for moving on.
-Question counts survive reloads and conversation rollover; assistant prose omits
-internal evidence IDs. See [topic budget](INTERVIEW.md#three-question-topic-budget).
-
-The extraction LangGraph now prepares review after validation, removing ambiguity
-flags already answered by the CV. Existing CVs reuse current saved evidence; a
-rich responsibility/skill clarification can finish a project when its baseline
-is established. Clear wording alone does not end skill evaluation. See [clarification-first routing](INTERVIEW.md#clarification-first-routing).
-
-Baseline review has three questions per whole project/experience, with no overall
-topic cap. It tracks all named project skills internally and asks about relevant responsibility
-and application gaps; insufficient evidence stays backend-only. Saved CV detail exposes supported `skill_estimates`, also shown in the
-Skills Profile project summary. See [baseline review](INTERVIEW.md#baseline-skill-review-per-project).
-
-Insufficient-evidence estimate entries stay in backend/planner state and are
-omitted from public CV/conversation responses and UI. Questions prioritize relevant
-project gaps within the three-question budget, rather than every missing field.
+Uploaded-CV review uses a trusted Profile policy snapshot. Section scope shares
+at most two questions across projects in the same normalized section; item scope
+allows two per project/experience. Opening and skipped questions count, and
+saved clarification receipts rebuild the allowance across reloads. Clear sources
+need no questions. Misclassified answers are not met with the same question again;
+a bounded recovery can defer the question with uncertainty. Source-linked evidence
+and supported baseline estimates remain specific to each item. See the
+[interview budget](INTERVIEW.md#review-question-budget).
 
 Users may skip review questions, leaving targeted ownership/details uncertain.
 Skipped ownership can close with gaps and does not block moving to another project.

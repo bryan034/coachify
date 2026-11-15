@@ -28,12 +28,9 @@ after failure. Review validation checks schema, topic relevance and source ident
 it does not verify agreement with the CV, quote entailment or earlier answers. Normal factual interview turns reuse their already-admitted interpretation;
 they do not run a second interpretation model merely to save it. Review turns do not make a separate evidence-verification call. Planning starts
 after statement actions succeed. One automatic schema retry is allowed; repeated
-malformed output repeats the question directly as a new numbered follow-up, without
-a failed evidence card. Follow-ups use the same durable question publication path
-and count toward the three-question topic limit, including after reload or retry.
-After the third question, the harness closes the topic with gaps and moves on;
-it never asks a fourth question because interpretation failed. The original user
-messages remain saved in the conversation; malformed interpretations add no facts.
+malformed output keeps the existing question visible without issuing it again.
+Bounded no-progress recovery can defer it with gaps. The original user messages
+remain saved; malformed interpretations add no facts.
 Corrections, removals and manual additions retain explicit confirmation. Confirmation
 or action-specific recovery resumes the original interview planner once siblings finish.
 
@@ -210,27 +207,24 @@ replies/estimate explanations; the frontend also filters opaque source reference
 from assistant display, including saved replies. Literal user messages and saved
 transcripts are preserved.
 
-## Three-question topic budget
+## Review question budget
 
-Each uploaded-CV topic has a hard maximum of three issued questions, including its
-opening question and skipped questions. Potential clarification areas are scope/objective, responsibilities personally
-handled and confidence in repeating a similar task. These are not mandatory
-questions: the CV supplies known context, and optional missing details alone
-do not justify probing. Known answers allow
-earlier completion and adaptation; the agent asks one clear question per turn.
-`replication_confidence` is an explicit self-report field, not evidence of mastery
-or independent ability. Ordinary factual answers still reuse the existing validated
-interpretation and do not require another provider verification call.
-
-Memory `question_counts` and `discussed_topic_ids` rebuild from all retained CV
-interview questions, not the last 120 memory entries. The budget survives reloads,
-retries, source corrections and conversation rollover for the same source identity.
-Failed planner proposals and side-question explanations do not consume slots.
-The planner receives each source’s asked/remaining count and an exact focused
-budget; the validator rejects a fourth question regardless of its target field.
-At the limit, a discussed topic can finish with gaps, while unvisited topics still
-prevent completion. Existing topics already beyond the limit get no further
-generated questions after the current answer/skip.
+The active review snapshots the authenticated Profile policy. Section scope groups
+items by their structured kind; item scope uses one group per project or experience.
+Each group allows at most two issued questions including the opening and skips.
+Counts rebuild from durable CV clarifications and accepted reconciliation history,
+deduplicating transferred receipts rather than relying on the bounded chat window. Old history above the limit accepts its active answer
+and closes with uncertainty. Repeated submissions reuse the saved question receipt.
+A resolved or skipped intent and a near-identical question are not reissued.
+When interpretation cannot connect an answer, the user can edit, skip or continue;
+two consecutive failed attempts defer the group and progress with gaps.
+Side questions receive bounded explanations of the review or its skip controls,
+so they cannot publish an uncounted request for additional evidence.
+Target-specific preparation uses the same CV-owned snapshot and group counts;
+over-budget unanswered legacy questions are hidden, while prior answers and skips
+remain available. When entitlement changes, starting a new review after completion
+records a policy migration and rebuilds the new group counts from the original
+question receipts. An active or paused review keeps its existing policy.
 
 Before publication and API delivery, assistant prose and active questions strip
 internal fact/source/evidence references, including `fact:` and `answer:` IDs.
@@ -256,7 +250,7 @@ without requesting a skill inventory or a repeated description of clear work.
 Zero questions can suffice when source evidence already supports the skill baseline;
 one rich clarification can complete a project. Otherwise clear CV wording alone
 does not end baseline review: missing personal skill application/support remains
-a reason for targeted questions, within the project’s own three-question budget. It preserves discussed-topic progress and the three-question maximum.
+a reason for targeted questions, within the applicable group budget.
 Sources with a complete supported baseline need no repeated questions. Old unvisited optional-only
 topics and obsolete active prompts retire through conversation reconciliation.
 Extraction prompt provenance is `cv-extraction-11`; graph provenance is
@@ -276,20 +270,10 @@ The existing single-repair limit and final quotation guard remain in place.
 
 ## Baseline skill review per project
 
-One topic is one whole project or experience, not the entire review and not a
-separate three-question budget for each skill. Every project has its own maximum
-of three issued questions; there is no additional cap on the number of topics.
-Existing upload/history/context capacity limits remain separate. A five-project
-CV can therefore have up to fifteen questions. Known CV content and related
-skills are grouped in specific responsibility/application questions, without
-asking for the skill inventory again.
-
-The planner seeks personal responsibilities, concrete application/depth of all
-project skills, and assistance/independence, outcomes and limitations. Skill gaps
-remain reviewable even when the project description is clear. One answer may
-cover several skills; completion can be earlier than three questions if the
-baseline is established. At exhaustion, move to the next project, not to whole-
-review completion while other unvisited projects remain.
+A source remains a whole project or experience. The trusted review scope controls
+whether its two-question allowance is shared with other sources in the same section.
+Evidence and estimates always remain attached to the original source. Questions are
+optional and stop early when the available information is sufficient.
 
 `domain/baseline.py` projects every project skill to guided_application,
 independent_application, complex_application or insufficient_evidence from
@@ -318,7 +302,7 @@ conversation projections omit those entries; frontend summary/chat also filter
 legacy responses and render no empty estimate section. Supported estimates remain
 visible. Source facts and literal user messages are retained.
 
-The three-question budget per whole project/experience targets relevant evidence
+The two-question group budget targets relevant evidence
 gaps, not every absent rubric field. Responsibility/ownership is established once
 at project scope, and concrete use of the named project skills is prioritized.
 Assistance/independence is offered as a follow-up after a relevant application is
@@ -342,7 +326,7 @@ field/skill targets project as private `_review_skips` dispositions with status
 `reviewed_with_gaps`; no factual answer, evidence quote, skill claim or competence level
 is fabricated. The skipped ownership target is closed to repeat questioning,
 including a later skill-specific rephrase of a generic ownership skip. Other
-useful questions can continue within the existing three-question project budget.
+useful questions can continue within the remaining group budget.
 Source corrections/reconciliation and extraction generations fence old skips.
 
 Explicit skipped/unknown/not-applicable ownership can close as reviewed-with-gaps.
@@ -378,24 +362,24 @@ keeps the current question. The reply starts with a fixed confirmation. Reopenin
 needs a remaining question and an open field; the next question must be about that
 topic (rejection reason `question_requested_topic`).
 
-Each issued question carries `number` and `limit` (question *n* of 3 for its topic),
-up to four short `hints` for what the answer can cover, and a one-sentence `reason`.
-The planner writes one plain question of at most 45 words; hints and reason pass
-through the same ID-stripping as replies. Older saved questions omit these fields.
+Each issued question carries `number` and `limit` (question *n* of 2 for its review group),
+optional short `hints` for what the answer can cover, and a one-sentence `reason`.
+These hints and reasons use fixed text; explicit multiple-question proposals are rejected.
+The planner is prompted to write one plain question of at most 45 words. Older saved questions omit these fields.
 
 The harness closes a discussed topic before planning when nothing material is left to
-ask, when it has used its three questions, or when it has enough context: supported
+ask, when its group has used its two questions, or when it has enough context: supported
 personal or shared ownership, a concrete task fact and supported use of every listed
 skill (team, observed or declined skills excepted). Optional details such as
 assistance may stay unknown, so related skill levels stay uncertain. An early close
-is `reviewed` only with proven ownership; a topic that used all three questions
+is `reviewed` only with proven ownership; a topic whose group used both questions
 closes `reviewed_with_gaps`. The planner sees per-source `enough_context` and the
 titles in `just_completed_topics`, and the focus stays on the closed topic for that
 turn so its evidence can be cited in the handover.
 
 ## Skill self-ratings during review
 
-Within the existing three-question topic budget, review also invites a 1–10 baseline
+Within the existing two-question group budget, review also invites a 1–10 baseline
 for each named personal skill, grouped with a relevant application/independence
 question where possible. `self_rating` facts require the explicit skill name, a
 whole-number string 1–10 and an exact answer quote. General confidence is never

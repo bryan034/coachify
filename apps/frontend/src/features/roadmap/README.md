@@ -13,6 +13,8 @@
 - **Preview:** `plan-preview.tsx` shows the first scheduled week, milestones, changes and any reconciliation decisions. It cannot record progress and only becomes active through Accept plan.
 - **Evidence suggestions:** `evidence-proposals.tsx` shows one "Add this to your Skills Profile?" suggestion at a time. "Not now" hides it for this visit only; nothing is written until you confirm.
 - **Outdated roadmap:** when the displayed plan's input hash differs from the latest CV, skills or career goal, a roadmap banner replaces the shared CV/career change banner and source notices. **Regenerate roadmap** uses the existing generation flow to prepare a preview for acceptance; it stays disabled while inputs are not ready or a request is in progress. A current preview clears the banner.
+- **Outline and monthly work:** `outline-months.tsx` shows the outline, permits milestone and routine edits, and accepts it before offering explicit month previews. A month can be accepted, discarded or revised; viewing the page does not generate work. `task-editor.tsx` adds and edits task text, effort and milestone, with title counts and conflict recovery; new tasks are unscheduled.
+
 
 Ticking a task shows an optimistic update and rolls back if saving fails. Notes and self-ratings save separately through the task details. `roadmap-calendar.ts` handles plain local dates; `roadmap-day.ts` contains display arithmetic.
 

@@ -9,6 +9,7 @@ import httpx
 from bson import BSON
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
+from elo_shared.model_telemetry import operation_scope
 from app.conversation.presentation import review_reply
 from app.domain.review_context import clarification_context
 from app.domain.baseline import visible_baseline_estimates
@@ -386,6 +387,10 @@ class ConversationService:
         return result
 
     async def process(self, app, account, identifier, route_id, token):
+        with operation_scope(route_id):
+            return await self._process(app, account, identifier, route_id, token)
+
+    async def _process(self, app, account, identifier, route_id, token):
         owner = account['id']
         conversation = self.get(owner, identifier)
         route = deepcopy(action_in(conversation, route_id))
@@ -564,7 +569,7 @@ class ConversationService:
                 operation = await run_in_threadpool(self.remember_guided, owner, conversation['_id'], route['id'],
                     '_guided_prepare', operation, token)
                 prepared = await run_in_threadpool(prepare, self.cv, owner, conversation['cv_id'],
-                    PrepareMutation.model_validate(operation), context)
+                    PrepareMutation.model_validate(operation), context, account.get('cv_review_policy'))
                 again = await self.context(app, account['authorization'])
                 if again != context: raise Conflict('Your Career target changed while preparing questions. Refresh to continue.')
                 document = self.cv.get(owner, conversation['cv_id'])
@@ -597,6 +602,13 @@ class ConversationService:
         return action_in(saved, action_id)[field]
 
     async def execute(self, app, account, identifier, action_id, decision=None):
+        conversation = self.get(account['id'], identifier)
+        message = action_message(conversation, action_id)
+        parent = next((action for action in message.get('actions', []) if action['kind'] == 'route'), None)
+        with operation_scope(parent['id'] if parent else action_id, inherit=True):
+            return await self._execute(app, account, identifier, action_id, decision)
+
+    async def _execute(self, app, account, identifier, action_id, decision=None):
         owner, token = account['id'], str(uuid4())
         conversation = self.get(owner, identifier)
         original = deepcopy(action_in(conversation, action_id))
@@ -785,7 +797,7 @@ class ConversationService:
                 context = conversation.get('context') or {}
                 doc['clarifications'].append({'id': question_id, 'item_id': item['id'],
                     'kind': 'project' if item['kind'] == 'project' else 'work' if item['kind'] == 'experience' else 'other',
-                    'question': 'What additional or corrected facts are you stating about this source?',
+                    'question': 'What additional or corrected facts are you stating about this source?', '_synthetic_statement': True,
                     'uncertainty_key': digest({'conversation_action': action['id']}), 'uncertainty': 'claim',
                     'status': 'unanswered', 'answer': None, 'career_target_id': context.get('id'),
                     'career_target_version': context.get('version'), 'career_target_type': context.get('type'),

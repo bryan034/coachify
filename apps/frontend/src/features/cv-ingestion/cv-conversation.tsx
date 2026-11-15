@@ -395,8 +395,9 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    {purpose&&reviewComplete&&!historical&&<section className="cv-chat-done" aria-labelledby="cv-done-title">
     <div className="cv-chat-done-head"><span aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10"/></svg></span><div><h3 id="cv-done-title">Your CV review is complete</h3><p>{(sent => `You sent ${sent} ${sent === 1 ? 'answer' : 'answers'} across ${progress!.total_items} ${progress!.total_items === 1 ? 'topic' : 'topics'}.`)(conversation!.messages.filter(message => message.role === 'user').length)}</p></div></div>
     {changes.some(([, items]) => items.length) && <div className="cv-chat-done-changes">{changes.filter(([, items]) => items.length).map(([label, items, out]) => <div key={label}><p>{label} ({items.length})</p><p>{items.map((item, index) => <span key={`${item}:${index}`} className={`cv-chat-pill${out ? ' is-out' : ''}`}>{item}</span>)}</p></div>)}</div>}
-    <div className="cv-chat-done-actions"><button className="btn pri" type="button" disabled={blocked||unfinished} onClick={onOpenSummary}>View Skills Profile</button><Link className="btn" href="/roadmap">Generate roadmap</Link></div>
+    <div className="cv-chat-done-actions"><button className="btn pri" type="button" disabled={blocked||unfinished} onClick={onOpenSummary}>View Skills Profile</button>{cvId && <button type="button" disabled={blocked||unfinished} onClick={()=>void send('Review my CV again.', 'review')}>Review again</button>}<Link className="btn" href="/roadmap">Generate roadmap</Link></div>
    </section>}
+
    </div>
    {busy === 'message' && <p className="cv-chat-working" role="status">{uploadedReview && !hasReviewHistory ? 'Preparing your first question…' : 'Checking your message…'}</p>}
   </div>

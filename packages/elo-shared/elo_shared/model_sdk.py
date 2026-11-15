@@ -4,6 +4,7 @@ The application owns the supplied HTTP client. Closing the SDK wrapper must not
 close it: search and authentication may still be using that same client.
 """
 from contextlib import asynccontextmanager, contextmanager
+from elo_shared.model_telemetry import Measurement
 import os
 from urllib.parse import urlsplit
 
@@ -70,7 +71,7 @@ def model_client(settings, http_client):
 
 
 @asynccontextmanager
-async def completion_response(client, payload, *, local=False, responses=False):
+async def _completion_response(client, payload, *, local=False, responses=False):
     parameters = dict(payload)
     # DeepSeek documents Responses at the unversioned provider root. Preserve
     # configured custom/proxy paths; normalize only its standard /v1 alias.
@@ -125,7 +126,7 @@ class SyncProviderHTTPClient(httpx.Client):
 
 
 @contextmanager
-def sync_model_response(http_client, base_url, api_key, timeout, payload, *, local=False):
+def _sync_model_response(http_client, base_url, api_key, timeout, payload, *, local=False):
     parameters = dict(payload)
     extra = {key: parameters.pop(key) for key in ('thinking',) if key in parameters}
     rejection = None
@@ -149,9 +150,43 @@ def sync_model_response(http_client, base_url, api_key, timeout, payload, *, loc
 
 
 @asynccontextmanager
-async def async_model_response(http_client, base_url, api_key, timeout, payload, *, local=False):
+async def completion_response(client, payload, *, local=False, responses=False, telemetry=None):
+    labels = dict(telemetry or {})
+    labels.setdefault('provider', client.base_url.host)
+    measurement = Measurement(payload, labels)
+    failure = None
+    try:
+        async with _completion_response(client, payload, local=local, responses=responses) as response:
+            measurement.status = response.status_code
+            yield measurement.wrap_async(response)
+    except BaseException as exc:
+        failure = 'timeout' if isinstance(exc, httpx.TimeoutException) else 'interrupted'
+        raise
+    finally:
+        measurement.finish(failure)
+
+
+@contextmanager
+def sync_model_response(http_client, base_url, api_key, timeout, payload, *, local=False, telemetry=None):
+    labels = dict(telemetry or {})
+    labels.setdefault('provider', urlsplit(base_url).hostname)
+    measurement = Measurement(payload, labels)
+    failure = None
+    try:
+        with _sync_model_response(http_client, base_url, api_key, timeout, payload, local=local) as response:
+            measurement.status = response.status_code
+            yield measurement.wrap_sync(response)
+    except BaseException as exc:
+        failure = 'timeout' if isinstance(exc, httpx.TimeoutException) else 'interrupted'
+        raise
+    finally:
+        measurement.finish(failure)
+
+
+@asynccontextmanager
+async def async_model_response(http_client, base_url, api_key, timeout, payload, *, local=False, telemetry=None):
     async with AsyncOpenAI(base_url=base_url, api_key='local-no-key' if local else api_key,
                           http_client=ProviderHTTPClient(http_client),
                           max_retries=0, timeout=timeout) as client:
-        async with completion_response(client, payload, local=local) as response:
+        async with completion_response(client, payload, local=local, telemetry=telemetry) as response:
             yield response

@@ -44,6 +44,10 @@ class AccountView(BaseModel):
     email_verified: bool
     provider: Literal['google', 'local_test', 'email']
     expires_at: datetime
+    # These values are read from the server-owned account record, never an
+    # account-creation or profile-edit request. Existing accounts default free.
+    cv_review_scope: Literal['section', 'item'] = 'section'
+    cv_review_policy_version: Literal[1] = 1
 
 class PendingVerification(BaseModel):
     verification_required: Literal[True]

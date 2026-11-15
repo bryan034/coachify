@@ -46,7 +46,9 @@ it('shows the goal and skills that will be used before any generation', async ()
  expect(within(section).queryByText('Git')).not.toBeInTheDocument();
  fireEvent.click(within(section).getByRole('button', { name: /1 skill, 1 experience/ }));
  expect(within(section).getByText('Git')).toBeVisible();
- expect(calls('/planner/generate')).toHaveLength(0);
+ expect(calls('/planner/outlines/generate')).toHaveLength(0);
+ expect(calls('/planner/months/generate')).toHaveLength(0);
+ expect(calls('/planner/roll-forward')).toHaveLength(0);
 });
 
 it('counts skills the same way as the Skills Profile, not once per evidence source', async () => {
@@ -160,7 +162,7 @@ it('shows calculated runway with the extra capacity from backup blocks', async (
 it('edits recurring blocks and saves settings before generating', async () => {
  const order: string[] = []; const state = workspace();
  const generated = { version: 2, operation: { id: 'g', status: 'pending', stage: 'preparing' } };
- serve(state, { '/planner/config': () => { order.push('config'); return { ...state, version: 1 }; }, '/planner/generate': () => { order.push('generate'); return generated; } });
+ serve(state, { '/planner/config': () => { order.push('config'); return { ...state, version: 1 }; }, '/planner/outlines/generate': () => { order.push('generate'); return generated; } });
  render(<RoadmapPlanner />);
  await screen.findByRole('button', { name: 'Add study block' });
  fireEvent.click(screen.getByRole('button', { name: 'Add study block' }));
@@ -170,7 +172,7 @@ it('edits recurring blocks and saves settings before generating', async () => {
  fireEvent.click(screen.getByRole('button', { name: 'Generate roadmap' }));
  await waitFor(() => expect(order).toEqual(['config', 'generate']));
  expect(calls('/planner/config')[0][2].config.blocks.at(-1)).toEqual({ day: 0, start_time: '19:00', duration_minutes: 60, kind: 'backup' });
- expect(calls('/planner/generate')[0][2].expected_version).toBe(1);
+ expect(calls('/planner/outlines/generate')[0][2].expected_version).toBe(1);
 });
 
 function wideScreen() { vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('min-width') })); }
@@ -540,13 +542,14 @@ it('records a demonstrated outcome with a note', async () => {
 
 it('asks experience questions and offers to regenerate once answered', async () => {
  const answered = withCandidate(roadmap(), { confirmations: { docker: { answer: 'no_experience' } }, signals: [{ kind: 'evidence', message: 'You answered experience questions after this plan was prepared.' }] });
- serve(withCandidate(), { '/planner/confirmations': () => answered, '/planner/generate': () => ({ version: 3, operation: null }) }); render(<RoadmapPlanner />);
+ serve(withCandidate(), { '/planner/confirmations': () => answered, '/planner/outlines/generate': () => ({ version: 3, operation: null }) }); render(<RoadmapPlanner />);
  fireEvent.click(within(await screen.findByRole('group', { name: 'Have you run a service in Docker?' })).getByRole('radio', { name: 'No' }));
  fireEvent.click(screen.getByRole('button', { name: 'Back to settings' }));
  await screen.findByRole('button', { name: 'Generate roadmap' });
  expect(calls('/planner/confirmations')[0][2]).toMatchObject({ gap_id: 'docker', answer: 'no_experience' });
  fireEvent.click(screen.getByRole('button', { name: 'Generate roadmap' }));
- await waitFor(() => expect(calls('/planner/generate')).toHaveLength(1));
+ await waitFor(() => expect(calls('/planner/outlines/generate')).toHaveLength(1));
+
 });
 
 it('shows what a revision changes, keeps completed work and applies only on accept', async () => {
@@ -563,30 +566,31 @@ it('shows what a revision changes, keeps completed work and applies only on acce
 });
 
 it('offers an updated preview when settings, progress or evidence change', async () => {
- serve(withActive(roadmap(), { signals: [{ kind: 'settings', message: 'Your study settings changed since this roadmap was accepted.' }] }), { '/planner/generate': () => ({ version: 3, operation: null }) });
+ serve(withActive(roadmap(), { signals: [{ kind: 'settings', message: 'Your study settings changed since this roadmap was accepted.' }] }), { '/planner/outlines/generate': () => ({ version: 3, operation: null }) });
  render(<RoadmapPlanner />);
  fireEvent.click(await screen.findByRole('button', { name: /Plan settings/ }));
  await screen.findByText('Your study settings changed since this roadmap was accepted.');
  fireEvent.click(screen.getByRole('button', { name: 'Preview updated roadmap' }));
- await waitFor(() => expect(calls('/planner/generate')).toHaveLength(1));
+ await waitFor(() => expect(calls('/planner/outlines/generate')).toHaveLength(1));
 });
 
 it.each(['CV', 'career goal'])('replaces source notices with a roadmap banner after the %s changes', async source => {
  const state = withActive(roadmap(), { signals: [{ kind: 'evidence', message: 'Your CV, skills or Career goal changed since this roadmap was prepared.' }] });
  state.context.input_hash = `${source}-changed`;
  const freshPlan = roadmap({ id: 'fresh-preview', assessment_hash: state.context.input_hash });
- const fresh = withCandidate(freshPlan, { active: state.planner.active });
+ const freshOutline = { id: 'fresh-outline', revision: 1, assessment_hash: state.context.input_hash, summary: freshPlan.summary, gaps: freshPlan.gaps, milestones: freshPlan.milestones, routine_rules: [], deadline_outcome: freshPlan.deadline_outcome, beyond_deadline: freshPlan.beyond_deadline, exclusions: freshPlan.exclusions, config: freshPlan.config };
+ const fresh = workspace({ planner: planner({ active: state.planner.active, active_review: state.planner.active_review, outline_candidate: freshOutline }) });
  fresh.context.input_hash = state.context.input_hash;
- serve(state, { '/planner/generate': () => fresh });
+ serve(state, { '/planner/outlines/generate': () => fresh });
  render(<RoadmapPlanner />);
  fireEvent.click(await screen.findByRole('button', { name: /Plan settings/ }));
  expect(await screen.findByRole('heading', { name: 'Your roadmap is out of date' })).toBeVisible();
  expect(screen.queryByText('Your CV, skills or Career goal changed since this roadmap was prepared.')).not.toBeInTheDocument();
  expect(screen.getByRole('button', { name: 'Preview updated roadmap' })).toBeEnabled();
- expect(calls('/planner/generate')).toHaveLength(0);
+ expect(calls('/planner/outlines/generate')).toHaveLength(0);
  fireEvent.click(screen.getByRole('button', { name: 'Regenerate roadmap' }));
- await screen.findByText('Preview · not active until you accept it');
- expect(calls('/planner/generate')).toHaveLength(1);
+ await screen.findByRole('heading', { name: 'Review your milestone outline' });
+ expect(calls('/planner/outlines/generate')).toHaveLength(1);
  expect(screen.queryByRole('heading', { name: 'Your roadmap is out of date' })).not.toBeInTheDocument();
  expect(calls('/planner/accept')).toHaveLength(0);
 });
