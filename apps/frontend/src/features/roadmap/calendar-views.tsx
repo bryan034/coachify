@@ -155,8 +155,8 @@ export function WeekView({ context, day, editor }: { context: ViewContext; day: 
      {folded ? <button type="button" className="rv-fold" onClick={() => setUnfolded(value => ({ ...value, [date]: true }))}>All {items.length} done · show</button>
       : <TaskList day={date} items={items} context={context} editor={editor} nextId={next} canAdd={date >= today} addLabel={`Add a task to ${date === today ? 'today' : `${weekdayName(date)} ${shortDate(date)}`}`} />}
     </div>; })}
-   {!week.total && <p className="rv-empty">{week.dates[6] < today ? 'No sessions were planned for this week.' : 'Sessions for this week aren’t planned yet. elo plans one week at a time.'}</p>}
-   {rest.length > 0 && <p className="rv-note" style={{ margin: '14px 6px 0' }}>{rest.map(date => `${weekdayName(date)} ${dayOfMonth(date)}`).join(' and ')} {rest.length === 1 ? 'is a rest day' : 'are rest days'} in your plan. Use Plan settings to preview the next week when you reach it.</p>}
+   {!week.total && <p className="rv-empty">{week.dates[6] < today ? 'No sessions were planned for this week.' : 'Sessions for this week aren’t planned yet. Generate a month preview from your milestone outline.'}</p>}
+   {rest.length > 0 && <p className="rv-note" style={{ margin: '14px 6px 0' }}>{rest.map(date => `${weekdayName(date)} ${dayOfMonth(date)}`).join(' and ')} {rest.length === 1 ? 'is a rest day' : 'are rest days'} in your plan. Use your milestone outline to preview tasks for a month.</p>}
   </section>
   <aside className="rv-rail" aria-label="Backlog">
    <Backlog context={context} panel />

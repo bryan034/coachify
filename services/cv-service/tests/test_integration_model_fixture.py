@@ -58,6 +58,27 @@ def test_interview_fixture_moves_to_another_topic_when_the_question_budget_is_us
     assert result['targets'] == [{'field': 'personal_contribution', 'skill_name': None}]
 
 
+def test_interview_fixture_uses_remaining_open_target_after_ownership_was_answered():
+    source = {'id': 'project', 'title': 'Team dashboard', 'kind': 'project'}
+    result = fixture.interview_fixture({'task': 'cv_interview_plan', 'focused_source': source,
+        'topic_question_budget': {'remaining': 1}, 'sources': [source],
+        'question_options': [{'skill_name': None, 'open_fields': ['task_scope'],
+                              'closed_fields': {'personal_contribution': 'closed', 'responsibilities': 'closed'}}]})
+    assert result['action'] == 'ask'
+    assert result['targets'] == [{'field': 'task_scope', 'skill_name': None}]
+    assert 'task scope' in result['reply']
+
+
+def test_interview_fixture_preserves_skill_target_when_only_skill_gap_is_open():
+    source = {'id': 'project', 'title': 'Team dashboard', 'kind': 'project'}
+    result = fixture.interview_fixture({'task': 'cv_interview_plan', 'focused_source': source,
+        'topic_question_budget': {'remaining': 1}, 'sources': [source],
+        'question_options': [{'skill_name': None, 'open_fields': []},
+                             {'skill_name': 'Python', 'open_fields': ['skill_use']}]})
+    assert result['targets'] == [{'field': 'skill_use', 'skill_name': 'Python'}]
+    assert 'Python' in result['reply']
+
+
 def test_interview_fixture_corrects_the_project_after_focus_moves_to_the_internship():
     project = {'id': 'project', 'title': 'Team dashboard', 'kind': 'project'}
     work = {'id': 'work', 'title': 'Synthetic reporting internship', 'kind': 'experience'}

@@ -137,6 +137,9 @@ describe('saved CV conversation', () => {
   render(<CvConversationPanel {...props()} purpose="skills_profile" autoReview/>);
   expect(await screen.findByRole('button',{name:'View Skills Profile'})).toBeEnabled();
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
+  vi.mocked(cvApi.sendMessage).mockResolvedValue(conversation({purpose:'skills_profile',revision:2,messages:[message('m2','Your review is complete.')]}));
+  fireEvent.click(screen.getByRole('button',{name:'Review again'}));
+  await waitFor(()=>expect(cvApi.sendMessage).toHaveBeenCalledWith('chat-one',expect.objectContaining({command:'review'}),'synthetic-session',expect.any(AbortSignal)));
  });
  it('shows one line and one action when an answer could not be processed', async () => {
   const failed=action({kind:'clarify',status:'failed'});

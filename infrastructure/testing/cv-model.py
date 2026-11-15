@@ -185,7 +185,13 @@ def interview_fixture(value):
     if source.get('title') not in known:
         raise ValueError('Unknown synthetic interview source')
     if value['task'] == 'cv_interview_plan':
-        if value.get('topic_question_budget', {}).get('remaining') == 0:
+        # The backend owns admissible targets. In particular, an answered
+        # ownership target can close a differently worded responsibility target.
+        # Follow its projected options rather than inferring gaps from raw facts.
+        options = value.get('question_options', [])
+        choice = next(((option.get('skill_name'), field) for option in options
+                       for field in option.get('open_fields', [])), None)
+        if value.get('topic_question_budget', {}).get('remaining') == 0 or not choice:
             next_source = next((item for item in value['sources']
                 if item['id'] != source['id'] and item['kind'] in {'project', 'experience'}
                 and not item.get('coverage') and item.get('questions_remaining', 0) > 0
@@ -195,15 +201,10 @@ def interview_fixture(value):
                 return {'action': 'ask', 'reply': f"What did you personally do in {next_source['title']}?",
                         'item_id': next_source['id'], 'targets': [{key: target[key] for key in ('field', 'skill_name') if key in target}]}
             return {'action': 'pause', 'reply': 'The synthetic interview can pause here with remaining details uncertain.'}
-        fields = {f['field']: f['status'] for f in value.get('evidence_index', {}).values()
-                  if f['item_id'] == source['id'] and not f.get('skill_name')}
-        for field in ('personal_contribution', 'responsibilities', 'task_scope'):
-            attempt = value['memory']['attempts'].get(source['id'] + ':' + field + ':', {})
-            if fields.get(field) in {'supported', 'unknown', 'skipped', 'not_applicable'} or attempt.get('declined') or attempt.get('count', 0) >= 2:
-                continue
-            return {'action': 'ask', 'reply': f"What can you share about {field.replace('_', ' ')} in {source['title']}? Unknown is fine.",
-                    'item_id': source['id'], 'targets': [{'field': field}]}
-        return {'action': 'pause', 'reply': 'The synthetic interview can pause here with remaining details uncertain.'}
+        skill, field = choice
+        subject = f' for {skill}' if skill else ''
+        return {'action': 'ask', 'reply': f"What can you share about {field.replace('_', ' ')}{subject} in {source['title']}? Unknown is fine.",
+                'item_id': source['id'], 'targets': [{'field': field, 'skill_name': skill}]}
     if value['message'] in {'Stop here.', 'I want to stop now.'}:
         return {'intent': 'stop', 'reply': 'Paused.', 'actions': [], 'interpretations': []}
     active = value.get('active_question')

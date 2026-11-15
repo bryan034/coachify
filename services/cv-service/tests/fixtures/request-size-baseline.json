@@ -1,0 +1,199 @@
+{
+  "format": "cv-request-size-replay-v1",
+  "measurement": "UTF-8 bytes; synthetic fixtures, not tokens",
+  "provider_calls": 0,
+  "rows": [
+    {
+      "fixture": "clear",
+      "stage": "extraction",
+      "request_bytes": 16708,
+      "system_text_bytes": 11775,
+      "user_text_bytes": 150,
+      "response_format_bytes": 4288
+    },
+    {
+      "fixture": "clear",
+      "stage": "extraction_repair",
+      "request_bytes": 17888,
+      "system_text_bytes": 12847,
+      "user_text_bytes": 243,
+      "response_format_bytes": 4288
+    },
+    {
+      "fixture": "clear",
+      "stage": "evidence_verification",
+      "request_bytes": 1574,
+      "system_text_bytes": 867,
+      "user_text_bytes": 292,
+      "response_format_bytes": 233
+    },
+    {
+      "fixture": "clear",
+      "stage": "cv_interview_interpret",
+      "request_bytes": 12440,
+      "system_text_bytes": 8784,
+      "user_text_bytes": 2135,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "clear",
+      "stage": "cv_interview_plan",
+      "request_bytes": 11250,
+      "system_text_bytes": 6743,
+      "user_text_bytes": 3448,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "clear",
+      "stage": "clarification_interpretation",
+      "request_bytes": 13085,
+      "system_text_bytes": 11227,
+      "user_text_bytes": 775,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "sparse",
+      "stage": "extraction",
+      "request_bytes": 16663,
+      "system_text_bytes": 11775,
+      "user_text_bytes": 105,
+      "response_format_bytes": 4288
+    },
+    {
+      "fixture": "sparse",
+      "stage": "extraction_repair",
+      "request_bytes": 17843,
+      "system_text_bytes": 12847,
+      "user_text_bytes": 198,
+      "response_format_bytes": 4288
+    },
+    {
+      "fixture": "sparse",
+      "stage": "evidence_verification",
+      "request_bytes": 1484,
+      "system_text_bytes": 867,
+      "user_text_bytes": 202,
+      "response_format_bytes": 233
+    },
+    {
+      "fixture": "sparse",
+      "stage": "cv_interview_interpret",
+      "request_bytes": 12305,
+      "system_text_bytes": 8784,
+      "user_text_bytes": 2000,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "sparse",
+      "stage": "cv_interview_plan",
+      "request_bytes": 11160,
+      "system_text_bytes": 6743,
+      "user_text_bytes": 3358,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "sparse",
+      "stage": "clarification_interpretation",
+      "request_bytes": 12995,
+      "system_text_bytes": 11227,
+      "user_text_bytes": 685,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "ambiguous",
+      "stage": "extraction",
+      "request_bytes": 16693,
+      "system_text_bytes": 11775,
+      "user_text_bytes": 135,
+      "response_format_bytes": 4288
+    },
+    {
+      "fixture": "ambiguous",
+      "stage": "extraction_repair",
+      "request_bytes": 17873,
+      "system_text_bytes": 12847,
+      "user_text_bytes": 228,
+      "response_format_bytes": 4288
+    },
+    {
+      "fixture": "ambiguous",
+      "stage": "evidence_verification",
+      "request_bytes": 1544,
+      "system_text_bytes": 867,
+      "user_text_bytes": 262,
+      "response_format_bytes": 233
+    },
+    {
+      "fixture": "ambiguous",
+      "stage": "cv_interview_interpret",
+      "request_bytes": 12395,
+      "system_text_bytes": 8784,
+      "user_text_bytes": 2090,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "ambiguous",
+      "stage": "cv_interview_plan",
+      "request_bytes": 11220,
+      "system_text_bytes": 6743,
+      "user_text_bytes": 3418,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "ambiguous",
+      "stage": "clarification_interpretation",
+      "request_bytes": 13055,
+      "system_text_bytes": 11227,
+      "user_text_bytes": 745,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "long",
+      "stage": "extraction",
+      "request_bytes": 20277,
+      "system_text_bytes": 11775,
+      "user_text_bytes": 3719,
+      "response_format_bytes": 4288
+    },
+    {
+      "fixture": "long",
+      "stage": "extraction_repair",
+      "request_bytes": 21457,
+      "system_text_bytes": 12847,
+      "user_text_bytes": 3812,
+      "response_format_bytes": 4288
+    },
+    {
+      "fixture": "long",
+      "stage": "evidence_verification",
+      "request_bytes": 5152,
+      "system_text_bytes": 867,
+      "user_text_bytes": 3870,
+      "response_format_bytes": 233
+    },
+    {
+      "fixture": "long",
+      "stage": "cv_interview_interpret",
+      "request_bytes": 23147,
+      "system_text_bytes": 8784,
+      "user_text_bytes": 12842,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "long",
+      "stage": "cv_interview_plan",
+      "request_bytes": 18388,
+      "system_text_bytes": 6743,
+      "user_text_bytes": 10586,
+      "response_format_bytes": 22
+    },
+    {
+      "fixture": "long",
+      "stage": "clarification_interpretation",
+      "request_bytes": 20223,
+      "system_text_bytes": 11227,
+      "user_text_bytes": 7913,
+      "response_format_bytes": 22
+    }
+  ]
+}

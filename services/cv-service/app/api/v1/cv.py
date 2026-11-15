@@ -153,14 +153,14 @@ async def clarifications(cv_id: str, request: Request, account=Depends(authentic
     # Read the CV after the network request so a concurrent save is reflected in
     # this envelope's cv_version, which clients pair with their detail snapshot.
     doc = await run_in_threadpool(service(request).get, account['id'], cv_id)
-    return envelope(doc, context)
+    return envelope(doc, context, account.get('cv_review_policy'))
 
 
 @router.post('/{cv_id}/clarifications/prepare', response_model=QuestionEnvelope)
 async def prepare_questions(cv_id: str, mutation: PrepareMutation, request: Request, account=Depends(authenticated)):
     await run_in_threadpool(service(request).get, account['id'], cv_id)
     context = await request.app.state.target_provider.context(account['authorization'], mutation.career_target_id, mutation.career_target_version)
-    result = await run_in_threadpool(prepare, service(request), account['id'], cv_id, mutation, context)
+    result = await run_in_threadpool(prepare, service(request), account['id'], cv_id, mutation, context, account.get('cv_review_policy'))
     selected = await request.app.state.target_provider.selected_context(account['authorization'])
     before = ConfirmedContext.model_validate(context) if context is not None else None
     after = ConfirmedContext.model_validate(selected) if selected is not None else None

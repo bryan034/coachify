@@ -1,12 +1,20 @@
 """Editable roadmap tasks; generated sessions remain available as a compatibility view."""
 from datetime import date
 from typing import Annotated, Literal
-from pydantic import ConfigDict, Field, StringConstraints, model_serializer, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, StringConstraints, model_serializer, model_validator
 from .base import Contract, Mutation, Text
 from .notes import NotesDocument
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
 Key=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=80)]
 Title=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160)]
+def validate_task_title(value: str) -> str:
+    """Enforce the word limit on new or changed titles, not historical reads."""
+    if len(value.split()) > 19:
+        raise ValueError('Task titles must contain at most 19 whitespace-separated words.')
+    return value
+
+TaskTitle=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160),
+    AfterValidator(validate_task_title),Field(description='One to 19 whitespace-separated words, up to 160 characters.')]
 
 class TaskSlot(Contract):
     date:date
@@ -34,7 +42,7 @@ class SelfRating(Contract):
     recorded_at:str|None=None
 
 class TaskDefinition(Contract):
-    title:Title
+    title:TaskTitle
     instructions:Text
     completion_outcome:Text
     estimated_minutes:int=Field(strict=True,ge=1,le=60000)
@@ -44,7 +52,7 @@ class TaskDefinition(Contract):
     schedule:list[TaskSlot]=Field(default_factory=list,max_length=100)
 
 class TaskChanges(Contract):
-    title:Title|None=None
+    title:TaskTitle|None=None
     instructions:Text|None=None
     completion_outcome:Text|None=None
     estimated_minutes:int|None=Field(default=None,strict=True,ge=1,le=60000)
@@ -159,6 +167,7 @@ class EditableTask(Contract):
     definition_review_required:bool=False
     removal:TaskRemoval|None=None
     generated_key:str|None=None
+    routine_rule_id:str|None=None
     origin:Literal['generated','user']
     overrides:list[str]=Field(default_factory=list)
     source_assignment:SourceAssignment|None=None

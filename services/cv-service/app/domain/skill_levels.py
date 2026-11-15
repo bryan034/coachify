@@ -79,6 +79,20 @@ def pending_sources(document, items, statuses=None):
     return result
 
 
+def rating_ready(source, failures, now):
+    """A changed source may retry immediately; unchanged failures wait for backoff."""
+    receipt = failures.get(source['item_id'], {})
+    return (receipt.get('fingerprint') != source['fingerprint']
+            or not isinstance(receipt.get('retry_at'), (int, float))
+            or receipt['retry_at'] <= now)
+
+
+def rating_failure(source, previous, now):
+    attempts = min(6, previous.get('attempts', 0) + 1) if previous.get('fingerprint') == source['fingerprint'] else 1
+    return {'fingerprint': source['fingerprint'], 'attempts': attempts,
+            'retry_at': now + min(3600, 60 * 2 ** (attempts - 1))}
+
+
 def assumed_level(source, identifier):
     """The worst reasonable reading when the model gave no usable rating for a skill."""
     if source['model']['cv_unverified'] and not source['model']['review_answers']:

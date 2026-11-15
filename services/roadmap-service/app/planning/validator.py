@@ -106,7 +106,7 @@ def check_milestones(draft,capacity,completed,retained):
         errors.append(issue('milestone_capacity_exceeded',f'{names} need {effort} minutes between {first} and {last}, but only {available} usable minutes exist. Reduce scope or move work to beyond_deadline.'))
     return errors
 
-def check_gaps(draft,assessment,confirmations,instruction):
+def check_gaps(draft,assessment,confirmations,instruction,authorized_exclusions=()):
     errors=[];outcomes,conditions,satisfied=assessment_lookup(assessment)
     ids=[g.id for g in draft.gaps];known=set(ids)
     for key in sorted({k for k in ids if ids.count(k)>1}):errors.append(issue('duplicate_gap',f"Gap id '{key}' is used more than once."))
@@ -123,7 +123,7 @@ def check_gaps(draft,assessment,confirmations,instruction):
     excluded=set()
     for exclusion in draft.exclusions:
         if exclusion.requirement_ref not in outcomes:errors.append(issue('unknown_requirement',f"Exclusion references unknown requirement '{exclusion.requirement_ref}'."))
-        elif not instruction or exclusion.quote not in instruction:errors.append(issue('exclusion_without_quote',f"Excluding '{exclusion.requirement_ref}' needs an exact quote from the user's current message."))
+        elif (exclusion.requirement_ref,exclusion.quote) not in authorized_exclusions and (not instruction or exclusion.quote not in instruction):errors.append(issue('exclusion_without_quote',f"Excluding '{exclusion.requirement_ref}' needs an exact quote from the user's current message."))
         else:excluded.add(exclusion.requirement_ref)
     for gap in draft.gaps:
         label=f"Gap '{gap.id}'";answer=(confirmations.get(gap.id) or {}).get('answer')

@@ -2,7 +2,7 @@
 import time
 import pytest
 from app.domain.service import detail
-from app.domain.skill_levels import apply_skill_level_reviews, coverage, pending_sources, ratable, review_source, validate_level_review
+from app.domain.skill_levels import apply_skill_level_reviews, coverage, pending_sources, ratable, rating_failure, rating_ready, review_source, validate_level_review
 from tests.test_cv_interview import send, start_two_topics
 
 METADATA = {'provider': 'synthetic', 'model': 'fixture', 'prompt_version': 'cv-skill-levels-1', 'schema_version': '1'}
@@ -143,15 +143,34 @@ def test_skipped_topics_are_rated_from_the_cv(harness):
 
 
 def test_rating_failure_never_loses_the_turn(harness):
+    import asyncio
+    from app.conversation.interview import InterviewHarness
     client, app, *_ = harness
     cv, chat, provider = start_two_topics(harness)
-    provider.rate_skill_levels = Rater(fail=True)
+    provider.rate_skill_levels = rater = Rater(fail=True)
     chat = send(client, chat, 'Skip all remaining topics.', command='skip_remaining', item_id=None)
     assert chat['interview']['status'] == 'reviewed_with_gaps'
-    stored = stored_when(app, cv, lambda d: d.get('profile_reviewed_effective_version') == d['effective_version'])
+    stored = stored_when(app, cv, lambda d: d.get('profile_reviewed_effective_version') == d['effective_version'] and d.get('skill_level_failures'))
     assert 'skill_level_reviews' not in stored  # Missing persisted reviews remain eligible for a model retry.
+    assert stored.get('skill_level_failures')
     assert coverage(detail(stored)['items'])['share'] >= 0.9
     assert pending_sources(stored, detail(stored)['items'])
+    conversation = app.state.conversations.get('owner-a', chat['id'])
+    asyncio.run(InterviewHarness(app.state.conversations).rate_skill_levels({'id': 'owner-a'}, conversation))
+    assert len(rater.calls) == 1  # Unrelated turns during backoff do not call the provider again.
+
+
+def test_rating_failure_backoff_is_scoped_to_exact_source_fingerprint():
+    source = review_source(document(), item())
+    first = rating_failure(source, {}, 1000)
+    assert first['attempts'] == 1 and first['retry_at'] == 1060
+    assert not rating_ready(source, {'item-1': first}, 1059)
+    assert rating_ready(source, {'item-1': first}, 1060)
+    second = rating_failure(source, first, 1060)
+    assert second['attempts'] == 2 and second['retry_at'] == 1180
+    changed = review_source(document(), item(description='Changed personal work.'))
+    assert rating_ready(changed, {'item-1': second}, 1061)
+    assert rating_failure(changed, second, 1061)['attempts'] == 1
 
 
 def test_missing_model_rating_keeps_unverified_cv_evidence_uncertain():

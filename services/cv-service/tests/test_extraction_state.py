@@ -317,6 +317,28 @@ def test_automatic_retries_stop_at_the_limit_and_a_manual_retry_gets_a_fresh_all
     assert status(client, cv['id'])['status'] == 'queued' and len(calls) == 4
 
 
+def test_operation_budget_survives_automatic_retries_and_explicit_retry_resets_it(harness):
+    client, app, extractor, *_ = harness
+    worker = auto_retrying(app, 10)
+    calls = []
+    def times_out(*args, **kwargs):
+        calls.append(1)
+        raise ExtractionFailure('Synthetic timeout.', 'model_request', 'timeout')
+    extractor.extract = times_out
+    cv = upload(client).json()
+    for _ in range(7):
+        worker.run_once()
+        if status(client, cv['id'])['status'] == 'queued': make_due(app, cv['id'])
+    failed = status(client, cv['id'])
+    assert failed['status'] == 'failed' and failed['error']['failure_category'] == 'operation_budget'
+    assert len(calls) == 6
+    assert app.state.repository.get('owner-a', cv['id'])['operation']['model_call_attempts'] == 6
+    retry(client, failed)
+    worker.run_once()
+    assert len(calls) == 7
+    assert app.state.repository.get('owner-a', cv['id'])['operation']['model_call_attempts'] == 1
+
+
 @pytest.mark.parametrize('failure', [
     ExtractionFailure('Synthetic rejection.', 'model_request', 'provider_http_error', 401, provider_reason='authentication_failed'),
     ExtractionFailure('Synthetic rejection.', 'model_request', 'provider_http_error', 400, provider_reason='schema_rejected'),
@@ -358,7 +380,8 @@ def test_embedded_provider_quota_respects_worker_auto_retry_policy(harness, monk
 
 
 @pytest.mark.parametrize('failure,auto', [
-    ({'failure_category': 'schema_validation'}, True), ({'failure_category': 'incomplete_output'}, True),
+    ({'failure_category': 'schema_validation'}, False), ({'failure_category': 'evidence_validation'}, False),
+    ({'failure_category': 'invalid_json'}, False), ({'failure_category': 'incomplete_output'}, False),
     ({'failure_category': 'provider_http_error', 'provider_reason': 'rate_limit_or_quota'}, True),
     ({'failure_category': 'provider_http_error', 'provider_reason': 'provider_unavailable'}, True),
     ({'failure_category': 'model_admission', 'message': OWNER_BUSY}, True),
@@ -377,15 +400,20 @@ def test_only_fixed_text_and_allowlisted_issues_reach_the_model():
     assert failure_for_model({'failure_category': 'invalid_document'}) is None
 
 
-def test_the_model_sees_the_previous_failure_in_the_real_request(harness, monkeypatch):
+def test_rejected_output_stops_after_repair_and_explicit_retry_keeps_guidance(harness, monkeypatch):
     from tests.test_extraction_harness import candidates, read_result, setup_provider
-    invalid, valid = candidates()
+    _, valid = candidates()
+    # An empty extraction cannot be salvaged, so explicit recovery remains available.
+    invalid = {'items': []}
     client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, invalid, valid])
     worker = auto_retrying(app)
     worker.run_once()
-    assert read_result(client, queued)['status'] == 'queued' and len(calls) == 2
+    failed = read_result(client, queued)
+    assert failed['status'] == 'failed' and len(calls) == 2
     assert 'previous_attempt_failure' not in json.loads(calls[0]['messages'][1]['content'])
-    make_due(app, queued['id'])
+    worker.run_once()
+    assert len(calls) == 2
+    retry(client, failed)
     worker.run_once()
     result = read_result(client, queued)
     assert result['status'] == 'ready' and len(calls) == 3

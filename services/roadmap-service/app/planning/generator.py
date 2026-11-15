@@ -313,15 +313,20 @@ async def chat_turn(app,row,account,assess,read_context):
     config=saved_config(state);now=app.state.clock()
     capacity=Capacity(config,now,completed_sessions(state['active']))
     report=capacity.report(allow_past_start=bool(state['active']))
+    outline=state['outline_candidate'] or state['outline_active']
     plan=state['candidate'] or state['active']
     output=await app.state.model.generate(ChatTurn,CHAT_INSTRUCTIONS,{
         'current_date':capacity.today.isoformat(),'time_zone':config.time_zone,'goal':source['goal'],'planning_defaults':source['planning_defaults'],
         'settings':config.model_dump(mode='json'),'runway':{k:report[k] for k in ('issues','calendar','study')},
-        'current_plan':compact_plan(plan),'messages':row['messages'][-12:],'history_window':'Latest 12 messages; saved settings preserve earlier choices.',
+        'current_plan':outline or compact_plan(plan),'messages':row['messages'][-12:],'history_window':'Latest 12 messages; saved settings preserve earlier choices.',
         'user_message':body['message']})
     updated,note=apply_settings(config,output.settings,capacity.today)
     reply=output.reply+(f'\n\n{note}' if note else '')
-    if output.revision_instruction and plan and not note:
+    if output.revision_instruction and outline and not note:
+        from app.planning.outlines import prepare_outline
+        await prepare_outline(app,row,account,assess,read_context,config=updated,instruction=output.revision_instruction,user_message=body['message'])
+        state=planner_state(row)
+    elif output.revision_instruction and plan and not note:
         await prepare_plan(app,row,account,assess,read_context,config=updated,instruction=output.revision_instruction,user_message=body['message'])
         state=planner_state(row)
     else:state['config']=updated.model_dump(mode='json')

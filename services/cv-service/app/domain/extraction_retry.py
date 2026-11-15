@@ -6,8 +6,11 @@ never provider prose, exception text or CV content.
 from app.domain.model_usage import GLOBAL_DAILY, OWNER_DAILY
 
 REJECTED_OUTPUT = frozenset({'schema_validation', 'evidence_validation'})
-_RETRYABLE = REJECTED_OUTPUT | {'timeout', 'connection_error', 'transport_error', 'invalid_json',
-                                'invalid_response', 'incomplete_output', 'response_too_large'}
+# A rejected or malformed response is not a transient transport failure. The
+# graph already repairs validation errors once; rerunning it automatically
+# would silently create another extraction/repair cycle. Users can still make
+# an explicit retry after any terminal failure.
+_RETRYABLE = frozenset({'timeout', 'connection_error', 'transport_error'})
 _RETRYABLE_PROVIDER_REASONS = frozenset({'rate_limit_or_quota', 'provider_unavailable'})
 _GUIDANCE = {
     'schema_validation': 'The output did not match the required schema, even after repair. Fix the listed issues.',

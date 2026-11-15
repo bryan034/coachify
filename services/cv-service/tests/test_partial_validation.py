@@ -192,14 +192,17 @@ def test_the_last_attempt_publishes_verified_items_and_flags_the_rest(harness):
     assert project_skills and project_skills[0]['sources'][0]['support_uncertain'] is True
 
 
-def test_earlier_attempts_retry_instead_of_keeping_a_partial_extraction(harness, monkeypatch):
-    client, app, queued, calls = setup_provider(harness, monkeypatch,
-        [{'items': [education(), project()]}, {'supported': []}] * 2)
+def test_repaired_rejection_publishes_partial_without_restarting_extraction(harness, monkeypatch):
+    from tests.test_extraction_harness import candidates
+    candidate, _ = candidates()
+    client, app, queued, calls = setup_provider(harness, monkeypatch, [candidate, candidate])
     app.state.worker.settings = replace(app.state.worker.settings, extraction_auto_retries=2)
     app.state.worker.run_once()
     result = read_result(client, queued)
-    assert result['status'] == 'queued' and result['items'] == [] and result['extraction_version'] == 0
-    assert result['error'] is None
+    assert result['status'] == 'ready' and len(calls) == 2
+    cv = client.get('/api/v1/cv/' + queued['id']).json()
+    assert any(item.get('validation_issue') for item in cv['items'])
+    assert any(not item.get('validation_issue') for item in cv['items'])
 
 
 def test_the_chat_and_topic_list_flag_the_section_and_say_it_again_in_the_first_question(harness):

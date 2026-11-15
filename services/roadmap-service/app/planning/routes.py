@@ -43,6 +43,10 @@ def register_planner(app,context,mutate,worker):
     prefix='/api/v1/roadmaps/planner'
     register_task_routes(app,context,mutate)
     register_session_routes(app,context,mutate)
+    from app.planning.outlines import register_outline_routes
+    from app.planning.months import register_month_routes
+    register_outline_routes(app,context,mutate,worker)
+    register_month_routes(app,context,mutate,worker)
     @app.get('/api/v1/roadmaps/learning',response_model=LearningPlan)
     async def learning(request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id'])
@@ -67,6 +71,8 @@ def register_planner(app,context,mutate,worker):
         row=await thread(app.state.store.load,account['id']);state=planner_state(row)
         repeated=any(r['id']==str(body.mutation_id) for r in row['receipts']) or (row.get('pending') or {}).get('id')==str(body.mutation_id)
         if not repeated:
+            if state['outline_active'] or state['outline_candidate']:
+                raise Problem('Use the outline and monthly task workflow for this roadmap.',409,'outline_workflow_required')
             source=await context(account)
             if not source['ready']:raise Problem('Complete your selected CV and extracted Career goal first.',409,'inputs_missing')
             config=saved_config(state)
@@ -80,6 +86,8 @@ def register_planner(app,context,mutate,worker):
     async def roll_forward(body:GeneratePlan,request:Request,account=Depends(authenticated)):
         from app.planning.capacity import week_of
         row=await thread(app.state.store.load,account['id']);state=planner_state(row)
+        if state.get('outline_active') or state.get('outline_candidate'):
+            raise Problem('Use the outline and monthly task workflow for this roadmap.',409,'outline_workflow_required')
         active=state.get('active')
         if not active or state.get('candidate'):raise Problem('A saved active roadmap without a pending preview is required.',409,'roll_forward_blocked')
         today=Capacity(saved_config(state),app.state.clock()).today
@@ -113,6 +121,8 @@ def register_planner(app,context,mutate,worker):
     async def accept(body:Mutation,request:Request,account=Depends(authenticated)):
         def apply(row,source):
             state=planner_state(row)
+            if state['outline_active'] or state['outline_candidate']:
+                raise Problem('Use the outline and monthly task workflow for this roadmap.',409,'outline_workflow_required')
             if not state['candidate']:raise Problem('There is no previewed roadmap to accept.')
             blockers=candidate_blockers(state,source,app.state.clock())
             if blockers:raise Problem(blockers[0]['message'],409,blockers[0]['code'])

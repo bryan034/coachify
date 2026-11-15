@@ -784,7 +784,36 @@ roadmaps *-- RoadmapMilestone
 roadmaps *-- RoadmapAssignment
 roadmaps *-- EditableRoadmapTask
 roadmaps *-- RoadmapGap
-note for RoadmapAssignment "Compatibility projection of scheduled milestone-linked tasks; generated detail initially covers the first planning week. Completion is not proficiency."
+class RoadmapOutline {
+    +String id
+    +Integer revision
+    +String assessment_hash
+    +String config_hash
+    +Object[] milestones
+    +RoutineRule[] routine_rules
+}
+class RoutineRule {
+    +String id
+    +Integer revision
+    +String milestone_key
+    +Integer[] weekdays
+    +Integer duration_minutes
+    +Date start_date
+    +Date end_date
+}
+class MonthlyTaskBlock {
+    +String id
+    +String outline_id
+    +Integer outline_revision
+    +String month
+    +Date start_date
+    +Date end_exclusive
+    +String[] task_ids
+}
+RoadmapOutline *-- RoutineRule
+note for RoadmapOutline "The Roadmap workspace retains preview, accepted revision and accepted outline history; accepted month blocks refer to its revision."
+note for MonthlyTaskBlock "Monthly previews and accepted block metadata are owned by the workspace; accepted tasks use canonical editable tasks."
+note for RoadmapAssignment "Compatibility projection of scheduled milestone-linked tasks. Completion is not proficiency."
 note for EditableRoadmapTask "Canonical task data includes unscheduled work, student edits and removal history. Protected work survives revisions; ambiguous regenerated work needs review."
 
 class JobApplicationSnapshot {

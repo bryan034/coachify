@@ -61,6 +61,8 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         raise Problem('Assessment is still processing. Retry this saved planning message to reconnect.',503,'assessment_processing')
     async def worker(row,account):
         if row['pending']['kind'] in ('generate','roll_forward'):
+            if row['pending']['kind']=='roll_forward' and (planner_state(row)['outline_active'] or planner_state(row)['outline_candidate']):
+                raise Problem('Use the outline and monthly task workflow for this roadmap.',409,'outline_workflow_required')
             await prepare_plan(app,row,account,assessment,context)
             if row['pending']['kind']=='roll_forward':
                 from app.planning.state import candidate_blockers
@@ -70,6 +72,12 @@ def create_app(store=None,upstream=None,model=None,clock=None):
                 if blockers:raise Problem('The next week needs review. Your active plan is unchanged.',409,'roll_forward_review')
                 mark_plan_membership_changes(state['active'],state['candidate'])
                 state['active']=state['candidate'];state['candidate']=None
+        elif row['pending']['kind']=='outline_generate':
+            from app.planning.outlines import prepare_outline
+            await prepare_outline(app,row,account,assessment,context)
+        elif row['pending']['kind']=='month_generate':
+            from app.planning.months import prepare_month
+            await prepare_month(app,row,account,context)
         else:await chat_turn(app,row,account,assessment,context)
         return row
 

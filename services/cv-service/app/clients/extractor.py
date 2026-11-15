@@ -13,7 +13,7 @@ from app.domain.extraction_errors import ExtractionFailure
 from app.clients.extraction_schema import extraction_schema
 from app.clients.provider_errors import provider_failure, classified_provider_failure
 
-PROMPT_VERSION = 'cv-extraction-13'
+PROMPT_VERSION = 'cv-extraction-14'
 SCHEMA_VERSION = '7'
 REPAIR_INSTRUCTIONS = '''
 Repair the rejected extraction using the original source_blocks and validation feedback.
@@ -144,7 +144,7 @@ class Extractor:
             'messages': [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': json.dumps({
                 'source_blocks': [block for block in blocks if block['id'] in ids],
                 'summaries': [{'index': index, **ref} for index, ref in enumerate(refs)]})}], **self._provider_options()}
-        result, _ = self._complete(payload, timeout_seconds=timeout_seconds)
+        result, _ = self._complete(payload, timeout_seconds=timeout_seconds, usage_stage="evidence_verification")
         values = result.get('supported') if isinstance(result, dict) and set(result) == {'supported'} else None
         if (not isinstance(values, list) or len(values) > len(refs)
                 or any(type(index) is not int or not 0 <= index < len(refs) for index in values)
@@ -157,19 +157,21 @@ class Extractor:
         if not self.configured:
             raise ExtractionFailure('CV extraction is not configured. Ask the administrator to configure the CV model, then retry this saved upload.',
                                     'model_request', 'not_configured')
-        schema = extraction_schema()
-        decoding_schema = schema
+        # Main's full decoder schema remains authoritative. JSON-only mode
+        # needs the schema in prose; strict mode receives it in response_format.
+        schema_in_prompt = self.response_mode == 'json_object'
+        decoding_schema = extraction_schema()
         response_format = ({'type': 'json_schema', 'json_schema': {'name': 'cv_extraction', 'strict': True, 'schema': decoding_schema}}
                            if self.response_mode == 'json_schema' else {'type': 'json_object'})
         payload = {'model': self.model, 'temperature': 0,
                    'response_format': response_format,
-                   'messages': [{'role': 'system', 'content': SYSTEM + json.dumps(EXAMPLE) + '\nSchema: ' + json.dumps(schema) + (REPAIR_INSTRUCTIONS if repair else '') + (PREVIOUS_FAILURE_INSTRUCTIONS if previous_failure else '')},
+                   'messages': [{'role': 'system', 'content': SYSTEM + json.dumps(EXAMPLE) + ('\nSchema: ' + json.dumps(extraction_schema()) if schema_in_prompt else '') + (REPAIR_INSTRUCTIONS if repair else '') + (PREVIOUS_FAILURE_INSTRUCTIONS if previous_failure else '')},
                                 {'role': 'user', 'content': json.dumps({'source_blocks': blocks, **(repair or {}),
                                     **({'previous_attempt_failure': previous_failure} if previous_failure else {})})}],
                    'max_tokens': 12000, **self._provider_options()}
-        return self._complete(payload, timeout_seconds=timeout_seconds)
+        return self._complete(payload, timeout_seconds=timeout_seconds, usage_stage="extraction_repair" if repair else "extraction")
 
-    def _complete(self, payload, *, timeout_seconds=None):
+    def _complete(self, payload, *, timeout_seconds=None, usage_stage="extraction"):
         stage = 'model_request'
         unavailable = 'CV extraction is temporarily unavailable or returned an invalid result. Your saved inputs are safe; retry later.'
         try:
@@ -182,7 +184,8 @@ class Extractor:
             # local model traffic direct, including when NO_PROXY is absent.
             with Client(timeout=request_timeout, follow_redirects=False, trust_env=not self.local) as client:
                 with sync_model_response(client, self.base_url, self.api_key,
-                                         request_timeout, payload, local=self.local) as response:
+                                         request_timeout, payload, local=self.local, telemetry={"service": "cv", "stage": usage_stage,
+                                             "prompt_version": PROMPT_VERSION, "schema_version": SCHEMA_VERSION}) as response:
                     response.raise_for_status()
                     data = bytearray()
                     for part in response.iter_bytes():

@@ -44,35 +44,35 @@ Extraction gathers evidence that is neither an exact nor a formatting-equivalent
 
 Evidence has no character limit. A quotation or summary of any length is stored whole as one citation, and the six-citation and 160-entry limits, skill provenance, dates and relationship checks remain enforced. Other fields keep their limits. The 12,000-token output allowance and 1 MiB response limit still bound a whole response. Approval sets are transient and never apply to a changed repair candidate.
 
-Extraction and repair use `CV_LLM_RESPONSE_MODE=json_schema` by default. Both send `response_format.type=json_schema` with `strict=true` and a schema derived from the authoritative `Extraction` model, with references inlined, defaults removed, every object property required and additional properties forbidden. Enums, types, required properties and nullability are retained. The decoding schema keeps the full bounds, and backend validation remains authoritative. Extraction dates accept bounded strings without a date-format constraint; unknown scalar values are null, absent lists are empty and unstated ongoing is false. No provider rejection triggers an automatic fallback to JSON mode. `CV_LLM_RESPONSE_MODE=json_object` explicitly opts out for endpoints that support only JSON-object generation; it does not promise schema-constrained decoding. Routing and clarification interpretation keep their existing JSON mode.
+Extraction and repair use `CV_LLM_RESPONSE_MODE=json_schema` by default. Both send `response_format.type=json_schema` with `strict=true` and a schema derived from the authoritative `Extraction` model, with references inlined, defaults removed, every object property required and additional properties forbidden. Enums, types, required properties, nullability and full bounds are retained. Strict mode sends the schema in the response format instead of duplicating it in the prompt; backend validation remains authoritative. Extraction dates accept bounded strings without a date-format constraint; unknown scalar values are null, absent lists are empty and unstated ongoing is false. No provider rejection triggers an automatic fallback to JSON mode. `CV_LLM_RESPONSE_MODE=json_object` explicitly opts out for endpoints that support only JSON-object generation and keeps the schema in the prompt; it does not promise schema-constrained decoding. Routing and clarification interpretation keep their existing JSON mode.
 
 Provider support is not identical to local validation. Constrained decoding may ignore some length, count or range bounds depending on the routed model, so backend limits remain the ones that count. Backend length/count/range validation, source support, explicit skill labels and source relationships remain authoritative; extraction dates use the nonfatal handling described above. The schema-compatible request format is documented by [OpenRouter](https://openrouter.ai/docs/features/structured-outputs) and [Ollama](https://docs.ollama.com/capabilities/structured-outputs); live endpoint/model support still needs verification. [DeepSeek Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion/) currently documents `json_object`, not `json_schema`.
 
 Repair receives the original source blocks, rejected structured candidate and at most 16 issues containing allowlisted indexed paths, issue codes and fixed guidance. Validator messages, values, contexts and unknown extra-field names never enter feedback. The system instructs the model to treat candidates/documents as untrusted, preserve supported records, keep evidence faithful to its source and recheck dates and final support indexes. The complete repaired candidate passes the same Pydantic and evidence validation before publication.
 
-Each extraction, repair and semantic-verification call independently reserves the existing owner/global daily budget and concurrency slot. There is at most one extraction, one repair and one semantic check per candidate (at most four provider calls total). Verification failures from the provider, malformed verdicts or local admission stop immediately, without being treated as evidence to repair. The worker rechecks its exact live lease before admission and again inside the callback. HTTP timeout ceilings are 90 seconds cloud / 120 seconds local, reduced to remaining worker time minus ten seconds for validation/publication. No repair starts with ten seconds or less remaining. Stale work makes no further call or publication. Publication retains the existing final lease/token check and CAS; prior facts/overlays and source reconciliation remain worker-owned. Provider I/O still holds its concurrency slot until it actually exits, even if the lease expires. A restart recovers the durable upload job; it does not resume a private graph checkpoint.
+Each extraction, repair and semantic-verification call independently reserves the existing owner/global daily budget and concurrency slot. There is at most one extraction, one repair and one semantic check per candidate (at most four provider calls total). Verification failures from the provider, malformed verdicts or local admission stop immediately, without being treated as evidence to repair. The worker rechecks its exact live lease before admission and again inside the callback. HTTP timeout ceilings are 90 seconds cloud / 120 seconds local, reduced to remaining worker time minus ten seconds for validation/publication. No repair starts with ten seconds or less remaining. Stale work makes no further call or publication. Publication retains the existing final lease/token check and CAS; prior facts/overlays and source reconciliation remain worker-owned. Provider I/O still holds its concurrency slot until it actually exits, even if the lease expires. A restart recovers the durable upload job and can resume its saved graph state.
 
 Each graph state change is saved before the next step starts, in the private `cv_extraction_states` collection, with one record per CV. A new save replaces the previous one, and the finished state stays until a later run replaces it or the CV is deleted. The record holds the parsed text, model candidate, repair feedback and validated items, but never the original file or exception text. Approval sets from semantic checks are not saved.
 
-An interrupted worker, expired lease or retried failure continues from the first unfinished step, so finished steps are not repeated or paid for again. A run that finished but was not published returns its saved result without a model call. Saved state only applies to the same operation and workflow version, so a reupload or new workflow version starts again and replaces it. If output is still rejected after repair, the next attempt keeps the parsed document and asks the model again. If processing fails unexpectedly or interruptions reach the attempt limit, the state is marked discarded and the next retry starts from the document. Workers only save while they hold the lease. Deleting a CV erases its state, including a save that lands after deletion. Saved state outlives the 24-hour original retention, and resuming still requires the original file to be available.
+An interrupted worker, expired lease or retried failure continues from the first unfinished step, so finished steps are not repeated or paid for again. A run that finished but was not published returns its saved result without a model call. Saved state only applies to the same operation and workflow version, so a reupload or new workflow version starts again and replaces it. If output is still rejected after repair, eligible partial results are retained or the run ends with an explicit recovery path rather than restarting the full extraction automatically. If processing fails unexpectedly or interruptions reach the attempt limit, the state is marked discarded and the next retry starts from the document. Workers only save while they hold the lease. Deleting a CV erases its state, including a save that lands after deletion. Saved state outlives the 24-hour original retention, and resuming still requires the original file to be available.
 
 There is no state streaming or external tracing; LangSmith tracing and inherited callbacks are disabled during invocation. Successful metadata adds `workflow_version=cv-extraction-6`, `response_mode` and `repair_attempts` (0 or 1). Terminal errors add `repair_attempted`, indicating the repair branch was entered even if local budget/time checks prevented a provider call; older records without these fields return null. The graph never writes another service or starts an assessment/roadmap.
 
 ### Automatic retries
 
-A failed run returns to the queue twice automatically, after 20 and then 40 seconds, and is marked `failed` only after the third run fails. While it waits, the status is `queued`, `processing_progress.message` says an error was hit, why in plain terms and which retry is next, and workers skip it until `operation.retry_at`. During a retry, the normal stage message is prefixed with `Retry 1 of 2:`. Each run resumes from the saved graph state. Each run also has its own repair and semantic checks, so three runs can make up to 12 provider calls, all counted against the daily budget. A manual retry starts a new allowance.
+A transient failure may return to the queue twice automatically, after 20 and then 40 seconds. While it waits, the status is `queued`, `processing_progress.message` explains the delay and workers skip it until `operation.retry_at`. During a retry, the normal stage message identifies the retry. Each run resumes from saved graph state and all calls count against the daily budget. Extraction, repair and semantic verification share a durable six-attempt operation budget, including attempts whose response was lost. It survives worker interruptions and automatic retries; an explicit retry starts a new allowance. This limits call count, not provider token usage. A reservation is charged before dispatch, so an interrupted attempt may count even when no response was received.
 
-Retried automatically: output rejected after repair, invalid or incomplete responses, timeouts, connection errors, HTTP 429, provider 5xx responses and busy model slots. Not retried automatically: authentication, permission, schema or other HTTP 4xx rejections, missing configuration, reached daily budgets, unreadable documents, unexpected errors, changed source identities and history capacity.
+Retried automatically: timeouts, connection errors, HTTP 429, provider 5xx responses and busy model slots. Rejected output after its one repair, invalid or incomplete responses and oversized responses stop with an explicit recovery path rather than restarting an extraction/repair cycle. Also not retried automatically: authentication, permission, schema or other HTTP 4xx rejections, missing configuration, reached daily budgets, unreadable documents, unexpected errors, changed source identities and history capacity.
 
 ### Partly verified extractions
 
-Validation rejects a whole run only while retries remain. On the last automatic run, after its repair also failed, the backend keeps the part that verified instead of discarding the upload (`app/domain/partial_validation.py`). Each item is judged alone: an item that verifies is published exactly as before, with the same ID. An item that cannot be verified, whether for unsupported evidence, an unstated explicit skill, an unmatched review quote or a schema error, is kept as unconfirmed context with `validation_issue: {status: "unverified", code, message}`. `code` names the failed check and `message` is fixed wording; neither holds CV or model text.
+After the repair also fails validation, the backend can keep the part that verified instead of discarding the upload (`app/domain/partial_validation.py`). Partial validation is subject to the same operation call budget; if it cannot complete within that budget, the upload has a recoverable failure. Each item is judged alone: an item that verifies is published exactly as before, with the same ID. An item that cannot be verified, whether for unsupported evidence, an unstated explicit skill, an unmatched review quote or a schema error, is kept as unconfirmed context with `validation_issue: {status: "unverified", code, message}`. `code` names the failed check and `message` is fixed wording; neither holds CV or model text.
 
 A flagged item keeps its extracted title, description and cited excerpts (only those whose block exists). It drops dates, proficiency, durations and review facts, has `provenance: "inferred"` and `support_uncertain: true`, so its skills never count as demonstrated capability, and carries the `claim` uncertainty so the review asks about it. An entry with no usable kind, title or description is dropped and counted. `other_information` entries that do not verify are left out and counted. Both counts appear in `notices`.
 
 The whole run still fails when the problem is not one item's fault or nothing verifies: no item passes, a claim is duplicated, relationships are circular, or either list exceeds 160 entries. Semantic support already obtained for the candidate is reused; otherwise one verification call is made, so a run still makes at most four provider calls. A user's explanation or correction of a flagged item removes its flag.
 
-Every flagged item is a review topic of any kind. `InterviewProgress.topics[].validation` is `"unverified"` for it, the planner is told the source is unconfirmed, and the backend puts a fixed notice before the first question about it, saying the section is better explained in chat.
+Flagged items of any kind are eligible review topics. `InterviewProgress.topics[].validation` is `"unverified"` for them, the planner is told the source is unconfirmed, and the backend puts a fixed notice before the first question about one. A source whose group allowance is exhausted can close with gaps instead of receiving another question.
 
 Automatic and manual retries tell the model why the previous run failed, in `previous_attempt_failure`. It holds the failure category, a fixed sentence and, for rejected output, the same allowlisted validation issues used for repair. It never holds provider prose, exception text, the rejected output or CV content. The operation keeps this record until a run succeeds or the CV is reuploaded, and it is not returned by the API.
 
@@ -139,7 +139,7 @@ Successful interpretation updates individual source-linked skill claims: persona
 
 A skill's own level is independent of the career goal comparison and of the categorical `skill_estimates`. CV and Career use the same whole-number 1–10 scale from `elo_shared.competence_scale`: 1 means not competent, 5 means working independently with understanding, and 10 means the most complex work. Evidence is read pessimistically: use without stated personal independence is capped at 3; a bare mention is capped at 2. Self-ratings, titles and tenure alone do not establish competence. The extraction model returns source-linked `skill_levels`; interpreted answers may update `skill_level` with a rationale and answer excerpt. Each public `skill_level` has `level`, `status` (rated/uncertain), `rationale`, `source` (cv/review) and `evidence`. Aggregation takes the highest supported source level. `proficiency` retains the person's original wording.
 
-After each topic closes, including skips, the model rates its skills using CV evidence and review answers. A finished review also rates remaining sources, including bare skills. The target is at least 90% rated: missing information receives a pessimistic low estimate, while conflicting or unverified evidence can remain uncertain with a null level. Team-only, observed and denied skills are excluded. Invalid or omitted model ratings receive conservative assumptions. Results persist in `skill_level_reviews`, keyed by item with an evidence fingerprint, and apply only while that evidence matches. They do not alter effective evidence versions or interview memory. This step runs after the reply is saved; provider failure retains the turn and permits a later retry. Once a review is complete, reads supply conservative assumptions for skills still missing ratings; these assumptions are not persisted as model results and do not suppress later retries.
+After each topic closes, including skips, the model rates its skills using CV evidence and review answers. A finished review also rates remaining sources, including bare skills. The target is at least 90% rated: missing information receives a pessimistic low estimate, while conflicting or unverified evidence can remain uncertain with a null level. Team-only, observed and denied skills are excluded. Invalid or omitted model ratings receive conservative assumptions. Results persist in `skill_level_reviews`, keyed by item with an evidence fingerprint, and apply only while that evidence matches. They do not alter effective evidence versions or interview memory. This step runs after the reply is saved; provider failure retains the turn and permits a later retry. Failure receipts are keyed to the source fingerprint and delay retries from 60 seconds up to one hour with exponential backoff. Changed evidence is eligible immediately; successful saved ratings are reused. Once a review is complete, reads supply conservative assumptions for skills still missing ratings; these assumptions are not persisted as model results and do not suppress later retries.
 
 Pending/failed current interpretations remain visibly unresolved and are rejected by target-bound input assembly. An existing successful interpretation remains current saved evidence while a replacement answer on the unchanged source is pending; it must not be presented as the new answer's resolved result. Retry uses a separate mutation receipt, an invocation token and a 90-second execution lease. A live pending claim cannot start another retry; an expired interrupted claim can recover. Only the winning claim can call the provider and publish against matching source/answer/document revisions. Each service process permits at most two concurrent interpretation calls; capacity failures preserve the answer and offer retry. Legacy target-specific answers require explicit interpretation retry. Skills Profile chat can automatically retry an old evidence-alignment failure once when reopened, using the review policy below.
 
@@ -272,9 +272,7 @@ planning, reusing the initial interpretation instead of interpreting it again.
 Review answers are self-reported and take precedence over CV/earlier statements
 at the same field and skill scope. Validation is limited to typed schema, topic
 relevance and source/reference/capacity boundaries; no evidence-alignment or
-consistency verifier is called. Unrelated messages redirect without factual updates.
-One automatic schema retry is allowed; repeated malformed output asks for a natural
-clarification. Authentication, ownership, leases and concurrent-edit fencing remain.
+consistency verifier is called. Unrelated messages do not create factual updates. One automatic schema retry is allowed; repeated malformed output enters bounded no-progress recovery without republishing the active question. Authentication, ownership, leases and concurrent-edit fencing remain.
 Extraction and legacy target-specific interpretation retain their existing checks.
 
 Owner-scoped conversation memory survives restarts and segment rollover. Coverage
@@ -285,7 +283,7 @@ titles and topic states; its counts represent stable experience/project topics
 needing clarification, not question counts. Follow-ups do not add topics. Manual
 intake reports its four background areas. Completion is announced in chat, with a
 completion-only Review profile button opening the Skills Profile summary. Opening
-a paused review resumes automatically; completed reviews do not auto-restart. The existing explicit summary review stamp
+a paused review resumes automatically; completed reviews do not auto-restart. Review again explicitly begins another review and can migrate an entitlement change using existing question receipts. The existing explicit summary review stamp
 remains separate. `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` defaults to 2 (1–5), limiting
 unproductive probes of an unchanged target. Context is capped at 96 KiB with four
 recent non-placeholder messages, a deterministic per-source discussion summary,
@@ -344,8 +342,9 @@ message. Public messages are fixed application text, never provider reasoning.
 individual supported fields. The active topic remains current through follow-ups,
 including planner proposals that prematurely label it covered. A validated move
 to a different source closes the prior discussed topic atomically with the next
-question; omitted coverage uses `reviewed_with_gaps`. Final completion retains
-the existing all-topics coverage guard. Pauses/side questions do not add coverage.
+question; omitted coverage uses `reviewed_with_gaps`. At final completion, the harness can close remaining sources in a discussed group
+with gaps; sources in other undiscussed groups still require review. Pauses and
+side questions do not add coverage.
 Ordinary answer updates retain completed-topic navigation; explicit source edits,
 removal or a new extraction invalidate affected coverage. Skill estimates still
 invalidate on effective evidence changes.
@@ -361,21 +360,14 @@ private receipt diagnostics retain at most six allowlisted reason/action events.
 Content-free logs contain those codes and attempt numbers only, never model prose,
 CV data, skill names or raw schema errors. See [planner diagnostics](INTERVIEW.md#planner-rejection-diagnostics).
 
-### Three questions per review topic
+### Two questions per review group
 
-Uploaded-CV review permits at most three issued questions per source topic. The
-review starts from CV context and asks only about material ambiguity. Scope,
-personally handled responsibilities and confidence in replicating the task are
-possible areas, not a required questionnaire. The last answer is stored as source-scoped
-`review_evidence.field=replication_confidence`, with its original quote and explicit
-uncertainty/support needs. It is self-reported confidence, not proficiency proof.
-Already answered areas need not be repeated; three is a maximum, not a minimum.
-Skipped questions count; failed proposals/retries and side explanations do not.
-Counts derive from retained CV interview questions across conversation segments,
-including older/source-corrected records of the same source identity. The validator
-rejects a fourth question, and exposes the budget in transient planner context.
-After the third answer/skip, move on or finish with gaps; completion still requires
-all review topics to have been covered. No new configuration or collection is added.
+Uploaded-CV review snapshots the authenticated Profile scope: section scope shares
+two issued questions across sources of the same structured kind, and item scope
+allows two per project/experience. Opening and skipped questions count. Saved CV
+clarification receipts rebuild counts across conversation segments; a source with
+an exhausted group can close with gaps. The active answer remains saveable even
+when older history exceeds the limit. See [interview policy](INTERVIEW.md#review-question-budget).
 
 Assistant reply publication and conversation read projections remove internal
 evidence/fact/source IDs from prose and active question text. Read filtering also
@@ -400,9 +392,9 @@ context; all sources expose known skills and clarification targets. Planner
 required checklist. Named people/team achievements never become personal ownership
 without explicit source context or a user clarification.
 
-The three-question cap remains a maximum. CV sources with a supported skill baseline need zero questions. Clear wording
+The two-question group cap remains a maximum. CV sources with a supported skill baseline need zero questions. Clear wording
 alone is not enough when personal skill application/support is still unknown;
-responsibility and skill evidence gaps are reviewed within the per-project budget. Discussed
+responsibility and skill evidence gaps are reviewed within the applicable group budget. Discussed
 topics retain stable progress through completion. Known, unvisited optional-only
 topics and obsolete active questions can retire on conversation reconciliation.
 Original CV evidence, user overrides and explicit source corrections retain their
@@ -411,14 +403,9 @@ older CVs; they reuse their saved facts and source text.
 
 ### Baseline skill evaluation — per-project question budgets
 
-A review topic means a whole project or experience. Each has its own maximum of
-three issued questions; there is no overall three-question/three-topic limit.
-The existing retained CV/history capacity is not a conversational topic cap.
-Questions use known CV scope and skills to establish personal responsibilities,
-concrete skill application/depth and assistance/independence or limitations.
-Related skills may be covered by one focused question. The review proceeds to
-remaining projects after a topic is covered/exhausted and can finish earlier if
-all project skills already have sufficient baseline evidence.
+A source topic is one project or experience. The review policy chooses whether
+its allowance is shared across the section or held per item. Questions focus on
+material uncertainty and may finish early; answers remain source-specific.
 
 `GET /api/v1/cv/{id}` exposes `skill_estimates` for supported source-scoped
 project/experience skill levels. The complete per-skill projection, including
@@ -428,7 +415,7 @@ its source item ID, skill name, fixed evidence-based explanation and references.
 References are structured provenance, never printed in assistant prose. Estimates
 recompute from effective evidence on read; no provider call, separate collection
 or competing skill store is introduced. Confidence/tenure alone cannot establish
-competence. After three answers, unsupported fields remain unknown rather than
+competence. After the allowance is exhausted, unsupported fields remain unknown rather than
 receiving a fabricated score. This is a CV/conversation baseline, separate from
 practical testing and target-specific Assessment comparisons.
 
@@ -441,7 +428,7 @@ does not mutate those records. Frontend summary/chat defensively filter older
 responses too and show no empty diagnostic section. Supported skill levels remain
 visible. No API fields are removed and existing level enums stay compatible.
 
-A topic’s maximum of three questions addresses relevant project responsibilities
+A group’s maximum of two questions addresses relevant project responsibilities
 and skill application gaps; it is not a request to fill every empty field. Backend
 target selection offers concrete skill use before probing support/independence,
 and consolidates missing personal ownership at project scope. Partial peripheral
@@ -463,12 +450,12 @@ current known project. This saves a source-bound deferred-topic receipt, cancels
 related failed planning receipts and proceeds to another uncovered project or
 completes with gaps. It neither resubmits answers nor skips failed evidence writes.
 CV versions/extraction generations/source fingerprints fence retry and correction
-races. Existing user history, ownership, leases and three-question budgets remain.
+races. Existing user history, ownership, leases and group budgets remain.
 
 ### Skill self-rating baseline
 
-CV review invites quoted, skill-specific 1–10 `self_rating` facts within its existing
-three-question project budget. A rating is optional and never becomes independently
+CV review can capture quoted, skill-specific 1–10 `self_rating` facts within its
+existing two-question group budget. A rating is optional and never becomes independently
 assessed proficiency. Original answers and source scope are retained in existing
 review evidence; the Assessment API handoff includes these facts. See
 [the interview policy](INTERVIEW.md#skill-self-ratings-during-review).

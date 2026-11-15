@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { PlannedRoadmap, Workspace } from '../../src/features/roadmap/types';
+import type { MonthPreview, Outline, PlannedRoadmap, Workspace } from '../../src/features/roadmap/types';
 import { blankPlanner, config, review, roadmap, runway, workspace } from '../fixtures/roadmap-workspace';
 
 function initial(): Workspace { return workspace({ planner: { ...blankPlanner(), inputs: { goal: { role: 'Backend developer', target_type: 'specific_job', skills: [{ name: 'Python' }] }, cv: { id: 'synthetic-cv', name: 'synthetic-cv.docx' }, skills: [{ ref: 'cv:skill', name: 'Git', kind: 'skill', text: 'Used Git on a synthetic project.' }], experience: [{ ref: 'cv:project', name: 'Synthetic API project', kind: 'project', text: 'Built an API.' }], skill_groups: { Git: 'Tools' } } } }); }
@@ -13,11 +13,13 @@ const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.
 
 test('chat helper fills the planner, then generate, review, accept, complete a session and revise with preview', async ({ page }) => {
  await signIn(page);
- let state = initial(), generations = 0, modelMessages = 0;
+ let state = initial(), generations = 0, modelMessages = 0, months = 0;
+ const requests: string[] = [];
  const firstPlan: PlannedRoadmap = roadmap();
  const respond = (route: Parameters<Parameters<Page['route']>[1]>[0], body: unknown, status = 200) => route.fulfill({ status, json: body });
  await page.route('**/api/v1/roadmaps/**', async route => {
   const path = new URL(route.request().url()).pathname.replace('/api/v1/roadmaps', '');
+  requests.push(`${route.request().method()} ${path}`);
   if (route.request().method() === 'GET') return respond(route, state);
   const body = route.request().postDataJSON();
   if (path === '/planner/runway') { const usesBackup = body.config.use_backup; return respond(route, runway({ study: { preferred_minutes: 690, backup_extra_minutes: 120, usable_minutes: usesBackup ? 810 : 690 } })); }
@@ -28,14 +30,33 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
    return respond(route, { version: state.version, operation: state.operation }, 202);
   }
   if (path === '/planner/config') { state = { ...state, version: state.version + 1, planner: { ...state.planner, config: body.config, config_saved: true } }; return respond(route, state); }
-  if (path === '/planner/generate') {
+  if (path === '/planner/outlines/generate') {
    generations++;
-   const done = state.planner.active?.assignments.find(a => a.status === 'completed');
-   const candidate = generations === 1 ? firstPlan : roadmap({ id: 'plan2', base_active_id: 'plan1', summary: 'Moved the next session to Thursday.', assignments: [...(done ? [done] : []), { ...firstPlan.assignments[0], id: 'a2', key: 'a2', date: '2030-01-10', start_time: '18:00', task: 'Add input validation to the endpoint.' }], changes: { completed_preserved: done ? 1 : 0, assignments_added: ['Add input validation to the endpoint.'], assignments_moved: [], assignments_removed: [], milestones_added: [], milestones_moved: [], milestones_removed: [] } });
-   state = { ...state, version: state.version + 1, operation: { id: body.mutation_id, status: 'succeeded', stage: 'complete' }, assessment: candidate.assessment, planner: { ...state.planner, candidate, candidate_review: review(candidate) } };
+   const candidate: Outline = { id: `outline-${generations}`, revision: generations, assessment_hash: firstPlan.assessment_hash,
+    summary: generations === 1 ? firstPlan.summary : 'Moved the next session to Thursday.', gaps: firstPlan.gaps, milestones: firstPlan.milestones,
+    routine_rules: [], deadline_outcome: firstPlan.deadline_outcome, beyond_deadline: firstPlan.beyond_deadline, exclusions: firstPlan.exclusions, config: state.planner.config };
+   state = { ...state, version: state.version + 1, operation: { id: body.mutation_id, status: 'succeeded', stage: 'complete' }, assessment: firstPlan.assessment, planner: { ...state.planner, outline_candidate: candidate } };
    return respond(route, { version: state.version, operation: state.operation }, 202);
   }
-  if (path === '/planner/accept') { const active = state.planner.candidate!; state = { ...state, version: state.version + 1, planner: { ...state.planner, active, active_review: review(active), candidate: null, candidate_review: null, signals: [] } }; return respond(route, state); }
+  if (path.match(/^\/planner\/outlines\/outline-\d+\/accept$/)) {
+   state = { ...state, version: state.version + 1, planner: { ...state.planner, outline_active: state.planner.outline_candidate, outline_candidate: null } };
+   return respond(route, state);
+  }
+  if (path === '/planner/months/generate') {
+   months++;
+   const revision = Boolean(body.revision);
+   const candidate: MonthPreview = { id: revision ? 'month-2' : 'month-1', month: body.month, start_date: '2030-01-09', end_exclusive: '2030-01-28', time_zone: 'Asia/Singapore',
+    ...(revision ? { replaces_block_id: 'month-1', replaced_task_ids: [] } : {}), tasks: [{ id: revision ? 'a2' : 'a1', title: revision ? 'Add input validation to the endpoint.' : 'Write one tested Python endpoint.', instructions: 'Build and test the endpoint.', completion_outcome: 'The endpoint test passes.', milestone_key: 'm1', schedule: [{ date: revision ? '2030-01-10' : '2030-01-09', start_time: revision ? '18:00' : '19:00', duration_minutes: 60 }] }] };
+   state = { ...state, version: state.version + 1, operation: { id: body.mutation_id, status: 'succeeded', stage: 'complete' }, planner: { ...state.planner, month_candidate: candidate } };
+   return respond(route, { version: state.version, operation: state.operation }, 202);
+  }
+  if (path.match(/^\/planner\/months\/month-[12]\/accept$/)) {
+   const revision = path.includes('month-2');
+   const done = state.planner.active?.assignments.find(a => a.status === 'completed');
+   const active = revision ? roadmap({ id: 'plan2', base_active_id: 'plan1', summary: 'Moved the next session to Thursday.', assignments: [...(done ? [done] : []), { ...firstPlan.assignments[0], id: 'a2', key: 'a2', date: '2030-01-10', start_time: '18:00', task: 'Add input validation to the endpoint.' }] }) : firstPlan;
+   state = { ...state, version: state.version + 1, planner: { ...state.planner, active, active_review: review(active), month_candidate: null, month_blocks: [{ id: revision ? 'month-2' : 'month-1', month: '2030-01' }], signals: [] } };
+   return respond(route, state);
+  }
   if (path === '/planner/tasks/status') {
    const active = { ...state.planner.active!, assignments: state.planner.active!.assignments.map(a => a.id === body.task_id ? { ...a, status: body.status === 'completed' ? 'completed' as const : 'scheduled' as const, evidence_note: body.evidence_note, completed_at: '2030-01-09T12:00:00+00:00' } : a) };
    state = { ...state, version: state.version + 1, planner: { ...state.planner, active, active_review: { ...review(active), next_assignment_id: null }, signals: [{ kind: 'progress', message: 'You’ve completed 1 session(s) since this roadmap was prepared.' }] } };
@@ -96,22 +117,28 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await page.screenshot({ path: test.info().outputPath('roadmap-configure.png'), fullPage: true });
 
  await page.getByRole('button', { name: 'Generate roadmap' }).click();
- await expect(page.getByText('Preview · not active until you accept it')).toBeVisible();
- await expect(page.getByRole('region', { name: 'Your first week' })).toContainText('Write one tested Python endpoint.');
- await expect(page.getByRole('complementary', { name: 'Milestones in this plan' })).toContainText('Build a Python API');
+ await expect(page.getByRole('heading', { name: 'Review your milestone outline' })).toBeVisible();
+ await expect(page.getByRole('group', { name: 'Milestone 1' }).getByLabel('Title')).toHaveValue('Build a Python API');
+ expect(months).toBe(0);
  await page.screenshot({ path: test.info().outputPath('roadmap-review.png'), fullPage: true });
  await page.setViewportSize({ width: 390, height: 844 });
  expect(await noOverflow(page)).toBe(true);
  await page.screenshot({ path: test.info().outputPath('roadmap-review-mobile.png'), fullPage: true });
  await page.setViewportSize({ width: 1280, height: 900 });
-
- await page.getByRole('button', { name: 'Back to settings' }).click();
+ await page.getByRole('button', { name: 'Accept outline' }).click();
+ await expect(page.getByRole('heading', { name: 'Your milestone outline' })).toBeVisible();
+ await page.getByRole('button', { name: 'Change planning settings' }).click();
  await expect(page.getByRole('heading', { name: 'Your runway' })).toBeVisible();
  await page.setViewportSize({ width: 390, height: 844 });
  expect(await noOverflow(page)).toBe(true);
  await page.setViewportSize({ width: 1280, height: 900 });
  await page.getByRole('button', { name: 'Return to roadmap' }).click();
- await page.getByRole('button', { name: 'Accept plan' }).click();
+ await page.getByLabel('Month', { exact: true }).fill('2030-01');
+ await page.getByRole('button', { name: 'Generate month preview' }).click();
+ await expect(page.getByRole('heading', { name: 'Preview for 2030-01' })).toBeVisible();
+ await expect(page.getByText('Write one tested Python endpoint.', { exact: true })).toBeVisible();
+ expect(state.planner.active).toBeNull();
+ await page.getByRole('button', { name: 'Accept month' }).click();
  await expect(page.getByRole('navigation', { name: 'Roadmap views' })).toBeVisible();
  for (const view of ['Today', 'Week', 'Month', 'Milestones', 'Progress']) {
   await page.getByRole('navigation', { name: 'Roadmap views' }).getByRole('button', { name: view, exact: true }).click();
@@ -133,10 +160,14 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await page.getByRole('button', { name: /Plan settings/ }).click();
  await expect(page.getByLabel('Weekly budget in hours')).toHaveValue('4');
  await page.getByRole('button', { name: 'Preview updated roadmap' }).click();
- await expect(page.getByText('completed session stays as recorded')).toBeVisible();
- await expect(page.getByRole('region', { name: 'Your first week' })).toContainText('Add input validation to the endpoint.');
+ await expect(page.getByRole('heading', { name: 'Review your milestone outline' })).toBeVisible();
  expect(state.planner.active!.id).toBe('plan1');
- await page.getByRole('button', { name: 'Accept plan' }).click();
+ await page.getByRole('button', { name: 'Accept outline' }).click();
+ await page.getByRole('button', { name: 'Revise 2030-01' }).click();
+ await expect(page.getByText('Add input validation to the endpoint.', { exact: true })).toBeVisible();
+ await expect(page.getByText(/Completed, started, edited, removed and note-bearing work remains saved/)).toBeVisible();
+ expect(state.planner.active!.id).toBe('plan1');
+ await page.getByRole('button', { name: 'Accept month' }).click();
  await expect(page.getByRole('navigation', { name: 'Roadmap views' })).toBeVisible();
  expect(state.planner.active!.id).toBe('plan2');
  await page.getByRole('button', { name: /Plan settings/ }).click();
@@ -146,6 +177,8 @@ test('chat helper fills the planner, then generate, review, accept, complete a s
  await page.setViewportSize({ width: 390, height: 844 });
  expect(await noOverflow(page)).toBe(true);
  expect(generations).toBe(2);
+ expect(months).toBe(2);
+ expect(requests.filter(request => request.includes('/planner/roll-forward'))).toHaveLength(0);
 });
 
 test('a date field stays inside its border while editing, and a date problem shows only the field', async ({ page }) => {

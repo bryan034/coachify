@@ -359,7 +359,7 @@
     "/api/v1/profile/onboarding/complete": {
       "post": {
         "tags": [
-          "P13\u2013P14 initial setup"
+          "P13–P14 initial setup"
         ],
         "summary": "Finish Onboarding",
         "operationId": "finish_onboarding_api_v1_profile_onboarding_complete_post",
@@ -756,7 +756,7 @@
     "/api/v1/profile/auth/local-accounts": {
       "get": {
         "tags": [
-          "P09\u2013P16 account access"
+          "P09–P16 account access"
         ],
         "summary": "Local Accounts",
         "operationId": "local_accounts_api_v1_profile_auth_local_accounts_get",
@@ -778,92 +778,10 @@
         }
       }
     },
-    "/api/v1/profile/auth/attempts": {
-      "post": {
-        "tags": [
-          "P09\u2013P16 account access"
-        ],
-        "summary": "Begin",
-        "operationId": "begin_api_v1_profile_auth_attempts_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Begin"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Nonce"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/profile/auth/attempts/cancel": {
-      "post": {
-        "tags": [
-          "P09\u2013P16 account access"
-        ],
-        "summary": "Cancel",
-        "operationId": "cancel_api_v1_profile_auth_attempts_cancel_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Attempt"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Done"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/profile/auth/forgot-password": {
       "post": {
         "tags": [
-          "P09\u2013P16 account access"
+          "P09–P16 account access"
         ],
         "summary": "Forgot Password",
         "operationId": "forgot_password_api_v1_profile_auth_forgot_password_post",
@@ -904,7 +822,7 @@
     "/api/v1/profile/auth/reset-password": {
       "post": {
         "tags": [
-          "P09\u2013P16 account access"
+          "P09–P16 account access"
         ],
         "summary": "Reset Password",
         "operationId": "reset_password_api_v1_profile_auth_reset_password_post",
@@ -942,10 +860,92 @@
         }
       }
     },
+    "/api/v1/profile/auth/attempts": {
+      "post": {
+        "tags": [
+          "P09–P16 account access"
+        ],
+        "summary": "Begin",
+        "operationId": "begin_api_v1_profile_auth_attempts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Begin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Nonce"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/auth/attempts/cancel": {
+      "post": {
+        "tags": [
+          "P09–P16 account access"
+        ],
+        "summary": "Cancel",
+        "operationId": "cancel_api_v1_profile_auth_attempts_cancel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Attempt"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Done"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/profile/auth/complete": {
       "post": {
         "tags": [
-          "P09\u2013P16 account access"
+          "P09–P16 account access"
         ],
         "summary": "Complete",
         "operationId": "complete_api_v1_profile_auth_complete_post",
@@ -1000,7 +1000,7 @@
     "/api/v1/profile/auth/verify-email": {
       "post": {
         "tags": [
-          "P09\u2013P16 account access"
+          "P09–P16 account access"
         ],
         "summary": "Verify",
         "operationId": "verify_api_v1_profile_auth_verify_email_post",
@@ -1041,7 +1041,7 @@
     "/api/v1/profile/auth/resend-verification": {
       "post": {
         "tags": [
-          "P09\u2013P16 account access"
+          "P09–P16 account access"
         ],
         "summary": "Resend",
         "operationId": "resend_api_v1_profile_auth_resend_verification_post",
@@ -1082,7 +1082,7 @@
     "/api/v1/profile/auth/session": {
       "get": {
         "tags": [
-          "P09\u2013P16 account access"
+          "P09–P16 account access"
         ],
         "summary": "Session",
         "operationId": "session_api_v1_profile_auth_session_get",
@@ -1108,7 +1108,7 @@
     "/api/v1/profile/auth/logout": {
       "post": {
         "tags": [
-          "P09\u2013P16 account access"
+          "P09–P16 account access"
         ],
         "summary": "Logout",
         "operationId": "logout_api_v1_profile_auth_logout_post",
@@ -1400,69 +1400,6 @@
   },
   "components": {
     "schemas": {
-      "ResetRequest": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "maxLength": 254,
-            "title": "Email"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "email"
-        ],
-        "title": "ResetRequest"
-      },
-      "ResetComplete": {
-        "properties": {
-          "challenge_id": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Challenge Id"
-          },
-          "code": {
-            "type": "string",
-            "pattern": "^[0-9]{6}$",
-            "title": "Code"
-          },
-          "password": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 8,
-            "title": "Password"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "challenge_id",
-          "code",
-          "password"
-        ],
-        "title": "ResetComplete"
-      },
-      "ResetReceipt": {
-        "properties": {
-          "challenge_id": {
-            "type": "string",
-            "title": "Challenge Id"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          }
-        },
-        "type": "object",
-        "required": [
-          "challenge_id",
-          "message"
-        ],
-        "title": "ResetReceipt"
-      },
       "AccountView": {
         "properties": {
           "id": {
@@ -1494,6 +1431,21 @@
             "type": "string",
             "format": "date-time",
             "title": "Expires At"
+          },
+          "cv_review_scope": {
+            "type": "string",
+            "enum": [
+              "section",
+              "item"
+            ],
+            "title": "Cv Review Scope",
+            "default": "section"
+          },
+          "cv_review_policy_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Cv Review Policy Version",
+            "default": 1
           }
         },
         "type": "object",
@@ -2702,6 +2654,47 @@
         ],
         "title": "InstitutionView"
       },
+      "IntakeField": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "unknown",
+              "skipped",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEvidence"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "IntakeField"
+      },
       "Nonce": {
         "properties": {
           "nonce": {
@@ -2998,6 +2991,98 @@
         ],
         "title": "PlanningIssue"
       },
+      "ProfileEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "work",
+              "project",
+              "education",
+              "interest"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/IntakeField"
+            },
+            "propertyNames": {
+              "enum": [
+                "company",
+                "location",
+                "role",
+                "description",
+                "dates",
+                "contribution",
+                "tools",
+                "complexity",
+                "independence",
+                "recency",
+                "frequency",
+                "outcome",
+                "limitations",
+                "institution",
+                "qualification",
+                "completion"
+              ]
+            },
+            "type": "object",
+            "maxProperties": 16,
+            "title": "Fields"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileSkill"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Skills"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title"
+        ],
+        "title": "ProfileEntry"
+      },
+      "ProfileEvidence": {
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Message Id"
+          },
+          "quote": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Quote"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "message_id",
+          "quote"
+        ],
+        "title": "ProfileEvidence"
+      },
       "ProfilePatch": {
         "properties": {
           "expected_version": {
@@ -3116,6 +3201,83 @@
           "expected_version"
         ],
         "title": "ProfilePatch"
+      },
+      "ProfileSkill": {
+        "properties": {
+          "canonical_skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Skill Id"
+          },
+          "skill_registry_version": {
+            "type": "string",
+            "title": "Skill Registry Version",
+            "default": "skills-v2"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEvidence"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Evidence"
+          },
+          "dimensions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/IntakeField"
+            },
+            "propertyNames": {
+              "enum": [
+                "company",
+                "location",
+                "role",
+                "description",
+                "dates",
+                "contribution",
+                "tools",
+                "complexity",
+                "independence",
+                "recency",
+                "frequency",
+                "outcome",
+                "limitations",
+                "institution",
+                "qualification",
+                "completion"
+              ]
+            },
+            "type": "object",
+            "maxProperties": 8,
+            "title": "Dimensions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "evidence"
+        ],
+        "title": "ProfileSkill"
       },
       "ProfileView": {
         "properties": {
@@ -3275,6 +3437,69 @@
         ],
         "title": "ProfileView"
       },
+      "ResetComplete": {
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Challenge Id"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "title": "Code"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "challenge_id",
+          "code",
+          "password"
+        ],
+        "title": "ResetComplete"
+      },
+      "ResetReceipt": {
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "title": "Challenge Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "challenge_id",
+          "message"
+        ],
+        "title": "ResetReceipt"
+      },
+      "ResetRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "ResetRequest"
+      },
       "SavedInstitution": {
         "properties": {
           "kind": {
@@ -3340,126 +3565,6 @@
           "university"
         ],
         "title": "SchoolCategory"
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
-          }
-        },
-        "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError"
-      },
-      "VerificationAccess": {
-        "properties": {
-          "flow_id": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Flow Id"
-          },
-          "attempt_id": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Attempt Id"
-          },
-          "session_token": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Session Token"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "flow_id",
-          "attempt_id",
-          "session_token"
-        ],
-        "title": "VerificationAccess"
-      },
-      "Verify": {
-        "properties": {
-          "flow_id": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Flow Id"
-          },
-          "attempt_id": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Attempt Id"
-          },
-          "session_token": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Session Token"
-          },
-          "challenge_id": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 32,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Challenge Id"
-          },
-          "code": {
-            "type": "string",
-            "pattern": "^[0-9]{6}$",
-            "title": "Code"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "flow_id",
-          "attempt_id",
-          "session_token",
-          "challenge_id",
-          "code"
-        ],
-        "title": "Verify"
       },
       "SkillsProfile": {
         "properties": {
@@ -3599,215 +3704,125 @@
         ],
         "title": "SkillsProfileWrite"
       },
-      "ProfileEntry": {
+      "ValidationError": {
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "work",
-              "project",
-              "education",
-              "interest"
-            ],
-            "title": "Kind"
-          },
-          "title": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Title"
-          },
-          "fields": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/IntakeField"
-            },
-            "propertyNames": {
-              "enum": [
-                "company",
-                "location",
-                "role",
-                "description",
-                "dates",
-                "contribution",
-                "tools",
-                "complexity",
-                "independence",
-                "recency",
-                "frequency",
-                "outcome",
-                "limitations",
-                "institution",
-                "qualification",
-                "completion"
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
               ]
             },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
             "type": "object",
-            "maxProperties": 16,
-            "title": "Fields"
-          },
-          "skills": {
-            "items": {
-              "$ref": "#/components/schemas/ProfileSkill"
-            },
-            "type": "array",
-            "maxItems": 12,
-            "title": "Skills"
+            "title": "Context"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
-          "id",
-          "kind",
-          "title"
+          "loc",
+          "msg",
+          "type"
         ],
-        "title": "ProfileEntry"
+        "title": "ValidationError"
       },
-      "ProfileSkill": {
+      "VerificationAccess": {
         "properties": {
-          "canonical_skill_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Canonical Skill Id"
-          },
-          "skill_registry_version": {
+          "flow_id": {
             "type": "string",
-            "title": "Skill Registry Version",
-            "default": "skills-v2"
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Flow Id"
           },
-          "name": {
+          "attempt_id": {
             "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Name"
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Attempt Id"
           },
-          "description": {
+          "session_token": {
             "type": "string",
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Description"
-          },
-          "evidence": {
-            "items": {
-              "$ref": "#/components/schemas/ProfileEvidence"
-            },
-            "type": "array",
-            "maxItems": 4,
-            "minItems": 1,
-            "title": "Evidence"
-          },
-          "dimensions": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/IntakeField"
-            },
-            "propertyNames": {
-              "enum": [
-                "company",
-                "location",
-                "role",
-                "description",
-                "dates",
-                "contribution",
-                "tools",
-                "complexity",
-                "independence",
-                "recency",
-                "frequency",
-                "outcome",
-                "limitations",
-                "institution",
-                "qualification",
-                "completion"
-              ]
-            },
-            "type": "object",
-            "maxProperties": 8,
-            "title": "Dimensions"
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Session Token"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "name",
-          "description",
-          "evidence"
+          "flow_id",
+          "attempt_id",
+          "session_token"
         ],
-        "title": "ProfileSkill"
+        "title": "VerificationAccess"
       },
-      "ProfileEvidence": {
+      "Verify": {
         "properties": {
-          "message_id": {
+          "flow_id": {
             "type": "string",
-            "maxLength": 150,
-            "minLength": 1,
-            "title": "Message Id"
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Flow Id"
           },
-          "quote": {
+          "attempt_id": {
             "type": "string",
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Quote"
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Attempt Id"
+          },
+          "session_token": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Session Token"
+          },
+          "challenge_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Challenge Id"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "title": "Code"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "message_id",
-          "quote"
+          "flow_id",
+          "attempt_id",
+          "session_token",
+          "challenge_id",
+          "code"
         ],
-        "title": "ProfileEvidence"
-      },
-      "IntakeField": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "answered",
-              "unknown",
-              "skipped",
-              "not_applicable"
-            ],
-            "title": "Status"
-          },
-          "value": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2000,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Value"
-          },
-          "evidence": {
-            "items": {
-              "$ref": "#/components/schemas/ProfileEvidence"
-            },
-            "type": "array",
-            "maxItems": 4,
-            "title": "Evidence"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "IntakeField"
+        "title": "Verify"
       }
     },
     "securitySchemes": {
