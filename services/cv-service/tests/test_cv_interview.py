@@ -1667,6 +1667,45 @@ def test_side_question_cannot_publish_an_unreceipted_evidence_question(harness):
     assert len(raw['clarifications']) == 1
 
 
+def test_side_question_can_receive_a_relevant_answer_without_changing_evidence(harness):
+    client, app, *_ = harness
+    cv, chat, provider = start(harness)
+    original = deepcopy(chat['active_question'])
+    before = client.get('/api/v1/cv/' + cv['id']).json()
+    provider.evaluation = {'topic_relevant': True, 'intent': 'side_question',
+        'reply': 'This distinguishes your contribution from the team. It does not establish whether you used the skill elsewhere.',
+        'actions': []}
+    chat = send(client, chat, 'Why are you asking?')
+    assert 'It does not establish whether you used the skill elsewhere.' in chat['messages'][-1]['text']
+    assert chat['active_question'] == original
+    assert client.get('/api/v1/cv/' + cv['id']).json() == before
+
+    provider.evaluation = {'topic_relevant': True, 'intent': 'side_question',
+        'reply': 'That is a hypothetical question. Your saved CV facts remain as they are.', 'actions': []}
+    chat = send(client, chat, 'What if I had six months of SQL experience?')
+    assert 'Your saved CV facts remain as they are.' in chat['messages'][-1]['text']
+    assert chat['active_question'] == original
+    assert client.get('/api/v1/cv/' + cv['id']).json() == before
+
+
+@pytest.mark.parametrize('reply', [
+    'Tell me what else you built.',
+    'What else did you build',
+    'I would like to know your responsibilities.',
+    'Please provide another example.',
+    '请告诉我你做了什么。',
+])
+def test_side_question_filters_unreceipted_requests_even_without_question_marks(harness, reply):
+    client, app, *_ = harness
+    cv, chat, provider = start(harness)
+    original = deepcopy(chat['active_question'])
+    provider.evaluation = {'topic_relevant': True, 'intent': 'side_question', 'reply': reply, 'actions': []}
+    chat = send(client, chat, 'Why are you asking?')
+    assert reply not in chat['messages'][-1]['text']
+    assert chat['active_question'] == original
+    assert len(app.state.conversations.cv.get('owner-a', cv['id'])['clarifications']) == 1
+
+
 def test_explicit_review_migrates_policy_using_old_question_receipts(harness):
     client, app, *_ = harness
     cv, chat, _ = start_two_topics(harness, scope='section')

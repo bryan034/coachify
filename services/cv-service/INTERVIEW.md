@@ -218,8 +218,11 @@ and closes with uncertainty. Repeated submissions reuse the saved question recei
 A resolved or skipped intent and a near-identical question are not reissued.
 When interpretation cannot connect an answer, the user can edit, skip or continue;
 two consecutive failed attempts defer the group and progress with gaps.
-Side questions receive bounded explanations of the review or its skip controls,
-so they cannot publish an uncounted request for additional evidence.
+Side questions can receive the model's declarative explanation without changing
+saved CV evidence or issuing a new question. A conservative filter rejects question
+marks and common direct or indirect requests for more information; when it rejects
+a reply, a fixed explanation is used. The filter cannot prove the meaning of every
+possible natural-language sentence, so semantic quality still needs evaluation.
 Target-specific preparation uses the same CV-owned snapshot and group counts;
 over-budget unanswered legacy questions are hidden, while prior answers and skips
 remain available. When entitlement changes, starting a new review after completion

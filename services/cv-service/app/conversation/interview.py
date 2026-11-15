@@ -18,7 +18,7 @@ from app.schemas.interview import InterviewTurn
 from app.schemas.interview_evidence import fact_key, fact_groups, fact_group_value
 from app.conversation.interview_memory import (build_context, reconcile_memory, progress, evidence_for, target_key,
     topic_question_count, topic_discussed, topic_ids, enough_context, ownership_established, question_options, MAX_TOPIC_QUESTIONS, MAX_TARGET_ATTEMPTS)
-from app.conversation.presentation import review_reply, unverified_notice
+from app.conversation.presentation import review_reply, safe_side_answer, unverified_notice
 from app.conversation.interview_policy import validate_decision, DecisionRejected
 
 logger = logging.getLogger(__name__)
@@ -218,15 +218,18 @@ class InterviewHarness:
                 await run_in_threadpool(service.update, owner, identifier, remember)
             result = InterviewTurn.model_validate(evaluated['result'])
             if result.intent == 'side_question' and (result.topic_relevant or is_side_question(route['_text'])):
-                # Use bounded answers so a side reply cannot introduce another
-                # unreceipted request for CV evidence.
+                # Side replies do not create an evidence-question receipt.
+                # Preserve a declarative model answer only if it contains no
+                # obvious request for additional information.
                 text = route['_text'].casefold()
-                if re.search(r'\b(why|purpose|reason)\b', text):
-                    reply = 'These questions help clarify what you personally did and what remains uncertain.'
-                elif re.search(r'\b(skip|pass|answer|unsure)\b', text):
-                    reply = 'You can skip a question or say you are unsure; unknown details stay uncertain.'
-                else:
-                    reply = 'I can explain the review process here, but cannot answer that question from the saved CV.'
+                reply = safe_side_answer(result.reply) if result.topic_relevant else None
+                if not reply:
+                    if re.search(r'\b(why|purpose|reason)\b', text):
+                        reply = 'These questions help clarify what you personally did and what remains uncertain.'
+                    elif re.search(r'\b(skip|pass|answer|unsure)\b', text):
+                        reply = 'You can skip a question or say you are unsure; unknown details stay uncertain.'
+                    else:
+                        reply = 'I can explain the review process here, but cannot answer that question from the saved CV.'
                 if conversation.get('active_question'):
                     reply += ' Your current question is still open; you can answer it or skip.'
                 return await self.publish(account, identifier, route['id'], token, memory,
