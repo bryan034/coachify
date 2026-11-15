@@ -331,7 +331,7 @@ def test_target_prepare_keeps_the_original_trusted_policy_snapshot(harness):
     assert app.state.service.get('owner-a', cv['id'])['review_policy_snapshot'] == {'scope': 'item', 'version': 1}
 
 
-@pytest.mark.parametrize('scope,expected', [('section', 2), ('item', 4)])
+@pytest.mark.parametrize('scope,expected', [('section', 4), ('item', 4)])
 def test_target_prepare_groups_multiple_projects_by_trusted_scope(harness, scope, expected):
     from app.clarification.service import prepare
     from app.schemas.cv import PrepareMutation

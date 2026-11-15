@@ -12,6 +12,7 @@ from app.domain.capabilities import effective_items, digest, normalized_name, va
 from app.domain.errors import Conflict, CvError
 from app.domain.baseline import baseline_estimates
 from app.domain.review_context import clarification_context
+from app.domain.review_policy import effective_policy, migrate_snapshot
 from app.domain.service import now
 from app.schemas.cv import Mutation
 from app.schemas.interview import InterviewTurn
@@ -72,43 +73,100 @@ class InterviewHarness:
         saved_policy = (document.get('review_policy_snapshot') or next(
             (q['_interview_policy'] for q in document['clarifications'] if q.get('_interview_policy')), None)
             or prior.get('review_policy'))
-        entitlement = account.get('cv_review_policy', {'scope': 'section', 'version': 1})
-        if (saved_policy and saved_policy != entitlement and route.get('_command') == 'review'
-                and prior.get('status') in {'reviewed', 'reviewed_with_gaps'}
-                and not conversation.get('active_question')):
-            # Migration is an explicit start of a new review, never a mid-review
-            # reset. Original question IDs remain the basis for both groupings.
-            from app.conversation.interview_memory import durable_review_questions
-            receipt_ids = sorted(q['id'] for q in durable_review_questions(document))
+        policy = effective_policy(saved_policy or account.get('cv_review_policy'))
+        retained = route.get('_interview_plan')
+        # Finish an already-admitted v1 question with its original receipt and
+        # CAS fence before upgrading. A subsequent turn performs the upgrade.
+        if saved_policy and saved_policy != policy and not retained:
             def migrate(current):
-                if current.get('review_policy_snapshot', saved_policy) != saved_policy:
-                    raise Conflict('Your review policy changed. Continue with the latest review.')
-                migrations = current.setdefault('review_policy_migrations', [])
-                migrations.append({'from': saved_policy, 'to': entitlement,
-                                   'question_count': len(receipt_ids), 'receipt_basis': digest(receipt_ids)})
-                current['review_policy_snapshot'] = entitlement
+                migrate_snapshot(current, saved_policy, prior.get('question_counts', {}))
             await run_in_threadpool(service.cv.mutate, owner, document['_id'],
                 Mutation(expected_version=document['version'], mutation_id=key(route['id'] + ':review-policy')),
                 'review-policy-migration', migrate)
             document = service.cv.get(owner, document['_id'])
-        policy = (document.get('review_policy_snapshot') or next(
-            (q['_interview_policy'] for q in document['clarifications'] if q.get('_interview_policy')), None)
-            or prior.get('review_policy') or account.get('cv_review_policy', {'scope': 'section', 'version': 1}))
-        if (prior.get('review_policy') and prior['review_policy'] != policy and route.get('_command') == 'review'
-                and prior.get('status') in {'reviewed', 'reviewed_with_gaps'}):
-            # Also applies when publication was interrupted after migration.
-            prior = {**prior, 'review_policy': policy, 'status': 'reviewing', 'focus_item_id': None,
-                     'coverage': {i: v for i, v in prior.get('coverage', {}).items()
-                                  if v.get('status') == 'reviewed'}}
+        previous_policy = (saved_policy if saved_policy and saved_policy.get('scope') == 'section'
+                           else prior.get('previous_review_policy') or prior.get('review_policy') or saved_policy)
         conversation = {**conversation, 'interview_memory': {**prior, 'review_policy': policy}}
         memory = reconcile_memory(conversation, document)
+        memory.pop('previous_review_policy', None)
+        if previous_policy and previous_policy.get('scope') == 'section' and not retained:
+            # Reopen only material job/project gaps that the old shared section
+            # allowance exhausted. Preserve explicit skips and genuine coverage.
+            from app.clarification.service import group_counts
+            _, previous_counts = group_counts(document, previous_policy)
+            reopened = False
+            for item in effective_items(document):
+                item_id = item['id']
+                if (item.get('removed') or item['kind'] not in {'project', 'experience'}
+                        or item_id in memory.get('deferred_topics', {})
+                        or memory['coverage'].get(item_id, {}).get('status') != 'reviewed_with_gaps'
+                        or previous_counts.get('section:' + item['kind'], 0) < MAX_TOPIC_QUESTIONS
+                        or topic_question_count(memory, item_id) >= MAX_TOPIC_QUESTIONS):
+                    continue
+                if any(option['open_fields'] for option in question_options(item, memory)):
+                    memory['coverage'].pop(item_id)
+                    reopened = True
+            if reopened and memory['status'] in {'reviewed', 'reviewed_with_gaps'}:
+                memory['status'] = 'reviewing'
+            active = conversation.get('active_question')
+            if active and memory.get('item_groups', {}).get(active['item_id'], '').startswith('item:'):
+                from app.conversation.interview_memory import durable_review_questions
+                item_questions = [q for q in durable_review_questions(document) if q['item_id'] == active['item_id']]
+                ordinal = next((index for index, q in enumerate(item_questions, 1) if q['id'] == active['id']), None)
+                if ordinal and ordinal <= MAX_TOPIC_QUESTIONS:
+                    conversation = {**conversation, 'active_question': {**active, 'number': ordinal, 'limit': MAX_TOPIC_QUESTIONS}}
         memory['max_target_attempts'] = service.cv.settings.interview_max_target_attempts
-        retained = route.get('_interview_plan')
         if retained:
             question = retained['question']
             receipt = key(route['id'] + ':interview-question')
             if document['extraction_version'] != retained['memory']['extraction_version']:
                 raise Conflict('Your source changed while saving the question. Continue from the latest evidence.')
+            if (document.get('review_policy_snapshot') == policy
+                    and (retained['memory'].get('review_policy') != policy
+                         or document['version'] != retained['expected_version'])):
+                existing = next((q for q in document['clarifications'] if q['id'] == question['id']), None)
+                if existing and (existing['item_id'] != question['item_id'] or existing['question'] != question['question']):
+                    raise Conflict('The saved question changed. Continue from the latest review.')
+                source_available = any(item['id'] == question['item_id'] and not item.get('removed')
+                                       for item in effective_items(document))
+                if (existing and existing['status'] == 'unanswered' and not existing.get('reconciliation_required')
+                        and source_available):
+                    # The CV write succeeded before the policy upgrade, but the
+                    # conversation reply was interrupted. Reuse its receipt.
+                    recovered = deepcopy(retained['memory'])
+                    recovered['review_policy'] = policy
+                    recovered = reconcile_memory({**conversation, 'interview_memory': recovered}, document)
+                    active = deepcopy(retained['active'])
+                    from app.conversation.interview_memory import durable_review_questions
+                    item_questions = [q for q in durable_review_questions(document) if q['item_id'] == question['item_id']]
+                    ordinal = next((index for index, q in enumerate(item_questions, 1) if q['id'] == question['id']), None)
+                    if ordinal and ordinal <= MAX_TOPIC_QUESTIONS: active.update(number=ordinal, limit=MAX_TOPIC_QUESTIONS)
+                    reply = retained['reply']
+                    if document['effective_version'] != retained['memory']['evidence_version']:
+                        reply = 'Your saved evidence changed; you can still answer or skip this saved question. ' + reply
+                    return await self.publish(account, identifier, route['id'], token, recovered,
+                                              reply, active, retained['targets'])
+                if existing:
+                    # Another flow answered or skipped the already-issued
+                    # question. Its old mutation key belongs to that receipt;
+                    # acknowledge it without attempting another publication.
+                    recovered = deepcopy(retained['memory'])
+                    recovered['review_policy'] = policy
+                    recovered['focus_item_id'] = None
+                    recovered = reconcile_memory({**conversation, 'interview_memory': recovered}, document)
+                    return await self.publish(account, identifier, route['id'], token, recovered,
+                        ('That question was already answered or skipped. Your saved review is up to date; continue when ready.'
+                         if existing['status'] in {'answered', 'skipped'} else
+                         'Your source changed after that question was saved. Your review is retained; continue with the latest evidence.'), None, [])
+                # A different operation migrated/changed the question ledger
+                # or evidence before this proposal was published. Drop only
+                # that unissued proposal and plan against the latest state.
+                def clear_stale(current):
+                    action = action_in(current, route['id'])
+                    service.check_lease(action, token)
+                    action.pop('_interview_plan', None)
+                await run_in_threadpool(service.update, owner, identifier, clear_stale)
+                return await self.plan(app, account, conversation, document, route, token, memory)
             def add(current):
                 saved_policy = current.setdefault('review_policy_snapshot', retained['memory']['review_policy'])
                 if saved_policy != retained['memory']['review_policy']:

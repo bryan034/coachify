@@ -209,9 +209,9 @@ transcripts are preserved.
 
 ## Review question budget
 
-The active review snapshots the authenticated Profile policy. Section scope groups
-items by their structured kind; item scope uses one group per project or experience.
-Each group allows at most two issued questions including the opening and skips.
+Free and paid users share one policy: each project and experience is its own group,
+while other structured sections remain grouped by kind. Each group allows at most
+two issued questions including the opening and skips.
 Counts rebuild from durable CV clarifications and accepted reconciliation history,
 deduplicating transferred receipts rather than relying on the bounded chat window. Old history above the limit accepts its active answer
 and closes with uncertainty. Repeated submissions reuse the saved question receipt.
@@ -225,9 +225,19 @@ a reply, a fixed explanation is used. The filter cannot prove the meaning of eve
 possible natural-language sentence, so semantic quality still needs evaluation.
 Target-specific preparation uses the same CV-owned snapshot and group counts;
 over-budget unanswered legacy questions are hidden, while prior answers and skips
-remain available. When entitlement changes, starting a new review after completion
-records a policy migration and rebuilds the new group counts from the original
-question receipts. An active or paused review keeps its existing policy.
+remain available. Legacy section-scoped reviews are upgraded on the next review
+turn or target-specific preparation, preserving current questions, answers, skips,
+historical receipts and known legacy per-item counts. Completed reviews reopen only
+on an explicit review request; a staged question is recovered under its original
+receipt before the next turn upgrades it. If another operation upgrades the policy
+first, an already-issued question keeps its receipt; an unissued stale proposal is
+replanned against the current allowance. Reconciliation follows explicit source
+mappings. Rebuilt per-item counts can make previously section-limited material
+topics available without re-extraction or resetting already-issued questions.
+For an older cross-CV comparison, a count that exists only in the source CV's
+conversation and has no retained question receipt is not transferred to the target.
+Without a retained receipt or available same-CV conversation count, an earlier
+question cannot be reconstructed; no inferred association is created.
 
 Before publication and API delivery, assistant prose and active questions strip
 internal fact/source/evidence references, including `fact:` and `answer:` IDs.

@@ -6,6 +6,7 @@ from app.domain.capabilities import effective_items, digest, normalized_name
 from app.domain.attachments import source_fingerprint
 from app.domain.review_context import clarification_context, evidence_for, review_target_skipped
 from app.domain.baseline import baseline_estimates, skill_facts
+from app.domain.review_policy import effective_policy, map_legacy_counts
 from app.schemas.interview import InterviewProgress
 from app.schemas.interview_evidence import fact_key, ReviewField, fact_groups, facts_closed, fact_group_value
 
@@ -102,8 +103,10 @@ def durable_review_questions(document):
 
 def question_groups(question, item_groups, policy):
     item_id = question['item_id']
-    if policy.get('scope') == 'item' and question.get('kind') in {'project', 'work'}:
-        return ['item:' + item_id]
+    if policy.get('scope') == 'item':
+        known_group = item_groups.get(item_id)
+        if (known_group and known_group.startswith('item:')) or question.get('kind') in {'project', 'work'} or question.get('_interview_section') in {'project', 'experience'}:
+            return ['item:' + item_id]
     section = question.get('_interview_section') or {'project': 'project', 'work': 'experience'}.get(question.get('kind'))
     if section:
         return ['section:' + section]
@@ -214,8 +217,7 @@ def reconcile_memory(conversation, document):
     # A reopened skip can be answered, but its issued question still consumes a slot.
     answers = {q['id']: 'reopened' if q.get('reopened') else q['status'] for q in document['clarifications'] if not q.get('reconciliation_required')}
     # Rebuild from durable CV questions, not the bounded recent-memory window.
-    policy = (document.get('review_policy_snapshot') or old.get('review_policy')
-              or {'scope': 'section', 'version': 1})
+    policy = effective_policy(document.get('review_policy_snapshot') or old.get('review_policy'))
     # Include original and removed sources when rebuilding historical receipts.
     source_items = {i['id']: i for i in document.get('original_items', [])}
     source_items.update({i['id']: i for i in items})
@@ -229,13 +231,25 @@ def reconcile_memory(conversation, document):
                                'targets': q.get('_interview_targets', []), 'resolution': q.get('resolution'), 'question': q.get('question', '')})
         if q['status'] in {'answered', 'skipped'}: discussed_topics.add(q['item_id'])
     # Preserve legacy per-item counts if an older memory knows more than the surviving receipts.
-    for item_id, count in old.get('question_counts', {}).items():
-        if item_id in signatures and count > question_counts.get(item_id, 0): question_counts[item_id] = min(count, MAX_TOPIC_QUESTIONS)
+    for source in (map_legacy_counts(document, document.get('review_legacy_counts')),
+                   map_legacy_counts(document, old.get('question_counts'))):
+        for item_id, count in source.items():
+            if item_id in signatures and type(count) is int and count >= 0:
+                if count > question_counts.get(item_id, 0): question_counts[item_id] = min(count, MAX_TOPIC_QUESTIONS)
+    # Older memory can retain counts after individual receipts were lost. Sum
+    # known item counts for shared sections, and never reduce durable counts.
+    reconstructed = {}
+    for item_id, count in question_counts.items():
+        group = item_groups.get(item_id)
+        if group: reconstructed[group] = reconstructed.get(group, 0) + count
+    for group, count in reconstructed.items():
+        group_question_counts[group] = max(group_question_counts.get(group, 0), count)
     needed = set(topic_ids(items))
     retained_topics = [i for i in old.get('topic_ids', []) if i in signatures
                        and (i in needed or i in coverage or i in discussed_topics or topic_discussed(old, i))]
     history = [{**q, 'answer_status': answers.get(q['id'], 'unanswered')} for q in old.get('questions', []) if q.get('item_id') in signatures and q['id'] in answers][-120:]
-    return {'schema_version': 1, 'extraction_version': document['extraction_version'],
+    previous_policy = old.get('previous_review_policy') or (old.get('review_policy') if old.get('review_policy') != policy else None)
+    result = {'schema_version': 1, 'extraction_version': document['extraction_version'],
         'evidence_version': document['effective_version'], 'sources': signatures, 'input_sources': originals,
         'focus_item_id': old.get('focus_item_id') if old.get('focus_item_id') in signatures
                          and old.get('status') not in {'reviewed', 'reviewed_with_gaps'} else None,
@@ -249,6 +263,8 @@ def reconcile_memory(conversation, document):
         'questions': history,
         'notes': old.get('notes', [])[-24:],
         'summary': [{'item_id': i, 'status': value['status']} for i, value in coverage.items()]}
+    if previous_policy: result['previous_review_policy'] = previous_policy
+    return result
 
 
 def progress(memory, document):

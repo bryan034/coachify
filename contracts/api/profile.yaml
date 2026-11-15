@@ -1434,12 +1434,9 @@
           },
           "cv_review_scope": {
             "type": "string",
-            "enum": [
-              "section",
-              "item"
-            ],
+            "const": "item",
             "title": "Cv Review Scope",
-            "default": "section"
+            "default": "item"
           },
           "cv_review_policy_version": {
             "type": "integer",

@@ -85,9 +85,8 @@ Interview planning supplies exact open targets and retains bounded, content-free
 rejection codes for debugging; exhausted plans explain the last rejection category.
 See [planner diagnostics](INTERVIEW.md#planner-rejection-diagnostics).
 
-Uploaded-CV review uses a trusted Profile policy snapshot. Section scope shares
-at most two questions across projects in the same normalized section; item scope
-allows two per project/experience. Opening and skipped questions count, and
+Uploaded-CV review allows free and paid users at most two questions per individual
+project or job; other review sections retain a shared section allowance. Opening and skipped questions count, and
 saved clarification receipts rebuild the allowance across reloads. Clear sources
 need no questions. Misclassified answers are not met with the same question again;
 a bounded recovery can defer the question with uncertainty. Source-linked evidence

@@ -9,6 +9,7 @@ from app.domain.errors import Conflict, Missing
 from app.domain.service import bump, now
 from app.schemas.cv import ConfirmedContext, SavedInterpretation
 from app.domain.answer_capacity import reserve, release, CAPACITY_MESSAGE
+from app.domain.review_policy import effective_policy, map_legacy_counts, migrate_snapshot, validate_policy
 from app.conversation.interview_memory import MAX_TOPIC_QUESTIONS, durable_review_questions, question_groups, review_group
 
 
@@ -56,26 +57,30 @@ def relevant(item, context, uncertainty):
 
 
 def review_policy(document, supplied=None):
-    def valid(value):
-        return isinstance(value, dict) and value.get('scope') in {'section', 'item'} and value.get('version') == 1
     saved = document.get('review_policy_snapshot')
     if saved is not None:
-        if not valid(saved): raise Conflict('The saved CV review policy is invalid. Your evidence is retained.')
-        return saved
+        return effective_policy(saved)
     for question in document['clarifications']:
         value = question.get('_interview_policy')
-        if valid(value): return value
-    return supplied if valid(supplied) else {'scope': 'section', 'version': 1}
+        if value is not None:
+            if not validate_policy(value): raise Conflict('The saved CV review policy is invalid. Your evidence is retained.')
+            return effective_policy(value)
+    return effective_policy(supplied)
 
 
 def group_counts(document, policy):
     items = {i['id']: i for i in document.get('original_items', [])}
     items.update({i['id']: i for i in effective_items(document)})
     groups = {identifier: review_group(item, policy) for identifier, item in items.items()}
-    counts = {}
+    counts, by_item = {}, {}
     for question in durable_review_questions(document):
+        by_item[question['item_id']] = by_item.get(question['item_id'], 0) + 1
         for group in question_groups(question, groups, policy):
             counts[group] = counts.get(group, 0) + 1
+    for item_id, count in map_legacy_counts(document, document.get('review_legacy_counts')).items():
+        if item_id in groups and type(count) is int and count >= 0:
+            group = groups[item_id]
+            counts[group] = counts.get(group, 0) + max(0, min(count, MAX_TOPIC_QUESTIONS) - by_item.get(item_id, 0))
     return groups, counts
 
 
@@ -86,9 +91,15 @@ def envelope(document, raw_context=None, policy=None):
     items = {item['id']: item for item in effective_items(document)}
     questions = []
     policy = review_policy(document, policy)
-    groups, _ = group_counts(document, policy)
-    issued, admitted = {}, set()
-    for question in durable_review_questions(document):
+    groups, counts = group_counts(document, policy)
+    receipts = durable_review_questions(document)
+    receipt_counts = {}
+    for question in receipts:
+        for group in question_groups(question, groups, policy):
+            receipt_counts[group] = receipt_counts.get(group, 0) + 1
+    issued = {group: max(0, count - receipt_counts.get(group, 0)) for group, count in counts.items()}
+    admitted = set()
+    for question in receipts:
         within_allowance = True
         for group in question_groups(question, groups, policy):
             issued[group] = issued.get(group, 0) + 1
@@ -129,7 +140,19 @@ def prepare(service, owner, identifier, mutation, raw_context, policy=None):
         raise Conflict('Your selected Career target changed. Refresh before preparing questions.')
     def transform(document):
         active_policy = review_policy(document, policy)
-        document.setdefault('review_policy_snapshot', deepcopy(active_policy))
+        previous = document.get('review_policy_snapshot') or next(
+            (q['_interview_policy'] for q in document['clarifications'] if q.get('_interview_policy')), None)
+        conversation = service.repository.conversations.latest(owner, identifier)
+        legacy_counts = ((conversation or {}).get('interview_memory') or {}).get('question_counts', {})
+        recovered = map_legacy_counts(document, legacy_counts)
+        recorded = {}
+        for question in durable_review_questions(document):
+            recorded[question['item_id']] = recorded.get(question['item_id'], 0) + 1
+        stored = map_legacy_counts(document, document.get('review_legacy_counts'))
+        missing_counts = {item: count for item, count in recovered.items()
+                          if count > max(recorded.get(item, 0), stored.get(item, 0))}
+        if document.get('review_policy_snapshot') != active_policy or missing_counts:
+            migrate_snapshot(document, previous, missing_counts)
         document['prepared_context'] = prepared_snapshot(document, context)
         _, counts = group_counts(document, active_policy)
         existing = {question['uncertainty_key']: question for question in document['clarifications']

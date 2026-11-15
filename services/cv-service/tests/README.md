@@ -137,9 +137,9 @@ private rejection diagnostics. Log assertions exclude provider prose and answers
 Frontend regressions hide source IDs from saved assistant replies while retaining
 user messages and unrelated technical hashes.
 
-Three-question regressions reject a fourth target even when its field changes,
+Two-question regressions reject a third target even when its field changes,
 rebuild counts from CV history after compact-memory loss/rollover, keep progress
-open through the third question, transition to another topic and finish with gaps.
+open through the second question, transition to another topic and finish with gaps.
 Replication confidence persists with its own field and quote. API projection
 regressions hide fact/answer references in assistant prose while preserving
 structured identifiers, legacy stored messages and literal user text.

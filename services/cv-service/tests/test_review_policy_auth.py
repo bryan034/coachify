@@ -23,15 +23,18 @@ def account_from_profile(session):
 
 def test_trusted_review_policy_and_legacy_default():
     session = {'id': 'synthetic-owner', 'email_verified': True}
-    assert account_from_profile(session)['cv_review_policy'] == {'scope': 'section', 'version': 1}
-    session.update(cv_review_scope='item', cv_review_policy_version=1)
     assert account_from_profile(session)['cv_review_policy'] == {'scope': 'item', 'version': 1}
+    for scope, version in [('section', 1), ('item', 1)]:
+        session.update(cv_review_scope=scope, cv_review_policy_version=version)
+        assert account_from_profile(session)['cv_review_policy'] == {'scope': 'item', 'version': 1}
 
 
 @pytest.mark.parametrize('policy', [
     {'cv_review_scope': 'premium'},
     {'cv_review_scope': 'item', 'cv_review_policy_version': True},
+    {'cv_review_scope': 'section', 'cv_review_policy_version': 2},
     {'cv_review_scope': 'item', 'cv_review_policy_version': 2},
+    {'cv_review_scope': 'item', 'cv_review_policy_version': 3},
 ])
 def test_unrecognised_policy_does_not_grant_access(policy):
     with pytest.raises(HTTPException) as error:

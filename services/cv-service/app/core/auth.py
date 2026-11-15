@@ -2,6 +2,7 @@
 import httpx
 from fastapi import HTTPException, Request
 from fastapi.security import HTTPBearer
+from app.domain.review_policy import effective_policy, validate_policy
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -15,11 +16,11 @@ async def current_account(request: Request, credentials):
         if session.status_code != 200: raise ValueError
         account = session.json()
         if not isinstance(account.get('id'), str) or not account['id'] or account.get('email_verified') is not True: raise ValueError
-        # An older Profile deployment may omit the policy; absence grants only
-        # the default section allowance. Never accept a value from the browser.
+        # Accept older Profile deployments during a rolling upgrade. CV owns
+        # the current question policy, never a browser-supplied scope.
         scope = account.get('cv_review_scope', 'section')
         version = account.get('cv_review_policy_version', 1)
-        if scope not in ('section', 'item') or type(version) is not int or version != 1: raise ValueError
+        if not validate_policy({'scope': scope, 'version': version}): raise ValueError
         response = await request.app.state.profile_client.get('/api/v1/profile', headers=headers)
         if response.status_code == 401: raise HTTPException(401, 'Your session has ended. Sign in again.')
         if response.status_code != 200: raise ValueError
@@ -30,4 +31,4 @@ async def current_account(request: Request, credentials):
     if profile.get('onboarding_complete') is not True:
         raise HTTPException(403, 'Finish your initial setup before using CV review.')
     return {'id': account['id'], 'profile_version': profile.get('version', 0),
-            'authorization': headers['Authorization'], 'cv_review_policy': {'scope': scope, 'version': version}}
+            'authorization': headers['Authorization'], 'cv_review_policy': effective_policy({'scope': scope, 'version': version})}
