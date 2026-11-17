@@ -19,13 +19,7 @@ test('saved CVs retain corrections, require explicit selection and compose manua
 
  const source = path.join(process.cwd(), 'tests/fixtures/synthetic-cv.docx');
  await page.getByLabel('CV document', { exact: true }).setInputFiles(source);
- try { await page.getByRole('button', { name: 'Upload CV', exact: true }).click(); } catch (error) { // DIAG-TEMP
-  console.log('DIAG panels', await page.locator('.cv-upload-panel').count(), JSON.stringify(await page.locator('.cv-upload-panel').allInnerTexts()));
-  console.log('DIAG inputs', JSON.stringify(await page.getByLabel('CV document', { exact: true }).evaluateAll(list => list.map(el => ({ disabled: (el as HTMLInputElement).disabled, files: (el as HTMLInputElement).files?.length })))));
-  console.log('DIAG url', page.url(), 'busy', await page.locator('[aria-busy="true"]').count());
-  console.log('DIAG body', (await page.locator('main').innerText()).replace(/\s+/g, ' ').slice(0, 1800));
-  throw error;
- }
+ await page.getByRole('button', { name: 'Upload CV', exact: true }).click();
  let cvId = '';
  await expect.poll(async () => {
   const value = await (await account.get('/api/v1/cv')).json();
