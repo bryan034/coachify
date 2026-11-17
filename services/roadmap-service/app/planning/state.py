@@ -5,26 +5,52 @@ from elo_shared.runtime import digest
 from elo_shared.milestone_review import removal_needs_review
 from elo_shared.skill_groups import skill_groups
 from app.planning.capacity import Capacity, to_minute
-from app.schemas.roadmap import PlannerConfig
+from app.schemas.roadmap import DISPLAY_FIELDS, SHAPE_FIELDS, PlannerConfig
 
 ASSESSMENT_FIELDS=('id','input_hash','role','target_type','job_skill_gaps','interview_prep_gaps','constraints','groups','priorities','research_coverage','evidence','skill_profile')
 
 def planner_state(row):
     state=row.setdefault('planner',{})
-    for key,value in (('config',None),('candidate',None),('active',None),('outline_candidate',None),('outline_active',None),('month_candidate',None)):state.setdefault(key,value)
+    for key,value in (('config',None),('active',None),('outline_candidate',None),('outline_active',None),('week_candidate',None)):state.setdefault(key,value)
     state.setdefault('confirmations',{})
+    state.setdefault('week_blocks',[])
     state.setdefault('month_blocks',[])
     return state
-def saved_config(state,default_zone=None):
+def reduced_periods(periods):
+    """Profile availability periods as planner minutes. A malformed period is skipped, never guessed."""
+    result=[]
+    for period in periods or []:
+        try:result.append({'start_date':str(period['start_date']),'end_date':str(period['end_date']),'weekly_minutes':round(float(period['weekly_hours'])*60)})
+        except (KeyError,TypeError,ValueError):continue
+    return result
+def with_periods(config,periods):
+    """Reduced periods belong to Profile; the service copies the current ones over anything a client sent."""
+    if periods is None:return config
+    try:return PlannerConfig.model_validate({**config.model_dump(mode='json'),'reduced_periods':reduced_periods(periods)})
+    except ValueError:return config.model_copy(update={'reduced_periods':[]})
+def saved_config(state,default_zone=None,periods=None):
     if state['config'] is None and default_zone:
-        try:return PlannerConfig(time_zone=default_zone,allow_overflow=True)
+        try:return with_periods(PlannerConfig(time_zone=default_zone,allow_overflow=True),periods)
         except ValueError:pass
-    return PlannerConfig.model_validate(state['config']) if state['config'] is not None else PlannerConfig(allow_overflow=True)
+    return with_periods(PlannerConfig.model_validate(state['config']) if state['config'] is not None else PlannerConfig(allow_overflow=True),periods)
+def planning_source_changed(before,after):
+    """Fence publication against owner evidence, evaluation and current availability changes."""
+    def capture(source):
+        return {'input_hash':source.get('input_hash'),'ready':source.get('ready'),
+            'freshness':(source.get('evaluation') or {}).get('freshness','current'),
+            'periods':(source.get('planning_defaults') or {}).get('availability_periods',[])}
+    return digest(capture(before))!=digest(capture(after))
 def config_digest(config):
-    return digest(config.model_dump(mode='json'))
+    return digest(config.model_dump(mode='json',exclude=set(DISPLAY_FIELDS)))
+def shape_digest(config):
+    """Settings that decide what the outline covers. A change here needs the outline reviewed."""
+    return digest(config.model_dump(mode='json',include=set(SHAPE_FIELDS)))
+def schedule_digest(config):
+    """Settings that decide when sessions can be placed. A change here applies from the next week planned."""
+    return digest(config.model_dump(mode='json',exclude={*SHAPE_FIELDS,*DISPLAY_FIELDS}))
 def settings_differ(plan,state):
     """Compares current forms, so a saved plan's older settings format never reads as a change."""
-    return config_digest(PlannerConfig.model_validate(plan['config']))!=config_digest(saved_config(state))
+    return shape_digest(PlannerConfig.model_validate(plan['config']))!=shape_digest(saved_config(state))
 def completed_sessions(plan):
     if not plan:return []
     if isinstance(plan.get('editable_tasks'),list):
@@ -150,52 +176,21 @@ def learning_view(plan,now):
     return {'has_roadmap':True,'roadmap_id':plan['id'],'skills_total':len(steps),'skills_started':sum(s['state'] in ('in_progress','done') for s in steps),
         'skills_done':sum(s['state']=='done' for s in steps),'steps':steps}
 
-def candidate_blockers(state,source,now):
-    """Reasons the current preview can no longer be applied as shown."""
-    candidate=state['candidate'];active=state['active'];blockers=[]
-    if not candidate:return blockers
-    add=lambda code,message:blockers.append({'code':code,'message':message})
-    if candidate.get('base_active_id')!=(active or {}).get('id'):
-        add('active_changed','Your active roadmap changed after this preview was prepared. Prepare a fresh preview.')
-    if source.get('availability')=='unavailable':
-        add('sources_unavailable','Your CV and Career goal cannot be checked right now. Retry before accepting.')
-    elif not source.get('ready') or candidate['assessment_hash']!=source.get('input_hash'):
-        add('inputs_changed','Your CV or Career goal changed after this preview was prepared. Generate a fresh plan.')
-    if source.get('evaluation',{}).get('freshness','current')!='current':
-        add('assessment_required','Update your skill evaluation before accepting this roadmap.')
-    if settings_differ(candidate,state):
-        add('settings_changed','Your settings changed after this preview was prepared. Generate a fresh plan.')
-    if candidate.get('revision_review'):
-        add('revision_review_required','Review proposed tasks that may duplicate saved or removed work before accepting this roadmap.')
-    capacity=Capacity(PlannerConfig.model_validate(candidate['config']),now)
-    # Student-retained sessions may already be in the past; their timing is an
-    # explicit saved choice. Only newly proposed sessions can expire the preview.
-    prior_ids={a['id'] for a in (active or {}).get('assignments',[])}
-    if any(a['status']=='scheduled' and a['id'] not in prior_ids and session_has_passed(a,capacity) for a in candidate['assignments']):
-        add('plan_expired','A session in this preview has already passed. Generate a fresh plan.')
-    return blockers
-
 def revision_signals(state,source,now):
-    candidate=state['candidate'];active=state['active'];signals=[]
+    """Changes since the outline was accepted that the user may want a revised outline for."""
+    outline=state['outline_active'];active=state['active'];signals=[]
     add=lambda kind,message:signals.append({'kind':kind,'message':message})
-    plan=candidate or active
-    if not plan:return signals
-    if digest(state['confirmations'])!=plan['confirmations_hash']:
-        add('evidence','You answered experience questions after this plan was prepared.')
-    if candidate or not active:return signals
-    if settings_differ(active,state):
-        add('settings','Your study settings changed since this roadmap was accepted.')
-    if source.get('input_hash') and active['assessment_hash']!=source['input_hash']:
+    basis=state['outline_candidate'] or outline or active
+    if not basis:return signals
+    if digest(state['confirmations'])!=basis['confirmations_hash']:
+        add('evidence','You answered experience questions after this roadmap was prepared.')
+    if state['outline_candidate']:return signals
+    if settings_differ(basis,state):
+        add('settings','Your timeline, weekly hours or learning focus changed since this roadmap was prepared.')
+    if source.get('input_hash') and basis['assessment_hash']!=source['input_hash']:
         add('evidence','Your CV, skills or Career goal changed since this roadmap was prepared.')
-    capacity=Capacity(PlannerConfig.model_validate(active['config']),now)
-    scheduled=[a for a in active['assignments'] if a['status']=='scheduled']
-    done=completed_sessions(active)
-    if len(done)>active.get('completed_at_generation',0):
-        add('progress',f"You've completed {len(done)-active.get('completed_at_generation',0)} session(s) since this roadmap was prepared.")
-    if any(session_has_passed(a,capacity) for a in scheduled):
-        add('progress','Some sessions passed without being completed.')
-    if not scheduled or not any(not session_has_passed(a,capacity) for a in scheduled):
-        add('next_week','Your detailed sessions are finished or have passed. Plan your next week.')
+    if active and not outline:
+        add('progress','This roadmap was made before weekly planning. Generate an updated roadmap to plan week by week; your progress is kept.')
     return signals
 
 def retry_body(row,kind):
@@ -203,26 +198,68 @@ def retry_body(row,kind):
     if last.get('status')=='failed' and last.get('kind','message')==kind:return last.get('body')
     return None
 
+def week_overview(state,config,now):
+    """Every week of the outline with its objective and whether its tasks exist yet."""
+    from app.planning.tasks import ensure_tasks
+    from app.planning.weeks import day_of, week_is_planned
+    from datetime import timedelta
+    outline=state['outline_candidate'] or state['outline_active']
+    if not outline or not outline.get('weeks'):return []
+    capacity=Capacity(config,now);current=capacity.week(capacity.today)
+    tasks=[t for t in ensure_tasks(copy.deepcopy(state['active'])) if not t.get('removed')] if state['active'] else []
+    result=[]
+    for item in sorted(outline['weeks'],key=lambda w:w['week_start']):
+        week=day_of(item['week_start']);last=week+timedelta(days=6)
+        members=[t for t in tasks if any(week<=day_of(s['date'])<=last for s in t.get('schedule',[]))]
+        planned=bool(members) or (bool(state['active']) and week_is_planned(state,week,config,now) and week>=current)
+        status='past' if last<capacity.today else 'planned' if planned else 'open' if week<=current else 'projected'
+        result.append({**item,'start_date':max(week,capacity.start_date).isoformat(),'end_date':min(last,capacity.target or last).isoformat(),'status':status,
+            'tasks_total':len(members),'tasks_completed':sum(t['status']=='completed' for t in members),
+            'planned_minutes':sum(s['duration_minutes'] for t in members for s in t.get('schedule',[]) if week<=day_of(s['date'])<=last)})
+    return result
+
+def preview_sessions(state,now):
+    """The week preview as to-do rows, built on a copy: new tasks and carried work at their proposed times."""
+    from app.planning.tasks import ensure_tasks, project_assignments
+    from app.planning.sessions import session_views
+    from app.planning.weeks import publish_outline
+    candidate=state['week_candidate'];outline=state['outline_candidate'] or state['outline_active']
+    if not candidate or not outline:return []
+    plan=publish_outline(outline,state['active']);tasks={t['id']:t for t in ensure_tasks(plan)}
+    shown=set()
+    for entry in candidate['carryover']:
+        if entry['action'] in ('carry','split') and entry['task_id'] in tasks:
+            tasks[entry['task_id']]['schedule']=copy.deepcopy(entry['schedule']);shown.add(entry['task_id'])
+    plan['editable_tasks'].extend(copy.deepcopy(candidate['tasks']));shown.update(t['id'] for t in candidate['tasks'])
+    project_assignments(plan)
+    return [row for row in session_views(plan,now) if row['task_id'] in shown and candidate['start_date']<=row['date']<candidate['end_exclusive']]
+
 def planner_view(row,source,now,default_zone=None):
     state=planner_state(row)
+    operation=row.get('pending') or row.get('last_operation') or {}
+    if operation.get('kind')=='outline_generate' and operation.get('body',{}).get('auto_accept'):
+        # Checkpointed drafts are private working data during automatic creation,
+        # including after a timeout. Only published tasks belong in this response.
+        state=copy.deepcopy(state)
+        state['outline_candidate']=None;state['week_candidate']=None
     # Legacy snapshots are converted only in the response. A read never saves an
     # upgrade; the next explicit task mutation persists the canonical task data.
     from app.planning.tasks import ensure_tasks, project_assignments, schedule_warnings
     from app.planning.sessions import session_views
-    active,candidate=copy.deepcopy(state['active']),copy.deepcopy(state['candidate'])
-    for plan in (active,candidate):
-        if plan is not None:
-            ensure_tasks(plan)
-            project_assignments(plan)
-    config=saved_config(state,default_zone)
+    from app.planning.weeks import planning
+    active=copy.deepcopy(state['active'])
+    if active is not None:
+        ensure_tasks(active)
+        project_assignments(active)
+    config=saved_config(state,default_zone,(source.get('planning_defaults') or {}).get('availability_periods'))
     capacity=Capacity(config,now,completed_sessions(active))
     return {'config':config.model_dump(mode='json'),'config_saved':state['config'] is not None,
-        'runway':capacity.report(allow_past_start=bool(active)),'inputs':plan_inputs(source),
-        'candidate':candidate,'candidate_review':plan_review(candidate,now),'candidate_blockers':candidate_blockers(state,source,now),
+        'runway':capacity.report(allow_past_start=bool(active or state['outline_active'])),'inputs':plan_inputs(source),
         'active':active,'active_review':plan_review(active,now),
         'outline_candidate':copy.deepcopy(state['outline_candidate']),'outline_active':copy.deepcopy(state['outline_active']),
-        'month_candidate':copy.deepcopy(state['month_candidate']),'month_blocks':copy.deepcopy(state['month_blocks']),
+        'week_candidate':copy.deepcopy(state['week_candidate']),'week_blocks':copy.deepcopy(state['week_blocks']),'month_blocks':copy.deepcopy(state['month_blocks']),
+        'weeks':week_overview(state,config,now),'week_planning':planning(state,now,config),'preview_sessions':preview_sessions(state,now),
         'task_warnings':schedule_warnings(active,now) if active else [],
-        'active_sessions':session_views(active,now) if active else [],'candidate_sessions':session_views(candidate,now) if candidate else [],'confirmations':state['confirmations'],
-        'signals':revision_signals(state,source,now),'retry_generate':retry_body(row,'generate'),
-        'retry_outline':retry_body(row,'outline_generate'),'retry_month':retry_body(row,'month_generate')}
+        'active_sessions':session_views(active,now) if active else [],'confirmations':state['confirmations'],
+        'signals':revision_signals(state,source,now),
+        'retry_outline':retry_body(row,'outline_generate'),'retry_week':retry_body(row,'week_generate')}

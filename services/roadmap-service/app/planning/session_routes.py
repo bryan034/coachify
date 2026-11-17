@@ -3,8 +3,8 @@ import copy
 from uuid import NAMESPACE_URL, uuid5
 from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
-from elo_shared.runtime import Problem, authenticated
-from app.planning.sessions import backlog_plan, calendar, free_times, move_session, new_task, save_session, skip_session
+from elo_shared.runtime import Problem, authenticated, stamp
+from app.planning.sessions import locate, check_time, place, record_edit, task_day, backlog_plan, calendar, free_times, new_task, save_session, skip_session
 from app.planning.state import planner_state
 from app.planning.tasks import ensure_tasks, project_assignments
 from app.schemas.planner import Workspace
@@ -40,8 +40,27 @@ def register_session_routes(app,context,mutate):
         def apply(row,source):
             plan=active(row);capacity=calendar(plan,app.state.clock())
             if len({item.session_id for item in body.moves})!=len(body.moves):raise Problem('Move each task only once.',422,'validation')
-            # Each move is checked against the ones before it, so a batch cannot overlap itself.
-            for item in body.moves:move_session(plan,capacity,item.session_id,item.date,item.start_time)
+            # Release all moving slots before validating the final schedule, so swaps
+            # are valid and every destination is checked against the final batch.
+            prepared=[]
+            for item in body.moves:
+                task,index=locate(plan,item.session_id)
+                if task['status']=='completed':raise Problem('A finished task cannot be moved. Untick it first.',409,'session_completed')
+                minutes=task['estimated_minutes'] if index is None else task['schedule'][index]['duration_minutes']
+                prepared.append((item,task,index,minutes,task_day(task,index),copy.deepcopy(task.get('schedule') or [])))
+            moving={(task['id'],index) for _,task,index,_,_,_ in prepared}
+            final=copy.deepcopy(plan)
+            for task in ensure_tasks(final):
+                task['schedule']=[slot for index,slot in enumerate(task.get('schedule') or []) if (task['id'],index) not in moving]
+                if (task['id'],None) in moving:task['anytime_date']=None
+            for item,task,index,minutes,old_day,previous in prepared:
+                check_time(final,capacity,{'id':'batch:'+item.session_id},None,item.date,item.start_time,minutes,strict=True)
+                ensure_tasks(final).append({'id':'batch:'+item.session_id,'title':task['title'],'schedule':[{'date':item.date.isoformat(),'start_time':item.start_time,'duration_minutes':minutes}]})
+            for item,task,index,minutes,old_day,previous in prepared:
+                place(task,index,item.date,item.start_time,minutes,update_estimate=False)
+                if old_day<capacity.today.isoformat():
+                    task['backlog_moved_at']=stamp()
+                record_edit(task,{'schedule':previous,**({'anytime_date':old_day} if index is None else {})})
             project_assignments(plan);return row
         return await mutate(body,account,apply,operation='sessions.move')
 

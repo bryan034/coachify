@@ -9,12 +9,12 @@ Key=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_lengt
 Title=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160)]
 def validate_task_title(value: str) -> str:
     """Enforce the word limit on new or changed titles, not historical reads."""
-    if len(value.split()) > 19:
-        raise ValueError('Task titles must contain at most 19 whitespace-separated words.')
+    if len(value.split()) > 11:
+        raise ValueError('Task titles must contain at most 11 whitespace-separated words.')
     return value
 
 TaskTitle=Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160),
-    AfterValidator(validate_task_title),Field(description='One to 19 whitespace-separated words, up to 160 characters.')]
+    AfterValidator(validate_task_title),Field(description='One to 11 whitespace-separated words, up to 160 characters.')]
 
 class TaskSlot(Contract):
     date:date
@@ -44,6 +44,7 @@ class SelfRating(Contract):
 class TaskDefinition(Contract):
     title:TaskTitle
     instructions:Text
+    description:Text|None=Field(default=None,description='Detailed numbered steps, practical guidance and how to check the result; null for older tasks.')
     completion_outcome:Text
     estimated_minutes:int=Field(strict=True,ge=1,le=60000)
     requirement_refs:list[Key]=Field(default_factory=list,max_length=30)
@@ -54,6 +55,7 @@ class TaskDefinition(Contract):
 class TaskChanges(Contract):
     title:TaskTitle|None=None
     instructions:Text|None=None
+    description:Text|None=None
     completion_outcome:Text|None=None
     estimated_minutes:int|None=Field(default=None,strict=True,ge=1,le=60000)
     requirement_refs:list[Key]|None=Field(default=None,max_length=30)
@@ -76,12 +78,6 @@ class ChangeTaskStatus(Mutation):
     task_id:Key
     status:Literal['not_started','in_progress','completed']
     evidence_note:str|None=Field(default=None,max_length=2000)
-class ReconcileDecision(Contract):
-    task_id:Key
-    decision:Literal['keep','discard']
-class ReconcileTasks(Mutation):
-    candidate_id:Key
-    decisions:list[ReconcileDecision]=Field(min_length=1,max_length=100)
 
 class SavedTaskObject(Contract):
     """A typed view over saved data, retaining older and future extra fields."""
@@ -101,6 +97,7 @@ class SavedTaskObject(Contract):
 class TaskPrevious(SavedTaskObject):
     title:str|None=None
     instructions:str|None=None
+    description:str|None=None
     completion_outcome:str|None=None
     estimated_minutes:int|None=None
     requirement_refs:list[str]|None=None
@@ -149,6 +146,7 @@ class EditableTask(Contract):
     id:Key
     title:str
     instructions:Text
+    description:Text|None=Field(default=None,description='Detailed numbered steps, practical guidance and how to check the result; null for older tasks.')
     completion_outcome:Text
     estimated_minutes:int=Field(strict=True,ge=1,le=60000)
     requirement_refs:list[str]=Field(default_factory=list)
@@ -176,6 +174,8 @@ class EditableTask(Contract):
     original:TaskOriginal|None=None
     self_rating:SelfRating|None=None
     backlog_moved_at:str|None=None
+    week_start:str|None=Field(default=None,description='The planned week this generated task was written for.')
+    deferred_week:str|None=Field(default=None,description='Set when a week review left this unfinished task in the backlog; it is offered again next week.')
 
 class ReadinessReason(Contract):
     code:str

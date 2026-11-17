@@ -7,69 +7,103 @@ explicit development HTTP mode. Local testing can share the 16K-context
 Providers receive JSON Output plus the schema in the prompt;
 all responses still undergo the existing Pydantic and domain checks. Local calls
 serialize per service instance and use a 180-second HTTP timeout; operations use
-240-second budgets and 270-second leases, as do cloud operations.
+240-second weekly budgets; combined outline-plus-first-week generation has a 420-second budget. Checkpoints preserve each operation’s full lease with a 30-second margin for both local and cloud operations.
 
 
 ## Product direction — 4 November 2026
 
-The timed roadmap supersedes the 30 October chat-first direction and its "no exact time slots" limit. `/roadmap` is now Configure → Generate → Review. Configure is a fixed planner form. A button opens an optional chat helper, which guides the user through the required details and fills in the form; after a plan exists, the same helper requests edits. A Career goal and admissible Assessment evidence are required, and a saved current Assessment is reused for planning. Missing or outdated evaluations require an explicit evaluation command before generation. Evidence may be a selected extracted CV plus saved Profile declarations, or saved Profile declarations alone when no CV is selected.
+The timed roadmap supersedes the 30 October chat-first direction and its "no exact time slots" limit. `/roadmap` is now Configure → Create roadmap → Tasks. Configure is a fixed planner form. A button opens an optional chat helper, which guides the user through the required details and fills in the form; after a plan exists, the same helper requests edits. A Career goal and admissible Assessment evidence are required, and a saved current Assessment is reused for planning. Missing or outdated evaluations require an explicit evaluation command before generation. Evidence may be a selected extracted CV plus saved Profile declarations, or saved Profile declarations alone when no CV is selected.
 
 Jira references: G01/SCRUM-34, R01/SCRUM-41, R02–R09/SCRUM-42–49, E01–E07/SCRUM-50–56 and T01–T06/SCRUM-57–62. Retain existing identifiers/hierarchy/statuses. These stories were not re-read for this slice because Jira was not accessible; check them for conflicts.
 
-## Legacy weekly flow
+## Configure and create
 
-This flow remains for existing workspaces until an outline is created. The
-outline/month API is described below.
+The fixed planner and optional settings chat collect the confirmed schedule. Chat
+patches are validated and an invalid patch leaves settings unchanged. Initial
+roadmap creation generates the weekly outline and one detailed week, then automatically
+activates both. The UI displays scheduled tasks without the projected objective timeline. The old plan/month generation and roll-forward
+routes are retired. Existing accepted plans and month blocks remain readable.
 
-1. **Configure.** The planner form has fixed sections: Timeline and Study time (required), Blackout days and times, and Learning focus (optional). It is the confirmed record and shows the goal and skills sent to the model. The chat helper asks for whatever `runway.issues` reports as missing (`missing_target`, `no_budget`, `no_blocks`), then offers the optional details once. It proposes settings through a validated patch; an invalid patch changes nothing and is explained. Chat never starts generation.
-2. **Runway.** `POST /planner/runway` calculates calendar time and usable hours without a model call. Generation is disabled, with reasons, when the goal or CV is missing, dates are invalid, no usable time exists or the model is unavailable. Incomplete interview research needs the existing explicit partial choice.
-3. **Generate.** One durable operation reuses or runs Assessment, then asks the model for a structured `PlanDraft`, validates it and stores it as a candidate. Reads make no model calls. Stages are `assessing`, `writing` and `correcting`.
-4. **Review.** Shows the next assignment, remaining calendar time and study hours, a milestone timeline with a target-date marker, the projected outcome, work beyond the deadline, gaps and confirmation questions. The user accepts, or returns to configuration with the candidate retained.
-5. **Revise.** Reads report signals for changed settings, progress, evidence or a finished week. The user requests a preview, from a button or the chat helper, and nothing applies until accepted.
+## Weekly planning
 
-## Outline and monthly previews
+Outline generation makes at most two domain-generation attempts. The second receives
+validation errors and the previous output. If invalid assessment requirement IDs
+remain, the backend performs recovery on that second draft without a third outline
+model call: it removes invalid gap/exclusion rows and affected dependent milestones,
+weeks, routines and beyond-deadline rows. Shared valid work remains linked to valid
+gaps. Assessment data is never changed and IDs are never guessed.
 
-The outline/month API is an additional reviewed path alongside the existing weekly
-plan endpoints. `POST /planner/outlines/generate` starts a leased, source-checked
-operation. The model produces only milestones, gap resolution intentions and
-optional routine rules; it does not create assignments. The owner can edit the
-complete preview via `PATCH /planner/outlines/{id}` and explicitly accept it with
-`POST /planner/outlines/{id}/accept`. Validation checks provenance, prerequisite
-graph and order, dates, milestone effort and capacity. A material unknown can
-carry diagnostic intent before a diagnostic task exists. Routine rules specify
-weekdays, duration, topic progression and difficulty, link to a milestone, and
-are checked against available windows and weekly budget. Outline content is bounded
-to 48 KiB in JSON, so ordinary edits fit the 64 KiB request limit. Their effort is included
-in the milestone estimate. A conflict requires an adjustment rather than adding
-hours. Revisions retain accepted outline history and never rewrite active tasks;
-affected future month blocks are marked for review.
+A recovered outline must pass all remaining scheduling, structure, evidence and
+progress-preservation checks. No usable remainder, ambiguous duplicate identities,
+or removal of milestones with saved work means recovery fails safely. Explicit
+`partial_review` metadata records omissions and uncovered assessment priorities;
+only those recorded omissions permit partial weekly/priority coverage. The UI shows
+them before acceptance and retains the notice on the accepted roadmap. Recovery
+replaces whole-plan outcome claims with a partial-coverage explanation. Editing and
+accepting a partial outline still use the ordinary authenticated validation and CAS
+paths. Provider transport/JSON-format repair handling remains unchanged.
 
-`POST /planner/months/generate` starts an explicit preview for an accepted outline
-and calendar month. The local interval is clipped to the remaining runway, with
-an exclusive end boundary. Rules expand to dated tasks using stable rule/date IDs.
-Generation reserves saved work, checks weekly capacity across month boundaries,
-and does not recreate removed routine tasks. `POST /planner/months/{id}/accept`
-rechecks source, outline, progress and schedule and publishes the complete preview
-as canonical editable tasks. Generating an accepted month requires an explicit `revision` request; its
-preview preserves started, completed, edited, removed and note-bearing work.
-Failed operations retain earlier work. Previewed tasks are bounded to 128 KiB
-and the active plan to 512 KiB to keep the saved projection manageable. Workspace exposes `outline_candidate`,
-`outline_active`, `month_candidate` and `month_blocks` alongside legacy fields.
-Existing weekly endpoints remain available for legacy-only workspaces; once an
-outline exists, legacy generation and acceptance reject new requests. The outline
-path requires acceptance before monthly generation. Reads do not generate tasks.
+
+`POST /planner/outlines/generate` generates a projected weekly journey and the first
+week's detailed tasks in one leased operation. The UI sends `auto_accept: true` for
+Create roadmap, updates and regeneration: the operation validates and activates the
+outline and first week together, records a history snapshot and pace baseline, and
+returns the active tasks without a review step. Updates whose weeks are already
+scheduled activate the revised outline while keeping those tasks; they do not require
+a redundant first-week preview. Each worker lease captures its own snapshot so a
+publication retry cannot mix a prior capture with newly generated outline/week data.
+First-week or activation failure
+preserves the saved roadmap, clears failed candidates and retains the exact retry
+request. Source freshness, bearer revalidation, workspace CAS and receipts still apply.
+Clients omitting `auto_accept` retain the preview and explicit
+`POST /planner/outlines/{id}/accept` flow for compatibility. Outline editing invalidates
+that first-week preview. `/discard` removes only the preview.
+
+`POST /planner/weeks/generate` takes `week_start`, optional `feedback` (workload,
+difficulty and note), and `revision` for an already accepted week. The configured
+planning weekday defaults to the last day of a Monday-start week. Planning also opens
+when all current-week tasks are complete. Missed planning offers the current week,
+clipped to today; no-progress weeks can still be planned and reviewed.
+
+The model writes actionable titles under 12 whitespace-separated words (at most 11, up to 160 characters), brief instructions, a required `description` with detailed numbered steps and practical completion guidance, observable criteria and effort. Description is stored on canonical editable tasks and returned in week previews, task reads and session views. New or edited task titles use the same word limit; historical titles remain readable. Older tasks without descriptions return null; no model-generated guidance is retroactively invented. Descriptions may be edited through the existing task edit API and retained in its change history. The backend
+places sessions within study blocks, then optional extra time (09:00–23:00 by default),
+respecting blackouts, timezone/DST, existing work, session limits, proportional breaks,
+daily limits, rest days, lead time and Profile reduced availability. Weekly hours are
+a target; previews explain partial-week, saved-work and capacity shortfalls. Breaks do
+not count as study. The extra-time option is enabled for new accounts. Backup blocks
+are retired: enabled saved backup blocks become ordinary study blocks; disabled ones
+are omitted on read.
+
+Unfinished work has explicit carry, split, defer or drop proposals. The user can review
+choices at `/planner/weeks/{id}/carryover`, then `/accept` or `/discard`. A split keeps
+the original ID for this week's portion and creates a linked deferred remainder, so
+completing the first portion cannot discard the rest. Notes and edits stay on the
+original task; split history links the remainder. Future objective changes are shown
+with previous values and applied only on acceptance, retaining outline history.
+
+Mutation receipts and workspace CAS protect retries and concurrent writes. A week
+preview depends on its outline, scheduling settings, target-week tasks and unfinished
+work; unrelated progress leaves it valid. Accepted future week revisions replace only
+untouched future generated tasks, preserving completed, started, edited and note-bearing
+work. Legacy month blocks are read for coverage; there are no month generation routes.
+Old accepted plans remain readable and gain weekly objectives through outline generation.
+Reads never generate tasks. Task completion never changes assessed skill mastery.
+
+Settings live under Settings → Roadmap; core dates, hours, blocks, breaks and planning
+day remain on the roadmap form. Appearance offers light, dark and system modes, saved
+per browser; system changes are followed while the app is open.
 
 ## Capacity (`app/planning/capacity.py`)
 
 This module is the only source of runway numbers; the frontend displays its results.
 
 - The range is start date through target date, both inclusive. The target is the last study day. It must follow the start date, within one year.
-- Weeks run Monday to Sunday in the user's IANA time zone. Dates are real dates, so a partial week has no proration and still has the weekly cap.
-- A date is available only inside its blocks. Overlaps merge per date, so they count once, and preferred time takes precedence over backup. Blackouts, time already passed today, local minutes skipped by daylight saving and completed sessions are removed. Repeated local hours count once.
-- A week's usable time is `min(cap - completed minutes, merged minutes)`. Preferred time, extra backup capacity and usable time under the current toggle are reported separately.
+- Weeks use the configured start day (Monday by default) in the user's IANA time zone. Partial weeks use remaining schedulable time and explain any reduction from the weekly target.
+- A date is available only inside its blocks. Overlaps merge per date, so they count once, and preferred time takes precedence over extra time. Blackouts, time already passed today, local minutes skipped by daylight saving and completed sessions are removed. Repeated local hours count once.
+- A week's usable time is `min(cap - completed minutes, merged minutes)`. Preferred time, extra-time capacity and usable time are reported separately.
 - A duration resolves to a target date, with months clamped to the month's end. The target is authoritative for planning; a matching duration is reported so both controls stay synchronised.
 
-Non-zero Profile reduced periods appear as a notice and do not change capacity. Zero-hour periods can be added as a daily blackout over that range.
+Current Profile reduced periods lower the weekly target when enabled; zero-hour periods remove their affected dates. Publication rechecks current availability and evaluation freshness, even when the evidence hash has not changed.
 
 ### Blackouts
 
@@ -83,11 +117,11 @@ Non-zero Profile reduced periods appear as a notice and do not change capacity. 
 
 ## Model ownership and validation
 
-The model owns gaps, priorities, prerequisite order, effort, milestones, assignments and the deadline outcome. It receives the goal, Assessment outcomes and evidence, completed work, self-reported confirmations, settings, exact windows for the first planning week and per-week capacity for the rest. The first planning week is the first Monday-to-Sunday week with usable capacity.
+The model owns gaps, priorities, prerequisite order, effort, milestones, task content and the deadline outcome. Milestone estimates include already saved work; completed effort is subtracted once when calculating remaining scope. The backend owns session placement. It receives the goal, Assessment outcomes and evidence, completed work, self-reported confirmations, settings, exact windows for the first planning week and per-week capacity for the rest. The first planning week is the first configured planning week with usable capacity.
 
 `app/planning/validator.py` returns every error, and the errors plus the rejected output go back to the model, for at most three attempts in total. A failure leaves the active plan, any earlier candidate and settings unchanged. Checks:
 
-- **Assignments:** first-week dates, inside one eligible window, no overlap, not overlapping a blackout, not past and not after the target, within the week's remaining budget, and a known milestone. Backup needs permission and no free preferred window that could hold the session.
+- **Assignments:** first-week dates, inside one eligible window, no overlap, not overlapping a blackout, not past and not after the target, within the week's remaining budget, and a known milestone. Extra time requires permission; preferred study blocks are filled first.
 - **Milestones:** unique keys, valid windows inside the runway, known acyclic prerequisites finishing first, assignment minutes within effort, and retained if they have completed sessions. For every date range, the remaining effort of milestones wholly inside it must fit usable capacity.
 - **Gaps:** `confirmed_gap` needs an Assessment `confirmed_shortfall` or a self-reported "no experience". `uncertain` and `partial` are `unknown`. Supported requirements, satisfied alternatives and non-learning constraints are not study gaps. Inferred requirements are labelled, explained and `unknown` unless the user says otherwise. A material unknown needs a diagnostic of at most 30 minutes or a confirmation question.
 - **Competence:** job-skill outcomes may carry Assessment's planning estimate (`competence_score`, where 10 means the evidence meets the goal's level), `demonstrated_score`/`required_score` and linked `profile_skills`. The model uses them to size effort and order work only; they never change a gap's status.
@@ -115,11 +149,11 @@ Existing `roadmap-v2` assignments are converted in memory for reads, with no mig
 
 Split-session compatibility keys are generated without colliding with primary assignment keys. Task and session IDs remain stable; secondary assignment keys may change on projection, including for old snapshots. No stored snapshot is migrated by a read.
 
-Revisions retain student-created, edited, started, completed and removed tasks and related dependency records. Model-generated keys do not establish semantic identity. A preview flags new work that might repeat student-created, removed, edited, started or completed work, including reused protected keys; `/planner/tasks/reconcile` records an explicit keep/discard decision before acceptance. A changed active plan invalidates an earlier preview. This conservative review can include work that is actually unrelated.
+Revisions retain student-created, edited, started, completed and removed tasks and related dependency records. Model-generated keys do not establish semantic identity. Week validation rejects repeated saved task titles, including completed or removed work. The user reviews the generated tasks and every carry/split/defer/drop choice before acceptance. Changes to carried work or the target week invalidate that preview; unrelated progress does not.
 
 ## Reading a legacy generated roadmap
 
-`POST /planner/generate` returns `{version, operation}` straight away. Poll `GET /progress` until `operation.status` is `succeeded` or `failed`, then read `GET /workspace`: the preview is `planner.candidate`, with `planner.candidate_review` and `planner.candidate_blockers`. `POST /planner/accept` makes it `planner.active`. `roadmap.yaml` and `models/roadmap-plan.schema.json` publish these shapes.
+`POST /planner/outlines/generate` and `/planner/weeks/generate` return `{version, operation}`. Poll `GET /progress`, then read `GET /workspace` for `planner.outline_candidate` and `planner.week_candidate`. The API contracts publish saved roadmap shapes.
 
 Each `assignments` item is one to-do: `date`, `start_time`, `duration_minutes`, `task`, `completion_criterion` and `status`, changed with `POST /planner/assignments/status`. `skill_gap_ids` contains a single unambiguous current skill ID or an empty list when an explicit link is absent, stale or ambiguous; older responses without this field can use an unambiguous legacy gap or milestone association. Student changes take precedence over generated source links. Only `first_planning_week` has dated sessions. Later work exists only as milestones with `projected_start` and `projected_end`, until the user plans the next week.
 
@@ -141,11 +175,11 @@ Workspace `active` and `draft` remain as older untimed plans, shown read-only un
 
 ## Configuration and limits
 
-See setup for required service-scoped credentials. All model calls go through the OpenAI Python SDK with the service's own base URL, key and model. `ROADMAP_LLM_TOKEN_PARAMETER` selects `max_completion_tokens` for models that reject `max_tokens`. Planning operations have a total 240-second budget, including Assessment polling and model calls. Assessment is polled at most 60 times at two-second intervals (120 seconds of waiting plus request time), stopping early on completion or failure. Plan calls allow 24,000 output tokens and up to three validation attempts, subject to the overall operation deadline. Other limits are unchanged: 55-second cloud HTTP calls (local limits above), three worker slots, one operation per owner, 64 KiB requests, 1 MiB upstream responses and 250,000-byte model contexts. Overflow is explicit, not silent truncation.
+See setup for required service-scoped credentials. All model calls go through the OpenAI Python SDK with the service's own base URL, key and model. `ROADMAP_LLM_TOKEN_PARAMETER` selects `max_completion_tokens` for models that reject `max_tokens`. Weekly planning operations have a total 240-second budget; combined outline-plus-first-week operations have 420 seconds, including Assessment polling and model calls. Assessment is polled at most 60 times at two-second intervals (120 seconds of waiting plus request time), stopping early on completion or failure. Plan calls allow 24,000 output tokens. Outlines use two domain-generation attempts followed by deterministic invalid-ID recovery; weeks retain up to three attempts, subject to the overall operation deadline. Other limits are unchanged: 55-second cloud HTTP calls (local limits above), three worker slots, one operation per owner, 64 KiB requests, 1 MiB upstream responses and 250,000-byte model contexts. Overflow is explicit, not silent truncation.
 
 ## Remaining scope
 
-No external calendar or course integrations, automatic revision without a user request, scheduled reviews, actual-time recording, conversation continuation or modelled non-zero reduced periods. The frontend supports outline and month reviews, task editing, period views, session scheduling and backlog proposals. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.
+No external calendar or course integrations, automatic revision without a user request, scheduled reviews, actual-time recording, conversation continuation. The frontend supports weekly outline and task reviews, task editing, period views, session scheduling and backlog proposals. Live-model plan quality and effort estimates have not been evaluated, and the local 16K-context model is unlikely to fit full planning.
 
 
 ## Saved evaluation handoff
@@ -160,8 +194,8 @@ truncate the authoritative saved evidence.
 Roadmap never starts a missing/outdated Assessment automatically. The UI offers Evaluate
 skills or Update evaluation, with independent freshness, progress and completeness indicators.
 If an explicit evaluation is already pending/running, Roadmap can reconnect with at most 60
-polls at two-second intervals. The total operation budget remains 240 seconds for cloud and
-local models; Assessment's timeouts are unchanged. Publication rechecks the exact source
+polls at two-second intervals. The operation budgets are 240 seconds for a week and 420 seconds for a combined
+outline and first week for cloud and local models; Assessment's timeouts are unchanged. Publication rechecks the exact source
 fingerprint, and accepting a preview requires a current evaluation and unchanged inputs.
 
 ### Roadmap views and session planning
@@ -181,3 +215,22 @@ wording is retained for restoration. Notes and ratings never change assessed ski
 explicit move applies a proposal. Moves are validated together against the saved
 schedule and capacity. Checkpoint reached timestamps are explicit user reports,
 separate from demonstrated milestone outcomes.
+
+### Scheduling and retry invariants
+
+Runway calculations, routine placement, week placement, fixed-slot acceptance and
+strict session moves share deterministic scheduling constraints. Explicit manual
+detail edits retain the existing conflict-warning behaviour. Free-time and backlog
+proposals honour the extra-time opt-in. Batch moves validate the final schedule,
+including swaps, without retaining the old slots as false conflicts.
+
+Anytime tasks consume their day/week effort budget without occupying invented clock
+times. Weekly analytics count only segments belonging to the week being summarised.
+Split work retains notes on the original portion and records a linked remainder;
+dependents require that remainder before the complete prerequisite is considered done.
+Unfinished-work overflow fails explicitly rather than silently omitting tasks.
+
+Explicit evidence confirmation uses stable proposal content as its identity. Unrelated
+progress does not reoffer the same confirmed evidence, and an exact confirmation retry
+checks the local receipt before making another Profile write. Completion alone never
+submits evidence or changes skill estimates.

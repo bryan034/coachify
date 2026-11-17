@@ -32,3 +32,9 @@ describe('roadmap calendar', () => {
   expect(clockRange('23:00', 60)).toBe('23:00–24:00');
  });
 });
+
+it('uses the configured Sunday start across month boundaries', () => {
+ expect(weekStart('2030-01-09',6)).toBe('2030-01-06');
+ expect(weekDates('2030-01-09',6)[6]).toBe('2030-01-12');
+ expect(monthWeeks('2030-01-09',6)[0]).toBe('2029-12-30');
+});

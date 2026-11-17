@@ -77,8 +77,8 @@ export function hourWidths(base: number, hovered: number | null) {
 }
 
 /** Where the week stands: tasks done, tasks due by the end of today, and hours against the weekly goal. */
-export function weekSummary(sessions: Session[], day: string, today: string, goal: number) {
- const dates = weekDates(day), items = sessions.filter(item => dates.includes(item.date));
+export function weekSummary(sessions: Session[], day: string, today: string, goal: number, startDay = 0) {
+ const dates = weekDates(day, startDay), items = sessions.filter(item => dates.includes(item.date));
  const done = items.filter(isDone), due = items.filter(item => item.date <= today);
  const doneMinutes = sum(done), planned = sum(items);
  const scheduled = Math.min(Math.max(planned, doneMinutes), goal || planned);

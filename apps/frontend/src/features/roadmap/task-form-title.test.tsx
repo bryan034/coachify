@@ -10,9 +10,9 @@ it('shows and enforces the word limit in the redesigned new-task form', () => {
  const empty = blankDraft(null);
  const view = render(<TaskForm {...base} mode="new" draft={{ ...empty, title: Array(20).fill('word').join(' ') }} base={empty} />);
  const form = screen.getByRole('group', { name: 'New task' });
- expect(within(form).getByText('20 of 19 words')).toBeVisible();
+ expect(within(form).getByText('20 of 11 words')).toBeVisible();
  expect(within(form).getByRole('button', { name: 'Add task' })).toBeDisabled();
- expect(within(form).getByText('Use at most 19 words and 160 characters')).toBeVisible();
+ expect(within(form).getByText('Use at most 11 words and 160 characters')).toBeVisible();
  view.rerender(<TaskForm {...base} mode="new" draft={{ ...empty, title: 'Solve an array problem' }} base={empty} />);
  fireEvent.click(within(form).getByRole('button', { name: 'Add task' }));
  expect(base.onSubmit).toHaveBeenCalledWith(false);

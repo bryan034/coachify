@@ -8,11 +8,10 @@ import { useComparison, COMPARISON_REFRESH } from '@/features/assessment/compari
 import { EvaluationStatusPanel } from '@/features/assessment/evaluation-status';
 import { EvidenceProposals } from './evidence-proposals';
 import { AdviserChat } from './adviser-chat';
-import { RoadmapViews, skillCatalog } from './roadmap-views';
-import { PlanPreview } from './plan-preview';
-import { planSessions } from './roadmap-day';
+import { RoadmapViews } from './roadmap-views';
+
 import type { RoadmapActions } from './day-list';
-import { OutlineMonths } from './outline-months';
+import { WeeklyPlanning } from './weekly-planning';
 import { TaskEditor, type EditableRoadmapTask } from './task-editor';
 
 import { SettingsPanel, useSettingsDraft, type AutosaveState } from './settings-panel';
@@ -56,10 +55,9 @@ function Planner({ token }: { token: string }) {
  useEffect(() => { mounted.current = true; return () => { mounted.current = false; sequence.current++; }; }, []);
  function receive(value: Workspace) {
   if (!mounted.current) return;
-  // Choose the view in the same update as the new preview. A later effect can
-  // otherwise override a Back click made just after the preview appears.
+  // Return from settings when a generated roadmap or preview arrives.
   const candidateId = value.planner.outline_candidate?.id || value.planner.candidate?.id;
-  if (candidateId && candidateId !== (latest.current?.planner.outline_candidate?.id || latest.current?.planner.candidate?.id)) {
+  if ((candidateId && candidateId !== (latest.current?.planner.outline_candidate?.id || latest.current?.planner.candidate?.id)) || (value.planner.active?.id && value.planner.active.id !== latest.current?.planner.active?.id)) {
    setConfiguring(false); setHelperOpen(false);
 
   }
@@ -194,12 +192,8 @@ function Planner({ token }: { token: string }) {
  const [starting, setStarting] = useState(false);
  async function generate() {
   setStarting(true);
-  try { if (await saveSettings()) await change('/planner/outlines/generate', { allow_partial_assessment: partial }); } finally { if (mounted.current) setStarting(false); }
+  try { if (await saveSettings()) await change('/planner/outlines/generate', { allow_partial_assessment: partial, auto_accept: true }); } finally { if (mounted.current) setStarting(false); }
 
- }
- function retryGenerate(body: Record<string, unknown>, renew: boolean) {
-  if (renew) { void change('/planner/generate', { allow_partial_assessment: partial }); return; }
-  unknownMutation.current = { path: '/planner/generate', body }; void change('', {}, true);
  }
  function retryPlanning(path: string, body: Record<string, unknown>, renew: boolean) {
   if (renew) { const { expected_version: _version, mutation_id: _id, ...data } = body; void change(path, data); return; }
@@ -209,7 +203,7 @@ function Planner({ token }: { token: string }) {
  const { context, active: earlier, draft: earlierDraft, planner } = workspace;
 
  const frozen = busy || running || !!error || unknown || !!pending || !!workspace.operation?.retry_after;
- const plan = planner.candidate || planner.active; const preview = !!planner.candidate;
+ const plan = planner.candidate || planner.active; const preview = !!planner.outline_candidate || !!planner.week_candidate;
  const sourceHash = planner.outline_candidate?.assessment_hash || plan?.assessment_hash;
  const sourceChanged = !!sourceHash && !!context.input_hash && sourceHash !== context.input_hash;
  const review = preview ? planner.candidate_review : planner.active_review;
@@ -235,16 +229,17 @@ function Planner({ token }: { token: string }) {
   reachCheckpoint: (milestone, key, reached) => void change('/planner/milestones/checkpoint', { milestone_id: milestone.id, checkpoint_key: key, reached }),
   confirm: (gap, answer) => void change('/planner/confirmations', { gap_id: gap.id, answer }),
  };
- const failedGeneration = workspace.operation?.status === 'failed' ? planner.retry_generate : null;
+
  const failedOutline = workspace.operation?.status === 'failed' ? planner.retry_outline : null;
- const failedMonth = workspace.operation?.status === 'failed' ? planner.retry_month : null;
+ const failedWeek = workspace.operation?.status === 'failed' ? planner.retry_week : null;
  const helper = helperOpen && !blocked && <AdviserChat workspace={workspace} runway={settings.runway} text={text} setText={setText} partial={partial} setPartial={setPartial} showPartial={showRoadmap} busy={busy} running={running} frozen={frozen} editing={!!(plan || planner.outline_candidate || planner.outline_active)} takeFocus={helperTakesFocus.current} close={closeHelper} send={() => void send()}
 
   retry={() => void send(workspace.operation?.error?.code === 'inputs_changed' ? { ...workspace.retry_request!, expected_version: workspace.version, mutation_id: crypto.randomUUID() } : workspace.retry_request!)} />;
  const legacy = earlier || earlierDraft;
+ const weeklyPlanning = <WeeklyPlanning planner={planner} frozen={frozen} change={(path,data,method) => change(path,data,false,method)} acceptBlocked={sourceChanged || !context.ready || (!!context.evaluation && context.evaluation.freshness !== 'current')} settings={() => setConfiguring(true)}/>;
  return <section className="roadmap-adviser">
   <div className={`roadmap-workspace${helperOpen ? ' helper-open' : ''}`}><div className="roadmap-main">
-  {!showRoadmap && <header className="roadmap-heading"><div><h1>Roadmap</h1><p>{plan ? 'Plan settings: change your schedule, then preview an updated roadmap.' : 'Make room for the career you want.'}</p></div>
+  {!showRoadmap && <header className="roadmap-heading"><div><h1>Roadmap</h1><p>{plan ? 'Plan settings: change your schedule, then update your roadmap.' : 'Make room for the career you want.'}</p></div>
    <div className="roadmap-heading-side">
     <button ref={launcher} type="button" className="btn ghost helper-launcher" hidden={helperOpen || blocked} aria-expanded={helperOpen} onClick={() => helperOpen ? closeHelper() : openHelper()}>{helperOpen ? 'Chat helper is open' : workspace.messages.length ? 'Continue with chat helper' : 'Start chat helper'}</button>
     {running && !helperOpen && <p className="small">Your request is still being worked on. Changes are paused until it finishes.</p>}
@@ -252,7 +247,7 @@ function Planner({ token }: { token: string }) {
   </header>}
   {!activeView && sourceChanged && <section className="evaluate-banner change-banner" aria-labelledby="roadmap-outdated-title">
    <span className="evaluate-banner-mark" aria-hidden="true">↻</span>
-   <div><h2 id="roadmap-outdated-title">Your roadmap is out of date</h2><p>Your CV, skills or career goal changed. Regenerate your roadmap to build a plan from your latest information. You can review the new plan before accepting it.</p></div>
+   <div><h2 id="roadmap-outdated-title">Your roadmap is out of date</h2><p>Your CV, skills or career goal changed. Regenerate your roadmap to build a plan from your latest information. The updated tasks will appear automatically.</p></div>
    <div className="evaluate-banner-actions"><button type="button" className="btn pri" disabled={starting || frozen || !context.ready || !context.model_available || (!!context.evaluation && context.evaluation.freshness !== 'current')} onClick={() => void generate()}>Regenerate roadmap</button></div>
   </section>}
   {error && <div className="roadmap-notice" role="alert"><p>{error}</p><button className="btn ghost" disabled={busy} onClick={() => void load()}>Reload saved work</button>{pending && <button className="btn" disabled={busy || running} onClick={() => void send(pending)}>Recover sent message</button>}{unknown && <button className="btn" disabled={busy || running} onClick={() => void change('', {}, true)}>Recover saved change</button>}</div>}
@@ -263,16 +258,11 @@ function Planner({ token }: { token: string }) {
   {!activeView && <EvaluationStatusPanel comparison={evaluation} actions disabled={frozen} />}
   {blocked && <Prerequisites issues={context.issues} />}
   <GenerationProgress active={starting || running} stage={running ? workspace.operation?.stage : undefined} context={context} />
-  {failedGeneration && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your plan could not be prepared. Try again.')}</p>{!!workspace.operation?.retry_after && <p>Provider capacity: retry in {workspace.operation.retry_after} seconds.</p>}<button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after || (!!context.evaluation && context.evaluation.freshness !== 'current')} onClick={() => retryGenerate(failedGeneration, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
-  {(failedOutline || failedMonth) && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your preview could not be prepared. Your saved work is unchanged.')}</p><button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={() => retryPlanning(failedOutline ? '/planner/outlines/generate' : '/planner/months/generate', (failedOutline || failedMonth)!, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
+  {(failedOutline || failedWeek) && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your roadmap could not be created. Your saved work is unchanged.')}</p><button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={() => retryPlanning(failedOutline ? '/planner/outlines/generate' : '/planner/weeks/generate', (failedOutline || failedWeek)!, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
   <div id="plan-panel">
-   {showOutline && <OutlineMonths planner={planner} frozen={frozen} change={(path, data, method) => change(path, data, false, method)} revise={() => void generate()} settings={() => setConfiguring(true)} />}
-   {activeView ? <RoadmapViews plan={plan!} review={review!} planner={planner} goal={goalName} version={workspace.version} frozen={frozen} updates={updates} openSettings={() => setConfiguring(true)} actions={actions} />
-   : showRoadmap ? <PlanPreview planner={planner} blockers={planner.candidate_blockers} goal={goalName} sourceChanged={sourceChanged}
-     context={{ plan: plan!, review: review!, sessions: planSessions(planner, plan!, true, review!.remaining.resolved.today), today: review!.remaining.resolved.today, nowMinute: null, version: workspace.version, catalog: skillCatalog(plan!, planner), frozen, actions, go: () => {} }}
-     accept={() => void change('/planner/accept', {})} discard={() => void change('/planner/discard', {})} backToSettings={() => setConfiguring(true)}
-     keepTasks={decisions => void change('/planner/tasks/reconcile', { candidate_id: plan!.id, decisions })} />
-   : blocked || showOutline ? null : <>{!!plan && !preview && signals.length > 0 && <ul className="plan-updates" aria-label="Changes since this roadmap was prepared">{signals.map(signal => <li key={signal.kind + signal.message}>{signal.message}</li>)}</ul>}<SettingsPanel profileSkills={profileSkills.state} workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} autosave={autosave} returnToReview={plan || planner.outline_active || planner.outline_candidate ? () => setConfiguring(false) : null} /></>}
+   {!configuring && !activeView && weeklyPlanning}
+   {activeView ? <RoadmapViews plan={plan!} review={review!} planner={planner} goal={goalName} version={workspace.version} frozen={frozen} updates={updates} openSettings={() => setConfiguring(true)} actions={actions} weeklyPlanning={weeklyPlanning} />
+   : blocked || showOutline || (!configuring && !!planner.week_candidate) ? null : <>{!!plan && !preview && signals.length > 0 && <ul className="plan-updates" aria-label="Changes since this roadmap was prepared">{signals.map(signal => <li key={signal.kind + signal.message}>{signal.message}</li>)}</ul>}<SettingsPanel profileSkills={profileSkills.state} workspace={workspace} settings={settings} partial={partial} setPartial={setPartial} frozen={frozen} generate={() => void generate()} save={() => void saveSettings()} autosave={autosave} returnToReview={plan || planner.outline_active || planner.outline_candidate ? () => setConfiguring(false) : null} /></>}
    {activeView && <TaskEditor tasks={(planner.active?.editable_tasks || []).filter((task): task is EditableRoadmapTask & typeof task => typeof task.title === 'string' && typeof task.instructions === 'string' && typeof task.completion_outcome === 'string' && typeof task.estimated_minutes === 'number' && Array.isArray(task.schedule) && !!task.status && task.milestone_key !== undefined)} milestones={planner.active!.milestones} frozen={frozen} change={(path, data) => change(path, data)} />}
 
   </div>
@@ -281,7 +271,7 @@ function Planner({ token }: { token: string }) {
  </section>;
 }
 
-const stages = [['assessing', 'Comparing your skills with your goal', 30], ['writing', 'Writing your roadmap', 65], ['correcting', 'Fixing what the schedule check found', 88]] as const;
+const stages = [['assessing', 'Comparing your skills with your goal', 30], ['writing', 'Writing your weekly objectives', 50], ['scheduling', 'Scheduling your first week', 75], ['correcting', 'Fixing what the schedule check found', 88]] as const;
 /** Stage-based progress: it only moves when the service reports a new stage, so it never claims more than is known. */
 export function generationProgress(stage?: string) {
  const index = stages.findIndex(([key]) => key === stage);

@@ -13,9 +13,9 @@ it('shows the title limit and creates an unscheduled task only when valid', asyn
  fireEvent.change(screen.getByLabelText('Title'), { target: { value: Array(20).fill('word').join(' ') } });
  fireEvent.change(screen.getByLabelText('Instructions'), { target: { value: 'Choose a problem.' } });
  fireEvent.change(screen.getByLabelText('Completion outcome'), { target: { value: 'Save a solution.' } });
- expect(screen.getByText(/20 of 19 words/)).toBeTruthy();
+ expect(screen.getByText(/20 of 11 words/)).toBeTruthy();
  fireEvent.click(screen.getByRole('button', { name: 'Save task' }));
- expect(screen.getByRole('alert').textContent).toMatch(/1–19 words/);
+ expect(screen.getByRole('alert').textContent).toMatch(/1–11 words/);
  expect(change).not.toHaveBeenCalled();
  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Solve one medium array problem' } });
  fireEvent.click(screen.getByRole('button', { name: 'Save task' }));

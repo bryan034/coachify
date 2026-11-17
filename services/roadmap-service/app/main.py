@@ -8,11 +8,11 @@ from fastapi import Depends,Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import application,authenticated,Problem,begin,launch,operation_view,stamp,digest
 from app.schemas import Message,OperationAccepted,Workspace,Plan,PlannedRoadmap
-from app.planning.generator import PLANNING_SECONDS,chat_turn,prepare_plan
+from app.planning.generator import PLANNING_SECONDS,chat_turn
 from app.planning.retired_settings import remove_retired_settings
 from app.planning.routes import register_planner
 from app.planning.state import planner_state,planner_view,retry_body
-from app.planning.state import plan_review
+from app.planning.state import plan_review, planning_source_changed
 from app.planning.tasks import ensure_tasks,project_assignments,task_readiness
 from app.schemas.roadmap import DashboardSource
 
@@ -60,25 +60,51 @@ def create_app(store=None,upstream=None,model=None,clock=None):
                 return current['result']
         raise Problem('Assessment is still processing. Retry this saved planning message to reconnect.',503,'assessment_processing')
     async def worker(row,account):
-        if row['pending']['kind'] in ('generate','roll_forward'):
-            if row['pending']['kind']=='roll_forward' and (planner_state(row)['outline_active'] or planner_state(row)['outline_candidate']):
-                raise Problem('Use the outline and monthly task workflow for this roadmap.',409,'outline_workflow_required')
-            await prepare_plan(app,row,account,assessment,context)
-            if row['pending']['kind']=='roll_forward':
-                from app.planning.state import candidate_blockers
-                from app.planning.milestone_membership import mark_plan_membership_changes
-                state=planner_state(row)
-                blockers=candidate_blockers(state,await context(account),app.state.clock())
-                if blockers:raise Problem('The next week needs review. Your active plan is unchanged.',409,'roll_forward_review')
-                mark_plan_membership_changes(state['active'],state['candidate'])
-                state['active']=state['candidate'];state['candidate']=None
-        elif row['pending']['kind']=='outline_generate':
-            from app.planning.outlines import prepare_outline
-            await prepare_outline(app,row,account,assessment,context)
-        elif row['pending']['kind']=='month_generate':
-            from app.planning.months import prepare_month
-            await prepare_month(app,row,account,context)
-        else:await chat_turn(app,row,account,assessment,context)
+        kind=row['pending']['kind']
+        if kind=='outline_generate':
+            from app.planning.outlines import accept_outline, prepare_outline
+            from app.planning.weeks import prepare_week
+            automatic=row['pending']['body'].get('auto_accept',False)
+            try:
+                await prepare_outline(app,row,account,assessment,context)
+                try:week_prepared=await prepare_week(app,row,account,context,initial=True)
+                except Problem as error:
+                    if automatic:raise
+                    planner_state(row)['outline_candidate']['first_week_error']=error.detail
+                if automatic:
+                    # Publish a copy only once both the outline and first week validate.
+                    # A failed activation must not leave a partly accepted plan behind.
+                    state=copy.deepcopy(planner_state(row))
+                    latest=await app.state.upstream.account(account['token'])
+                    if latest['id']!=account['id']:raise Problem('Your account changed during creation.',401,'session')
+                    source=await context(latest)
+                    # Existing weeks can already cover the complete roadmap. A failed
+                    # generation still raises above; only a genuine no-op needs no week.
+                    accept_outline(state,source,state['outline_candidate']['id'],app.state.clock(),
+                        require_first_week=week_prepared or state['active'] is None)
+                    latest=await app.state.upstream.account(account['token'])
+                    if latest['id']!=account['id']:raise Problem('Your account changed during creation.',401,'session')
+                    fresh=await context(latest)
+                    if planning_source_changed(source,fresh):
+                        raise Problem('Your inputs changed during creation. Retry creating your roadmap.',409,'inputs_changed')
+                    active=state['active']
+                    # A failed publication may leave a captured snapshot. A new lease
+                    # must not reuse that attempt's tasks with a newly generated outline.
+                    active['id']=str(uuid5(NAMESPACE_URL,account['id']+':roadmap:'+row['pending']['id']+':'+row['pending']['token']))
+                    active.update(pace_baseline_id=active['id'],updated_at=stamp(),request_hash=row['pending']['hash'])
+                    state['active']=await thread(app.state.store.save_result,account['id'],active)
+                    row['planner']=state
+            except Exception:
+                if automatic:
+                    state=planner_state(row)
+                    state['outline_candidate']=None;state['week_candidate']=None
+                    await thread(app.state.store.checkpoint,account['id'],row,30)
+                raise
+        elif kind=='week_generate':
+            from app.planning.weeks import prepare_week
+            await prepare_week(app,row,account,context)
+        elif kind=='message':await chat_turn(app,row,account,assessment,context)
+        else:raise Problem('This kind of request is no longer supported. Start it again from the roadmap page.',409,'operation_retired')
         return row
 
     def visible(row,source,time_zone=None):
@@ -125,10 +151,6 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         fingerprint=digest({'operation':operation,'payload':payload}) if operation else digest(payload)
         prior=next((r for r in row['receipts'] if r['id']==key),None)
         if prior:
-            # Earlier accept/discard receipts stored only a body hash. Their
-            # identical request bodies cannot establish which action succeeded.
-            if operation in ('preview.accept','preview.discard') and prior['hash']==digest(payload):
-                raise Problem('This earlier preview request cannot be identified safely. Reload the roadmap and use a new request key.',409,'legacy_preview_retry_ambiguous')
             if prior['hash']!=fingerprint:raise Problem('This request key was used for a different change.')
             return visible(row,await context(account,tolerate_unavailable=True))
         if row.get('pending'):raise Problem('Wait for the current adviser response before applying a change.')
@@ -140,7 +162,7 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         fresh_account=await app.state.upstream.account(account['token'])
         if fresh_account['id']!=account['id']:raise Problem('Your account changed during saving.',401,'session')
         fresh=await context(fresh_account,tolerate_unavailable=True)
-        if fresh.get('input_hash')!=source.get('input_hash'):raise Problem('Your selected inputs changed during saving. Refresh and retry.',409,'inputs_changed')
+        if fresh.get('input_hash')!=source.get('input_hash') or mark_baseline and planning_source_changed(source,fresh):raise Problem('Your selected inputs, evaluation or availability changed during saving. Refresh and retry.',409,'inputs_changed')
         updated['receipts'].append({'id':key,'hash':fingerprint})
         accepted=planner_state(updated)['active']
         if accepted and accepted!=planner_state(row)['active']:

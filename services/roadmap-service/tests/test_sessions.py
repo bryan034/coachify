@@ -5,7 +5,6 @@ from uuid import uuid4
 import pytest
 
 from planner_fixtures import NOW, assignment, draft, gap, milestone
-from app.schemas.roadmap import PlanDraft
 from test_planner_flow import H, Scripted, accepted, client_for, generate, read
 
 PREFIX = '/api/v1/roadmaps/planner'
@@ -51,46 +50,6 @@ def test_generation_fills_the_to_do_name_skills_and_checkpoints():
         assert state['planner']['active']['assignments'][0]['title'] == 'Write one tested endpoint'
         marks = state['planner']['active']['milestones'][0]['checkpoints']
         assert [(c['key'], c['reached_at']) for c in marks] == [('early', None), ('late', None)]
-    prompt = model.contexts and __import__('app.planning.generator', fromlist=['x']).PLAN_INSTRUCTIONS
-    assert all(word in prompt for word in ('title', 'gap_ids', 'checkpoints', 'Done when'))
-
-
-def test_a_milestone_without_checkpoints_gets_its_completing_one_and_legacy_sessions_fall_back():
-    with client_for(Scripted([draft()])) as client:
-        state = accepted(client)
-        assert state['planner']['active']['milestones'][0]['checkpoints'] == [
-            {'key': 'complete', 'title': 'A small API running locally that you can walk through.', 'date': '2030-01-20', 'reached_at': None}]
-        # No gap_ids from the model: the single milestone gap is still shown as the skill.
-        assert [skill['gap_id'] for skill in only(state)['skills']] == ['python']
-
-
-def test_the_validator_rejects_long_names_unknown_skill_gaps_and_misplaced_checkpoints():
-    from planner_fixtures import assessment, settings
-    from app.planning.capacity import Capacity
-    from app.planning.validator import validate_plan
-    from app.schemas.roadmap import PlannerConfig
-    from datetime import date
-    bad = PlanDraft.model_validate(draft(
-        milestones=[milestone(checkpoints=[{'key': 'c', 'title': 'One', 'date': '2030-01-25'}, {'key': 'c', 'title': 'Two', 'date': '2030-01-10'}])],
-        assignments=[assignment(title='x' * 81, gap_ids=['nowhere'])]))
-    capacity = Capacity(PlannerConfig.model_validate(settings()), NOW)
-    codes = {e['code'] for e in validate_plan(bad, capacity, assessment(), date(2030, 1, 7))}
-    assert {'assignment_title_too_long', 'unknown_gap', 'duplicate_checkpoint', 'checkpoint_outside_milestone'} <= codes
-    with pytest.raises(ValueError): PlanDraft.model_validate(draft(assignments=[{k: v for k, v in assignment().items() if k != 'title'}]))
-
-
-def test_checkpoints_are_ticked_by_the_user_and_survive_a_revision():
-    with client_for(Scripted([rich_draft(), rich_draft()])) as client:
-        state = accepted(client)
-        state = save(client, '/milestones/checkpoint', state, milestone_id='m1', checkpoint_key='early', reached=True)
-        marks = {c['key']: c['reached_at'] for c in state['planner']['active']['milestones'][0]['checkpoints']}
-        assert marks['early'] and marks['late'] is None
-        assert call(client, '/milestones/checkpoint', state, milestone_id='m1', checkpoint_key='missing', reached=True).status_code == 404
-        state = generate(client, state)
-        kept = {c['key']: c['reached_at'] for c in state['planner']['candidate']['milestones'][0]['checkpoints']}
-        assert kept['early'] == marks['early']
-        state = save(client, '/milestones/checkpoint', state, milestone_id='m1', checkpoint_key='early', reached=False)
-        assert state['planner']['active']['milestones'][0]['checkpoints'][0]['reached_at'] is None
 
 
 def test_saving_details_renames_keeps_the_original_and_restores_it():
@@ -112,15 +71,6 @@ def test_saving_details_renames_keeps_the_original_and_restores_it():
         assert not {'title', 'completion_outcome'} & set(task['overrides']) and task['original'] is None
         assert call(client, '/sessions/save', state, session_id=row['id'], changes={'title': None}).status_code == 422
         assert call(client, '/sessions/save', state, session_id=row['id'], changes={'confidence': 11}).status_code == 422
-
-
-def test_a_renamed_task_is_kept_through_a_revision():
-    with client_for(Scripted([rich_draft(), draft(assignments=[assignment('other', start_time='20:00', duration_minutes=30)])])) as client:
-        state = accepted(client); row = only(state)
-        state = save(client, '/sessions/save', state, session_id=row['id'], changes={'title': 'Ship the endpoint'})
-        state = generate(client, state)
-        assert state['operation']['status'] == 'succeeded', state['operation']
-        assert 'Ship the endpoint' in [r['title'] for r in state['planner']['candidate_sessions']]
 
 
 def test_skills_come_from_the_plan_or_the_skills_profile_only():
@@ -172,8 +122,8 @@ def test_an_own_task_takes_done_when_skills_and_its_plan_milestone():
         assert call(client, '/sessions/add', state, session={'title': ' ', 'date': '2030-01-10', 'duration_minutes': 30}).status_code == 422
 
 
-def missed_plan(client, clock):
-    state = accepted(client)
+def missed_plan(client, clock, **changes):
+    state = accepted(client, **changes)
     clock.now = NOW + timedelta(days=1)
     return read(client)
 
@@ -189,7 +139,7 @@ def test_a_missed_session_waits_in_the_backlog_and_elo_proposes_a_free_study_tim
         free = client.post(PREFIX + '/sessions/free-times', headers=H, json={'duration_minutes': 60, 'session_id': row['id']}).json()
         days = {d['date']: d for d in free['days']}
         assert free['today'] == '2030-01-10' and list(days)[0] == '2030-01-10' and list(days)[-1] == '2030-01-20'
-        assert days['2030-01-10']['rest_day'] and days['2030-01-10']['kind'] == 'rest_day' and days['2030-01-10']['starts'][0] == '08:00'
+        assert days['2030-01-10']['rest_day'] and days['2030-01-10']['kind'] == 'none' and days['2030-01-10']['starts']==[]  # extra time is disabled
         assert days['2030-01-12']['kind'] == 'none' and days['2030-01-12']['starts'] == []  # a whole-day blackout
         assert days['2030-01-14']['starts'] == ['19:00', '19:15', '19:30', '19:45', '20:00'] and days['2030-01-14']['kind'] == 'study'
         state = save(client, '/sessions/move', state, moves=[{'session_id': row['id'], 'date': '2030-01-14', 'start_time': '19:00'}])
@@ -202,20 +152,20 @@ def test_a_full_study_block_offers_times_after_it_and_two_backlog_items_spread_o
     clock = Clock()
     two = draft(assignments=[assignment(title='First', duration_minutes=45), assignment('a2', title='Second', start_time='19:45', duration_minutes=45)])
     with client_for(Scripted([two]), clock=clock) as client:
-        state = missed_plan(client, clock)
+        state = missed_plan(client, clock, break_minutes_per_hour=0)  # two 45-minute sessions back to back
         moves = client.post(PREFIX + '/sessions/backlog-plan', headers=H, json={}).json()['moves']
         assert [(m['title'], m['date'], m['start_time']) for m in moves] == [('First', '2030-01-14', '19:00'), ('Second', '2030-01-16', '19:00')]
         state = save(client, '/sessions/move', state, moves=[{'session_id': m['session_id'], 'date': '2030-01-16', 'start_time': t} for m, t in zip(moves, ('19:00', '19:45'))])
         free = client.post(PREFIX + '/sessions/free-times', headers=H, json={'duration_minutes': 30}).json()
         wednesday = next(d for d in free['days'] if d['date'] == '2030-01-16')
-        assert wednesday['kind'] == 'after_block' and wednesday['starts'][0] == '20:30'
+        assert wednesday['kind'] == 'none' and wednesday['starts']==[]  # overflow requires explicit permission
 
 
 def test_moves_never_overlap_cross_a_blackout_or_go_into_the_past():
     clock = Clock()
     two = draft(assignments=[assignment(title='First', duration_minutes=45), assignment('a2', title='Second', start_time='19:45', duration_minutes=45)])
     with client_for(Scripted([two]), clock=clock) as client:
-        state = missed_plan(client, clock); first, second = sessions(state)
+        state = missed_plan(client, clock, break_minutes_per_hour=0); first, second = sessions(state)
         def refused(**move):
             response = call(client, '/sessions/move', state, moves=[{'session_id': first['id'], **move}])
             return response.status_code, response.json().get('code')
@@ -223,8 +173,8 @@ def test_moves_never_overlap_cross_a_blackout_or_go_into_the_past():
         assert refused(date='2030-01-09', start_time='21:00') == (409, 'time_passed')
         assert refused(date='2030-01-28', start_time='19:00') == (409, 'outside_plan')
         assert refused(date='2030-01-13', start_time='23:30') == (422, 'validation')
-        both = call(client, '/sessions/move', state, moves=[{'session_id': first['id'], 'date': '2030-01-13', 'start_time': '19:00'},
-                                                             {'session_id': second['id'], 'date': '2030-01-13', 'start_time': '19:30'}])
+        both = call(client, '/sessions/move', state, moves=[{'session_id': first['id'], 'date': '2030-01-14', 'start_time': '19:00'},
+                                                             {'session_id': second['id'], 'date': '2030-01-14', 'start_time': '19:30'}])
         assert both.status_code == 409 and both.json()['code'] == 'slot_taken'
         assert sessions(read(client)) == sessions(state)  # a refused batch moves nothing
         assert call(client, '/sessions/move', state, moves=[{'session_id': 'unknown', 'date': '2030-01-13', 'start_time': '19:00'}]).status_code == 404
@@ -241,17 +191,3 @@ def test_only_a_missed_session_can_be_skipped_and_it_leaves_the_list():
         assert sessions(state) == []
         task = state['planner']['active']['editable_tasks'][0]
         assert task['removed'] and task['removal']['reason'] == 'Skipped missed session.'
-
-
-def test_a_moved_backlog_task_keeps_its_time_when_the_next_plan_is_prepared():
-    clock = Clock()
-    later = draft(milestones=[milestone(projected_start='2030-01-10')], assignments=[assignment('next', date='2030-01-14', start_time='20:00', duration_minutes=30)])
-    model = Scripted([rich_draft(), later])
-    with client_for(model, clock=clock) as client:
-        state = missed_plan(client, clock); row = only(state)
-        state = save(client, '/sessions/move', state, moves=[{'session_id': row['id'], 'date': '2030-01-14', 'start_time': '19:00'}])
-        state = generate(client, state)
-        assert state['operation']['status'] == 'succeeded', state['operation']
-        assert {'id': row['id'], 'date': '2030-01-14', 'start_time': '19:00', 'duration_minutes': 60} in model.contexts[-1]['reserved_work']
-        kept = next(r for r in state['planner']['candidate_sessions'] if r['id'] == row['id'])
-        assert (kept['date'], kept['start_time']) == ('2030-01-14', '19:00')

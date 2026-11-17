@@ -91,7 +91,6 @@ function BlockRow({ block, index, change, remove, close }: { block: StudyBlock; 
   <label><span aria-hidden="true">Starts</span><input aria-label={`${name} start time`} type="time" value={block.start_time} onChange={e => { if (e.target.value) change({ start_time: e.target.value }); }} /></label>
   <BlockEnd block={block} name={name} change={change} />
   <label><span aria-hidden="true">Minutes</span><input aria-label={`${name} minutes`} type="number" min={15} max={480} step={5} value={block.duration_minutes} onChange={e => change({ duration_minutes: Math.round(Number(e.target.value)) })} /></label>
-  <label><span aria-hidden="true">Type</span><select aria-label={`${name} type`} value={block.kind} onChange={e => change({ kind: e.target.value as StudyBlock['kind'] })}><option value="preferred">Preferred</option><option value="backup">Backup</option></select></label>
   <button type="button" className="btn ghost" aria-label={`Remove block ${index + 1}`} onClick={remove}>Remove</button>
   <button type="button" className="btn ghost" onClick={close}>Done</button>
  </div>;
@@ -105,7 +104,7 @@ function StudyWeek({ blocks, blackouts, startDate, setBlocks, setBlackouts }: { 
  const [editing, setEditing] = useState<{ type: 'study' | 'blocked'; index: number } | null>(null);
  const isOpen = (type: 'study' | 'blocked', index: number) => editing?.type === type && editing.index === index;
  const toggle = (type: 'study' | 'blocked', index: number) => setEditing(isOpen(type, index) ? null : { type, index });
- const add = (day: number) => { if (blocks.length >= 28) return; setBlocks([...blocks, { day, start_time: '19:00', duration_minutes: 60, kind: 'preferred' }]); setEditing({ type: 'study', index: blocks.length }); };
+ const add = (day: number) => { if (blocks.length >= 28) return; setBlocks([...blocks, { day, start_time: '19:00', duration_minutes: 60 }]); setEditing({ type: 'study', index: blocks.length }); };
  const addBlocked = () => { if (blackouts.length >= 366) return; setBlackouts([...blackouts, newBlockedTime(startDate)]); setEditing({ type: 'blocked', index: blackouts.length }); };
  const block = editing?.type === 'study' ? blocks[editing.index] : undefined;
  const rule = editing?.type === 'blocked' ? blackouts[editing.index] : undefined;
@@ -115,7 +114,7 @@ function StudyWeek({ blocks, blackouts, startDate, setBlocks, setBlackouts }: { 
    const studies = blocks.map((item, index) => ({ item, index, at: item.start_time })).filter(({ item }) => item.day === day);
    const blocked = blackouts.map((item, index) => ({ item, index, at: item.start_time || '' })).filter(({ item }) => blockedOn(item, day));
    const chips = [
-    ...studies.map(({ item, index, at }) => ({ at, key: `study${index}`, chip: <button type="button" key={`study${index}`} className={`block-chip ${item.kind}`} aria-expanded={isOpen('study', index)} aria-label={`Edit ${name} block: ${blockHours(item)}, ${item.duration_minutes} minutes, ${item.kind}`} onClick={() => toggle('study', index)}><Hours text={blockHours(item)} /><span>{item.duration_minutes} min</span><span className="block-kind">{item.kind === 'backup' ? 'Backup' : 'Preferred'}</span></button> })),
+    ...studies.map(({ item, index, at }) => ({ at, key: `study${index}`, chip: <button type="button" key={`study${index}`} className="block-chip preferred" aria-expanded={isOpen('study', index)} aria-label={`Edit ${name} block: ${blockHours(item)}, ${item.duration_minutes} minutes`} onClick={() => toggle('study', index)}><Hours text={blockHours(item)} /><span>{item.duration_minutes} min</span><span className="block-kind">Study</span></button> })),
     ...blocked.map(({ item, index, at }) => ({ at, key: `blocked${index}`, chip: <button type="button" key={`blocked${index}`} className="block-chip blocked" aria-expanded={isOpen('blocked', index)} aria-label={`Edit blocked time on ${name}: ${describeBlackout(item)}`} onClick={() => toggle('blocked', index)}><Hours text={blockedHours(item)} /><span>{blockedRepeat(item)}</span><span className="block-kind">Blocked</span></button> })),
    ].sort((a, b) => a.at.localeCompare(b.at));
    return <div className="block-day" key={name}>
@@ -226,15 +225,15 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
    {config.weekly_minutes == null && defaults.weekly_hours != null && <div className="settings-suggestions"><button type="button" className="chip sm" onClick={() => update({ weekly_minutes: Math.round(defaults.weekly_hours! * 60) })}>Use saved {defaults.weekly_hours} hours a week</button></div>}
   </> },
   { name: 'Session length', required: true, filled: config.preferred_session_minutes > 0, content: <p className="road-clause">in <NumberToken name="Preferred session in minutes" min={15} max={480} step={5} value={config.preferred_session_minutes} suffix="-minute" attached onChange={value => update({ preferred_session_minutes: Math.round(Number(value)) })} /> sessions,</p> },
+  { name: 'Breaks and next week', required: false, filled: true, content: <><label>Break minutes per hour of study <input type="number" min={0} max={30} value={config.break_minutes_per_hour ?? 10} onChange={e => update({break_minutes_per_hour: Number(e.target.value)})}/></label><p className="small">Rest follows each session in proportion to its length. Breaks do not count towards study hours. Longer tasks are split at your session limit.</p><label>Plan next week on <select value={config.plan_day ?? ''} onChange={e => update({plan_day: e.target.value === '' ? null : Number(e.target.value)})}><option value="">Last day of my week</option>{days.map((day, i) => <option key={day} value={i}>{day}</option>)}</select></label><p className="small">This week's completion, workload and difficulty ratings help curate next week's plan. Planning also opens early when all tasks are complete. You can catch up if you miss this day.</p><Link href="/settings/roadmap" className="text-link">More roadmap settings</Link></> },
   { name: 'Recurring study blocks', required: true, filled: config.blocks.length > 0, content: <>
    <p className="road-clause">mostly at these times each week:</p>
    <p className="small road-hint">These are your preferred study times. elo fills them first, then uses the overflow window if enabled. Blocked-out times are never used.</p>
-   <div className="settings-field"><label><input type="checkbox" checked={!!config.allow_overflow} onChange={e=>update({allow_overflow:e.target.checked,overflow_start:config.overflow_start||'08:00',overflow_end:config.overflow_end||'22:00'})}/> Use extra time outside my preferred blocks</label>{config.allow_overflow&&<div className="row"><label>Overflow starts<input type="time" value={config.overflow_start||'08:00'} onChange={e=>update({overflow_start:e.target.value})}/></label><label>Overflow ends<input type="time" value={config.overflow_end||'22:00'} onChange={e=>update({overflow_end:e.target.value})}/></label></div>}</div>
+   <div className="settings-field"><label><input type="checkbox" checked={!!config.allow_overflow} onChange={e=>update({allow_overflow:e.target.checked,overflow_start:config.overflow_start||'09:00',overflow_end:config.overflow_end||'23:00'})}/> Use extra time outside my preferred blocks</label>{config.allow_overflow&&<div className="row"><label>Overflow starts<input type="time" value={config.overflow_start||'09:00'} onChange={e=>update({overflow_start:e.target.value})}/></label><label>Overflow ends<input type="time" value={config.overflow_end||'23:00'} onChange={e=>update({overflow_end:e.target.value})}/></label></div>}</div>
    <StudyWeek blocks={config.blocks} blackouts={config.blackouts} startDate={start} setBlocks={blocks => update({ blocks })} setBlackouts={blackouts => update({ blackouts })} />
    {blackoutPeriods.map(period => <p className="small road-note" key={period.start_date}>You saved no availability from {period.start_date} to {period.end_date}. <button type="button" className="settings-link" onClick={() => update({ blackouts: [...config.blackouts, dailyBlackout(period.start_date, period.end_date)] })}>Add as blackout</button></p>)}
-   {reduced.map(period => <p className="small road-note" key={period.start_date}>You saved {period.weekly_hours} hours a week from {period.start_date} to {period.end_date}. This isn’t applied automatically, so adjust your budget or blocked times if needed.</p>)}
+   {reduced.map(period => <p className="small road-note" key={period.start_date}>You saved {period.weekly_hours} hours a week from {period.start_date} to {period.end_date}. {config.apply_reduced_periods === false ? 'Automatic target reduction is off in Settings → Roadmap.' : 'Your weekly target is reduced automatically for these dates.'}</p>)}
   </> },
-  { name: 'Backup blocks', required: false, filled: config.use_backup, content: <><p className="road-clause">Backup blocks are <label className={`token toggle-token${config.use_backup ? '' : ' off'}`}><input type="checkbox" aria-label="Allow backup blocks when preferred time runs out" checked={config.use_backup} onChange={e => update({ use_backup: e.target.checked })} /><span aria-hidden="true">{config.use_backup ? 'allowed' : 'not allowed'}</span></label> when preferred time runs out.</p><p className="small">Backup blocks are extra times elo can use only if your preferred blocks run out. Blocked-out times are never used.</p></> },
   { name: 'Learning focus', required: false, filled: chosenFocus.length > 0 || !!config.learning_notes.trim(), content: <>
    <p className="road-clause">I’d like to focus on <button type="button" className={`token token-button${chosenFocus.length ? '' : ' empty'}`} aria-expanded={showFocus} aria-label="Choose learning focus" onClick={() => setChoosingFocus(!showFocus)}>{chosenFocus.length ? chosenFocus.join(', ') : <><span aria-hidden="true">+ </span>choose focus</>}</button> <span className="small">Optional</span></p>
    {showFocus && <div className="focus-panel">
@@ -294,18 +293,18 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
         <div className="runway-lead"><dt>Usable study time</dt><dd>{hours(runway.study.usable_minutes)}</dd></div>
         <div><dt>Calendar time</dt><dd>{runway.calendar.label}</dd></div>
         <div><dt>From preferred blocks</dt><dd>{hours(runway.study.preferred_minutes)}</dd></div>
-        <div><dt>Extra from backup blocks</dt><dd>+{hours(runway.study.backup_extra_minutes)}{config.use_backup ? ' (included)' : ' (not enabled)'}</dd></div>
        </dl>
        {runway.calendar.partial_first_week && <p className="small">Your first week is partial, so it only counts time from {longDate(start)}.</p>}
       </div>}
      </div>
      <p className="small">Times are in {config.time_zone}.{zone && zone !== config.time_zone && <> Your device uses {zone}. <button type="button" className="settings-link" onClick={() => update({ time_zone: zone })}>Use {zone}</button></>}</p>
 
+     {runway.weeks.filter(week => !week.partial && week.usable_minutes < week.weekly_cap).map(week => <p key={week.week_start} className="small">Week of {longDate(week.week_start)}: {hours(week.usable_minutes)} fits your available time, below your {hours(week.weekly_cap)} target. Add study time, enable extra time or lower the workload before generation.</p>)}
      {settings.calculating && <p role="status" className="small">Recalculating…</p>}
      {reasons.length > 0 && <div className="settings-blockers"><h3>Before you can generate</h3><ul>{reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul></div>}
      {context.ready && !validResearch && <p className="small">Using available evidence. Interview research is {context.research_coverage || 'unavailable'}; the comparison will be labelled partial.</p>}
      <div className="plan-actions">
-      <button type="button" className="btn primary" disabled={blocked || frozen} onClick={generate}>{planner.active ? 'Preview updated roadmap' : 'Generate roadmap'}</button>
+      <button type="button" className="btn primary" disabled={blocked || frozen} onClick={generate}>{planner.active ? 'Update roadmap' : 'Create roadmap'}</button>
       {settings.dirty && autosave === 'failed' && <button type="button" className="btn ghost" disabled={frozen || !!settings.previewError} onClick={save}>Save settings</button>}
       {autosave === 'saving' && <span className="small plan-saved">Saving…</span>}
       {autosave === 'saved' && !settings.dirty && <span className="small plan-saved">All changes saved</span>}

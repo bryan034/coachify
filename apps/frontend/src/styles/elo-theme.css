@@ -738,4 +738,12 @@ body.cv-rail-dragging{ cursor: col-resize; user-select: none; }
 .app .adviser-composer .adviser-compose-foot > button{ pointer-events: auto; }
 
 /* The review composer shrinks on short screens so the chat box never leaves the viewport. */
-.app .cv-workspace.cv-review-screen .cv-chat .cv-chat-composer textarea{ min-height: clamp(64px, 14dvh, var(--chat-input-min)); max-height: 30dvh; }
+.app .cv-workspace.cv-review-screen .cv-chat .cv-chat-composer textarea { min-height: clamp(64px, 14dvh, var(--chat-input-min)); max-height: 30dvh; }
+
+/* Appearance changes tokens, retaining elo's layout and brand accents. */
+:root[data-theme="dark"]{color-scheme:dark;--ink:#f1f5f9;--snow:#111827;--cloud:#1e293b;--white:#172234;--slate:#bac7d6;--mint-mist:#173c32;--forest:#6ee7b7;--forest-ink:#a7f3d0;--line:rgb(186 199 214 / .24);--field-line:rgb(186 199 214 / .55);--ready-bg:#164735;--ready-ink:#a7f3d0;--growing-bg:#493a17;--growing-ink:#fde68a;--build-bg:#4b2228;--build-ink:#fecaca;--gap-bg:#4c301f;--gap-ink:#fed7aa;--partial-bg:#203c60;--partial-ink:#bfdbfe}
+
+:root[data-theme="dark"] .btn.ghost{background:var(--side);color:var(--ink)}
+:root[data-theme="dark"] .btn.pri{color:var(--snow)}
+:root[data-theme="dark"] .brand-logo{content:url('/brand/elo-logo-dark.svg')}
+:root[data-theme="dark"] .brand-symbol{content:url('/brand/elo-mark-dark.svg')}

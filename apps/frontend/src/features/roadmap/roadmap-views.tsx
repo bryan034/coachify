@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { MonthView, TodayView, WeekView } from './calendar-views';
 import { useNowMinute, useTaskEditor, type RoadmapActions, type ViewContext, type ViewName } from './day-list';
 import { MilestonesView, ProgressView } from './progress-views';
+import { PartialOutlineNotice } from './weekly-planning';
 import { fullDate } from './roadmap-calendar';
 import { currentMilestone, daysBetween, planSessions } from './roadmap-day';
 import type { SkillOption } from './task-form';
@@ -29,8 +30,8 @@ function readAddress(today: string): { view: ViewName; date: string } {
 }
 
 /** The active roadmap: one header, five views. Plan settings is the only way out to the planning page. */
-export function RoadmapViews({ plan, review, planner, goal, version, frozen, updates, openSettings, actions }: {
- plan: PlannedRoadmap; review: PlanReview; planner: Planner; goal: string; version: number; frozen: boolean; updates: number; openSettings: () => void; actions: RoadmapActions;
+export function RoadmapViews({ plan, review, planner, goal, version, frozen, updates, openSettings, actions, weeklyPlanning }: {
+ plan: PlannedRoadmap; review: PlanReview; planner: Planner; goal: string; version: number; frozen: boolean; updates: number; openSettings: () => void; actions: RoadmapActions; weeklyPlanning?: ReactNode;
 }) {
  const today = review.remaining.resolved.today;
  const [place, setPlace] = useState(() => readAddress(today));
@@ -60,6 +61,8 @@ export function RoadmapViews({ plan, review, planner, goal, version, frozen, upd
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></svg>Plan settings{updates > 0 && <span className="rv-badge" aria-hidden="true">{updates}</span>}
    </button>
   </header>
+  <PartialOutlineNotice outline={planner.outline_active}/>
+  {weeklyPlanning}
   <nav className="rv-tabs" aria-label="Roadmap views">{tabs.map(([name, label]) => <button key={name} type="button" className="rv-tab" aria-current={place.view === name ? 'page' : undefined} onClick={() => leave(name, name === 'day' ? today : name === 'week' || name === 'month' ? (place.view === 'day' || place.view === 'week' || place.view === 'month' ? place.date : today) : undefined)}>{label}</button>)}</nav>
   {place.view === 'day' && <TodayView context={context} day={place.date} editor={editor} />}
   {place.view === 'week' && <WeekView context={context} day={place.date} editor={editor} />}

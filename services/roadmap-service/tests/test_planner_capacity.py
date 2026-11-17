@@ -13,25 +13,61 @@ BLOCKS=[{'day':0,'start_time':'19:00','duration_minutes':120,'kind':'preferred'}
     {'day':6,'start_time':'09:00','duration_minutes':120,'kind':'backup'}]
 def config(**changes):
     return PlannerConfig.model_validate({'start_date':'2030-01-09','target_date':'2030-01-27','time_zone':'Asia/Singapore','weekly_minutes':300,
-        'blocks':BLOCKS,'blackouts':[{'frequency':'once','start_date':'2030-01-12'}],**changes})
+        'blocks':BLOCKS,'blackouts':[{'frequency':'once','start_date':'2030-01-12'}],'break_minutes_per_hour':0,**changes})
 
-def test_partial_week_blackout_overlap_cap_and_backup_are_calculated_from_real_dates():
+def test_partial_week_blackout_overlap_and_cap_are_calculated_from_real_dates():
     report=Capacity(config(),NOW).report()
     assert report['can_generate'] and report['calendar']=={'days':19,'weeks':2,'extra_days':5,'label':'2 weeks, 5 days','partial_first_week':True}
     # Week 1 only has Wednesday (90); Saturday is blacked out. Later weeks have 390 merged minutes, capped at 300.
-    assert [(w['preferred_minutes'],w['backup_extra_minutes'],w['usable_minutes']) for w in report['weeks']]==[(90,120,90),(300,0,300),(300,0,300)]
-    assert report['study']=={'preferred_minutes':690,'backup_extra_minutes':120,'usable_minutes':690}
+    assert [(w['preferred_minutes'],w['overflow_minutes'],w['usable_minutes']) for w in report['weeks']]==[(90,0,90),(300,0,300),(300,0,300)]
+    assert report['study']=={'preferred_minutes':690,'overflow_minutes':0,'usable_minutes':690}
     assert report['weeks'][0]['partial'] and not report['weeks'][1]['partial']
     assert report['first_planning_week']=='2030-01-07'
 
-def test_enabling_backup_adds_only_the_extra_capacity_under_the_cap():
-    report=Capacity(config(use_backup=True),NOW).report()
-    assert report['study']=={'preferred_minutes':690,'backup_extra_minutes':120,'usable_minutes':810}
+def test_retired_backup_blocks_are_dropped_unless_they_were_switched_on():
+    assert len(config().blocks)==4 and all(not hasattr(block,'kind') for block in config().blocks)
+    kept=config(use_backup=True)
+    assert len(kept.blocks)==5 and 'use_backup' not in kept.model_dump()
+    assert Capacity(kept,NOW).report()['study']=={'preferred_minutes':810,'overflow_minutes':0,'usable_minutes':810}
 
-def test_overlapping_preferred_and_backup_blocks_count_once():
-    blocks=[{'day':0,'start_time':'10:00','duration_minutes':60,'kind':'preferred'},{'day':0,'start_time':'10:30','duration_minutes':60,'kind':'backup'}]
-    report=Capacity(config(blocks=blocks,start_date='2030-01-14',target_date='2030-01-20',use_backup=True,blackouts=[]),NOW).report()
-    assert report['study']=={'preferred_minutes':60,'backup_extra_minutes':30,'usable_minutes':90}
+def test_extra_time_fills_only_what_study_blocks_cannot_and_respects_blackouts():
+    report=Capacity(config(allow_overflow=True),NOW).report()
+    # Week 1: Wednesday's block holds 90; extra time on the other free days covers the rest of the 300.
+    assert [(w['preferred_minutes'],w['overflow_minutes'],w['usable_minutes']) for w in report['weeks']]==[(90,210,300),(300,0,300),(300,0,300)]
+    capacity=Capacity(config(allow_overflow=True),NOW)
+    assert capacity.days[date(2030,1,12)]=={'preferred':[],'overflow':[]}
+    assert capacity.days[date(2030,1,10)]['overflow']==[(540,1380)]
+    timed=Capacity(config(allow_overflow=True,blackouts=[{'frequency':'once','start_date':'2030-01-10','start_time':'12:00','end_time':'14:00'}]),NOW)
+    assert timed.days[date(2030,1,10)]['overflow']==[(540,720),(840,1380)]
+
+def test_breaks_session_length_daily_limit_and_rest_days_reduce_what_a_week_can_hold():
+    evening=[{'day':d,'start_time':'18:00','duration_minutes':180} for d in range(7)]
+    week=lambda **changes:Capacity(config(blocks=evening,blackouts=[],weekly_minutes=3000,start_date='2030-01-14',target_date='2030-01-20',**changes),NOW).report()['weeks'][0]['usable_minutes']
+    assert week()==7*180
+    # 60 + 10 break + 60 + 10 break + 40 fits in three hours.
+    assert week(break_minutes_per_hour=10)==7*160
+    # 90-minute sessions earn a 15-minute break: 90 + 15 + 75.
+    assert week(break_minutes_per_hour=10,preferred_session_minutes=90)==7*165
+    assert week(max_daily_minutes=60)==7*60
+    assert week(rest_days_per_week=2)==5*180
+    report=Capacity(config(blocks=evening[:1],blackouts=[],start_date='2030-01-14',target_date='2030-01-27'),NOW).report()
+    assert report['can_generate'] and [n['code'] for n in report['notices']]==['windows_below_target']
+
+def test_a_reduced_period_lowers_its_weeks_and_a_zero_hour_period_closes_its_days():
+    evening=[{'day':d,'start_time':'18:00','duration_minutes':120} for d in range(7)]
+    periods=[{'start_date':'2030-01-16','end_date':'2030-01-17','weekly_minutes':120},{'start_date':'2030-01-22','end_date':'2030-01-23','weekly_minutes':0}]
+    base=dict(blocks=evening,blackouts=[],weekly_minutes=600,start_date='2030-01-14',target_date='2030-01-27',reduced_periods=periods)
+    report=Capacity(config(**base),NOW).report()
+    assert [(w['weekly_cap'],w['usable_minutes'],w['reduced']) for w in report['weeks']]==[(120,120,True),(600,600,False)]
+    assert Capacity(config(**base),NOW).days[date(2030,1,22)]['preferred']==[]
+    assert 'reduced_periods' in [n['code'] for n in report['notices']]
+    ignored=Capacity(config(**base,apply_reduced_periods=False),NOW).report()
+    assert [(w['weekly_cap'],w['reduced']) for w in ignored['weeks']]==[(600,False),(600,False)]
+
+def test_a_week_can_start_on_another_day():
+    report=Capacity(config(week_start_day=6,blackouts=[]),NOW).report()
+    assert [w['week_start'] for w in report['weeks']]==['2030-01-06','2030-01-13','2030-01-20','2030-01-27']
+    assert report['first_planning_week']=='2030-01-06'
 
 def test_time_already_passed_today_is_not_counted():
     evening=datetime(2030,1,9,11,30,tzinfo=timezone.utc)  # 19:30 Wednesday in Singapore: 60 of the 90 minutes remain.
@@ -53,7 +89,8 @@ def test_invalid_inputs_are_reported_as_generation_blockers():
     assert codes(target_date='2031-02-01')==['runway_too_long']
     assert codes(weekly_minutes=0)==['no_budget']
     assert codes(blocks=[])==['no_blocks']
-    assert codes(blocks=[BLOCKS[-1]])==['no_usable_time']
+    assert codes(blocks=[BLOCKS[-1]])==['no_blocks']  # Only a retired backup block.
+    assert codes(blocks=[BLOCKS[2]],target_date='2030-01-13')==['no_usable_time']  # Its only Saturday is blacked out.
 
 def test_start_defaults_to_today_and_duration_resolves_and_matches_the_target():
     report=Capacity(config(start_date=None,target_date=None,duration={'value':8,'unit':'weeks'}),NOW).report()

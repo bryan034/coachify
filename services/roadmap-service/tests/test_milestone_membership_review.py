@@ -57,24 +57,6 @@ def test_moving_task_marks_both_milestones_and_unchanged_membership_does_not():
         assert outcome(state,'m2')['membership_review_required']
 
 
-def test_revision_membership_change_invalidates_saved_outcome_and_legacy_preview_accept():
-    with client_for(Scripted([draft(),draft(assignments=[assignment('a2')])])) as client:
-        state=accepted(client)
-        state=post(client,'/milestones/outcome',state,milestone_id='m1',demonstrated=True,note='Prior scope')
-        state=generate(client,state)
-        assert state['operation']['status']=='succeeded', state['operation']
-        candidate=state['planner']['candidate']
-        assert candidate['milestones'][0]['outcome']['membership_review_required']
-        # An older preview can have been saved before membership review existed.
-        owner='11111111-1111-4111-8111-111111111111'
-        old_outcome=client.app.state.store.data[owner]['planner']['candidate']['milestones'][0]['outcome']
-        old_outcome.pop('definition_review_required');old_outcome.pop('membership_review_required')
-        response=client.post('/api/v1/roadmaps/planner/accept',headers=H,json={
-            'expected_version':state['version'],'mutation_id':str(uuid4())})
-        assert response.status_code==200, response.text
-        assert outcome(response.json())['membership_review_required']
-
-
 def test_membership_review_blocks_dependent_milestone_without_inventing_progress():
     from app.planning.milestone_membership import mark_membership_review
     from app.planning.tasks import task_readiness
@@ -87,25 +69,6 @@ def test_membership_review_blocks_dependent_milestone_without_inventing_progress
     view=task_readiness(later,[earlier,later],plan)
     assert not view['actionable'] and view['reasons'][0]['code']=='milestone_prerequisite_incomplete'
     assert plan['milestones'][0]['outcome']['note']=='Self-report'
-
-
-def test_discarding_new_revision_work_restores_unchanged_membership_without_false_review():
-    revised=draft(assignments=[assignment('new',start_time='20:00',duration_minutes=30)])
-    with client_for(Scripted([draft(),revised])) as client:
-        state=accepted(client)
-        task=state['planner']['active']['editable_tasks'][0]
-        state=save(client,'edit',state,task_id=task['id'],changes={'instructions':'My saved work'})
-        state=post(client,'/milestones/outcome',state,milestone_id='m1',demonstrated=True,note='Current scope')
-        state=generate(client,state)
-        candidate=state['planner']['candidate']
-        assert candidate['milestones'][0]['outcome']['membership_review_required']
-        review=candidate['revision_review'][0]
-        state=save(client,'reconcile',state,candidate_id=candidate['id'],
-                   decisions=[{'task_id':review['task_id'],'decision':'discard'}])
-        restored=state['planner']['candidate']['milestones'][0]['outcome']
-        assert restored['demonstrated'] and restored['note']=='Current scope'
-        assert not restored.get('membership_review_required')
-        assert not restored.get('definition_review_required')
 
 
 def test_removal_requires_later_confirmation_without_losing_tombstone():

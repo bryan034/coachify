@@ -15,8 +15,20 @@ def to_minute(text):
     return int(hours)*60+int(minutes)
 def to_clock(minute):
     return f'{minute//60:02d}:{minute%60:02d}'
-def week_of(day):
-    return day-timedelta(days=day.weekday())
+def week_of(day,first=0):
+    """The first day of the week holding this date. Weeks start on Monday (0) unless the user chose another day."""
+    return day-timedelta(days=(day.weekday()-first)%7)
+def session_break(minutes,config):
+    """Rest owed after a session: the configured minutes per hour studied, rounded up to five minutes."""
+    return -(-minutes*config.break_minutes_per_hour//300)*5
+def shortest_session(config):
+    return min(config.min_session_minutes,config.preferred_session_minutes)
+def studyable(length,config):
+    """Study minutes one free window can hold once sessions are capped and separated by breaks."""
+    longest=config.preferred_session_minutes;shortest=shortest_session(config);total=0
+    while length>=shortest:
+        minutes=min(longest,length);total+=minutes;length-=minutes+session_break(minutes,config)
+    return total
 def add_duration(start,duration):
     if duration.unit=='weeks':return start+timedelta(weeks=duration.value)
     index=start.month-1+duration.value
@@ -87,9 +99,15 @@ def normalized(config,today):
     return config.model_copy(update={'start_date':start,'target_date':target})
 
 class Capacity:
-    """Eligible study time for one configuration, from now until the target date."""
+    """Eligible study time for one configuration, from now until the target date.
+
+    Every path that places or checks a session reads its windows from here: study blocks
+    first, then the extra-time window when it is enabled. Blackouts, elapsed time, saved
+    work and zero-hour reduced periods are already removed.
+    """
     def __init__(self,config,now,completed=()):
         self.config=config
+        self.now=now
         self.zone=ZoneInfo(config.time_zone)
         local=now.astimezone(self.zone)
         self.today=local.date()
@@ -97,13 +115,20 @@ class Capacity:
         self.start_date,self.target=resolve_dates(config,self.today)
         self.start=max(self.start_date,self.today)
         self.cap=config.weekly_minutes or 0
+        self.first=config.week_start_day
+        self.reduced=list(config.reduced_periods) if config.apply_reduced_periods else []
         self.completed_by_date={}
         self.completed_by_week={}
-        for session in completed:
+        self.busy_minutes={}
+        self.reserved=list(completed)
+        self._capacity_cache={}
+        for session in self.reserved:
             day=date.fromisoformat(str(session['date']))
-            begin=to_minute(session['start_time'])
-            self.completed_by_date.setdefault(day,[]).append((begin,begin+session['duration_minutes']))
-            week=week_of(day)
+            if session.get('start_time') is not None:
+                begin=to_minute(session['start_time'])
+                self.completed_by_date.setdefault(day,[]).append((begin,begin+session['duration_minutes']))
+            self.busy_minutes[day]=self.busy_minutes.get(day,0)+session['duration_minutes']
+            week=self.week(day)
             self.completed_by_week[week]=self.completed_by_week.get(week,0)+session['duration_minutes']
         self.blackouts=[rule for rule in config.blackouts if not blackout_problem(rule)]
         self.days={}
@@ -112,6 +137,17 @@ class Capacity:
             while day<=self.target:
                 self.days[day]=self._windows(day)
                 day+=timedelta(days=1)
+    def week(self,day):
+        return week_of(day,self.first)
+    def reduced_for(self,week):
+        """Non-zero reduced periods that touch this week."""
+        return [p for p in self.reduced if p.weekly_minutes and p.start_date<=week+timedelta(days=6) and p.end_date>=week]
+    def cap_for(self,week):
+        """The weekly target, lowered by any reduced-availability period that touches the week."""
+        return min([self.cap,*[p.weekly_minutes for p in self.reduced_for(week)]])
+    def closed(self,day):
+        """A zero-hour reduced period removes the whole day."""
+        return any(not p.weekly_minutes and p.start_date<=day<=p.end_date for p in self.reduced)
     def blackout_windows(self,day):
         return merge([blackout_span(rule) for rule in self.blackouts if blackout_occurs(rule,day)])
     def _windows(self,day):
@@ -119,53 +155,72 @@ class Capacity:
         span=lambda b:(to_minute(b.start_time),to_minute(b.start_time)+b.duration_minutes)
         holes=[*missing_local_minutes(day,self.zone),*self.completed_by_date.get(day,[]),*self.blackout_windows(day)]
         if day==self.today:holes.append((0,self.now_minute))
-        preferred=merge([span(b) for b in blocks if b.kind=='preferred'])
-        backup=subtract([span(b) for b in blocks if b.kind=='backup'],preferred)
-        overflow=subtract([(to_minute(self.config.overflow_start),to_minute(self.config.overflow_end))], [*preferred,*backup]) if self.config.allow_overflow else []
-        return {'preferred':subtract(preferred,holes),'backup':subtract(backup,holes),'overflow':subtract(overflow,holes)}
+        if self.closed(day):holes.append((0,1440))
+        preferred=merge([span(b) for b in blocks])
+        overflow=subtract([(to_minute(self.config.overflow_start),to_minute(self.config.overflow_end))],preferred) if self.config.allow_overflow else []
+        return {'preferred':subtract(preferred,holes),'overflow':subtract(overflow,holes)}
+    def eligible(self,day,overflow=True):
+        """Free windows on one day as (start, end, kind), study blocks before extra time."""
+        try:windows=self.days[day] if day in self.days else self._windows(day)
+        except OverflowError:return None
+        return [(low,high,kind) for kind in (('preferred','overflow') if overflow else ('preferred',)) for low,high in windows[kind]]
+    def fits(self,day,begin,end):
+        windows=self.eligible(day)
+        return windows is not None and any(low<=begin and end<=high for low,high,_ in windows)
     def week_left(self,week):
-        return max(0,self.cap-self.completed_by_week.get(week,0))
-    def between(self,first,last):
-        """Usable minutes from first to last, inclusive, honouring each week's remaining cap."""
+        return max(0,self.cap_for(week)-self.completed_by_week.get(week,0))
+    def day_minutes(self,day):
+        """Study minutes a day can still hold, as (study blocks, extra time), after breaks and the daily limit."""
+        windows=self.days.get(day)
+        if not windows:return 0,0
+        preferred=sum(studyable(high-low,self.config) for low,high in windows['preferred'])
+        overflow=sum(studyable(high-low,self.config) for low,high in windows['overflow'])
+        if self.config.max_daily_minutes is not None:
+            left=max(0,self.config.max_daily_minutes-self.busy_minutes.get(day,0))
+            preferred=min(preferred,left);overflow=min(overflow,left-preferred)
+        return preferred,overflow
+    def _week_minutes(self,first,last):
+        """Use the session placer for breaks, saved commitments, rest days and limits."""
+        from app.planning.placement import Placer
+        key=(first,last)
+        if key in self._capacity_cache:return self._capacity_cache[key]
         weeks={}
-        for day,windows in self.days.items():
-            if first<=day<=last:
-                minutes=total(windows['preferred'])+total(windows.get('overflow',[]))+(total(windows['backup']) if self.config.use_backup else 0)
-                weeks[week_of(day)]=weeks.get(week_of(day),0)+minutes
-        return sum(min(self.week_left(week),minutes) for week,minutes in weeks.items())
+        for day in self.days:
+            if first<=day<=last:weeks.setdefault(self.week(day),[]).append(day)
+        result={}
+        for week,days in weeks.items():
+            # Capacity construction never calls _week_minutes, so this does not recurse.
+            start=max(first,min(days));end=min(last,max(days))+timedelta(days=1)
+            result[week]=Placer(self.config,self.now,self.reserved,start,end).room_details()
+        self._capacity_cache[key]=result
+        return result
+    def between(self,first,last):
+        """Usable minutes from first to last, inclusive, honouring each week's remaining target."""
+        return sum(min(self.week_left(week),preferred+overflow) for week,(preferred,overflow) in self._week_minutes(first,last).items())
     def weeks(self):
-        rows={}
-        for day,windows in self.days.items():
-            row=rows.setdefault(week_of(day),{'preferred':0,'backup':0,'overflow':0})
-            row['preferred']+=total(windows['preferred'])
-            row['backup']+=total(windows['backup'])
-            row['overflow']+=total(windows.get('overflow',[]))
         result=[]
         if not self.target or self.target<self.start or not self.days and (self.target-self.start).days>MAX_RUNWAY_DAYS:return result
-        week=week_of(self.start)
+        rows=self._week_minutes(self.start,self.target)
+        week=self.week(self.start)
         while week<=self.target:
-            row=rows.get(week,{'preferred':0,'backup':0,'overflow':0})
-            left=self.week_left(week)
-            preferred=min(left,row['preferred'])
-            both=min(left,row['preferred']+row['backup'])
-            result.append({'week_start':week.isoformat(),'weekly_cap':self.cap,'completed_minutes':self.completed_by_week.get(week,0),
-                'preferred_minutes':preferred,'backup_extra_minutes':both-preferred,'usable_minutes':min(left,(row['preferred']+row['backup'] if self.config.use_backup else row['preferred'])+row.get('overflow',0)),
-                'partial':week<self.start or week+timedelta(days=6)>self.target})
+            preferred,overflow=rows.get(week,(0,0))
+            left=self.week_left(week);usable=min(left,preferred+overflow)
+            result.append({'week_start':week.isoformat(),'weekly_cap':self.cap_for(week),'completed_minutes':self.completed_by_week.get(week,0),
+                'preferred_minutes':min(left,preferred),'overflow_minutes':usable-min(left,preferred),'usable_minutes':usable,
+                'partial':week<self.start or week+timedelta(days=6)>self.target,'reduced':bool(self.reduced_for(week))})
             week+=timedelta(days=7)
         return result
     def windows_for_week(self,week):
-        """Exact eligible windows for one Monday-to-Sunday week."""
+        """Exact eligible windows for one week, study blocks before extra time."""
         result=[]
         for offset in range(7):
             day=week+timedelta(days=offset)
-            windows=self.days.get(day,{'preferred':[],'backup':[],'overflow':[]})
-            kinds=('preferred','backup','overflow') if self.config.use_backup else ('preferred','overflow')
-            for kind in kinds:
-                for start,end in windows[kind]:
-                    result.append({'date':day.isoformat(),'start_time':to_clock(start),'end_time':to_clock(end),'kind':kind,'minutes':end-start})
-        return sorted(result,key=lambda w:({'preferred':0,'backup':1,'overflow':2}[w['kind']],w['date'],w['start_time']))
+            if day not in self.days:continue
+            for start,end,kind in self.eligible(day):
+                result.append({'date':day.isoformat(),'start_time':to_clock(start),'end_time':to_clock(end),'kind':kind,'minutes':end-start})
+        return sorted(result,key=lambda w:({'preferred':0,'overflow':1}[w['kind']],w['date'],w['start_time']))
     def report(self,allow_past_start=False):
-        config=self.config;issues=[]
+        config=self.config;issues=[];notices=[]
         add=lambda code,message:issues.append({'code':code,'message':message})
         dates_valid=False
         if not self.target:add('missing_target','Choose a target date or a duration.')
@@ -181,19 +236,25 @@ class Capacity:
             if problem:add('blackout_invalid',f'Blackout {number} {problem}.')
         weeks=self.weeks() if dates_valid else []
         study={'preferred_minutes':sum(w['preferred_minutes'] for w in weeks),
-            'backup_extra_minutes':sum(w['backup_extra_minutes'] for w in weeks),
+            'overflow_minutes':sum(w['overflow_minutes'] for w in weeks),
             'usable_minutes':sum(w['usable_minutes'] for w in weeks)}
         if dates_valid and config.weekly_minutes and (config.blocks or config.allow_overflow) and not study['usable_minutes']:
             add('no_usable_time','No usable study time remains between these dates.')
+        short=[w for w in weeks if not w['partial'] and w['usable_minutes']<w['weekly_cap']-w['completed_minutes']]
+        if short and study['usable_minutes']:
+            least=min(w['usable_minutes'] for w in short)
+            notices.append({'code':'windows_below_target','message':f"{len(short)} of your weeks can hold less than your weekly hours (as little as {least//60}h {least%60:02d}m) once session length, breaks and blocked-out times are counted. Add study time, allow extra time or lower your weekly hours."})
+        if any(w['reduced'] for w in weeks):
+            notices.append({'code':'reduced_periods','message':'Weeks that overlap a reduced-availability period in your Profile use its lower weekly hours.'})
         calendar=None
         if dates_valid:
             days=(self.target-self.start).days+1
             parts=[f'{days//7} week'+('s' if days//7!=1 else '')] if days>=7 else []
             if days%7 or not parts:parts.append(f'{days%7} day'+('s' if days%7!=1 else ''))
-            calendar={'days':days,'weeks':days//7,'extra_days':days%7,'label':', '.join(parts),'partial_first_week':self.start.weekday()!=0}
+            calendar={'days':days,'weeks':days//7,'extra_days':days%7,'label':', '.join(parts),'partial_first_week':self.start.weekday()!=self.first}
         first=next((w['week_start'] for w in weeks if w['usable_minutes']),None)
         matched=matched_duration(self.start_date,self.target) if self.target and self.target>self.start_date else None
-        return {'windows':[window for row in weeks for window in self.windows_for_week(date.fromisoformat(row['week_start']))],'can_generate':not issues,'issues':issues,'calendar':calendar,'study':study,'weeks':weeks,'first_planning_week':first,
+        return {'windows':[window for row in weeks for window in self.windows_for_week(date.fromisoformat(row['week_start']))],'can_generate':not issues,'issues':issues,'notices':notices,'calendar':calendar,'study':study,'weeks':weeks,'first_planning_week':first,
             'resolved':{'today':self.today.isoformat(),'start_date':self.start_date.isoformat(),
                 'target_date':self.target.isoformat() if self.target else None,
                 'matched_duration':matched.model_dump() if matched else None}}

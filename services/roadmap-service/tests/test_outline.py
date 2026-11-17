@@ -1,15 +1,25 @@
 """Synthetic outline validation and publication: no provider or database calls."""
 import copy
 from datetime import date
-from planner_fixtures import NOW, assessment, draft, gap, milestone, settings
+from planner_fixtures import NOW, assessment, assignment, draft, gap, milestone, settings
 from app.planning.capacity import Capacity
 from app.planning.outlines import build_outline, draft_from_outline, validate_outline
 from app.schemas.outlines import OutlineDraft
 from app.schemas.roadmap import PlannerConfig
+from app.schemas.weeks import WeekDraft
 
 def outline(**changes):
     data=draft();data.pop('assignments');data['routine_rules']=[];data.update(changes)
     return OutlineDraft.model_validate(data)
+
+def with_weeks(value,context):
+    """The outline as the model must return it: a weekly objective for each week a milestone covers."""
+    from test_planner_flow import objectives
+    data=value.model_dump(mode='json');data['weeks']=objectives(data,context)
+    return OutlineDraft.model_validate(data)
+def first_week():
+    from test_planner_flow import week_draft
+    return WeekDraft.model_validate(week_draft([assignment()]))
 
 def codes(value,config=None):
     capacity=Capacity(PlannerConfig.model_validate(config or settings()),NOW)
@@ -56,9 +66,10 @@ def test_outline_preview_edit_and_accept_are_versioned_and_preserve_work():
         configured=True
         def __init__(self):self.calls=0
         async def generate(self,schema,instructions,context,max_tokens=8192):
+            if schema is WeekDraft:return first_week()
             assert schema is OutlineDraft
             self.calls+=1
-            return outline()
+            return with_weeks(outline(),context)
     model=Model()
     with TestClient(create_app(MemoryStore(),Sources(),model,clock=lambda:NOW)) as client:
         state=configure(client)
@@ -68,7 +79,8 @@ def test_outline_preview_edit_and_accept_are_versioned_and_preserve_work():
         assert state['operation']['status']=='succeeded',state['operation']
         candidate=state['planner']['outline_candidate']
         assert state['planner']['active'] is None and state['planner']['outline_active'] is None
-        assert model.calls==1 and 'assignments' not in candidate
+        assert model.calls==1 and 'assignments' not in candidate and len(candidate['weeks'])==3
+        assert state['planner']['week_candidate']['outline_id']==candidate['id']
         path='/api/v1/roadmaps/planner/outlines/'+candidate['id']
         invalid=draft_from_outline(candidate).model_dump(mode='json')
         invalid['milestones'][0]['prerequisite_keys']=['missing']
@@ -79,11 +91,14 @@ def test_outline_preview_edit_and_accept_are_versioned_and_preserve_work():
         response=client.patch(path,json={'expected_version':state['version'],'mutation_id':str(uuid4()),'outline':edited},headers=H)
         assert response.status_code==200,response.text
         state=response.json();candidate=state['planner']['outline_candidate']
+        # The first-week preview was written for the outline as it was, so it is planned again after acceptance.
+        assert state['planner']['week_candidate'] is None
         path='/api/v1/roadmaps/planner/outlines/'+candidate['id']+'/accept'
         body={'expected_version':state['version'],'mutation_id':str(uuid4())}
         response=client.post(path,json=body,headers=H);assert response.status_code==200,response.text
         state=response.json();assert state['planner']['outline_active']['summary']=='Edited outline.'
-        assert state['planner']['outline_candidate'] is None and state['planner']['active'] is None
+        assert state['planner']['outline_candidate'] is None and state['planner']['active']['editable_tasks']==[]
+        assert state['planner']['week_planning']['action']=='plan_this'
         assert client.post(path,json=body,headers=H).status_code==200
         assert model.calls==1
 
@@ -115,13 +130,14 @@ def test_operation_key_cannot_be_reused_across_generate_routes():
     from test_planner_flow import H, Sources, configure, finish
     class Model:
         configured=True
-        async def generate(self,schema,instructions,context,max_tokens=8192):return outline()
+        async def generate(self,schema,instructions,context,max_tokens=8192):return first_week() if schema is WeekDraft else with_weeks(outline(),context)
     with TestClient(create_app(MemoryStore(),Sources(),Model(),clock=lambda:NOW)) as client:
         state=configure(client)
         body={'expected_version':state['version'],'mutation_id':str(uuid4()),'allow_partial_assessment':False}
         assert client.post('/api/v1/roadmaps/planner/outlines/generate',json=body,headers=H).status_code==202
         assert finish(client)['operation']['status']=='succeeded'
-        assert client.post('/api/v1/roadmaps/planner/generate',json=body,headers=H).status_code==409
+        reused={'expected_version':body['expected_version'],'mutation_id':body['mutation_id'],'week_start':'2030-01-07'}
+        assert client.post('/api/v1/roadmaps/planner/weeks/generate',json=reused,headers=H).status_code==409
 
 def test_chat_revision_refines_outline_without_legacy_tasks():
     from uuid import uuid4
@@ -136,8 +152,9 @@ def test_chat_revision_refines_outline_without_legacy_tasks():
         async def generate(self,schema,instructions,context,max_tokens=8192):
             self.schemas.append(schema)
             if schema is ChatTurn:return ChatTurn(reply='I will revise the outline.',revision_instruction='Practise arrays weekly.')
+            if schema is WeekDraft:return first_week()
             assert schema is OutlineDraft
-            return outline(summary='Revised outline.' if context.get('instruction') else 'Initial outline.')
+            return with_weeks(outline(summary='Revised outline.' if context.get('instruction') else 'Initial outline.'),context)
     model=Model()
     with TestClient(create_app(MemoryStore(),Sources(),model,clock=lambda:NOW)) as client:
         state=configure(client)
@@ -151,25 +168,23 @@ def test_chat_revision_refines_outline_without_legacy_tasks():
         state=finish(client)
         assert state['operation']['status']=='succeeded',state['operation']
         assert state['planner']['outline_candidate']['summary']=='Revised outline.'
-        assert state['planner']['active'] is None and model.schemas==[OutlineDraft,ChatTurn,OutlineDraft]
+        # The revision is an outline preview only: the accepted week and its task are untouched and not written again.
+        assert len(state['planner']['active']['editable_tasks'])==1 and state['planner']['week_candidate'] is None
+        assert model.schemas==[OutlineDraft,WeekDraft,ChatTurn,OutlineDraft]
 
-def test_outline_workflow_blocks_new_legacy_generation_and_acceptance():
+def test_legacy_generation_month_and_roll_forward_routes_are_gone():
     from uuid import uuid4
     from fastapi.testclient import TestClient
     from elo_shared.runtime import MemoryStore
     from app.main import create_app
-    from test_planner_flow import H, Sources, configure, finish
+    from test_planner_flow import H, Sources, configure
     class Model:
         configured=True
-        async def generate(self,schema,instructions,context,max_tokens=8192):return outline()
+        async def generate(self,schema,instructions,context,max_tokens=8192):raise AssertionError('no model call')
     with TestClient(create_app(MemoryStore(),Sources(),Model(),clock=lambda:NOW)) as client:
-        state=configure(client)
-        body={'expected_version':state['version'],'mutation_id':str(uuid4())}
-        assert client.post('/api/v1/roadmaps/planner/outlines/generate',json=body,headers=H).status_code==202
-        state=finish(client);body={'expected_version':state['version'],'mutation_id':str(uuid4())}
-        for path in ('/planner/generate','/planner/accept','/planner/roll-forward'):
-            response=client.post('/api/v1/roadmaps'+path,json=body,headers=H)
-            assert response.status_code==409 and response.json()['code']=='outline_workflow_required'
+        state=configure(client);body={'expected_version':state['version'],'mutation_id':str(uuid4())}
+        for path in ('/planner/generate','/planner/accept','/planner/discard','/planner/roll-forward','/planner/tasks/reconcile','/planner/months/generate','/planner/months/x/accept','/planner/months/x/discard'):
+            assert client.post('/api/v1/roadmaps'+path,json=body,headers=H).status_code==404,path
 
 
 def test_milestone_outcome_cannot_be_a_generic_learning_goal():
@@ -188,9 +203,10 @@ def test_user_quoted_exclusion_survives_edit_and_accept_without_allowing_a_new_q
         configured=True
         async def generate(self,schema,instructions,context,max_tokens=8192):
             if schema is ChatTurn:return ChatTurn(reply='I will revise the outline.',revision_instruction=quote)
+            if schema is WeekDraft:return first_week()
             if context.get('instruction'):
-                return outline(milestones=[milestone(gap_ids=[])],exclusions=[{'requirement_ref':'job:python','reason':'User request','quote':quote}])
-            return outline()
+                return with_weeks(outline(milestones=[milestone(gap_ids=[])],exclusions=[{'requirement_ref':'job:python','reason':'User request','quote':quote}]),context)
+            return with_weeks(outline(),context)
     with TestClient(create_app(MemoryStore(),Sources(),Model(),clock=lambda:NOW)) as client:
         state=configure(client)
         def body(state,**values):return {'expected_version':state['version'],'mutation_id':str(uuid4()),**values}

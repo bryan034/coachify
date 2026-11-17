@@ -1,21 +1,22 @@
-"""Configure, generate, review and revise through the HTTP API, with scripted model output."""
+"""Configure, generate, review and plan week by week through the HTTP API, with scripted model output."""
 import copy
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
 from elo_shared.runtime import MemoryStore, Problem
 from planner_fixtures import NOW, OWNER, CleanableStore, assessment, assignment, draft, gap, milestone, settings
 from app.main import create_app
 from app.planning.state import learning_view
-from app.schemas.roadmap import ChatTurn, LearningPlan, PlanDraft, PlannedRoadmap
+from app.schemas.roadmap import ChatTurn, LearningPlan, OutlineDraft, PlannedRoadmap
+from app.schemas.weeks import WeekDraft
 
 H={'Authorization':'Bearer synthetic'}
+PREFIX='/api/v1/roadmaps/planner'
 class Sources:
-    def __init__(self):self.owner=OWNER;self.hash='hash1';self.ready=True;self.result=assessment();self.writes=[];self.reads=[]
-    async def account(self,token):return {'id':self.owner,'token':token,'profile':{'version':1,'weekly_hours':6,'application_date':None,'availability_periods':[]}}
+    def __init__(self):self.owner=OWNER;self.hash='hash1';self.ready=True;self.result=assessment();self.writes=[];self.reads=[];self.periods=[]
+    async def account(self,token):return {'id':self.owner,'token':token,'profile':{'version':1,'weekly_hours':6,'application_date':None,'availability_periods':self.periods}}
     async def read(self,service,path,token,params=None):
         self.reads.append(path)
         if path.endswith('/context'):
@@ -24,17 +25,48 @@ class Sources:
         return {'version':0,'ready':self.ready,'result':self.result,'stale':False,'evaluation':{'freshness':'current'},'operation':None}
     async def write(self,service,path,token,body):
         self.writes.append(path);self.result=assessment(self.hash);return {'version':1}
+def objectives(item,context):
+    """A weekly objective for each week a milestone covers, sharing out its estimate."""
+    left={m['key']:m['estimated_minutes'] for m in item['milestones']};weeks=[]
+    for row in context['weekly_capacity']:
+        first=row['week_start'];last=(datetime.fromisoformat(first)+timedelta(days=6)).date().isoformat()
+        found=next((m for m in item['milestones'] if m['projected_start']<=last and m['projected_end']>=first),None)
+        if not found:found=item['milestones'][-1] if item['milestones'] else None
+        if not found:continue
+        covered=found['projected_start']<=last and found['projected_end']>=first
+        minutes=min(row['usable_minutes'],left[found['key']]) if covered else 0;left[found['key']]-=minutes
+        weeks.append({'week_start':first,'objective':'Advance '+found['title'],'expected_outcome':found['demonstrable_outcome'][:400],
+            'estimated_minutes':minutes,'milestone_key':found['key'],'gap_ids':found['gap_ids'][:8]})
+    return weeks
+def week_draft(tasks=(),**changes):
+    """A week written by the model: tasks without times. Fixture assignments are accepted and their dates ignored."""
+    return {'summary':'This week builds on what you finished.','tasks':[{'key':t['key'],'milestone_key':t['milestone_key'],'title':t['title'],
+        'description':t.get('description') or '1. Implement the endpoint using the project conventions.\n2. Run its tests and fix failures.\n3. Save the passing result.',
+        'instructions':t.get('task') or t['instructions'],'completion_outcome':t.get('completion_criterion') or t['completion_outcome'],
+        'duration_minutes':t['duration_minutes'],'kind':t.get('kind','study'),'gap_id':t.get('gap_id')} for t in tasks],'carryover':[],'objective_changes':[],**changes}
 class Scripted:
-    """Returns each supplied plan once; a dict is a PlanDraft and a ChatTurn is returned for chat."""
+    """Returns each supplied outline once. A fixture draft's assignments become the tasks of its first week unless `weeks` scripts them."""
     configured=True
-    def __init__(self,plans=(),chats=()):self.plans=list(plans);self.chats=list(chats);self.contexts=[];self.tokens=[]
+    def __init__(self,plans=(),chats=(),weeks=()):
+        self.plans=list(plans);self.chats=list(chats);self.weeks=list(weeks);self.contexts=[];self.tokens=[];self.schemas=[];self.first_week=[]
     async def generate(self,schema,instructions,context,max_tokens=8192):
-        self.contexts.append(copy.deepcopy(context));self.tokens.append(max_tokens)
+        self.contexts.append(copy.deepcopy(context));self.tokens.append(max_tokens);self.schemas.append(schema.__name__)
         if schema is ChatTurn:return ChatTurn.model_validate(self.chats.pop(0))
-        assert schema is PlanDraft
-        item=self.plans.pop(0)
+        if schema is OutlineDraft:
+            item=self.plans.pop(0)
+            if isinstance(item,Exception):raise item
+            item=copy.deepcopy(item);self.first_week=item.pop('assignments',[])
+            item.setdefault('weeks',objectives(item,context))
+            return OutlineDraft.model_validate(item)
+        assert schema is WeekDraft
+        item=self.weeks.pop(0) if self.weeks else week_draft(self.first_week)
         if isinstance(item,Exception):raise item
-        return PlanDraft.model_validate(item)
+        return WeekDraft.model_validate(item(context) if callable(item) else item)
+    def sent(self,schema):
+        return [context for name,context in zip(self.schemas,self.contexts) if name==schema]
+class Clock:
+    def __init__(self,now=NOW):self.now=now
+    def __call__(self):return self.now
 def client_for(model,sources=None,clock=None):
     return TestClient(create_app(MemoryStore(),sources or Sources(),model,clock=clock or (lambda:NOW)))
 def read(client):
@@ -46,24 +78,388 @@ def finish(client):
         if (state['operation'] or {}).get('status') in ('succeeded','failed'):return state
         time.sleep(.01)
     raise AssertionError('operation did not finish')
+def request(client,path,state,**body):
+    return client.post(PREFIX+path,headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4()),**body})
 def post(client,path,state,**body):
-    response=client.post('/api/v1/roadmaps/planner'+path,headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4()),**body})
+    response=request(client,path,state,**body)
     assert response.status_code==200,response.text
     return response.json()
 def configure(client,state=None,**changes):
-    return post(client,'/config',state or read(client),config=settings(**changes))
+    # Ten-minute breaks, as a new account has: Wednesday's 90 minutes then hold one 60-minute session.
+    return post(client,'/config',state or read(client),config=settings(**{'break_minutes_per_hour':10,**changes}))
 def generate(client,state,allow_partial=False):
-    response=client.post('/api/v1/roadmaps/planner/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4()),'allow_partial_assessment':allow_partial})
+    """Outline and first week in one operation."""
+    response=request(client,'/outlines/generate',state,allow_partial_assessment=allow_partial)
     assert response.status_code==202,response.text
     time.sleep(.01)
     return finish(client)
+def plan_week(client,state,week_start,**body):
+    response=request(client,'/weeks/generate',state,week_start=week_start,**body)
+    assert response.status_code==202,response.text
+    time.sleep(.01)
+    return finish(client)
+def accept_outline(client,state):
+    return post(client,'/outlines/'+state['planner']['outline_candidate']['id']+'/accept',state)
+def accept_week(client,state):
+    return post(client,'/weeks/'+state['planner']['week_candidate']['id']+'/accept',state)
 def chat(client,state,message):
     body={'expected_version':state['version'],'mutation_id':str(uuid4()),'message':message,'allow_partial_assessment':False}
     response=client.post('/api/v1/roadmaps/messages',headers=H,json=body);assert response.status_code==202,response.text
     return finish(client)
-def accepted(client):
-    state=generate(client,configure(client));assert state['operation']['status']=='succeeded',state['operation']
-    return post(client,'/accept',state)
+def accepted(client,**changes):
+    state=generate(client,configure(client,**changes));assert state['operation']['status']=='succeeded',state['operation']
+    return accept_outline(client,state)
+
+SUNDAY=NOW+timedelta(days=4)  # 2030-01-13 08:00 in Singapore: the last day of the first week.
+def task(key,title,minutes=60,**changes):
+    return assignment(key,title=title,task=title+'.',duration_minutes=minutes,**changes)
+def long_draft(**changes):
+    """A milestone that runs to the target date, so all three weeks have an objective."""
+    return draft(milestones=[milestone(estimated_minutes=600,projected_end='2030-01-27')],**changes)
+def schedule_of(state,key):
+    found=next(t for t in state['planner']['active']['editable_tasks'] if t.get('generated_key')==key)
+    return [(s['date'],s['start_time'],s['duration_minutes']) for s in found['schedule']]
+def carry_all(action='carry',**extra):
+    return lambda context:[{'task_id':t['task_id'],'action':action,'reason':'Still the next step.',**extra} for t in context['progress']['unfinished']]
+
+# One generation, one acceptance
+
+def test_one_generation_previews_the_whole_outline_and_the_first_week_and_one_acceptance_publishes_both():
+    model=Scripted([long_draft()])
+    with client_for(model) as client:
+        state=generate(client,configure(client))
+        assert state['operation']['status']=='succeeded',state['operation']
+        planner=state['planner']
+        assert model.schemas==['OutlineDraft','WeekDraft'] and planner['active'] is None and 'candidate' not in planner
+        # Every week has a projected objective; only the first has tasks, and none of it is active yet.
+        assert [(w['week_start'],w['status'],w['tasks_total']) for w in planner['weeks']]==[('2030-01-07','open',0),('2030-01-14','projected',0),('2030-01-21','projected',0)]
+        assert all(w['objective'] and w['expected_outcome'] and w['milestone_key']=='m1' for w in planner['weeks'])
+        preview=planner['week_candidate']
+        assert preview['outline_id']==planner['outline_candidate']['id'] and preview['week_start']=='2030-01-07'
+        assert [(t['title'],t['schedule']) for t in preview['tasks']]==[('Write one tested endpoint',[{'date':'2030-01-09','start_time':'19:00','duration_minutes':60}])]
+        # Wednesday's 90 minutes can hold 80 study minutes in shorter sessions, and the partial week is explained.
+        assert (preview['target']['weekly_minutes'],preview['target']['target_minutes'])==(300,80)
+        assert [r['code'] for r in preview['target']['reasons']]==['partial_week','remaining_scope']
+        row=planner['preview_sessions'][0]
+        assert (row['title'],row['date'],row['start_time'],row['duration_minutes'])==('Write one tested endpoint','2030-01-09','19:00',60)
+        body={'expected_version':state['version'],'mutation_id':str(uuid4())}
+        path=PREFIX+'/outlines/'+planner['outline_candidate']['id']+'/accept'
+        response=client.post(path,headers=H,json=body);assert response.status_code==200,response.text
+        state=response.json();planner=state['planner'];active=planner['active']
+        assert planner['outline_candidate'] is None and planner['week_candidate'] is None and planner['outline_active']['status']=='accepted'
+        assert [a['title'] for a in active['assignments']]==['Write one tested endpoint'] and active['pace_baseline_id']==active['id']
+        assert active.keys()<={field.alias or name for name,field in PlannedRoadmap.model_fields.items()}|{'editable_tasks'}
+        assert [b['week_start'] for b in planner['week_blocks']]==['2030-01-07']
+        assert [(w['status'],w['tasks_total'],w['planned_minutes']) for w in planner['weeks']]==[('planned',1,60),('projected',0,0),('projected',0,0)]
+        assert (planner['week_planning']['action'],planner['week_planning']['available'],planner['week_planning']['reason'])==('plan_next',False,'waiting')
+        # A lost response is retried with the same key and changes nothing.
+        retry=client.post(path,headers=H,json=body)
+        assert retry.status_code==200 and retry.json()['planner']['active']['id']==active['id'] and len(model.contexts)==2
+
+def test_an_outline_is_still_reviewable_when_its_first_week_cannot_be_prepared():
+    model=Scripted([long_draft()],weeks=[Problem('Provider unavailable.',503,'model_provider'),week_draft([assignment()])])
+    with client_for(model) as client:
+        state=generate(client,configure(client))
+        assert state['operation']['status']=='succeeded' and state['planner']['week_candidate'] is None
+        assert state['planner']['outline_candidate']['first_week_error']=='Provider unavailable.'
+        state=accept_outline(client,state);planner=state['planner']
+        assert planner['active']['editable_tasks']==[] and planner['outline_active']['first_week_error'] is None
+        assert (planner['week_planning']['action'],planner['week_planning']['week_start'],planner['week_planning']['available'])==('plan_this','2030-01-07',True)
+        state=accept_week(client,plan_week(client,state,'2030-01-07'))
+        assert schedule_of(state,'a1')==[('2030-01-09','19:00',60)]
+
+def test_a_discarded_outline_preview_takes_its_first_week_with_it():
+    with client_for(Scripted([draft()])) as client:
+        state=generate(client,configure(client))
+        state=post(client,'/outlines/'+state['planner']['outline_candidate']['id']+'/discard',state)
+        assert state['planner']['outline_candidate'] is None and state['planner']['week_candidate'] is None and state['planner']['active'] is None
+
+def test_a_week_under_or_over_the_agreed_hours_is_sent_back_with_the_reason():
+    light=week_draft([task('a1','Read one page',30)]);heavy=week_draft([task('a1','Write endpoints',90)])
+    model=Scripted([draft()],weeks=[light,heavy,week_draft([assignment()])])
+    with client_for(model) as client:
+        state=generate(client,configure(client))
+        assert state['operation']['status']=='succeeded',state['operation']
+        first,second,third=model.sent('WeekDraft')
+        assert (first['target_minutes'],first['new_task_minutes'],first['session_minutes'])==(80,80,60) and first['validation_errors']==[]
+        assert 'under the agreed hours' in second['validation_errors'][0]
+        assert 'New tasks total 90 minutes but this week has room for 80' in third['validation_errors'][0]
+        assert state['planner']['week_candidate']['generation']['attempts']==3
+
+def test_three_rejected_weeks_fail_without_touching_saved_work():
+    bad=week_draft([task('a1','Write far too much',200)])
+    with client_for(Scripted([draft()],weeks=[bad,bad,bad,bad,bad,bad])) as client:
+        state=accept_outline(client,generate(client,configure(client)))
+        assert state['planner']['active']['editable_tasks']==[]
+        active=state['planner']['active']
+        state=plan_week(client,state,'2030-01-07')
+        assert state['operation']['error']['code']=='week_validation' and 'room for 80' in state['operation']['error']['detail']
+        assert state['planner']['active']==active and state['planner']['week_candidate'] is None
+        assert state['planner']['retry_week']['week_start']=='2030-01-07'
+
+# Planning the next week
+
+def test_next_week_opens_on_the_planning_day_or_once_every_task_is_done():
+    clock=Clock()
+    with client_for(Scripted([long_draft()]),clock=clock) as client:
+        state=accepted(client)
+        early=request(client,'/weeks/generate',state,week_start='2030-01-14')
+        assert early.status_code==409 and early.json()['code']=='week_not_open' and '2030-01-13' in early.json()['detail']
+        assert request(client,'/weeks/generate',state,week_start='2030-01-21').status_code==409
+        assert request(client,'/weeks/generate',state,week_start='2030-01-15').status_code==422
+        clock.now=SUNDAY
+        planning=read(client)['planner']['week_planning']
+        assert (planning['action'],planning['week_start'],planning['available'],planning['reason'],planning['unfinished_count'])==('plan_next','2030-01-14',True,'plan_day',1)
+    with client_for(Scripted([long_draft()])) as client:
+        state=accepted(client)
+        state=post(client,'/tasks/status',state,task_id=state['planner']['active']['editable_tasks'][0]['id'],status='completed')
+        planning=state['planner']['week_planning']
+        assert (planning['available'],planning['reason'],planning['week_done'])==(True,'week_done',True)
+    with client_for(Scripted([long_draft()]),clock=clock) as client:
+        clock.now=NOW
+        state=accepted(client,plan_day=4)  # Friday
+        assert state['planner']['week_planning']['plan_day']=='2030-01-11' and not state['planner']['week_planning']['available']
+        clock.now=NOW+timedelta(days=2)
+        assert read(client)['planner']['week_planning']['available']
+
+def test_next_week_carries_unfinished_work_once_and_proposes_later_changes_for_review():
+    clock=Clock()
+    change={'week_start':'2030-01-21','objective':'Catch up on endpoint tests.','expected_outcome':'Every endpoint has a passing test.','estimated_minutes':220,
+        'milestone_key':'m1','gap_ids':['python'],'reason':'The first week slipped, so testing moves here.'}
+    next_week=lambda context:week_draft([task('b1','Add a second endpoint'),task('b2','Validate request bodies'),task('b3','Return clear errors'),task('b4','Tidy the README',30)],
+        carryover=carry_all()(context),objective_changes=[change])
+    model=Scripted([long_draft()],weeks=[week_draft([assignment()]),next_week])
+    with client_for(model,clock=clock) as client:
+        state=accepted(client);first=state['planner']['active']['editable_tasks'][0]
+        clock.now=SUNDAY
+        state=plan_week(client,read(client),'2030-01-14',feedback={'workload':'too_light','note':'I could do more.'})
+        assert state['operation']['status']=='succeeded',state['operation']
+        sent=model.sent('WeekDraft')[-1]
+        # The model plans from what actually happened: nothing done, one task unfinished, and the user's feedback.
+        assert [t['task_id'] for t in sent['progress']['unfinished']]==[first['id']] and sent['feedback']['workload']=='too_light'
+        assert sent['last_week']=={'tasks_planned':1,'tasks_completed':0,'minutes_planned':60,'minutes_completed':0,'average_difficulty':None,'average_confidence':None}
+        assert sent['objective']['week_start']=='2030-01-14' and 'date' not in str(sent['progress'])
+        planner=state['planner'];preview=planner['week_candidate']
+        # Nothing is applied by a preview.
+        assert planner['active']['editable_tasks']==[first] or planner['active']['editable_tasks'][0]['schedule']==first['schedule']
+        entry=preview['carryover'][0]
+        assert (entry['task_id'],entry['action'],entry['proposed_action'],entry['adjusted'])==(first['id'],'carry','carry',False)
+        assert entry['schedule']==[{'date':'2030-01-14','start_time':'19:00','duration_minutes':60}] and entry['previous_schedule']==first['schedule']
+        placed={t['generated_key']:[(s['date'],s['start_time'],s['duration_minutes']) for s in t['schedule']] for t in preview['tasks']}
+        # Study blocks fill in date order, each session followed by its ten-minute break.
+        assert placed=={'b1':[('2030-01-16','19:00',60)],'b2':[('2030-01-19','10:00',60)],'b3':[('2030-01-19','11:10',60)],'b4':[('2030-01-14','20:10',30)]}
+        assert preview['objective_changes'][0]['previous']['objective']=='Advance Build a Python API' and preview['objective_changes'][0]['reason']==change['reason']
+        assert sorted(row['title'] for row in planner['preview_sessions'])==sorted(['Write one tested endpoint','Add a second endpoint','Validate request bodies','Return clear errors','Tidy the README'])
+        # A second click cannot start a duplicate preview; the first request's own retry is safe.
+        again=request(client,'/weeks/generate',state,week_start='2030-01-14',feedback={'workload':'too_light','note':'I could do more.'})
+        assert again.status_code==409 and again.json()['code']=='week_preview_exists'
+        state=accept_week(client,state);planner=state['planner'];tasks=planner['active']['editable_tasks']
+        # The unfinished task moved; it was not copied.
+        assert len(tasks)==5 and [t['id'] for t in tasks].count(first['id'])==1
+        moved=next(t for t in tasks if t['id']==first['id'])
+        assert moved['schedule']==entry['schedule'] and moved['status']=='not_started'
+        assert (moved['history'][-1]['event'],moved['history'][-1]['reason'])==('carried','Still the next step.')
+        assert planner['outline_active']['revision']==2 and planner['outline_active']['weeks'][2]['objective']=='Catch up on endpoint tests.'
+        assert planner['outline_active']['weeks'][2]['revised_reason']==change['reason']
+        assert [(b['week_start'],b['feedback'] and b['feedback']['workload']) for b in planner['week_blocks']]==[('2030-01-07',None),('2030-01-14','too_light')]
+        assert request(client,'/weeks/generate',state,week_start='2030-01-14').json()['code']=='week_already_accepted'
+        assert len(model.sent('WeekDraft'))==2
+
+def test_each_unfinished_task_gets_a_reviewed_decision_that_the_user_can_change():
+    clock=Clock()
+    two=draft(assignments=[task('a1','First',45),task('a2','Second',45)])
+    drop_first=lambda context:week_draft([task('b1','Add a second endpoint'),task('b2','Validate request bodies')],
+        carryover=[{'task_id':context['progress']['unfinished'][0]['task_id'],'action':'drop','reason':'Superseded by this week.'}])
+    model=Scripted([two],weeks=[week_draft(two['assignments']),drop_first,week_draft()])
+    with client_for(model,clock=clock) as client:
+        state=accepted(client,break_minutes_per_hour=0)
+        first,second=state['planner']['active']['editable_tasks']
+        clock.now=SUNDAY
+        state=plan_week(client,read(client),'2030-01-14')
+        assert state['operation']['status']=='succeeded',state['operation']
+        preview=state['planner']['week_candidate']
+        # The model dropped one and said nothing about the other, which then follows the user's default.
+        assert [(c['title'],c['action']) for c in preview['carryover']]==[('First','drop'),('Second','carry')]
+        assert 'your setting for unfinished work' in preview['carryover'][1]['reason']
+        state=post(client,'/weeks/'+preview['id']+'/carryover',state,decisions=[{'task_id':first['id'],'action':'defer'}])
+        entry=state['planner']['week_candidate']['carryover'][0]
+        assert (entry['action'],entry['proposed_action'],entry['reason'])==('defer','drop','Your choice.')
+        assert len(model.sent('WeekDraft'))==2  # the user's choice needs no model call
+        state=accept_week(client,state);tasks={t['title']:t for t in state['planner']['active']['editable_tasks']}
+        assert (tasks['First']['schedule'],tasks['First']['removed'],tasks['First']['deferred_week'])==([],False,'2030-01-14')
+        assert tasks['First']['history'][-1]['event']=='deferred' and tasks['Second']['schedule'][0]['date']=='2030-01-14'
+        # Deferred work is offered again the next week, and carried work is capped at half the weekly hours.
+        clock.now=SUNDAY+timedelta(days=7)
+        state=read(client);assert state['planner']['week_planning']['unfinished_count']==4
+        state=plan_week(client,state,'2030-01-21')
+        assert state['operation']['status']=='succeeded',state['operation']
+        assert first['id'] in [t['task_id'] for t in model.sent('WeekDraft')[-1]['progress']['unfinished']]
+        entries=state['planner']['week_candidate']['carryover']
+        assert sum(c['estimated_minutes'] for c in entries if c['action']=='carry')==150
+        held=[c for c in entries if c['adjusted']]
+        assert len(held)==1 and held[0]['action']=='defer' and 'more than 150 minutes' in held[0]['reason']
+
+def test_splitting_and_dropping_unfinished_work_keep_their_history():
+    clock=Clock()
+    two=draft(assignments=[task('a1','First',45),task('a2','Second',45)])
+    decide=lambda context:week_draft([task('b1','Add a second endpoint'),task('b2','Validate request bodies')],carryover=[
+        {'task_id':context['progress']['unfinished'][0]['task_id'],'action':'split','minutes':25,'reason':'Finish the first half.'},
+        {'task_id':context['progress']['unfinished'][1]['task_id'],'action':'drop','reason':'No longer needed.'}])
+    with client_for(Scripted([two],weeks=[week_draft(two['assignments']),decide]),clock=clock) as client:
+        state=accepted(client,break_minutes_per_hour=0)
+        clock.now=SUNDAY
+        state=accept_week(client,plan_week(client,read(client),'2030-01-14'))
+        tasks={t['title']:t for t in state['planner']['active']['editable_tasks'] if t.get('schedule') or t.get('removed')}
+        remainder=next(t for t in state['planner']['active']['editable_tasks'] if t['history'] and t['history'][0].get('event')=='split_remainder')
+        assert remainder['estimated_minutes']==20 and remainder['deferred_week']=='2030-01-14'
+        assert remainder['id']!=tasks['First']['id']
+        assert [(s['date'],s['duration_minutes']) for s in tasks['First']['schedule']]==[('2030-01-14',25)] and tasks['First']['estimated_minutes']==25
+        assert tasks['First']['history'][-1]['event']=='split'
+        state=post(client,'/tasks/status',state,task_id=tasks['First']['id'],status='completed')
+        saved={t['id']:t for t in state['planner']['active']['editable_tasks']}
+        assert saved[tasks['First']['id']]['status']=='completed'
+        assert saved[remainder['id']]['status']=='not_started' and saved[remainder['id']]['estimated_minutes']==20
+        assert saved[remainder['id']]['history'][0]['source_task_id']==tasks['First']['id']
+        assert tasks['Second']['removed'] and tasks['Second']['removal']['reason']=='No longer needed.' and tasks['Second']['history'][-1]['event']=='removed'
+        assert [row['title'] for row in state['planner']['active_sessions'] if row['title']=='Second']==[]
+
+SPREAD=[{'day':2,'start_time':'19:00','duration_minutes':70},{'day':6,'start_time':'19:00','duration_minutes':70}]
+def sunday_preview(client,clock,model):
+    """Wednesday's task was missed and Sunday evening's is still ahead when next week is previewed on Sunday morning."""
+    state=accepted(client,blocks=SPREAD,blackouts=[])
+    clock.now=SUNDAY
+    state=plan_week(client,read(client),'2030-01-14')
+    assert state['operation']['status']=='succeeded',state['operation']
+    return state
+def spread_model():
+    week_one=week_draft([task('a1','First'),task('a2','Second')])
+    return Scripted([draft()],weeks=[week_one,lambda context:week_draft([task('b1','Add a second endpoint')],carryover=carry_all()(context))])
+
+def test_progress_elsewhere_keeps_a_preview_valid_but_progress_on_carried_work_does_not():
+    clock=Clock()
+    with client_for(spread_model(),clock=clock) as client:
+        state=sunday_preview(client,clock,None);tasks={t['title']:t for t in state['planner']['active']['editable_tasks']}
+        assert [c['title'] for c in state['planner']['week_candidate']['carryover']]==['First']
+        state=post(client,'/tasks/status',state,task_id=tasks['Second']['id'],status='completed')
+        state=accept_week(client,state)
+        done=next(t for t in state['planner']['active']['editable_tasks'] if t['title']=='Second')
+        assert done['status']=='completed' and done['schedule']==tasks['Second']['schedule']
+    clock=Clock()
+    with client_for(spread_model(),clock=clock) as client:
+        state=sunday_preview(client,clock,None);carried=state['planner']['week_candidate']['carryover'][0]['task_id']
+        state=post(client,'/tasks/status',state,task_id=carried,status='completed')
+        response=request(client,'/weeks/'+state['planner']['week_candidate']['id']+'/accept',state)
+        assert response.status_code==409 and response.json()['code']=='week_stale'
+        after=read(client)
+        assert next(t for t in after['planner']['active']['editable_tasks'] if t['id']==carried)['status']=='completed'
+
+def test_schedule_settings_apply_from_the_next_week_and_shape_settings_need_the_outline_reviewed():
+    clock=Clock()
+    with client_for(spread_model(),clock=clock) as client:
+        state=sunday_preview(client,clock,None)
+        # A new study time is a scheduling rule: no outline review, but the open preview was placed without it.
+        state=configure(client,state,blocks=[*SPREAD,{'day':1,'start_time':'07:00','duration_minutes':60}],blackouts=[])
+        assert 'settings' not in {s['kind'] for s in state['planner']['signals']}
+        response=request(client,'/weeks/'+state['planner']['week_candidate']['id']+'/accept',state)
+        assert response.status_code==409 and response.json()['code']=='week_stale'
+        state=post(client,'/weeks/'+state['planner']['week_candidate']['id']+'/discard',state)
+        state=configure(client,state,blocks=SPREAD,blackouts=[],weekly_minutes=240)
+        assert 'settings' in {s['kind'] for s in state['planner']['signals']}
+        response=request(client,'/weeks/generate',state,week_start='2030-01-14')
+        assert response.status_code==409 and response.json()['code']=='settings_changed'
+
+def test_revising_an_accepted_week_replaces_only_untouched_future_tasks():
+    clock=Clock()
+    first=lambda context:week_draft([task('b1','Add a second endpoint'),task('b2','Validate request bodies'),task('b3','Return clear errors'),task('b4','Tidy the README',30)],carryover=carry_all()(context))
+    second=week_draft([task('r1','Write a health check'),task('r2','Add request logging'),task('r3','Document the endpoints',60)])
+    model=Scripted([long_draft()],weeks=[week_draft([assignment()]),first,second])
+    with client_for(model,clock=clock) as client:
+        state=accepted(client);clock.now=SUNDAY
+        state=accept_week(client,plan_week(client,read(client),'2030-01-14'))
+        rows={row['title']:row for row in state['planner']['active_sessions']}
+        state=post(client,'/sessions/save',state,session_id=rows['Add a second endpoint']['id'],changes={'title':'Add the orders endpoint'})
+        before={t['generated_key']:t for t in state['planner']['active']['editable_tasks']}
+        state=plan_week(client,state,'2030-01-14',revision=True)
+        assert state['operation']['status']=='succeeded',state['operation']
+        preview=state['planner']['week_candidate']
+        # Carried work has history and the renamed task is the user's edit, so only the untouched tasks are replaced.
+        assert sorted(preview['replaced_task_ids'])==sorted(before[key]['id'] for key in ('b2','b3','b4')) and preview['revision']==2
+        state=accept_week(client,state);after={t['generated_key']:t for t in state['planner']['active']['editable_tasks']}
+        assert set(after)=={'a1','b1','r1','r2','r3'} and after['b1']['title']=='Add the orders endpoint' and after['a1']==before['a1']
+        slots=sorted((s['date'],s['start_time']) for t in after.values() for s in t['schedule'])
+        assert len(slots)==len(set(slots))==6
+        assert all(s['duration_minutes']<=60 for t in after.values() for s in t['schedule'])
+        assert sum(s['duration_minutes'] for key in ('r1','r2','r3') for s in after[key]['schedule'])==180
+        assert [b.get('revision',1) for b in state['planner']['week_blocks']]==[1,2]
+
+def test_a_missed_planning_window_plans_the_current_week_from_today():
+    clock=Clock()
+    late=lambda context:week_draft([task('b1','Add a second endpoint',80),task('b2','Validate request bodies',160)],carryover=carry_all('defer')(context))
+    with client_for(Scripted([long_draft()],weeks=[week_draft([assignment()]),late]),clock=clock) as client:
+        state=accepted(client)
+        clock.now=NOW+timedelta(days=7)  # Wednesday of the next week; nobody planned it on Sunday.
+        state=read(client);planning=state['planner']['week_planning']
+        assert (planning['action'],planning['week_start'],planning['available'],planning['reason'])==('plan_this','2030-01-14',True,'week_unplanned')
+        state=plan_week(client,state,'2030-01-14')
+        assert state['operation']['status']=='succeeded',state['operation']
+        preview=state['planner']['week_candidate']
+        assert preview['start_date']=='2030-01-16' and all(s['date']>='2030-01-16' for t in preview['tasks'] for s in t['schedule'])
+        assert 'saved_work' not in [r['code'] for r in preview['target']['reasons']] and preview['target']['target_minutes']<300
+
+# Compatibility with saved work
+
+def test_saved_backup_blocks_months_and_legacy_previews_stay_readable():
+    store=CleanableStore()
+    with TestClient(create_app(store,Sources(),Scripted([long_draft()]),clock=lambda:NOW)) as client:
+        state=accepted(client)
+        row=store.data[OWNER];planner=row['planner']
+        # As saved before weekly planning: a month block, a month preview, a legacy preview and backup settings.
+        planner['week_blocks']=[]
+        planner['month_blocks']=[{'id':'m-1','month':'2030-01','status':'accepted','start_date':'2030-01-09','end_exclusive':'2030-01-28','task_ids':[t['id'] for t in planner['active']['editable_tasks']],'outline_id':'x','config_hash':'h'}]
+        planner['month_candidate']={'id':'m-2','month':'2030-02'};planner['candidate']={'id':'legacy'}
+        planner['config'].update(use_backup=False);planner['config']['blocks'].append({'day':6,'start_time':'09:00','duration_minutes':120,'kind':'backup'})
+        state=read(client);view=state['planner']
+        assert len(view['config']['blocks'])==4 and 'use_backup' not in view['config'] and 'candidate' not in view
+        assert view['month_blocks'][0]['month']=='2030-01'
+        # Every week of the accepted month already counts as planned, so nothing is offered for planning.
+        assert view['week_planning']['action'] is None
+        assert [w['status'] for w in view['weeks']]==['planned','planned','planned']
+
+def test_a_roadmap_from_before_weekly_planning_keeps_its_progress_and_is_invited_to_update():
+    store=CleanableStore()
+    with TestClient(create_app(store,Sources(),Scripted([long_draft(),long_draft()]),clock=lambda:NOW)) as client:
+        state=accepted(client)
+        state=post(client,'/tasks/status',state,task_id=state['planner']['active']['editable_tasks'][0]['id'],status='completed')
+        planner=store.data[OWNER]['planner'];planner['outline_active']=None;planner['week_blocks']=[]
+        state=read(client)
+        assert state['planner']['week_planning'] is None and [s['kind'] for s in state['planner']['signals']]==['progress']
+        assert state['planner']['active']['assignments'][0]['status']=='completed'
+        state=accept_outline(client,generate(client,state))
+        done=state['planner']['active']['editable_tasks'][0]
+        assert done['status']=='completed' and done['schedule']==[{'date':'2030-01-09','start_time':'19:00','duration_minutes':60}]
+
+def test_reduced_periods_come_from_profile_and_lower_that_weeks_target():
+    sources=Sources();sources.periods=[{'id':'p1','start_date':'2030-01-14','end_date':'2030-01-18','weekly_hours':2}]
+    with client_for(Scripted([long_draft()]),sources) as client:
+        state=configure(client,reduced_periods=[{'start_date':'2030-01-21','end_date':'2030-01-22','weekly_minutes':0}])
+        assert state['planner']['config']['reduced_periods']==[{'start_date':'2030-01-14','end_date':'2030-01-18','weekly_minutes':120}]
+        weeks=state['planner']['runway']['weeks']
+        assert [(w['weekly_cap'],w['reduced']) for w in weeks]==[(300,False),(120,True),(300,False)]
+        assert 'reduced_periods' in [n['code'] for n in state['planner']['runway']['notices']]
+        state=configure(client,state,apply_reduced_periods=False)
+        assert [w['weekly_cap'] for w in state['planner']['runway']['weeks']]==[300,300,300]
+
+def test_a_saved_plan_or_settings_holding_old_fields_is_rejected_on_read():
+    from pydantic import ValidationError
+    with client_for(Scripted([draft()])) as client:
+        plan=accepted(client)['planner']['active']
+    for field,value in {'buffer_percent':20,'checkin_day':4,'checkin_time':'18:00','blackout_dates':['2030-02-01']}.items():
+        with pytest.raises(ValidationError):PlannedRoadmap.model_validate({**plan,'config':{**plan['config'],field:value}})
+
+# Settings, chat, sources and saved evaluation
+
+def restarted(store,model=None,sources=None):
+    return TestClient(create_app(store,sources or Sources(),model or Scripted(),clock=lambda:NOW))
 
 def test_runway_is_shown_before_any_model_call_and_generation_is_gated():
     model=Scripted()
@@ -73,8 +469,8 @@ def test_runway_is_shown_before_any_model_call_and_generation_is_gated():
         assert state['planner']['config_saved'] is False and not state['planner']['runway']['can_generate']
         assert {i['code'] for i in state['planner']['runway']['issues']}>={'missing_target','no_budget'}
         response=client.post('/api/v1/roadmaps/planner/runway',headers=H,json={'config':settings()})
-        assert response.status_code==200 and response.json()['study']=={'preferred_minutes':690,'backup_extra_minutes':120,'usable_minutes':690}
-        response=client.post('/api/v1/roadmaps/planner/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
+        assert response.status_code==200 and response.json()['study']=={'preferred_minutes':690,'overflow_minutes':0,'usable_minutes':690}
+        response=client.post('/api/v1/roadmaps/planner/outlines/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
         assert response.status_code==409 and response.json()['code']=='generation_blocked'
         assert model.contexts==[]
 
@@ -92,7 +488,7 @@ def test_missing_goal_or_cv_blocks_generation():
     sources=Sources();sources.ready=False;model=Scripted()
     with client_for(model,sources) as client:
         state=configure(client)
-        response=client.post('/api/v1/roadmaps/planner/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
+        response=client.post('/api/v1/roadmaps/planner/outlines/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
         assert response.status_code==409 and response.json()['code']=='inputs_missing' and model.contexts==[]
 
 def test_the_panel_shows_the_goal_and_skills_passed_to_the_model():
@@ -106,163 +502,13 @@ def test_the_panel_shows_the_goal_and_skills_passed_to_the_model():
         assert sent['goal']['role']=='Developer' and set(sent['assessment']['evidence'])=={i['ref'] for i in [*inputs['skills'],*inputs['experience']]}
         assert model.tokens[0]>8192
 
-def test_generation_sends_settings_and_windows_for_the_partial_first_week_and_blackout():
-    model=Scripted([draft()])
-    with client_for(model) as client:
-        state=generate(client,configure(client))
-        assert state['operation']['status']=='succeeded',state['operation']
-        sent=model.contexts[0]
-        assert sent['first_planning_week']=='2030-01-07'
-        # Monday and Tuesday have passed, Saturday is a blackout and backup is disabled.
-        assert sent['first_week_windows']==[{'date':'2030-01-09','start_time':'19:00','end_time':'20:30','kind':'preferred','minutes':90}]
-        assert [w['usable_minutes'] for w in sent['weekly_capacity']]==[90,300,300]
-        assert state['planner']['candidate'] and not state['planner']['active']
-        session=state['planner']['candidate']['assignments'][0]
-        assert (session['date'],session['start_time'],session['duration_minutes'],session['milestone_key'])==('2030-01-09','19:00',60,'m1')
-        review=state['planner']['candidate_review']
-        assert review['next_assignment_id']==session['id'] and review['remaining']['calendar']['label']=='2 weeks, 5 days'
-
-def test_backup_windows_are_only_offered_and_accepted_when_enabled():
-    using_backup=draft(assignments=[assignment('a1',duration_minutes=90),assignment('a2',date='2030-01-13',start_time='09:00')])
-    model=Scripted([using_backup,using_backup,using_backup])
-    with client_for(model) as client:
-        state=generate(client,configure(client))
-        assert state['operation']['error']['code']=='plan_validation' and 'backup' in state['operation']['error']['detail']
-    model=Scripted([using_backup])
-    with client_for(model) as client:
-        state=generate(client,configure(client,use_backup=True))
-        assert state['operation']['status']=='succeeded',state['operation']
-        assert [w['kind'] for w in model.contexts[0]['first_week_windows']]==['preferred','backup']
-        assert [w['usable_minutes'] for w in model.contexts[0]['weekly_capacity']]==[210,300,300]
-
-def test_insufficient_runway_retries_with_errors_then_reports_what_remains():
-    overcommitted=draft(milestones=[milestone(estimated_minutes=5000,projected_end='2030-01-27')])
-    honest=draft(milestones=[milestone(estimated_minutes=600,projected_end='2030-01-27')],
-        beyond_deadline=[{'title':'Advanced Python','gap_ids':['python'],'reason':'Needs more time than the runway allows.','estimated_minutes':4400}],
-        deadline_outcome={'summary':'By the target you can show a basic API, but not advanced Python.','achievable_by_target':['A basic API'],'fits_in_runway':False})
-    model=Scripted([overcommitted,honest])
-    with client_for(model) as client:
-        state=generate(client,configure(client))
-        assert state['operation']['status']=='succeeded',state['operation']
-        assert len(model.contexts)==2 and 'validation_errors' not in model.contexts[0]
-        retry=model.contexts[1]
-        assert retry['attempt']==2 and {e['code'] for e in retry['validation_errors']}=={'milestone_capacity_exceeded'}
-        assert '5000 minutes' in retry['validation_errors'][0]['message'] and retry['previous_output']['milestones'][0]['estimated_minutes']==5000
-        candidate=state['planner']['candidate']
-        assert candidate['beyond_deadline'][0]['title']=='Advanced Python' and candidate['deadline_outcome']['fits_in_runway'] is False
-        assert candidate['generation']['attempts']==2
-
-def test_retries_are_bounded_and_the_last_valid_plan_is_preserved():
-    bad=draft(assignments=[assignment(date='2030-01-12',start_time='10:00')])
-    model=Scripted([draft(),bad,bad,bad])
-    with client_for(model) as client:
-        state=accepted(client);active=state['planner']['active']
-        state=generate(client,state)
-        assert len(model.contexts)==4 and state['operation']['status']=='failed' and state['operation']['error']['code']=='plan_validation'
-        assert 'blackout' in state['operation']['error']['detail']
-        assert state['planner']['active']==active and state['planner']['candidate'] is None
-        assert state['planner']['retry_generate']['mutation_id']==state['operation']['id'] and state['retry_request'] is None
-
-def test_provider_failure_keeps_an_earlier_preview_and_settings():
-    model=Scripted([draft(),Problem('Provider unavailable.',503,'model_provider')])
-    with client_for(model) as client:
-        state=generate(client,configure(client));candidate=state['planner']['candidate']
-        state=generate(client,state)
-        assert state['operation']['error']['code']=='model_provider'
-        assert state['planner']['candidate']==candidate and state['planner']['config']['weekly_minutes']==300
-
-def test_failed_generation_retry_reuses_its_identity_and_replay_is_idempotent():
-    model=Scripted([Problem('Provider unavailable.',503,'model_provider'),draft()])
-    with client_for(model) as client:
-        state=generate(client,configure(client))
-        body=state['planner']['retry_generate']
-        assert client.post('/api/v1/roadmaps/planner/generate',headers=H,json=body).status_code==202
-        state=finish(client);time.sleep(.01);state=finish(client)
-        assert state['operation']['status']=='succeeded' and state['planner']['candidate']
-        assert client.post('/api/v1/roadmaps/planner/generate',headers=H,json=body).status_code==202
-        assert len(model.contexts)==2
-
 def test_missing_assessment_requires_explicit_evaluation_before_planning():
     sources=Sources();sources.result=None;model=Scripted([draft()])
     with client_for(model,sources) as client:
         state=generate(client,configure(client))
-        assert sources.writes==[] and state['planner']['candidate'] is None
+        assert sources.writes==[] and state['planner']['outline_candidate'] is None
         assert state['operation']['error']['code']=='assessment_required'
         assert model.contexts==[]
-
-def test_accept_requires_a_current_preview_and_snapshots_the_plan():
-    sources=Sources();model=Scripted([draft(),draft()])
-    with client_for(model,sources) as client:
-        state=generate(client,configure(client))
-        changed=configure(client,state,weekly_minutes=240)
-        response=client.post('/api/v1/roadmaps/planner/accept',headers=H,json={'expected_version':changed['version'],'mutation_id':str(uuid4())})
-        assert response.status_code==409 and response.json()['code']=='settings_changed'
-        assert {b['code'] for b in changed['planner']['candidate_blockers']}=={'settings_changed'}
-        state=configure(client,changed)
-        sources.hash='hash2'
-        response=client.post('/api/v1/roadmaps/planner/accept',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
-        assert response.status_code==409 and response.json()['code']=='inputs_changed'
-        sources.hash='hash1'
-        body={'expected_version':state['version'],'mutation_id':str(uuid4())}
-        response=client.post('/api/v1/roadmaps/planner/accept',headers=H,json=body);assert response.status_code==200,response.text
-        state=response.json();plan=state['planner']['active'];assert plan and state['planner']['candidate'] is None
-        assert client.post('/api/v1/roadmaps/planner/accept',headers=H,json=body).json()['planner']['active']['id']==plan['id']
-        history=client.get('/api/v1/roadmaps/history/'+plan['id'],headers=H);assert history.status_code==200 and history.json()['schema_version']=='roadmap-v2'
-        sources.owner='22222222-2222-4222-8222-222222222222'
-        assert client.get('/api/v1/roadmaps/history/'+plan['id'],headers=H).status_code==404
-        assert read(client)['planner']['active'] is None
-
-def test_preview_expires_once_a_session_has_passed():
-    moments=[NOW];model=Scripted([draft()])
-    with client_for(model,clock=lambda:moments[0]) as client:
-        state=generate(client,configure(client))
-        moments[0]=NOW.replace(hour=12)  # 20:00 in Singapore, after the 19:00 session.
-        state=read(client)
-        assert 'plan_expired' in {b['code'] for b in state['planner']['candidate_blockers']}
-        response=client.post('/api/v1/roadmaps/planner/accept',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
-        assert response.status_code==409 and response.json()['code']=='plan_expired'
-
-def test_schedule_change_after_completion_previews_a_revision_and_preserves_completed_work():
-    sources=Sources()
-    revised=draft(summary='Moved to Thursday evenings.',milestones=[milestone(estimated_minutes=120)],assignments=[assignment('a2',date='2030-01-10',start_time='18:00')])
-    model=Scripted([draft(assignments=[assignment('a1'),assignment('a3',start_time='20:00',duration_minutes=30)]),revised])
-    with client_for(model,sources) as client:
-        state=accepted(client);session=state['planner']['active']['assignments'][0]
-        state=post(client,'/assignments/status',state,assignment_id=session['id'],status='completed',evidence_note='Endpoint test passed.')
-        done=state['planner']['active']['assignments'][0]
-        assert done['status']=='completed' and done['evidence_note']=='Endpoint test passed.'
-        assert 'progress' in {s['kind'] for s in state['planner']['signals']}
-        active_before=copy.deepcopy(state['planner']['active'])
-        blocks=[{'day':3,'start_time':'18:00','duration_minutes':60,'kind':'preferred'},{'day':0,'start_time':'19:00','duration_minutes':120,'kind':'preferred'}]
-        state=configure(client,state,blocks=blocks,blackouts=[])
-        assert {'settings','progress'}<={s['kind'] for s in state['planner']['signals']}
-        assert state['planner']['active']==active_before
-        state=generate(client,state)
-        assert state['operation']['status']=='succeeded',state['operation']
-        sent=model.contexts[-1]
-        assert sent['completed_work'][0]['key']=='a1' and sent['completed_work'][0]['evidence_note']=='Endpoint test passed.'
-        assert sent['current_plan']['scheduled'][0]['key']=='a3'
-        assert sent['first_week_windows']==[{'date':'2030-01-10','start_time':'18:00','end_time':'19:00','kind':'preferred','minutes':60}]
-        assert state['planner']['active']==active_before
-        preview=state['planner']['candidate']
-        assert preview['assignments'][0]==done and [a['key'] for a in preview['assignments']]==['a1','a2']
-        assert preview['changes']['completed_preserved']==1 and preview['changes']['assignments_removed'] and preview['changes']['assignments_added']
-        review=preview['revision_review']
-        assert len(review)==1 and done['id'] in review[0]['related_task_ids']
-        assert 'revision_review_required' in {item['code'] for item in state['planner']['candidate_blockers']}
-        state=post(client,'/tasks/reconcile',state,candidate_id=preview['id'],
-            decisions=[{'task_id':review[0]['task_id'],'decision':'keep'}])
-        state=post(client,'/accept',state)
-        assert state['planner']['active']['assignments'][0]==done and state['planner']['active']['summary']=='Moved to Thursday evenings.'
-        assert sources.writes==[]
-
-def test_completing_a_session_invalidates_an_older_preview():
-    model=Scripted([draft(),draft(assignments=[assignment('a9',start_time='19:30')])])
-    with client_for(model) as client:
-        state=accepted(client);session=state['planner']['active']['assignments'][0]
-        state=generate(client,state);assert state['planner']['candidate']
-        state=post(client,'/assignments/status',state,assignment_id=session['id'],status='completed')
-        assert {b['code'] for b in state['planner']['candidate_blockers']}=={'active_changed'}
 
 def test_session_completion_and_recorded_outcomes_stay_separate_from_proficiency():
     sources=Sources();model=Scripted([draft()])
@@ -291,7 +537,7 @@ def test_confirmation_answers_are_self_reported_and_prompt_a_revision():
         assert state['planner']['confirmations']['sql']['source']=='self_reported'
         assert 'evidence' in {s['kind'] for s in state['planner']['signals']}
         state=generate(client,state)
-        assert model.contexts[-1]['confirmations']['sql']['answer']=='some_experience'
+        assert model.sent('OutlineDraft')[-1]['confirmations']['sql']['answer']=='some_experience'
         assert state['operation']['status']=='succeeded',state['operation']
         assert not state['planner']['signals']
 
@@ -301,20 +547,6 @@ def test_changed_evidence_prompts_a_revision():
         accepted(client);sources.hash='hash2'
         assert 'evidence' in {s['kind'] for s in read(client)['planner']['signals']}
 
-def test_finished_week_prompts_the_next_week_and_revision_rolls_detail_forward():
-    moments=[NOW]
-    next_week=draft(milestones=[milestone(projected_start='2030-01-14')],assignments=[assignment('w2',date='2030-01-14',start_time='19:00')])
-    model=Scripted([draft(),next_week])
-    with client_for(model,clock=lambda:moments[0]) as client:
-        state=accepted(client);session=state['planner']['active']['assignments'][0]
-        moments[0]=NOW.replace(day=13)  # Sunday; the Wednesday session was missed.
-        state=read(client)
-        assert {'progress','next_week'}<={s['kind'] for s in state['planner']['signals']}
-        assert state['planner']['active_review']['missed_assignment_ids']==[session['id']]
-        state=generate(client,state)
-        assert state['operation']['status']=='succeeded',state['operation']
-        assert model.contexts[-1]['first_planning_week']=='2030-01-14'
-
 def test_chat_collects_settings_without_generating_a_plan():
     patch={'target_date':'2030-01-27','weekly_minutes':300,'blocks':settings()['blocks'],'blackouts':[{'frequency':'once','start_date':'2030-01-12'}]}
     model=Scripted(chats=[{'reply':'Saved those. Please review the panel.','settings':patch}])
@@ -323,12 +555,12 @@ def test_chat_collects_settings_without_generating_a_plan():
         assert state['operation']['status']=='succeeded',state['operation']
         planner=state['planner']
         assert planner['config']['weekly_minutes']==300 and planner['config']['start_date']=='2030-01-09'
-        assert planner['runway']['can_generate'] and planner['candidate'] is None
+        assert planner['runway']['can_generate'] and planner['outline_candidate'] is None
         assert state['messages'][-1]['content']=='Saved those. Please review the panel.'
         assert len(model.contexts)==1 and model.contexts[0]['settings']['weekly_minutes'] is None
 
 def test_invalid_chat_settings_change_nothing_and_are_explained():
-    model=Scripted(chats=[{'reply':'Added your late block.','settings':{'blocks':[{'day':0,'start_time':'23:30','duration_minutes':60,'kind':'preferred'}]}}])
+    model=Scripted(chats=[{'reply':'Added your late block.','settings':{'blocks':[{'day':0,'start_time':'23:30','duration_minutes':60}]}}])
     with client_for(model) as client:
         state=configure(client)
         before=state['planner']['config']
@@ -358,86 +590,6 @@ def test_chat_blackout_that_cannot_apply_changes_nothing_and_is_explained():
         assert state['operation']['status']=='succeeded' and state['planner']['config']==before
         assert 'unchanged' in state['messages'][-1]['content']
 
-OLD_SETTINGS={'buffer_percent':20,'checkin_day':4,'checkin_time':'18:00'}
-def restarted(store,model=None,sources=None):
-    return TestClient(create_app(store,sources or Sources(),model or Scripted(),clock=lambda:NOW))
-def add_old_settings(store,*plan_kinds):
-    row=store.data[OWNER];row['planner']['config'].update(OLD_SETTINGS)
-    for kind in plan_kinds:
-        plan=row['planner'][kind];plan['config'].update(OLD_SETTINGS)
-        if kind=='active':store.results[(OWNER,plan['id'])]['config'].update(OLD_SETTINGS)
-
-@pytest.mark.parametrize('plan_kind',[None,'candidate','active'])
-def test_a_restart_removes_old_settings_from_storage_and_keeps_the_plan(plan_kind):
-    store=CleanableStore();model=Scripted([draft()])
-    with restarted(store,model) as client:
-        state=configure(client)
-        if plan_kind:
-            state=generate(client,state)
-            if plan_kind=='active':state=post(client,'/accept',state)
-    add_old_settings(store,*[plan_kind] if plan_kind else [])
-    version=store.data[OWNER]['version']
-    with restarted(store,model) as client:
-        row=store.data[OWNER]
-        assert row['version']==version
-        assert not OLD_SETTINGS.keys()&row['planner']['config'].keys()
-        restored=read(client)
-        assert restored['planner']['config']==state['planner']['config']
-        assert restored['planner']['runway']==state['planner']['runway']
-        assert not any(s['kind']=='settings' for s in restored['planner']['signals'])
-        if plan_kind:
-            plan=row['planner'][plan_kind]
-            assert not OLD_SETTINGS.keys()&plan['config'].keys()
-            assert restored['planner'][plan_kind]['assignments']==state['planner'][plan_kind]['assignments']
-        if plan_kind=='active':
-            assert not OLD_SETTINGS.keys()&store.results[(OWNER,plan['id'])]['config'].keys()
-            assert client.get('/api/v1/roadmaps/history/'+plan['id'],headers=H).json()['config']==restored['planner']['config']
-
-def test_a_restart_turns_old_blackout_dates_into_rules_without_a_settings_change():
-    store=CleanableStore();model=Scripted([draft()])
-    with restarted(store,model) as client:
-        accepted(client)
-    row=store.data[OWNER]
-    for section in (row['planner'],row['planner']['active']):
-        config=section['config']
-        config['blackout_dates']=[rule['start_date'] for rule in config.pop('blackouts')]
-    with restarted(store,model) as client:
-        assert 'blackout_dates' not in store.data[OWNER]['planner']['config']
-        state=read(client)
-        assert state['planner']['config']['blackouts'][0]['start_date']=='2030-01-12'
-        assert 'settings' not in {s['kind'] for s in state['planner']['signals']}
-
-def test_every_change_works_on_a_plan_cleaned_of_old_settings():
-    edit={'reply':'Moved to Thursday.','settings':{'blocks':[{'day':3,'start_time':'18:00','duration_minutes':60,'kind':'preferred'}]},'revision_instruction':'Move this week to Thursday evening.'}
-    settings_only={'reply':'Updated.','settings':{'weekly_minutes':240}}
-    revised=draft(milestones=[milestone(estimated_minutes=120)],assignments=[assignment('a2',date='2030-01-10',start_time='18:00')])
-    store=CleanableStore();model=Scripted([draft(),revised,revised],[settings_only,edit])
-    with restarted(store,model) as client:
-        accepted(client)
-    add_old_settings(store,'active')
-    with restarted(store,model) as client:
-        state=read(client);active=state['planner']['active']
-        state=post(client,'/assignments/status',state,assignment_id=active['assignments'][0]['id'],status='completed',evidence_note='Finished.')
-        state=post(client,'/milestones/outcome',state,milestone_id=active['milestones'][0]['id'],demonstrated=True,note='Shown to a friend.')
-        state=chat(client,state,'I can only do four hours.')
-        assert state['operation']['status']=='succeeded',state['operation']
-        assert state['planner']['config']['weekly_minutes']==240
-        state=chat(client,state,'Can we move it to Thursday evening?')
-        assert state['operation']['status']=='succeeded',state['operation']
-        assert state['planner']['candidate']['assignments'][0]['status']=='completed'
-        state=post(client,'/discard',state)
-        assert state['planner']['candidate'] is None
-        state=generate(client,state)
-        assert state['operation']['status']=='succeeded',state['operation']
-        assert not any(s['kind']=='settings' for s in state['planner']['signals'])
-        review=state['planner']['candidate']['revision_review']
-        assert review and any(blocker['code']=='revision_review_required' for blocker in state['planner']['candidate_blockers'])
-        state=post(client,'/tasks/reconcile',state,candidate_id=state['planner']['candidate']['id'],
-                   decisions=[{'task_id':entry['task_id'],'decision':'keep'} for entry in review])
-        state=post(client,'/accept',state)
-        statuses={a['key']:a['status'] for a in state['planner']['active']['assignments']}
-        assert statuses=={'a1':'completed','a2':'scheduled'}
-
 @pytest.mark.parametrize('extra',[{'buffer_percent':20},{'checkin_day':4},{'checkin_time':'18:00'},{'blackout_dates':['2030-02-01']},{'unknown_setting':True}])
 def test_new_settings_requests_reject_retired_or_unknown_fields(extra):
     with client_for(Scripted()) as client:
@@ -447,82 +599,6 @@ def test_new_settings_requests_reject_retired_or_unknown_fields(extra):
         assert response.status_code==422
         assert client.post('/api/v1/roadmaps/planner/runway',headers=H,json={'config':settings(**extra)}).status_code==422
         assert read(client)==before
-
-def declared_keys(model):
-    return {field.alias or name for name,field in model.model_fields.items()}
-
-def test_a_generated_roadmap_returns_only_declared_fields_through_the_frontend_flow():
-    with client_for(Scripted([draft()])) as client:
-        state=configure(client)
-        started=client.post('/api/v1/roadmaps/planner/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
-        assert started.status_code==202
-        assert started.json().keys()=={'version','operation'}
-        assert started.json()['operation'].keys()=={'id','status','stage','error','retry_after'}
-        state=finish(client)
-        progress=client.get('/api/v1/roadmaps/progress',headers=H).json()
-        assert progress['operation']['status']=='succeeded' and progress['operation']['stage']=='complete'
-        planner=state['planner'];candidate=planner['candidate']
-        assert candidate.keys()<=declared_keys(PlannedRoadmap)
-        assert candidate['generation']=={'prompt_version':'roadmap-plan-v3','attempts':1}
-        assert candidate['milestones'][0]['outcome'].keys()=={'demonstrated','note','recorded_at','source'}
-        assert planner['candidate_review']['milestones']['m1']=={
-            'sessions_total':1,'sessions_completed':0,'completed_minutes':0,
-            'tasks_total':1,'tasks_completed':0,'review_needed':False}
-        assert state['messages']==[] and planner['inputs']['experience'][0].keys()>={'ref','name','kind','text','start_date','end_date','ongoing'}
-        state=post(client,'/accept',state)
-        assert state['planner']['active'].keys()<=declared_keys(PlannedRoadmap)
-
-def test_a_saved_plan_or_settings_holding_old_fields_is_rejected_on_read():
-    with client_for(Scripted([draft()])) as client:
-        plan=generate(client,configure(client))['planner']['candidate']
-    for field,value in {**OLD_SETTINGS,'blackout_dates':['2030-02-01']}.items():
-        with pytest.raises(ValidationError):PlannedRoadmap.model_validate({**plan,'config':{**plan['config'],field:value}})
-
-def test_a_generated_roadmap_can_drive_a_daily_weekly_and_monthly_to_do_list():
-    """Each session carries what a to-do item needs, and its skills resolve through its milestone."""
-    with client_for(Scripted([draft()])) as client:
-        state=accepted(client);plan=state['planner']['active']
-        names={gap['id']:gap['name'] for gap in plan['gaps']}
-        milestones={item['key']:item for item in plan['milestones']}
-        session=plan['assignments'][0]
-        assert (session['date'],session['start_time'],session['duration_minutes'])==('2030-01-09','19:00',60)
-        assert session['task'] and session['completion_criterion'] and session['status']=='scheduled'
-        assert [names[g] for g in milestones[session['milestone_key']]['gap_ids']]==['Python']
-        assert plan['first_planning_week']=='2030-01-07'
-        assert state['planner']['active_review']['next_assignment_id']==session['id']
-        later=plan['milestones'][0]
-        assert (later['projected_start'],later['projected_end'])==('2030-01-09','2030-01-20')
-        done=post(client,'/assignments/status',state,assignment_id=session['id'],status='completed')
-        change=done['planner']['active']['assignments'][0]['history'][0]
-        assert (change['from'],change['to'])==('scheduled','completed')
-        task_change=done['planner']['active']['editable_tasks'][0]['history'][0]
-        assert (task_change['from'],task_change['to'])==('not_started','completed')
-        assert done['planner']['active_review']['milestones']['m1']['sessions_completed']==1
-        reopened=post(client,'/assignments/status',done,assignment_id=session['id'],status='scheduled')
-        assert reopened['planner']['active']['assignments'][0]['status']=='scheduled'
-
-def test_chat_edits_prepare_a_preview_and_leave_the_active_plan_alone():
-    edit={'reply':'I prepared a preview that moves the work to Thursday.','settings':{'blocks':[{'day':3,'start_time':'18:00','duration_minutes':60,'kind':'preferred'}]},'revision_instruction':'Move this week to Thursday evening.'}
-    revised=draft(milestones=[milestone(estimated_minutes=120)],assignments=[assignment('a2',date='2030-01-10',start_time='18:00')])
-    model=Scripted([draft(),revised],[edit])
-    with client_for(model) as client:
-        state=accepted(client);active=state['planner']['active']
-        state=chat(client,state,'Can we move it to Thursday evening?')
-        assert state['operation']['status']=='succeeded',state['operation']
-        assert state['planner']['active']==active and state['planner']['candidate']['assignments'][0]['key']=='a2'
-        assert model.contexts[-1]['instruction']=='Move this week to Thursday evening.'
-        assert state['planner']['config']['blocks'][0]['day']==3
-        assert state['messages'][-1]['role']=='assistant'
-
-def test_a_chat_edit_that_fails_validation_keeps_settings_and_preview():
-    edit={'reply':'Preparing that.','settings':{'weekly_minutes':30},'revision_instruction':'Reduce the weekly budget.'}
-    bad=draft()
-    model=Scripted([draft(),bad,bad,bad],[edit])
-    with client_for(model) as client:
-        state=accepted(client);config=state['planner']['config']
-        state=chat(client,state,'Reduce to thirty minutes.')
-        assert state['operation']['status']=='failed' and state['planner']['config']==config and state['planner']['candidate'] is None
-        assert state['retry_request'] and state['planner']['retry_generate'] is None
 
 def test_writes_are_rejected_for_stale_versions_and_other_operations():
     with client_for(Scripted()) as client:
@@ -577,12 +653,6 @@ def test_learning_steps_follow_the_active_roadmap_through_the_api():
     step=body['steps'][0]
     assert (body['skills_started'],body['skills_done'],step['state'],step['sessions_completed'],step['next_session'])==(1,1,'done',1,None)
 
-def learning_plan():
-    def session(key,**changes):return {**assignment(key,**changes),'id':key,'status':changes.get('status','scheduled')}
-    return {'id':'plan1','config':settings(),'gaps':[gap('sql',name='SQL',priority=2),gap('python'),gap('rust',name='Rust',status='unknown',priority=3)],
-        'milestones':[{**milestone(gap_ids=['python','sql']),'id':'m1'}],
-        'assignments':[session('a1',status='completed'),session('a2',gap_id='sql',date='2030-01-14',task='Write a join.'),session('a3',gap_id='python',date='2030-01-15',task='Add a route.')]}
-
 def test_learning_steps_report_each_skills_progress_in_priority_order():
     body=learning_view(learning_plan(),NOW)
     python,sql,rust=body['steps']
@@ -597,7 +667,6 @@ def test_learning_steps_report_each_skills_progress_in_priority_order():
 def test_a_passed_session_is_missed_rather_than_next():
     step=learning_view(learning_plan(),NOW+timedelta(days=30))['steps'][1]
     assert (step['name'],step['sessions_missed'],step['next_session'],step['state'])==('SQL',1,None,'in_progress')
-
 
 @pytest.mark.parametrize('complete_after', [3, None])
 def test_assessment_polling_uses_two_second_intervals_and_stops_at_sixty(monkeypatch, complete_after):
@@ -630,7 +699,6 @@ def test_assessment_polling_uses_two_second_intervals_and_stops_at_sixty(monkeyp
         assert state['operation']['error']['code']=='assessment_processing'
         assert model.contexts==[]
 
-
 def test_current_evaluation_is_reused_with_skill_judgements_and_reference_metadata_only():
     sources=Sources();sources.result['skill_profile']['skills']=[{'name':'Python','competence_score':3,'required_score':5}]
     model=Scripted([draft()])
@@ -642,7 +710,6 @@ def test_current_evaluation_is_reused_with_skill_judgements_and_reference_metada
     assert sent['skill_profile']==sources.result['skill_profile']
     assert set(sent['evidence'])==set(sources.result['evidence'])
     assert all('text' not in record for record in sent['evidence'].values())
-
 
 @pytest.mark.parametrize('kind',['outdated','legacy','unavailable'])
 def test_unusable_saved_evaluation_never_starts_assessment_or_plan_model(kind):
@@ -659,7 +726,6 @@ def test_unusable_saved_evaluation_never_starts_assessment_or_plan_model(kind):
     assert state['operation']['error']['code']=='assessment_required'
     assert sources.writes==[] and model.contexts==[]
 
-
 def test_preview_cannot_be_accepted_when_saved_evaluation_needs_an_update():
     class EvaluationSource(Sources):
         freshness='current'
@@ -670,9 +736,29 @@ def test_preview_cannot_be_accepted_when_saved_evaluation_needs_an_update():
     sources=EvaluationSource()
     with client_for(Scripted([draft()]),sources) as client:
         state=generate(client,configure(client))
-        assert state['planner']['candidate']
+        assert state['planner']['outline_candidate']
         sources.freshness='outdated'
-        response=client.post('/api/v1/roadmaps/planner/accept',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())})
+        response=request(client,'/outlines/'+state['planner']['outline_candidate']['id']+'/accept',state)
         assert response.status_code==409 and response.json()['code']=='assessment_required'
         state=read(client)
-        assert state['planner']['candidate'] and state['planner']['active'] is None
+        assert state['planner']['outline_candidate'] and state['planner']['week_candidate'] and state['planner']['active'] is None
+
+def test_a_restart_turns_old_blackout_dates_into_rules_without_a_settings_change():
+    store=CleanableStore();model=Scripted([draft()])
+    with restarted(store,model) as client:
+        accepted(client)
+    row=store.data[OWNER]
+    for section in (row['planner'],row['planner']['active'],row['planner']['outline_active']):
+        config=section['config']
+        config['blackout_dates']=[rule['start_date'] for rule in config.pop('blackouts')]
+    with restarted(store,model) as client:
+        assert 'blackout_dates' not in store.data[OWNER]['planner']['config']
+        state=read(client)
+        assert state['planner']['config']['blackouts'][0]['start_date']=='2030-01-12'
+        assert 'settings' not in {s['kind'] for s in state['planner']['signals']}
+
+def learning_plan():
+    def session(key,**changes):return {**assignment(key,**changes),'id':key,'status':changes.get('status','scheduled')}
+    return {'id':'plan1','config':settings(),'gaps':[gap('sql',name='SQL',priority=2),gap('python'),gap('rust',name='Rust',status='unknown',priority=3)],
+        'milestones':[{**milestone(gap_ids=['python','sql']),'id':'m1'}],
+        'assignments':[session('a1',status='completed'),session('a2',gap_id='sql',date='2030-01-14',task='Write a join.'),session('a3',gap_id='python',date='2030-01-15',task='Add a route.')]}

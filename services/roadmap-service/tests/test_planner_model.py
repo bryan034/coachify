@@ -6,7 +6,8 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from elo_shared.runtime import MemoryStore, Model
-from planner_fixtures import NOW, assessment, draft, settings
+from planner_fixtures import NOW, assessment, assignment, draft, settings
+from test_planner_flow import objectives, week_draft
 from app.main import create_app
 
 H={'Authorization':'Bearer synthetic'}
@@ -21,8 +22,11 @@ def run_flow(monkeypatch,base,*,parameter=None):
     requests=[]
     def handler(request):
         body=json.loads(request.content);requests.append((request,body))
-        chat='current_plan' in json.loads(body['messages'][1]['content']) and 'first_week_windows' not in json.loads(body['messages'][1]['content'])
-        content={'reply':'Saved.','settings':{'weekly_minutes':300},'revision_instruction':None} if chat else draft()
+        sent=json.loads(body['messages'][1]['content'])
+        if 'new_task_minutes' in sent:content=week_draft([assignment()])
+        elif 'weekly_capacity' in sent:
+            content=draft();content.pop('assignments');content['weeks']=objectives(content,sent)
+        else:content={'reply':'Saved.','settings':{'weekly_minutes':300},'revision_instruction':None}
         return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(content)}}]})
     with TestClient(create_app(MemoryStore(),Sources(),None,clock=lambda:NOW)) as client:
         client.app.state.model=Model(httpx.AsyncClient(transport=httpx.MockTransport(handler)),'ROADMAP')
@@ -32,24 +36,25 @@ def run_flow(monkeypatch,base,*,parameter=None):
                 if (state['operation'] or {}).get('status') in ('succeeded','failed'):return state
                 time.sleep(.01)
             raise AssertionError('operation did not finish')
-        state=client.post('/api/v1/roadmaps/planner/config',headers=H,json={'expected_version':0,'mutation_id':str(uuid4()),'config':settings()}).json()
+        state=client.post('/api/v1/roadmaps/planner/config',headers=H,json={'expected_version':0,'mutation_id':str(uuid4()),'config':settings(break_minutes_per_hour=10)}).json()
         assert client.post('/api/v1/roadmaps/messages',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4()),'message':'Five hours a week.','allow_partial_assessment':False}).status_code==202
         state=finish();assert state['operation']['status']=='succeeded',state['operation']
-        assert client.post('/api/v1/roadmaps/planner/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())}).status_code==202
+        assert client.post('/api/v1/roadmaps/planner/outlines/generate',headers=H,json={'expected_version':state['version'],'mutation_id':str(uuid4())}).status_code==202
         time.sleep(.01);state=finish();assert state['operation']['status']=='succeeded',state['operation']
-        assert state['planner']['candidate']['summary']=='Build Python depth first.'
+        assert state['planner']['outline_candidate']['summary']=='Build Python depth first.'
+        assert state['planner']['week_candidate']['tasks'][0]['schedule']==[{'date':'2030-01-09','start_time':'19:00','duration_minutes':60}]
     return requests
 
 def test_openrouter_requests_use_the_openai_sdk_and_json_output(monkeypatch):
     requests=run_flow(monkeypatch,'https://openrouter.ai/api/v1')
-    assert len(requests)==2
+    assert len(requests)==3  # chat, then the outline and its first week
     for request,body in requests:
         assert str(request.url)=='https://openrouter.ai/api/v1/chat/completions'
         assert request.headers['authorization']=='Bearer synthetic-key'
         assert request.headers['user-agent'].startswith('AsyncOpenAI/Python') and request.headers['x-stainless-lang']=='python'
         assert body['model']=='synthetic-model' and body['response_format']=={'type':'json_object'} and 'reasoning_effort' not in body
         assert 'JSON schema' in body['messages'][0]['content']
-    assert requests[0][1]['max_tokens']==8192 and requests[1][1]['max_tokens']==24000
+    assert [body['max_tokens'] for _,body in requests]==[8192,24000,24000]
 
 def test_openai_requests_use_the_selected_token_parameter_and_json_output(monkeypatch):
     requests=run_flow(monkeypatch,'https://api.openai.com/v1',parameter='max_completion_tokens')

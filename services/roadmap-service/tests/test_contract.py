@@ -11,7 +11,7 @@ def test_published_contracts_match_the_running_service_models():
 
 def test_operation_routes_publish_the_shape_the_frontend_polls():
     paths=app.openapi()['paths']
-    for path,method,status in (('/api/v1/roadmaps/planner/generate','post','202'),('/api/v1/roadmaps/messages','post','202'),('/api/v1/roadmaps/progress','get','200')):
+    for path,method,status in (('/api/v1/roadmaps/planner/outlines/generate','post','202'),('/api/v1/roadmaps/planner/weeks/generate','post','202'),('/api/v1/roadmaps/messages','post','202'),('/api/v1/roadmaps/progress','get','200')):
         schema=paths[path][method]['responses'][status]['content']['application/json']['schema']
         assert schema=={'$ref':'#/components/schemas/'+OperationAccepted.__name__}
 

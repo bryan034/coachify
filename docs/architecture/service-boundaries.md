@@ -230,7 +230,7 @@ CV-conversation-owned, source-fenced and preserves saved answers while moving on
 
 ## Timed roadmap
 
-Roadmap runs Configure → Generate → Review. Assessment's `GET /context` additionally returns its evidence records, without a model call, so the settings panel can show what will be sent; generation still reuses or runs a full Assessment. Roadmap owns the deterministic runway calculation and plan validation. The LLM owns gaps, sequencing, effort and assignments within those checks. Session completion, self-reported outcomes and experience confirmations stay in Roadmap's `workspaces.planner` and `roadmaps`, and never write to Profile, CV or Assessment. No new service, collection or foreign database access is introduced. See the [Roadmap specification](../../services/roadmap-service/SPEC.md).
+Roadmap runs Configure → Create roadmap → Tasks. UI creation activates the validated outline and first week in the backend operation; preview APIs remain available for compatibility. Weekly objectives are internal planning context rather than calendar UI rows. Assessment's `GET /context` additionally returns its evidence records, without a model call, so the settings panel can show what will be sent; generation still reuses or runs a full Assessment. Roadmap owns the deterministic runway calculation and plan validation. The LLM owns gaps, sequencing, effort and assignments within those checks. Session completion, self-reported outcomes and experience confirmations stay in Roadmap's `workspaces.planner` and `roadmaps`, and never write to Profile, CV or Assessment. No new service, collection or foreign database access is introduced. See the [Roadmap specification](../../services/roadmap-service/SPEC.md).
 
 ## Job search
 
