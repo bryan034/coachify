@@ -1,5 +1,5 @@
 """Roadmap adviser API and model contracts."""
 from .base import Mutation
 from .planner import Message, DayBudget, Preferences, TaskDefinition, Task, Schedule, Plan, Workspace
-from .roadmap import (PlannerConfig, SettingsPatch, ChatTurn, PlanDraft, RunwayRequest, SaveConfig, GeneratePlan,
+from .roadmap import (PlannerConfig, SettingsPatch, ChatTurn, RunwayRequest, SaveConfig, GeneratePlan,
     AssignmentStatus, MilestoneOutcome, ExperienceConfirmation, OperationAccepted, OperationView, PlannedRoadmap, PlannerView, Runway)

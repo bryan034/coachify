@@ -95,18 +95,18 @@ export function TaskForm({ mode, draft, base, session, date, where, others, conf
  const named = draft.title.trim().length > 0;
  const words = named ? draft.title.trim().split(/\s+/u).length : 0;
  const titleChanged = mode === 'new' || draft.title !== base.title;
- const titleValid = named && (!titleChanged || (words <= 19 && Array.from(draft.title.trim()).length <= 160));
+ const titleValid = named && (!titleChanged || (words <= 11 && Array.from(draft.title.trim()).length <= 160));
  const dirty = isDirty(draft, base);
  const durations = DURATIONS.includes(draft.minutes) ? DURATIONS : [...DURATIONS, draft.minutes].sort((a, b) => a - b);
  const original = session?.original ?? null;
  const reworded = mode === 'edit' && session?.origin === 'generated' && !!original && (draft.title !== original.title || draft.doneWhen !== original.completion_criterion);
  const ready = titleValid && !tooLate && !disabled && (mode === 'new' || dirty);
- const status = !named ? (mode === 'new' ? 'Give the task a name to add it' : 'The task needs a name') : !titleValid ? 'Use at most 19 words and 160 characters' : mode === 'new' ? 'Ready to add' : dirty ? 'Unsaved changes' : 'No changes yet';
+ const status = !named ? (mode === 'new' ? 'Give the task a name to add it' : 'The task needs a name') : !titleValid ? 'Use at most 11 words and 160 characters' : mode === 'new' ? 'Ready to add' : dirty ? 'Unsaved changes' : 'No changes yet';
  const summary = `${draft.time ? `${draft.time}–${toClock(toMinutes(draft.time) + draft.minutes)}` : 'Anytime'} ${where} · ${shortLength(draft.minutes)} · ${draft.skills.length ? draft.skills.join(', ') : 'No specific skill'}`;
  const submit = () => { if (ready) onSubmit(!!clash); };
  return <div className={`rv-det${mode === 'new' ? ' new' : ''}`} role="group" aria-label={mode === 'new' ? 'New task' : 'Edit task'} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onEscape(); } }}>
   {mode === 'new' && <h3>New task <span className="rv-soft" style={{ fontWeight: 400, fontSize: 13, color: 'var(--slate)' }}>for {where.replace(/^on /, '')}</span></h3>}
-  <div><label htmlFor={`${id}-title`} className="rv-flab">Task</label><input id={`${id}-title`} type="text" className="rv-input" maxLength={160} aria-describedby={`${id}-title-count`} autoFocus={mode === 'new'} placeholder="What will you do?" value={draft.title} onChange={event => onChange({ title: event.target.value })} onKeyDown={event => { if (event.key === 'Enter' && mode === 'new') { event.preventDefault(); submit(); } }} /><p id={`${id}-title-count`} className="rv-note">{words} of 19 words{!titleChanged && words > 19 ? ' · saved title; shorten it only if you change it' : ''}</p></div>
+  <div><label htmlFor={`${id}-title`} className="rv-flab">Task</label><input id={`${id}-title`} type="text" className="rv-input" maxLength={160} aria-describedby={`${id}-title-count`} autoFocus={mode === 'new'} placeholder="What will you do?" value={draft.title} onChange={event => onChange({ title: event.target.value })} onKeyDown={event => { if (event.key === 'Enter' && mode === 'new') { event.preventDefault(); submit(); } }} /><p id={`${id}-title-count`} className="rv-note">{words} of 11 words{!titleChanged && words > 11 ? ' · saved title; shorten it only if you change it' : ''}</p></div>
   <div><label htmlFor={`${id}-done`} className="rv-flab">Done when</label><textarea id={`${id}-done`} className="rv-input" maxLength={4000} placeholder="How you’ll know it’s finished, e.g. the tests pass" value={draft.doneWhen} onChange={event => onChange({ doneWhen: event.target.value })} />
    {reworded && <p className="rv-note" style={{ marginTop: 4, fontSize: 12 }}>You’ve changed elo’s wording for this task. <button type="button" className="rv-link" style={{ fontSize: 12 }} onClick={() => onChange({ title: original!.title, doneWhen: original!.completion_criterion })}>Restore elo’s version</button></p>}</div>
   <SkillPicker id={`${id}-skill`} value={draft.skills} catalog={catalog} onChange={skills => onChange({ skills })} />

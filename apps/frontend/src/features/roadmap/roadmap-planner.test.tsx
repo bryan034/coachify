@@ -29,7 +29,7 @@ it('gates missing CV and goal without making model requests', async () => {
  render(<RoadmapPlanner />); await screen.findByText('Select an extracted CV.');
  expect(screen.getByRole('link', { name: 'Open CV' })).toHaveAttribute('href', '/cv');
  expect(screen.getByText('Your Career goal is set.')).toBeInTheDocument();
- expect(screen.queryByRole('button', { name: /chat helper/ })).toBeNull(); expect(screen.queryByRole('button', { name: 'Generate roadmap' })).toBeNull(); expect(api).toHaveBeenCalledTimes(1);
+ expect(screen.queryByRole('button', { name: /chat helper/ })).toBeNull(); expect(screen.queryByRole('button', { name: 'Create roadmap' })).toBeNull(); expect(api).toHaveBeenCalledTimes(1);
 });
 it('sends the chat helper message on Enter but keeps Shift+Enter for a new line', async () => {
  api.mockImplementation((path: string) => path === '/messages' ? new Promise(() => {}) : Promise.resolve(state()));
@@ -52,7 +52,7 @@ it('retains the next draft during async advice and sends the exact chosen partia
 });
 it('labels incomplete research without blocking generation', async () => {
  const value = state(); value.context.research_coverage = 'unavailable'; api.mockResolvedValue(value); render(<RoadmapPlanner />);
- const generate = await screen.findByRole('button', { name: 'Generate roadmap' });
+ const generate = await screen.findByRole('button', { name: 'Create roadmap' });
  expect(generate).toBeEnabled(); expect(screen.getByText(/Using available evidence/)).toBeVisible();
  expect(screen.queryByRole('checkbox',{name:/Continue with available evidence/})).not.toBeInTheDocument();
  // Filling in the planner runs no comparison, so the helper needs no choice until a plan exists.
@@ -94,13 +94,13 @@ it('shows a generation progress bar from the click and moves it with the reporte
  const value = state(); value.planner = planner({ runway: runway({ can_generate: true }) });
  api.mockImplementation((path: string) => path === '/generate' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(value));
  render(<RoadmapPlanner />);
- const button = await screen.findByRole('button', { name: /^Generate roadmap/ });
+ const button = await screen.findByRole('button', { name: /^Create roadmap/ });
  fireEvent.click(button);
  const bar = await screen.findByRole('progressbar', { name: 'Starting: saving your settings' });
  expect(bar).toHaveAttribute('aria-valuenow', String(generationProgress().percent));
  expect(generationProgress('assessing')).toMatchObject({ step: 1, percent: 30 });
- expect(generationProgress('writing')).toMatchObject({ step: 2, percent: 65 });
- expect(generationProgress('correcting')).toMatchObject({ step: 3, percent: 88 });
+ expect(generationProgress('writing')).toMatchObject({ step: 2, percent: 50 });
+ expect(generationProgress('correcting')).toMatchObject({ step: 4, percent: 88 });
  expect(generationProgress('anything-else')).toMatchObject({ step: 0, percent: 8 });
  await act(async () => finish({ version: 1, operation: { id: 'op', status: 'running', stage: 'writing' } }));
 });

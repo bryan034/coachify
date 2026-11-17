@@ -124,24 +124,6 @@ def test_manual_overlapping_slots_are_saved_with_warnings_not_silent_reschedulin
         assert by_title(read(client), added['title'])['schedule'] == schedule
 
 
-def test_revision_retains_edits_personal_tasks_and_removal_intent():
-    revised = draft(assignments=[assignment('a1')])
-    with client_for(Scripted([draft(), revised])) as client:
-        state = accepted(client)
-        generated = next(t for t in state['planner']['active']['editable_tasks'] if t['schedule'])
-        state = save(client, 'edit', state, task_id=generated['id'], changes={'instructions': 'My own instructions.'})
-        state = save(client, 'add', state, task=definition(title='My own task'))
-        state = save(client, 'remove', state, task_id=generated['id'], reason='Not needed')
-        state = generate(client, state)
-        assert state['operation']['status'] == 'succeeded', state['operation']
-        candidate = state['planner']['candidate']
-        removed = next(t for t in candidate['editable_tasks'] if t['id'] == generated['id'])
-        assert removed['removed'] and removed['removal']['reason'] == 'Not needed'
-        assert removed['instructions'] == 'My own instructions.'
-        assert any(t['title'] == 'My own task' and not t['removed'] for t in candidate['editable_tasks'])
-        assert not any(t['id'] != generated['id'] and t.get('generated_key') == 'a1' and not t['removed'] for t in candidate['editable_tasks'])
-
-
 def test_planned_prerequisite_date_does_not_unblock_and_completion_does():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -161,19 +143,6 @@ def test_planned_prerequisite_date_does_not_unblock_and_completion_does():
         assert view['readiness']['actionable'] is True
 
 
-def test_edit_invalidates_preexisting_revision_preview():
-    with client_for(Scripted([draft(), draft()])) as client:
-        state = accepted(client)
-        state = generate(client, state)
-        assert state['planner']['candidate']
-        generated = state['planner']['active']['editable_tasks'][0]
-        state = save(client, 'edit', state, task_id=generated['id'], changes={'title': 'Changed after preview'})
-        assert 'active_changed' in {item['code'] for item in state['planner']['candidate_blockers']}
-        response = client.post(PREFIX + '/accept', headers=H,
-                               json={'expected_version': state['version'], 'mutation_id': str(uuid4())})
-        assert response.status_code == 409
-
-
 def test_saved_pre_task_model_roadmap_is_readable_without_read_migration():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)
@@ -190,31 +159,6 @@ def test_saved_pre_task_model_roadmap_is_readable_without_read_migration():
         task = next(t for t in tasks(client)['tasks'] if t['id'] == assignment_id)
         assert task['schedule']
         assert client.get(PREFIX + '/tasks').status_code == 401
-
-
-def test_revision_requires_explicit_review_of_unmatched_work_after_removal():
-    with client_for(Scripted([draft(), draft(assignments=[assignment('new-key')])])) as client:
-        state = accepted(client)
-        old = state['planner']['active']['editable_tasks'][0]
-        state = save(client, 'remove', state, task_id=old['id'], reason='Do not restore this')
-        state = generate(client, state)
-        assert state['operation']['status'] == 'succeeded', state['operation']
-        candidate = state['planner']['candidate']
-        assert candidate['revision_review']
-        review = candidate['revision_review'][0]
-        assert old['id'] in review['removed_task_ids']
-        assert 'revision_review_required' in {item['code'] for item in state['planner']['candidate_blockers']}
-        blocked = client.post(PREFIX + '/accept', headers=H,
-                              json={'expected_version': state['version'], 'mutation_id': str(uuid4())})
-        assert blocked.status_code == 409
-        state = save(client, 'reconcile', state, candidate_id=candidate['id'],
-                     decisions=[{'task_id': review['task_id'], 'decision': 'discard'}])
-        response = client.post(PREFIX + '/accept', headers=H,
-                               json={'expected_version': state['version'], 'mutation_id': str(uuid4())})
-        assert response.status_code == 200, response.text
-        active = response.json()['planner']['active']['editable_tasks']
-        assert any(t['id'] == old['id'] and t['removed'] for t in active)
-        assert not any(t['id'] == review['task_id'] and not t['removed'] for t in active)
 
 
 def test_old_assignment_status_updates_canonical_task_and_new_status_projects_back():
@@ -289,44 +233,6 @@ def test_cyclic_and_unknown_prerequisites_are_rejected_without_changing_saved_ta
         restored = read(client)
         assert by_title(restored, 'First')['prerequisites'] == []
         assert by_title(restored, 'Second')['prerequisites'] == [first]
-
-
-def test_reused_generated_key_with_changed_content_requires_reconciliation():
-    changed = draft(assignments=[assignment('a1', task='A different generated exercise.', start_time='20:00', duration_minutes=30)])
-    with client_for(Scripted([draft(), changed])) as client:
-        state = accepted(client)
-        original = state['planner']['active']['editable_tasks'][0]
-        state = save(client, 'edit', state, task_id=original['id'], changes={'instructions': 'My saved exercise.'})
-        state = generate(client, state)
-        assert state['operation']['status'] == 'succeeded', state['operation']
-        candidate = state['planner']['candidate']
-        assert next(t for t in candidate['editable_tasks'] if t['id'] == original['id'])['instructions'] == 'My saved exercise.'
-        review = candidate['revision_review'][0]
-        assert original['id'] in review['related_task_ids']
-        assert 'revision_review_required' in {item['code'] for item in state['planner']['candidate_blockers']}
-        state = save(client, 'reconcile', state, candidate_id=candidate['id'],
-                     decisions=[{'task_id': review['task_id'], 'decision': 'keep'}])
-        response = client.post(PREFIX + '/accept', headers=H,
-                               json={'expected_version': state['version'], 'mutation_id': str(uuid4())})
-        assert response.status_code == 200, response.text
-        tasks_after = response.json()['planner']['active']['editable_tasks']
-        assert next(t for t in tasks_after if t['id'] == original['id'])['instructions'] == 'My saved exercise.'
-        assert any(t['id'] == review['task_id'] and not t['removed'] for t in tasks_after)
-
-
-def test_revision_preserves_prerequisite_of_personal_task():
-    initial = draft(assignments=[assignment('a1'), assignment('a2', start_time='20:00', duration_minutes=30)])
-    revised = draft(assignments=[assignment('a1')])
-    with client_for(Scripted([initial, revised])) as client:
-        state = accepted(client)
-        prerequisite = next(t for t in state['planner']['active']['editable_tasks'] if t['generated_key'] == 'a2')
-        state = save(client, 'add', state, task=definition(title='My dependent', prerequisites=[prerequisite['id']]))
-        state = generate(client, state)
-        assert state['operation']['status'] == 'succeeded', state['operation']
-        candidate = state['planner']['candidate']['editable_tasks']
-        assert any(t['id'] == prerequisite['id'] and not t['removed'] for t in candidate)
-        dependent = next(t for t in candidate if t['title'] == 'My dependent')
-        assert dependent['prerequisites'] == [prerequisite['id']]
 
 
 def test_old_requirement_link_survives_an_unrelated_edit_and_is_flagged():

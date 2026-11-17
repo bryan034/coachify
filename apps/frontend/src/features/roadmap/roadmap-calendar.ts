@@ -6,15 +6,15 @@ const format = (value: string, options: Intl.DateTimeFormatOptions) => parse(val
 
 export const addDays = (value: string, count: number) => { const date = parse(value); date.setUTCDate(date.getUTCDate() + count); return iso(date); };
 /** The Monday of the Monday-to-Sunday week holding this date, matching the backend's planning weeks. */
-export const weekStart = (value: string) => addDays(value, -((parse(value).getUTCDay() + 6) % 7));
-export const weekDates = (value: string) => { const monday = weekStart(value); return Array.from({ length: 7 }, (_, index) => addDays(monday, index)); };
+export const weekStart = (value: string, startDay = 0) => addDays(value, -((parse(value).getUTCDay() + 6 - startDay + 7) % 7));
+export const weekDates = (value: string, startDay = 0) => { const monday = weekStart(value, startDay); return Array.from({ length: 7 }, (_, index) => addDays(monday, index)); };
 export const monthKey = (value: string) => value.slice(0, 7);
 export const addMonths = (value: string, count: number) => { const date = new Date(Date.UTC(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1 + count, 1, 12)); return iso(date); };
 
 /** The Mondays of every week that touches this date's month. */
-export function monthWeeks(value: string) {
+export function monthWeeks(value: string, startDay = 0) {
  const first = `${monthKey(value)}-01`; const weeks: string[] = [];
- for (let monday = weekStart(first); monthKey(monday) <= monthKey(value); monday = addDays(monday, 7)) weeks.push(monday);
+ for (let monday = weekStart(first, startDay); monthKey(monday) <= monthKey(value); monday = addDays(monday, 7)) weeks.push(monday);
  return weeks;
 }
 export function monthsBetween(start: string, end: string) {

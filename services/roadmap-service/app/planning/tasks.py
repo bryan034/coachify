@@ -4,7 +4,7 @@ from datetime import date
 from uuid import NAMESPACE_URL, uuid5
 from elo_shared.runtime import Problem, stamp
 from elo_shared.skills import resolve
-from app.planning.capacity import Capacity, to_minute, week_of
+from app.planning.capacity import Capacity, to_minute
 from app.schemas.roadmap import PlannerConfig
 
 
@@ -199,8 +199,8 @@ def task_readiness(task,tasks,plan):
         members=[t for t in tasks if t.get('milestone_key')==key]
         prerequisite=next((m for m in plan.get('milestones',[]) if m['key']==key),None)
         valid=[t for t in members if not t.get('removed') and t['status']=='completed' and not t.get('definition_review_required')]
-        # Generated milestone estimates are remaining effort, not a stable total;
-        # completed work from earlier revisions cannot be compared against them.
+        # Effort estimates and task completion alone cannot establish an outcome;
+        # require the existing explicit, current self-reported milestone outcome.
         outcome=(prerequisite or {}).get('outcome') or {}
         enough=bool(outcome.get('demonstrated') and not outcome.get('definition_review_required'))
         if not members or len(valid)!=len(members) or not enough:
@@ -226,19 +226,14 @@ def schedule_warnings(plan,now):
             start_in_calendar=day.toordinal()*1440+begin;end_in_calendar=day.toordinal()*1440+end
             old=bounds.get(task['id'])
             bounds[task['id']]=(min(start_in_calendar,old[0]),max(end_in_calendar,old[1])) if old else (start_in_calendar,end_in_calendar)
-            week=weeks.setdefault(week_of(day),{'minutes':0,'task_ids':{}})
+            week=weeks.setdefault(capacity.week(day),{'minutes':0,'task_ids':{}})
             week['minutes']+=slot['duration_minutes'];week['task_ids'][task['id']]=None
             if day<capacity.start_date or (capacity.target and day>capacity.target):add('outside_plan','A session is outside the roadmap dates.',[task['id']])
             if day not in windows_by_day:
-                blackouts=capacity.blackout_windows(day)
-                try:
-                    windows=capacity._windows(day)
-                    eligible=windows['preferred']+(windows['backup'] if capacity.config.use_backup else [])
-                except OverflowError:
-                    # Python cannot represent the next day at its calendar limit.
-                    # Preserve accepted dates and report that eligibility is unknown.
-                    eligible=None
-                windows_by_day[day]=(blackouts,eligible)
+                # Python cannot represent the next day at its calendar limit, so eligibility
+                # can be unknown (None). Accepted dates stay readable either way.
+                found=capacity.eligible(day)
+                windows_by_day[day]=(capacity.blackout_windows(day),None if found is None else [(low,high) for low,high,_ in found])
             blackouts,eligible=windows_by_day[day]
             if any(begin<high and end>low for low,high in blackouts):add('blackout','A session overlaps a blackout.',[task['id']])
             if eligible is None:add('calendar_unavailable','Study-time eligibility cannot be calculated for this calendar date.',[task['id']])
@@ -283,6 +278,6 @@ def schedule_warnings(plan,now):
         message=('Scheduled work has an incomplete prerequisite without scheduled time.' if code=='prerequisite_unscheduled'
             else 'Scheduled work begins before its incomplete prerequisite is scheduled to finish.')
         add(code,message,[*milestone_work[key]['ids'],*dependants])
-    for week in weeks.values():
-        if week['minutes']>capacity.cap:add('weekly_capacity','Scheduled work exceeds the weekly study budget.',week['task_ids'])
+    for start,week in weeks.items():
+        if week['minutes']>capacity.cap_for(start):add('weekly_capacity','Scheduled work exceeds the weekly study budget.',week['task_ids'])
     return [{**warning,'task_ids':list(warning['task_ids'])} for warning in warnings.values()]

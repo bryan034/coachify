@@ -3,11 +3,13 @@
 A session is one scheduled slot of an editable task, or the day of a task without a set time.
 Editable tasks stay the saved record; nothing here is stored separately.
 """
+import copy
 from datetime import date, timedelta
 from uuid import NAMESPACE_URL, uuid5
 from elo_shared.runtime import Problem, stamp
 from elo_shared.skills import normalize, resolve
-from app.planning.capacity import Capacity, merge, subtract, to_clock, to_minute, week_of
+from app.planning.placement import Placer
+from app.planning.capacity import Capacity, merge, subtract, to_clock, to_minute
 from app.planning.milestone_membership import mark_membership_review
 from app.planning.tasks import ensure_tasks, gap_skill, requirement_ids, validate_links
 from app.schemas.roadmap import PlannerConfig
@@ -45,7 +47,7 @@ def session_views(plan,now):
         edited=bool(original and (original['title']!=task['title'] or original['completion_outcome']!=task['completion_outcome']))
         for index,day,start,minutes in places:
             ident=slot_id(task,index)
-            rows.append({'id':ident,'task_id':task['id'],'title':task['title'],'instructions':task['instructions'],
+            rows.append({'id':ident,'task_id':task['id'],'title':task['title'],'instructions':task['instructions'],'description':task.get('description'),
                 'completion_criterion':task['completion_outcome'],'date':day,'start_time':start,'duration_minutes':minutes,
                 'status':'completed' if done else 'scheduled','completed_at':task.get('completed_at'),'missed':not done and day<today,
                 'origin':task.get('origin','generated'),'kind':source.get('kind') or 'study','milestone_key':task.get('milestone_key'),
@@ -117,6 +119,12 @@ def busy_on(plan,day,skip=None):
             begin=to_minute(slot['start_time']);spans.append((begin,begin+slot['duration_minutes'],task['title']))
     return spans
 
+def slot_placer(plan,capacity,day,skip=None,extra=()):
+    reserved=[dict(slot) for task in ensure_tasks(plan) if not task.get('removed') for i,slot in enumerate(task.get('schedule') or []) if skip!=(task['id'],i)]
+    reserved.extend({'date':task['anytime_date'],'start_time':None,'duration_minutes':task['estimated_minutes']} for task in ensure_tasks(plan) if not task.get('removed') and not task.get('schedule') and task.get('anytime_date') and skip!=(task['id'],None))
+    reserved.extend({'date':day.isoformat(),'start_time':to_clock(low),'duration_minutes':high-low} for low,high in extra)
+    return Placer(capacity.config,capacity.now,reserved,capacity.start_date,(capacity.target or day)+timedelta(days=1))
+
 def check_time(plan,capacity,task,index,day,start,minutes,*,strict,allow_overlap=False):
     """Reject a time the day cannot hold. Moves are strict; a detail edit may keep a past time or a confirmed overlap."""
     begin=to_minute(start);end=begin+minutes
@@ -129,17 +137,18 @@ def check_time(plan,capacity,task,index,day,start,minutes,*,strict,allow_overlap
     clash=next((title for low,high,title in busy_on(plan,day,(task['id'],index)) if begin<high and low<end),None)
     if clash and (strict or not allow_overlap):
         raise Problem(f'That time overlaps “{clash}”. Choose another time.' if strict else f'That time overlaps “{clash}”.',409,'slot_taken' if strict else 'overlap')
+    if strict and not slot_placer(plan,capacity,day,(task['id'],index)).accepts(day,begin,minutes):
+        raise Problem('That time does not fit your study windows, session limit, breaks or available hours. Choose an available time.',409,'schedule_constraint')
 
-def place(task,index,day,start,minutes):
+def place(task,index,day,start,minutes,*,update_estimate=True):
     slot={'date':day.isoformat(),'start_time':start,'duration_minutes':minutes}
     if index is None or not task.get('schedule'):task['schedule']=[slot]
     else:task['schedule'][index]=slot
     task['anytime_date']=None
-    if len(task['schedule'])==1:task['estimated_minutes']=minutes
+    if update_estimate and len(task['schedule'])==1:task['estimated_minutes']=minutes
 
 def study_spans(capacity,day):
-    blocks=[b for b in capacity.config.blocks if b.day==day.weekday() and (b.kind=='preferred' or capacity.config.use_backup)]
-    return merge([(to_minute(b.start_time),to_minute(b.start_time)+b.duration_minutes) for b in blocks])
+    return merge([(to_minute(b.start_time),to_minute(b.start_time)+b.duration_minutes) for b in capacity.config.blocks if b.day==day.weekday()])
 
 def free_starts(spans,holes,minutes):
     starts=[]
@@ -150,22 +159,22 @@ def free_starts(spans,holes,minutes):
     return starts
 
 def day_options(plan,capacity,day,minutes,skip=None,extra=()):
-    """Free start times on one day: inside study blocks, after them only when they are full, never in a blackout."""
-    holes=[(low,high) for low,high,_ in busy_on(plan,day,skip)]+list(capacity.blackout_windows(day))+list(extra)
-    if day==capacity.today:holes.append((0,capacity.now_minute))
+    """Free start times on one day: inside study blocks, then the extra-time window around them. Never in a blackout."""
+    placer=slot_placer(plan,capacity,day,skip,extra)
     study=study_spans(capacity,day)
-    if not study:
-        config=capacity.config
-        starts=free_starts([(to_minute(config.overflow_start),to_minute(config.overflow_end))],holes,minutes)
-        return {'rest_day':True,'kind':'rest_day' if starts else 'none','starts':starts}
-    starts=free_starts(study,holes,minutes)
-    if starts:return {'rest_day':False,'kind':'study','starts':starts}
-    late=free_starts([(study[-1][1],1440)],holes,minutes)
-    return {'rest_day':False,'kind':'after_block' if late else 'none','starts':late}
+    def starts(kind):
+        return [begin for low,high,found in capacity.eligible(day) or [] if found==kind
+            for begin in range(-(-low//STEP)*STEP,high-minutes+1,STEP) if placer.accepts(day,begin,minutes)]
+    preferred=starts('preferred')
+    if preferred:return {'rest_day':False,'kind':'study','starts':preferred}
+    around=starts('overflow') if capacity.config.allow_overflow else []
+    if not study:return {'rest_day':True,'kind':'rest_day' if around else 'none','starts':around}
+    later=[start for start in around if start>=study[-1][1]]
+    return {'rest_day':False,'kind':'after_block' if around else 'none','starts':later or around}
 
 def horizon(capacity):
     """Today to the Sunday of next week, stopping at the target date."""
-    last=week_of(capacity.today)+timedelta(days=13)
+    last=capacity.week(capacity.today)+timedelta(days=13)
     if capacity.target:last=min(last,capacity.target)
     day=capacity.today
     while day<=last:
@@ -184,21 +193,25 @@ def free_times(plan,now,minutes,session_id=None):
 
 def backlog_plan(plan,now,session_ids=None):
     """Earliest free study time for each backlog item, with at most one moved task a day while there is room."""
+    plan=copy.deepcopy(plan)
     capacity=calendar(plan,now)
     wanted=None if session_ids is None else set(session_ids)
     items=[row for row in session_views(plan,now) if row['missed'] and (wanted is None or row['id'] in wanted)]
-    days=list(horizon(capacity));taken={};used=set();moves=[]
+    days=list(horizon(capacity));used=set();moves=[]
     for row in items:
         task,index=locate(plan,row['id']);choice=None
-        for spread in (True,False):
-            for day in days:
-                if spread and day in used:continue
-                options=day_options(plan,capacity,day,row['duration_minutes'],(task['id'],index),taken.get(day,()))
-                if options['kind']=='study':
-                    choice=(day,options['starts'][0]);break
+        for preferred in (True,False):
+            for spread in (True,False):
+                for day in days:
+                    if spread and day in used:continue
+                    options=day_options(plan,capacity,day,row['duration_minutes'],(task['id'],index))
+                    if options['starts'] and (options['kind']=='study')==preferred:
+                        choice=(day,options['starts'][0]);break
+                if choice:break
             if choice:break
         if choice:
-            day,start=choice;used.add(day);taken.setdefault(day,[]).append((start,start+row['duration_minutes']))
+            day,start=choice;used.add(day)
+            place(task,index,day,to_clock(start),row['duration_minutes'],update_estimate=False)
         moves.append({'session_id':row['id'],'title':row['title'],'duration_minutes':row['duration_minutes'],
             'date':choice[0].isoformat() if choice else None,'start_time':to_clock(choice[1]) if choice else None})
     return moves
@@ -213,7 +226,7 @@ def move_session(plan,capacity,session_id,day,start):
     check_time(plan,capacity,task,index,day,start,minutes,strict=True)
     previous={'schedule':[dict(slot) for slot in task.get('schedule') or []]}
     if index is None:previous['anytime_date']=old_day
-    place(task,index,day,start,minutes)
+    place(task,index,day,start,minutes,update_estimate=False)
     if old_day<capacity.today.isoformat():task['backlog_moved_at']=stamp()
     record_edit(task,previous)
 
@@ -267,7 +280,7 @@ def save_session(plan,capacity,source,session_id,changes,allow_overlap=False):
             task['schedule']=[];task['anytime_date']=day.isoformat();task['estimated_minutes']=new_minutes
         else:
             check_time(plan,capacity,task,index,day,new_start,new_minutes,strict=False,allow_overlap=allow_overlap)
-            place(task,index,day,new_start,new_minutes)
+            place(task,index,day,new_start,new_minutes,update_estimate='duration_minutes' in changes and new_minutes!=minutes)
     record_edit(task,previous)
     if had_original and not task.get('original'):
         # Back to the generated wording, so a later revision may rewrite it again.

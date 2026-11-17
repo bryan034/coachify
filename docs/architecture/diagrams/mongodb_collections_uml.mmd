@@ -290,8 +290,10 @@ class roadmap_workspaces {
     +Object outline_candidate?
     +Object outline_active?
     +Object[] outline_history
-    +Object month_candidate?
-    +Object[] month_blocks
+    +Object week_candidate?
+    +Object[] week_blocks
+    +Object[] week_history
+    +Object[] month_blocks [legacy accepted coverage]
     +String _id [owner UUID]
     +Integer version
     +Object[] messages
@@ -304,7 +306,7 @@ class roadmap_workspaces {
 users --> assessment_workspaces : owner API
 assessment_workspaces --> skill_gap_analyses : current immutable result
 users --> roadmap_workspaces : owner API
-roadmap_workspaces --> roadmaps : reviewed activation and history
+roadmap_workspaces --> roadmaps : automatic or reviewed activation and history
 roadmaps --> skill_gap_analyses : Assessment API snapshot
 note for skill_gap_analyses "New Assessment-owned database. UUID results use assessment-v1; old analysis-v1 Career contracts/records remain legacy with no automatic migration."
 note for roadmaps "Separate Roadmap-owned database with owner-scoped immutable snapshots. Editable tasks retain student changes, status and removals; assignments are a compatibility projection. Earlier records remain readable."

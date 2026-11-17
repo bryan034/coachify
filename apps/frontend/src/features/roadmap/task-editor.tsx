@@ -28,14 +28,14 @@ export function TaskEditor({ tasks, milestones, frozen, change }: { tasks: Edita
  const conflicted = !!draft?.taskId && (!current || edited.some(k => fieldsOf(current)[k] !== draft.original![k]));
  const titleChanged = !draft?.original || draft.fields.title !== draft.original.title;
  const words = draft ? wordCount(draft.fields.title) : 0;
- const titleInvalid = !!draft && titleChanged && (words < 1 || words > 19 || Array.from(draft.fields.title.trim()).length > 160);
+ const titleInvalid = !!draft && titleChanged && (words < 1 || words > 11 || Array.from(draft.fields.title.trim()).length > 160);
  const update = (fields: Partial<Fields>) => { setDraft(d => d && ({ ...d, fields: { ...d.fields, ...fields } })); setError(''); };
  const edit = (task: EditableRoadmapTask) => { const original = fieldsOf(task); setDraft({ taskId: task.id, original, fields: { ...original } }); setError(''); };
  const submit = async (event: FormEvent) => {
   event.preventDefault(); if (!draft || frozen) return;
   const values = draft.fields;
   if (conflicted) { setError('This task changed while you were editing it. Copy your changes, then reopen it to use the latest version.'); return; }
-  if (titleInvalid) { setError('Use 1–19 words and at most 160 characters for the title.'); return; }
+  if (titleInvalid) { setError('Use 1–11 words and at most 160 characters for the title.'); return; }
   if (!values.instructions.trim() || !values.completion_outcome.trim() || Array.from(values.instructions.trim()).length > 4000 || Array.from(values.completion_outcome.trim()).length > 4000 || !Number.isInteger(values.estimated_minutes) || values.estimated_minutes < 1 || values.estimated_minutes > 60000) {
    setError('Add instructions, a completion outcome and an estimate between 1 and 60,000 minutes. Each description can contain at most 4,000 characters.'); return;
   }
@@ -62,7 +62,7 @@ export function TaskEditor({ tasks, milestones, frozen, change }: { tasks: Edita
   {draft && <form onSubmit={event => void submit(event)} noValidate>
    <h3>{draft.taskId ? 'Edit task' : 'Add task'}</h3>
    <label>Title <input value={draft.fields.title} onChange={e => update({ title: e.target.value })} aria-describedby="task-title-count" /></label>
-   <p className="small" id="task-title-count" aria-live="polite">{words} of 19 words · {Array.from(draft.fields.title.trim()).length} of 160 characters{!titleChanged && words > 19 ? ' · saved title; shorten it only if you change it' : ''}</p>
+   <p className="small" id="task-title-count" aria-live="polite">{words} of 11 words · {Array.from(draft.fields.title.trim()).length} of 160 characters{!titleChanged && words > 11 ? ' · saved title; shorten it only if you change it' : ''}</p>
    <label>Instructions <textarea value={draft.fields.instructions} onChange={e => update({ instructions: e.target.value })} /></label>
    <label>Completion outcome <textarea value={draft.fields.completion_outcome} onChange={e => update({ completion_outcome: e.target.value })} /></label>
    <label>Estimated minutes <input type="number" min="1" max="60000" step="1" value={draft.fields.estimated_minutes || ''} onChange={e => update({ estimated_minutes: Number(e.target.value) })} /></label>

@@ -8,16 +8,16 @@ from app.schemas.roadmap import NewSession, SessionChanges
 
 def test_title_word_limit_on_creation_and_edit():
     fields = dict(instructions='Do the work', completion_outcome='Record the result', estimated_minutes=30)
-    assert TaskDefinition(title=' '.join(['word'] * 19), **fields).title.count('word') == 19
-    with pytest.raises(ValidationError, match='at most 19'):
-        TaskDefinition(title=' '.join(['word'] * 20), **fields)
-    with pytest.raises(ValidationError, match='at most 19'):
-        TaskChanges(title='\t'.join(['word'] * 20))
+    assert TaskDefinition(title=' '.join(['word'] * 11), **fields).title.count('word') == 11
+    with pytest.raises(ValidationError, match='at most 11'):
+        TaskDefinition(title=' '.join(['word'] * 12), **fields)
+    with pytest.raises(ValidationError, match='at most 11'):
+        TaskChanges(title='\t'.join(['word'] * 12))
     assert TaskChanges(instructions='Updated instructions').title is None
 
 
 def test_existing_long_title_remains_readable_and_unsplit_text_uses_character_limit():
-    title = ' '.join(['word'] * 20)
+    title = ' '.join(['word'] * 12)
     task = EditableTask(id='old', title=title, instructions='Work', completion_outcome='Done',
                         estimated_minutes=30, status='not_started', origin='generated')
     assert task.title == title
@@ -27,9 +27,9 @@ def test_existing_long_title_remains_readable_and_unsplit_text_uses_character_li
 
 
 def test_session_edit_and_create_apply_the_same_title_limit():
-    title=' '.join(['word'] * 20)
-    with pytest.raises(ValidationError, match='at most 19'):
+    title=' '.join(['word'] * 12)
+    with pytest.raises(ValidationError, match='at most 11'):
         SessionChanges(title=title)
-    with pytest.raises(ValidationError, match='at most 19'):
+    with pytest.raises(ValidationError, match='at most 11'):
         NewSession(title=title,date='2030-01-09',duration_minutes=30)
     assert SessionChanges(notes={'blocks':[]}).title is None

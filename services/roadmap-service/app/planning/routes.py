@@ -3,16 +3,14 @@ from fastapi import Depends, Request
 from uuid import NAMESPACE_URL, uuid5
 import copy
 from starlette.concurrency import run_in_threadpool as thread
-from elo_shared.runtime import Problem, authenticated, begin, launch, operation_view, stamp, digest
+from elo_shared.runtime import Problem, authenticated, stamp, digest
 from app.planning.capacity import Capacity, normalized
-from app.planning.generator import PLANNING_SECONDS
-from app.planning.milestone_membership import mark_plan_membership_changes
-from app.planning.state import candidate_blockers, completed_sessions, learning_view, planner_state, saved_config
+from app.planning.state import completed_sessions, learning_view, planner_state, with_periods
 from app.planning.tasks import change_status, ensure_tasks, project_assignments
 from app.planning.task_routes import register_task_routes
 from app.planning.session_routes import register_session_routes
-from app.schemas.roadmap import (AssignmentStatus, CheckpointReached, ExperienceConfirmation, GeneratePlan, LearningPlan, OperationAccepted, Runway, MilestoneOutcome,
-    PlannerConfig, RunwayRequest, SaveConfig)
+from app.schemas.roadmap import (AssignmentStatus, CheckpointReached, ExperienceConfirmation, LearningPlan, Runway, MilestoneOutcome,
+    RunwayRequest, SaveConfig)
 from app.schemas.planner import Mutation, Workspace
 
 from pydantic import Field
@@ -35,7 +33,7 @@ def evidence_proposals(row):
             proposal={'id':session['id']+'_'+gap_id,'session_id':session['id'],'name':gap['name'],
                 'description':'Self-reported roadmap practice: '+session['evidence_note']}
             if len(proposal['name'])>120 or len(proposal['description'])>2000:continue  # Original note stays saved; never truncate evidence.
-            proposal['proposal_hash']=digest({'plan':plan['id'],**proposal})
+            proposal['proposal_hash']=digest(proposal)
             if proposal['proposal_hash'] not in state.get('confirmed_evidence',[]):proposals.append(proposal)
     return proposals
 
@@ -44,9 +42,9 @@ def register_planner(app,context,mutate,worker):
     register_task_routes(app,context,mutate)
     register_session_routes(app,context,mutate)
     from app.planning.outlines import register_outline_routes
-    from app.planning.months import register_month_routes
+    from app.planning.weeks import register_week_routes
     register_outline_routes(app,context,mutate,worker)
-    register_month_routes(app,context,mutate,worker)
+    register_week_routes(app,context,mutate,worker)
     @app.get('/api/v1/roadmaps/learning',response_model=LearningPlan)
     async def learning(request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id'])
@@ -55,46 +53,18 @@ def register_planner(app,context,mutate,worker):
     @app.post(prefix+'/runway',response_model=Runway)
     async def runway(body:RunwayRequest,request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id']);state=planner_state(row)
-        capacity=Capacity(body.config,app.state.clock(),completed_sessions(state['active']))
-        return capacity.report(allow_past_start=bool(state['active']))
+        config=with_periods(body.config,account['profile'].get('availability_periods',[]))
+        capacity=Capacity(config,app.state.clock(),completed_sessions(state['active']))
+        return capacity.report(allow_past_start=bool(state['active'] or state['outline_active']))
 
     @app.post(prefix+'/config',response_model=Workspace)
     async def save_config(body:SaveConfig,request:Request,account=Depends(authenticated)):
         def apply(row,source):
-            today=Capacity(body.config,app.state.clock()).today
-            planner_state(row)['config']=normalized(body.config,today).model_dump(mode='json')
+            config=with_periods(body.config,(source.get('planning_defaults') or {}).get('availability_periods'))
+            today=Capacity(config,app.state.clock()).today
+            planner_state(row)['config']=normalized(config,today).model_dump(mode='json')
             return row
         return await mutate(body,account,apply)
-
-    @app.post(prefix+'/generate',status_code=202,response_model=OperationAccepted)
-    async def generate(body:GeneratePlan,request:Request,account=Depends(authenticated)):
-        row=await thread(app.state.store.load,account['id']);state=planner_state(row)
-        repeated=any(r['id']==str(body.mutation_id) for r in row['receipts']) or (row.get('pending') or {}).get('id')==str(body.mutation_id)
-        if not repeated:
-            if state['outline_active'] or state['outline_candidate']:
-                raise Problem('Use the outline and monthly task workflow for this roadmap.',409,'outline_workflow_required')
-            source=await context(account)
-            if not source['ready']:raise Problem('Complete your selected CV and extracted Career goal first.',409,'inputs_missing')
-            config=saved_config(state)
-            report=Capacity(config,app.state.clock(),completed_sessions(state['active'])).report(allow_past_start=bool(state['active']))
-            if not report['can_generate']:raise Problem(' '.join(i['message'] for i in report['issues']),409,'generation_blocked')
-        row=await thread(begin,app.state.store,account['id'],body,'generate',PLANNING_SECONDS)
-        if row.get('pending'):launch(app,account['id'],account['token'],worker)
-        return {'version':row['version'],'operation':operation_view(row)}
-
-    @app.post(prefix+'/roll-forward',status_code=202,response_model=OperationAccepted)
-    async def roll_forward(body:GeneratePlan,request:Request,account=Depends(authenticated)):
-        from app.planning.capacity import week_of
-        row=await thread(app.state.store.load,account['id']);state=planner_state(row)
-        if state.get('outline_active') or state.get('outline_candidate'):
-            raise Problem('Use the outline and monthly task workflow for this roadmap.',409,'outline_workflow_required')
-        active=state.get('active')
-        if not active or state.get('candidate'):raise Problem('A saved active roadmap without a pending preview is required.',409,'roll_forward_blocked')
-        today=Capacity(saved_config(state),app.state.clock()).today
-        if active.get('first_planning_week','')>=week_of(today).isoformat():return {'version':row['version'],'operation':operation_view(row)}
-        row=await thread(begin,app.state.store,account['id'],body,'roll_forward',PLANNING_SECONDS)
-        if row.get('pending'):launch(app,account['id'],account['token'],worker)
-        return {'version':row['version'],'operation':operation_view(row)}
 
     @app.get(prefix+'/evidence-proposals')
     async def proposals(request:Request,account=Depends(authenticated)):
@@ -105,6 +75,9 @@ def register_planner(app,context,mutate,worker):
     @app.post(prefix+'/evidence-proposals/{proposal_id}/confirm',response_model=Workspace)
     async def confirm_evidence(proposal_id:str,body:ConfirmEvidence,request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id'])
+        if any(receipt['id']==str(body.mutation_id) for receipt in row['receipts']):
+            return await mutate(body,account,lambda current,source:current,operation='evidence.confirm')
+        if row.get('pending'):raise Problem('Wait for the current adviser response before confirming evidence.',409,'operation_pending')
         if row['version']!=body.expected_version:raise Problem('Your roadmap changed. Review the evidence proposal again.',409,'inputs_changed')
         proposal=next((item for item in evidence_proposals(row) if item['id']==proposal_id and item['proposal_hash']==body.proposal_hash),None)
         if not proposal:raise Problem('This evidence proposal changed or was already confirmed.',409,'inputs_changed')
@@ -116,27 +89,6 @@ def register_planner(app,context,mutate,worker):
             state=planner_state(current);state.setdefault('confirmed_evidence',[]).append(body.proposal_hash)
             return current
         return await mutate(body,account,apply,operation='evidence.confirm')
-
-    @app.post(prefix+'/accept',response_model=Workspace)
-    async def accept(body:Mutation,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
-            state=planner_state(row)
-            if state['outline_active'] or state['outline_candidate']:
-                raise Problem('Use the outline and monthly task workflow for this roadmap.',409,'outline_workflow_required')
-            if not state['candidate']:raise Problem('There is no previewed roadmap to accept.')
-            blockers=candidate_blockers(state,source,app.state.clock())
-            if blockers:raise Problem(blockers[0]['message'],409,blockers[0]['code'])
-            mark_plan_membership_changes(state['active'],state['candidate'])
-            state['active']=state['candidate'];state['candidate']=None
-            return row
-        return await mutate(body,account,apply,operation='preview.accept',mark_baseline=True)
-
-    @app.post(prefix+'/discard',response_model=Workspace)
-    async def discard(body:Mutation,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
-            planner_state(row)['candidate']=None
-            return row
-        return await mutate(body,account,apply,operation='preview.discard')
 
     def active_plan(row):
         plan=planner_state(row)['active']
@@ -191,7 +143,7 @@ def register_planner(app,context,mutate,worker):
     async def confirmation(body:ExperienceConfirmation,request:Request,account=Depends(authenticated)):
         def apply(row,source):
             state=planner_state(row)
-            plan=state['candidate'] or state['active']
+            plan=state['outline_candidate'] or state['active']
             gap=next((g for g in (plan or {}).get('gaps',[]) if g['id']==body.gap_id),None)
             if not gap:raise Problem('This question was not found in your plan.',404,'not_found')
             state['confirmations'][body.gap_id]={'name':gap['name'],'question':gap.get('confirmation_question'),'answer':body.answer,

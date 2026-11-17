@@ -6,10 +6,10 @@ from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, authenticated, stamp
 from app.planning.state import planner_state
-from app.planning.milestone_membership import mark_membership_review, mark_plan_membership_changes
+from app.planning.milestone_membership import mark_membership_review
 from app.planning.tasks import change_status, ensure_tasks, find_task, project_assignments, requirement_ids, schedule_warnings, task_readiness, validate_links
 from app.schemas.planner import Workspace
-from app.schemas.tasks import AddTask, EditTask, RemoveTask, ChangeTaskStatus, ReconcileTasks, SaveTaskNotes, TaskList
+from app.schemas.tasks import AddTask, EditTask, RemoveTask, ChangeTaskStatus, SaveTaskNotes, TaskList
 
 
 def register_task_routes(app,context,mutate):
@@ -119,21 +119,3 @@ def register_task_routes(app,context,mutate):
             task=find_task(plan,body.task_id)
             change_status(task,body.status,body.evidence_note);project_assignments(plan);return row
         return await mutate(body,account,apply,operation='tasks.status')
-
-    @app.post(prefix+'/reconcile',response_model=Workspace)
-    async def reconcile(body:ReconcileTasks,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
-            candidate=planner_state(row)['candidate']
-            if not candidate or candidate['id']!=body.candidate_id:raise Problem('This revision preview changed. Reload before reviewing it.',409,'candidate_changed')
-            pending={r['task_id']:r for r in candidate.get('revision_review',[])}
-            if len({d.task_id for d in body.decisions})!=len(body.decisions) or any(d.task_id not in pending for d in body.decisions):
-                raise Problem('Choose each unresolved task only once.',422,'validation')
-            for decision in body.decisions:
-                task=find_task(candidate,decision.task_id)
-                if decision.decision=='discard':
-                    now=stamp();task['removed']=True;task['removal']={'at':now,'reason':'Discarded during revision review.'}
-                    task.setdefault('history',[]).append({'at':now,'event':'removed','reason':task['removal']['reason']})
-                pending.pop(decision.task_id)
-            mark_plan_membership_changes(planner_state(row)['active'],candidate,reset_unchanged=True)
-            candidate['revision_review']=list(pending.values());project_assignments(candidate);return row
-        return await mutate(body,account,apply,operation='tasks.reconcile')

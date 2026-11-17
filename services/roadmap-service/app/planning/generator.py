@@ -1,46 +1,22 @@
-"""LLM work for the timed roadmap: settings chat, plan writing and the bounded validation retry."""
+"""The settings chat helper, and helpers shared by outline and week generation."""
 import copy
 from datetime import date
 from uuid import NAMESPACE_URL, uuid5
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool as thread
-from elo_shared.runtime import Problem, digest, stamp
+from elo_shared.runtime import Problem, stamp
 from app.planning.capacity import Capacity, blackout_problem, normalized, to_clock, to_minute
-from app.planning.state import ASSESSMENT_FIELDS, completed_sessions, config_digest, planner_state, saved_config
-from app.planning.milestone_membership import mark_plan_membership_changes
-from app.planning.validator import validate_plan
-from app.schemas.roadmap import ChatTurn, PlanDraft, PlannerConfig
+from app.planning.state import ASSESSMENT_FIELDS, completed_sessions, planner_state, saved_config
+from app.schemas.roadmap import ChatTurn, PlannerConfig
 
 MAX_ATTEMPTS=3
 PLAN_MAX_TOKENS=24000
 # Total operation budget, including up to 60 Assessment polls at two-second intervals.
 PLANNING_SECONDS=240
-PROMPT_VERSION='roadmap-plan-v3'
-
-PLAN_INSTRUCTIONS='''You write a personal study roadmap towards the user's career goal. You own the learning plan: identify and prioritise gaps, sequence prerequisites, estimate effort, define milestones and write the actual assignments. The backend owns dates and capacity and rejects anything that does not fit, so work only inside the supplied windows and weekly capacity.
-
-Use assessment.skill_profile as the saved evaluation of individual skills; reuse its levels, relevance and links rather than rating proficiency again. Evidence entries are reference metadata; do not invent quotations or additional source facts.
-
-Gaps. assessment holds the evidence-linked comparison of the user's goal with their skills.
-- A requirement whose outcome has a confirmed_shortfall component is status confirmed_gap. uncertain or partial outcomes are status unknown: missing proof is not a shortfall. Supported outcomes and members of satisfied "any" groups are not gaps. assessment.constraints are non-learning conditions that study cannot resolve; never list them as gaps.
-- A gap from the assessment has source "stated" and its requirement_ref. A requirement you infer about the role yourself has source "inferred", no requirement_ref, an inference_reason and status unknown.
-- plan_impact is "material" when the answer would change what the user should study or in what order. A material unknown needs resolution "diagnostic" (a task of 30 minutes or less in the first planning week, kind "diagnostic", with gap_id set) or "confirm_experience" (a short confirmation_question). confirmations are the user's self-reported answers: use them and do not ask again. Reuse a gap's id when revising.
-- Every id in assessment.priorities must appear in a milestone's gap_ids or in beyond_deadline.
-- A job_skill_gaps outcome may carry competence_score (a 0 to 10 planning estimate where 10 means the evidence meets the level the goal needs), demonstrated_score and required_score on one 0 to 10 scale, and profile_skills (the user's related Skills Profile skills). Use them to size effort, order work and build on related skills: the lower the score, the more remaining effort. They never change a gap's status, which follows the rules above.
-
-Milestones. estimated_minutes is the effort still remaining. Each needs a projected_start and projected_end inside the runway, prerequisites finishing first, and a demonstrable_outcome the user could show another person. Give each milestone two to five checkpoints: dated, observable states on the way to its outcome, in date order inside its projected window, each with a key unique within the milestone and a short title such as "The skeleton runs locally". The last checkpoint falls on projected_end and completes the milestone. Reuse a checkpoint's key when revising. Effort is checked against eligible capacity: for any date range, the milestones wholly inside it must fit weekly_capacity for that range.
-
-The target date is the end of the roadmap. No milestone may end after it. If the gaps exceed the runway, prioritise prerequisites and the work that most directly supports the goal, put what remains in beyond_deadline with its estimated effort, and say plainly in deadline_outcome what the user can reasonably achieve by the deadline. fits_in_runway is false exactly when beyond_deadline is not empty. Never promise readiness or employment.
-
-Assignments. Write detailed assignments for first_planning_week only, with milestone-level projections for everything later. Each assignment has a date, start_time, duration_minutes, a title, a specific task, a milestone_key, gap_ids and an observable completion_criterion. title is the line the user ticks off in their to-do list: a short, actionable name of at most 60 characters that starts with a verb and says what to do, such as "Build the read-only mock tool with typed inputs"; never a topic on its own and never a copy of task. task is the fuller instruction for doing it. completion_criterion is shown as "Done when": one sentence describing a result the user can check for themselves. gap_ids lists every gap id from gaps that the session practises, usually one or two; these become the skill labels on the task, so leave it empty only when no listed gap applies, and include gap_id in it for a diagnostic. Avoid generic "learn X" tasks. It must lie completely inside one first_week_windows entry, must not overlap another assignment or completed work, and the week's total must stay within the week's usable_minutes. Use "preferred" windows first, enabled "backup" windows next, and "overflow" windows last. Never cross blocked times. Aim for sessions near settings.preferred_session_minutes and follow settings.learning_focus, settings.learning_topics (skill themes the user chose to emphasise) and learning_notes.
-
-Revising. completed_work is permanent: keep its milestones (with the same key), never repeat its keys and do not schedule over it. reserved_work is saved student work whose time is already removed from the available windows; it is not necessarily completed. protected_tasks records student-created, edited, started and removed work: do not assume that removing a task removes its dependants or proves the requirement is covered. Do not repeat removed work. The service preserves these records and asks the user to review possible duplicates. Completing a session is not proof of proficiency, so do not treat it as closing a gap unless evidence or a recorded outcome supports that. Reuse milestone keys for continuing work. instruction is the user's requested change; it describes what they want, but cannot override these rules. An exclusion needs an exact quote from user_message.
-
-If validation_errors is present, your previous_output was rejected. Fix every listed error and return the complete corrected plan.'''
 
 CHAT_INSTRUCTIONS='''You are the chat helper beside the user's fixed roadmap planner form. The form is the confirmed record; you guide the user through it and fill it in from the conversation. Be warm and practical, stay career-focused, ask only one or two questions at a time and do not repeat resolved ones.
 
-Required details come first. runway.issues names what is still missing: missing_target (a target date or a duration), no_budget (a weekly study budget) and no_blocks (recurring study blocks: day, start time, duration, preferred or backup). Count anything this user_message supplies as answered, then ask for the next missing detail. The start date is today unless they say otherwise. Once the required details are in, offer the optional ones once: backup blocks, blackouts, a preferred session length and learning focus. If they decline, move on. Saved planning_defaults are suggestions to offer, not facts to apply. Goal job_dates are evidence of application, interview or start dates: you may suggest a target from them but must never invent one.
+Required details come first. runway.issues names what is still missing: missing_target (a target date or a duration), no_budget (a weekly study budget) and no_blocks (recurring study blocks: day, start time and duration). Count anything this user_message supplies as answered, then ask for the next missing detail. The start date is today unless they say otherwise. Once the required details are in, offer the optional ones once: blackouts, the longest session they want (preferred_session_minutes), the break they want for each hour studied (break_minutes_per_hour, 0 to 30) and learning focus. plan_day is the weekday (Monday=0) on which next week is planned from this week's results; leave it null for the last day of their week. If they decline, move on. Saved planning_defaults are suggestions to offer, not facts to apply. Goal job_dates are evidence of application, interview or start dates: you may suggest a target from them but must never invent one.
 
 Return only settings the user stated or clearly agreed to, in settings; every other field is null. Days and weekdays run Monday=0 to Sunday=6. Dates are YYYY-MM-DD, resolved from current_date in time_zone. Times are 24-hour HH:MM. Budgets and durations are whole minutes. blocks and blackouts replace the whole saved list, so include existing entries you want kept. learning_focus uses interview_practice, portfolio_work, hands_on_projects, courses_and_reading, certification, networking.
 
@@ -48,7 +24,7 @@ A blackout is time the user cannot study. frequency is once, daily, weekly or mo
 
 Never compute available hours or claim the schedule fits: the planner form shows the calculated runway. You cannot start generation or apply a plan. When the required details are in, tell the user to review the form and press Generate.
 
-When current_plan is present and the user asks to change it, set revision_instruction to a short, precise description of the change, and include any settings changes. This prepares a preview; nothing applies until the user accepts it. Do not set revision_instruction when the user only asks a question. Completed sessions cannot be changed. Factual skill corrections belong in Skills Profile, so point the user there.'''
+When current_plan is present and the user asks to change it, set revision_instruction to a short, precise description of the change, and include any settings changes. This prepares a revised outline to preview; nothing applies until the user accepts it. Week-by-week tasks are planned from the roadmap page, not from chat. Do not set revision_instruction when the user only asks a question. Completed sessions cannot be changed. Factual skill corrections belong in Skills Profile, so point the user there.'''
 
 def planning_assessment(result):
     """Keep the saved skill judgements and their evidence handles without copying raw source documents."""
@@ -56,14 +32,6 @@ def planning_assessment(result):
     value['evidence']={ref:{k:record[k] for k in ('name','kind','attribution','reviewed','cv_level','canonical_skill_id') if k in record}
         for ref,record in result.get('evidence',{}).items()}
     return value
-
-def compact_plan(plan):
-    if not plan:return None
-    if 'editable_tasks' in plan:
-        from app.planning.tasks import project_assignments
-        plan=copy.deepcopy(plan);project_assignments(plan)
-    fields=('summary','first_planning_week','gaps','milestones','deadline_outcome','beyond_deadline','exclusions')
-    return {**{k:plan.get(k) for k in fields},'scheduled':[{k:a[k] for k in ('key','milestone_key','date','start_time','duration_minutes','title','task')} for a in plan['assignments'] if a['status']=='scheduled']}
 
 def apply_settings(config,patch,today):
     """Merge a chat patch. An invalid patch changes nothing and returns the reason to show."""
@@ -79,40 +47,6 @@ def apply_settings(config,patch,today):
     if any(blackout_problem(rule) for rule in updated.blackouts):
         return config,'I couldn’t apply that change because of blackouts, so your settings are unchanged.'
     return normalized(updated,today),None
-
-async def write_plan(model,context,check,before_retry):
-    """Call the model until its plan passes validation, at most MAX_ATTEMPTS times in total."""
-    errors=[];previous=None
-    for attempt in range(1,MAX_ATTEMPTS+1):
-        request={**context,'attempt':attempt}
-        if errors:
-            await before_retry()
-            request.update(validation_errors=errors,previous_output=previous)
-        draft=await model.generate(PlanDraft,PLAN_INSTRUCTIONS,request,max_tokens=PLAN_MAX_TOKENS)
-        errors=check(draft)
-        if not errors:return draft,attempt
-        previous=draft.model_dump(mode='json')
-    examples=' '.join(e['message'] for e in errors[:3])
-    raise Problem(f'We could not produce a plan that fits your schedule after {MAX_ATTEMPTS} attempts. Your last valid plan is unchanged. {examples}'[:1500],502,'plan_validation')
-
-def plan_changes(previous,assignments,milestones):
-    """What a preview changes relative to the active plan, shown before the user accepts it."""
-    if not previous:return None
-    if 'editable_tasks' in previous:
-        from app.planning.tasks import project_assignments
-        previous=copy.deepcopy(previous);project_assignments(previous)
-    slot=lambda a:(str(a['date']),a['start_time'],a['duration_minutes'])
-    before={a['key']:a for a in previous['assignments'] if a['status']=='scheduled'}
-    after={a['key']:a for a in assignments if a['status']=='scheduled'}
-    old={m['key']:m for m in previous['milestones']};new={m['key']:m for m in milestones}
-    window=lambda m:(str(m['projected_start']),str(m['projected_end']))
-    return {'completed_preserved':sum(a['status']=='completed' for a in assignments),
-        'assignments_added':[after[k]['task'] for k in after if k not in before],
-        'assignments_removed':[before[k]['task'] for k in before if k not in after],
-        'assignments_moved':[after[k]['task'] for k in after if k in before and slot(after[k])!=slot(before[k])],
-        'milestones_added':[new[k]['title'] for k in new if k not in old],
-        'milestones_removed':[old[k]['title'] for k in old if k not in new],
-        'milestones_moved':[new[k]['title'] for k in new if k in old and window(new[k])!=window(old[k])]}
 
 def protected_tasks(plan):
     """Student intent and task history survive replacement of generated sessions."""
@@ -162,172 +96,30 @@ def reserved_sessions(plan,now):
             reserved.append({'id':ident,**slot})
     return reserved
 
-def reconcile_tasks(plan,active):
-    """Carry protected records into a preview and flag possible duplicate work.
-
-    Model-generated keys cannot establish that a newly worded task is distinct
-    from removed, user-created, edited, in-progress or completed work. Require
-    a decision for newly generated work when such protected records exist.
-    """
-    from app.planning.tasks import ensure_tasks, project_assignments
-    generated=ensure_tasks(plan)
-    retained=copy.deepcopy(protected_tasks(active))
-    if not retained:return
-    ids={t['id'] for t in retained}
-    # Completed multi-slot tasks were copied as legacy session projections.
-    # All of those projected IDs belong to the one retained canonical task.
-    for task in retained:
-        if task.get('status')=='completed':
-            ids.update(str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(i))) for i in range(1,len(task.get('schedule',[]))))
-    keys={t.get('generated_key'):t for t in retained if t.get('generated_key')}
-    # Completed assignments are also copied into the new plan by build_plan.
-    # Generated keys are not proof of identity. Copied completed slots have
-    # already been recognized by their stable IDs above.
-    fresh=[];ambiguous={}
-    for task in generated:
-        if task['id'] in ids:continue
-        prior=keys.get(task.get('generated_key'))
-        if prior:
-            # Even identical wording with a recycled key could be distinct work.
-            # Give the proposal its own key and let the student decide.
-            task['generated_key']=str(uuid5(NAMESPACE_URL,plan['id']+':reconciled:'+task['id']))
-            ambiguous[task['id']]=prior['id']
-        fresh.append(task)
-    plan['editable_tasks']=[*retained,*fresh]
-    removed=[t['id'] for t in retained if t.get('removed')]
-    protected=[t['id'] for t in retained if not t.get('removed') and
-        (t.get('origin')=='user' or t.get('overrides') or t.get('notes') or t.get('status') in ('in_progress','completed'))]
-    plan['revision_review']=[]
-    for task in fresh:
-        related=list(dict.fromkeys([*protected,*([ambiguous[task['id']]] if task['id'] in ambiguous else [])]))
-        if removed or related:
-            plan['revision_review'].append({'task_id':task['id'],'removed_task_ids':removed,'related_task_ids':related})
-
-    # Keep the milestone and its prerequisite context for retained work, even if
-    # the model did not include it in this revision. Never delete dependants.
-    old_milestones={m['key']:m for m in (active or {}).get('milestones',[])}
-    current={m['key'] for m in plan['milestones']}
-    needed=[t.get('milestone_key') for t in retained if t.get('milestone_key')]
-    while needed:
-        key=needed.pop()
-        if key in current or key not in old_milestones:continue
-        milestone=copy.deepcopy(old_milestones[key])
-        plan['milestones'].append(milestone);current.add(key)
-        needed.extend(milestone.get('prerequisite_keys',[]))
-    old_gaps={g['id']:g for g in (active or {}).get('gaps',[])}
-    gap_ids={g['id'] for g in plan['gaps']}
-    for milestone in plan['milestones']:
-        for key in milestone.get('gap_ids',[]):
-            if key not in gap_ids and key in old_gaps:
-                plan['gaps'].append(copy.deepcopy(old_gaps[key]));gap_ids.add(key)
-    project_assignments(plan)
-
-def plan_checkpoints(milestone,previous):
-    """Checkpoints in date order, keeping when the user reached them. A milestone always has its completing one."""
-    reached={c['key']:c.get('reached_at') for c in previous.get('checkpoints',[])}
-    items=sorted(milestone.get('checkpoints') or [],key=lambda c:str(c['date']))
-    if not items:items=[{'key':'complete','title':milestone['demonstrable_outcome'][:160],'date':milestone['projected_end']}]
-    return [{**item,'reached_at':reached.get(item['key'])} for item in items]
-
-def build_plan(draft,assessment,config,first_week,operation_id,attempts,active,confirmations):
-    data=draft.model_dump(mode='json')
-    completed=copy.deepcopy(completed_sessions(active))
-    earlier={m['key']:m for m in (active or {}).get('milestones',[])}
-    milestones=[]
-    for m in data['milestones']:
-        previous=earlier.get(m['key'],{})
-        outcome=copy.deepcopy(previous.get('outcome') or {'demonstrated':False})
-        if outcome.get('demonstrated') and previous.get('demonstrable_outcome')!=m['demonstrable_outcome']:
-            outcome['definition_review_required']=True
-            outcome.setdefault('previous_definition',previous.get('demonstrable_outcome'))
-        milestones.append({**m,'id':m['key'],'outcome':outcome,'checkpoints':plan_checkpoints(m,previous)})
-    assignments=[*completed,*[{**a,'id':str(uuid5(NAMESPACE_URL,operation_id+':assignment:'+a['key'])),'status':'scheduled','completed_at':None,'evidence_note':None,'history':[]} for a in data['assignments']]]
-    plan={'schema_version':'roadmap-v2','id':str(uuid5(NAMESPACE_URL,operation_id+':roadmap')),
-        'assessment_id':assessment['id'],'assessment_hash':assessment['input_hash'],'assessment':{k:assessment.get(k) for k in ASSESSMENT_FIELDS},
-        'config':config.model_dump(mode='json'),'config_hash':config_digest(config),'confirmations_hash':digest(confirmations),
-        'base_active_id':(active or {}).get('id'),'created_at':stamp(),'first_planning_week':first_week.isoformat(),
-        'completed_at_generation':len(completed),'summary':data['summary'],'gaps':data['gaps'],'milestones':milestones,'assignments':assignments,
-        'deadline_outcome':data['deadline_outcome'],'beyond_deadline':data['beyond_deadline'],'exclusions':data['exclusions'],
-        'changes':plan_changes(active,assignments,milestones),'generation':{'prompt_version':PROMPT_VERSION,'attempts':attempts}}
-    reconcile_tasks(plan,active)
-    mark_plan_membership_changes(active,plan)
-    plan['changes']=plan_changes(active,plan['assignments'],plan['milestones'])
-    return plan
-
 async def set_stage(app,row,owner,stage):
     row['pending']['stage']=stage
-    seconds=PLANNING_SECONDS+30
+    seconds=row['pending'].get('work_seconds',PLANNING_SECONDS)+30
     await thread(app.state.store.checkpoint,owner,row,seconds)
-
-async def prepare_plan(app,row,account,assess,read_context,*,config=None,instruction=None,user_message=None):
-    """Compare skills, write and validate a plan, and store it as the candidate.
-
-    The row is only changed after validation, so a failure keeps every earlier plan.
-    """
-    owner=account['id'];state=planner_state(row)
-    config=config or saved_config(state)
-    pending=row['pending'];operation_id=pending['id']
-    await set_stage(app,row,owner,'assessing')
-    result=await assess(account,operation_id,pending['body'].get('allow_partial_assessment',False))
-    source=await read_context(account)
-    if not source['ready'] or source.get('input_hash')!=result['input_hash']:raise Problem('Your selected inputs changed. Refresh before planning.',409,'inputs_changed')
-    await set_stage(app,row,owner,'writing')
-    state=planner_state(row)
-    active=state['active'];confirmations=state['confirmations'];now=app.state.clock()
-    completed=completed_sessions(active)
-    reservations=reserved_sessions(active,now)
-    capacity=Capacity(config,now,reservations)
-    report=capacity.report(allow_past_start=bool(active))
-    if not report['can_generate']:raise Problem(' '.join(i['message'] for i in report['issues']),409,'generation_blocked')
-    first_week=date.fromisoformat(report['first_planning_week'])
-    retained=sorted({s['milestone_key'] for s in completed})
-    def check(draft):
-        return validate_plan(draft,capacity,result,first_week,completed=completed,retained_milestones=retained,confirmations=confirmations,instruction=user_message)
-    local=now.astimezone(capacity.zone)
-    draft,attempts=await write_plan(app.state.model,{
-        'current_date':capacity.today.isoformat(),'current_time':to_clock(local.hour*60+local.minute),'time_zone':config.time_zone,
-        'goal':source['goal'],'assessment':planning_assessment(result),
-        'settings':config.model_dump(mode='json'),'runway':{k:report[k] for k in ('calendar','study')},
-        'first_planning_week':report['first_planning_week'],'first_week_windows':capacity.windows_for_week(first_week),
-        'weekly_capacity':[{k:w[k] for k in ('week_start','usable_minutes','partial')} for w in report['weeks']],
-        'completed_work':[{k:s.get(k) for k in ('key','milestone_key','date','start_time','duration_minutes','title','task','completion_criterion','evidence_note')} for s in completed],
-        'reserved_work':[{k:s.get(k) for k in ('id','date','start_time','duration_minutes')} for s in reservations],
-        'milestone_outcomes':{m['key']:m['outcome'] for m in (active or {}).get('milestones',[]) if m['outcome'].get('demonstrated') and not m['outcome'].get('definition_review_required')},
-        'protected_tasks':protected_tasks(active),
-        'confirmations':confirmations,'current_plan':compact_plan(active),'instruction':instruction,'user_message':user_message},
-        check,lambda:set_stage(app,row,owner,'correcting'))
-    latest=await app.state.upstream.account(account['token'])
-    if latest['id']!=owner:raise Problem('Your account changed while preparing this plan.',401,'session')
-    fresh=await read_context(latest)
-    if fresh.get('input_hash')!=source['input_hash']:raise Problem('Your evidence or goal changed while preparing this plan. Retry with the latest inputs.',409,'inputs_changed')
-    state=planner_state(row)
-    state['config']=config.model_dump(mode='json')
-    state['candidate']=build_plan(draft,result,config,first_week,operation_id,attempts,active,confirmations)
-    row['assessment']={k:result.get(k) for k in ASSESSMENT_FIELDS}
 
 async def chat_turn(app,row,account,assess,read_context):
     """One saved chat message: answer, collect settings and, with a plan present, prepare a preview."""
     body=row['pending']['body'];state=planner_state(row)
     source=await read_context(account)
     if not source['ready']:raise Problem('Complete your selected CV and extracted Career goal first.',409,'inputs_missing')
-    config=saved_config(state);now=app.state.clock()
+    config=saved_config(state,periods=source['planning_defaults']['availability_periods']);now=app.state.clock()
     capacity=Capacity(config,now,completed_sessions(state['active']))
-    report=capacity.report(allow_past_start=bool(state['active']))
+    report=capacity.report(allow_past_start=bool(state['active'] or state['outline_active']))
     outline=state['outline_candidate'] or state['outline_active']
-    plan=state['candidate'] or state['active']
     output=await app.state.model.generate(ChatTurn,CHAT_INSTRUCTIONS,{
         'current_date':capacity.today.isoformat(),'time_zone':config.time_zone,'goal':source['goal'],'planning_defaults':source['planning_defaults'],
-        'settings':config.model_dump(mode='json'),'runway':{k:report[k] for k in ('issues','calendar','study')},
-        'current_plan':outline or compact_plan(plan),'messages':row['messages'][-12:],'history_window':'Latest 12 messages; saved settings preserve earlier choices.',
+        'settings':config.model_dump(mode='json',exclude={'reduced_periods'}),'runway':{k:report[k] for k in ('issues','notices','calendar','study')},
+        'current_plan':outline,'messages':row['messages'][-12:],'history_window':'Latest 12 messages; saved settings preserve earlier choices.',
         'user_message':body['message']})
     updated,note=apply_settings(config,output.settings,capacity.today)
     reply=output.reply+(f'\n\n{note}' if note else '')
-    if output.revision_instruction and outline and not note:
+    if output.revision_instruction and (outline or state['active']) and not note:
         from app.planning.outlines import prepare_outline
         await prepare_outline(app,row,account,assess,read_context,config=updated,instruction=output.revision_instruction,user_message=body['message'])
-        state=planner_state(row)
-    elif output.revision_instruction and plan and not note:
-        await prepare_plan(app,row,account,assess,read_context,config=updated,instruction=output.revision_instruction,user_message=body['message'])
         state=planner_state(row)
     else:state['config']=updated.model_dump(mode='json')
     row['messages'].append({'id':row['pending']['id']+':reply','role':'assistant','content':reply,'created_at':stamp()})

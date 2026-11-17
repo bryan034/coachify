@@ -390,6 +390,21 @@
           "title": "Instructions",
           "type": "string"
         },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Detailed numbered steps, practical guidance and how to check the result; null for older tasks.",
+          "title": "Description"
+        },
         "completion_outcome": {
           "maxLength": 4000,
           "minLength": 1,
@@ -656,6 +671,32 @@
           ],
           "default": null,
           "title": "Backlog Moved At"
+        },
+        "week_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The planned week this generated task was written for.",
+          "title": "Week Start"
+        },
+        "deferred_week": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set when a week review left this unfinished task in the backlog; it is offered again next week.",
+          "title": "Deferred Week"
         }
       },
       "required": [
@@ -1264,7 +1305,7 @@
     },
     "PlannerConfig": {
       "additionalProperties": false,
-      "description": "Date problems are reported as runway issues so the settings panel can explain them.",
+      "description": "Date problems are reported as runway issues so the settings panel can explain them.\n\nSHAPE_FIELDS decide what the outline covers. DISPLAY_FIELDS only change how the page reads.\nEvery other field is a scheduling rule that applies from the next week that is planned.",
       "properties": {
         "start_date": {
           "anyOf": [
@@ -1330,24 +1371,19 @@
           "title": "Blocks",
           "type": "array"
         },
-        "use_backup": {
-          "default": false,
-          "title": "Use Backup",
-          "type": "boolean"
-        },
         "allow_overflow": {
           "default": false,
           "title": "Allow Overflow",
           "type": "boolean"
         },
         "overflow_start": {
-          "default": "08:00",
+          "default": "09:00",
           "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
           "title": "Overflow Start",
           "type": "string"
         },
         "overflow_end": {
-          "default": "22:00",
+          "default": "23:00",
           "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
           "title": "Overflow End",
           "type": "string"
@@ -1362,10 +1398,135 @@
         },
         "preferred_session_minutes": {
           "default": 60,
+          "description": "The longest single session. Longer tasks are split.",
           "maximum": 480,
           "minimum": 15,
           "title": "Preferred Session Minutes",
           "type": "integer"
+        },
+        "break_minutes_per_hour": {
+          "default": 10,
+          "description": "Rest left after a session for each hour studied.",
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Break Minutes Per Hour",
+          "type": "integer"
+        },
+        "min_session_minutes": {
+          "default": 25,
+          "description": "The shortest session worth scheduling.",
+          "maximum": 120,
+          "minimum": 15,
+          "title": "Min Session Minutes",
+          "type": "integer"
+        },
+        "max_daily_minutes": {
+          "anyOf": [
+            {
+              "maximum": 1440,
+              "minimum": 15,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Daily Minutes"
+        },
+        "lead_minutes": {
+          "default": 0,
+          "description": "Notice needed before a newly planned session can start.",
+          "maximum": 1440,
+          "minimum": 0,
+          "title": "Lead Minutes",
+          "type": "integer"
+        },
+        "week_start_day": {
+          "default": 0,
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Week Start Day",
+          "type": "integer"
+        },
+        "plan_day": {
+          "anyOf": [
+            {
+              "maximum": 6,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Weekday on which next week can be planned. Null means the last day of the week.",
+          "title": "Plan Day"
+        },
+        "rest_days_per_week": {
+          "default": 0,
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Rest Days Per Week",
+          "type": "integer"
+        },
+        "apply_reduced_periods": {
+          "default": true,
+          "title": "Apply Reduced Periods",
+          "type": "boolean"
+        },
+        "reduced_periods": {
+          "description": "Set by the service from Profile; values sent by a client are replaced.",
+          "items": {
+            "$ref": "#/$defs/ReducedPeriod"
+          },
+          "maxItems": 100,
+          "title": "Reduced Periods",
+          "type": "array"
+        },
+        "unfinished_default": {
+          "default": "ask",
+          "enum": [
+            "ask",
+            "carry",
+            "defer"
+          ],
+          "title": "Unfinished Default",
+          "type": "string"
+        },
+        "max_carry_minutes": {
+          "anyOf": [
+            {
+              "maximum": 10080,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Most carried-over work in one week. Null means half the weekly hours.",
+          "title": "Max Carry Minutes"
+        },
+        "time_format": {
+          "default": "24h",
+          "enum": [
+            "24h",
+            "12h"
+          ],
+          "title": "Time Format",
+          "type": "string"
+        },
+        "goal_unit": {
+          "default": "tasks",
+          "enum": [
+            "tasks",
+            "hours"
+          ],
+          "title": "Goal Unit",
+          "type": "string"
         },
         "learning_focus": {
           "items": {
@@ -1401,6 +1562,35 @@
         }
       },
       "title": "PlannerConfig",
+      "type": "object"
+    },
+    "ReducedPeriod": {
+      "additionalProperties": false,
+      "description": "A Profile availability period, copied by the service so every capacity calculation sees the same dates.",
+      "properties": {
+        "start_date": {
+          "format": "date",
+          "title": "Start Date",
+          "type": "string"
+        },
+        "end_date": {
+          "format": "date",
+          "title": "End Date",
+          "type": "string"
+        },
+        "weekly_minutes": {
+          "maximum": 10080,
+          "minimum": 0,
+          "title": "Weekly Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_date",
+        "end_date",
+        "weekly_minutes"
+      ],
+      "title": "ReducedPeriod",
       "type": "object"
     },
     "RevisionReview": {
@@ -1733,15 +1923,6 @@
           "minimum": 15,
           "title": "Duration Minutes",
           "type": "integer"
-        },
-        "kind": {
-          "default": "preferred",
-          "enum": [
-            "preferred",
-            "backup"
-          ],
-          "title": "Kind",
-          "type": "string"
         }
       },
       "required": [
@@ -1939,6 +2120,18 @@
           ],
           "default": null,
           "title": "Instructions"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
         },
         "completion_outcome": {
           "anyOf": [

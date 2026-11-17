@@ -55,21 +55,6 @@ def test_baseline_is_the_exact_accepted_snapshot_and_survives_task_mutations():
         assert client.get('/api/v1/roadmaps/history/'+baseline, headers=H).json() == snapshot.json()
 
 
-def test_accepting_revision_resets_baseline_and_retry_is_idempotent():
-    with client_for(Scripted([draft(), draft()])) as client:
-        state = accepted(client)
-        first = state['planner']['active']['pace_baseline_id']
-        state = generate(client, state)
-        body = {'expected_version': state['version'], 'mutation_id': str(uuid4())}
-        response = client.post('/api/v1/roadmaps/planner/accept', headers=H, json=body)
-        assert response.status_code == 200, response.text
-        active = response.json()['planner']['active']
-        assert active['pace_baseline_id'] == active['id'] != first
-        assert client.get('/api/v1/roadmaps/history/'+active['id'], headers=H).json()['pace_baseline_id'] == active['id']
-        retry = client.post('/api/v1/roadmaps/planner/accept', headers=H, json=body)
-        assert retry.status_code == 200 and retry.json()['planner']['active']['id'] == active['id']
-
-
 def test_legacy_snapshot_gets_no_invented_baseline_or_read_migration():
     with client_for(Scripted([draft()])) as client:
         state = accepted(client)

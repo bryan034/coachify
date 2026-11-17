@@ -1,4 +1,8 @@
-"""Synthetic scenario shared by the validator and flow tests. Wednesday 2030-01-09, 08:00 Singapore."""
+"""Synthetic scenario shared by the validator and flow tests. Wednesday 2030-01-09, 08:00 Singapore.
+
+BLOCKS keeps the retired `kind` field, as saved settings may: the Sunday backup block is dropped on read.
+Breaks are off here so the arithmetic stays plain; test_placement.py covers breaks.
+"""
 import copy
 from datetime import datetime, timezone
 from elo_shared.runtime import MemoryStore
@@ -12,7 +16,7 @@ BLOCKS=[{'day':0,'start_time':'19:00','duration_minutes':120,'kind':'preferred'}
     {'day':6,'start_time':'09:00','duration_minutes':120,'kind':'backup'}]
 def settings(**changes):
     return {'start_date':'2030-01-09','target_date':'2030-01-27','time_zone':'Asia/Singapore','weekly_minutes':300,'blocks':BLOCKS,
-        'blackouts':[{'frequency':'once','start_date':'2030-01-12'}],'preferred_session_minutes':60,'learning_focus':['portfolio_work'],**changes}
+        'blackouts':[{'frequency':'once','start_date':'2030-01-12'}],'preferred_session_minutes':60,'break_minutes_per_hour':0,'learning_focus':['portfolio_work'],**changes}
 def outcome(ref,status,shortfall=False):
     component={'dimension':'capability','status':'confirmed_shortfall' if shortfall else 'uncertain' if status!='supported' else 'supported','explanation':'Synthetic.','evidence_refs':[]}
     return {'ref':ref,'kind':'job_skill','name':ref.split(':')[1].title(),'match_status':status,'components':[component],'recommendation':None,'mapping_method':'canonical','mapping_reason':'Synthetic.'}

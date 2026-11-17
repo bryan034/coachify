@@ -1356,129 +1356,6 @@
         ]
       }
     },
-    "/api/v1/roadmaps/planner/tasks/reconcile": {
-      "post": {
-        "summary": "Reconcile",
-        "operationId": "reconcile_api_v1_roadmaps_planner_tasks_reconcile_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReconcileTasks"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Workspace"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Content Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/roadmaps/planner/sessions/free-times": {
       "post": {
         "summary": "Times",
@@ -2611,133 +2488,10 @@
         }
       }
     },
-    "/api/v1/roadmaps/planner/months/generate": {
+    "/api/v1/roadmaps/planner/outlines/{identifier}/discard": {
       "post": {
-        "summary": "Generate",
-        "operationId": "generate_api_v1_roadmaps_planner_months_generate_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateMonth"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationAccepted"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Content Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/roadmaps/planner/months/{identifier}/accept": {
-      "post": {
-        "summary": "Accept",
-        "operationId": "accept_api_v1_roadmaps_planner_months__identifier__accept_post",
+        "summary": "Discard",
+        "operationId": "discard_api_v1_roadmaps_planner_outlines__identifier__discard_post",
         "security": [
           {
             "HTTPBearer": []
@@ -2868,10 +2622,401 @@
         }
       }
     },
-    "/api/v1/roadmaps/planner/months/{identifier}/discard": {
+    "/api/v1/roadmaps/planner/weeks/generate": {
+      "post": {
+        "summary": "Generate",
+        "operationId": "generate_api_v1_roadmaps_planner_weeks_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateWeek"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/roadmaps/planner/weeks/{identifier}/carryover": {
+      "post": {
+        "summary": "Carryover",
+        "operationId": "carryover_api_v1_roadmaps_planner_weeks__identifier__carryover_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewCarryover"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/roadmaps/planner/weeks/{identifier}/accept": {
+      "post": {
+        "summary": "Accept",
+        "operationId": "accept_api_v1_roadmaps_planner_weeks__identifier__accept_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Mutation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/roadmaps/planner/weeks/{identifier}/discard": {
       "post": {
         "summary": "Discard",
-        "operationId": "discard_api_v1_roadmaps_planner_months__identifier__discard_post",
+        "operationId": "discard_api_v1_roadmaps_planner_weeks__identifier__discard_post",
         "security": [
           {
             "HTTPBearer": []
@@ -3361,252 +3506,6 @@
         ]
       }
     },
-    "/api/v1/roadmaps/planner/generate": {
-      "post": {
-        "summary": "Generate",
-        "operationId": "generate_api_v1_roadmaps_planner_generate_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GeneratePlan"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationAccepted"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Content Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/roadmaps/planner/roll-forward": {
-      "post": {
-        "summary": "Roll Forward",
-        "operationId": "roll_forward_api_v1_roadmaps_planner_roll_forward_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GeneratePlan"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationAccepted"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Content Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/roadmaps/planner/evidence-proposals": {
       "get": {
         "summary": "Proposals",
@@ -3850,252 +3749,6 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/roadmaps/planner/accept": {
-      "post": {
-        "summary": "Accept",
-        "operationId": "accept_api_v1_roadmaps_planner_accept_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Mutation"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Workspace"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Content Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/roadmaps/planner/discard": {
-      "post": {
-        "summary": "Discard",
-        "operationId": "discard_api_v1_roadmaps_planner_discard_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Mutation"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Workspace"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Content Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorView"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
       }
     },
     "/api/v1/roadmaps/planner/assignments/status": {
@@ -5063,6 +4716,138 @@
         "title": "BlackoutRule",
         "description": "A whole day or a time slot, once or repeating. Weekly uses weekdays; monthly uses start_date's day.\n\nOrdering problems are reported as runway issues so the planner form can explain them."
       },
+      "CarryChoice": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Task Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "carry",
+              "split",
+              "defer",
+              "drop"
+            ],
+            "title": "Action"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_id",
+          "action"
+        ],
+        "title": "CarryChoice"
+      },
+      "CarryoverEntry": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "milestone_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Key"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress"
+            ],
+            "title": "Status"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "title": "Estimated Minutes"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "carry",
+              "split",
+              "defer",
+              "drop"
+            ],
+            "title": "Action"
+          },
+          "proposed_action": {
+            "type": "string",
+            "enum": [
+              "carry",
+              "split",
+              "defer",
+              "drop"
+            ],
+            "title": "Proposed Action"
+          },
+          "minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "adjusted": {
+            "type": "boolean",
+            "title": "Adjusted",
+            "description": "The service changed the proposal because the work could not be placed or exceeded the carry-over limit.",
+            "default": false
+          },
+          "schedule": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Schedule"
+          },
+          "previous_schedule": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Previous Schedule"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "task_id",
+          "title",
+          "status",
+          "estimated_minutes",
+          "action",
+          "proposed_action",
+          "reason"
+        ],
+        "title": "CarryoverEntry",
+        "description": "One unfinished task and what the preview does with it. Nothing changes until the week is accepted."
+      },
       "ChangeTaskStatus": {
         "properties": {
           "expected_version": {
@@ -5889,6 +5674,20 @@
             "minLength": 1,
             "title": "Instructions"
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Detailed numbered steps, practical guidance and how to check the result; null for older tasks."
+          },
           "completion_outcome": {
             "type": "string",
             "maxLength": 4000,
@@ -6139,6 +5938,30 @@
               }
             ],
             "title": "Backlog Moved At"
+          },
+          "week_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week Start",
+            "description": "The planned week this generated task was written for."
+          },
+          "deferred_week": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deferred Week",
+            "description": "Set when a week review left this unfinished task in the backlog; it is offered again next week."
           }
         },
         "additionalProperties": false,
@@ -6322,38 +6145,6 @@
         ],
         "title": "FreeTimesRequest"
       },
-      "GenerateMonth": {
-        "properties": {
-          "expected_version": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Version"
-          },
-          "mutation_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Mutation Id"
-          },
-          "month": {
-            "type": "string",
-            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
-            "title": "Month"
-          },
-          "revision": {
-            "type": "boolean",
-            "title": "Revision",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_version",
-          "mutation_id",
-          "month"
-        ],
-        "title": "GenerateMonth"
-      },
       "GeneratePlan": {
         "properties": {
           "expected_version": {
@@ -6370,6 +6161,12 @@
             "type": "boolean",
             "title": "Allow Partial Assessment",
             "default": false
+          },
+          "auto_accept": {
+            "type": "boolean",
+            "title": "Auto Accept",
+            "description": "Activate the roadmap and first week in the generation operation, without a separate review.",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -6379,6 +6176,48 @@
           "mutation_id"
         ],
         "title": "GeneratePlan"
+      },
+      "GenerateWeek": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "revision": {
+            "type": "boolean",
+            "title": "Revision",
+            "default": false
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeekFeedback"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "week_start"
+        ],
+        "title": "GenerateWeek"
       },
       "InputExperience": {
         "properties": {
@@ -6968,7 +6807,7 @@
             "maxLength": 160,
             "minLength": 1,
             "title": "Title",
-            "description": "One to 19 whitespace-separated words, up to 160 characters."
+            "description": "One to 11 whitespace-separated words, up to 160 characters."
           },
           "completion_criterion": {
             "type": "string",
@@ -7064,6 +6903,133 @@
         "additionalProperties": false,
         "type": "object",
         "title": "NotesDocument"
+      },
+      "ObjectiveRevision": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "objective": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Objective"
+          },
+          "expected_outcome": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Expected Outcome"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "maximum": 10080.0,
+            "minimum": 0.0,
+            "title": "Estimated Minutes"
+          },
+          "milestone_key": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Milestone Key"
+          },
+          "gap_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Gap Ids"
+          },
+          "revised_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revised Reason"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SavedWeekObjective"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "week_start",
+          "objective",
+          "expected_outcome",
+          "estimated_minutes",
+          "milestone_key",
+          "reason"
+        ],
+        "title": "ObjectiveRevision"
+      },
+      "OmittedOutlineItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "gap",
+              "milestone",
+              "week",
+              "routine",
+              "exclusion",
+              "beyond_deadline"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "requirement_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Ref"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "reason"
+        ],
+        "title": "OmittedOutlineItem"
       },
       "OperationAccepted": {
         "properties": {
@@ -7185,6 +7151,14 @@
             "maxItems": 16,
             "title": "Milestones"
           },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/WeekObjective"
+            },
+            "type": "array",
+            "maxItems": 54,
+            "title": "Weeks"
+          },
           "routine_rules": {
             "items": {
               "$ref": "#/components/schemas/RoutineRule"
@@ -7220,6 +7194,31 @@
           "deadline_outcome"
         ],
         "title": "OutlineDraft"
+      },
+      "PartialOutlineReview": {
+        "properties": {
+          "omitted_items": {
+            "items": {
+              "$ref": "#/components/schemas/OmittedOutlineItem"
+            },
+            "type": "array",
+            "title": "Omitted Items"
+          },
+          "uncovered_requirements": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Uncovered Requirements"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "omitted_items"
+        ],
+        "title": "PartialOutlineReview",
+        "description": "Backend-recorded omissions after two outline attempts; shown before explicit acceptance."
       },
       "Plan": {
         "properties": {
@@ -7894,7 +7893,7 @@
             "title": "Assessment"
           },
           "config": {
-            "$ref": "#/components/schemas/PlannerConfig"
+            "$ref": "#/components/schemas/PlannerConfig-Output"
           },
           "config_hash": {
             "type": "string",
@@ -8063,7 +8062,7 @@
         ],
         "title": "PlannedRoadmap"
       },
-      "PlannerConfig": {
+      "PlannerConfig-Input": {
         "properties": {
           "start_date": {
             "anyOf": [
@@ -8125,11 +8124,6 @@
             "maxItems": 28,
             "title": "Blocks"
           },
-          "use_backup": {
-            "type": "boolean",
-            "title": "Use Backup",
-            "default": false
-          },
           "allow_overflow": {
             "type": "boolean",
             "title": "Allow Overflow",
@@ -8139,13 +8133,13 @@
             "type": "string",
             "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
             "title": "Overflow Start",
-            "default": "08:00"
+            "default": "09:00"
           },
           "overflow_end": {
             "type": "string",
             "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
             "title": "Overflow End",
-            "default": "22:00"
+            "default": "23:00"
           },
           "blackouts": {
             "items": {
@@ -8160,7 +8154,129 @@
             "maximum": 480.0,
             "minimum": 15.0,
             "title": "Preferred Session Minutes",
+            "description": "The longest single session. Longer tasks are split.",
             "default": 60
+          },
+          "break_minutes_per_hour": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Break Minutes Per Hour",
+            "description": "Rest left after a session for each hour studied.",
+            "default": 10
+          },
+          "min_session_minutes": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 15.0,
+            "title": "Min Session Minutes",
+            "description": "The shortest session worth scheduling.",
+            "default": 25
+          },
+          "max_daily_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 15.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Daily Minutes"
+          },
+          "lead_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Lead Minutes",
+            "description": "Notice needed before a newly planned session can start.",
+            "default": 0
+          },
+          "week_start_day": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Week Start Day",
+            "default": 0
+          },
+          "plan_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Day",
+            "description": "Weekday on which next week can be planned. Null means the last day of the week."
+          },
+          "rest_days_per_week": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Rest Days Per Week",
+            "default": 0
+          },
+          "apply_reduced_periods": {
+            "type": "boolean",
+            "title": "Apply Reduced Periods",
+            "default": true
+          },
+          "reduced_periods": {
+            "items": {
+              "$ref": "#/components/schemas/ReducedPeriod-Input"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Reduced Periods",
+            "description": "Set by the service from Profile; values sent by a client are replaced."
+          },
+          "unfinished_default": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "carry",
+              "defer"
+            ],
+            "title": "Unfinished Default",
+            "default": "ask"
+          },
+          "max_carry_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10080.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Carry Minutes",
+            "description": "Most carried-over work in one week. Null means half the weekly hours."
+          },
+          "time_format": {
+            "type": "string",
+            "enum": [
+              "24h",
+              "12h"
+            ],
+            "title": "Time Format",
+            "default": "24h"
+          },
+          "goal_unit": {
+            "type": "string",
+            "enum": [
+              "tasks",
+              "hours"
+            ],
+            "title": "Goal Unit",
+            "default": "tasks"
           },
           "learning_focus": {
             "items": {
@@ -8198,12 +8314,266 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PlannerConfig",
-        "description": "Date problems are reported as runway issues so the settings panel can explain them."
+        "description": "Date problems are reported as runway issues so the settings panel can explain them.\n\nSHAPE_FIELDS decide what the outline covers. DISPLAY_FIELDS only change how the page reads.\nEvery other field is a scheduling rule that applies from the next week that is planned."
+      },
+      "PlannerConfig-Output": {
+        "properties": {
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Duration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "time_zone": {
+            "type": "string",
+            "title": "Time Zone",
+            "default": "Asia/Singapore"
+          },
+          "weekly_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10080.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Minutes"
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/StudyBlock"
+            },
+            "type": "array",
+            "maxItems": 28,
+            "title": "Blocks"
+          },
+          "allow_overflow": {
+            "type": "boolean",
+            "title": "Allow Overflow",
+            "default": false
+          },
+          "overflow_start": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Overflow Start",
+            "default": "09:00"
+          },
+          "overflow_end": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Overflow End",
+            "default": "23:00"
+          },
+          "blackouts": {
+            "items": {
+              "$ref": "#/components/schemas/BlackoutRule"
+            },
+            "type": "array",
+            "maxItems": 366,
+            "title": "Blackouts"
+          },
+          "preferred_session_minutes": {
+            "type": "integer",
+            "maximum": 480.0,
+            "minimum": 15.0,
+            "title": "Preferred Session Minutes",
+            "description": "The longest single session. Longer tasks are split.",
+            "default": 60
+          },
+          "break_minutes_per_hour": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Break Minutes Per Hour",
+            "description": "Rest left after a session for each hour studied.",
+            "default": 10
+          },
+          "min_session_minutes": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 15.0,
+            "title": "Min Session Minutes",
+            "description": "The shortest session worth scheduling.",
+            "default": 25
+          },
+          "max_daily_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 15.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Daily Minutes"
+          },
+          "lead_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Lead Minutes",
+            "description": "Notice needed before a newly planned session can start.",
+            "default": 0
+          },
+          "week_start_day": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Week Start Day",
+            "default": 0
+          },
+          "plan_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Day",
+            "description": "Weekday on which next week can be planned. Null means the last day of the week."
+          },
+          "rest_days_per_week": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Rest Days Per Week",
+            "default": 0
+          },
+          "apply_reduced_periods": {
+            "type": "boolean",
+            "title": "Apply Reduced Periods",
+            "default": true
+          },
+          "reduced_periods": {
+            "items": {
+              "$ref": "#/components/schemas/app__schemas__roadmap__ReducedPeriod"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Reduced Periods",
+            "description": "Set by the service from Profile; values sent by a client are replaced."
+          },
+          "unfinished_default": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "carry",
+              "defer"
+            ],
+            "title": "Unfinished Default",
+            "default": "ask"
+          },
+          "max_carry_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10080.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Carry Minutes",
+            "description": "Most carried-over work in one week. Null means half the weekly hours."
+          },
+          "time_format": {
+            "type": "string",
+            "enum": [
+              "24h",
+              "12h"
+            ],
+            "title": "Time Format",
+            "default": "24h"
+          },
+          "goal_unit": {
+            "type": "string",
+            "enum": [
+              "tasks",
+              "hours"
+            ],
+            "title": "Goal Unit",
+            "default": "tasks"
+          },
+          "learning_focus": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "interview_practice",
+                "portfolio_work",
+                "hands_on_projects",
+                "courses_and_reading",
+                "certification",
+                "networking"
+              ]
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Learning Focus"
+          },
+          "learning_notes": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Learning Notes",
+            "default": ""
+          },
+          "learning_topics": {
+            "items": {
+              "type": "string",
+              "maxLength": 160,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Learning Topics"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PlannerConfig",
+        "description": "Date problems are reported as runway issues so the settings panel can explain them.\n\nSHAPE_FIELDS decide what the outline covers. DISPLAY_FIELDS only change how the page reads.\nEvery other field is a scheduling rule that applies from the next week that is planned."
       },
       "PlannerView": {
         "properties": {
           "config": {
-            "$ref": "#/components/schemas/PlannerConfig"
+            "$ref": "#/components/schemas/PlannerConfig-Output"
           },
           "config_saved": {
             "type": "boolean",
@@ -8214,33 +8584,6 @@
           },
           "inputs": {
             "$ref": "#/components/schemas/PlanInputs"
-          },
-          "candidate": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlannedRoadmap"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "candidate_review": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanReview"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "candidate_blockers": {
-            "items": {
-              "$ref": "#/components/schemas/RunwayIssue"
-            },
-            "type": "array",
-            "title": "Candidate Blockers"
           },
           "active": {
             "anyOf": [
@@ -8277,12 +8620,13 @@
             "type": "array",
             "title": "Active Sessions"
           },
-          "candidate_sessions": {
+          "preview_sessions": {
             "items": {
               "$ref": "#/components/schemas/SessionView"
             },
             "type": "array",
-            "title": "Candidate Sessions"
+            "title": "Preview Sessions",
+            "description": "The week preview as to-do rows: new tasks and carried work at their proposed times."
           },
           "outline_candidate": {
             "anyOf": [
@@ -8304,15 +8648,22 @@
               }
             ]
           },
-          "month_candidate": {
+          "week_candidate": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SavedMonth"
+                "$ref": "#/components/schemas/SavedWeek"
               },
               {
                 "type": "null"
               }
             ]
+          },
+          "week_blocks": {
+            "items": {
+              "$ref": "#/components/schemas/SavedWeek"
+            },
+            "type": "array",
+            "title": "Week Blocks"
           },
           "month_blocks": {
             "items": {
@@ -8320,6 +8671,23 @@
             },
             "type": "array",
             "title": "Month Blocks"
+          },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/WeekOverview"
+            },
+            "type": "array",
+            "title": "Weeks"
+          },
+          "week_planning": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeekPlanning"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "retry_outline": {
             "anyOf": [
@@ -8331,10 +8699,10 @@
               }
             ]
           },
-          "retry_month": {
+          "retry_week": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RetryMonth"
+                "$ref": "#/components/schemas/RetryWeek"
               },
               {
                 "type": "null"
@@ -8354,16 +8722,6 @@
             },
             "type": "array",
             "title": "Signals"
-          },
-          "retry_generate": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/GeneratePlan"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "additionalProperties": false,
@@ -8373,9 +8731,6 @@
           "config_saved",
           "runway",
           "inputs",
-          "candidate",
-          "candidate_review",
-          "candidate_blockers",
           "active",
           "active_review",
           "confirmations",
@@ -8463,7 +8818,7 @@
           },
           "reduced_periods": {
             "items": {
-              "$ref": "#/components/schemas/ReducedPeriod"
+              "$ref": "#/components/schemas/app__schemas__planner__ReducedPeriod"
             },
             "type": "array",
             "maxItems": 100,
@@ -8493,83 +8848,8 @@
         ],
         "title": "ReadinessReason"
       },
-      "ReconcileDecision": {
+      "ReducedPeriod-Input": {
         "properties": {
-          "task_id": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Task Id"
-          },
-          "decision": {
-            "type": "string",
-            "enum": [
-              "keep",
-              "discard"
-            ],
-            "title": "Decision"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "task_id",
-          "decision"
-        ],
-        "title": "ReconcileDecision"
-      },
-      "ReconcileTasks": {
-        "properties": {
-          "expected_version": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Version"
-          },
-          "mutation_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Mutation Id"
-          },
-          "candidate_id": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Candidate Id"
-          },
-          "decisions": {
-            "items": {
-              "$ref": "#/components/schemas/ReconcileDecision"
-            },
-            "type": "array",
-            "maxItems": 100,
-            "minItems": 1,
-            "title": "Decisions"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_version",
-          "mutation_id",
-          "candidate_id",
-          "decisions"
-        ],
-        "title": "ReconcileTasks"
-      },
-      "ReducedPeriod": {
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 100
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
           "start_date": {
             "type": "string",
             "format": "date",
@@ -8580,11 +8860,11 @@
             "format": "date",
             "title": "End Date"
           },
-          "weekly_hours": {
-            "type": "number",
-            "maximum": 168.0,
+          "weekly_minutes": {
+            "type": "integer",
+            "maximum": 10080.0,
             "minimum": 0.0,
-            "title": "Weekly Hours"
+            "title": "Weekly Minutes"
           }
         },
         "additionalProperties": false,
@@ -8592,9 +8872,10 @@
         "required": [
           "start_date",
           "end_date",
-          "weekly_hours"
+          "weekly_minutes"
         ],
-        "title": "ReducedPeriod"
+        "title": "ReducedPeriod",
+        "description": "A Profile availability period, copied by the service so every capacity calculation sees the same dates."
       },
       "RemoveTask": {
         "properties": {
@@ -8636,7 +8917,7 @@
         ],
         "title": "RemoveTask"
       },
-      "RetryMonth": {
+      "RetryWeek": {
         "properties": {
           "expected_version": {
             "type": "integer",
@@ -8648,15 +8929,27 @@
             "format": "uuid",
             "title": "Mutation Id"
           },
-          "month": {
+          "week_start": {
             "type": "string",
-            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
-            "title": "Month"
+            "format": "date",
+            "title": "Week Start"
           },
           "revision": {
             "type": "boolean",
             "title": "Revision",
             "default": false
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback"
           }
         },
         "additionalProperties": false,
@@ -8664,9 +8957,40 @@
         "required": [
           "expected_version",
           "mutation_id",
-          "month"
+          "week_start"
         ],
-        "title": "RetryMonth"
+        "title": "RetryWeek"
+      },
+      "ReviewCarryover": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mutation Id"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/CarryChoice"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "minItems": 1,
+            "title": "Decisions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "decisions"
+        ],
+        "title": "ReviewCarryover"
       },
       "RevisionReview": {
         "properties": {
@@ -8837,6 +9161,14 @@
             "type": "array",
             "title": "Issues"
           },
+          "notices": {
+            "items": {
+              "$ref": "#/components/schemas/RunwayIssue"
+            },
+            "type": "array",
+            "title": "Notices",
+            "description": "Explanations that do not block generation, such as study times that hold less than the weekly hours."
+          },
           "resolved": {
             "$ref": "#/components/schemas/RunwayResolved"
           },
@@ -8941,7 +9273,7 @@
       "RunwayRequest": {
         "properties": {
           "config": {
-            "$ref": "#/components/schemas/PlannerConfig"
+            "$ref": "#/components/schemas/PlannerConfig-Input"
           }
         },
         "additionalProperties": false,
@@ -8999,9 +9331,9 @@
             "type": "integer",
             "title": "Preferred Minutes"
           },
-          "backup_extra_minutes": {
+          "overflow_minutes": {
             "type": "integer",
-            "title": "Backup Extra Minutes"
+            "title": "Overflow Minutes"
           },
           "usable_minutes": {
             "type": "integer",
@@ -9012,7 +9344,7 @@
         "type": "object",
         "required": [
           "preferred_minutes",
-          "backup_extra_minutes",
+          "overflow_minutes",
           "usable_minutes"
         ],
         "title": "RunwayStudy"
@@ -9035,9 +9367,9 @@
             "type": "integer",
             "title": "Preferred Minutes"
           },
-          "backup_extra_minutes": {
+          "overflow_minutes": {
             "type": "integer",
-            "title": "Backup Extra Minutes"
+            "title": "Overflow Minutes"
           },
           "usable_minutes": {
             "type": "integer",
@@ -9046,6 +9378,11 @@
           "partial": {
             "type": "boolean",
             "title": "Partial"
+          },
+          "reduced": {
+            "type": "boolean",
+            "title": "Reduced",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -9055,7 +9392,7 @@
           "weekly_cap",
           "completed_minutes",
           "preferred_minutes",
-          "backup_extra_minutes",
+          "overflow_minutes",
           "usable_minutes",
           "partial"
         ],
@@ -9074,7 +9411,7 @@
             "title": "Mutation Id"
           },
           "config": {
-            "$ref": "#/components/schemas/PlannerConfig"
+            "$ref": "#/components/schemas/PlannerConfig-Input"
           }
         },
         "additionalProperties": false,
@@ -9173,14 +9510,6 @@
             ],
             "title": "Status"
           },
-          "outline_id": {
-            "type": "string",
-            "title": "Outline Id"
-          },
-          "outline_revision": {
-            "type": "integer",
-            "title": "Outline Revision"
-          },
           "start_date": {
             "type": "string",
             "title": "Start Date"
@@ -9188,58 +9517,6 @@
           "end_exclusive": {
             "type": "string",
             "title": "End Exclusive"
-          },
-          "time_zone": {
-            "type": "string",
-            "title": "Time Zone"
-          },
-          "config_hash": {
-            "type": "string",
-            "title": "Config Hash"
-          },
-          "assessment_hash": {
-            "type": "string",
-            "title": "Assessment Hash"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "accepted_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Accepted At"
-          },
-          "basis": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Basis"
-          },
-          "tasks": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/EditableTask"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tasks"
           },
           "task_ids": {
             "anyOf": [
@@ -9254,44 +9531,6 @@
               }
             ],
             "title": "Task Ids"
-          },
-          "needs_review": {
-            "type": "boolean",
-            "title": "Needs Review",
-            "default": false
-          },
-          "revision": {
-            "type": "integer",
-            "title": "Revision",
-            "default": 1
-          },
-          "replaces_block_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Replaces Block Id"
-          },
-          "replaced_task_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Replaced Task Ids"
-          },
-          "generation": {
-            "$ref": "#/components/schemas/PlanGeneration"
           }
         },
         "additionalProperties": true,
@@ -9300,20 +9539,24 @@
           "id",
           "month",
           "status",
-          "outline_id",
-          "outline_revision",
           "start_date",
-          "end_exclusive",
-          "time_zone",
-          "config_hash",
-          "assessment_hash",
-          "created_at",
-          "generation"
+          "end_exclusive"
         ],
-        "title": "SavedMonth"
+        "title": "SavedMonth",
+        "description": "A calendar month accepted before weekly planning. Read-only: its weeks count as planned."
       },
       "SavedOutline": {
         "properties": {
+          "partial_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartialOutlineReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -9344,7 +9587,7 @@
             "title": "Assessment"
           },
           "config": {
-            "$ref": "#/components/schemas/PlannerConfig"
+            "$ref": "#/components/schemas/PlannerConfig-Output"
           },
           "config_hash": {
             "type": "string",
@@ -9406,6 +9649,13 @@
             "type": "array",
             "title": "Milestones"
           },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/SavedWeekObjective"
+            },
+            "type": "array",
+            "title": "Weeks"
+          },
           "routine_rules": {
             "items": {
               "$ref": "#/components/schemas/RoutineRule"
@@ -9432,6 +9682,18 @@
           },
           "generation": {
             "$ref": "#/components/schemas/PlanGeneration"
+          },
+          "first_week_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Week Error",
+            "description": "Why the first week could not be prepared with this outline. The outline can still be accepted."
           }
         },
         "additionalProperties": true,
@@ -9460,6 +9722,250 @@
           "generation"
         ],
         "title": "SavedOutline"
+      },
+      "SavedWeek": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "week_start": {
+            "type": "string",
+            "title": "Week Start"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "preview",
+              "accepted"
+            ],
+            "title": "Status"
+          },
+          "outline_id": {
+            "type": "string",
+            "title": "Outline Id"
+          },
+          "outline_revision": {
+            "type": "integer",
+            "title": "Outline Revision"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_exclusive": {
+            "type": "string",
+            "title": "End Exclusive"
+          },
+          "time_zone": {
+            "type": "string",
+            "title": "Time Zone"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "accepted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeekTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EditableTask"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasks"
+          },
+          "unplaced": {
+            "items": {
+              "$ref": "#/components/schemas/EditableTask"
+            },
+            "type": "array",
+            "title": "Unplaced",
+            "description": "New tasks left out because a carry-over choice used their time."
+          },
+          "task_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Ids"
+          },
+          "carryover": {
+            "items": {
+              "$ref": "#/components/schemas/CarryoverEntry"
+            },
+            "type": "array",
+            "title": "Carryover"
+          },
+          "objective_changes": {
+            "items": {
+              "$ref": "#/components/schemas/ObjectiveRevision"
+            },
+            "type": "array",
+            "title": "Objective Changes"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "default": 1
+          },
+          "replaces_block_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces Block Id"
+          },
+          "replaced_task_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced Task Ids"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/PlanGeneration"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "week_start",
+          "status",
+          "outline_id",
+          "outline_revision",
+          "start_date",
+          "end_exclusive",
+          "time_zone",
+          "created_at",
+          "generation"
+        ],
+        "title": "SavedWeek"
+      },
+      "SavedWeekObjective": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "objective": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Objective"
+          },
+          "expected_outcome": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Expected Outcome"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "maximum": 10080.0,
+            "minimum": 0.0,
+            "title": "Estimated Minutes"
+          },
+          "milestone_key": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Milestone Key"
+          },
+          "gap_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Gap Ids"
+          },
+          "revised_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revised Reason"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "week_start",
+          "objective",
+          "expected_outcome",
+          "estimated_minutes",
+          "milestone_key"
+        ],
+        "title": "SavedWeekObjective"
       },
       "Schedule": {
         "properties": {
@@ -9642,7 +10148,7 @@
                 "type": "string",
                 "maxLength": 160,
                 "minLength": 1,
-                "description": "One to 19 whitespace-separated words, up to 160 characters."
+                "description": "One to 11 whitespace-separated words, up to 160 characters."
               },
               {
                 "type": "null"
@@ -9835,6 +10341,20 @@
             "type": "string",
             "title": "Instructions"
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Detailed task steps and completion guidance; null for older tasks."
+          },
           "completion_criterion": {
             "type": "string",
             "title": "Completion Criterion"
@@ -10015,8 +10535,7 @@
             "enum": [
               "settings",
               "evidence",
-              "progress",
-              "next_week"
+              "progress"
             ],
             "title": "Kind"
           },
@@ -10268,15 +10787,6 @@
             "maximum": 480.0,
             "minimum": 15.0,
             "title": "Duration Minutes"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "preferred",
-              "backup"
-            ],
-            "title": "Kind",
-            "default": "preferred"
           }
         },
         "additionalProperties": false,
@@ -10402,7 +10912,7 @@
                 "type": "string",
                 "maxLength": 160,
                 "minLength": 1,
-                "description": "One to 19 whitespace-separated words, up to 160 characters."
+                "description": "One to 11 whitespace-separated words, up to 160 characters."
               },
               {
                 "type": "null"
@@ -10422,6 +10932,19 @@
               }
             ],
             "title": "Instructions"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
           },
           "completion_outcome": {
             "anyOf": [
@@ -10523,13 +11046,27 @@
             "maxLength": 160,
             "minLength": 1,
             "title": "Title",
-            "description": "One to 19 whitespace-separated words, up to 160 characters."
+            "description": "One to 11 whitespace-separated words, up to 160 characters."
           },
           "instructions": {
             "type": "string",
             "maxLength": 4000,
             "minLength": 1,
             "title": "Instructions"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Detailed numbered steps, practical guidance and how to check the result; null for older tasks."
           },
           "completion_outcome": {
             "type": "string",
@@ -10825,6 +11362,17 @@
             ],
             "title": "Instructions"
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "completion_outcome": {
             "anyOf": [
               {
@@ -11065,6 +11613,20 @@
             "maxLength": 4000,
             "minLength": 1,
             "title": "Instructions"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Detailed numbered steps, practical guidance and how to check the result; null for older tasks."
           },
           "completion_outcome": {
             "type": "string",
@@ -11317,6 +11879,30 @@
             ],
             "title": "Backlog Moved At"
           },
+          "week_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week Start",
+            "description": "The planned week this generated task was written for."
+          },
+          "deferred_week": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deferred Week",
+            "description": "Set when a week review left this unfinished task in the backlog; it is offered again next week."
+          },
           "readiness": {
             "$ref": "#/components/schemas/TaskReadiness"
           },
@@ -11402,6 +11988,338 @@
           "type"
         ],
         "title": "TextBlock"
+      },
+      "WeekFeedback": {
+        "properties": {
+          "workload": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "too_much",
+                  "about_right",
+                  "too_light"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workload"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "too_hard",
+                  "about_right",
+                  "too_easy"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "WeekFeedback",
+        "description": "Optional, self-reported. It shapes the next week and never changes assessed skills."
+      },
+      "WeekObjective": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "objective": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Objective"
+          },
+          "expected_outcome": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Expected Outcome"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "maximum": 10080.0,
+            "minimum": 0.0,
+            "title": "Estimated Minutes"
+          },
+          "milestone_key": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Milestone Key"
+          },
+          "gap_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Gap Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "week_start",
+          "objective",
+          "expected_outcome",
+          "estimated_minutes",
+          "milestone_key"
+        ],
+        "title": "WeekObjective",
+        "description": "What one week of the roadmap is for. A projection until that week's tasks are generated and accepted."
+      },
+      "WeekOverview": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "objective": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Objective"
+          },
+          "expected_outcome": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Expected Outcome"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "maximum": 10080.0,
+            "minimum": 0.0,
+            "title": "Estimated Minutes"
+          },
+          "milestone_key": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Milestone Key"
+          },
+          "gap_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Gap Ids"
+          },
+          "revised_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revised Reason"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "past",
+              "planned",
+              "open",
+              "projected"
+            ],
+            "title": "Status"
+          },
+          "tasks_total": {
+            "type": "integer",
+            "title": "Tasks Total",
+            "default": 0
+          },
+          "tasks_completed": {
+            "type": "integer",
+            "title": "Tasks Completed",
+            "default": 0
+          },
+          "planned_minutes": {
+            "type": "integer",
+            "title": "Planned Minutes",
+            "default": 0
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "week_start",
+          "objective",
+          "expected_outcome",
+          "estimated_minutes",
+          "milestone_key",
+          "start_date",
+          "end_date",
+          "status"
+        ],
+        "title": "WeekOverview",
+        "description": "One week of the journey: its objective, and whether its tasks exist yet."
+      },
+      "WeekPlanning": {
+        "properties": {
+          "current_week_start": {
+            "type": "string",
+            "title": "Current Week Start"
+          },
+          "plan_day": {
+            "type": "string",
+            "title": "Plan Day"
+          },
+          "week_done": {
+            "type": "boolean",
+            "title": "Week Done"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "plan_this",
+                  "plan_next",
+                  "review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "week_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week Start"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "week_unplanned",
+                  "week_done",
+                  "plan_day",
+                  "waiting",
+                  "preview_ready"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "unfinished_count": {
+            "type": "integer",
+            "title": "Unfinished Count",
+            "default": 0
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "current_week_start",
+          "plan_day",
+          "week_done",
+          "action",
+          "week_start",
+          "available",
+          "reason"
+        ],
+        "title": "WeekPlanning",
+        "description": "Which week can be planned now. `available` is false while next week is still waiting for the planning day."
+      },
+      "WeekTarget": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "title": "Week Start"
+          },
+          "weekly_minutes": {
+            "type": "integer",
+            "title": "Weekly Minutes"
+          },
+          "target_minutes": {
+            "type": "integer",
+            "title": "Target Minutes"
+          },
+          "shortfall_minutes": {
+            "type": "integer",
+            "title": "Shortfall Minutes",
+            "default": 0
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/RunwayIssue"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "week_start",
+          "weekly_minutes",
+          "target_minutes"
+        ],
+        "title": "WeekTarget",
+        "description": "How much study the week should hold and why it differs from the agreed weekly hours."
       },
       "Workspace": {
         "properties": {
@@ -11496,6 +12414,75 @@
         ],
         "title": "Workspace",
         "description": "assessment and context come from the Assessment service, so they stay open objects here."
+      },
+      "app__schemas__planner__ReducedPeriod": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "weekly_hours": {
+            "type": "number",
+            "maximum": 168.0,
+            "minimum": 0.0,
+            "title": "Weekly Hours"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start_date",
+          "end_date",
+          "weekly_hours"
+        ],
+        "title": "ReducedPeriod"
+      },
+      "app__schemas__roadmap__ReducedPeriod": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "weekly_minutes": {
+            "type": "integer",
+            "maximum": 10080.0,
+            "minimum": 0.0,
+            "title": "Weekly Minutes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start_date",
+          "end_date",
+          "weekly_minutes"
+        ],
+        "title": "ReducedPeriod",
+        "description": "A Profile availability period, copied by the service so every capacity calculation sees the same dates."
       }
     },
     "securitySchemes": {

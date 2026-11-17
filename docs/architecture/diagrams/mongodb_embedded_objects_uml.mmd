@@ -708,7 +708,19 @@ class PlannerConfig {
     +String time_zone [IANA]
     +Integer weekly_minutes?
     +StudyBlock[] blocks
-    +Boolean use_backup
+    +Boolean allow_overflow
+    +String overflow_start [09:00]
+    +String overflow_end [23:00]
+    +Integer break_minutes_per_hour [10]
+    +Integer week_start_day [0]
+    +Integer plan_day? [last day of week]
+    +Integer min_session_minutes
+    +Integer max_daily_minutes?
+    +Integer lead_minutes
+    +Integer rest_days_per_week
+    +Boolean apply_reduced_periods
+    +String unfinished_default
+    +Integer max_carry_minutes?
     +BlackoutRule[] blackouts
     +Integer preferred_session_minutes
     +String[] learning_focus
@@ -718,7 +730,6 @@ class StudyBlock {
     +Integer day [Monday 0 to Sunday 6]
     +String start_time [HH:MM]
     +Integer duration_minutes
-    +String kind [preferred|backup]
 }
 class BlackoutRule {
     +String frequency [once|daily|weekly|monthly]
@@ -734,7 +745,7 @@ class RoadmapMilestone {
     +String title
     +String[] gap_ids
     +String[] prerequisite_keys
-    +Integer estimated_minutes [remaining]
+    +Integer estimated_minutes [total including saved work]
     +Date projected_start
     +Date projected_end
     +String demonstrable_outcome
@@ -755,7 +766,8 @@ class RoadmapAssignment {
 }
 class EditableRoadmapTask {
     +String id
-    +String title
+    +String title [new_titles_max_11_words]
+    +String description? [steps_and_completion_guidance]
     +String instructions
     +String completion_outcome
     +Integer estimated_minutes
@@ -785,6 +797,7 @@ roadmaps *-- RoadmapAssignment
 roadmaps *-- EditableRoadmapTask
 roadmaps *-- RoadmapGap
 class RoadmapOutline {
+    +PartialOutlineReview partial_review?
     +String id
     +Integer revision
     +String assessment_hash
@@ -801,18 +814,18 @@ class RoutineRule {
     +Date start_date
     +Date end_date
 }
-class MonthlyTaskBlock {
+class WeeklyTaskBlock {
     +String id
     +String outline_id
     +Integer outline_revision
-    +String month
+    +String week_start
     +Date start_date
     +Date end_exclusive
     +String[] task_ids
 }
 RoadmapOutline *-- RoutineRule
-note for RoadmapOutline "The Roadmap workspace retains preview, accepted revision and accepted outline history; accepted month blocks refer to its revision."
-note for MonthlyTaskBlock "Monthly previews and accepted block metadata are owned by the workspace; accepted tasks use canonical editable tasks."
+note for RoadmapOutline "The Roadmap workspace retains preview, accepted revision and accepted outline history; accepted week blocks refer to its revision. Each outline contains projected weekly objectives; previews contain carry decisions, target explanations and reviewed objective changes. Legacy accepted month blocks remain readable."
+note for WeeklyTaskBlock "Weekly previews and accepted block metadata are owned by the workspace; accepted tasks use canonical editable tasks."
 note for RoadmapAssignment "Compatibility projection of scheduled milestone-linked tasks. Completion is not proficiency."
 note for EditableRoadmapTask "Canonical task data includes unscheduled work, student edits and removal history. Protected work survives revisions; ambiguous regenerated work needs review."
 
@@ -889,3 +902,21 @@ class RoadmapTaskDetails {
 }
 note for RoadmapCheckpoint "Embedded in roadmap milestones; dates and names are model-generated and validated. Reached timestamps are explicit user reports."
 note for RoadmapTaskDetails "Embedded editable task fields in Roadmap workspaces and accepted snapshots. Sessions are derived API projections; notes and ratings do not update Assessment."
+
+class RoadmapWeeklyObjective {
+    +Date week_start
+    +String objective
+    +String expected_outcome
+    +Integer estimated_minutes
+    +String milestone_key
+    +String[] gap_ids
+}
+RoadmapOutline *-- RoadmapWeeklyObjective : weeks
+
+class PartialOutlineReview {
+    +Object[] omitted_items [kind/id/title/reason/requirement_ref]
+    +String[] uncovered_requirements
+}
+RoadmapOutline *-- PartialOutlineReview : reviewed omissions
+
+%% Create roadmap activates the outline and validated first week atomically; weekly objectives remain backend planning context, not calendar UI rows.

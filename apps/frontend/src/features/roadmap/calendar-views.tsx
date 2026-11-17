@@ -9,7 +9,7 @@ import type { Session } from './types';
 const Chevron = ({ back = false }: { back?: boolean }) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d={back ? 'm15 6-6 6 6 6' : 'm9 6 6 6-6 6'} /></svg>;
 const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? '' : 's'}`;
 const dayTitle = (day: string) => `${weekdayName(day)}, ${shortDate(day)}`;
-export const weekRange = (day: string) => { const first = weekStart(day), last = addDays(first, 6); return monthKey(first) === monthKey(last) ? `${dayOfMonth(first)}–${dayOfMonth(last)} ${monthName(last)}` : `${shortDate(first)} – ${shortDate(last)}`; };
+export const weekRange = (day: string, startDay = 0) => { const first = weekStart(day, startDay), last = addDays(first, 6); return monthKey(first) === monthKey(last) ? `${dayOfMonth(first)}–${dayOfMonth(last)} ${monthName(last)}` : `${shortDate(first)} – ${shortDate(last)}`; };
 /** The plan's own span, so the arrows stop where the plan does. */
 export function planBounds({ plan, sessions, today }: ViewContext) {
  const edges = [plan.config.start_date, plan.config.target_date, today, ...sessions.map(item => item.date), ...plan.milestones.flatMap(item => [item.projected_start, item.projected_end])].filter((value): value is string => !!value).sort();
@@ -24,12 +24,12 @@ function WeeklyGoal({ context, onFill }: { context: ViewContext; onFill: () => v
  const { sessions, today, plan } = context;
  const [unit, setUnit] = useState<'tasks' | 'hours'>('tasks');
  const goal = plan.config.weekly_minutes || 0;
- const week = weekSummary(sessions, today, today, goal);
+ const week = weekSummary(sessions, today, today, goal, context.plan.config.week_start_day);
  const circumference = 2 * Math.PI * 50;
  const arc = (minutes: number) => `${(goal ? Math.min(minutes, goal) / goal * circumference : 0).toFixed(1)} ${circumference.toFixed(1)}`;
  const backlog = sessions.some(item => item.missed);
  return <section className="rv-card" aria-labelledby="goal-h">
-  <div className="rv-row-between"><h2 id="goal-h">This week’s goal <span className="rv-soft" style={{ fontSize: 13 }}>{weekRange(today)}</span></h2>
+  <div className="rv-row-between"><h2 id="goal-h">This week’s goal <span className="rv-soft" style={{ fontSize: 13 }}>{weekRange(today, context.plan.config.week_start_day)}</span></h2>
    <div className="rv-seg" role="group" aria-label="Measure the goal in"><button type="button" aria-pressed={unit === 'tasks'} onClick={() => setUnit('tasks')}>Tasks</button><button type="button" aria-pressed={unit === 'hours'} onClick={() => setUnit('hours')}>Hours</button></div></div>
   {unit === 'tasks' ? <>
    <p className="rv-big">{week.done} <span>of {count(week.total, 'task')} done</span></p>
@@ -121,7 +121,7 @@ export function WeekView({ context, day, editor }: { context: ViewContext; day: 
  const { sessions, today, plan, go } = context;
  const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
  const goal = plan.config.weekly_minutes || 0;
- const week = weekSummary(sessions, day, today, goal);
+ const week = weekSummary(sessions, day, today, goal, plan.config.week_start_day);
  const current = week.dates.includes(today);
  const { first, last } = planBounds(context);
  const circumference = 2 * Math.PI * 26; const next = upNext(context);
@@ -133,7 +133,7 @@ export function WeekView({ context, day, editor }: { context: ViewContext; day: 
    <div className="rv-row-between">
     <div className="rv-nav">
      <button className="rv-ico" type="button" aria-label="Previous week" disabled={addDays(week.dates[0], -1) < first} onClick={() => move(addDays(week.dates[0], -7))}><Chevron back /></button>
-     <h2 id="wk-title" className="rv-title">{current ? 'This week' : 'Week of'} <span>{current ? weekRange(day) : shortDate(week.dates[0])}</span></h2>
+     <h2 id="wk-title" className="rv-title">{current ? 'This week' : 'Week of'} <span>{current ? weekRange(day, plan.config.week_start_day) : shortDate(week.dates[0])}</span></h2>
      <button className="rv-ico" type="button" aria-label="Next week" disabled={addDays(week.dates[0], 7) > last} onClick={() => move(addDays(week.dates[0], 7))}><Chevron /></button>
     </div>
     <p className="rv-note" style={{ fontSize: 14 }}><strong style={{ color: 'var(--ink)' }}>{week.done} of {count(week.total, 'task')}</strong>{current ? `, ${week.due} due by tonight` : ''} · {shortLength(week.doneMinutes)}{goal ? ` of your ${shortLength(goal)} goal` : ' done'}</p>
@@ -155,7 +155,7 @@ export function WeekView({ context, day, editor }: { context: ViewContext; day: 
      {folded ? <button type="button" className="rv-fold" onClick={() => setUnfolded(value => ({ ...value, [date]: true }))}>All {items.length} done · show</button>
       : <TaskList day={date} items={items} context={context} editor={editor} nextId={next} canAdd={date >= today} addLabel={`Add a task to ${date === today ? 'today' : `${weekdayName(date)} ${shortDate(date)}`}`} />}
     </div>; })}
-   {!week.total && <p className="rv-empty">{week.dates[6] < today ? 'No sessions were planned for this week.' : 'Sessions for this week aren’t planned yet. Generate a month preview from your milestone outline.'}</p>}
+   {!week.total && <p className="rv-empty">{week.dates[6] < today ? 'No sessions were planned for this week.' : 'Sessions for this week aren’t planned yet. Plan the next week from your milestone outline.'}</p>}
    {rest.length > 0 && <p className="rv-note" style={{ margin: '14px 6px 0' }}>{rest.map(date => `${weekdayName(date)} ${dayOfMonth(date)}`).join(' and ')} {rest.length === 1 ? 'is a rest day' : 'are rest days'} in your plan. Use your milestone outline to preview tasks for a month.</p>}
   </section>
   <aside className="rv-rail" aria-label="Backlog">
@@ -199,12 +199,12 @@ export function MonthView({ context, day }: { context: ViewContext; day: string 
     <p className="rv-legend" style={{ margin: 0 }}><span><i className="rv-chip key done" />Done</span><span><i className="rv-chip key miss" />Missed</span><span><i className="rv-chip key up" />Scheduled</span><span><i className="rv-chip key proj" />Study time, sessions not planned yet</span><span><Flag size={12} />Checkpoint</span></p>
    </div>
    <div className="rv-month-scroll"><div className="rv-month">
-    <div className="rv-month-head" aria-hidden="true">{weekDates('2030-01-07').map(date => <span key={date}>{weekdayName(date)}</span>)}</div>
-    {monthWeeks(day).map(monday => {
+    <div className="rv-month-head" aria-hidden="true">{weekDates('2030-01-09', context.plan.config.week_start_day).map(date => <span key={date}>{weekdayName(date)}</span>)}</div>
+    {monthWeeks(day, context.plan.config.week_start_day).map(monday => {
      const bars = milestones.flatMap((milestone, index) => { const columns = weekColumns(monday, milestone.projected_start, milestone.projected_end); return columns ? [{ milestone, index, ...columns }] : []; });
      return <div className="rv-month-week" key={monday}>
       {bars.length > 0 && <div className="rv-month-bars">{bars.map(({ milestone, index, from, to, startsHere }) => <button key={milestone.id} type="button" className={`rv-mbar${startsHere ? '' : ' cont'}${milestone.outcome.demonstrated ? ' reached' : ''}`} style={{ gridColumn: `${from} / ${to + 1}` }} onClick={() => go('milestones')}>{index + 1} · {milestone.title}{milestone.outcome.demonstrated ? ' ✓' : startsHere ? '' : ' (continues)'}</button>)}</div>}
-      <div className="rv-month-days">{weekDates(monday).map(date => {
+      <div className="rv-month-days">{weekDates(monday, context.plan.config.week_start_day).map(date => {
        const items = onDay(sessions, date).sort(listOrder); const done = items.filter(isDone);
        const flag = checkpoints.find(item => item.date === date);
        const study = studyBlocks(plan.config, date).reduce((total, [start, end]) => total + end - start, 0);

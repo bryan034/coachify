@@ -6,7 +6,7 @@ because the fields never affected a plan, so open tabs do not need to reload.
 """
 RETIRED=('buffer_percent','checkin_day','checkin_time')
 OLD_BLACKOUTS='blackout_dates'
-WORKSPACE_CONFIGS=('planner.config','planner.candidate.config','planner.active.config')
+WORKSPACE_CONFIGS=('planner.config','planner.candidate.config','planner.active.config','planner.outline_candidate.config','planner.outline_active.config')
 PLAN_CONFIGS=('config',)
 
 def config_update(config,path):
