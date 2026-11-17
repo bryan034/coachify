@@ -82,19 +82,17 @@ export function SkillsProcessing({token, title, cv, items, busy, cancel, review,
 }
 
 /** Shown once the guided review is finished; points at what the profile unlocks. */
-export function ReviewComplete({cv}: {cv: CvDetail}) {
+export function ReviewComplete({cv}: {cv: CvDetail | null}) {
+ if (!cv) return null;
  const summary = cv.review_summary;
  const answered = summary?.answered_questions ?? 0, experiences = summary?.experiences ?? 0;
  const changes = summary ? [[summary.skills_added, 'added'], [summary.skills_corrected, 'corrected'], [summary.skills_removed, 'removed']]
   .filter(([count]) => Number(count) > 0).map(([count, verb]) => verb === 'added' ? `added ${count} ${count === 1 ? 'skill' : 'skills'}` : `${verb} ${count}`) : [];
  const joined = changes.length > 1 ? `${changes.slice(0, -1).join(', ')} and ${changes[changes.length - 1]}` : changes[0];
- return <section className="skills-complete" aria-labelledby="skills-complete-title">
-  <span className="skills-complete-mark" aria-hidden="true"><Tick size={18} color="#fff"/></span>
-  <div>
-   <h2 id="skills-complete-title">Your CV review is complete</h2>
-   <p>{answered ? `You answered ${answered} ${answered === 1 ? 'question' : 'questions'} across ${experiences} ${experiences === 1 ? 'experience' : 'experiences'}.${joined ? ` From your answers, elo ${joined}.` : ' Your skills reflect your answers.'}` : 'Your skills reflect the review you completed with elo.'}</p>
-  </div>
-  <div className="skills-complete-actions"><Link className="btn pri" href="/roadmap">Generate roadmap</Link><Link className="btn" href="/jobs">Search jobs</Link></div>
+ return <section className="ws-status ok" aria-labelledby="skills-complete-title">
+  <span className="ws-okdot" aria-hidden="true">✓</span>
+  <p><b><span id="skills-complete-title">Your CV review is complete</span>.</b> {answered ? `You answered ${answered} ${answered === 1 ? 'question' : 'questions'} across ${experiences} ${experiences === 1 ? 'experience' : 'experiences'}.${joined ? ` From your answers, elo ${joined}.` : ' Your skills reflect your answers.'}` : 'Your skills reflect the review you completed with elo.'}</p>
+  <Link className="go" href="/roadmap">Generate roadmap</Link><Link className="lnk" href="/jobs">Search jobs</Link>
  </section>;
 }
 

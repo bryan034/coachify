@@ -70,6 +70,6 @@ for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:3
   expect(turns).toBe(2);
   await page.screenshot({path:testInfo.outputPath('review-complete.png'),fullPage:true});
   await page.getByRole('button',{name:'View Skills Profile',exact:true}).click();
-  await expect(page.getByRole('region',{name:'Skills profile summary'})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Your skills',exact:true})).toBeVisible();
  });
 }

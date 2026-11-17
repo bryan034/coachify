@@ -53,6 +53,15 @@ class CapabilityAttachment(BaseModel):
     cv_match: CvMatch | None
 
 
+class CapabilityWithdrawal(BaseModel):
+    """Takes back one description a person added, such as an Undo after adding evidence."""
+    model_config = ConfigDict(extra="forbid")
+    expected_version: Annotated[int, Field(strict=True, ge=0)]
+    mutation_id: Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")]
+    declaration_id: Annotated[str, Field(min_length=1, max_length=80)]
+    contribution_id: Annotated[str, Field(min_length=1, max_length=80)]
+
+
 SourceFingerprint = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 
 

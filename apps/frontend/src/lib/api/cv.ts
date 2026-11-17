@@ -102,4 +102,6 @@ export const cvApi = {
  declarationLinks: (token: string, signal: AbortSignal) => request('/cv/declaration-links',token,signal,declarationLinks),
  updateAttachment: (body: {expected_version:number;mutation_id:string;declaration_id:string;cv_match:CvMatch|null}, token: string, signal: AbortSignal) => request('/profile/capabilities/attachment',token,signal,declarations,json('POST',body)),
  addDeclaration: (body: DeclarationInput, token: string, signal: AbortSignal) => request('/profile/capabilities',token,signal,declarations,json('POST',body)),
+ /** Takes back one description the person added; a declaration left with none is removed. */
+ withdrawDeclaration: (body: {expected_version:number;mutation_id:string;declaration_id:string;contribution_id:string}, token: string, signal: AbortSignal) => request('/profile/capabilities/withdrawal',token,signal,declarations,json('POST',body)),
 };

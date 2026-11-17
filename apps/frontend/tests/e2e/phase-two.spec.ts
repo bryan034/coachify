@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { careerFixture } from './career-fixture';
 
-test('compares saved evidence from Home without generating a roadmap', async ({ page }, testInfo) => {
+test('Home shows the saved comparison read-only and sends the person to Career Goal to compare', async ({ page }, testInfo) => {
  let compared = false; const commands: string[] = [];
  await page.addInitScript(() => { localStorage.setItem('elo.access-epoch','1'); sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'})); });
  await page.route('**/api/v1/**', route => {
@@ -27,12 +27,17 @@ test('compares saved evidence from Home without generating a roadmap', async ({ 
  });
  await page.goto('/dashboard');
  await expect(page.getByRole('heading',{name:'Welcome back, Synthetic.'})).toBeVisible();
- await page.getByRole('button',{name:'Compare with my skills'}).click();
-  await expect(page.getByRole('heading',{name:'0 of 1 skill you already have'})).toBeVisible();
- await expect(page.getByText('Partial comparison: interview research is unavailable.')).toBeVisible();
- expect(commands).toEqual(['/api/v1/assessments']);
+ // Sections keep the artifact's 18px rhythm; `.page.on` must not collapse the flex gap.
+ expect(await page.evaluate(() => { const hero = document.querySelector('.ws-hero')!; return Math.round(hero.nextElementSibling!.getBoundingClientRect().top - hero.getBoundingClientRect().bottom); })).toBe(18);
+ const match = page.getByRole('article',{name:/Goal match/});
+ await expect(match.getByRole('link',{name:'Compare my skills'})).toHaveAttribute('href','/career-goal');
+ await expect(match.getByText('Your skills haven’t been compared with this role yet.')).toBeVisible();
+ // The saved comparison is shown once it exists; Home never starts one.
+ compared = true;
  await page.reload();
- await expect(page.getByRole('heading',{name:'0 of 1 skill you already have'})).toBeVisible();
+ await expect(match.getByText(/of 1 goal skill you already have/)).toBeVisible();
+ await expect(match.getByText('Partial comparison: interview research is unavailable.')).toBeVisible();
+ expect(commands).toEqual([]);
  for (const width of [1440,390]) {
   await page.setViewportSize({width,height:1000});
   await page.screenshot({path:testInfo.outputPath(`home-${width}.png`),fullPage:true});

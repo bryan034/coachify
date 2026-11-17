@@ -100,9 +100,10 @@ retaining live saved data and shared workspace navigation. See the
 [data map, implemented limits and proposed database extensions](career-briefing.md).
 
 
-Home uses a state-based next action, goal match and confirmed gaps instead of the
-skill-count chart and coming-soon tiles. Shared comparison panels distinguish loading,
-missing, stale, running, partial and failed states. Have / Partial / Gap / Unknown
+Home, Career Goal and Skills Profile share one layout language (dark hero, rounded white cards, pill
+controls) defined in `src/styles/workspace-pages.css`. Home shows the next planned session or the open set-up
+step, goal match, the roadmap week and progress derived from saved data. Evaluation states distinguish loading,
+missing, stale, running, partial and failed. Have / Partial / Gap / Unknown
 refer to evidence; missing evidence never becomes a gap. OR alternatives retain a
 separate label. Skills Profile shades evidence referenced by the current comparison;
 relevance ratings and numerical scores remain unavailable pending an approved rubric.

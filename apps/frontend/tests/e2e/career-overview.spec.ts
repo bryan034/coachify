@@ -43,7 +43,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
  await expect(page.locator('#priorities-title')).toHaveText('Skills needed');
  await expect(page.getByText('Python',{exact:true})).toBeVisible();
  await page.getByText('Teamwork',{exact:true}).click();
- await expect(page.locator('.goal-skill-details:visible').getByText('Evaluate your skills to see where you stand.',{exact:true})).toBeVisible();
+ await expect(page.locator('.ws-sk-more:visible').getByText('This skill hasn’t been compared with your Skills Profile yet.',{exact:true})).toBeVisible();
  await expect(page.getByRole('status').filter({hasText:'elo keeps working'})).toBeVisible();
  await expect(page.locator('.evaluate-banner')).toHaveCount(0);
  await expect(page.getByRole('textbox',{name:'Job description'})).toHaveCount(0);
@@ -152,15 +152,15 @@ test('the grouped skill list supports keyboard disclosure, long lists, confirmed
  await page.setViewportSize({width:1440,height:1000});await page.goto('/career-goal');
  await expect(page.locator('#priorities-title')).toHaveText('Skills needed');
  // Skills sit under category headings, most important group first, coloured by importance.
- const rows=page.locator('.goal-skill-row');
+ const rows=page.locator('.ws-skill');
  await expect(rows).toHaveCount(9);
- await expect(page.locator('.goal-skill-category h3')).toHaveText(['Product Management','AI']);
- await expect(page.locator('.goal-skill-importance',{hasText:'Essential'})).toHaveCount(6);
- await expect(page.locator('.goal-skill-importance',{hasText:'Important'})).toHaveCount(3);
+ await expect(page.locator('.ws-cat')).toHaveText(['Product Management','AI']);
+ await expect(page.locator('.ws-sk-name > span',{hasText:'Essential'})).toHaveCount(6);
+ await expect(page.locator('.ws-sk-name > span',{hasText:'Important'})).toHaveCount(3);
  const first=await rows.nth(0).boundingBox(),second=await rows.nth(1).boundingBox();
  expect(second!.x).toBe(first!.x);expect(second!.y).toBeGreaterThan(first!.y);
  await page.screenshot({path:test.info().outputPath('learning-focus-desktop.png'),fullPage:true});
- const toggle=page.getByRole('button',{name:longTitle,exact:true});await toggle.focus();await page.keyboard.press('Enter');
+ const toggle=page.getByRole('button',{name:new RegExp('^'+longTitle)});await toggle.focus();await page.keyboard.press('Enter');
  await expect(toggle).toHaveAttribute('aria-expanded','true');
  await expect(page.locator(`#${await toggle.getAttribute('aria-controls')}`)).toBeVisible();
  expect((await rows.nth(1).boundingBox())!.height).toBe(second!.height);
@@ -173,8 +173,6 @@ test('the grouped skill list supports keyboard disclosure, long lists, confirmed
  expect((await rows.nth(1).boundingBox())!.y).toBeGreaterThan((await rows.nth(0).boundingBox())!.y);
  await page.screenshot({path:test.info().outputPath('learning-focus-mobile.png'),fullPage:true});
  count=30;await page.reload();
- await expect(rows).toHaveCount(10);
- await page.getByRole('button',{name:/^Show 20 more skills/}).click();
  await expect(rows).toHaveCount(30);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

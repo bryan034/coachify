@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError
-from app.domain.capabilities import CapabilityConflict, revise_attachment, revise_declarations
+from app.domain.capabilities import CapabilityConflict, revise_attachment, revise_declarations, withdraw_contribution
 
 
 class CapabilityRepository:
@@ -55,6 +55,9 @@ class CapabilityRepository:
             cv_item = validate_cv(target["name"]) if request.cv_match else None
             return revise_attachment(previous, request, cv_item)
         return self.mutate(owner, request, revise, operation="attachment")
+
+    def withdraw(self, owner, request):
+        return self.mutate(owner, request, lambda account: withdraw_contribution(account.get("capability_declarations", []), request), operation="withdrawal")
 
     def mutate(self, owner, request, revise, operation=None):
         body = request.model_dump(mode="json")
