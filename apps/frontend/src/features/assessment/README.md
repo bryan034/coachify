@@ -9,7 +9,7 @@ exists. It shows exactly one of: the setup step still open (set a goal, add skil
 finish the CV review, linking to the other page when the step lives there), a wait
 for goal research, progress, or the **Evaluate skills** button that submits the
 versioned command. It steps aside while an earlier result is out of date.
-`ComparisonPanel` remains Home's entry point.
+Home only reads the saved comparison (`useComparison`); it never starts one. Evaluations start from Career Goal, Skills Profile or Roadmap.
 
 `ChangeBanner` (workspace layout) keeps the evaluation in step with the active CV and career goal.
 On Career Goal and Skills Profile, once an evaluation exists and its inputs changed, it submits

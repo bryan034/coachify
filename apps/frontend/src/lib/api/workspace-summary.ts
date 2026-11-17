@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { profileSkillGroups, profileSkillList } from '@/features/cv-ingestion/skill-cards';
 import { deviceTimeZone } from '@/features/profile/planning-preferences';
-import type { LearningPlan, Workspace } from '@/features/roadmap/types';
+import type { Workspace } from '@/features/roadmap/types';
 import { groupSkills } from '@/lib/skill-groups';
 import { careerApi, type CurrentGoal } from './career';
 import { cvApi } from './cv';
@@ -53,12 +53,6 @@ export async function loadRoadmap(token: string, signal: AbortSignal) {
  const workspace = await roadmapApi<Workspace>(`/workspace${zone}`, token, undefined, signal);
  if (!workspace.planner) throw new Error('Your roadmap could not be read. Retry shortly.');
  return workspace;
-}
-
-export async function loadLearning(token: string, signal: AbortSignal) {
- const plan = await roadmapApi<LearningPlan>('/learning', token, undefined, signal);
- if (typeof plan?.has_roadmap !== 'boolean' || !Array.isArray(plan.steps)) throw new Error('Your learning steps could not be read. Retry shortly.');
- return plan;
 }
 
 export const loadApplications = (token: string, signal: AbortSignal) => listApplications(token, signal);

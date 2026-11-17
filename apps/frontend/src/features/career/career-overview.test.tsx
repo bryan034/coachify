@@ -1,6 +1,6 @@
 import {cleanup,act,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {CareerGoalHome,CareerGoalOverview,LearningFocus} from './career-overview';
+import {CareerGoalHome,CareerGoalOverview,SkillsNeeded,goalSkillLevel} from './career-overview';
 import {CareerSessionProvider} from './career-session';
 import {getCvGoalConfirmation,confirmCvGoal} from '@/lib/api/career-cv-confirmation';
 import {careerApi,refreshWorkspace,type CareerWorkspace} from '@/lib/api/career';
@@ -12,24 +12,127 @@ vi.mock('@/lib/api/career',()=>({careerApi:vi.fn(),importCareer:vi.fn(),refreshW
 const extraction={role:'Backend Software Engineer',field:'Software Engineering',company:'Example',location:'Singapore',seniority_level:'Entry level',job_url:null,summary:'Build backend services.',responsibilities:['Build APIs'],skills:[{item_id:'sql',name:'SQL',category:'Technical',priority:'required' as const,origin:'employer' as const},{item_id:'team',name:'Teamwork',category:'Transferable',priority:'preferred' as const,origin:'employer' as const}],non_skill_requirements:[{requirement_id:'degree',category:'Qualifications',description:'A relevant degree',priority:'preferred',evidence:'A relevant degree is preferred.',group_id:null,group_operator:'all' as const}]};
 const workspace:CareerWorkspace={session_id:'session',revision:1,kind:'jd',phase:'ready',current:{selection_version:1,skill_groups:{SQL:'Data & analytics',Teamwork:'Communication & leadership'},goal:{...extraction,_id:'goal',version:1,target_type:'specific_job',interests:[],preferences:[],readiness:'pending',exploration_draft_id:null,exploration_draft_version:null},dependent_results_need_review:false},research_id:'research',research_version:1,coverage:[],error:null,retry_after:null,expires_at:null,exploration_id:null};
 
-const skillRow=(name:string)=>screen.getByRole('button',{name}).closest('li')!;
 function overview(value=workspace){return render(<CareerSessionProvider><CareerGoalOverview workspace={value} onReload={vi.fn()}/></CareerSessionProvider>);}
 afterEach(()=>vi.useRealTimers());
 beforeEach(()=>{vi.resetAllMocks();vi.mocked(refreshWorkspace).mockImplementation(async(_previous,token,signal)=>careerApi('/workspace',token,{signal}));vi.mocked(getCvGoalConfirmation).mockResolvedValue({goal_id:'goal',goal_version:1,selection_version:1,confirmed:false,context:null,reason:null});params.forEach((_,key)=>params.delete(key));vi.mocked(careerApi).mockImplementation(async(path)=>path==='/workspace'?workspace as never:{status:'no_cv',cv_uploaded:false,skills_evaluated:false} as never);});
-it('shows saved skills in briefing accordions and keeps refinement and replacement',async()=>{
+const serve=(context:object,current:object={})=>vi.stubGlobal('fetch',vi.fn(async(url:string,init?:RequestInit)=>new Response(JSON.stringify(init?.method==='POST'?{version:1,operation:{id:'op',status:'pending'}}:String(url).endsWith('/context')?{ready:true,model_available:true,cv_reviewed:true,research_pending:false,goal:{role:'Backend Software Engineer'},...context}:{version:0,ready:true,operation:null,stale:false,result:null,issues:[],...current}),{status:init?.method==='POST'?202:200})));
+const outcome=(extra:object={})=>({ref:'job:sql',name:'SQL',match_status:'partial' as const,components:[],...extra});
+const sql={...extraction.skills[0],competence_target:{level:8,basis:'job_description' as const,explanation:'Write joins and window queries unaided.',source_urls:[]}};
+const row=(name:string)=>screen.getByRole('button',{name:new RegExp(`^${name}`)}).closest('li')!;
+it('shows the role header, skills under their category, and keeps refinement and replacement',()=>{
  overview();expect(screen.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
  expect(screen.getByRole('heading',{name:'Skills needed'})).toBeVisible();
- expect(screen.getByRole('button',{name:'SQL'})).toHaveAttribute('aria-expanded','false');
- fireEvent.click(screen.getByRole('button',{name:'SQL'}));
- expect(screen.getByRole('button',{name:'SQL'})).toHaveAttribute('aria-expanded','true');
- expect(screen.getByRole('button',{name:'Teamwork'})).toHaveAttribute('aria-expanded','false');
- expect(screen.getByText('2 saved skills')).toBeVisible();
- // Rows sit under their category heading instead of repeating it on every row.
- expect(skillRow('SQL').closest('section')!.querySelector('h3')).toHaveTextContent('Data & analytics');expect(within(skillRow('SQL')).getByText('Essential')).toBeVisible();
- expect(skillRow('Teamwork').closest('section')!.querySelector('h3')).toHaveTextContent('Communication & leadership');expect(within(skillRow('Teamwork')).getByText('Important')).toBeVisible();
  expect(screen.getByRole('link',{name:'Refine goal'})).toHaveAttribute('href','/career-goal/chat?refine=1');
  fireEvent.click(screen.getByRole('button',{name:/Set a new goal/}));expect(push).toHaveBeenCalledWith('/career-goal?new=1');
+ expect(row('SQL').closest('section')!.querySelector('h3')).toHaveTextContent('Data & analytics');expect(within(row('SQL')).getByText('Essential')).toBeVisible();
+ expect(row('Teamwork').closest('section')!.querySelector('h3')).toHaveTextContent('Communication & leadership');expect(within(row('Teamwork')).getByText('Important')).toBeVisible();
+ expect(screen.getByRole('navigation',{name:'How the pages connect'})).toHaveTextContent('Career Goal→Skills Profile→Roadmap');
  expect(vi.mocked(careerApi).mock.calls.every(call=>!call[2]?.method)).toBe(true);
+});
+it('shows goal facts as plain chips, separate from the real actions',()=>{
+ overview();
+ const meta=screen.getByRole('region',{name:'Your target role'}).querySelector('.ws-meta')!;
+ expect(within(meta as HTMLElement).queryByRole('button')).toBeNull();
+ expect(meta).toHaveTextContent('Example');expect(meta).toHaveTextContent('Singapore');
+});
+it('shows each skill’s level against the role target from the saved comparison and filters by it',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({version:0,ready:true,model_available:true,operation:null,stale:false,result:{input_hash:'h',groups:[],job_skill_gaps:[{ref:'job:sql',match_status:'supported',demonstrated_score:9,required_score:8,competence_score:10},{ref:'job:team',match_status:'confirmed_shortfall',demonstrated_score:2,required_score:6,competence_score:3.3}]}}))));
+ overview();
+ expect(await within(row('SQL')).findByText('9')).toBeVisible();
+ expect(within(row('SQL')).getByText('/ 8')).toBeVisible();
+ expect(within(row('Teamwork')).getByText('2')).toBeVisible();
+ expect(screen.getByRole('button',{name:/1 Ready/})).toBeVisible();expect(screen.getByRole('button',{name:/1 To build/})).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:/1 To build/}));
+ expect(screen.queryByRole('button',{name:/^SQL/})).not.toBeInTheDocument();expect(screen.getByRole('button',{name:/^Teamwork/})).toBeVisible();
+ vi.unstubAllGlobals();
+});
+it('offers the evaluation once the goal is set and the Skills Profile is reviewed',async()=>{
+ serve({});overview();
+ fireEvent.click(await screen.findByRole('button',{name:'Evaluate skills'}));
+ expect(screen.getByRole('heading',{name:'Evaluate skills with career goal'})).toBeVisible();
+ await waitFor(()=>expect(vi.mocked(fetch).mock.calls.filter(call=>call[1]?.method==='POST')).toHaveLength(1));
+ expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(call=>call[1]?.method==='POST')![1]!.body))).toMatchObject({expected_version:0,allow_partial:true,mutation_id:expect.any(String)});
+ vi.unstubAllGlobals();
+});
+it('hides the banner once a current evaluation exists and asks again when it is stale',async()=>{
+ const result={input_hash:'h',groups:[],job_skill_gaps:[{ref:'job:sql',match_status:'supported',demonstrated_score:9,required_score:8,competence_score:10}]};
+ serve({input_hash:'h'},{result});const view=overview();
+ expect(await within(row('SQL')).findByText('9')).toBeVisible();
+ expect(screen.queryByRole('button',{name:'Evaluate skills'})).not.toBeInTheDocument();
+ view.unmount();serve({},{result:{...result,input_hash:undefined},stale:true});overview();
+ expect(await screen.findByRole('heading',{name:'Your goal or skills changed'})).toBeVisible();
+ expect(screen.getByRole('button',{name:'Evaluate again'})).toBeEnabled();
+ expect(within(row('SQL')).queryByText('9')).not.toBeInTheDocument();
+ vi.unstubAllGlobals();
+});
+it('asks for the goal to be confirmed in one line and confirms it',async()=>{
+ vi.mocked(confirmCvGoal).mockResolvedValue({goal_id:'goal',goal_version:1,selection_version:1,confirmed:true,context:{id:'goal',version:1,selection_version:1,confirmed:true},reason:null});
+ overview();
+ expect(await screen.findByText('Use this goal in your CV review?')).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Confirm goal'}));
+ await waitFor(()=>expect(confirmCvGoal).toHaveBeenCalled());
+ expect(await screen.findByText('Goal confirmed.')).toBeVisible();
+ expect(screen.getByRole('link',{name:'Review CV'})).toHaveAttribute('href','/cv');
+});
+it('keeps provenance and safe sources, and shows the job’s own words only as evidence the person opens',()=>{
+ const goal={...workspace.current.goal!,skills:[{...sql,group_id:'alternatives',group_operator:'any' as const,context:'Maintain relational data.',evidence:'SQL or another query language.',source_urls:['https://example.test/job','javascript:alert(1)']},{...extraction.skills[1],origin:'generated_guidance' as const,priority:'suggested' as const}]};
+ overview({...workspace,current:{...workspace.current,goal}});
+ fireEvent.click(within(row('SQL')).getByRole('button',{name:/^SQL/}));
+ fireEvent.click(within(row('SQL')).getByRole('button',{name:'See evidence'}));
+ expect(screen.getByText('Maintain relational data.')).toBeVisible();
+ expect(screen.queryByText('SQL or another query language.')).not.toBeInTheDocument();
+ expect(screen.getByText(/Alternative requirement/)).toBeVisible();
+ expect(screen.getByText(/Target 8 \/ 10\. Write joins and window queries unaided\./)).toBeVisible();
+ expect(screen.getByRole('link',{name:/example\.test/})).toHaveAttribute('href','https://example.test/job');
+ expect(document.querySelector('a[href^="javascript:"]')).toBeNull();
+ expect(within(row('Teamwork')).getByText(/Nice to have · inferred by elo/)).toBeInTheDocument();
+});
+it('handles a goal with no skills',()=>{
+ overview({...workspace,current:{...workspace.current,goal:{...workspace.current.goal!,skills:[],responsibilities:[],non_skill_requirements:[],summary:null}}});
+ expect(screen.getByText(/No skills are listed/)).toBeVisible();
+ expect(screen.queryByRole('button',{name:/1 Ready/})).not.toBeInTheDocument();
+});
+it('labels advisory or unknown importance without relabelling it as required',()=>{
+ render(<SkillsNeeded skills={[{...extraction.skills[0],priority:'suggested'},{...extraction.skills[1],priority:'conflicting'}]}/>);
+ expect(within(row('SQL')).getByText('Nice to have')).toBeVisible();
+ expect(within(row('Teamwork')).getByText('Conflicting requirements')).toBeVisible();
+ expect(screen.queryByText('Essential')).not.toBeInTheDocument();
+});
+it('groups by the categories the backend sent, most important first, with Other last',()=>{
+ const skills=[{...extraction.skills[1],name:'Docker',item_id:'docker'},{...extraction.skills[0],name:'Python',item_id:'python'},{...extraction.skills[0],name:'Mystery',item_id:'mystery'}];
+ render(<SkillsNeeded skills={skills} categories={{Docker:'Technical coding',Python:'Technical coding'}}/>);
+ expect(screen.getAllByRole('heading',{level:3}).map(h=>h.textContent)).toEqual(['Technical coding','Other skills']);
+ expect(Array.from(document.querySelectorAll('.ws-sk-name b')).map(node=>node.textContent)).toEqual(['Python','Docker','Mystery']);
+});
+it('counts skills as ready, getting there, to build or not rated against each target',()=>{
+ const skills=['a','b','c','d'].map(id=>({...extraction.skills[0],name:id.toUpperCase(),item_id:id,priority:'required' as const}));
+ const levels:Record<string,[number,number]>={a:[8,8],b:[6,8],c:[2,8],d:[0,0]};
+ const outcomes=Object.fromEntries(['a','b','c'].map(id=>[id,outcome({ref:`job:${id}`,demonstrated_score:levels[id][0],required_score:levels[id][1]})]));
+ render(<SkillsNeeded skills={skills} outcomes={outcomes}/>);
+ for(const label of ['4 All','1 Ready','1 Getting there','1 To build','1 Not rated'])expect(screen.getByRole('button',{name:label})).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'1 Not rated'}));
+ expect(screen.getByRole('button',{name:/^D/})).toBeVisible();expect(screen.queryByRole('button',{name:/^A/})).not.toBeInTheDocument();
+});
+it('reads a level from the skill’s own score, or from progress towards the target on older evaluations',()=>{
+ expect(goalSkillLevel(sql,outcome({demonstrated_score:6,required_score:7}))).toEqual({level:6,target:7});
+ expect(goalSkillLevel(sql,outcome({competence_score:5,required_score:8}))).toEqual({level:4,target:8});
+ expect(goalSkillLevel(sql,undefined)).toEqual({level:null,target:8});
+});
+it('opens Talk it through for a skill and explains its target',()=>{
+ render(<CareerSessionProvider><SkillsNeeded skills={[sql]} talk={vi.fn()}/></CareerSessionProvider>);
+ fireEvent.click(screen.getByRole('button',{name:/^SQL/}));
+ expect(screen.getByRole('button',{name:'Rate this skill'})).toBeVisible();
+ expect(screen.getByText(/hasn’t been compared with your Skills Profile yet/)).toBeVisible();
+ expect(screen.getByRole('button',{name:'See evidence'})).toHaveAttribute('aria-expanded','false');
+});
+it('opens the drawer from a skill row on the Career Goal page',async()=>{
+ overview();
+ fireEvent.click(row('SQL').querySelector('button')!);
+ fireEvent.click(within(row('SQL')).getByRole('button',{name:'Rate this skill'}));
+ const dialog=await screen.findByRole('dialog',{name:'SQL'});
+ expect(within(dialog).getByText(/Have you used it anywhere/)).toBeVisible();
+ fireEvent.click(within(dialog).getByRole('button',{name:'Close chat'}));
+ await waitFor(()=>expect(screen.queryByRole('dialog',{name:'SQL'})).not.toBeInTheDocument());
 });
 it('links the three goal pages as tabs and keeps eligibility on About the role',async()=>{
  overview();
@@ -43,54 +146,6 @@ it('links the three goal pages as tabs and keeps eligibility on About the role',
  fireEvent.click(screen.getByText('Eligibility and commitment'));
  expect(screen.getByText('A relevant degree')).toBeVisible();
  expect(screen.getByRole('heading',{name:'About the role'})).toBeVisible();
-});
-it('shows goal facts as plain metadata, separate from the real actions',()=>{
- overview();
- const meta=screen.getByRole('region',{name:'Your target role'}).querySelector('.briefing-target-meta')!;
- expect(within(meta as HTMLElement).queryByRole('button')).toBeNull();
- expect(meta).toHaveTextContent('Example');expect(meta).toHaveTextContent('Singapore');
-});
-it('marks each needed skill from the saved comparison',async()=>{
- vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({version:0,ready:true,model_available:true,operation:null,stale:false,result:{groups:[],job_skill_gaps:[{ref:'job:sql',match_status:'supported'},{ref:'job:team',match_status:'confirmed_shortfall'}]}}))));
- overview();
- expect(await within(skillRow('SQL')).findByText('Have')).toBeVisible();
- expect(within(skillRow('Teamwork')).getByText('Gap')).toBeVisible();
- expect(screen.getByRole('button',{name:'SQL'})).toHaveAccessibleDescription('Have');
- expect(document.querySelector('.goal-skills-summary')).toHaveTextContent('You have 1 of 2 · 1 gap');
- expect(screen.queryByText(/Not yet compared/)).not.toBeInTheDocument();
- vi.unstubAllGlobals();
-});
-const serve=(context:object,current:object={})=>vi.stubGlobal('fetch',vi.fn(async(url:string,init?:RequestInit)=>new Response(JSON.stringify(init?.method==='POST'?{version:1,operation:{id:'op',status:'pending'}}:String(url).endsWith('/context')?{ready:true,model_available:true,cv_reviewed:true,research_pending:false,goal:{role:'Backend Software Engineer'},...context}:{version:0,ready:true,operation:null,stale:false,result:null,issues:[],...current}),{status:init?.method==='POST'?202:200})));
-it('offers the evaluation, and nothing else, once the goal is set and the Skills Profile is reviewed',async()=>{
- serve({});overview();
- fireEvent.click(await screen.findByRole('button',{name:'Evaluate skills'}));
- expect(screen.getByRole('heading',{name:'Evaluate skills with career goal'})).toBeVisible();
- expect(screen.queryByRole('link',{name:/Skills Profile|CV review/})).not.toBeInTheDocument();
- expect(screen.queryByText('Have')).not.toBeInTheDocument();
- await waitFor(()=>expect(vi.mocked(fetch).mock.calls.filter(call=>call[1]?.method==='POST')).toHaveLength(1));
- expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(call=>call[1]?.method==='POST')![1]!.body))).toMatchObject({expected_version:0,allow_partial:true,mutation_id:expect.any(String)});
- vi.unstubAllGlobals();
-});
-it.each([
- ['an unreviewed CV',{cv_reviewed:false},'Finish your CV review first','Finish CV review'],
- ['no skills source',{ready:false,cv_reviewed:null,issues:[{source:'cv',message:'Upload a CV.',href:'/cv'}]},'Add your skills first','Go to Skills Profile'],
-])('points to Skills Profile instead of offering the evaluation with %s',async(_case,context,title,action)=>{
- serve(context);overview();
- expect(await screen.findByRole('heading',{name:title})).toBeVisible();
- expect(screen.getByRole('link',{name:action})).toHaveAttribute('href','/cv');
- expect(screen.queryByRole('button',{name:'Evaluate skills'})).not.toBeInTheDocument();
- vi.unstubAllGlobals();
-});
-it('hides the banner once a current evaluation exists and asks again when it is stale',async()=>{
- const result={groups:[],job_skill_gaps:[{ref:'job:sql',match_status:'supported',competence_score:9}]};
- serve({},{result});const view=overview();
- expect(await within(skillRow('SQL')).findByText('9')).toBeVisible();
- expect(screen.queryByRole('button',{name:/Evaluate/})).not.toBeInTheDocument();
- view.unmount();serve({},{result,stale:true});overview();
- expect(await screen.findByRole('heading',{name:'Your goal or skills changed'})).toBeVisible();
- expect(screen.getByRole('button',{name:'Evaluate again'})).toBeEnabled();
- expect(within(skillRow('SQL')).queryByText('9')).not.toBeInTheDocument();
- vi.unstubAllGlobals();
 });
 it('displays extracted categories while research is still running',async()=>{
  overview({...workspace,phase:'researching',research_id:null});expect(screen.getByText('SQL')).toBeVisible();
@@ -109,30 +164,6 @@ it('new-goal mode keeps the saved goal untouched and opens the input methods',()
  expect(screen.getByRole('link',{name:'← Back to saved goal'})).toHaveAttribute('href','/career-goal');
 });
 
-it('preserves AND/OR, provenance and safe sources without inventing learning guidance',async()=>{
- const goal={...workspace.current.goal!,skills:[{...extraction.skills[0],group_id:'alternatives',group_operator:'any' as const,context:'Maintain relational data.',evidence:'SQL or another query language.',source_urls:['https://example.test/job','javascript:alert(1)']},{...extraction.skills[1],origin:'generated_guidance' as const,priority:'suggested' as const}]};
- overview({...workspace,current:{...workspace.current,goal}});
- fireEvent.click(screen.getByRole('button',{name:'SQL'}));
- expect(screen.getByText('Maintain relational data.')).toBeVisible();
- // Job-description quotes stay out of skill cards; the source link remains.
- expect(screen.queryByText('SQL or another query language.')).not.toBeInTheDocument();
- expect(screen.getByText(/Alternative requirement/)).toBeVisible();
- expect(screen.getByRole('link',{name:'example.test ↗'})).toHaveAttribute('href','https://example.test/job');
- expect(document.querySelector('a[href^="javascript:"]')).toBeNull();
- fireEvent.click(screen.getByText('Teamwork'));
- expect(screen.getByText('AI planning suggestion')).toBeVisible();
- expect(within(skillRow('Teamwork')).getByText('Nice to have')).toBeVisible();
- expect(within(skillRow('Teamwork')).getByLabelText('importance inferred by elo')).toBeInTheDocument();
- expect(screen.queryByText('A way to practise')).not.toBeInTheDocument();
-});
-it('hides role fields with no data and never labels individual skills as assessed',()=>{
- overview({...workspace,current:{...workspace.current,goal:{...workspace.current.goal!,skills:[],responsibilities:[],non_skill_requirements:[],summary:null}}});
- expect(screen.getByText(/No skills are listed/)).toBeVisible();
- expect(screen.queryByText(/Eligibility & commitment/)).not.toBeInTheDocument();
- expect(screen.queryByText(/0 requirements/)).not.toBeInTheDocument();
- expect(screen.queryByText('What you would work on')).not.toBeInTheDocument();
-});
-
 it('retries a failed research job without replacing the saved goal',async()=>{
  const reload=vi.fn();
  render(<CareerSessionProvider><CareerGoalOverview workspace={{...workspace,phase:'research_failed'}} onReload={reload}/></CareerSessionProvider>);
@@ -142,64 +173,6 @@ it('retries a failed research job without replacing the saved goal',async()=>{
  expect(screen.getByRole('heading',{name:'Backend Software Engineer'})).toBeVisible();
 });
 
-it('labels advisory or unknown importance without relabelling it as required',()=>{
- render(<LearningFocus skills={[{...extraction.skills[0],priority:'suggested'},{...extraction.skills[1],priority:'conflicting'}]}/>);
- expect(within(skillRow('SQL')).getByText('Nice to have')).toBeVisible();
- expect(within(skillRow('Teamwork')).getByText('Conflicting requirements')).toBeVisible();
- expect(screen.queryByText('Essential')).not.toBeInTheDocument();
- expect(screen.queryByText(/Not assessed against/)).not.toBeInTheDocument();
- expect(screen.queryByText(/Evidence in CV|No evidence yet|What to review in your CV/)).not.toBeInTheDocument();
-});
-it('handles empty and single-skill goals',()=>{
- const {rerender}=render(<LearningFocus skills={[]}/>);
- expect(screen.getByText(/No skills are listed/)).toBeVisible();
- expect(screen.queryByRole('heading',{level:3})).not.toBeInTheDocument();
- rerender(<LearningFocus skills={[extraction.skills[0]]} categories={{SQL:'Data & analytics'}}/>);
- expect(screen.getByText('Data & analytics')).toBeVisible();
- expect(screen.queryByRole('button',{name:/more skill/})).not.toBeInTheDocument();
- expect(screen.queryByText('Sorted by priority')).not.toBeInTheDocument();
-});
-it('groups by the categories the backend sent, most important first within each, with Other last',()=>{
- const skills=[{...extraction.skills[1],name:'Docker',item_id:'docker'},{...extraction.skills[0],name:'Python',item_id:'python'},{...extraction.skills[0],name:'Mystery',item_id:'mystery'}];
- render(<LearningFocus skills={skills} categories={{Docker:'Technical coding',Python:'Technical coding'}}/>);
- expect(screen.getAllByRole('heading',{level:3}).map(h=>h.textContent)).toEqual(['Technical coding','Other skills']);
- const names=()=>Array.from(document.querySelectorAll('.goal-skill-row .skill-row-toggle')).map(button=>document.getElementById(button.getAttribute('aria-labelledby')!)!.textContent);
- expect(names()).toEqual(['Python','Docker','Mystery']);
-});
-it('starts long lists short and reveals every skill on request',()=>{
- const skills=Array.from({length:13},(_,i)=>({...extraction.skills[0],name:`Skill ${i}`,item_id:`s${i}`}));
- render(<LearningFocus skills={skills} categories={Object.fromEntries(skills.map((skill,i)=>[skill.name,i<10?'Technical coding':'Data & analytics']))}/>);
- expect(document.querySelectorAll('.goal-skill-row')).toHaveLength(10);
- fireEvent.click(screen.getByRole('button',{name:'Show 3 more skills in 1 category'}));
- expect(document.querySelectorAll('.goal-skill-row')).toHaveLength(13);
-});
-it('shows a planning estimate only when the comparison scored the skill',()=>{
- const outcome={ref:'job:sql',name:'SQL',match_status:'partial' as const,components:[],competence_score:5,score_status:'estimated' as const,score_explanation:'Guided evidence against an intermediate requirement.'};
- render(<LearningFocus skills={[extraction.skills[0],extraction.skills[1]]} matches={{sql:'partial',team:'uncertain'}} outcomes={{sql:outcome}}/>);
- expect(within(skillRow('SQL')).getByText('5')).toBeVisible();
- expect(within(skillRow('Teamwork')).getByText('Unknown')).toBeVisible();
- fireEvent.click(screen.getByRole('button',{name:'SQL'}));
- expect(screen.getByRole('img',{name:'Your competence 5 out of 10 against the level this role needs'})).toBeInTheDocument();
- expect(screen.getByText(/Planning estimate: 5 \/ 10/)).toBeVisible();
- expect(document.querySelector('.goal-skills-summary')).toHaveTextContent('0 ready · 0 getting there · 1 to build · 1 not rated');
-});
-it('shows an expected level only when the job states one',()=>{
- render(<LearningFocus skills={[{...extraction.skills[0],required_proficiency:'advanced'},extraction.skills[1]]}/>);
- fireEvent.click(screen.getByRole('button',{name:'SQL'}));fireEvent.click(screen.getByRole('button',{name:'Teamwork'}));
- expect(screen.getByText('Advanced level expected')).toBeVisible();
- expect(screen.getAllByText(/level expected/)).toHaveLength(1);
-});
-it('retains the full title and saved content behind an independent accessible disclosure',()=>{
- const name='Ability to learn quickly, investigate failure modes, and iterate based on evidence and user feedback';
- render(<LearningFocus skills={[{...extraction.skills[0],name,context:'Investigate failed releases.',evidence:'Learn from user feedback.'},extraction.skills[1]]}/>);
- const button=screen.getByRole('button',{name});
- const panel=document.getElementById(button.getAttribute('aria-controls')!)!;
- expect(panel).not.toBeVisible();fireEvent.click(button);
- expect(panel).toBeVisible();expect(panel).toHaveTextContent('Investigate failed releases.');
- expect(panel).not.toHaveTextContent('Learn from user feedback.');
- expect(screen.getByRole('button',{name:'Teamwork'})).toHaveAttribute('aria-expanded','false');
- fireEvent.click(button);expect(panel).not.toBeVisible();
-});
 it('refreshes automatically when returning to a goal page updated by discovery',async()=>{
  const mounted=render(<CareerSessionProvider><CareerGoalHome/></CareerSessionProvider>);
  await screen.findByRole('heading',{name:'Backend Software Engineer'});
@@ -221,46 +194,4 @@ it('refreshes a ready goal when Discovery completes in the background',async()=>
  await act(async()=>{vi.advanceTimersByTime(5000);});
  expect(screen.getByRole('heading',{name:'Data Engineer'})).toBeInTheDocument();
  expect(refreshWorkspace).toHaveBeenCalled();
-});
-it('hides labels and charts that carry no information',()=>{
- const unspecified=[{...extraction.skills[0],priority:'unspecified' as const},{...extraction.skills[1],priority:'unspecified' as const}];
- const view=render(<LearningFocus skills={unspecified}/>);
- expect(screen.queryByText('Importance not specified')).not.toBeInTheDocument();
- expect(screen.queryByText('Sorted by priority')).not.toBeInTheDocument();
- view.unmount();
- const required=[{...extraction.skills[0],priority:'required' as const},{...extraction.skills[1],priority:'required' as const}];
- overview({...workspace,current:{...workspace.current,goal:{...workspace.current.goal!,skills:required}}});
- expect(screen.queryByRole('figure',{name:/Priority of the/})).not.toBeInTheDocument();
-});
-
-it('has no side rail: the skills fill the page and the three goal pages are one tab group',()=>{
- overview();
- expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
- expect(screen.queryByText('Explore other careers')).not.toBeInTheDocument();
- const tabs=screen.getByRole('navigation',{name:'Career goal pages'}).querySelector('.goal-tab-group')!;
- expect(within(tabs as HTMLElement).getAllByRole('link').map(link=>link.textContent)).toEqual(['Skills needed','Interview preparation','About the role']);
-});
-it('shows the model\'s levels and the linked Skills Profile skills on a goal skill',()=>{
- const outcome={ref:'job:sql',name:'SQL',match_status:'partial' as const,components:[],competence_score:8,demonstrated_score:6,required_score:7,score_status:'estimated' as const,score_explanation:'You wrote reporting queries yourself.',
-  profile_skills:[{name:'PostgreSQL',competence_score:6,required_score:7}]};
- render(<LearningFocus skills={[extraction.skills[0],extraction.skills[1]]} matches={{sql:'partial',team:'uncertain'}} outcomes={{sql:outcome,team:{ref:'job:team',name:'Teamwork',match_status:'uncertain',components:[],profile_skills:[]}}}/>);
- fireEvent.click(screen.getByRole('button',{name:'SQL'}));
- expect(screen.getByText('You: about 6 / 10 · role needs about 7 / 10')).toBeVisible();
- expect(screen.getByText(/You wrote reporting queries yourself/)).toBeVisible();
- expect(screen.getByRole('link',{name:'PostgreSQL'})).toHaveAttribute('href','/cv');
- fireEvent.click(screen.getByRole('button',{name:'Teamwork'}));
- expect(screen.getByText('No skill in your Skills Profile covers this yet.')).toBeVisible();
-});
-it('marks the current position before expansion and reserves target met for 10',()=>{
- const outcome={ref:'job:sql',name:'SQL',match_status:'partial' as const,components:[],competence_score:6.2,demonstrated_score:5,required_score:8,score_confidence:'medium' as const,score_status:'estimated' as const};
- const target={level:8,basis:'job_description' as const,explanation:'Familiarity requires role-ready application.',source_urls:[]};
- render(<LearningFocus skills={[{...extraction.skills[0],competence_target:target}]} outcomes={{sql:outcome}}/>);
- expect(screen.getByRole('meter',{name:'SQL progress towards this role'})).toHaveAttribute('aria-valuenow','6.2');
- expect(screen.getByText('Current 6.2/10')).toBeVisible();
- expect(screen.getByText('Goal 10/10')).toBeVisible();
- expect(document.querySelector('.goal-skills-summary')).toHaveTextContent('0 ready');
- fireEvent.click(screen.getByRole('button',{name:'SQL'}));
- expect(screen.getByText('Role competence target: 8/10')).toBeVisible();
- expect(screen.getByText('You: about 5 / 10 · role needs about 8 / 10')).toBeVisible();
- expect(screen.getByText(/10\/10 means the goal is satisfied for this specific job role, based/)).toBeVisible();
 });

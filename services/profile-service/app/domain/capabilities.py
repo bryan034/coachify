@@ -95,3 +95,20 @@ def revise_declarations(previous, request: CapabilityCreate, user_id, cv_item=No
         "created_at": timestamp, "updated_at": timestamp,
     })
     return declarations
+
+
+def withdraw_contribution(previous, request):
+    """Removes one description. A declaration left with none is removed; an already-removed one is a no-op."""
+    declarations = deepcopy(previous)
+    target = next((row for row in declarations if row["id"] == request.declaration_id), None)
+    if target is None:
+        return previous
+    remaining = [part for part in target["contributions"] if part["id"] != request.contribution_id]
+    if len(remaining) == len(target["contributions"]):
+        return previous
+    if not remaining:
+        return [row for row in declarations if row["id"] != request.declaration_id]
+    target["contributions"] = remaining
+    target["description"] = remaining[0]["description"]
+    target["updated_at"] = datetime.now(timezone.utc).isoformat()
+    return declarations

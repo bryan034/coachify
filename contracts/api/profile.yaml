@@ -1327,6 +1327,83 @@
         ]
       }
     },
+    "/api/v1/profile/capabilities/withdrawal": {
+      "post": {
+        "tags": [
+          "C07 manual capabilities"
+        ],
+        "summary": "Withdraw Capability",
+        "description": "Take back one description the person added. The declaration goes when its last description does.",
+        "operationId": "withdraw_capability_api_v1_profile_capabilities_withdrawal_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapabilityWithdrawal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/profile/skills-profile": {
       "get": {
         "tags": [
@@ -1867,6 +1944,44 @@
           "declarations"
         ],
         "title": "CapabilityView"
+      },
+      "CapabilityWithdrawal": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "mutation_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Mutation Id"
+          },
+          "declaration_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Declaration Id"
+          },
+          "contribution_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Contribution Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "mutation_id",
+          "declaration_id",
+          "contribution_id"
+        ],
+        "title": "CapabilityWithdrawal",
+        "description": "Takes back one description a person added, such as an Undo after adding evidence."
       },
       "CapacityWindow": {
         "properties": {
