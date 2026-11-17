@@ -10,6 +10,7 @@ assessments and roadmaps can use their saved information. P01–P16 are availabl
 | `GET /api/v1/profile/capabilities` | Read account-level capability declarations, their revision and text/count limits. |
 | `POST /api/v1/profile/capabilities` | Add a declaration without a CV, keep a same-name claim distinct, or explicitly attach another description. |
 | `POST /api/v1/profile/capabilities/attachment` | Explicitly refresh/change a declaration's CV evidence link or detach it while preserving the statement and link history. |
+| `POST /api/v1/profile/capabilities/withdrawal` | Take back one description a person added (used by Undo on Skills Profile). A declaration left with no description is removed; repeating the request is harmless. |
 
 Declarations belong to the existing account and survive CV uploads and selection
 changes. Writes use body `expected_version` and `mutation_id`; repeated input with

@@ -98,7 +98,7 @@ disappears once the summary arrives.
 
 Career chats give the conversation at least 70% of the screen height, on any screen size. Short screens scroll the page rather than shrinking it.
 
-The saved-goal overview opens with the role and a ring of skills by the backend's priority. There is no side rail: the skills fill the page, and the three goal pages are one pill-shaped tab group. CV status and the comparison live in Skills Profile and Home, and Explore careers is reached from Conversations. Skills form one numbered list sorted by priority, with category filters. Each skill keeps its number when filtered, using the backend's categories in, using the backend's
+The saved-goal overview is a dark header (role, facts, a ring of skills by importance, Refine goal / Set a new goal), a line showing how Career Goal, Skills Profile and Roadmap feed each other, the three goal pages as one pill-shaped tab group, a one-line goal confirmation for CV review, and **Skills needed**: every skill under its category, most important first, with the person's level against the role's target (the tick), filters for Ready / Getting there / To build / Not rated, **Talk it through** and **See evidence** per skill. A yellow chip warns when the roadmap ends after the job's start date. Levels come from the saved evaluation (`demonstrated_score` against `required_score`); nothing is scored in the browser. Categories come from
 `current.skill_groups`. Importance (Required, Preferred and so on) is a label on each
 row, most important first, with any level the job states.
 

@@ -66,12 +66,12 @@ it('shows a saved partial profile and its uncertainty without inventing a skill 
   skills:[{name:'Data processing',description:'Combined sales spreadsheets.',evidence:[{message_id:'turn',quote:'I combined sales spreadsheets.'}],dimensions:{independence:{status:'unknown',value:null,evidence:[]}}}]}]});
  render(<ResumePreview/>);
  expect(await screen.findByText('Saved profile')).toBeVisible();
- expect(screen.getByRole('heading',{name:'Weekly reports'})).toBeVisible();
+ expect(screen.getByText('Weekly reports')).toBeVisible();
  // The CV review owns the named regions for these kinds, so the summary columns must not add a second one.
  expect(screen.queryByRole('region',{name:'Work and internships'})).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:/^Data processing/}));
- // The skill panel shows one competence state instead of raw dimension fields; nothing is invented.
- expect(within(screen.getByRole('complementary',{name:'Data processing'})).getByText(/Evaluate your skills with your Career Goal|Competence not recorded yet/)).toBeVisible();
+ // Talk it through opens on the skill. Without a goal comparison there is no target and no level is invented.
+ expect(within(screen.getByRole('dialog',{name:'Data processing'})).getByText(/I couldn’t find enough in your CV to rate this/)).toBeVisible();
  expect(screen.queryByText('Advanced')).not.toBeInTheDocument();
  expect(cvApi.openConversation).not.toHaveBeenCalled();
 });
@@ -130,10 +130,9 @@ it('reports what the review changed and shows the review note in the skill panel
  render(<ResumePreview/>);
  const banner=await screen.findByRole('region',{name:'Your CV review is complete'});
  expect(banner).toHaveTextContent('You answered 21 questions across 8 experiences. From your answers, elo added 3 skills, corrected 2 and removed 1.');
- fireEvent.click(await screen.findByRole('button',{name:'Python'}));
- const panel=screen.getByRole('complementary',{name:'Python'});
- expect(within(panel).getByText('From your review')).toBeVisible();
- expect(within(panel).getByText('You wrote the ETL scripts yourself.')).toBeVisible();
+ fireEvent.click(await screen.findByRole('button',{name:/^Python/}));
+ const panel=screen.getByRole('dialog',{name:'Python'});
+ expect(within(panel).getByText(/You wrote the ETL scripts yourself\./)).toBeVisible();
 });
 
 it('shows where an unfinished review stands, read from the saved conversation, and holds back skills',async()=>{

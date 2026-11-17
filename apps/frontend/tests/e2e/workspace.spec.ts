@@ -62,7 +62,7 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.locator('.side-bottom .me')).toContainText('Synthetic College');
  await page.screenshot({path:testInfo.outputPath('home-desktop.png'),fullPage:true});
  for (const [label,heading] of [['Roadmap','Roadmap'],['Skills Profile','Skills Profile'],['Search Jobs','Search Jobs'],['Calendar','Calendar']]) {
-  const link=page.getByRole('navigation').getByRole('link',{name:label,exact:true});
+  const link=page.getByRole('complementary',{name:'Workspace'}).getByRole('link',{name:label,exact:true});
   await link.click();
   await expect(link).toHaveAttribute('aria-current','page');
   await expect(page.getByRole('heading',{level:1,name:heading})).toBeVisible();
@@ -101,9 +101,9 @@ test('workspace uses saved profile data, preserves navigation and leaves missing
  await expect(page.locator('[aria-label="Month calendar"] .dh')).toHaveCount(7);
  // Calendar shows no add or view-event controls until they work.
  await expect(page.getByRole('button',{name:'+ Add',exact:true})).toHaveCount(0);
- await page.getByRole('navigation').getByRole('link',{name:'Skills Profile'}).click();
+ await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Skills Profile'}).click();
  await expect(page.getByRole('button',{name:'Upload CV',exact:true})).toBeDisabled();
- await page.getByRole('navigation').getByRole('link',{name:'Roadmap',exact:true}).click();
+ await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Roadmap',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Finish these first'})).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/cv"]')).toBeVisible();
  await expect(page.locator('.roadmap-prerequisites a[href="/career-goal"]')).toBeVisible();

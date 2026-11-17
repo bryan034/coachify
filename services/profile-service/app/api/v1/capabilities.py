@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from app.clients.cv import validate_cv_match
 from app.core.auth import current_owner
 from app.domain.capabilities import CapabilityConflict, CapabilityLimit
-from app.schemas.capabilities import CapabilityAttachment, CapabilityCreate, CapabilityView, CapabilityError
+from app.schemas.capabilities import CapabilityAttachment, CapabilityCreate, CapabilityView, CapabilityError, CapabilityWithdrawal
 
 router = APIRouter(prefix="/api/v1/profile/capabilities", tags=["C07 manual capabilities"])
 
@@ -52,3 +52,14 @@ async def reconcile_attachment(data: CapabilityAttachment, request: Request,
         return JSONResponse(status_code=409, content={"detail": exc.message, "code": exc.code})
     except CapabilityLimit as exc:
         raise HTTPException(422, [{"loc": ["body"], "msg": str(exc), "type": "value_error"}]) from exc
+
+
+@router.post("/withdrawal", response_model=CapabilityView, responses={401: {"model": CapabilityError},
+    409: {"model": CapabilityError}, 503: {"model": CapabilityError}})
+async def withdraw_capability(data: CapabilityWithdrawal, request: Request,
+                   owner: Annotated[str, Depends(current_owner)], repo=Depends(repository)):
+    """Take back one description the person added. The declaration goes when its last description does."""
+    try:
+        return await to_thread.run_sync(partial(repo.withdraw, owner, data), limiter=request.app.state.capability_limiter)
+    except CapabilityConflict as exc:
+        return JSONResponse(status_code=409, content={"detail": exc.message, "code": exc.code})

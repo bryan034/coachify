@@ -138,13 +138,11 @@ UI behavior; they do not establish real model extraction accuracy.
 
 The full-screen CV chat gives the conversation at least 70% of the screen height.
 
-Entry now shows `skills-profile-summary.tsx`: profile counts, a bar showing each
-category's share, then skills as chips in one card per category
-(`skill-cards.tsx`), combining CV skills, skills described in chat and manually
-added capabilities. Categories over eight skills start collapsed. Experience sits in
-columns by kind. Each opened chip shows the strongest supported baseline level,
-or "Level not established", with its source experience; evidence stays behind the
-row's details. The backend assigns categories (`skill_groups` on each response) and
+Entry now shows `skills-profile-summary.tsx`: header, how the pages connect, then `skills-overview.tsx`
+(skills as chips, goal skills first with level against target, and the shared **Talk it through** drawer in
+`features/assessment/talk-it-through.tsx`), the CV card with the upload panel, and experience by kind.
+Skills combine CV skills, skills described in chat and manually added capabilities (`skill-cards.tsx`).
+The backend assigns categories (`skill_groups` on each response) and
 the frontend only displays them; a skill missing from the map shows under Other skills.
 Experience and clarifications, then the
 upload form and saved CVs, follow below, with links to jump between sections.

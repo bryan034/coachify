@@ -1,8 +1,7 @@
 "use client";
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { Assessment, Operation } from '@/features/roadmap/types';
-import { errorText, friendlyOperationError } from '@/lib/errors';
+import { errorText } from '@/lib/errors';
 import { assessmentApi, skillMatches, skillOutcomes, type EvaluationStatus } from '@/lib/api/assessment';
 
 type Command = { expected_version: number; mutation_id: string; allow_partial: boolean };
@@ -69,26 +68,3 @@ export function useComparison(token: string | undefined, revision?: string) {
  return { current: owner.current === token ? current : null, context: owner.current === token ? context : null, result, matches: result ? skillMatches(result) : null, outcomes: result ? skillOutcomes(result) : null, error, busy, compare, retry: () => setAttempt(value => value + 1) };
 }
 export type Comparison = ReturnType<typeof useComparison>;
-export function ComparisonPanel({ comparison: c, className = '' }: { comparison: Comparison; className?: string }) {
- const running = !!c.current?.operation && ['pending', 'running'].includes(c.current.operation.status);
- const outcomes = c.result?.job_skill_gaps ?? [];
- const have = outcomes.filter(item => item.match_status === 'supported').length;
- const gaps = outcomes.filter(item => c.matches?.[item.ref.slice(4)] !== 'covered' && item.components?.some(component => component.status === 'confirmed_shortfall')).sort((a,b) => (c.result?.priorities.indexOf(a.ref) ?? -1) - (c.result?.priorities.indexOf(b.ref) ?? -1));
- return <section id="goal-match" className={`card pad goal-comparison ${className}`} aria-label="Goal match" aria-busy={running || c.busy}>
-  <h2>Goal match</h2>
-  {!c.current && !c.error && <p role="status">Checking your saved comparison…</p>}
-  {c.error && <div role="alert"><p>{c.error}</p><button className="btn ghost" onClick={c.retry}>Reload comparison</button></div>}
-  {c.current?.stale && c.current.result && <p>Your goal or skills changed. Compare again to update these results.</p>}
-  {c.current && !c.result && !running && <p>Not yet compared with your latest Skills Profile.</p>}
-  {c.context?.goal && <p>{c.context.goal.role}{c.context.cv?.name ? ` · ${c.context.cv.name}` : ''}</p>}
-  {c.result && <><p><strong>You have evidence for {have} of {outcomes.length} skills.</strong> Missing evidence stays unknown.</p>
-   <p>Top confirmed gaps</p>{gaps.length ? <ul>{gaps.slice(0, 3).map(item => <li key={item.ref}>{item.name}</li>)}</ul> : <p>No confirmed skill gaps in this comparison.</p>}
-   <Link href="/roadmap">Plan your next steps</Link></>}
-  {!c.result && c.context?.ready && !['available', 'no_findings'].includes(c.context.research_coverage ?? '') && <p className="small">Compare with available evidence. Interview research is {c.context.research_coverage || 'unavailable'}; results will be labelled partial.</p>}
-  {c.result && !['available', 'no_findings'].includes(c.result.research_coverage) && <p className="notice">Partial comparison: interview research is {c.result.research_coverage}.</p>}
-  {c.context && !c.context.ready && c.context.issues?.map((issue, i) => <p key={i}>{issue.message} <Link href={issue.href}>Set up</Link></p>)}
-  {c.context && !c.context.model_available && <p>The comparison assistant is unavailable. Your saved result is retained.</p>}
-  {running ? <p role="status">Comparing your saved evidence… You can leave and return.</p> : c.context?.ready && <button className="btn pri" disabled={c.busy || !c.context.model_available || !!c.current?.operation?.retry_after} onClick={() => void c.compare()}>{c.busy ? 'Starting comparison…' : c.result ? 'Compare again' : 'Compare with my skills'}</button>}
-  {c.current?.operation?.status === 'failed' && <p role="alert">{friendlyOperationError(c.current.operation.error, 'The comparison failed. Try again.')}</p>}
- </section>;
-}

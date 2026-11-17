@@ -41,6 +41,12 @@ truth. The [README](README.md) lists available endpoints, and the
   an older response does not supply one. Missing fingerprints never establish a
   current verified relationship. CV owns current relationship assessment through
   its API; Profile does not query CV during ordinary declaration reads.
+- `POST /api/v1/profile/capabilities/withdrawal` accepts `declaration_id`,
+  `contribution_id`, `expected_version` and `mutation_id` and takes back one
+  description the person added (Undo on Skills Profile). A declaration left with
+  no description is removed; an unknown or already-removed description is a
+  no-op that does not change the version. It follows the same version check and
+  mutation receipts as the other writes.
 - `POST /api/v1/profile/capabilities/attachment` accepts `declaration_id`,
   `expected_version`, `mutation_id` and nullable `cv_match`. It validates the
   account's existing declaration name against a proposed source, or explicitly

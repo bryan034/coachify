@@ -16,17 +16,20 @@ test('role-relative skill progress stays readable on desktop and mobile',async({
  const result={id:'synthetic-assessment',input_hash:'synthetic-input',groups:[],job_skill_gaps:[{ref:'job:python',name:'Python',match_status:'partial',components:[],competence_score:6.2,demonstrated_score:5,required_score:8,score_confidence:'medium',score_status:'estimated',score_explanation:'Independent successful project delivery.'}],interview_prep_gaps:[],constraints:[],priorities:[],research_coverage:'available'};
  await page.route('**/api/v1/assessments/**',route=>route.fulfill({json:new URL(route.request().url()).pathname.endsWith('/context')?{ready:true,model_available:true,input_hash:'synthetic-input',cv_reviewed:true,research_pending:false,issues:[]}:{version:1,operation:null,result,stale:false,ready:true,issues:[]}}));
  await page.goto('/career-goal');
+ await expect(page.locator('.ws-goal')).toBeVisible();
+ expect(await page.evaluate(()=>{const hero=document.querySelector('.ws-goal')!;return Math.round(hero.nextElementSibling!.getBoundingClientRect().top-hero.getBoundingClientRect().bottom);})).toBe(18);
  for(const width of [1440,390]){
   await page.setViewportSize({width,height:900});
-  const meter=page.getByRole('meter',{name:'Python progress towards this role'});
-  await expect(meter).toBeVisible();
-  await expect(meter).toHaveAttribute('aria-valuenow','6.2');
-  await expect(page.getByText('Current 6.2/10')).toBeVisible();
-  await expect(page.getByText('Goal 10/10')).toBeVisible();
+  const bar=page.getByRole('img',{name:'5 out of 10, target 8'});
+  await expect(bar).toBeVisible();
+  await expect(page.locator('.ws-score')).toHaveText(/5\s*\/\s*8/);
+  await expect(page.getByRole('button',{name:'3 To build'})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'1 To build'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  }
- await page.getByRole('button',{name:'Python',exact:true}).click();
- await expect(page.getByText('Role competence target: 8/10')).toBeVisible();
- await expect(page.getByText('You: about 5 / 10 · role needs about 8 / 10')).toBeVisible();
- await expect(page.getByText(/10\/10 means the goal is satisfied for this specific job role, based/)).toBeVisible();
+ await page.getByRole('button',{name:/^Python/}).click();
+ await expect(page.getByText(/3 more to reach the target of 8 for this essential skill\./)).toBeVisible();
+ await page.getByRole('button',{name:'See evidence'}).click();
+ await expect(page.getByText('Target 8 / 10. Familiarity requires role-ready application at level 8.')).toBeVisible();
+ await expect(page.getByText('Independent successful project delivery.')).toBeVisible();
 });

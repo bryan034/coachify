@@ -442,3 +442,49 @@ def test_public_manual_declaration_uses_same_canonical_identity_as_cv_and_goal()
         contributions=[],created_at=datetime.now(timezone.utc),updated_at=datetime.now(timezone.utc))
     assert value.canonical_skill_id=='language.sql'
     assert value.skill_id=='skill:sql'
+
+
+def withdrawal(**updates):
+    from app.schemas.capabilities import CapabilityWithdrawal
+    return CapabilityWithdrawal(**{"expected_version": 1, "mutation_id": "undo-one", **updates})
+
+
+def test_withdrawing_the_only_description_removes_the_declaration(repo):
+    saved = repo.create("alice", payload())
+    row = saved["declarations"][0]
+    undone = repo.withdraw("alice", withdrawal(declaration_id=row["id"], contribution_id=row["contributions"][0]["id"]))
+    assert undone["declarations"] == [] and undone["version"] == 2
+    assert repo.current("bob")["declarations"] == []
+
+
+def test_withdrawing_one_of_several_descriptions_keeps_the_rest(repo):
+    first = repo.create("alice", payload())
+    row = first["declarations"][0]
+    second = repo.create("alice", payload(expected_version=1, mutation_id="add-two", mode="attach", attach_to_id=row["id"],
+        description="I also built a synthetic dashboard."))
+    added = second["declarations"][0]["contributions"][1]
+    undone = repo.withdraw("alice", withdrawal(expected_version=2, declaration_id=row["id"], contribution_id=added["id"]))
+    kept = undone["declarations"][0]
+    assert [part["description"] for part in kept["contributions"]] == ["I cleaned synthetic tabular data using pandas."]
+    assert kept["description"] == "I cleaned synthetic tabular data using pandas."
+
+
+def test_withdrawal_is_idempotent_scoped_to_the_owner_and_checks_the_version(repo):
+    saved = repo.create("alice", payload())
+    row = saved["declarations"][0]
+    body = withdrawal(declaration_id=row["id"], contribution_id=row["contributions"][0]["id"])
+    assert repo.withdraw("alice", body) == repo.withdraw("alice", body)
+    # Bob cannot remove Alice's description, and an unknown one changes nothing.
+    other = repo.withdraw("bob", withdrawal(mutation_id="bob-undo", expected_version=0, declaration_id=row["id"], contribution_id="x"))
+    assert other["version"] == 0
+    with pytest.raises(CapabilityConflict):
+        repo.withdraw("alice", withdrawal(mutation_id="stale", expected_version=1, declaration_id=row["id"], contribution_id="x"))
+
+
+def test_withdrawal_route(client):
+    headers = {"Authorization": "Bearer alice"}
+    created = client.post("/api/v1/profile/capabilities", headers=headers, json={"expected_version": 0, "mutation_id": "a1", "name": "SQL", "description": "Wrote joins.", "mode": "new"}).json()
+    row = created["declarations"][0]
+    response = client.post("/api/v1/profile/capabilities/withdrawal", headers=headers, json={"expected_version": 1, "mutation_id": "u1", "declaration_id": row["id"], "contribution_id": row["contributions"][0]["id"]})
+    assert response.status_code == 200 and response.json()["declarations"] == []
+    assert client.post("/api/v1/profile/capabilities/withdrawal", json={"expected_version": 1, "mutation_id": "u2", "declaration_id": "x", "contribution_id": "y"}).status_code == 401

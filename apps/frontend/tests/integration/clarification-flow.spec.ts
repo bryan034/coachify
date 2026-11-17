@@ -21,7 +21,7 @@ test('confirmed Career targets drive saved project, work and skill clarification
  const initialContext=await confirmCanonicalGoal(page,account,target);
  expect(initialContext).toMatchObject({id:targetId,confirmed:true,role:'Synthetic data analyst'});
  await page.reload();
- await expect(page.getByRole('region',{name:'Goal confirmation for CV review'})).toHaveCount(0);
+ await expect(page.getByRole('region',{name:'Goal confirmation for CV review'})).toContainText('Goal confirmed.');
  expect(await (await account.get('/api/v1/career/goals/current/confirmed-context')).json()).toEqual(initialContext);
 
  await page.goto('/cv');await openCvReviewTools(page);
