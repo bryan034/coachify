@@ -155,9 +155,16 @@ CV context is read through its owner-authenticated API. The Career projection ha
 
 ## Role competence targets
 
-Career prepares each skill's `competence_target` (level, basis, explanation, public source URLs) on the same 1–10 competence scale as CV: 1 not competent, 5 independent with understanding, 10 the most complex work. Description-based defaults are 5 for familiarity/unstated expectations, 3 for basic/beginner, 7 for advanced/proficient/complex, and 9 for expert/mastery.
+Career prepares each skill's `competence_target` (level, basis, explanation, public source URLs) on the same 1–10 competence scale as CV: 1 not competent, 5 independent with understanding, 10 the most complex work. The level is scored deterministically in `app/domain/competence.py`, whose ranking tables hold every weight:
 
-After public research, a model stage rates every non-user-declared goal skill using public role metadata and validated findings. It returns a whole-number level, rationale and finding references, persisted in `intelligence.skill_levels`. No CV, private chat or full JD text enters this rating call. Explicit employer expectations are a floor; otherwise research determines the target. Expired research is ignored. Rating failure preserves completed research and description-based targets; cached summary rebuilds reuse saved ratings without another call. These remain planning estimates, never employer pass marks. Assessment pins goal/research versions and owns the comparison.
+- Baseline from the role band, matched on seniority level then title: internship 3, entry/graduate 4, mid 5, senior 7, lead/staff/manager 8, principal/director 9; otherwise by employment type (full-time or contract 5, part-time 4, internship 3, unknown 5).
+- Skill adjustments: essential (required or preferred) +1, nice to have −1; named in the role title +1; stated experience under 12 months −1, 24–59 months +1, 60+ months +2.
+- Research adjustments (fresh research only): discussed in findings from 3+ distinct public sources +1; mentioned in interview findings +1. The research model's rating can then move the score by at most one level, and only when it cites findings.
+- Employer-stated wording bounds the result: expert 9, advanced/proficient 7 and intermediate 5 are floors; beginner/basic is a ceiling of 3. Other origins state no bound.
+
+Basis is `job_description` when a stated bound sets the level, `research` when research supplied cited sources, otherwise `inferred`. The explanation lists each contribution. Saving a goal reuses a skill's saved target only when its wording, origin, priority, proficiency, experience and the goal's role, seniority and employment type are unchanged.
+
+After public research, the rating model stage still runs for every non-user-declared goal skill using public role metadata and validated findings, persisted in `intelligence.skill_levels`. No CV, private chat or full JD text enters this rating call. Expired research is ignored. Rating failure preserves completed research and the deterministic targets; cached summary rebuilds reuse saved ratings without another call. These remain planning estimates, never employer pass marks. Assessment pins goal/research versions and owns the comparison.
 
 The canonical `GET /goals/current`, workspace and Assessment handoff reads use the
 same calibrated target projection. Reading the current goal cannot disagree with

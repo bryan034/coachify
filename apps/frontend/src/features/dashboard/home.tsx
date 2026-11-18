@@ -135,8 +135,9 @@ function NextStep({ step, session, after, workspace, reload, show }: { step: Ste
 /* ---------- Cards ---------- */
 const matchWords = { supported: 'Have', covered: 'Have', partial: 'Partial', confirmed_shortfall: 'Gap', uncertain: 'Unknown' } as const;
 const matchPill = { supported: 'have', covered: 'have', partial: 'part', confirmed_shortfall: 'gap', uncertain: 'unk' } as const;
-const importanceLabel = (priority?: string) => priority === 'required' ? 'Essential' : priority === 'preferred' ? 'Important' : 'Nice to have';
-const priorityRank = (priority?: string) => priority === 'required' ? 0 : priority === 'preferred' ? 1 : 2;
+const isEssential = (priority?: string) => priority === 'required' || priority === 'preferred';
+const importanceLabel = (priority?: string) => isEssential(priority) ? 'Essential' : 'Nice to have';
+const priorityRank = (priority?: string) => isEssential(priority) ? 0 : 1;
 const Pencil = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>;
 
 /** Goal match reads the same saved comparison as Career Goal; nothing is recomputed here. */
@@ -169,10 +170,10 @@ function GoalMatch({ section, skills, retry, comparison }: { section: Section<Cu
      <div className="ws-divider"/>
      <h3 style={{ fontSize: 15 }}>Top {gaps.length === 1 ? 'skill' : `${gaps.length}`} to strengthen</h3>
      <div className="ws-gaps-head"><span className="n"/><span className="gname">Skill</span>
-      <span className="ws-colh c-imp" tabIndex={0} aria-describedby="def-imp">Importance to the role<span className="ws-q" aria-hidden="true">?</span><span className="ws-tip" role="tooltip" id="def-imp"><b>Essential:</b> listed as required in the job description.<br/><b>Important:</b> preferred, or mentioned often across sources.<br/><b>Nice to have:</b> mentioned once or inferred by elo.</span></span>
+      <span className="ws-colh c-imp" tabIndex={0} aria-describedby="def-imp">Importance to the role<span className="ws-q" aria-hidden="true">?</span><span className="ws-tip" role="tooltip" id="def-imp"><b>Essential:</b> listed as required or preferred in the job description, or mentioned often across sources.<br/><b>Nice to have:</b> mentioned once or inferred by elo.</span></span>
       <span className="ws-colh c-lvl" tabIndex={0} aria-describedby="def-lvl">Your level<span className="ws-q" aria-hidden="true">?</span><span className="ws-tip" role="tooltip" id="def-lvl"><b>Have:</b> your CV and answers show you’ve used it at the level the role needs.<br/><b>Partial:</b> some evidence, but not yet at that level.<br/><b>Gap:</b> no evidence yet.<br/><b>Unknown:</b> not enough detail to judge.</span></span>
      </div>
-     <ol className="ws-gaps">{gaps.map((skill, index) => { const m = matches[skill.item_id!] as keyof typeof matchWords; return <li key={skill.item_id}><span className="n">{index + 1}</span><span className="gname">{skill.name}</span><span className="c-imp"><span className={`ws-pill ${skill.priority === 'required' ? 'ess' : 'imp'}`}>{importanceLabel(skill.priority)}</span></span><span className="c-lvl"><span className={`ws-pill ${matchPill[m]}`}>{matchWords[m]}</span></span></li>; })}</ol>
+     <ol className="ws-gaps">{gaps.map((skill, index) => { const m = matches[skill.item_id!] as keyof typeof matchWords; return <li key={skill.item_id}><span className="n">{index + 1}</span><span className="gname">{skill.name}</span><span className="c-imp"><span className={`ws-pill ${isEssential(skill.priority) ? 'ess' : 'imp'}`}>{importanceLabel(skill.priority)}</span></span><span className="c-lvl"><span className={`ws-pill ${matchPill[m]}`}>{matchWords[m]}</span></span></li>; })}</ol>
     </>}
     {comparison.result && !['available', 'no_findings'].includes(comparison.result.research_coverage) && <p className="ws-sub">Partial comparison: interview research is {comparison.result.research_coverage}.</p>}
    </> : <>

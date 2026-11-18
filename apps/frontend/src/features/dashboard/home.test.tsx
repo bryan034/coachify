@@ -63,6 +63,19 @@ test('Goal match counts the saved comparison, lists the top skills to strengthen
  expect(within(match).getByText(/Based on/)).toHaveTextContent('Based on 1 skill in your profile');
 });
 
+test('Goal match ranks required and preferred skills equally within the same gap status', async () => {
+ const orderedSkills = [skills[2], skills[0], skills[1], { ...skills[0], item_id: 'd', name: 'Python' }];
+ stub({ ...skillsReady, '/career/goals/current': goal(orderedSkills), '/assessments/current': comparison({
+  a: 'confirmed_shortfall', b: 'confirmed_shortfall', c: 'confirmed_shortfall', d: 'confirmed_shortfall',
+ }) });
+ render(<ProfileProvider><HomeDashboard /></ProfileProvider>);
+ const match = await screen.findByRole('article', { name: /Goal match/ });
+ await within(match).findByRole('heading', { name: 'Top 3 to strengthen' });
+ const rows = within(match).getAllByRole('listitem');
+ expect(rows.map(row => row.querySelector('.gname')!.textContent)).toEqual(['Excel', 'SQL', 'Testing']);
+ expect(within(match).getAllByText('Essential', { selector: '.ws-pill.ess' })).toHaveLength(3);
+});
+
 test('a failed service is reported where it belongs and never counted as done or as next', async () => {
  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/career/goals/current') ? new Response(JSON.stringify({ detail: 'Career service unavailable.' }), { status: 503 }) : new Response(JSON.stringify(liveData(url)))));
  render(<ProfileProvider><HomeDashboard /></ProfileProvider>);

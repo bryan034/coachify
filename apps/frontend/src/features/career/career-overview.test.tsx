@@ -25,7 +25,7 @@ it('shows the role header, skills under their category, and keeps refinement and
  expect(screen.getByRole('link',{name:'Refine goal'})).toHaveAttribute('href','/career-goal/chat?refine=1');
  fireEvent.click(screen.getByRole('button',{name:/Set a new goal/}));expect(push).toHaveBeenCalledWith('/career-goal?new=1');
  expect(row('SQL').closest('section')!.querySelector('h3')).toHaveTextContent('Data & analytics');expect(within(row('SQL')).getByText('Essential')).toBeVisible();
- expect(row('Teamwork').closest('section')!.querySelector('h3')).toHaveTextContent('Communication & leadership');expect(within(row('Teamwork')).getByText('Important')).toBeVisible();
+ expect(row('Teamwork').closest('section')!.querySelector('h3')).toHaveTextContent('Communication & leadership');expect(within(row('Teamwork')).getByText('Essential')).toBeVisible();
  expect(screen.getByRole('navigation',{name:'How the pages connect'})).toHaveTextContent('Career Goal→Skills Profile→Roadmap');
  expect(vi.mocked(careerApi).mock.calls.every(call=>!call[2]?.method)).toBe(true);
 });
@@ -99,7 +99,7 @@ it('labels advisory or unknown importance without relabelling it as required',()
  expect(screen.queryByText('Essential')).not.toBeInTheDocument();
 });
 it('groups by the categories the backend sent, most important first, with Other last',()=>{
- const skills=[{...extraction.skills[1],name:'Docker',item_id:'docker'},{...extraction.skills[0],name:'Python',item_id:'python'},{...extraction.skills[0],name:'Mystery',item_id:'mystery'}];
+ const skills=[{...extraction.skills[1],name:'Docker',item_id:'docker',priority:'unspecified' as const},{...extraction.skills[0],name:'Python',item_id:'python'},{...extraction.skills[0],name:'Mystery',item_id:'mystery'}];
  render(<SkillsNeeded skills={skills} categories={{Docker:'Technical coding',Python:'Technical coding'}}/>);
  expect(screen.getAllByRole('heading',{level:3}).map(h=>h.textContent)).toEqual(['Technical coding','Other skills']);
  expect(Array.from(document.querySelectorAll('.ws-sk-name b')).map(node=>node.textContent)).toEqual(['Python','Docker','Mystery']);
