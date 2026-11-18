@@ -59,12 +59,14 @@ it('groups interview findings by round, keeping process-wide facts as headlines'
   finding('f0000000000000010','recruitment_stages','Three stages are reported.'),
   finding('f0000000000000011','round_format','Two timed coding problems.',{round_number:1,round_name:'Online assessment'}),
   finding('f0000000000000012','interview_questions','Reverse a linked list.',{round_number:1,round_name:'Online assessment'}),
-  finding('f0000000000000013','preparation_topics','Revise OOP basics.',{round_number:2,round_name:'Technical interview'}),
+  finding('f0000000000000013','preparation_topics','Revise OOP basics.',{round_number:4,round_name:'Technical interview'}),
  ]);
  render(<OpportunityIntelligence goalId="goal" version={1} selectionVersion={2}/>);
  const headlines=await screen.findByRole('list',{name:'Interview headline facts'});
  expect(within(headlines).getByText('Three stages are reported.')).toBeVisible();
  expect(screen.getByText('Sources describe 2 rounds.')).toBeVisible();
+ // Source round numbers can skip; the badges count the rounds shown.
+ expect([...document.querySelectorAll('.round-num')].map(n=>n.textContent)).toEqual(['1','2']);
  expect(screen.queryByRole('button',{name:/Online assessment/})).not.toBeInTheDocument();
  expect(screen.getByText('Reverse a linked list.')).toBeVisible();
  expect(screen.getByText('Revise OOP basics.')).toBeVisible();

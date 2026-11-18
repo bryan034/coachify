@@ -58,7 +58,7 @@ class OpportunityStore:
         row={'_id':identifier,'kind':'opportunity_job','owner':owner,'goal_id':goal.id,'goal_version':goal.version,'selection':selection,'session':session,'run':run,
              'digest':digest,'public':public,'context':context.model_dump(mode='json'),'status':'pending' if pending or summary_pending else cached.intelligence.status,
              'finished':not (pending or summary_pending),'prefetched':bool(seed),'queries_planned':bool((seed or {}).get('queries_planned')),'categories':categories,'sources':sources,'queries':(seed or {}).get('queries',{}),'evidence':(seed or {}).get('evidence',{}),'history':(seed or {}).get('history',{}),
-             'retained_sources':retained,'requested':pending,'skills':rating_skills(goal),'skill_levels':[v.model_dump(mode='json') for v in cached.intelligence.skill_levels] if cached else [],'research_id':cached.id if cached else None,'created_at':now(),'updated_at':now(),'next_attempt_at':now(), 'summary':cached.intelligence.summary.model_dump() if cached else {}}
+             'retained_sources':retained,'requested':pending,'skills':rating_skills(goal),'skill_levels':[v.model_dump(mode='json') for v in cached.intelligence.skill_levels] if cached and not pending else [],'research_id':cached.id if cached else None,'created_at':now(),'updated_at':now(),'next_attempt_at':now(), 'summary':cached.intelligence.summary.model_dump() if cached else {}}
         waits=(seed or {}).get('waits',{})
         if waits and pending:
             active_waits={category:until for category,until in waits.items() if category in pending and until>now()}

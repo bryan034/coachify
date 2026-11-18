@@ -102,8 +102,20 @@ def compatibility(categories,sources=()):
 
 def rating_skills(goal):
     """Skill names and stated expectations only; never the job text, CV or user notes."""
-    return [{'name':s.name,'priority':s.priority,'stated_proficiency':s.required_proficiency}
+    return [{'name':s.name,'priority':s.priority,'stated_proficiency':s.required_proficiency,'required_experience_months':s.required_experience_months}
             for s in goal.skills if s.origin!='user_declaration'][:60]
+
+
+def weighted_skills(skills,public,categories):
+    """Rating input: each skill with elo's weighted reference score and the weights behind it."""
+    from types import SimpleNamespace
+    from app.domain.competence import reference
+    role=SimpleNamespace(**{k:public.get(k) for k in ('role','seniority_level','employment_type')})
+    rows=[]
+    for s in skills:
+        level,factors=reference(SimpleNamespace(name=s['name'],priority=s.get('priority'),required_experience_months=s.get('required_experience_months')),role,categories)
+        rows.append({**s,'reference_level':level,'reference_factors':factors})
+    return rows
 
 
 def validated_skill_levels(output,skills,finding_ids):

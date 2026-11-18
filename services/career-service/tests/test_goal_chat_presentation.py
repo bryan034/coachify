@@ -186,7 +186,9 @@ def test_followup_is_scoped_cited_and_never_exports_conversation(monkeypatch,top
             assert 'Example Analyst' in searches[0] and 'location' in searches[0]
             assert 'private' not in searches[0] and '@' not in searches[0]
             assert 'https://example.test/job' in result.reply
-            assert events==['understanding_question','searching_question','answering_question','saving_question_findings']
+            # The passage names neither the role nor an office location, so it may
+            # answer as public context but is never saved as a verified job fact.
+            assert events==['understanding_question','searching_question','answering_question']
             assert len(checks)>=3
     asyncio.run(run())
 

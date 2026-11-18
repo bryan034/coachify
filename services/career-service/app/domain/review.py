@@ -68,10 +68,14 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
             item['correction'] = 'extracted' if extracted else old.get(item[key], {}).get('correction', 'user') if comparable == original else 'user'
     result=JDExtraction.model_validate(data)
     from app.domain.competence import target_for
+    # A target depends on the skill's wording, importance and experience and on the goal's role band;
+    # untouched skills keep their saved target, any change to those inputs recomputes it.
+    role_same=previous is not None and all(getattr(previous,key)==getattr(result,key) for key in ('role','seniority_level','employment_type'))
     for skill in result.skills:
         prior=old.get(skill.item_id)
-        unchanged=prior and all(getattr(skill,key)==prior.get(key) for key in ('name','evidence','context','required_proficiency'))
-        skill.competence_target=prior.get('competence_target') if unchanged and not extracted else target_for(skill)
+        unchanged=role_same and prior and all(getattr(skill,key)==prior.get(key) for key in
+            ('name','evidence','context','origin','priority','required_proficiency','required_experience_months'))
+        skill.competence_target=prior.get('competence_target') if unchanged and not extracted else target_for(skill,goal=result)
     # Revalidate retained nested target dictionaries as well as freshly derived ones.
     result=JDExtraction.model_validate(result.model_dump(mode='json'))
     return result

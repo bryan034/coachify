@@ -253,7 +253,7 @@ def test_blocked_or_unsupported_job_page_has_fallback(status,content_type):
 def test_robots_and_redirect_limits():
     seen=[]
     def fetch(url,deadline):seen.append(url);return 200,{},b'User-agent: *\nDisallow: /'
-    with patch('socket.getaddrinfo',public_dns),pytest.raises(ValueError,match='restricts'):
+    with patch('socket.getaddrinfo',public_dns),pytest.raises(job_url.AccessBlocked,match='could not be extracted'):
         job_url.import_url('https://example.test/job',fetch)
     assert len(seen)==1
     with pytest.raises(ValueError,match='too many'):
@@ -310,7 +310,7 @@ def test_redirect_destination_robots_is_checked_before_job_content():
         if url=='https://example.test/job':return 302,{'location':'https://other.test/job'},b''
         if url=='https://other.test/robots.txt':return 200,{},b'User-agent: *\nDisallow: /job'
         raise AssertionError('blocked destination job must not be downloaded')
-    with patch('socket.getaddrinfo',public_dns),pytest.raises(ValueError,match='restricts'):
+    with patch('socket.getaddrinfo',public_dns),pytest.raises(job_url.AccessBlocked):
         job_url.import_url('https://example.test/job',fetch)
     assert requested==['https://example.test/robots.txt','https://example.test/job','https://other.test/robots.txt']
 

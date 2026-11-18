@@ -202,12 +202,27 @@ router; grounded answers use at most 768 output tokens, subject to the existing 
 Independent questions omit chat history; follow-ups include only two short recent
 messages. Unrelated tasks are refused. Q&A may perform up to three distinct searches for missing/current public information.
 The router summarises the specific public question into a bounded keyword phrase;
-Python adds the saved employer/role/location and tries public, official-employer and
-candidate-report searches. Empty results or an answering-model `not_found` permit
-the next search; a supported answer stops further searches. New complex-question
-findings are saved only when cited in a validated answer. Exact excerpts/sources
-append to the existing owner/version-linked `question_research` JSON and are reused
-on later turns. Existing research remains readable. Unanswered details stay unknown;
+Python adds the saved employer/role/location (Singapore when no location is saved) to
+the first search. Searches are not limited to one country (Brave `country=ALL`): the
+second search uses a recognised place from the saved location, summary, responsibilities
+or requirements, prioritising explicit base-office wording. Otherwise it searches for
+the employer and role worldwide. The third query adds official careers keywords for
+the listed market. Empty results or an answering-model `not_found`
+permit the next search; a supported answer stops further searches.
+Saved information is checked first. Salary/location lookups answer without a model
+or search from JD details or verified findings, and search only when none exist.
+Retrieved passages are checked deterministically (`app/domain/source_scope.py`):
+a passage must match the listed market, employer, core role words and question topic
+to qualify as a verified job fact. Compensation passages need an amount, and dated
+passages must be within three years. For Singapore goals, evidence of an overseas
+market prevents verification. Only verified passages are saved (`scope=exact`), and the store re-checks them. Unverified passages,
+including other-country sources (`scope=related_location`), may inform an answer as
+labelled context but are never stored; answers name the country a figure describes and
+keep its original currency. Foreign monetary figures must appear in the facts cited
+by the reply.
+Exact excerpts/sources append to the existing owner/version-linked
+`question_research` JSON and are reused on later turns; records saved before
+verification (`saved-question-evidence-v1`) are no longer served. Existing research remains readable. Unanswered details stay unknown;
 this path never silently edits the goal. JD chat history remains temporary browser memory.
 
 Provider rejections include safe `provider_error` metadata: HTTP status, known

@@ -28,7 +28,7 @@ from .store import OpportunityStore
 from .sources import pool,retain_useful,merge_sources,category_sources
 from .queries import ACTIVITIES,planned_queries
 from app.domain.review import MAPPING_VERSION
-from .domain import whitespace,public_opportunity,validate_claims,summary_input,dedupe_findings,supported_claims,validated_skill_levels
+from .domain import whitespace,public_opportunity,validate_claims,summary_input,dedupe_findings,supported_claims,validated_skill_levels,weighted_skills
 
 logger=logging.getLogger('uvicorn.error.opportunity')
 
@@ -297,7 +297,8 @@ class OpportunityEngine:
     async def rate_skills(self,state):
         """Rate the level the role needs in each goal skill from the validated findings.
 
-        Optional enrichment: any model failure leaves the description-based targets in place.
+        The model decides each level, guided by elo's weighted reference score for the skill.
+        Optional enrichment: any model failure leaves the weighted reference targets in place.
         """
         job=await self.job(state);skills=job.get('skills') or []
         categories={k:CategoryResult.model_validate(v) for k,v in job['categories'].items()}
@@ -305,7 +306,8 @@ class OpportunityEngine:
         if not skills or not job.get('requested') or any(v.status=='pending' for v in categories.values()):return {}
         findings=[{k:f[k] for k in ('id','category','field','value','confidence','scope')} for f in summary_input(categories)]
         public=job['public'];ids={f['id'] for f in findings}
-        data={'opportunity':{k:public.get(k) for k in ('company','role','field','location','seniority_level','employment_type')},'skills':skills,'findings':findings}
+        data={'opportunity':{k:public.get(k) for k in ('company','role','field','location','seniority_level','employment_type')},
+              'skills':weighted_skills(skills,public,categories),'findings':findings}
         try:
             output=await self.generate(job,'opportunity_skill_levels',data,lambda value:validated_skill_levels(value,skills,ids))
             levels=validated_skill_levels(output,skills,ids)
@@ -313,7 +315,7 @@ class OpportunityEngine:
             # Never let this enrichment fail or re-run the research: an unhandled error here would
             # make durable recovery repeat the whole job. Cancellation still propagates.
             logger.warning('node=opportunity_skill_levels skipped error_code=%s',getattr(error,'code',type(error).__name__))
-            return {}
+            levels=[]
         await thread(self.store.update,job['_id'],job['worker_token'],skill_levels=levels)
         return {}
 

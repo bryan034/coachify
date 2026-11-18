@@ -19,7 +19,7 @@ import { LEVEL_COLORS, LEVEL_LABELS, levelStatus, namesSkill, type LevelStatus }
 import { TalkItThrough, type TalkSkill } from '@/features/assessment/talk-it-through';
 import { PageFlow } from '@/components/ui/page-flow';
 import { loadRoadmap, loadSkills, useSection, type ProfileLevel } from '@/lib/api/workspace-summary';
-import { ProcessingCard, SkeletonRows, type ProcessingStep } from '@/components/ui/processing-card';
+import { ProcessingCard, type ProcessingStep } from '@/components/ui/processing-card';
 import type { Requirement } from '@/features/roadmap/types';
 import { formatDayMonthYear } from '@/lib/format';
 import { PageSkeleton } from '@/components/ui/workspace-ui';
@@ -57,7 +57,8 @@ export function CareerGoalHome({view='skills'}:{view?:GoalView}={}){
 function originLabel(item:{correction?:string;origin?:string}){
  return item.correction==='user'||item.origin==='user_declaration'?'Your refinement':item.origin==='generated_guidance'?'AI planning suggestion':item.origin==='market_research'?'From sampled job listings':'From the job description';
 }
-const priorityOrder:ReviewSkill['priority'][]=['required','preferred','unspecified','conflicting','suggested'];
+// Required and preferred skills are both Essential, so they rank together.
+const priorityRank:Record<ReviewSkill['priority'],number>={required:0,preferred:0,unspecified:1,conflicting:2,suggested:3};
 function RequirementSources({urls=[]}:{urls?:string[]}){
  const links=urls.map(sourceLink).filter(link=>link!==null);
  return links.length?<p>{links.map((link,i)=><a key={i} href={link.url} target="_blank" rel="noopener noreferrer">{link.domain} ↗ </a>)}</p>:null;
@@ -65,9 +66,9 @@ function RequirementSources({urls=[]}:{urls?:string[]}){
 const sentence=(value:string)=>value.charAt(0).toUpperCase()+value.slice(1);
 
 /** Importance in the page's words. Unstated importance that elo inferred is marked as inferred. */
-type Importance='essential'|'important'|'nice'|'unclear';
-const importanceLabels:Record<Importance,string>={essential:'Essential',important:'Important',nice:'Nice to have',unclear:'Conflicting requirements'};
-const skillImportance=(skill:ReviewSkill):Importance=>skill.priority==='required'?'essential':skill.priority==='preferred'?'important':skill.priority==='conflicting'?'unclear':'nice';
+type Importance='essential'|'nice'|'unclear';
+const importanceLabels:Record<Importance,string>={essential:'Essential',nice:'Nice to have',unclear:'Conflicting requirements'};
+const skillImportance=(skill:ReviewSkill):Importance=>skill.priority==='required'||skill.priority==='preferred'?'essential':skill.priority==='conflicting'?'unclear':'nice';
 const inferredImportance=(skill:ReviewSkill)=>(skill.priority_origin??skill.origin)==='generated_guidance';
 const tidy=(value:number)=>Math.round(value*10)/10;
 
@@ -137,8 +138,8 @@ export function SkillsNeeded({skills,categories,outcomes,profileLevels,evidence,
  const [filter,setFilter]=useState<'all'|LevelStatus>('all');
  const rows=new Map<ReviewSkill,Row>(skills.map(skill=>{const outcome=skill.item_id?outcomes?.[skill.item_id]:undefined,{level,target}=goalSkillLevel(skill,outcome,profileLevels);return [skill,{skill,outcome,level,target,status:levelStatus(level,target),key:skill.item_id||skill.name,pending:pending(skill)}];}));
  const count=(key:'all'|LevelStatus)=>key==='all'?skills.length:[...rows.values()].filter(row=>row.status===key).length;
- const ordered=[...skills].sort((a,b)=>priorityOrder.indexOf(a.priority)-priorityOrder.indexOf(b.priority)).filter(skill=>filter==='all'||rows.get(skill)!.status===filter);
- const best=(items:ReviewSkill[])=>Math.min(...items.map(skill=>priorityOrder.indexOf(skill.priority)));
+ const ordered=[...skills].sort((a,b)=>priorityRank[a.priority]-priorityRank[b.priority]).filter(skill=>filter==='all'||rows.get(skill)!.status===filter);
+ const best=(items:ReviewSkill[])=>Math.min(...items.map(skill=>priorityRank[skill.priority]));
  const groups=groupSkills(ordered,skill=>skill.name,categories).sort((a,b)=>Number(a.name===OTHER_SKILLS)-Number(b.name===OTHER_SKILLS)||best(a.items)-best(b.items));
  return <section id="priorities" className="ws-panel" aria-labelledby="priorities-title">
   <h2 id="priorities-title">Skills needed</h2>
@@ -157,8 +158,8 @@ export function SkillsNeeded({skills,categories,outcomes,profileLevels,evidence,
 }
 /** Part-to-whole of the goal's own priorities. Every slice is named and counted beside the ring. */
 function PriorityRing({skills}:{skills:ReviewSkill[]}){
- const required=skills.filter(skill=>skill.priority==='required').length,preferred=skills.filter(skill=>skill.priority==='preferred').length;
- const slices=[{label:'Essential',count:required,color:'#34D399'},{label:'Important',count:preferred,color:'#FFFFFF'},{label:'Nice to have or not stated',count:skills.length-required-preferred,color:'#64748B'}].filter(slice=>slice.count>0);
+ const essential=skills.filter(skill=>skill.priority==='required'||skill.priority==='preferred').length;
+ const slices=[{label:'Essential',count:essential,color:'#34D399'},{label:'Nice to have or not stated',count:skills.length-essential,color:'#64748B'}].filter(slice=>slice.count>0);
  if(!skills.length)return null;
  let start=0;
  return <div className="ws-ring-box">
@@ -238,7 +239,7 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   {goal.requirements_need_review&&<p className="notice">Your role context changed. Refine your goal to review which requirements still apply.</p>}
   {working&&view!=='skills'&&<p className="notice" role="status">{waitingText}</p>}
   {view==='skills'&&working&&<ProcessingCard title="Skills needed" intro="elo is working out what this role needs and how your skills compare." progressLabel="Working out the skills needed" steps={processingSteps}
-   footer={<p>{workspace.phase==='waiting_quota'?waitingText:'You can leave this page. elo keeps working, and your skills will be here when it’s done.'}</p>}>{!goal.skills.length&&<SkeletonRows rows={4}/>}</ProcessingCard>}
+   footer={<p>{workspace.phase==='waiting_quota'?waitingText:'You can leave this page. elo keeps working, and your skills will be here when it’s done.'}</p>}></ProcessingCard>}
   {workspace.phase==='research_failed'&&<div className="notice" role="alert"><p>Opportunity research could not finish. Your saved goal remains available.</p><button className="btn ghost sm" disabled={retrying} onClick={()=>void retryResearch()}>{retrying?'Resuming research…':'Retry research'}</button>{retryError&&<p>{retryError}</p>}</div>}
   {view==='skills'&&<>
    {!working&&<EvaluateBanner comparison={comparison} here="/career-goal"/>}

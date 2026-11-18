@@ -25,7 +25,12 @@ class DeepSeekSearch(SourceAPIs):
         query=' '.join(query.split())
         # The documented API limit is 128 Unicode characters. Preserve both the
         # public role/employer prefix and the specific research focus suffix.
-        if len(query)>128:query=query[:79].rsplit(' ',1)[0]+' '+query[-48:].split(' ',1)[-1]
+        if len(query)>128:
+            shortened=query[:79].rsplit(' ',1)[0]+' '+query[-48:].split(' ',1)[-1]
+            # DeepSeek has no country filter: never truncate away the Singapore anchor.
+            if 'singapore' in query.casefold() and 'singapore' not in shortened.casefold():
+                shortened=query[:69].rsplit(' ',1)[0]+' Singapore '+query[-48:].split(' ',1)[-1]
+            query=shortened
         if not query:raise GoalError('The public research query is empty.',422)
         try:
             async with self.client.stream('POST','https://api.deepseek.com/v1/tools/search',

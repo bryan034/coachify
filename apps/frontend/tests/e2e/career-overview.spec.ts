@@ -155,8 +155,8 @@ test('the grouped skill list supports keyboard disclosure, long lists, confirmed
  const rows=page.locator('.ws-skill');
  await expect(rows).toHaveCount(9);
  await expect(page.locator('.ws-cat')).toHaveText(['Product Management','AI']);
- await expect(page.locator('.ws-sk-name > span',{hasText:'Essential'})).toHaveCount(6);
- await expect(page.locator('.ws-sk-name > span',{hasText:'Important'})).toHaveCount(3);
+ await expect(page.locator('.ws-sk-name > span',{hasText:'Essential'})).toHaveCount(9);
+ await expect(page.getByRole('img',{name:'9 skills: 9 essential'})).toBeVisible();
  const first=await rows.nth(0).boundingBox(),second=await rows.nth(1).boundingBox();
  expect(second!.x).toBe(first!.x);expect(second!.y).toBeGreaterThan(first!.y);
  await page.screenshot({path:test.info().outputPath('learning-focus-desktop.png'),fullPage:true});

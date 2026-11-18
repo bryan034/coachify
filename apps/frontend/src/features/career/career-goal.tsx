@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useCareerSession } from './career-session';
 import { Icon } from '@/components/ui/icon';
 import { useProfile } from '@/features/profile/profile-provider';
-import { importCareer, type CareerPreview } from '@/lib/api/career';
+import { importCareer, type CareerPreview, type CareerWorkspace } from '@/lib/api/career';
+import { careerOperation } from '@/lib/api/career-operation';
+import { AgentProgress } from './agent-message';
 import { errorText } from '@/lib/errors';
 
 const methods = [
@@ -16,6 +18,8 @@ const methods = [
 type Method = typeof methods[number]['id'];
 type Draft = { text: string; preview?: CareerPreview };
 const MAX_TEXT = 8_000, MAX_FILE = 10 * 1024 * 1024;
+// Career returns this message whenever a website refuses or blocks automated reading.
+const BLOCKED_SITE = 'could not be extracted from this website';
 const empty = (): Record<Method,Draft> => ({text:{text:''},url:{text:''},document:{text:''}});
 export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
  const { token } = useProfile();
@@ -25,12 +29,15 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
  const [drafts,setDrafts] = useState(()=>{const values=empty();if(jd)values.text={text:jd.text};return values;});
  const [url,setUrl] = useState(()=>typeof window!=='undefined'?new URLSearchParams(window.location.search).get('job_url')||'':''); const [file,setFile] = useState<File>();
  const [error,setError] = useState(''); const [busy,setBusy] = useState(false);
+ const [extracting,setExtracting]=useState(false),[extractError,setExtractError]=useState(''),[extractSteps,setExtractSteps]=useState<string[]>([]);
+ const [extractWait,setExtractWait]=useState('');
+ const extractController=useRef<AbortController|null>(null),extractKey=useRef<{body:string;key:string}|null>(null);
  const controller = useRef<AbortController | null>(null); const request = useRef(0); const input = useRef<HTMLInputElement>(null);
  const active = methods.find(m=>m.id===method)!; const draft=drafts[method];
  const count=Array.from(draft.text).length; const tooLong=count>MAX_TEXT;
  const hasWork=Boolean(url||file||Object.values(drafts).some(d=>d.text));
  const work = useRef(hasWork); work.current=hasWork;
- useEffect(()=>()=>{request.current++;controller.current?.abort();},[]);
+ useEffect(()=>()=>{request.current++;controller.current?.abort();extractController.current?.abort();},[]);
  useEffect(()=>{
   const warning='Your Career Goal preview is temporary. Leave this page and discard it?';
   function unload(event:BeforeUnloadEvent){if(work.current){event.preventDefault();event.returnValue='';}}
@@ -44,12 +51,12 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
   window.addEventListener('beforeunload',unload);document.addEventListener('click',link,true);
   return()=>{window.removeEventListener('beforeunload',unload);document.removeEventListener('click',link,true);};
  },[]);
- function changeMethod(next:Method){request.current++;controller.current?.abort();setBusy(false);setError('');setMethod(next);}
+ function changeMethod(next:Method){extractController.current?.abort();setExtracting(false);setExtractError('');request.current++;controller.current?.abort();setBusy(false);setError('');setMethod(next);}
  function keyboard(event:KeyboardEvent<HTMLButtonElement>,index:number){
   const move=event.key==='ArrowRight'?(index+1)%3:event.key==='ArrowLeft'?(index+2)%3:event.key==='Home'?0:event.key==='End'?2:null;
   if(move===null)return;event.preventDefault();changeMethod(methods[move].id);document.getElementById(`goal-tab-${methods[move].id}`)?.focus();
  }
- function update(text:string){setDrafts(previous=>({...previous,[method]:{...previous[method],text}}));}
+ function update(text:string){setExtractError('');setDrafts(previous=>({...previous,[method]:{...previous[method],text}}));}
  async function startImport(event?:FormEvent,selectedFile?:File){
   event?.preventDefault();if(method==='text'||(busy&&!selectedFile))return;setError('');
   const readingFile=selectedFile||file;
@@ -66,6 +73,19 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
   }catch(cause){if(sequence===request.current&&!abort.signal.aborted)setError(errorText(cause, 'Could not import this source. Please retry.'));}
   finally{if(sequence===request.current)setBusy(false);}
  }
+ async function extractGoal(){
+  if(!token||extracting||!draft.text.trim()||tooLong)return;
+  const body=JSON.stringify({text:draft.text,source_url:draft.preview?.source_url||null,source_kind:method});
+  if(extractKey.current?.body!==body)extractKey.current={body,key:crypto.randomUUID()};
+  extractController.current?.abort();const abort=new AbortController();extractController.current=abort;
+  setExtracting(true);setExtractError('');setExtractSteps([]);setExtractWait('');
+  try{
+   await careerOperation<CareerWorkspace>('/workspace/jd',token,{signal:abort.signal,method:'POST',headers:{'Idempotency-Key':extractKey.current.key},body},job=>{setExtractWait(job.status==='waiting_quota'?(job.limit_scope==='user'?'Waiting for the AI service to resume. Extraction continues automatically.':'Waiting for the research service to resume. Extraction continues automatically.'):'');setExtractSteps(previous=>[...new Set([...previous,...(job.activities||[])])]);});
+   if(abort.signal.aborted)return;
+   chooseJD(null);router.push('/career-goal/chat?source=jd');
+  }catch(cause){if(!abort.signal.aborted)setExtractError(errorText(cause,'Could not extract a career goal from this description.'));}
+  finally{if(!abort.signal.aborted)setExtracting(false);}
+ }
  function clear(){if(hasWork&&!window.confirm('Clear this temporary input and preview?'))return;request.current++;controller.current?.abort();setBusy(false);setError('');setDrafts(p=>({...p,[method]:{text:''}}));if(method==='url')setUrl('');if(method==='document'){setFile(undefined);if(input.current)input.current.value='';}}
  return <section className="page on career-goal">
   <div className="ptitle"><div><h1>Career Goal</h1><p className="small goal-lede">Bring a job description that interests you. Start with its text, a link or a document.</p></div><div className="goal-title-actions">{!replacing&&<button type="button" className="btn ghost" onClick={()=>router.push('/career-goal/chat')}>Continue career conversation</button>}<button type="button" className="btn ghost" onClick={()=>{chooseJD(null);router.push('/career-goal/discovery');}}>Explore careers</button></div></div>
@@ -78,7 +98,11 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
      {(method==='url'||!!error)&&<button className="btn pri" disabled={busy||(method==='url'?!url:!file)}>{busy?'Preparing preview…':method==='url'?'Import job page':'Retry reading document'}</button>}
     </form>}
     {busy&&<p role="status" className="goal-status">Preparing a temporary preview. You can switch methods to cancel.</p>}
-    {error&&<div role="alert" className="goal-error"><p>{error}</p><p className="small">Your current input is still here. Retry, paste the description or choose another source.</p>{method==='url'&&<div className="row"><button type="button" className="btn ghost sm" onClick={()=>changeMethod('text')}>Paste description</button><button type="button" className="btn ghost sm" onClick={()=>changeMethod('document')}>Upload document</button></div>}</div>}
+    {extracting&&<div role="status" className="goal-status"><p>{extractWait||'Extracting your career goal. This can take a moment.'}</p><AgentProgress steps={extractSteps}/></div>}
+    {extractError&&<div role="alert" className="goal-error"><p>{extractError}</p><p className="small">Your description is still here. Retry, edit it or choose another source.</p></div>}
+    {error&&(method==='url'&&error.includes(BLOCKED_SITE)
+     ?<div role="alert" className="goal-error"><p>The information could not be extracted from this website.</p><p className="small">Open the job listing, copy its description and paste it instead.</p><div className="row"><button type="button" className="btn pri sm" onClick={()=>changeMethod('text')}>Paste description</button></div></div>
+     :<div role="alert" className="goal-error"><p>{error}</p><p className="small">Your current input is still here. Retry, paste the description or choose another source.</p>{method==='url'&&<div className="row"><button type="button" className="btn ghost sm" onClick={()=>changeMethod('text')}>Paste description</button><button type="button" className="btn ghost sm" onClick={()=>changeMethod('document')}>Upload document</button></div>}</div>)}
     {(method==='text'||draft.text)&&<div className="goal-preview">
 
      <div className="row between"><label htmlFor="job-description">{method==='text'?'Job description':'Review and edit the preview'}</label><span id="goal-count" className={`small ${tooLong?'error':''}`}>{count.toLocaleString()} / 8,000 characters</span></div>
@@ -86,7 +110,7 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
      <p id="goal-input-note" className="small">{tooLong?'This description exceeds 8,000 characters. Shorten it before using it in a future analysis; your text has not been cut off.':'Keep the original wording, bullet points and line breaks. Review imported content for missing or unrelated sections.'}</p>
      {draft.preview?.notices.map((notice,index)=><p key={index} className="small goal-notice">{notice}</p>)}
     </div>}
-    <div className="row between goal-actions"><button type="button" className="btn ghost sm" disabled={!draft.text&&!(method==='url'?url:method==='document'?file:false)} onClick={clear}>Clear input</button><button type="button" className="btn pri" disabled={!draft.text.trim()||tooLong||busy} onClick={()=>{chooseJD({text:draft.text,kind:method,name:draft.preview?.source_name||'Pasted job description',url:draft.preview?.source_url});router.push('/career-goal/chat?source=jd');}}>Extract career goal</button></div>
+    <div className="row between goal-actions"><button type="button" className="btn ghost sm" disabled={!draft.text&&!(method==='url'?url:method==='document'?file:false)} onClick={clear}>Clear input</button><button type="button" className="btn pri" disabled={!draft.text.trim()||tooLong||busy||extracting} onClick={()=>void extractGoal()}>{extracting?'Extracting career goal…':extractError?'Retry extraction':'Extract career goal'}</button></div>
    </div>
   </div></div>
  </section>;

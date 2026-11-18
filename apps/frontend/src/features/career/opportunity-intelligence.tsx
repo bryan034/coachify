@@ -46,7 +46,8 @@ function InterviewRounds({findings,links,generated}:{findings:IntelligenceFindin
  const numbers=[...new Set(findings.map(f=>f.round_number).filter((n):n is number=>n!=null))].sort((a,b)=>a-b);
  // Without rounds, the questions and preparation slots belong to the whole process.
  const otherGeneral=general.filter(f=>!headline.includes(f)&&(numbers.length>0||!slotFields.includes(f.field)));
- const rounds=numbers.map(n=>{const items=findings.filter(f=>f.round_number===n);return {n,name:items.find(f=>f.round_name)?.round_name||`Round ${n}`,items};});
+ // Sources may skip round numbers (e.g. only rounds 1 and 4 are reported), so rounds are shown by position; n stays the source key.
+ const rounds=numbers.map((n,index)=>{const items=findings.filter(f=>f.round_number===n);return {n,position:index+1,name:items.find(f=>f.round_name)?.round_name||`Round ${index+1}`,items};});
  const list=(items:IntelligenceFinding[])=><ul className="round-list">{items.map(f=><li key={f.finding_id}><span><Rich text={f.value}/></span><FindingLabels finding={f}/> {links(f.source_ids)}</li>)}</ul>;
  const slots=(items:IntelligenceFinding[],round:number|null)=><>
   <Slot label="Questions to expect" sourced={items.filter(f=>f.field===roundFields.questions)} generated={generated} round={round} field={roundFields.questions} list={list}/>
@@ -64,7 +65,7 @@ function InterviewRounds({findings,links,generated}:{findings:IntelligenceFindin
   {rounds.length?<><p className="small">{rounds.length===1?'Sources describe one round.':`Sources describe ${rounds.length} rounds.`}</p>
    <ol className="rounds">{rounds.map(round=>{const format=round.items.filter(f=>f.field==='round_format');const other=round.items.filter(f=>![...slotFields,'round_format'].includes(f.field));
     return <li key={round.n} className="round open">
-     <div className="round-head"><span className="round-num" aria-hidden="true">{round.n}</span><span><strong>{round.name}</strong>{format[0]&&<span className="small"><Rich text={format[0].value}/></span>}</span></div>
+     <div className="round-head"><span className="round-num" aria-hidden="true">{round.position}</span><span><strong>{round.name}</strong>{format[0]&&<span className="small"><Rich text={format[0].value}/></span>}</span></div>
      <div className="round-body">
       {format.length>1&&list(format.slice(1))}
       {slots(round.items,round.n)}

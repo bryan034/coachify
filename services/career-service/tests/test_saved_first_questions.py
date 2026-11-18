@@ -5,7 +5,7 @@ from types import SimpleNamespace as NS
 import pytest
 from app.ai.adapter import AIError
 from app.ai.context_contracts import ContextPlan
-from app.domain.question_memory import direct_public_plan,exact_question_findings
+from app.domain.question_memory import direct_public_plan,scoped_question_findings
 from app.repositories.question_memory import QuestionMemory
 from app.repositories.questions import QuestionStore
 from app.schemas.analysis import ResearchSource
@@ -13,7 +13,7 @@ from app.workflows.context_chat import semantic_chat
 from tests.test_goal_chat_presentation import environment
 from tests.test_workspace import flow,ingest,wait,headers,BASE,OWNER,OTHER
 
-SALARY='Synthetic analyst internship salary is SGD 1500 per month.'
+SALARY='Synthetic Example Data Analyst salary in Singapore is SGD 1500 per month.'
 
 
 def test_saved_salary_uses_no_model_or_search_even_when_model_returns_malformed_json(monkeypatch):
@@ -55,7 +55,9 @@ def test_missing_salary_searches_once_saves_exact_evidence_and_reuses_it_next_tu
         assert SALARY in first.reply and SALARY in second.reply
         assert len(searches)==1 and len(saved)==1
         assert saved[0][0].quotes==[SALARY] and saved[0][0].value==SALARY
-        assert 'general context' in first.reply and 'low confidence' in first.reply
+        # Verified for this employer, role and market: saved as an exact job fact
+        # and answered without a model, on both turns.
+        assert saved[0][0].scope=='exact' and '[Source](<https://example.test/salary>)' in first.reply
     asyncio.run(run())
 
 
@@ -99,7 +101,8 @@ def test_direct_question_route_does_not_swallow_edits_mixed_tasks_or_conversion_
 
 def evidence(text=SALARY,url='https://example.test/salary',focus='compensation'):
     source=ResearchSource(source_id='original',platform='other',url=url,evidence=text)
-    return exact_question_findings(focus,[],{'web0':[source.model_dump()]})
+    findings,sources,*_=scoped_question_findings(focus,{'web0':[source.model_dump()]},{'role':'Data Analyst','field':'Data'})
+    return findings,sources
 
 
 def test_salary_reuse_and_json_exposure_survive_new_store_instances(flow):
@@ -134,17 +137,17 @@ def test_salary_reuse_and_json_exposure_survive_new_store_instances(flow):
 def test_concurrent_question_saves_merge_and_keep_immutable_history(flow):
     ingest(flow);wait(flow);client,db,*_=flow;repo=client.app.state.workspace_store;research=client.app.state.research_store
     row=repo.row(OWNER)
-    a=evidence();b=evidence('Synthetic salary is SGD 1800 per month.','https://example.test/second')
+    a=evidence();b=evidence('Data Analyst salary in Singapore is SGD 1800 per month.','https://example.test/second')
     def save(values):return QuestionMemory(repo,research).save(OWNER,row,'compensation',*values)
     with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(save,[a,b]))
     records=QuestionMemory(repo,research).entries(OWNER,row)
-    assert len(records)==1 and {f.value for f in records[0].question_findings}=={SALARY,'Synthetic salary is SGD 1800 per month.'}
+    assert len(records)==1 and {f.value for f in records[0].question_findings}=={SALARY,'Data Analyst salary in Singapore is SGD 1800 per month.'}
     assert len(research.records.get_research(results[0].id).question_findings) in (1,2)
     assert db.interview_research.count_documents({'question_focus':'compensation'})>=2
     # Updating the same source must retain earlier quote bindings too.
-    save(evidence('Synthetic salary is SGD 1600 per month.'))
+    save(evidence('Data Analyst salary in Singapore is SGD 1600 per month.'))
     latest=QuestionMemory(repo,research).entries(OWNER,row)[0]
-    assert {SALARY,'Synthetic salary is SGD 1600 per month.'}<={f.value for f in latest.question_findings}
+    assert {SALARY,'Data Analyst salary in Singapore is SGD 1600 per month.'}<={f.value for f in latest.question_findings}
 
 
 def test_question_memory_rejects_wrong_owner_stale_revision_and_forged_evidence(flow):
@@ -159,3 +162,40 @@ def test_question_memory_rejects_wrong_owner_stale_revision_and_forged_evidence(
     with pytest.raises(GoalError):memory.save(OWNER,row,'compensation',*evidence())
     newer=repo.row(OWNER)
     assert memory.entries(OWNER,newer)==[]
+
+
+def test_store_refuses_unverified_or_foreign_evidence_and_ignores_legacy_records(flow):
+    from app.domain.question_memory import exact_question_findings
+    from app.repositories.goals import GoalError
+    from app.repositories.question_memory import VERIFIED_EVIDENCE
+    ingest(flow);wait(flow);client,db,*_=flow;repo=client.app.state.workspace_store;research=client.app.state.research_store
+    row=repo.row(OWNER);memory=QuestionMemory(repo,research)
+    # Topical but unscoped excerpts (the old saving rule) are refused by the store.
+    foreign=ResearchSource(source_id='au',platform='other',url='https://www.seek.com.au/x',
+                           evidence='Data Analyst salary in Sydney is AUD 5000 per month.')
+    unscoped=exact_question_findings('compensation',[],{'web0':[foreign.model_dump()]})
+    with pytest.raises(GoalError,match='verified'):memory.save(OWNER,row,'compensation',*unscoped)
+    forged=unscoped[0][0].model_copy(update={'scope':'exact'})
+    with pytest.raises(GoalError,match='verified'):memory.save(OWNER,row,'compensation',[forged],unscoped[1])
+    assert memory.entries(OWNER,row)==[]
+    record=memory.save(OWNER,row,'compensation',*evidence())
+    assert record.generation.prompt_version==VERIFIED_EVIDENCE and len(memory.entries(OWNER,row))==1
+    # Records saved before scope verification existed are no longer served.
+    db.interview_research.update_many({'question_focus':'compensation'},{'$set':{'generation.prompt_version':'saved-question-evidence-v1'}})
+    assert memory.entries(OWNER,row)==[]
+    assert not any(item.get('category')=='question_research' for item in
+                   QuestionStore(repo,research).fetch(OWNER,row,'opportunity')[1]['opportunity_findings'])
+
+
+def test_saving_verified_evidence_does_not_promote_legacy_findings(flow):
+    ingest(flow);wait(flow);client,db,*_=flow
+    repo=client.app.state.workspace_store;research=client.app.state.research_store
+    row=repo.row(OWNER);memory=QuestionMemory(repo,research)
+    legacy=memory.save(OWNER,row,'compensation',*evidence())
+    from bson import ObjectId
+    db.interview_research.update_one({'_id':ObjectId(legacy.id)},{'$set':{
+        'generation.prompt_version':'saved-question-evidence-v1'}})
+    fresh='Data Analyst salary in Singapore is SGD 1800 per month.'
+    memory.save(OWNER,row,'compensation',*evidence(fresh,'https://example.test/fresh'))
+    [record]=memory.entries(OWNER,row)
+    assert [finding.value for finding in record.question_findings]==[fresh]

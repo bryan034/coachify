@@ -132,7 +132,7 @@ Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview
 (`/career-goal/interview`) and **About the role** (`/career-goal/role`).
 
 - Skills needed groups skills by the Skills Profile taxonomy, most important group first.
-  Importance is shown by colour (Essential, Important, Nice to have) and marked when elo
+  Importance is shown by colour (Essential, covering required and preferred skills, or Nice to have) and marked when elo
   inferred it. Each row shows the Assessment rubric v1 planning estimate when the comparison
   scored it (10 means your evidence meets the level the role states), otherwise its Have,
   Partial, Gap or Unknown status. Expanding a skill shows why it matters, its importance

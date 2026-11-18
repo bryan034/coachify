@@ -18,7 +18,23 @@ from app.schemas.planner import Workspace
 # The outline and its first week are written in one operation, so it has a longer budget than a single stage.
 OUTLINE_SECONDS=420
 OUTLINE_MODEL_ATTEMPTS=2
-OUTLINE_INSTRUCTIONS='''Create a milestone outline for the user's career goal from the supplied assessment and capacity. Return milestones, prerequisite order, demonstrable outcomes, dates, effort and any beyond-deadline work. Do not create tasks. Also return weeks: one objective for every entry in weekly_capacity through the target date, including rest or contingency weeks, using its week_start. Each objective names the main thing to achieve that week, an expected_outcome the user could observe, estimated_minutes within that week's usable_minutes, the milestone_key it advances (weeks with positive effort must fall inside that milestone's dates; use zero effort for unavailable or post-scope weeks and explain that no additional work is planned) and the gap_ids it works on. A week's objectives for one milestone must not total more than the milestone's estimated_minutes. Later weeks are projections that are refined as the user progresses. Material unknowns must have a diagnostic intent or a confirmation question; do not invent a skill gap. Include routine rules only where the user requested recurring practice; show weekdays, duration, topic progression and difficulty. Keep each combined activity, difficulty and topic title under 12 whitespace-separated words (at most 11), summarising the action. Routine effort is included in its milestone estimate, not additional effort. Keep work within the runway and capacity. Preserve completed work and milestone keys. Exclusions require an exact quote from the user's instruction. Correct all validation errors when supplied.'''
+OUTLINE_INSTRUCTIONS='''Create a milestone outline for the user's career goal from the supplied assessment and capacity. Return milestones, prerequisite order, demonstrable outcomes, dates, effort and any beyond-deadline work. No milestone, checkpoint or routine may start before planning_start, even when its first week_start is earlier. Do not create tasks. Also return weeks: one objective for every entry in weekly_capacity through the target date, including rest or contingency weeks, using its week_start. Each objective names the main thing to achieve that week, an expected_outcome the user could observe, estimated_minutes within that week's usable_minutes, the milestone_key it advances (weeks with positive effort must fall inside that milestone's dates; use zero effort for unavailable or post-scope weeks and explain that no additional work is planned) and the gap_ids it works on. A week's objectives for one milestone must not total more than the milestone's estimated_minutes. Later weeks are projections that are refined as the user progresses. Material unknowns must have a diagnostic intent or a confirmation question; do not invent a skill gap. Include routine rules only where the user requested recurring practice; show weekdays, duration, topic progression and difficulty. Keep each combined activity, difficulty and topic title under 12 whitespace-separated words (at most 11), summarising the action. Routine effort is included in its milestone estimate, not additional effort. Keep work within the runway and capacity. Preserve completed work and milestone keys. Exclusions require an exact quote from the user's instruction. Correct all validation errors when supplied.'''
+
+def clamp_to_start(draft,capacity,completed=()):
+    """Move unfinished milestones, checkpoints and routines that begin before the planning start up to it.
+
+    Week rows start on the configured week day, so the model often dates the first milestone from a
+    week_start that precedes today or the chosen start date. Milestones with completed work keep their dates.
+    """
+    start=capacity.start;finished={s['milestone_key'] for s in completed};moved=set()
+    for milestone in draft.milestones:
+        if milestone.key in finished or milestone.projected_start>=start or milestone.projected_end<start:continue
+        milestone.projected_start=start;moved.add(milestone.key)
+        for checkpoint in milestone.checkpoints:
+            if checkpoint.date<start:checkpoint.date=start
+    for rule in draft.routine_rules:
+        if rule.milestone_key in moved and rule.start_date<start<=rule.end_date:rule.start_date=start
+    return draft
 
 def check_objectives(draft,capacity,omitted_weeks=()):
     """Weekly objectives: one for each week that can hold study, inside its milestone and that week's hours."""
@@ -189,7 +205,7 @@ async def prepare_outline(app,row,account,assess,read_context,*,config=None,inst
     if not report['can_generate']:raise Problem(' '.join(i['message'] for i in report['issues']),409,'generation_blocked')
     context={'current_date':capacity.today.isoformat(),'time_zone':config.time_zone,'goal':source['goal'],
         'assessment':planning_assessment(result),'settings':config.model_dump(mode='json',exclude={'reduced_periods','time_format','goal_unit'}),
-        'runway':{k:report[k] for k in ('calendar','study')},'weekly_capacity':report['weeks'],
+        'planning_start':capacity.start.isoformat(),'runway':{k:report[k] for k in ('calendar','study')},'weekly_capacity':report['weeks'],
         'completed_work':completed,'confirmations':confirmations,'current_outline':state['outline_candidate'] or accepted,
         'instruction':instruction,'user_message':user_message}
     errors=[];previous=None;partial_review=None
@@ -197,7 +213,7 @@ async def prepare_outline(app,row,account,assess,read_context,*,config=None,inst
         request={**context,'attempt':attempt}
         if errors:
             await set_stage(app,row,owner,'correcting');request.update(validation_errors=errors,previous_output=previous)
-        draft=await app.state.model.generate(OutlineDraft,OUTLINE_INSTRUCTIONS,request,max_tokens=PLAN_MAX_TOKENS)
+        draft=clamp_to_start(await app.state.model.generate(OutlineDraft,OUTLINE_INSTRUCTIONS,request,max_tokens=PLAN_MAX_TOKENS),capacity,completed)
         errors=validate_outline(draft,capacity,result,confirmations,completed,user_message,active,authorized_exclusions(state['outline_candidate'] or accepted),require_weeks=True)
         if not errors:break
         previous=draft.model_dump(mode='json')

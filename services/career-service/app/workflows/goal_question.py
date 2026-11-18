@@ -1,4 +1,4 @@
-"""Focused, public-only Brave retrieval for a model-selected goal question."""
+"""Focused, public-only retrieval for a model-selected goal question."""
 import asyncio
 import re
 from app.schemas.analysis import ResearchContext
@@ -33,14 +33,26 @@ def question_queries(title, focus, terms=None):
                 r'\b(?:my|email|phone|password|secret|passport|address|resume|cv)\b', terms, re.I):
             terms=None
     subject=terms or FOCUSES[focus]
-    identity=' '.join(str(title.get(key) or '') for key in ('company','role','location')).strip()[:240]
-    suffixes=('', 'official employer information', 'candidate reports experiences')
-    return list(dict.fromkeys(' '.join((identity,subject,suffix)).strip() for suffix in suffixes))[:MAX_QUESTION_SEARCHES]
+    from app.domain.source_scope import SINGAPORE,target_place
+    company,role=(str(title.get(key) or '').strip() for key in ('company','role'))
+    place=target_place(title)
+    market='Singapore' if place==SINGAPORE else place
+    def query(place, suffix=''):
+        # Fit DeepSeek's query limit without truncating the market or subject.
+        tail=' '.join(part for part in (subject,suffix) if part)
+        place=place[:max(0,126-len(tail))].strip()
+        budget=max(0,127-len(tail)-(len(place)+1 if place else 0))
+        role_prefix=role[:budget].strip()
+        company_prefix=company[:max(0,budget-len(role_prefix)-bool(role_prefix))].strip()
+        return ' '.join(part for part in (company_prefix,role_prefix,place,tail) if part)
+    related=title.get('related_locations') or []
+    queries=(query(market),query(related[0] if related else ''),query(market,'official careers'))
+    return list(dict.fromkeys(' '.join(query.split()) for query in queries))[:MAX_QUESTION_SEARCHES]
 
 
 async def research_question(request, title, focus, check, *, query=None):
     provider = request.app.state.research_client
-    collect = getattr(provider, 'collect_query', None)
+    collect = getattr(provider, 'collect_question_query', None) or getattr(provider, 'collect_query', None)
     if not callable(collect):
         raise GoalError('Public research is unavailable. Your saved goal remains available.', 503)
     context = ResearchContext(**{key: title.get(key) for key in
@@ -71,7 +83,7 @@ async def research_question(request, title, focus, check, *, query=None):
     await check()
     facts = [{'ref': f'web{i}', 'kind': 'public_source',
               'data': {'title': source.title, 'evidence': source.evidence,
-                       'scope': 'Public source; verify exact role, location and dates.'}}
+                       'scope': 'Public source; verify exact employer, role, location and dates.'}}
              for i, source in enumerate(sources) if source.evidence]
     links = {f'web{i}': [source.model_dump(mode='json')] for i, source in enumerate(sources) if source.evidence}
     return facts, links
