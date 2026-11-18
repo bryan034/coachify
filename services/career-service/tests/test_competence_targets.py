@@ -1,4 +1,4 @@
-"""Role targets on the shared 1-10 scale: scored deterministically from the role, the skill and its research."""
+"""Role targets on the shared 1-10 scale: the research model decides, guided by a weighted reference score."""
 from datetime import timedelta
 from types import SimpleNamespace as NS
 import pytest
@@ -86,23 +86,61 @@ def test_wide_and_interview_research_each_add_a_level_and_cite_sources():
     assert target_for(skill('Java'), probed, goal()).level == 6
 
 
-def test_a_cited_research_rating_nudges_by_at_most_one_level():
-    assert target_for(skill(), report(9), goal()).level == 7
-    assert target_for(skill(), report(2), goal()).level == 5
-    assert target_for(skill(), report(6), goal()).level == 6
-    assert 'research rated it 9' in target_for(skill(), report(9), goal()).explanation
+def test_the_research_model_decides_the_level_and_the_weights_are_its_reference():
+    target = target_for(skill(), report(9), goal())
+    assert (target.level, target.basis) == (9, 'research') and target.source_urls == ['https://example.test/source1']
+    assert 'Interviews test scripting.' in target.explanation and 'Weighted reference 6/10' in target.explanation
+    # The model may rate below the weighted reference too, e.g. an internship needing only basics.
+    assert target_for(skill(), report(2), goal('Analyst', employment='internship')).level == 2
+    # A rating that cites no findings still decides, but is labelled inferred.
+    uncited = target_for(skill(), report(3, cited=()), goal())
+    assert (uncited.level, uncited.basis) == (3, 'inferred') and 'No research findings were cited' in uncited.explanation
 
 
-@pytest.mark.parametrize('research', [report(9, cited=()), report(9, expired=True), report(9, status='failed'),
-                                      report(9, name='JavaScript'), None])
-def test_uncited_stale_failed_or_other_skill_ratings_are_ignored(research):
+def test_a_level_the_employer_states_still_bounds_the_model_rating():
+    assert target_for(skill(evidence='Advanced Python'), report(4), goal()).level == 7
+    assert target_for(skill(evidence='Advanced Python'), report(9), goal()).level == 9
+    capped = target_for(skill(evidence='Basic Python'), report(6), goal())
+    assert (capped.level, capped.basis) == (3, 'job_description')
+
+
+def test_displayed_reference_uses_employment_type_inferred_for_research():
+    research = report(3)
+    research.intelligence.employment_type = 'internship'
+    target = target_for(skill(), research, goal())
+    assert 'Weighted reference 4/10' in target.explanation
+    assert 'internship baseline 3' in target.explanation
+
+
+def test_long_stored_rationale_preserves_the_employer_bound_and_reference():
+    research = report(9)
+    research.intelligence.skill_levels[0].rationale = 'Candidate interview feedback. ' * 19
+    target = target_for(skill(evidence='Basic Python'), research, goal(employment='internship'))
+    assert (target.level, target.basis) == (3, 'job_description')
+    assert 'asks only for basic understanding' in target.explanation
+    assert 'internship baseline 3' in target.explanation
+    assert len(target.explanation) <= 600 and target.explanation.endswith('…')
+
+
+@pytest.mark.parametrize('research', [report(9, expired=True), report(9, status='failed'), report(9, name='JavaScript'), None])
+def test_without_a_fresh_rating_the_weighted_reference_is_the_target(research):
     assert target_for(skill(), research, goal()).level == 6
+
+
+def test_rating_input_carries_the_weighted_reference_for_each_skill():
+    from app.workflows.opportunity.domain import weighted_skills
+    probed = report(findings=[('interview_intelligence', finding(1, 'Interviewers ask Python questions.', ['a']))]).intelligence.categories
+    rows = weighted_skills([{'name': 'Python', 'priority': 'required', 'stated_proficiency': None, 'required_experience_months': None},
+                            {'name': 'Excel', 'priority': 'unspecified', 'stated_proficiency': None, 'required_experience_months': None}],
+                           {'role': 'Data Intern', 'seniority_level': None, 'employment_type': 'internship'}, probed)
+    assert [(r['name'], r['reference_level']) for r in rows] == [('Python', 5), ('Excel', 2)]
+    assert rows[0]['reference_factors'] == ['internship baseline 3', 'essential to the role +1', 'probed in reported interviews +1']
 
 
 def test_current_goal_enrichment_keeps_saved_goal_and_source_provenance_intact():
     saved = goal(skills=[skill(evidence='Python')])
     current = calibrated_goal(saved, report(9))
-    assert current.skills[0].competence_target.level == 7
+    assert current.skills[0].competence_target.level == 9
     assert saved.skills[0].competence_target is None
     assert current.skills[0].evidence == saved.skills[0].evidence
 
@@ -140,3 +178,5 @@ def test_rating_prompt_uses_the_shared_scale_and_research():
     assert '1 = No understanding' in prompt and '4-6 = moderate understanding' in prompt and '10 = Expert understanding' in prompt
     assert 'crowd-sourced' in prompt and 'not what tasks they can execute alone' in prompt
     assert 'findings' in prompt and 'exactly one entry per skill' in prompt
+    assert 'Treat required and preferred skills as essential' in prompt
+    assert 'reference_level' in prompt and 'reference_factors' in prompt and 'you decide the level' in prompt

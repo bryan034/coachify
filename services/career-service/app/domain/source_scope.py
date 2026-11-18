@@ -1,14 +1,14 @@
 """Deterministic scope checks for public question evidence.
 
 A passage is *verified* only when every check passes: it names the target market
-(Singapore unless the goal states another location) and no other country, currency
-or foreign site; it names the saved employer; it contains each core role word; it
+(Singapore unless the goal states another location); for Singapore goals it has
+no other-country signal. It names the saved employer, contains each core role word,
 addresses the question focus (a salary needs an actual amount) and the router's
 search subject; and it is not stale. Only verified passages may be saved as job
-facts. Passages with any foreign signal are rejected before a model sees them.
-Everything else is an unverified candidate that may inform an answer but is never
-saved. Checks are lexical and conservative: a missed match costs recall, never
-correctness.
+facts. Everything else, including passages about another country (for example the
+office a Singapore-listed role is actually based in), is an unverified candidate
+that may inform an answer, labelled with its market, but is never saved. Checks
+are lexical and conservative: a missed match costs recall, never correctness.
 """
 import re
 from dataclasses import dataclass, field
@@ -22,7 +22,7 @@ LOCAL = re.compile(r'\bsingapore(?:an)?\b|\bSGD\b|\bS\$|\bSG\$', re.I)
 # Currencies other than SGD. Bare "$" stays neutral: Singapore postings use it too.
 FOREIGN_CURRENCY = re.compile(
     r'\b(?:AUD|USD|GBP|EUR|INR|MYR|HKD|NZD|CAD|IDR|CNY|RMB|JPY|KRW|THB|VND|AED|CHF)\b'
-    r'|(?:\bA|\bAU|\bUS|\bHK|\bNZ|\bC|\bCA|\bNT)\$|£|€|₹|¥|₩|₱|\bRM\s?\d|\bRs\.?\s?\d|\bRp\.?\s?\d', re.I)
+    r'|(?:\bA|\bAU|\bUS|\bHK|\bNZ|\bC|\bCA|\bNT)\$|£|€|₹|¥|₩|₱|\bRM(?=\s?\d)|\bRs\.?(?=\s?\d)|\bRp\.?(?=\s?\d)', re.I)
 FOREIGN_PLACE = re.compile(r'\b(?:' + '|'.join([
     'australia', 'australian', 'sydney', 'melbourne', 'brisbane', 'perth', 'adelaide', 'canberra',
     'new zealand', 'auckland', 'wellington', 'united states', 'usa', 'america', 'new york',
@@ -34,6 +34,7 @@ FOREIGN_PLACE = re.compile(r'\b(?:' + '|'.join([
     'china', 'chinese mainland', 'shanghai', 'beijing', 'shenzhen', 'taiwan', 'taipei', 'japan', 'tokyo',
     'korea', 'seoul', 'dubai', 'germany', 'berlin', 'france', 'paris', 'netherlands', 'amsterdam',
 ]) + r')\b', re.I)
+NAMED_PLACE = re.compile(FOREIGN_PLACE.pattern + r'|\bSingapore\b', re.I)
 FOREIGN_TLDS = frozenset('au uk in my hk ca nz ph id cn jp kr tw th vn ae de fr nl ie us za'.split())
 # Two-letter country subdomains used by global job boards, e.g. au.indeed.com.
 FOREIGN_SUBDOMAINS = FOREIGN_TLDS | {'gb', 'en-au', 'en-gb', 'en-in'}
@@ -77,11 +78,33 @@ def host(url):
 def target_place(goal):
     """Singapore is the default market; another saved location becomes the anchor."""
     location = ' '.join(str((goal or {}).get('location') or '').split())
+    location = re.split(r'\s*[(/,-]?\s*\bbased (?:in|out of)\b', location, maxsplit=1, flags=re.I)[0].strip()
     if not location or re.search(r'\b(?:singapore|sg)\b', location, re.I):
         return SINGAPORE
     if re.fullmatch(r'(?i)(?:remote|hybrid|on-?site|flexible)', location):
         return SINGAPORE
     return re.split(r'[,(/|-]', location)[0].strip().casefold() or SINGAPORE
+
+
+def related_places(goal, texts=()):
+    """Other places the saved goal itself names, e.g. a base office in the JD.
+
+    A role listed in one market can be based in another; these places widen
+    search and give the answer model context. They never verify a passage.
+    """
+    place = target_place(goal)
+    bases, mentioned = [], []
+    for text in [str((goal or {}).get('location') or ''), *texts]:
+        for match in NAMED_PLACE.finditer(text or ''):
+            name = ' '.join(match[0].split()).casefold()
+            if name == place:
+                continue
+            preceding = text[max(0, match.start()-48):match.start()]
+            if re.search(r'\b(?:based (?:in|out of)|works? (?:from|out of)|sits? (?:in|with)) (?:our |the )?$', preceding, re.I):
+                bases.append(name)
+            else:
+                mentioned.append(name)
+    return list(dict.fromkeys([*bases, *mentioned]))[:3]
 
 
 def foreign_host(name):

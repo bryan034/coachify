@@ -16,11 +16,11 @@ from app.workflows.structured import structured_node
 from app.workflows.current import workspace_revision
 from app.ai.routing import chat_models
 from app.workflows.activity import activity
-from app.workflows.goal_question import research_question,question_queries,MAX_QUESTION_SEARCHES
-from app.workflows.citations import fact_citations
+from app.workflows.goal_question import research_question,question_queries
+from app.workflows.citations import citation_error,fact_citations
 from app.domain.question_memory import (direct_public_plan,focused_saved_facts,scoped_question_findings,excerpt_facts,
-    saved_fact_reply,factual_reply,trusted_fact,foreign_fact)
-from app.domain.source_scope import FOREIGN_CURRENCY,SINGAPORE,target_place
+    saved_fact_reply,factual_reply,trusted_fact,market_scoped,cited_foreign_currency)
+from app.domain.source_scope import related_places
 
 PUBLIC_FOCUS={'role':'role_details','skills':'role_details','requirements':'eligibility',
     'interview_process':'interviews','interview_skills':'interviews','preparation':'interviews',
@@ -34,19 +34,18 @@ async def semantic_chat(request,account,row,body):
     repo=request.app.state.workspace_store
     store=QuestionStore(repo,request.app.state.research_store)
     revision=str(body.expected_version)
-    searches=set()
+    search_count=0
     refining=getattr(body,'mode','question')=='refine'
-    async def public_facts(title,focus,terms):
+    async def public_facts(title,focus,query):
+        nonlocal search_count
         current=workspace_revision(repo,account,body.session_id,body.expected_version)
         async def check():
             if await current()!=revision:raise AIError('stale_input',True)
         await check()
-        queries=question_queries(title,focus,terms)
-        query=queries[len(searches)]
         # Completed queries are recorded for this turn; quota waits retry only the
         # unfinished request inside research_question, without advancing the budget.
         result=await research_question(request,title,focus,check,query=query)
-        searches.add(query)
+        search_count+=1
         return result
     async def generate(stage,context,history=(),question=None,validate=None):
         await thread(repo.check,account,body.session_id,body.expected_version)
@@ -60,6 +59,11 @@ async def semantic_chat(request,account,row,body):
         activity('understanding_question')
         goal,research=await thread(store.fetch,account,row,'overview')
         index=context_index(goal,research,row['workspace'].get('edit_draft'))
+        # A role listed in one market may be based in another; places the saved JD
+        # names widen public search and tell the answer model which markets relate.
+        descriptions=[item.get('description') for item in goal.get('non_skill_requirements',[])]
+        places=related_places(goal,[goal.get('summary'),*goal.get('responsibilities',[]),*descriptions])
+        if places:index['goal']={**index['goal'],'related_locations':places}
         direct=direct_public_plan(body.message)
         if direct:return {'plan':direct,'title':index['goal'],'direct':True}
         if refining:index['scope']='career'
@@ -85,18 +89,18 @@ async def semantic_chat(request,account,row,body):
             g,r=await thread(store.fetch,account,row,topic,plan.include_evidence)
             goal.update(g);research=merge_projection(research,r)
         facts,links,partial=focused_saved_facts(plan.research_focus,goal,research) if plan.research_focus else selected_facts(plan,goal,research)
-        # Saved findings about another market never answer a question about this goal.
-        facts=[fact for fact in facts if not foreign_fact(fact,state['title'])]
-        links={ref:value for ref,value in links.items() if ref in {fact['ref'] for fact in facts}}
+        # Saved findings about another market remain context but are never trusted job facts.
+        facts=[market_scoped(fact,state['title'],links[fact['ref']]) for fact in facts]
         focus=plan.research_focus or PUBLIC_FOCUS.get(plan.topic)
         # Database first: direct salary/location lookups search only when no trusted
         # (JD-sourced or verified) fact is saved; other questions when nothing relevant is.
         untrusted=state.get('direct') and not any(trusted_fact(fact) for fact in facts)
-        return {**state,'facts':facts,'links':links,'partial':partial,'focus':focus,'saved_facts':facts,'saved_links':links,
+        queries=question_queries(state['title'],focus,plan.public_search_terms) if focus else []
+        return {**state,'facts':facts,'links':links,'partial':partial,'focus':focus,'queries':queries,'saved_facts':facts,'saved_links':links,
                 'needs_search':bool(focus) and (not facts or plan.missing or bool(untrusted))}
 
     async def search_public(state):
-        facts,links=await public_facts(state['title'],state['focus'],state['plan'].public_search_terms)
+        facts,links=await public_facts(state['title'],state['focus'],state['queries'][search_count])
         return {**state,'retrieved_facts':facts,'retrieved_links':links,'needs_search':False}
 
     async def persist(state,findings,sources):
@@ -148,9 +152,9 @@ async def semantic_chat(request,account,row,body):
                 await thread(repo.check,account,body.session_id,body.expected_version)
                 return {'result':JDReply(reply=reply,proposed_skills=None),'needs_search':False}
         def missing():
-            return 'I could not verify that detail in the public sources retrieved for this goal. What would you like to clarify or research next?' if searches else MISSING
+            return 'I could not verify that detail in the public sources retrieved for this goal. What would you like to clarify or research next?' if search_count else MISSING
         if not state.get('facts'):
-            if state.get('focus') and len(searches)<MAX_QUESTION_SEARCHES:
+            if search_count<len(state.get('queries',[])):
                 return {**state,'needs_search':True}
             return {'result':JDReply(reply=missing(),proposed_skills=None)}
         activity('answering_question')
@@ -158,8 +162,8 @@ async def semantic_chat(request,account,row,body):
         def validate(output):
             if output.status=='answered':
                 fact_citations(output.reply,output.references,state['links'])
-                if target_place(state['title'])==SINGAPORE and FOREIGN_CURRENCY.search(output.reply):
-                    raise AIError('invalid_output',True,reason='scope',fields=('reply',))
+                if not cited_foreign_currency(output.reply,output.references,state['facts']):
+                    raise citation_error('unsupported_foreign_currency')
         @structured_node
         async def answer_facts(_):
             result=await generate(stage,{'goal':state['title'],'facts':state['facts'],'partial':state['partial']},
@@ -169,18 +173,18 @@ async def semantic_chat(request,account,row,body):
         try:result=await answer_facts({})
         except AIError as error:
             if error.code not in ('invalid_output','incomplete_output','context_limit'):raise
-            if state.get('candidates') and not state.get('direct'):
+            if search_count:
                 verified=factual_reply(state['facts'],state['links'])
                 if verified:
                     await thread(repo.check,account,body.session_id,body.expected_version)
                     return {'result':JDReply(reply=verified,proposed_skills=None),'needs_search':False}
-                if len(searches)<MAX_QUESTION_SEARCHES:return {**state,'needs_search':True}
+                if search_count<len(state['queries']):return {**state,'needs_search':True}
                 return {'result':JDReply(reply=missing(),proposed_skills=None),'needs_search':False}
             reply=saved_fact_reply(state['facts'],state['links'],state['partial'])
             if not reply:raise
             await thread(repo.check,account,body.session_id,body.expected_version)
             return {'result':JDReply(reply=reply,proposed_skills=None),'needs_search':False}
-        if result.status=='not_found' and len(searches)<MAX_QUESTION_SEARCHES and state.get('focus'):
+        if result.status=='not_found' and search_count<len(state['queries']):
             return {**state,'needs_search':True}
         validate(result)
         if result.status!='answered':return {'result':JDReply(reply=REFUSAL if result.status=='off_topic' else missing(),proposed_skills=None)}

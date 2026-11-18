@@ -245,6 +245,9 @@ class SourceAPIs:
         # The model supplies text only; endpoint, credentials and result budget stay fixed.
         return await self.search(query,country=search_country(context.location))
 
+    async def collect_question_query(self,context,query):
+        return await self.search(query,country='ALL')
+
     async def collect_opportunity_query(self,context,query):
         return await self.search(query,country=search_country(context.location),focus=query,max_sources=OPPORTUNITY_SOURCE_LIMIT,evidence_chars=OPPORTUNITY_EXCERPT_LIMIT)
 

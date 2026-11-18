@@ -1,9 +1,10 @@
 """The research run rates the level the role needs in each goal skill; failure never blocks research."""
 import json
 from types import SimpleNamespace
+from uuid import uuid4
 from app.ai.opportunity_contracts import SkillLevels
 from tests.test_opportunity import opportunity_flow, research  # noqa: F401 (fixture)
-from tests.test_workspace import ingest
+from tests.test_workspace import headers, ingest
 
 
 def rate(flow, level=None, error=None):
@@ -28,19 +29,43 @@ def test_research_rates_every_goal_skill_and_sets_its_target(opportunity_flow):
     assert result['status'] == 'completed' and len(calls) == 1
     # Only public role facts, skill names and validated findings are sent: no job text or CV.
     assert set(calls[0]) == {'opportunity', 'skills', 'findings'}
-    assert all(set(s) == {'name', 'priority', 'stated_proficiency'} for s in calls[0]['skills'])
+    assert all(set(s) == {'name', 'priority', 'stated_proficiency', 'required_experience_months', 'reference_level', 'reference_factors'}
+               for s in calls[0]['skills'])
+    assert all(s['reference_factors'][0].endswith(f"baseline {s['reference_level']}") or len(s['reference_factors']) > 1 for s in calls[0]['skills'])
     skills = [s for s in workspace['current']['goal']['skills'] if s['origin'] != 'user_declaration']
-    assert skills and all(s['competence_target']['level'] >= 4 for s in skills)
+    assert skills and all(s['competence_target']['level'] >= 4 for s in skills)  # Stated floors can lift a rating.
     assert any(s['competence_target']['level'] == 4 and s['competence_target']['basis'] == 'research'
                and s['competence_target']['source_urls'] for s in skills)
     saved = flow[1].interview_research.find_one({'intelligence': {'$ne': None}})['intelligence']['skill_levels']
     assert {r['skill'] for r in saved} == {s['name'] for s in calls[0]['skills']}
 
 
-def test_a_failed_rating_keeps_the_research_and_the_description_based_targets(opportunity_flow):
+def test_a_failed_rating_keeps_the_research_and_the_weighted_reference_targets(opportunity_flow):
     flow = opportunity_flow; calls = rate(flow, error=RuntimeError('provider down'))
     assert ingest(flow).status_code == 202
     workspace, result, _ = research(flow)
     assert result['status'] == 'completed' and len(calls) == 1  # Not retried by durable recovery.
     assert flow[1].interview_research.find_one({'intelligence': {'$ne': None}})['intelligence']['skill_levels'] == []
     assert all(s['competence_target']['basis'] in ('job_description', 'inferred') for s in workspace['current']['goal']['skills'])
+
+
+def test_a_failed_refresh_rating_does_not_reuse_the_cached_levels(opportunity_flow):
+    flow = opportunity_flow
+    rate(flow, level=9)
+    assert ingest(flow).status_code == 202
+    workspace, _, path = research(flow)
+    original = flow[1].interview_research.find_one({'intelligence': {'$ne': None}})
+    assert original['intelligence']['skill_levels']
+
+    calls = rate(flow, error=RuntimeError('provider down'))
+    body = {
+        'expected_version': workspace['current']['goal']['version'],
+        'expected_selection_version': workspace['current']['selection_version'],
+        'refresh': True,
+        'category': 'company_intelligence',
+    }
+    assert flow[0].post(path, headers=headers(str(uuid4())), json=body).status_code == 202
+    _, result, _ = research(flow)
+    assert result['status'] == 'completed' and len(calls) == 1
+    refreshed = flow[1].interview_research.find_one({'_id': {'$ne': original['_id']}, 'intelligence': {'$ne': None}})
+    assert refreshed['intelligence']['skill_levels'] == []

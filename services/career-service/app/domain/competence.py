@@ -1,11 +1,12 @@
 """Role targets are planning standards on the shared 1-10 competence scale, never employer pass marks.
 
 Levels rate understanding of the subject: 1-3 basic, 4-6 moderate, 7-8 good, 9-10 expert.
-The target is scored deterministically from the goal and its research: a baseline for the role's
-seniority, adjusted by the skill's importance, whether the role is named after it, the experience
-asked for, and how widely and how deeply public research discusses it. A research model rating may
-nudge the score by one level only when it cites findings. A level the employer states outright is a
-floor (or, for basic wording, a ceiling). Every weight lives in the tables below.
+The research model decides the level from everything it knows about the role. It is given a weighted
+reference score as guidance: a baseline for the role's seniority, adjusted by the skill's importance,
+whether the role is named after it, the experience asked for, and how widely and how deeply public
+research discusses it. Until the model has rated a skill, that reference is the target. A level the
+employer states outright is a floor (or, for basic wording, a ceiling) on either. Every weight lives
+in the tables below.
 """
 import re
 from elo_shared.competence_scale import MIN_LEVEL, MAX_LEVEL
@@ -32,7 +33,6 @@ CORE_WEIGHT = (1, 'named in the role title')
 EXPERIENCE_WEIGHT = ((60, 2), (24, 1), (12, 0), (0, -1))
 BREADTH_SOURCES, BREADTH_WEIGHT = 3, (1, 'discussed across {n} public sources')
 INTERVIEW_WEIGHT = (1, 'probed in reported interviews')
-RESEARCH_NUDGE = 1  # The most a cited research rating can move the score.
 # Stated employer wording: floors raise the score, the ceiling caps it.
 STATED_FLOORS = ((r'\b(expert|expertise|mastery|authoritative)\b', 'expert', 9),
                  (r'\b(advanced|proficient|proficiency|complex|in.depth)\b', 'advanced', 7),
@@ -76,26 +76,22 @@ def fresh_report(research):
     return report
 
 
-def research_signals(skill, research):
-    """Public sources that discuss the skill, interview findings that probe it, and any cited model rating."""
-    report=fresh_report(research)
-    if not report: return set(),False,None,[]
-    urls={s.source_id:s.url for s in research.sources}
-    sources=set();interview=False;used=[]
-    for category,result in report.categories.items():
+def finding_signals(name, categories):
+    """Source ids of findings that discuss the skill, and whether interview findings probe it."""
+    sources=[];interview=False
+    for category,result in (categories or {}).items():
         for finding in result.findings:
-            if not _mentions(skill.name, finding.value): continue
-            sources.update(finding.source_ids);used+=finding.source_ids
-            interview=interview or category==INTERVIEW_CATEGORY
-    rating=next((r for r in getattr(report,'skill_levels',None) or [] if _key(r.skill)==_key(skill.name)), None)
-    findings={f.finding_id:f for result in report.categories.values() for f in result.findings}
-    cited=[s for i in (rating.finding_ids if rating else []) if i in findings for s in findings[i].source_ids]
-    if rating and not any(s in urls for s in cited): rating=None  # Uncited ratings never move the score.
-    links=[urls[s] for s in [*cited,*used] if s in urls]
-    return sources,interview,rating,list(dict.fromkeys(links))
+            if not _mentions(name, finding.value): continue
+            sources+=finding.source_ids;interview=interview or category==INTERVIEW_CATEGORY
+    return list(dict.fromkeys(sources)),interview
 
 
-def target_for(skill, research=None, goal=None):
+def reference(skill, goal=None, categories=None):
+    """The weighted reference score and the contribution of each weight, before stated bounds.
+
+    `skill` needs name, priority and required_experience_months; `goal` role, seniority_level and
+    employment_type; `categories` are fresh research findings by category, if any.
+    """
     level,label=role_base(goal)
     reasons=[f'{label} baseline {level}']
     def add(weight, reason):
@@ -103,23 +99,53 @@ def target_for(skill, research=None, goal=None):
         if weight: level+=weight;reasons.append(f'{reason} {weight:+d}')
     add(*PRIORITY_WEIGHT.get(skill.priority,(0,None)))
     if _mentions(skill.name, getattr(goal,'role',None)): add(*CORE_WEIGHT)
-    if skill.required_experience_months is not None:
-        months=skill.required_experience_months
-        add(next(w for m,w in EXPERIENCE_WEIGHT if months>=m), f'{months} months’ experience asked')
-    sources,interview,rating,links=research_signals(skill, research)
+    months=getattr(skill,'required_experience_months',None)
+    if months is not None: add(next(w for m,w in EXPERIENCE_WEIGHT if months>=m), f'{months} months’ experience asked')
+    sources,interview=finding_signals(skill.name, categories)
     if len(sources)>=BREADTH_SOURCES: add(BREADTH_WEIGHT[0], BREADTH_WEIGHT[1].format(n=len(sources)))
     if interview: add(*INTERVIEW_WEIGHT)
-    if rating and rating.level!=level:
-        add(max(-RESEARCH_NUDGE, min(RESEARCH_NUDGE, rating.level-level)), f'research rated it {rating.level}')
-    level=max(MIN_LEVEL, min(MAX_LEVEL, level))
+    return max(MIN_LEVEL, min(MAX_LEVEL, level)),reasons
+
+
+def research_rating(skill, research):
+    """The fresh model rating for this skill, the public sources it cites and those discussing the skill."""
+    report=fresh_report(research)
+    if not report: return None,[],[]
+    urls={s.source_id:s.url for s in research.sources}
+    rating=next((r for r in getattr(report,'skill_levels',None) or [] if _key(r.skill)==_key(skill.name)), None)
+    findings={f.finding_id:f for result in report.categories.values() for f in result.findings}
+    cited=[urls[s] for i in (rating.finding_ids if rating else []) if i in findings for s in findings[i].source_ids if s in urls]
+    used=[urls[s] for s in finding_signals(skill.name, report.categories)[0] if s in urls]
+    return rating,list(dict.fromkeys(cited)),list(dict.fromkeys(used))
+
+
+def target_for(skill, research=None, goal=None):
+    report=fresh_report(research)
+    employment=getattr(report,'employment_type','unknown')
+    if goal is not None and employment!='unknown' and goal.employment_type=='unknown':
+        goal=goal.model_copy(update={'employment_type':employment})
+    ref,reasons=reference(skill, goal, report.categories if report else None)
+    rating,cited,used=research_rating(skill, research)
+    level=rating.level if rating else ref
     floor,ceiling=stated_bounds(skill);bound=None
     if floor and level<floor: level,bound=floor,f'the job description asks for at least {floor}'
     if ceiling and level>ceiling: level,bound=ceiling,f'the job description asks only for basic understanding ({ceiling})'
+    explanation=f'Role target: {level}/10. '
+    if bound: explanation+=f'Set to {level} because {bound}. '
+    explanation+=f"Weighted reference {ref}/10: {'; '.join(reasons)}. "
+    if rating:
+        explanation+='Rated using cited public research. ' if cited else 'No research findings were cited for the rating. '
+    elif used:
+        explanation+='Research discussing this skill was weighed. '
+    explanation+='This is a planning estimate, not an employer test score.'
+    if rating:
+        remaining=600-len(explanation)-1
+        rationale=rating.rationale
+        if len(rationale)>remaining: rationale=rationale[:remaining-1].rstrip()+'…'
+        explanation+=f' {rationale}'
+    links=cited if rating else used
     basis='job_description' if bound else 'research' if links else 'inferred'
-    explanation=(f'Role target: {level}/10. '+'; '.join(reasons)+'. '+(f'Set to {level} because {bound}. ' if bound else '')
-                 +('Adjusted from public research on this role. ' if links else '')
-                 +'This is a planning estimate, not an employer test score.')
-    return CompetenceTarget(level=level, basis=basis, explanation=explanation[:600],
+    return CompetenceTarget(level=level, basis=basis, explanation=explanation,
                             source_urls=list(dict.fromkeys([*links,*skill.source_urls]))[:10])
 
 

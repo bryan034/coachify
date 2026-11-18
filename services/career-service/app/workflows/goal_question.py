@@ -1,4 +1,4 @@
-"""Focused, public-only Brave retrieval for a model-selected goal question."""
+"""Focused, public-only retrieval for a model-selected goal question."""
 import asyncio
 import re
 from app.schemas.analysis import ResearchContext
@@ -34,25 +34,25 @@ def question_queries(title, focus, terms=None):
             terms=None
     subject=terms or FOCUSES[focus]
     from app.domain.source_scope import SINGAPORE,target_place
-    # Keep the market in every query: Brave has no Singapore country filter and
-    # DeepSeek has none at all, so the query text is the only geographic anchor.
-    parts=[str(title.get(key) or '').strip() for key in ('company','role','location')]
-    if target_place(title)==SINGAPORE and not any(re.search(r'\bsingapore\b',part,re.I) for part in parts):
-        parts.append('Singapore')
-    market=' '.join(part for part in parts[2:] if part)
-    prefix=' '.join(part for part in parts[:2] if part)
-    # Reserve space for the market before bounding the employer/role prefix.
-    identity=' '.join(part for part in (prefix[:max(0,239-len(market))],market) if part)
-    # Later searches narrow towards employer-published and local sources rather than
-    # broadening to global candidate reports.
-    local={'compensation':'SGD per month','location':'office address'}.get(focus,'employee reviews')
-    suffixes=('', 'official careers', local)
-    return list(dict.fromkeys(' '.join((identity,subject,suffix)).strip() for suffix in suffixes))[:MAX_QUESTION_SEARCHES]
+    company,role=(str(title.get(key) or '').strip() for key in ('company','role'))
+    place=target_place(title)
+    market='Singapore' if place==SINGAPORE else place
+    def query(place, suffix=''):
+        # Fit DeepSeek's query limit without truncating the market or subject.
+        tail=' '.join(part for part in (subject,suffix) if part)
+        place=place[:max(0,126-len(tail))].strip()
+        budget=max(0,127-len(tail)-(len(place)+1 if place else 0))
+        role_prefix=role[:budget].strip()
+        company_prefix=company[:max(0,budget-len(role_prefix)-bool(role_prefix))].strip()
+        return ' '.join(part for part in (company_prefix,role_prefix,place,tail) if part)
+    related=title.get('related_locations') or []
+    queries=(query(market),query(related[0] if related else ''),query(market,'official careers'))
+    return list(dict.fromkeys(' '.join(query.split()) for query in queries))[:MAX_QUESTION_SEARCHES]
 
 
 async def research_question(request, title, focus, check, *, query=None):
     provider = request.app.state.research_client
-    collect = getattr(provider, 'collect_query', None)
+    collect = getattr(provider, 'collect_question_query', None) or getattr(provider, 'collect_query', None)
     if not callable(collect):
         raise GoalError('Public research is unavailable. Your saved goal remains available.', 503)
     context = ResearchContext(**{key: title.get(key) for key in
@@ -83,7 +83,7 @@ async def research_question(request, title, focus, check, *, query=None):
     await check()
     facts = [{'ref': f'web{i}', 'kind': 'public_source',
               'data': {'title': source.title, 'evidence': source.evidence,
-                       'scope': 'Public source; verify exact employer, role, Singapore location and dates.'}}
+                       'scope': 'Public source; verify exact employer, role, location and dates.'}}
              for i, source in enumerate(sources) if source.evidence]
     links = {f'web{i}': [source.model_dump(mode='json')] for i, source in enumerate(sources) if source.evidence}
     return facts, links

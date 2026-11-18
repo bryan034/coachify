@@ -2,6 +2,7 @@
 import re
 from app.ai.context_contracts import ContextPlan
 from app.domain.questions import blocked_task,opportunity_findings
+from app.domain.source_scope import FOREIGN_CURRENCY,TOPIC,foreign_source,foreign_text,target_place,verify
 from app.workflows.citations import summary_text,source_links
 from app.ai.opportunity_contracts import evidence_passages
 from app.schemas.opportunity import Finding
@@ -57,7 +58,7 @@ def focused_saved_facts(focus,goal,research):
         add('opportunity_finding',{key:item[key] for key in ('field','value','confidence','scope','evidence_type') if key in item},item.get('source_ids',[]))
     return facts[:6],{k:v for k,v in links.items() if k in {f['ref'] for f in facts[:6]}},len(facts)>6
 
-def passage_finding(focus,text,source,*,verified=False,official=False):
+def passage_finding(focus,text,source,*,verified=False,official=False,scope='general'):
     if verified:
         confidence='high' if official else 'medium'
         evidence='official' if official else 'candidate_reported' if source.platform=='reddit' else 'third_party'
@@ -65,7 +66,7 @@ def passage_finding(focus,text,source,*,verified=False,official=False):
         confidence='low';evidence='official' if source.platform=='employer' or source.reliability=='official' else 'third_party'
     return Finding(finding_id='f'+fingerprint({'focus':focus,'quote':text,'url':source.url})[:16],
         field=focus,value=text,quotes=[text],source_ids=[source.source_id],confidence=confidence,
-        scope='exact' if verified else 'general',evidence_type=evidence,last_verified_at=now())
+        scope='exact' if verified else scope,evidence_type=evidence,last_verified_at=now())
 
 def link_sources(links):
     sources=[]
@@ -92,24 +93,27 @@ def exact_question_findings(focus,facts,links,*,require_focus=True):
 def scoped_question_findings(focus,links,goal,*,terms=None,require_focus=True):
     """Split exact passages into verified job facts and unverified candidates.
 
-    Foreign-market passages are dropped. Verified passages pass every deterministic
-    check in source_scope and are the only ones that may be saved; candidates may
-    inform an answer as general context but are never stored.
+    Verified passages pass every deterministic check in source_scope and are the
+    only ones that may be saved. Candidates, including passages about another
+    market (scope related_location), may inform an answer but are never stored.
     """
-    from app.domain.source_scope import verify
     sources=link_sources(links)
     verified=[];candidates=[]
     for passage in evidence_passages(sources):
         text=passage['text'];source=sources[passage['source_ref']]
         verdict=verify(focus,source.url,source.title,text,goal,terms=terms,published=source.published_date)
-        if verdict.foreign:continue
         if verdict.verified:
             if sum(source.source_id in f.source_ids for f in verified)<2 and len(verified)<6:
                 verified.append(passage_finding(focus,text,source,verified=True,official=verdict.official))
             continue
-        if require_focus and not re.search(FOCUS_WORDS[focus],text,re.I):continue
+        if require_focus:
+            source_text=f'{source.title or ""} {text}'
+            topical=re.search(FOCUS_WORDS[focus],source_text,re.I)
+            if focus=='compensation':
+                topical=topical or re.search(TOPIC[focus],source_text,re.I) or FOREIGN_CURRENCY.search(text)
+            if not topical:continue
         if sum(source.source_id in f.source_ids for f in candidates)>=2 or len(candidates)>=6:continue
-        candidates.append(passage_finding(focus,text,source))
+        candidates.append(passage_finding(focus,text,source,scope='related_location' if verdict.foreign else 'general'))
     def used(findings):
         ids={sid for finding in findings for sid in finding.source_ids}
         return [source for source in sources if source.source_id in ids]
@@ -119,9 +123,38 @@ def trusted_fact(fact):
     """JD-sourced details and deterministically verified findings are job facts."""
     return fact.get('kind')=='job_details' or (fact.get('data') or {}).get('scope')=='exact'
 
-def foreign_fact(fact,goal):
-    from app.domain.source_scope import foreign_text,target_place
-    return foreign_text(' '.join(str(v) for v in (fact.get('data') or {}).values()),target_place(goal))
+def market_scoped(fact,goal,sources=()):
+    """Saved findings about another market stay usable as labelled context, never as job facts."""
+    if fact.get('kind')=='job_details':
+        return fact
+    data=fact.get('data') or {}
+    text=' '.join(str(v) for v in data.values())
+    if foreign_text(text,target_place(goal)) or any(
+            foreign_source(source.get('url'),source.get('title'),'',goal) for source in sources):
+        return {**fact,'data':{**data,'scope':'related_location'}}
+    return fact
+
+def cited_foreign_currency(reply,references,facts):
+    """Foreign monetary figures must occur in the facts cited by the answer."""
+    amount=r'\d+(?:[,.]\d+)*(?:[kKmM]\b)?'
+    def figures(text):
+        values=set()
+        for match in FOREIGN_CURRENCY.finditer(text):
+            after=re.match(r'\s*('+amount+')',text[match.end():])
+            before=re.search(r'('+amount+r')\s*$',text[:match.start()]) if not after else None
+            number=after or before
+            values.add((match[0].casefold(),re.sub(r'(?<=\d),(?=\d{3}(?:[,.km]|$))','',number[1].casefold()) if number else None))
+        return values
+    claimed=figures(reply)
+    if not claimed:
+        return True
+    supported=set()
+    for fact in facts:
+        if fact['ref'] in references:
+            for key in ('value','description'):
+                supported.update(figures(str(fact['data'].get(key) or '')))
+    return all((currency,amount) in supported if amount else any(code==currency for code,_ in supported)
+               for currency,amount in claimed)
 
 def factual_reply(facts,links):
     """Concise, model-free answer from trusted saved facts with source links."""
@@ -145,6 +178,8 @@ def excerpt_facts(findings,sources):
         data=finding.model_dump(exclude={'quotes','source_ids','finding_id','last_verified_at','round_number','round_name','conflict_group'})
         from app.domain.source_scope import host
         data['source']=', '.join(dict.fromkeys(host(s.url) for s in linked))
+        titles=list(dict.fromkeys(s.title for s in linked if s.title))
+        if titles:data['source_titles']=titles
         data['verified']=finding.scope=='exact'
         facts.append({'ref':ref,'kind':'opportunity_finding','data':data})
         links[ref]=[s.model_dump(mode='json') for s in linked]
