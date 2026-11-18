@@ -119,3 +119,29 @@ def test_same_key_after_failed_work_can_start_a_fresh_attempt():
         assert jobs.read('owner',second['operation_id'])['result'] == {'saved':True}
         await jobs.close()
     asyncio.run(run())
+
+
+def test_daily_allowance_retry_retains_deadline_until_reset(monkeypatch):
+    from types import SimpleNamespace
+    from app.workflows import operations
+    clock = [100.0]
+    monkeypatch.setattr(operations, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+    async def run():
+        jobs = Operations()
+        async def denied(): raise AIError('model_daily_allowance', True, retry_after=30)
+        first = jobs.submit('owner', 'key', 'digest', 'chat', denied)
+        await jobs.jobs[first['operation_id']].task
+        async def done(): return {'saved': True}
+        clock[0] += 10
+        with pytest.raises(AIError) as blocked:
+            jobs.submit('owner', 'key', 'digest', 'chat', done)
+        assert blocked.value.retry_after == 20
+        with pytest.raises(AIError) as polled:
+            jobs.read('owner', first['operation_id'])
+        assert polled.value.retry_after == 20
+        clock[0] += 20
+        second = jobs.submit('owner', 'key', 'digest', 'chat', done)
+        await jobs.jobs[second['operation_id']].task
+        assert jobs.read('owner', second['operation_id'])['result'] == {'saved': True}
+        await jobs.close()
+    asyncio.run(run())

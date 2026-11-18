@@ -89,3 +89,24 @@ def test_explicit_worker_budget_applies_to_local_and_cloud_without_changing_defa
     for local in (False,True):
         for explicit in (False,True):asyncio.run(exercise(local,explicit))
     assert budgets==[210,240,600,240]
+
+
+def test_worker_keeps_private_error_on_owner_record_and_out_of_logs(caplog):
+    import asyncio
+    from types import SimpleNamespace
+    from elo_shared.runtime import MemoryStore, Problem, run_operation
+    from elo_shared.model_budget import current_budget_owner
+    store = MemoryStore()
+    pending = {'id':'fixture', 'hash':'fixture', 'kind':'month_generate', 'lease':0}
+    store.cas('owner', 0, {'pending':pending, 'receipts':[], 'messages':[]})
+    class Upstream:
+        async def account(self, token):
+            return {'id':'owner'}
+    async def worker(row, account):
+        assert current_budget_owner() == 'owner'
+        raise Problem('Private fixture activity and date.', 409, 'routine_conflict')
+    app = SimpleNamespace(state=SimpleNamespace(store=store, model=object(), slots=asyncio.Semaphore(1), upstream=Upstream()))
+    with caplog.at_level('WARNING', logger='uvicorn.error'):
+        asyncio.run(run_operation(app, 'owner', 'synthetic', worker))
+    assert 'routine_conflict' in caplog.text and 'Private fixture activity' not in caplog.text
+    assert store.load('owner')['last_operation']['error']['detail'] == 'Private fixture activity and date.'

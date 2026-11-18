@@ -1,4 +1,6 @@
 """About the role digest, scoped to the owner's current goal version and latest research."""
+import asyncio
+
 from fastapi import APIRouter,Depends,Request
 from fastapi.encoders import jsonable_encoder
 from app.api.v1.goals import owner
@@ -8,6 +10,26 @@ from app.schemas.role_summary import SummaryCommand
 from app.workflows import role_summary as digest
 
 router=APIRouter(prefix='/api/v1/career/goals',tags=['About the role summary'])
+
+
+async def generate_once(request, account, goal, record):
+    state = request.app.state
+    if not hasattr(state, 'role_summary_tasks'):
+        state.role_summary_tasks = {}
+    pending = state.role_summary_tasks
+    key = (account, goal.id, goal.version, digest.research_key(record))
+    task = pending.get(key)
+    if task is None:
+        task = asyncio.create_task(digest.generate(request, account, goal, record))
+        pending[key] = task
+
+        def finished(completed):
+            pending.pop(key)
+            if not completed.cancelled():
+                completed.exception()
+
+        task.add_done_callback(finished)
+    return await asyncio.shield(task)
 
 
 @router.get('/{goal_id}/role-summary')
@@ -28,4 +50,4 @@ async def generate(goal_id:str,body:SummaryCommand,request:Request,account=Depen
     if not body.refresh:
         saved=await digest.read_saved(request,account,goal,record)
         if saved:return jsonable_encoder({'status':'ready','summary':saved})
-    return jsonable_encoder({'status':'ready','summary':await digest.generate(request,account,goal,record)})
+    return jsonable_encoder({'status':'ready','summary':await generate_once(request,account,goal,record)})

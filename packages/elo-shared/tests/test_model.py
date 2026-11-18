@@ -200,3 +200,24 @@ def test_worker_correlates_requests_and_records_prompt_and_schema_versions(monke
     assert events[0]['prompt_version'] == events[1]['prompt_version'] and events[0]['prompt_version'].startswith('sha256:')
     assert events[0]['schema_version'] == events[1]['schema_version'] and events[0]['schema_version'].startswith('sha256:')
     assert 'opaque-operation' not in caplog.text and 'private synthetic question' not in caplog.text and 'Fixed prompt' not in caplog.text
+
+
+@pytest.mark.parametrize('prefix', ['ASSESSMENT', 'ROADMAP'])
+def test_schema_repair_charges_another_call_before_provider_dispatch(monkeypatch, tmp_path, prefix):
+    from elo_shared.model_budget import budget_owner, reserve_provider_call
+    from elo_shared.runtime import Problem
+    monkeypatch.setenv(prefix + '_LLM_API_KEY', 'synthetic')
+    monkeypatch.setenv('MODEL_BUDGET_PATH', str(tmp_path / 'usage.sqlite3'))
+    monkeypatch.setenv('MODEL_BUDGET_OWNER_CALLS_PER_DAY', '1')
+    calls = []
+    def invalid(request):
+        calls.append(request)
+        return httpx.Response(200, json={'choices': [{'finish_reason':'stop', 'message':{'content':'{}'}}]})
+
+    async def exercise():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(invalid)) as client:
+            with budget_owner('owner'), pytest.raises(Problem) as denied:
+                await Model(client, prefix, reserve_call=reserve_provider_call).generate(Answer, 'Answer.', {})
+            assert denied.value.code == 'model_daily_allowance' and denied.value.status == 429
+    asyncio.run(exercise())
+    assert len(calls) == 1

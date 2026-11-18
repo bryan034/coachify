@@ -45,26 +45,43 @@ def career():return {'ready':True,'selection_version':1,'research':None,'goal':{
 '''
 ASSESS=r'''
 from app.main import create_app
+from app.schemas import SkillBatch
 class Model:
  configured=True
  async def generate(self,schema,instructions,context):
+  if schema is SkillBatch:
+   return SkillBatch(skills=[
+    {'skill_key':skill['key'],'category':'Technical coding','relevance':'high','competence_score':6,'required_score':7,
+     'explanation':'Used independently in the synthetic API project.','evidence_refs':[skill['sources'][0]['ref']],
+     'requirement_refs':[r['ref'] for r in context['goal']['requirements']]}
+    for skill in context['skills']])
   return schema.model_validate({'outcomes':[{'requirement_ref':r['ref'],'components':[{'dimension':'capability','status':'supported','explanation':'Declared personal API project.','evidence_refs':['cv:item1:claim:0']}],'recommendation':'Practise explaining the API decisions.','mapping_method':'canonical','mapping_reason':'Same shared Python identity.'} for r in context['requirements']]})
 app=create_app(model=Model())
 '''
 ROADMAP=r'''
 from datetime import datetime,timezone
 from app.main import create_app
-from app.schemas import ChatTurn
-BLOCKS=[{'day':2,'start_time':'19:00','duration_minutes':90,'kind':'preferred'},{'day':5,'start_time':'10:00','duration_minutes':120,'kind':'preferred'},{'day':6,'start_time':'09:00','duration_minutes':60,'kind':'backup'}]
+from app.schemas.roadmap import ChatTurn, OutlineDraft
+from app.schemas.weeks import WeekDraft
+BLOCKS=[{'day':2,'start_time':'19:00','duration_minutes':90},{'day':5,'start_time':'10:00','duration_minutes':120}]
+OUTCOME='A written explanation with two alternatives.'
 class Model:
  configured=True
  async def generate(self,schema,instructions,context,max_tokens=8192):
   if schema is ChatTurn:
-   return schema.model_validate({'reply':'I added those to your settings. Review the panel, then press Generate.','settings':{'target_date':'2030-02-01','weekly_minutes':180,'blocks':BLOCKS,'blackouts':[{'frequency':'once','start_date':'2030-01-12'}]}})
-  return schema.model_validate({'summary':'Practise explaining your existing API experience.','gaps':[],
-   'milestones':[{'key':'explain','title':'Explain your API decisions','gap_ids':[],'prerequisite_keys':[],'estimated_minutes':120,'projected_start':'2030-01-09','projected_end':'2030-01-20','demonstrable_outcome':'A written explanation with two alternatives.'}],
-   'assignments':[{'key':'first','milestone_key':'explain','gap_id':None,'kind':'study','date':'2030-01-09','start_time':'19:00','duration_minutes':60,'task':'Describe two trade-offs in your synthetic API project.','completion_criterion':'Write a concise explanation with two alternatives.'}],
-   'deadline_outcome':{'summary':'You can explain your API decisions by the target date.','achievable_by_target':['A written explanation'],'fits_in_runway':True},'beyond_deadline':[],'exclusions':[]})
+   return ChatTurn.model_validate({'reply':'Review the settings and generate your outline.','settings':{'target_date':'2030-02-01','weekly_minutes':180,'blocks':BLOCKS,'blackouts':[{'frequency':'once','start_date':'2030-01-12'}]}})
+  if schema is OutlineDraft:
+   weeks=[{'week_start':row['week_start'],'objective':'Explain the API decisions.' if index==0 else 'Keep this week clear after finishing the explanation.',
+           'expected_outcome':OUTCOME,'estimated_minutes':60 if index==0 else 0,'milestone_key':'explain','gap_ids':[]}
+          for index,row in enumerate(context['weekly_capacity'])]
+   return OutlineDraft.model_validate({'summary':'Practise explaining your existing API experience.',
+    'milestones':[{'key':'explain','title':'Explain your API decisions','estimated_minutes':60,'projected_start':'2030-01-09','projected_end':'2030-01-13','demonstrable_outcome':OUTCOME}],
+    'weeks':weeks,'deadline_outcome':{'summary':'Explain the API decisions by the target date.','achievable_by_target':[OUTCOME],'fits_in_runway':True}})
+  assert schema is WeekDraft
+  return WeekDraft.model_validate({'summary':'Document the project decisions.','tasks':[{
+    'key':'first','milestone_key':'explain','title':'Explain two API design choices','duration_minutes':60,
+    'description':'1. Choose two API decisions. 2. Compare an alternative to each. 3. Record the trade-offs.',
+    'instructions':'Describe two trade-offs in the synthetic API project.','completion_outcome':OUTCOME}]})
 # Wednesday 2030-01-09, 08:00 in Singapore: a partial first week with one blackout.
 app=create_app(model=Model(),clock=lambda:datetime(2030,1,9,0,0,tzinfo=timezone.utc))
 '''
@@ -108,17 +125,35 @@ def main():
             assert http.post('/api/v1/roadmaps/messages',json=body).status_code==202
             state=finish();assert state['operation']['status']=='succeeded',state['operation']
             runway=state['planner']['runway']
-            assert runway['can_generate'] and runway['weeks'][0]['partial'] and runway['weeks'][0]['usable_minutes']==90 and runway['study']['backup_extra_minutes']==60
-            assert state['planner']['inputs']['experience'] and not state['planner']['candidate']
+            assert runway['can_generate'] and runway['weeks'][0]['partial'] and runway['weeks'][0]['usable_minutes']==180
+            assert (runway['weeks'][0]['preferred_minutes'],runway['weeks'][0]['overflow_minutes'])==(60,120)
+            assert state['planner']['inputs']['experience'] and not state['planner']['outline_candidate']
+            # The user explicitly evaluates skills before generating a roadmap from that saved assessment.
+            assessment_url=f'http://127.0.0.1:{assess_port}/api/v1/assessments'
+            before=http.get(assessment_url+'/current')
+            before.raise_for_status()
+            evaluation=http.post(assessment_url,json={'expected_version':before.json()['version'],'mutation_id':str(uuid4()),'allow_partial':True})
+            assert evaluation.status_code==202,evaluation.text
+            for _ in range(100):
+                result=http.get(assessment_url+'/current')
+                result.raise_for_status()
+                operation=result.json().get('operation') or {}
+                if operation.get('status') in ('succeeded','failed'):
+                    break
+                time.sleep(.1)
+            assert operation.get('status')=='succeeded',operation
             body={'expected_version':state['version'],'mutation_id':str(uuid4()),'allow_partial_assessment':True}
-            assert http.post('/api/v1/roadmaps/planner/generate',json=body).status_code==202
+            assert http.post('/api/v1/roadmaps/planner/outlines/generate',json=body).status_code==202
             state=finish();assert state['operation']['status']=='succeeded',state['operation']
-            assert state['planner']['candidate']['assessment']['research_coverage']=='unavailable'
+            assert state['planner']['outline_candidate']['assessment']['research_coverage']=='unavailable'
             assert state['assessment']['job_skill_gaps'][0]['match_status']=='supported'
             accept={'expected_version':state['version'],'mutation_id':str(uuid4())}
-            response=http.post('/api/v1/roadmaps/planner/accept',json=accept);assert response.status_code==200,response.text;state=response.json()
+            preview=state['planner']['week_candidate']
+            assert preview['outline_id']==state['planner']['outline_candidate']['id'] and preview['tasks'][0]['schedule'][0]['duration_minutes']==60
+            accept_path='/api/v1/roadmaps/planner/outlines/'+state['planner']['outline_candidate']['id']+'/accept'
+            response=http.post(accept_path,json=accept);assert response.status_code==200,response.text;state=response.json()
             identifier=state['planner']['active']['id'];session=state['planner']['active']['assignments'][0]['id']
-            assert http.post('/api/v1/roadmaps/planner/accept',json=accept).json()['planner']['active']['id']==identifier
+            assert http.post(accept_path,json=accept).json()['planner']['active']['id']==identifier
             response=http.post('/api/v1/roadmaps/planner/assignments/status',json={'expected_version':state['version'],'mutation_id':str(uuid4()),'assignment_id':session,'status':'completed','evidence_note':'Explanation written.'})
             assert response.status_code==200,response.text
             completed=response.json()['planner']['active']

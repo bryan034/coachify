@@ -748,6 +748,43 @@ def test_password_attempt_rate_limit_is_enforced_without_account_creation(setup)
     assert repo.accounts.count_documents({})==0
 
 
+def test_failed_password_sources_step_up_without_locking_out_mailbox_owner(setup, monkeypatch):
+    client, repo = setup
+    account, existing_session, _, _ = register(client)
+    monkeypatch.setattr('app.repositories.verification.ACCOUNT_FAILURE_THRESHOLD', 2)
+    monkeypatch.setattr('app.repositories.verification.ACCOUNT_SOURCE_FAILURE_LIMIT', 1)
+    for source in ('192.0.2.1', '192.0.2.2'):
+        with patch('app.api.v1.accounts.password_source', return_value=source):
+            rejected, _ = complete(client, begin(client, 'login'), email=account['email'], password='incorrect password')
+            assert rejected.status_code == 401
+            limited, _ = complete(client, begin(client, 'login'), email=account['email'])
+            assert limited.status_code == 429
+    attempt = begin(client, 'login')
+    body = {'flow_id': attempt['flow_id'], 'attempt_id': attempt['attempt_id'], 'session_token': token_urlsafe(32),
+            'email': account['email'], 'password': PASSWORD}
+    pending = client.post(BASE + '/auth/complete', json=body)
+    assert pending.status_code == 200 and pending.json()['verification_required'] is True
+    assert client.post(BASE + '/auth/complete', json=body).json() == pending.json()
+    headers = {'Authorization': 'Bearer ' + body['session_token']}
+    assert client.get(BASE + '/auth/session', headers=headers).status_code == 401
+    assert client.get(BASE + '/auth/session', headers=existing_session).status_code == 200
+    proof = {k: body[k] for k in ('flow_id', 'attempt_id', 'session_token')}
+    proof.update(challenge_id=pending.json()['challenge_id'], code=repo.mailer.messages[-1][1])
+    assert client.post(BASE + '/auth/verify-email', json=proof).json()['id'] == account['id']
+    assert client.get(BASE + '/auth/session', headers=headers).status_code == 200
+
+
+def test_password_failure_limit_across_accounts_is_scoped_to_source(setup, monkeypatch):
+    client, _ = setup
+    account, _, _, _ = register(client)
+    monkeypatch.setattr('app.repositories.verification.SOURCE_FAILURE_LIMIT', 1)
+    assert complete(client, begin(client, 'login'), email='other@example.test')[0].status_code == 404
+    assert complete(client, begin(client, 'login'), email=account['email'])[0].status_code == 429
+    with patch('app.api.v1.accounts.password_source', return_value='192.0.2.3'):
+        accepted, _ = complete(client, begin(client, 'login'), email=account['email'])
+        assert accepted.json()['id'] == account['id']
+
+
 def test_legacy_mapping_rejects_production_other_owner_and_populated_target(setup):
     from app.domain.legacy import map_legacy_owner
     from app.schemas.profile import ProfilePatch

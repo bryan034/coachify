@@ -29,8 +29,8 @@ test('P13 uses canonical completion, guards deep links and distinguishes profile
  await expect(page).toHaveURL(/\/getting-started$/);
  await page.goto('/dashboard');
  await expect(page).toHaveURL(/\/dashboard$/);
- outage=true;
  await expect(page.getByRole('heading',{name:/Welcome back/})).toBeVisible();
+ outage=true;
  await page.goto('/profile');
  await expect(page).toHaveURL(/\/profile$/);
  await expect(page.getByRole('main').getByRole('alert')).toContainText('Synthetic profile outage');

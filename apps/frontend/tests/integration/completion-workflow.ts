@@ -144,7 +144,7 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
 
  await chapter('10. Upload a replacement without replacing history', 'A second CV is saved independently. Compare the previous evidence and explicitly choose which statements to carry forward. Similar names never transfer answers automatically.', page.getByLabel('CV document', {exact: true}));
  const replacementId = await upload();
- expect((await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBe(cvId);
+ await expect.poll(async () => (await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBe(replacementId);
  await page.getByRole('combobox', {name: 'Previous saved CV', exact: true}).selectOption(cvId);
  await page.getByRole('button', {name: 'Compare saved evidence', exact: true}).click();
  await expect(page.getByRole('heading', {name: 'Review changed source evidence', exact: true})).toBeVisible();

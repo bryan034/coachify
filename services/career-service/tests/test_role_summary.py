@@ -130,6 +130,33 @@ def test_route_generates_once_and_waits_for_research():
     assert http.post(PATH,json={'expected_version':3}).status_code==409 and not calls
 
 
+def test_concurrent_role_summary_generation_shares_one_provider_call():
+    from app.api.v1.role_summary import generate_once
+
+    async def check():
+        req, calls = request(good())
+        entered, release = asyncio.Event(), asyncio.Event()
+        original = req.app.state.ai.generate
+
+        async def paused(*args, **kwargs):
+            entered.set()
+            await release.wait()
+            return await original(*args, **kwargs)
+
+        req.app.state.ai.generate = paused
+        first = asyncio.create_task(generate_once(req, 'owner', goal(), record()))
+        await entered.wait()
+        second = asyncio.create_task(generate_once(req, 'owner', goal(), record()))
+        await asyncio.sleep(0)
+        release.set()
+        initial, concurrent = await asyncio.gather(first, second)
+        assert initial == concurrent and len(calls) == 1
+        await generate_once(req, 'owner', goal(), record())
+        assert len(calls) == 2
+
+    run(check())
+
+
 def test_bold_rules_headline_and_length_are_enforced():
     for text,issue in (('Pays **SGD 1500** **a** **month** **often**','too_much_bold'),('Pays *SGD 1500* monthly','unsupported_markup'),
                        ('**Pays SGD 1500 monthly**','bold_dominates'),('# Pays SGD 1500','unsupported_markup'),('Pays **SGD 1500** in [a](http://x)','unsupported_markup')):

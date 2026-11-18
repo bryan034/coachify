@@ -7,11 +7,43 @@ from pymongo.errors import DuplicateKeyError
 from app.core.security import now, keyed, digest
 
 
+ACCOUNT_FAILURE_THRESHOLD = 10
+SOURCE_FAILURE_LIMIT = 100
+ACCOUNT_SOURCE_FAILURE_LIMIT = 10
+
+
 class VerificationRepository:
     def __init__(self, database):
         self.flows = database.auth_flows
         self.limits = database.auth_limits
         self.limits.create_index('expires_at', expireAfterSeconds=0)
+
+    def password_buckets(self, secret, identity, source):
+        window = int(now().timestamp()) // 900
+        return (keyed(secret, 'password-account', identity, window),
+                keyed(secret, 'password-source', source, window),
+                keyed(secret, 'password-account-source', identity, source, window))
+
+    def check_password_source(self, buckets):
+        _, source, pair = buckets
+        blocked = self.limits.find_one({'$or': [
+            {'_id': source, 'count': {'$gte': SOURCE_FAILURE_LIMIT}},
+            {'_id': pair, 'count': {'$gte': ACCOUNT_SOURCE_FAILURE_LIMIT}},
+        ]}, {'_id': 1})
+        if blocked:
+            raise HTTPException(429, 'Too many attempts. Please wait 15 minutes before trying again.')
+
+    def failed_password(self, buckets):
+        for bucket in buckets:
+            query = {'_id': bucket}
+            change = {'$inc': {'count': 1}, '$setOnInsert': {'expires_at': now() + timedelta(minutes=30)}}
+            try:
+                self.limits.update_one(query, change, upsert=True)
+            except DuplicateKeyError:
+                self.limits.update_one(query, {'$inc': {'count': 1}})
+
+    def password_needs_mailbox(self, bucket):
+        return self.limits.find_one({'_id': bucket, 'count': {'$gte': ACCOUNT_FAILURE_THRESHOLD}}, {'_id': 1}) is not None
 
     def limit(self, secret, category, identity, maximum):
         window = int(now().timestamp()) // 900
@@ -33,7 +65,7 @@ class VerificationRepository:
                 'resend_at': flow['resend_at'].replace(tzinfo=now().tzinfo)}
 
     def send(self, flow, account, settings, mailer, resend=False):
-        if account.get('email_verified'):
+        if account.get('email_verified') and not flow.get('password_step_up'):
             raise HTTPException(409, 'This email is already verified. Sign in again.')
         if flow.get('otp_verified') or flow.get('otp_attempts', 0) >= 5:
             raise HTTPException(429, 'Verification attempts exhausted. Start again after the cooldown.')

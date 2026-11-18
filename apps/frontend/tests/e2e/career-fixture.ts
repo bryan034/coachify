@@ -1,3 +1,18 @@
+import {test as base} from '@playwright/test';
+
+// The Career pages also read assessment and roadmap state for the shared change banner.
+export const test = base.extend({
+  page: async ({page}, use) => {
+    await page.route('**/api/v1/assessments/current', route => route.fulfill({
+      json: {version: 0, stale: false, ready: false, model_available: true, result: null, operation: null, issues: []},
+    }));
+    await page.route('**/api/v1/roadmaps/dashboard-source', route => route.fulfill({
+      json: {version: 0, active: null, active_review: null, task_readiness: {}},
+    }));
+    await use(page);
+  },
+});
+
 // Shared synthetic API fixtures project one goal and separate progress/evidence reads.
 type Json=Record<string,any>;
 const reports=new Map<string,Json>();

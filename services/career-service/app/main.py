@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from app.core.auth import bearer, current_account
+from elo_shared.model_budget import reserve_provider_call
 from app.ai.adapter import AIAdapter
 from app.ai.config import AISettings
 from app.ai.routing import ModelRouter,opportunity_models
@@ -99,7 +100,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
         model_settings=AISettings.from_env() if ai is None else None
         async with httpx.AsyncClient(trust_env=model_settings is None or model_settings.provider!='local', follow_redirects=False) as ai_client:
             # One configured model serves every reasoning/extraction/chat stage.
-            primary=ai or AIAdapter(model_settings,ai_client)
+            primary=ai or AIAdapter(model_settings,ai_client,reserve_call=reserve_provider_call)
             context=primary if ai is None else context_ai
             app.state.ai=ModelRouter(primary,context) if context is not None else primary
             app.state.research_client = research_client or SourceAPIs.from_environment(ai_client)
@@ -170,8 +171,10 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
 
     @app.exception_handler(AIError)
     async def ai_error(request, error):
-        status=429 if error.code=='rate_limited' else 422 if error.code=='input_limit' else 409 if error.code=='stale_input' else 503
-        messages={'not_configured':'AI is disabled. Configure AI_ENABLED and CAREER_LLM_API_KEY on the Career service.',
+        status=429 if error.code in ('rate_limited', 'model_daily_allowance') else 422 if error.code=='input_limit' else 409 if error.code=='stale_input' else 503
+        messages={'model_daily_allowance':'The daily model allowance has been reached. Retry after the next UTC day.',
+                  'model_budget_unavailable':'Model usage could not be reserved. Retry when the service is available.',
+                  'not_configured':'AI is disabled. Configure AI_ENABLED and CAREER_LLM_API_KEY on the Career service.',
                   'unsupported_structured_output':'Career Discovery requires schema-constrained generation. Select a supported provider or configure verified json_schema_strict support for the compatible endpoint.',
                   'provider_auth':'Check CAREER_LLM_API_KEY and access to CAREER_LLM_BASE_URL for the configured model provider.',
                   'provider_configuration':'The AI provider rejected the request configuration. Check provider_error for the safe status and rejected field names.',
@@ -189,6 +192,8 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
         detail=messages.get(error.code,'The assistant could not complete this turn. Your saved progress is unchanged; retry shortly.')
         payload={'detail':detail,'code':error.code}
         if error.provider_error:payload['provider_error']=error.provider_error
+        if error.code == 'model_daily_allowance':
+            payload['retry_after'] = error.retry_after
         if error.code == 'rate_limited':
             payload['limit_scope'] = error.limit_scope
             payload['detail'] = 'The AI provider request or token quota was reached.' + ' Your inputs and saved progress are unchanged.'

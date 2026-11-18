@@ -16,6 +16,9 @@ def create_app(store=None,upstream=None,model=None):
         if not snapshot['ready']:raise Problem('Complete the selected CV and Career goal before assessment.',409,'inputs_missing')
         if snapshot['research_coverage'] not in ('available','no_findings') and not row['pending']['body']['allow_partial']:
             raise Problem('Interview research is unavailable, incomplete or stale. Retry research or choose a labelled target-only analysis.',409,'research_partial')
+        previous = evaluation_status(row, snapshot)
+        if previous['freshness'] == 'current' and previous['completeness'] == 'complete':
+            return row
         checkpoint=row['pending'].get('checkpoint')
         # A pre-v2 checkpoint can restart with the new rubric only when the exact
         # source revisions still match. Never reuse its already inflated scores.

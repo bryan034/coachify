@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 from bson import BSON
+from elo_shared.model_budget import budget_owner
 
 
 MAX_OWNER_ENTRIES = 10_000
@@ -130,7 +131,8 @@ class ModelUsage:
                 # A write may have committed. Never refund or call the provider
                 # after an uncertain reservation, and do not disclose DB details.
                 raise ModelAdmissionError(UNAVAILABLE) from exc
-            return callback(*args)
+            with budget_owner(owner):
+                return callback(*args)
         finally:
             fcntl.flock(descriptor, fcntl.LOCK_UN)
             os.close(descriptor)

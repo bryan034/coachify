@@ -2,6 +2,7 @@
 from copy import deepcopy
 from dataclasses import replace
 import json
+from uuid import uuid4
 import pytest
 from app.domain.extraction_errors import ExtractionFailure
 from app.core.config import Settings
@@ -443,10 +444,47 @@ def test_deleting_a_cv_erases_its_saved_state(harness):
     cv = upload(client).json()
     app.state.worker.run_once()
     states = app.state.repository.extraction_states
-    assert states.get(cv['id'])
+    checkpoint = states.get(cv['id'])
+    assert checkpoint
     latest = status(client, cv['id'])
     assert client.request('DELETE', '/api/v1/cv/' + cv['id'], json=mutation(latest['version'])).status_code == 200
+    # A checkpoint already prepared by a worker must remain rejected at storage.
+    states.save(checkpoint)
+    states.set_writes(cv['id'], checkpoint['checkpoint_id'], checkpoint['writes'])
+    states.discard(cv['id'])
+    states.delete(cv['id'])
+    states.save(checkpoint)
     assert states.get(cv['id']) is None
+    stored = (states.documents[cv['id']] if isinstance(states, MemoryExtractionStateStore)
+              else states.collection.find_one({'_id': cv['id']}))
+    assert stored == {'_id': cv['id'], 'erased': True}
+
+
+def test_recovery_scrubs_legacy_orphans_and_preserves_live_checkpoints(harness):
+    client, app, *_ = harness
+    retained, removed = upload(client).json(), upload(client).json()
+    repository = app.state.repository
+    states = repository.extraction_states
+    app.state.worker.run_once()
+    live = states.get(retained['id'])
+    stale = states.get(removed['id'])
+    assert live and stale
+    # Historical rows could accompany a completed receipt or lack a parent.
+    parent = repository.get('owner-a', removed['id'])
+    parent_receipt = {key: parent[key] for key in ('_id', 'user_id', 'upload_key')}
+    parent_receipt.update(revision=parent['revision'] + 1, original_available=False,
+                          operation={'id': parent['operation']['id'], 'status': 'deleted'},
+                          deletion={'state': 'complete'})
+    repository.replace(parent, parent_receipt)
+    orphan = str(uuid4())
+    states.save({**stale, '_id': orphan})
+    for _ in range(2):
+        app.state.worker.deletion.recover()
+        assert states.get(retained['id']) == live
+        assert states.get(orphan) is None
+        assert states.get(removed['id']) is None
+    states.save(stale)
+    assert states.get(removed['id']) is None
 
 
 def test_a_cv_deleted_mid_run_leaves_no_state_behind(harness):

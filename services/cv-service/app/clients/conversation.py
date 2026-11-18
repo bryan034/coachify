@@ -110,6 +110,7 @@ class ConversationRouter(Extractor):
             timeout = self._request_timeout(20)
             deadline = time.monotonic() + timeout + 5
             with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=not self.local) as client:
+                self.reserve_dispatch(payload)
                 with sync_model_response(client, self.base_url, self.api_key,
                                          httpx.Timeout(timeout, connect=5), payload, local=self.local,
                                          telemetry={'service': 'cv', 'stage': 'cv_skill_levels',
@@ -155,6 +156,7 @@ class ConversationRouter(Extractor):
             timeout=self._request_timeout(20)
             deadline = time.monotonic() + timeout + 5
             with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=not self.local) as client:
+                self.reserve_dispatch(payload)
                 with sync_model_response(client, self.base_url, self.api_key,
                                          httpx.Timeout(timeout, connect=5), payload, local=self.local,
                                          telemetry={"service": "cv", "stage": context.get("task", "conversation"),

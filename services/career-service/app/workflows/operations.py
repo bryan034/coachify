@@ -29,6 +29,7 @@ class Failure:
     """Retain bounded public diagnostics, never an exception or request frames."""
     kind: str
     values: dict
+    retry_at: float | None = None
 
     @classmethod
     def capture(cls, error):
@@ -40,9 +41,10 @@ class Failure:
                 fields=error.fields, violations=error.violations, provider=error.provider,
                 provider_error=error.provider_error, limit_scope=error.limit_scope,
                 retry_after=error.retry_after, input_count=error.input_count)
+            retry_at = time.monotonic() + safe.retry_after if code == 'model_daily_allowance' and safe.retry_after else None
             return cls('ai', {name: getattr(safe, name) for name in
                 ('code','retryable','reason','fields','violations','provider','provider_error',
-                 'limit_scope','retry_after','input_count')})
+                 'limit_scope','retry_after','input_count')}, retry_at)
         if isinstance(error, CareerScopeError): return cls('scope', {})
         if isinstance(error, GoalError):
             if not isinstance(error.message,str) or len(error.message)>1024:
@@ -55,6 +57,8 @@ class Failure:
         return cls('goal', {'message': 'This temporary operation failed. Retry your retained input.', 'status': 503})
 
     def exception(self):
+        if self.retry_at is not None:
+            return AIError(**{**self.values, 'retry_after': max(0, math.ceil(self.retry_at - time.monotonic()))})
         if self.kind == 'ai': return AIError(**self.values)
         if self.kind == 'scope': return CareerScopeError()
         if self.kind == 'operation': return OperationConflict(**self.values)
@@ -127,6 +131,8 @@ class Operations:
                 if job.digest != digest or job.kind != kind:
                     raise OperationConflict('operation_key_reused','This request changed after it started. Return to Career Goal and submit the updated description again.')
                 if job.error is not None:
+                    if job.error.retry_at is not None and job.error.retry_at > time.monotonic():
+                        raise job.error.exception()
                     del self.jobs[job.id]
                     break
                 return job.view()

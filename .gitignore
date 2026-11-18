@@ -34,6 +34,15 @@ htmlcov/
 runtime/
 uploads/
 mongo-data/
+# Database dumps and WiredTiger data files belong outside source control.
+*mongo*backup*.tgz
+*mongo*backup*.tar*
+*mongo*backup*.zip
+*mongo*backup*.archive*
+*mongo*dump*.archive*
+*.bson
+*.wt
+WiredTiger*
 logs/
 *.log
 work/

@@ -17,6 +17,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  database-artifacts:
+    name: Reject committed database artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tracked paths for MongoDB backups and data files
+        shell: bash
+        run: |
+          artifacts=$(git ls-files -- \
+            ':(icase,glob)**/mongo-data/**' ':(icase,glob)**/WiredTiger*' \
+            ':(icase,glob)**/*.wt' ':(icase,glob)**/*.bson' \
+            ':(icase,glob)**/*mongo*backup*.tgz' ':(icase,glob)**/*mongo*backup*.tar*' \
+            ':(icase,glob)**/*mongo*backup*.zip' ':(icase,glob)**/*mongo*backup*.archive*' \
+            ':(icase,glob)**/*mongo*dump*.archive*')
+          if [[ -n "$artifacts" ]]; then
+            printf '%s\n' 'Database artifacts are tracked:' "$artifacts" >&2
+            exit 1
+          fi
+
   frontend-unit:
     name: Frontend unit tests
     runs-on: ubuntu-latest
@@ -77,9 +97,9 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e ../../packages/elo-shared -e '.[test]'
-      - name: Verify shared API contracts and model transport
+      - name: Run shared package tests
         if: matrix.service == 'assessment'
-        run: python -m pytest ../../packages/elo-shared/tests/test_api_contract.py ../../packages/elo-shared/tests/test_model.py ../../packages/elo-shared/tests/test_model_sdk.py ../../packages/elo-shared/tests/test_model_errors.py ../../packages/elo-shared/tests/test_milestone_review.py ../../packages/elo-shared/tests/test_skill_groups.py
+        run: python -m pytest ../../packages/elo-shared/tests
       - name: Provision Career tokenizer before test network isolation
         if: matrix.service == 'career'
         run: python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
@@ -96,16 +116,16 @@ jobs:
 
   profile-integration:
     name: Profile MongoDB integration
-    # Runner pinned while MongoDB 8.0 rejected kernels >=6.19. mongo:8.2 starts on them; see docs/testing.md.
+    # Keep the runner on a kernel supported by the MongoDB image. See docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     services:
       mongodb:
-        image: mongo:8.2
+        image: mongo:8.3
         ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
-          --health-interval 5s --health-timeout 5s --health-retries 20
+          --health-interval 5s --health-timeout 5s --health-retries 20 --ulimit nofile=16384:16384
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -120,7 +140,7 @@ jobs:
 
   analysis-integration:
     name: Analysis MongoDB contracts (${{ matrix.service }})
-    # Runner pinned while MongoDB 8.0 rejected kernels >=6.19. mongo:8.2 starts on them; see docs/testing.md.
+    # Keep the runner on a kernel supported by the MongoDB image. See docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
@@ -131,11 +151,11 @@ jobs:
         service: [career, cv, jobs]
     services:
       mongodb:
-        image: mongo:8.2
+        image: mongo:8.3
         ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
-          --health-interval 5s --health-timeout 5s --health-retries 20
+          --health-interval 5s --health-timeout 5s --health-retries 20 --ulimit nofile=16384:16384
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -156,7 +176,7 @@ jobs:
 
   local-ui-integration:
     name: Local UI and MongoDB integration
-    # Runner pinned while MongoDB 8.0 rejected kernels >=6.19. mongo:8.2 starts on them; see docs/testing.md.
+    # Keep the runner on a kernel supported by the MongoDB image. See docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
@@ -213,12 +233,13 @@ jobs:
   test-gate:
     name: Test gate
     if: ${{ always() }}
-    needs: [frontend-unit, frontend-e2e, backend, profile-integration, analysis-integration, local-ui-integration]
+    needs: [database-artifacts, frontend-unit, frontend-e2e, backend, profile-integration, analysis-integration, local-ui-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require every test job to pass
         env:
+          ARTIFACT_RESULT: ${{ needs.database-artifacts.result }}
           UNIT_RESULT: ${{ needs.frontend-unit.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
@@ -226,6 +247,7 @@ jobs:
           ANALYSIS_RESULT: ${{ needs.analysis-integration.result }}
           INTEGRATION_RESULT: ${{ needs.profile-integration.result }}
         run: |
+          test "$ARTIFACT_RESULT" = success
           test "$UNIT_RESULT" = success
           test "$E2E_RESULT" = success
           test "$BACKEND_RESULT" = success

@@ -12,6 +12,7 @@ from app.api.v1.cv import router
 from app.api.v1.conversations import router as conversation_router
 from app.clients.conversation import ConversationRouter
 from app.conversation.service import ConversationService
+from elo_shared.model_budget import reserve_provider_call
 from app.clients.extractor import Extractor
 from app.clients.interpretation import Interpreter
 from app.clients.career import CareerTargetProvider, service_url
@@ -63,11 +64,11 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
                 base_url=os.getenv('PROFILE_SERVICE_URL', 'http://profile-service:8000'), timeout=5,
                 follow_redirects=False, trust_env=False))
             app.state.settings = settings
-            app.state.extractor = extractor or Extractor()
-            app.state.interpreter = interpreter or Interpreter()
+            app.state.extractor = extractor or Extractor(reserve_call=reserve_provider_call)
+            app.state.interpreter = interpreter or Interpreter(reserve_call=reserve_provider_call)
             app.state.files = FileStore(settings.storage_path)
             app.state.service = CvService(app.state.repository, app.state.files, settings)
-            app.state.conversations = ConversationService(app.state.service, chat_provider or ConversationRouter())
+            app.state.conversations = ConversationService(app.state.service, chat_provider or ConversationRouter(reserve_call=reserve_provider_call))
             if target_provider is not None: app.state.target_provider = target_provider
             else:
                 career_client = await stack.enter_async_context(httpx.AsyncClient(

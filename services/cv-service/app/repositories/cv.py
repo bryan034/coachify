@@ -69,6 +69,9 @@ class CvRepository:
     def capacity_record(self, identifier):
         return self.collection.find_one({'_id': identifier}, CAPACITY_FIELDS)
 
+    def visible_ids(self, identifiers):
+        return {row['_id'] for row in self.collection.find({'_id': {'$in': identifiers}, **VISIBLE}, {'_id': 1})}
+
     def replace(self, previous, document):
         result = self.collection.replace_one({'_id': previous['_id'], 'user_id': previous['user_id'],
                                               'revision': previous['revision']}, deepcopy(document))
@@ -171,6 +174,10 @@ class MemoryCvRepository:
         with self.lock:
             doc = self.documents.get(identifier)
             return {key: deepcopy(doc[key]) for key in CAPACITY_FIELDS if key in doc} if doc else None
+
+    def visible_ids(self, identifiers):
+        with self.lock:
+            return {key for key in identifiers if key in self.documents and not self.documents[key].get('deletion')}
 
     def replace(self, previous, document):
         with self.lock:

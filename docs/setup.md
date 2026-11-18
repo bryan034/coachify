@@ -250,7 +250,11 @@ saved-result staleness and roadmap generation remain unimplemented. See the
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml down
 ```
 
-The stack uses `mongo:8.2`, which starts on Docker Desktop kernels 6.19 and newer. The `mongo:8.0` and `mongo:8.3` images refuse to start on those kernels. Do not treat a local startup compatibility failure as an application test pass or silently bypass the server's guard. An existing 8.0 data volume opens on 8.2 with its feature compatibility version still at 8.0; leave it there if you may need to return to 8.0.
+### Upgrade an existing MongoDB volume
+
+Fresh installations use `mongo:8.3`. Before upgrading an existing volume, stop application writers, keep an access-controlled backup outside Git, and verify restore to a separate volume. For an existing 8.2 deployment, confirm that it is still healthy on 8.2 and that its feature compatibility version (FCV) is `8.2` before starting 8.3 on that volume. A volume carried forward from 8.0 may still report FCV `8.0`. Follow MongoDB’s upgrade procedure for the installed version and FCV, including any required intermediate steps. Verify service access and retained data on 8.3 before changing the FCV to `8.3`. Preserve the original backup until the upgrade is accepted. [MongoDB upgrade procedures](https://www.mongodb.com/docs/manual/release-notes/8.3-upgrade/)
+
+Run the image on a Docker host supported by that MongoDB release. Some Docker Desktop hosts with Linux kernels 6.19 and newer trigger MongoDB’s startup guard. Use a compatible host if the image rejects the current kernel.
 See [testing](testing.md) for automated checks and disposable test stacks.
 
 ## Career model and search configuration
@@ -305,6 +309,11 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 Existing deployments retain their configured providers until their private settings are updated; without the public template, Compose falls back to OpenRouter (`https://openrouter.ai/api/v1`, `openai/gpt-4o-mini`) and requires `OPENROUTER_API_KEY` or a service key.
 
 Keep `AI_ENABLED=true` for Career inference and configure public search independently. SDK retries are disabled; each service retains its own retry, quota, timeout and validation policy.
+
+Career, CV, Assessment and Roadmap reserve capacity before every cloud model dispatch, including provider and validation retries. The default per-account daily allowance is 250 calls and 8 million units. The deployment shares 4,000 calls and 160 million units per UTC day across all accounts and provider keys. One unit is one serialized request byte or one requested output token. Charges stay reserved when the provider fails or times out. See the four `MODEL_BUDGET_*` settings in the public Compose template. A zero allowance stops cloud dispatches. Local inference and disabled models do not consume the allowance.
+
+The counters contain hashed account IDs and reside on the `model_budget` named volume. Keep this volume mounted across restarts and replicas on the same Docker host. Independent hosts require a coordinated ledger or provider-side spending limits to bound their combined usage. Provider billing depends on the selected model and its prices. For a direct service run, point `MODEL_BUDGET_PATH` at the same writable SQLite file for all four processes.
+
 
 For optional local testing, select an Ollama-compatible server on the Docker host
 and keep Brave LLM Context for search:

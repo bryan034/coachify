@@ -53,9 +53,10 @@ test('confirmed Career targets drive saved project, work and skill clarification
   await expect(page.getByRole('button', { name: 'Skip and continue', exact: true })).toHaveCount(before - 1);
  }
  const clarified = await (await account.get(`/api/v1/cv/${cvId}`)).json();
- expect(clarified.clarifications).toHaveLength(4);
- expect(clarified.clarifications.filter((q: { status: string }) => q.status === 'answered')).toHaveLength(2);
- expect(clarified.clarifications.filter((q: { status: string }) => q.status === 'skipped')).toHaveLength(1);
+ const targetQuestions = clarified.clarifications.filter((q: { career_target_id: string | null }) => q.career_target_id === targetId);
+ expect(targetQuestions).toHaveLength(4);
+ expect(targetQuestions.filter((q: { status: string }) => q.status === 'answered')).toHaveLength(2);
+ expect(targetQuestions.filter((q: { status: string }) => q.status === 'skipped')).toHaveLength(1);
  // Python attributed only to a teammate is no longer an active proficiency question.
  expect(clarified.skills.find((skill: { skill_id: string }) => skill.skill_id === 'skill:sql').sources).toEqual(expect.arrayContaining([expect.objectContaining({ attribution: 'personal' })]));
  expect(clarified.effective_version).toBe(afterAnswers.effective_version);

@@ -87,7 +87,8 @@ Private requests use a elo session bearer. Email accounts sign in with email
 and password (8–128 characters for registration and password reset). The current local configuration disables Google sign-in. New registrations
 accept any valid email address and require an emailed OTP before an account is created.
 Pending details live in the expiring verification attempt; resume that attempt or
-start registration again. Verified accounts keep their existing sign-in behavior.
+start registration again. When a password account receives repeated failed
+sign-ins, its owner may need an emailed code with the correct password.
 The authenticated account response exposes the server-owned CV review policy:
 all accounts use item scope. Its existing version 1 wire contract keeps older CV
 deployments compatible while the CV service upgrades saved policy snapshots.

@@ -23,7 +23,7 @@ class StoredOperation(Document):
     result_id: DomainId | None = None
     generation: Generation | None = None
     error_code: Literal['not_configured', 'invalid_operation', 'stale_input', 'busy', 'capacity',
-        'rate_limited', 'timeout', 'unavailable', 'provider_auth', 'provider_configuration',
+        'rate_limited', 'model_daily_allowance', 'model_budget_unavailable', 'timeout', 'unavailable', 'provider_auth', 'provider_configuration',
         'context_limit', 'output_limit', 'incomplete_output', 'invalid_output', 'cancelled'] | None = None
 
     @model_validator(mode='after')

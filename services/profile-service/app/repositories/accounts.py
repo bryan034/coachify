@@ -57,7 +57,7 @@ class AccountRepository:
             raise HTTPException(409, 'Access attempt cancelled, changed mode or expired. Start again.')
         return flow
 
-    def finish(self, data, settings, verify):
+    def finish(self, data, settings, verify, source):
         flow = self.attempt(data, settings)
         fingerprint = keyed(settings.otp_secret, flow['intent'], data.name, data.email, data.password,
                             data.credential, digest(data.session_token))
@@ -65,8 +65,10 @@ class AccountRepository:
             if flow['fingerprint'] != fingerprint:
                 raise HTTPException(409, 'This attempt has already been used. Start again to change account details.')
         else:
-            account, registration, replaces = self.authenticate(data, flow, settings, verify)
+            account, registration, replaces, step_up = self.authenticate(data, flow, settings, verify, source)
             changes = {'fingerprint': fingerprint, 'account_id': account['id'], 'session_hash': digest(data.session_token)}
+            if step_up:
+                changes['password_step_up'] = True
             if account.get('password_hash'):
                 changes['credential_hash'] = account['password_hash']
             if registration:
@@ -85,11 +87,11 @@ class AccountRepository:
             account = self.activate_registration(flow)
         if account.get('migration_pending'):
             raise HTTPException(409, 'Account maintenance in progress. Please retry later.')
-        if not account.get('email_verified'):
+        if not account.get('email_verified') or (flow.get('password_step_up') and not flow.get('otp_verified')):
             return self.verification.send(flow, account, settings, self.mailer)
         return self.publish(data, flow, account, settings)
 
-    def authenticate(self, data, flow, settings, verify):
+    def authenticate(self, data, flow, settings, verify, source):
         google = data.credential is not None
         if google:
             if settings.mode != 'google' or data.email is not None or data.password is not None:
@@ -110,7 +112,9 @@ class AccountRepository:
             provider = 'local_test' if settings.mode == 'local_test' else 'email'
             identity = provider + ':' + email
             name = (data.name or '').strip() or email.split('@')[0]
-            self.verification.limit(settings.otp_secret, 'credentials', identity, 10)
+            if flow['intent'] == 'register':
+                self.verification.limit(settings.otp_secret, 'registration-source', source, 100)
+                self.verification.limit(settings.otp_secret, 'registration-account-source', [identity, source], 10)
         account = self.accounts.find_one({'identity': identity})
         if google and account and not account.get('email'):
             # Upgrade only after proving the exact Google subject; never link by email.
@@ -121,14 +125,19 @@ class AccountRepository:
             if google:
                 if not account:
                     raise HTTPException(404, 'Account not found. Choose Create account first.')
-            elif not password_matches((account or {}).get('password_hash'), data.password):
+                return account, False, None, False
+            buckets = self.verification.password_buckets(settings.otp_secret, identity, source)
+            self.verification.check_password_source(buckets)
+            if not password_matches((account or {}).get('password_hash'), data.password):
+                self.verification.failed_password(buckets)
                 if not account:
                     raise HTTPException(404, 'No account was found for this email address. Create a new account to get started.')
                 raise HTTPException(401, 'Email or password is incorrect.')
-            return account, False, None
+            step_up = account.get('email_verified') and self.verification.password_needs_mailbox(buckets[0])
+            return account, False, None, step_up
         if account:
             if google and not account.get('email_verified') and account.get('created_by') == digest(data.attempt_id):
-                return account, False, None
+                return account, False, None, False
             if google or not self.reclaimable_reservation(account):
                 raise HTTPException(409, 'An account already exists for this email address. Sign in or use Forgot password.')
         identifier = str(uuid4())
@@ -137,7 +146,7 @@ class AccountRepository:
                      'created_at': now(), 'created_by': digest(data.attempt_id), 'email_verified': False}
         if not google:
             candidate['password_hash'] = hasher.hash(data.password)
-        return candidate, True, account['id'] if account else None
+        return candidate, True, account['id'] if account else None, False
 
     def bound_account(self, flow):
         account = flow.get('registration_candidate') or self.accounts.find_one({'id': flow.get('account_id')})
@@ -227,7 +236,7 @@ class AccountRepository:
         verified = self.verification.consume(data, flow, account, settings)
         if verified.get('registration_candidate'):
             account = self.activate_registration(verified)
-        else:
+        elif not verified.get('password_step_up'):
             updated = self.accounts.update_one({'id': account['id'], 'identity': account['identity'], 'email': account['email'],
                                                'migration_pending': {'$ne': True}},
                                               {'$set': {'email_verified': True, 'email_verified_at': now()}})
