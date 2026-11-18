@@ -12,7 +12,8 @@ def facts(*fields):
     ({'source_kind':'project','attribution':'unknown'},3),
     ({'source_kind':'project','attribution':'personal','support_uncertain':True},3),
     ({'attribution':'personal','assistance':'assisted'},3),
-    ({'attribution':'personal','assistance':'independent'},4),
+    ({'attribution':'personal','assistance':'independent'},3),
+    ({'attribution':'personal','assistance':'assisted','review_facts':facts('outcome')},5),
     ({'attribution':'personal','assistance':'independent','review_facts':facts('outcome')},5),
     ({'attribution':'personal','assistance':'independent','review_facts':facts('outcome','complexity','problem_solving')},7),
     ({'attribution':'personal','assistance':'independent','experience_months':30,'review_facts':facts('outcome','complexity','problem_solving','frequency','recency')},9),
@@ -26,7 +27,7 @@ def test_both_scoring_paths_obey_the_evidence_ceiling(record,level):
     result=planning_estimate({'kind':'job_skill','priority':'required','competence_target':{'level':8}},outcome,{'e1':record})
     assert result['demonstrated_score']==level and result['required_score']==8
     assert result['competence_score']==(goal_score(level,8) if level is not None else None)
-    assert result['scoring_rubric_version']=='evidence-role-v4'
+    assert result['scoring_rubric_version']=='evidence-role-v5'
     assert (result['score_status']=='estimated')==(level is not None)
 
 
@@ -37,10 +38,15 @@ def test_self_ratings_do_not_inflate_or_override_evidence():
         assert evidence_level([record],10)==5
 
 
-def test_failed_outcomes_and_conflicts_do_not_prove_success():
-    record={'attribution':'personal','assistance':'independent','review_facts':[{'field':'outcome','status':'supported','value':'The deployment failed.'}]}
-    assert evidence_level([record],10)==3
-    record['review_facts']=[{'field':'assistance','status':'conflicting','value':'Unclear help.'}]
+def test_independence_and_outcomes_do_not_change_the_understanding_level():
+    # The level rates understanding; a failed or AI-assisted delivery says nothing against it.
+    record={'attribution':'personal','assistance':'supervised','review_facts':[{'field':'outcome','status':'supported','value':'The deployment failed.'}]}
+    assert evidence_level([record],10)==5
+
+
+def test_conflicts_remove_the_level():
+    record={'attribution':'personal','assistance':'independent'}
+    record['review_facts']=[{'field':'skill_use','status':'conflicting','value':'Unclear use.'}]
     assert evidence_level([record],10)==None
 
 
@@ -52,7 +58,7 @@ def test_only_reaching_the_role_target_scores_ten():
     assert goal_score(9,8)==10
 
 
-def test_explicit_low_replication_confidence_limits_the_current_estimate():
+def test_replication_confidence_does_not_limit_understanding():
     record={'attribution':'personal','assistance':'independent','review_facts':facts('outcome')+
         [{'field':'replication_confidence','status':'supported','value':'I am unsure and need help to repeat it.'}]}
-    assert evidence_level([record],10)==3
+    assert evidence_level([record],10)==5

@@ -18,7 +18,7 @@ export function AdviserChat({ workspace, runway, text, setText, partial, setPart
  workspace: Workspace; runway: Runway | null; text: string; setText: (value: string) => void; partial: boolean; setPartial: (value: boolean) => void; showPartial: boolean;
  busy: boolean; running: boolean; frozen: boolean; editing: boolean; takeFocus: boolean; send: () => void; retry: () => void; close: () => void;
 }) {
- const { transcript, showJump, jumpToLatest, scrollProps } = useChatScroll();
+ const { transcript, resumeFollow, showJump, jumpToLatest, scrollProps } = useChatScroll();
  const input = useRef<HTMLTextAreaElement>(null);
  useEffect(() => { if (takeFocus) input.current?.focus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
  const { context } = workspace;
@@ -37,7 +37,7 @@ export function AdviserChat({ workspace, runway, text, setText, partial, setPart
    {failed && workspace.retry_request && <div className="roadmap-notice"><p>{friendlyOperationError(workspace.operation?.error, 'This response could not finish. Your message is saved.')}</p>{!!workspace.operation?.retry_after && <p role="status">Provider capacity: retry in {workspace.operation.retry_after} seconds.</p>}<button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={retry}>{workspace.operation?.error?.code === 'inputs_changed' ? 'Retry with current inputs' : 'Retry saved message'}</button></div>}
   </div>
   <ChatScrollControl visible={showJump} onClick={jumpToLatest} />
-  <form className="adviser-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); send(); }}>
+  <form className="adviser-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); resumeFollow(); send(); }}>
    {!validResearch && context.ready && <p className="small">Using available evidence. Interview research is {context.research_coverage || 'unavailable'}; the comparison will be labelled partial.</p>}
    {!context.model_available && <p className="small">Your helper is unavailable. Your saved plan remains available, and you can still fill in the planner yourself.</p>}
    {!!blocker && !!text.trim() && <p className="small" role="status">{blocker}</p>}

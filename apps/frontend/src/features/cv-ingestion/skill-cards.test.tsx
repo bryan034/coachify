@@ -3,9 +3,9 @@ import {beforeEach, expect, it, vi} from 'vitest';
 import {SkillsOverview} from './skills-overview';
 import {evaluatedSkill, profileSkillGroups, profileSkillList, skillStatus} from './skill-cards';
 import type {Comparison} from '@/features/assessment/comparison';
-import {rateSkill, skillRatings} from '@/lib/api/assessment';
+import {rateSkill, reevaluateSkill, skillRatings} from '@/lib/api/assessment';
 
-vi.mock('@/lib/api/assessment', async original => ({...await original<typeof import('@/lib/api/assessment')>(), skillRatings: vi.fn(), rateSkill: vi.fn()}));
+vi.mock('@/lib/api/assessment', async original => ({...await original<typeof import('@/lib/api/assessment')>(), skillRatings: vi.fn(), rateSkill: vi.fn(), reevaluateSkill: vi.fn()}));
 import type {CvDetail, CvSkill, Declarations, SkillEstimate, SkillsProfile} from './types';
 import type {Assessment} from '@/features/roadmap/types';
 
@@ -64,37 +64,58 @@ it('shows the CV review level without a comparison and never invents one for ins
  expect(profileSkillList(cv([skill('SQL')],[estimate('SQL','insufficient_evidence')]),null,null)[0].established).toBe(false);
 });
 
-it('opens Talk it through on a skill, with the role’s target, review note and where the level comes from',()=>{
+it('opens the Skills Helper on a skill, with the role’s target, review note and where the level comes from',()=>{
  const python={...skill('Python'),canonical_skill_id:'python'};
  const goal=ready({skills:[{name:'Python',canonical_skill_id:'python',competence_target:{level:8,explanation:'You can ship it unaided.'},learning_items:[{name:'Build a CLI',reason:'Shows independent delivery.'}]}]});
  view({...cv([python]),review_summary:{answered_questions:1,experiences:1,skills_added:0,skills_corrected:0,skills_removed:0,added_skill_ids:[],skill_notes:{python:'You wrote the ETL scripts yourself.'}}} as unknown as CvDetail,null,null,judged([{name:'Python',canonical_skill_id:'python',competence_score:6,required_score:8}]),goal);
  fireEvent.click(chip('Python'));
  const panel=dialog('Python');
- expect(panel).toHaveTextContent(/target for Python is 8 out of 10\. You can ship it unaided\./);
- expect(within(panel).getByText(/You’re at 6 now, based on Reporting API\. From your CV review: You wrote the ETL scripts yourself\./)).toBeVisible();
- fireEvent.click(within(panel).getByRole('button',{name:'Not yet, help me build it'}));
- expect(within(panel).getByText('Build a CLI')).toBeVisible();
- expect(within(panel).getByRole('button',{name:'Add to my roadmap'})).toBeVisible();
+ expect(within(panel).getByRole('heading',{name:'Why is Python rated 6 out of 10?'})).toBeVisible();
+ expect(within(panel).getByText(/You wrote the ETL scripts yourself\. The target for .* is 8\./)).toBeVisible();
+ expect(within(panel).getByText(/If your CV review doesn’t show solid evidence, elo assumes you used complete guidance/)).toBeVisible();
+ expect(within(panel).getByText('Skills Helper')).toBeVisible();
+ expect(within(panel).getByText(/Want elo to take another look\?/)).toBeVisible();
+ expect(within(panel).getByRole('textbox',{name:'Your answer'})).toBeVisible();
+ expect(within(panel).queryByRole('button',{name:/help me build it|evidence to add/i})).not.toBeInTheDocument();
  fireEvent.click(within(panel).getByRole('button',{name:'Close chat'}));
 });
 
-it('saves what the person tells elo as evidence on the Skills Profile and can take it back',async()=>{
+it('saves what the person tells elo as evidence, then re-judges only that skill',async()=>{
  const base={version:1,declarations:[]};
- const added={version:2,declarations:[{id:'d1',name:'SQL',description:'Cleaned café sales.',skill_id:'skill:sql',provenance:'user_declared',contributions:[{id:'c1',description:'Cleaned café sales.\nTools used: Excel',created_at:'2026-11-17T00:00:00Z'}],created_at:'2026-11-17T00:00:00Z',updated_at:'2026-11-17T00:00:00Z'}]};
- vi.spyOn(cvApi,'declarations').mockResolvedValueOnce(base as never).mockResolvedValue(added as never);
- const addDeclaration=vi.spyOn(cvApi,'addDeclaration').mockResolvedValue(added as never);
- const withdraw=vi.spyOn(cvApi,'withdrawDeclaration').mockResolvedValue(base as never);
+ vi.spyOn(cvApi,'declarations').mockResolvedValue(base as never);
+ const addDeclaration=vi.spyOn(cvApi,'addDeclaration').mockResolvedValue({version:2,declarations:[]} as never);
+ vi.mocked(reevaluateSkill).mockResolvedValue({version:3,skill:{name:'SQL',canonical_skill_id:null,competence_score:5,required_score:7,relevance:'high',explanation:'Synthetic.'}});
  view(cv([skill('SQL'),skill('Excel')]));
  fireEvent.click(chip('SQL'));
  const panel=dialog('SQL');
- fireEvent.click(within(panel).getByRole('button',{name:'Yes, let me tell you'}));
  fireEvent.change(within(panel).getByRole('textbox',{name:'Your answer'}),{target:{value:'Cleaned café sales.'}});
- fireEvent.click(within(panel).getByRole('button',{name:'Send'}));
- fireEvent.click(await within(panel).findByRole('button',{name:'Excel'}));
- fireEvent.click(within(panel).getByRole('button',{name:'Done'}));
- await waitFor(()=>expect(addDeclaration).toHaveBeenCalledWith(expect.objectContaining({expected_version:1,name:'SQL',description:'Cleaned café sales.\nTools used: Excel',mode:'new'}),'synthetic',expect.any(AbortSignal)));
- expect(await within(panel).findByText(/I’ve added it to your Skills Profile/)).toBeVisible();
- expect(withdraw).not.toHaveBeenCalled();
+ fireEvent.click(within(panel).getByRole('button',{name:'Send message'}));
+ await waitFor(()=>expect(addDeclaration).toHaveBeenCalledWith(expect.objectContaining({expected_version:1,name:'SQL',description:'Cleaned café sales.',mode:'new'}),'synthetic',expect.any(AbortSignal)));
+ expect(reevaluateSkill).toHaveBeenCalledWith('synthetic',{name:'SQL',canonical_skill_id:null},expect.any(AbortSignal));
+ expect(await within(panel).findByText('SQL: Not rated → 5')).toBeVisible();
+});
+
+it('keeps the answer saved and says so when the skill cannot be re-judged yet',async()=>{
+ vi.spyOn(cvApi,'declarations').mockResolvedValue({version:1,declarations:[]} as never);
+ vi.spyOn(cvApi,'addDeclaration').mockResolvedValue({version:2,declarations:[]} as never);
+ vi.mocked(reevaluateSkill).mockRejectedValue(Object.assign(new Error('x'),{status:409,code:'full_evaluation_required'}));
+ view(cv([skill('SQL')]));
+ fireEvent.click(chip('SQL'));
+ const panel=dialog('SQL');
+ fireEvent.change(within(panel).getByRole('textbox',{name:'Your answer'}),{target:{value:'Cleaned café sales.'}});
+ fireEvent.click(within(panel).getByRole('button',{name:'Send message'}));
+ expect(await within(panel).findByText(/Your answer is saved\. Your level updates the next time/)).toBeVisible();
+});
+
+it('lists goal skills first in each category, most important first, and can filter to them',()=>{
+ const goal=ready({skills:[{name:'FastAPI',priority:'preferred'},{name:'SQL',priority:'unspecified'},{name:'Python',priority:'required'}]});
+ view(cv([skill('Docker','Cloud & DevOps'),skill('FastAPI'),skill('Python'),skill('SQL')]),null,null,null,goal);
+ const names=(region:string)=>within(screen.getByRole('region',{name:region})).getAllByRole('button').map(button=>button.getAttribute('aria-label')?.split(',')[0]);
+ expect(names('Technical coding')).toEqual(['Python','FastAPI']);
+ expect(names('Data & analytics')).toEqual(['SQL']);
+ fireEvent.click(screen.getByRole('button',{name:'Show only skills relevant to your goal'}));
+ expect(screen.queryByRole('button',{name:/^Docker,/})).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:/^Python,/})).toBeVisible();
 });
 
 it('merges the same skill from several sources into one chip and labels described and added skills',()=>{
@@ -122,19 +143,6 @@ it('uses the comparison’s per-skill judgement, falling back to requirement out
  expect(evaluatedSkill(sql,value)?.name).toBe('SQL');
  expect(skillStatus(sql,value)).toMatchObject({relevance:'medium',state:'score',score:5,need:7});
  expect(skillStatus(python,value)).toMatchObject({relevance:'low',state:'score',score:4,need:6});
-});
-
-it('rates an unrated skill the person’s own level',async()=>{
- vi.mocked(skillRatings).mockResolvedValue({version:3,ratings:[]});
- vi.mocked(rateSkill).mockResolvedValue({version:4,ratings:[]});
- view(cv([skill('FastAPI')]),null,null,judged([{name:'FastAPI',competence_score:null}]));
- fireEvent.click(chip('FastAPI'));
- const panel=dialog('FastAPI');
- fireEvent.click(await within(panel).findByRole('button',{name:'Set my own level'}));
- fireEvent.change(within(panel).getByRole('slider'),{target:{value:'7'}});
- fireEvent.click(within(panel).getByRole('button',{name:'Save my rating'}));
- await waitFor(()=>expect(rateSkill).toHaveBeenCalledWith('synthetic',{expected_version:3,name:'FastAPI',canonical_skill_id:null,score:7}));
- expect(await within(panel).findByText(/You set FastAPI to 7 \/ 10/)).toBeVisible();
 });
 
 it('shows a saved own rating on the chip when elo has no score for the skill',async()=>{

@@ -383,15 +383,15 @@ def test_manual_only_snapshot_uses_published_declarations_and_tracks_revision():
     assert asyncio.run(capture(source,account))['input_hash']!=snapshot['input_hash']
 
 
-def test_independence_without_success_gets_a_conservative_level_against_role_target():
+def test_use_without_explained_understanding_gets_a_basic_level_against_role_target():
     sources=Sources()
     snapshot=asyncio.run(capture(sources,asyncio.run(sources.account('synthetic'))))
     output=asyncio.run(Interpreter().generate(Batch,'',snapshot))
     outcome=validate_batch(output,snapshot['requirements'],snapshot['evidence'])[0]
-    assert outcome['competence_score']==8
-    assert outcome['demonstrated_score']==4 and outcome['required_score']==5
+    assert outcome['competence_score']==6
+    assert outcome['demonstrated_score']==3 and outcome['required_score']==5
     assert outcome['relevance']=='high'
-    assert outcome['scoring_rubric_version']=='evidence-role-v4'
+    assert outcome['scoring_rubric_version']=='evidence-role-v5'
     assert outcome['score_status']=='estimated'
 
 
@@ -417,7 +417,7 @@ def test_manual_only_assessment_publishes_a_versioned_result_without_cv():
         assert state['result']['inputs']['cv_id'] is None
         # The declaration supplies basic personal use, not evidence of independent successful delivery.
         python=state['result']['job_skill_gaps'][0]
-        assert python['scoring_rubric_version']=='evidence-role-v4' and python['competence_score']==6
+        assert python['scoring_rubric_version']=='evidence-role-v5' and python['competence_score']==6
         assert python['profile_skills'][0]['name']=='Python'
 
 
@@ -480,7 +480,7 @@ def test_retry_discards_pre_v2_scores_only_when_source_revisions_still_match():
         client.post('/api/v1/assessments',headers=H,json=body)
         current=finish(client)
         assert current['operation']['status']=='succeeded'
-        assert current['result']['job_skill_gaps'][0]['competence_score']==8
+        assert current['result']['job_skill_gaps'][0]['competence_score']==6
         assert model.calls==2
 
 

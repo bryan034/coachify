@@ -42,7 +42,7 @@ def test_valid_judgements_keep_category_scores_and_drop_a_goal_level_for_unneede
         judgement('s1', subcategory='Languages', competence_score=6, evidence_refs=['cv:item1:claim:0'], requirement_refs=['job:req1']),
         judgement('s2', category='Cloud & DevOps', relevance='none', required_score=5)])
     python, docker = validate_skill_batch(output, skills, {'job:req1'}, EVIDENCE)
-    assert python['subcategory'] == 'Languages' and python['competence_score'] == 4
+    assert python['subcategory'] == 'Languages' and python['competence_score'] == 3
     assert python['required_score'] == 5 and python['canonical_skill_id'] == 'language.python'
     assert docker['category'] == 'Cloud & DevOps' and docker['required_score'] is None and docker['evidence_refs'] == []
 
@@ -77,10 +77,10 @@ def test_completed_assessment_publishes_the_skill_profile():
         client.post('/api/v1/assessments', json={'expected_version': 0, 'mutation_id': str(uuid4()), 'allow_partial': True}, headers=H)
         state = finish(client)
     profile = state['result']['skill_profile']
-    assert profile['status'] == 'evaluated' and profile['rubric_version'] == 'evidence-role-v4'
+    assert profile['status'] == 'evaluated' and profile['rubric_version'] == 'evidence-role-v5'
     [skill]=profile['skills']
     assert skill['name']=='Python' and skill['canonical_skill_id']=='language.python'
-    assert skill['competence_score']==4 and skill['required_score']==5
+    assert skill['competence_score']==3 and skill['required_score']==5
     assert skill['evidence_refs']==['cv:item1:claim:0'] and skill['requirement_refs']==['job:req1']
     assert 'Self-ratings do not override' in skill['explanation']
     assert model.calls == 1 and model.skill_calls == 1
@@ -149,7 +149,7 @@ def test_large_profiles_are_judged_in_bounded_batches_and_checkpointed():
 def test_a_profile_without_skills_is_empty_without_a_model_call():
     model = Interpreter()
     profile = asyncio.run(evaluate_skills(model, {'evidence': {}, 'goal': {}, 'requirements': []}, [], [], None))
-    assert profile == {'status': 'empty', 'rubric_version': 'evidence-role-v4', 'skills': []} and model.skill_calls == 0
+    assert profile == {'status': 'empty', 'rubric_version': 'evidence-role-v5', 'skills': []} and model.skill_calls == 0
 
 
 def test_ambiguous_project_has_a_provisional_baseline_even_if_model_leaves_it_unknown():
@@ -192,3 +192,58 @@ def test_reviewed_cv_level_is_reused_even_when_goal_model_omits_it():
     output.skills[0].competence_score=None
     python,_=validate_skill_batch(output,profile_skills(evidence),{'job:req1'},evidence)
     assert python['competence_score'] is None
+
+
+def _declaration(identifier, name, text):
+    return {'id': identifier, 'name': name, 'description': text, 'contributions': []}
+
+
+class Recorder(Interpreter):
+    """Remembers which skills each per-skill judgement was given."""
+    def __init__(self, sources=None):
+        super().__init__(sources);self.sent = []
+    async def generate(self, schema, instructions, context):
+        if schema is SkillBatch:
+            self.sent.append([skill['name'] for skill in context['skills']])
+        return await super().generate(schema, instructions, context)
+
+
+def _evaluated(sources, model):
+    sources.source['declarations'] = [_declaration('d1', 'Excel', 'Monthly sales workbooks.')]
+    sources.source['declarations_version'] = 1
+    client = TestClient(create_app(MemoryStore(), sources, model));client.__enter__()
+    client.post('/api/v1/assessments', json={'expected_version': 0, 'mutation_id': str(uuid4()), 'allow_partial': True}, headers=H)
+    assert finish(client)['operation']['status'] == 'succeeded'
+    return client
+
+
+def test_reevaluating_one_skill_sends_only_that_skill_and_replaces_only_its_judgement():
+    sources, model = Sources(), Recorder()
+    client = _evaluated(sources, model)
+    before = client.get('/api/v1/assessments/current', headers=H).json()
+    assert sorted(model.sent[0]) == ['Excel', 'Python']
+    excel = next(skill for skill in before['result']['skill_profile']['skills'] if skill['name'] == 'Excel')
+    sources.source['declarations'].append(_declaration('d2', 'Python', 'Built a scraper on my own at a hackathon.'))
+    sources.source['declarations_version'] = 2
+    response = client.post('/api/v1/assessments/skills/reevaluate', json={'name': 'Python'}, headers=H)
+    assert response.status_code == 200, response.text
+    assert model.sent[-1] == ['Python'] and len(model.sent) == 2
+    after = client.get('/api/v1/assessments/current', headers=H).json()
+    assert after['stale'] is False and after['evaluation']['freshness'] == 'current'
+    skills = {skill['name']: skill for skill in after['result']['skill_profile']['skills']}
+    assert skills['Excel'] == excel and skills['Python'] == response.json()['skill']
+    assert after['result']['id'] == before['result']['id']
+    assert client.get('/api/v1/assessments/' + before['result']['id'], headers=H).json()['input_hash'] == before['result']['input_hash']
+
+
+def test_reevaluating_a_skill_needs_a_finished_evaluation_and_no_other_changed_input():
+    sources, model = Sources(), Recorder()
+    with TestClient(create_app(MemoryStore(), sources, model)) as client:
+        assert client.post('/api/v1/assessments/skills/reevaluate', json={'name': 'Python'}, headers=H).json()['code'] == 'evaluation_required'
+    client = _evaluated(sources, model)
+    sources.goal['version'] = 2
+    response = client.post('/api/v1/assessments/skills/reevaluate', json={'name': 'Python'}, headers=H)
+    assert response.status_code == 409 and response.json()['code'] == 'full_evaluation_required'
+    sources.goal['version'] = 1
+    assert client.post('/api/v1/assessments/skills/reevaluate', json={'name': 'Nope'}, headers=H).json()['code'] == 'skill_not_found'
+    assert len(model.sent) == 1

@@ -2,10 +2,10 @@ from uuid import uuid5, NAMESPACE_URL
 from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import application, authenticated, Problem, begin, launch, operation_view, stamp, digest
-from app.schemas import Generate, Result, Context, Current, DashboardSource, SkillRatingInput, SkillRatings, batch_schema
+from app.schemas import Generate, Result, Context, Current, DashboardSource, SkillRatingInput, SkillRatings, SkillReevaluateInput, SkillReevaluated, batch_schema
 from app.inputs import capture
-from app.domain import INSTRUCTIONS, validate_batch, group_outcome, model_evidence, ASSESSMENT_CONTEXT_BYTES
-from app.skills import evaluate_skills, link_profile
+from app.domain import OutputProblem, INSTRUCTIONS, validate_batch, group_outcome, model_evidence, ASSESSMENT_CONTEXT_BYTES
+from app.skills import evaluate_skills, link_profile, find_skill, reevaluate_skill
 from app.competence import RUBRIC_VERSION
 from app.freshness import evaluation_status
 
@@ -184,6 +184,39 @@ def create_app(store=None,upstream=None,model=None):
             ratings[key]={'key':key,'name':body.name,'canonical_skill_id':body.canonical_skill_id,'score':body.score,'updated_at':stamp()}
         row['skill_ratings']=ratings
         return ratings_view(await thread(app.state.store.cas,account['id'],row['version'],row))
+
+    @app.post('/api/v1/assessments/skills/reevaluate',response_model=SkillReevaluated)
+    async def reevaluate(body:SkillReevaluateInput,request:Request,account=Depends(authenticated)):
+        """Re-judge one skill after the person added evidence for it, and replace only that skill in the saved evaluation.
+
+        Only this skill's evidence reaches the model. The saved evaluation moves to the new inputs only when the sole
+        change since it was made is evidence for this skill; otherwise a full evaluation is needed."""
+        if not app.state.model.configured:raise Problem('The skill helper is unavailable right now.',503,'model_unavailable')
+        row=await thread(app.state.store.load,account['id'])
+        if row.get('pending'):raise Problem('Wait for the current evaluation to finish.',409,'operation_pending')
+        result=row.get('result');profile=(result or {}).get('skill_profile')
+        if not profile or profile.get('status') not in ('evaluated','partial'):raise Problem('Evaluate your skills against your goal first.',409,'evaluation_required')
+        snapshot=await capture(app.state.upstream,account)
+        if not snapshot['ready']:raise Problem('Complete your CV and Career goal first.',409,'inputs_missing')
+        skill=find_skill(snapshot['evidence'],body.name,body.canonical_skill_id)
+        if not skill:raise Problem('This skill is not in your Skills Profile.',404,'skill_not_found')
+        # Only evidence for this skill may differ from what the saved evaluation read.
+        status=evaluation_status(row,snapshot);before=result['evidence'];now=snapshot['evidence']
+        changed=[ref for ref in {*before,*now} if before.get(ref)!=now.get(ref)]
+        mine={source['ref'] for source in skill['sources']}
+        if set(status['reasons'])-{'evidence_changed'} or any(ref not in mine or not ref.startswith('declaration:') for ref in changed):
+            raise Problem('Your inputs changed beyond this skill. Re-evaluate your skills to update your level.',409,'full_evaluation_required')
+        try:judged=await reevaluate_skill(app.state.model,snapshot,result['job_skill_gaps'],skill)
+        except OutputProblem as error:raise Problem('This skill could not be re-evaluated just now. Your answer is saved.',502,'assessment_output') from error
+        fresh=await thread(app.state.store.load,account['id'])
+        if fresh['version']!=row['version']:raise Problem('Your workspace changed. Try again.',409,'version_conflict')
+        key=judged['canonical_skill_id'] or judged['name'].casefold()
+        skills=[judged if (item.get('canonical_skill_id') or item['name'].casefold())==key else item for item in profile['skills']]
+        if judged not in skills:skills.append(judged)
+        # The immutable history entry is untouched; only the current copy moves to the inputs this skill was judged from.
+        row['result']={**result,'skill_profile':{**profile,'skills':skills},'evidence':now,'inputs':snapshot['inputs'],'input_hash':snapshot['input_hash'],'source_snapshot':snapshot['source_snapshot']}
+        saved=await thread(app.state.store.cas,account['id'],row['version'],row)
+        return {'version':saved['version'],'skill':judged}
 
     @app.get('/api/v1/assessments/{identifier}',response_model=Result)
     async def history(identifier:str,request:Request,account=Depends(authenticated)):

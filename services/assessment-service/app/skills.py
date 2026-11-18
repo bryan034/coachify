@@ -20,7 +20,7 @@ For every skill in "skills", return exactly one judgement with its skill_key:
 - subcategory: a short label (at most three words) that splits a large category, such as "Languages", "Frameworks", "Tools", "Data stores" or "Cloud platforms" for technical skills; null when no useful split exists. Use the same label for the same kind of skill.
 - relevance to the goal: "high" when the goal requires it or it is core to the role, "medium" when it is preferred or clearly helpful, "low" when it is only nice to have or loosely related, "none" when the goal does not use it. Prefer stated goal requirements and their priority; for a career-exploration goal judge what the role usually needs.
 - requirement_refs: the refs of goal requirements this skill directly serves (copied exactly from goal.requirements); empty when none.
-- competence_score: reuse the highest existing cv_level from reviewed, non-team sources when present, citing those sources. Do not independently re-rate an already reviewed CV level. Only estimate a missing level from evidence. A strict whole-number evidence-based level, not a percentage of role readiness. Project skills without an explicit personal part have a provisional baseline 3, not verified mastery. Guided/unclear personal application is at most 3; explicit independence without successful delivery at most 4; independently and successfully doing that work establishes 5. Scores 6-7 need additional skill-specific complexity and problem solving. Scores 8-9 need successful, complex and sustained/repeated work. Ordinary project participation must never score 8-10. Team-only, observed and denied work remains null. Review self_rating and replication_confidence are rough baselines only; your evidence-based analysis takes precedence, never copy or average self-ratings as competence. When a source has reviewed=true but its personal part stayed unconfirmed (the person skipped that review topic), still give your best whole-number estimate from the CV as written, at most 5, and cite that source; only team-only, observed or denied work stays null.
+- competence_score: reuse the highest existing cv_level from reviewed, non-team sources when present, citing those sources. Do not independently re-rate an already reviewed CV level. Only estimate a missing level from evidence. A strict whole-number level of the person's UNDERSTANDING of the skill (1-3 no, little or basic; 4-6 moderate, can explain concepts; 7-8 good, eloquently articulates core concepts; 9-10 expert, deep knowledge), not a percentage of role readiness and not whether they can do the tasks alone, because AI may have done the work. Project skills without an explicit personal part have a provisional baseline 3, not verified understanding. Scores 4-5 need the person to explain the concepts; 6-8 need clear explanation of complexity and problem solving in that skill; 9 needs deep, sustained knowledge. Ordinary project participation must never score 8-10. Team-only, observed and denied work remains null. Review self_rating is a rough baseline only; your evidence-based analysis takes precedence, never copy or average self-ratings as competence. When a source has reviewed=true but its personal part stayed unconfirmed (the person skipped that review topic), still give your best whole-number estimate from the CV as written, at most 5, and cite that source; only team-only, observed or denied work stays null.
 - required_score: copy competence_target.level from linked goal requirements, using the strongest target for multiple links. A source's cv_level is the level the CV review already gave that skill on this same scale; never score above the highest cv_level among the sources you cite. Missing targets default to 5 (advanced 7). Never lower a role target to inflate readiness. Null only when relevance is none.
 - evidence_refs: the evidence refs of that skill (copied exactly from its sources) that support the competence_score; empty when competence_score is null.
 - explanation: one or two plain sentences for the person explaining the relevance and the level, citing what they did. Do not mention refs, IDs or this rubric.
@@ -127,7 +127,7 @@ def validate_skill_batch(output, skills, requirement_refs, evidence, requirement
                         'competence_score': score, 'required_score': None if none else need,
                         'explanation': (f'elo estimated level {score}/10 from your CV as written. Your review did not confirm your personal part, so this is a rough estimate. {item.explanation}'.strip() if estimated else
                             'Provisional level 3/10: your personal part in this project is unclear. This is not verified capability; your self-rating cannot establish ownership.' if score==3 and any(evidence[ref].get('source_kind') in {'project','experience'} and (evidence[ref].get('attribution')!='personal' or evidence[ref].get('support_uncertain')) for ref in refs) else
-                            f'Evidence-based level {score}/10. Independent successful delivery establishes level 5; higher scores require additional complex, sustained evidence. Self-ratings do not override the evidence.' if score != item.competence_score else item.explanation),
+                            f'Evidence-based level {score}/10. Moderate understanding (4-6) needs explained concepts; higher scores require clearly articulated, deeper knowledge. Self-ratings do not override the evidence.' if score != item.competence_score else item.explanation),
                         'evidence_refs': refs,
                         'requirement_refs': list(dict.fromkeys(item.requirement_refs))})
     return results
@@ -190,3 +190,32 @@ def link_profile(outcomes, profile):
                         'required_score': need, 'score_status': 'estimated', 'scoring_rubric_version': RUBRIC_VERSION,
                         'score_explanation': f"From your Skills Profile: {best['name']} is at about {best['competence_score']}/10 and this role needs about {need}/10. {best['explanation']}"})
     return outcomes
+
+
+def _identity(name, canonical):
+    return canonical or (name or '').strip().casefold()
+
+
+def find_skill(evidence, name, canonical_skill_id=None):
+    """The one profile skill a re-evaluation targets, matched by registry identity or case-folded name."""
+    wanted = _identity(name, canonical_skill_id)
+    for skill in profile_skills(evidence):
+        if wanted in (_identity(skill['name'], skill['canonical_skill_id']), skill['name'].strip().casefold()):
+            return skill
+    return None
+
+
+async def reevaluate_skill(model, snapshot, saved_outcomes, skill):
+    """Judge one skill from its own evidence. Only this skill, the goal's requirements and the CV's
+    experience summaries reach the model; the rest of the person's skills are never sent."""
+    goal = _goal({**snapshot, 'requirements': snapshot['requirements']}, saved_outcomes)
+    refs = {r['ref'] for r in goal['requirements']}
+    context = {'goal': goal, 'experiences': _experiences(snapshot['evidence']), 'skills': [skill]}
+    for attempt in range(2):
+        output = await model.generate(SkillBatch, INSTRUCTIONS, context)
+        try:
+            return validate_skill_batch(output, [skill], refs, snapshot['evidence'], goal['requirements'])[0]
+        except OutputProblem as error:
+            if attempt:
+                raise
+            context = {**context, 'validation_feedback': error.feedback, 'previous_output': output.model_dump(mode='json')}

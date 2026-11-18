@@ -28,3 +28,18 @@ it('preserves the reading position during new content and follows again only aft
  log.scrollTop=1300;fireEvent.scroll(log);height=1700;view.rerender(<Chat text="Latest"/>);
  expect(scroll).toHaveBeenLastCalledWith({top:1700,behavior:'instant'});
 });
+
+it('follows again from the next message after the reader sends while scrolled away',()=>{
+ let height=1000;
+ const scroll=vi.fn();
+ function Chat({text}:{text:string}){
+  const {transcript,scrollProps,resumeFollow}=useChatScroll();
+  return <><div role="log" ref={transcript} {...scrollProps}>{text}</div><button onClick={resumeFollow}>send</button></>;
+ }
+ const view=render(<Chat text="a"/>),log=screen.getByRole('log');
+ Object.defineProperties(log,{scrollHeight:{get:()=>height},clientHeight:{value:300},scrollTop:{value:700,writable:true},scrollTo:{value:scroll}});
+ fireEvent.wheel(log,{deltaY:-100});log.scrollTop=200;fireEvent.scroll(log);scroll.mockClear();
+ fireEvent.click(screen.getByText('send'));
+ height=1300;view.rerender(<Chat text="reply"/>);
+ expect(scroll).toHaveBeenLastCalledWith({top:1300,behavior:'instant'});
+});

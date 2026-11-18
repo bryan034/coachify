@@ -1,10 +1,10 @@
-"""Conservative evidence ceilings shared by both Assessment scoring paths."""
+"""Conservative understanding ceilings shared by both Assessment scoring paths."""
 import math
 import re
-from elo_shared.competence_scale import INDEPENDENT_LEVEL
+from elo_shared.competence_scale import MODERATE_LEVEL
 
-# v4: reuse reviewed CV levels on the shared scale, retaining conservative evidence ceilings.
-RUBRIC_VERSION='evidence-role-v4'
+# v5: levels rate understanding of the subject, not independent execution.
+RUBRIC_VERSION='evidence-role-v5'
 _NOT_PERSONAL={'team','observed','denied'}
 
 
@@ -12,8 +12,8 @@ def role_level(requirement):
     target=requirement.get('competence_target') or {}
     if isinstance(target.get('level'),int) and 1<=target['level']<=10:
         return target['level']
-    # No Career target: working independently with understanding, or complex work when stated advanced.
-    return 7 if requirement.get('required_proficiency')=='advanced' else INDEPENDENT_LEVEL
+    # No Career target: moderate understanding, or good understanding when stated advanced.
+    return 7 if requirement.get('required_proficiency')=='advanced' else MODERATE_LEVEL
 
 
 def cv_level(records):
@@ -35,21 +35,14 @@ def source_level(record):
     if record.get('support_uncertain') or record.get('attribution')!='personal':
         return 3 if project else None
     facts=record.get('review_facts',[])
-    if any(f['status']=='conflicting' and f['field'] in {'personal_contribution','skill_use','assistance','outcome'} for f in facts):
+    if any(f['status']=='conflicting' and f['field'] in {'personal_contribution','skill_use','outcome'} for f in facts):
         return 3 if project else None
-    known={f['field'] for f in facts if f['status']=='supported'}
-    if any(f['field']=='replication_confidence' and f['status']=='supported' and
-           re.search(r'\b(low|unsure|not confident|need help|cannot repeat|can.t repeat)\b',f.get('value') or '',re.I) for f in facts): return 3
-    outcomes=[f for f in facts if f['field']=='outcome' and f['status']=='supported']
-    if any(re.search(r'\b(failed|unsuccessful|unfinished|incomplete|not completed|not successful|did not work|could not|couldn.t)\b',f.get('value') or '',re.I) for f in outcomes): return 3
-    independent=record.get('assistance')=='independent' or record.get('application_level') in {'independent_application','complex_application'}
-    if not independent: return 3
-    # Independence alone does not establish successful delivery.
-    successful=any(f.get('attribution') not in {'team','observed','denied'} and
-        re.search(r'\b(success\w*|succeeded|delivered|completed|achieved|passed|working|improved|reduced|increased|met|deployed|launched)\b',f.get('value') or '',re.I) for f in outcomes)
-    if not successful: return 4
+    known={f['field'] for f in facts if f['status']=='supported' and f['field'] not in {'self_rating','replication_confidence'}}
+    # Nothing explained about the skill: use alone shows only basic understanding.
+    if not known: return 3
+    # The level rates understanding, not independent delivery: AI may have done the work, so
+    # independence and outcomes do not matter. Explained complexity and problem solving show depth.
     if not {'complexity','problem_solving'}<=known: return 5
-    # High levels need successful, complex and sustained skill-specific work.
     if not {'frequency','recency'}<=known or (record.get('experience_months') or 0)<24: return 7
     return 9
 

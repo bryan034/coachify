@@ -1,14 +1,14 @@
 """Review-time skill levels: the model rates each skill by itself from the CV and review answers.
 
-Levels use the shared 1-10 competence scale and are read pessimistically: a skill the review
-did not clarify is assumed guided or not competent rather than left unrated. Only conflicting
+Levels use the shared 1-10 understanding scale and are read pessimistically: a skill the review
+did not clarify is assumed basic or not understood rather than left unrated. Only conflicting
 or unverified evidence is labelled uncertain. This is independent of any career goal. Reviews are stored beside the CV and overlaid on read,
 so they never change effective evidence, fingerprints or interview memory. A review applies only
 while the evidence it was judged from is unchanged.
 """
 from copy import deepcopy
 from pydantic import BaseModel, ConfigDict, Field
-from elo_shared.competence_scale import GUIDED_CEILING, MIN_LEVEL, clamp_level
+from elo_shared.competence_scale import UNEXPLAINED_CEILING, MIN_LEVEL, clamp_level
 from app.domain.capabilities import digest, evidence_matches, level_ceiling, skill_id
 from app.schemas.interview_evidence import ReviewQuote, SkillLevel
 
@@ -60,7 +60,7 @@ def review_source(document, item, status=None):
     for answer in answers: texts[answer['id']] = texts.get(answer['id'], '') + '\n' + answer['answer']
     return {'item_id': item['id'], 'model': model, 'texts': texts, 'kind': item['kind'],
             'skills': {c['skill_id']: c['name'] for c in claims},
-            'ceilings': {c['skill_id']: level_ceiling(item, c) for c in claims},
+            'ceilings': {c['skill_id']: level_ceiling(item, c, bool(answers)) for c in claims},
             'fingerprint': digest({key: value for key, value in model.items() if key != 'review_status'})}
 
 
@@ -99,10 +99,10 @@ def assumed_level(source, identifier):
         return {'skill_id': identifier, 'level': None, 'rationale': 'The CV evidence is unverified and no review answer supports it.',
                 'evidence': []}
     described = source['kind'] in {'project', 'experience'}
-    level = clamp_level(GUIDED_CEILING - 1 if described else MIN_LEVEL, source['ceilings'][identifier])
+    level = clamp_level(UNEXPLAINED_CEILING - 1 if described else MIN_LEVEL, source['ceilings'][identifier])
     first = source['model']['cv_evidence'][:1]
     return {'skill_id': identifier, 'level': level, 'assumed': True,
-        'rationale': ('Used in this work, but nothing shows it was done independently, so guided use is assumed.' if described
+        'rationale': ('Used in this work, but nothing shows the person understands it, so basic understanding is assumed.' if described
                       else 'Only named, with no described use.'),
         'evidence': [{'id': e['source_id'], 'excerpt': e['text'], 'location': 'Your CV'} for e in first]}
 
@@ -164,6 +164,6 @@ def apply_skill_level_reviews(document, items):
             level = levels.get(claim['skill_id'])
             if level and claim['attribution'] not in EXCLUDED:
                 claim['skill_level'] = {'rationale': level['rationale'], 'source': 'review', 'evidence': deepcopy(level['evidence']),
-                    'level': None if level['level'] is None else clamp_level(level['level'], level_ceiling(item, claim)),
+                    'level': None if level['level'] is None else clamp_level(level['level'], level_ceiling(item, claim, source['model']['review_answers'] != [])),
                     'status': 'uncertain' if level['level'] is None else 'rated'}
     return items

@@ -32,7 +32,7 @@ function DiscoveryConversation({token}:{token:string|undefined}){
  const [introduction,setIntroduction]=useState('');
  const [view,setView]=useState<View>(),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[reload,setReload]=useState(0);
  const [pending,setPending]=useState(''),[failedMessage,setFailedMessage]=useState(''),[details,setDetails]=useState(false);
- const {transcript,followReply,showJump,jumpToLatest,scrollProps}=useChatScroll();
+ const {transcript,followReply,resumeFollow,showJump,jumpToLatest,scrollProps}=useChatScroll();
  const restored=useRef<{id:string;count:number;reply:string|null}|null>(null);
  const generation=useRef(0);
  const sending=useRef(false),currentView=useRef<View|undefined>(undefined);
@@ -56,6 +56,7 @@ function DiscoveryConversation({token}:{token:string|undefined}){
  }
  async function send(text=message,retry=false){
   const input=text.trim();
+  if(input)resumeFollow();
   if(!token||!view?.available||!input||sending.current||busy)return;
   sending.current=true;setBusy(true);setError('');setPending(input);setFailedMessage('');
   // Clear immediately; leave the composer editable while the response is pending.

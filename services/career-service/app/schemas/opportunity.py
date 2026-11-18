@@ -83,7 +83,7 @@ class Summary(Model):
     consideration_refs:list[str]=Field(default_factory=list,max_length=6)
 
 class SkillLevelRating(Model):
-    """The level a role needs in one skill on elo's shared 1-10 competence scale, rated from research."""
+    """The level a role needs in one skill on elo's shared 1-10 understanding scale, rated from research."""
     skill:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=200)]
     level:int=Field(ge=1,le=10,strict=True)
     rationale:Text

@@ -1,13 +1,15 @@
 import os
 from anyio import CapacityLimiter
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from typing import Annotated
+from fastapi import Depends, FastAPI, HTTPException, Request
+from elo_shared.dev_reset import dev_reset_enabled
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from app.api.v1.profile import router
-from app.core.auth import auth_settings
+from app.core.auth import auth_settings, current_owner
 from app.api.v1.accounts import router as account_router
 from app.repositories.accounts import AccountRepository
 from app.repositories.profile import ProfileRepository
@@ -49,6 +51,21 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
     app.include_router(account_router)
     app.include_router(capability_router)
     app.include_router(skills_profile_router)
+
+    if dev_reset_enabled():
+        # Development only and absent from the published contract. Keeps the account, session and onboarding;
+        # clears the manual skill declarations and Skills Profile intake so the user can start afresh.
+        @app.post("/api/v1/profile/dev/reset", include_in_schema=False)
+        def dev_reset(request: Request, owner: Annotated[str, Depends(current_owner)]):
+            capabilities = request.app.state.capabilities
+            if capabilities is None:
+                raise HTTPException(503, "Account storage unavailable. Please retry.")
+            account = capabilities.account(owner)
+            capabilities.accounts.update_one({"owner": owner}, {"$unset": {
+                "capability_declarations": "", "declarations_version": "", "capability_last_mutation": "",
+                "skills_profile": "", "skills_profile_last_mutation": ""}})
+            deleted = capabilities.receipts.delete_many({"user_id": account["id"]}).deleted_count
+            return {"deleted": {"capability_mutations": deleted} if deleted else {}}
 
     @app.middleware("http")
     async def private_responses(request, call_next):

@@ -18,7 +18,7 @@ import { EvaluateBanner } from '@/features/assessment/evaluate-banner';
 import { LEVEL_COLORS, LEVEL_LABELS, levelStatus, namesSkill, type LevelStatus } from '@/features/assessment/levels';
 import { TalkItThrough, type TalkSkill } from '@/features/assessment/talk-it-through';
 import { PageFlow } from '@/components/ui/page-flow';
-import { loadRoadmap, loadSkills, useSection } from '@/lib/api/workspace-summary';
+import { loadRoadmap, loadSkills, useSection, type ProfileLevel } from '@/lib/api/workspace-summary';
 import { ProcessingCard, SkeletonRows, type ProcessingStep } from '@/components/ui/processing-card';
 import type { Requirement } from '@/features/roadmap/types';
 import { formatDayMonthYear } from '@/lib/format';
@@ -72,11 +72,13 @@ const inferredImportance=(skill:ReviewSkill)=>(skill.priority_origin??skill.orig
 const tidy=(value:number)=>Math.round(value*10)/10;
 
 /** A goal skill's level and the level the role needs, read from the saved evaluation. Nothing is scored here. */
-export function goalSkillLevel(skill:ReviewSkill,outcome?:Requirement):{level:number|null;target:number|null}{
+export function goalSkillLevel(skill:ReviewSkill,outcome?:Requirement,profileLevels:ProfileLevel[]=[]):{level:number|null;target:number|null}{
  const target=outcome?.required_score??skill.competence_target?.level??null;
  // Older evaluations hold progress towards the target rather than the level itself.
- const level=outcome?.demonstrated_score??(outcome?.competence_score!=null&&target!=null?tidy(outcome.competence_score*target/10):outcome?.competence_score??null);
- return {level,target};
+ const evaluated=outcome?.demonstrated_score??(outcome?.competence_score!=null&&target!=null?tidy(outcome.competence_score*target/10):outcome?.competence_score??null);
+ // A skill the evaluation has not rated still shows the level its Skills Profile entry already has.
+ const profile=profileLevels.find(item=>namesSkill([item],{name:skill.name,canonicalId:skill.canonical_skill_id}))?.level;
+ return {level:evaluated??profile??null,target};
 }
 type Row={skill:ReviewSkill;outcome?:Requirement;level:number|null;target:number|null;status:LevelStatus;key:string;pending:boolean};
 
@@ -131,9 +133,9 @@ function SkillRow({row,evidence,talk}:{row:Row;evidence?:Record<string,{name?:st
 }
 const filters:{key:'all'|LevelStatus;label:string}[]=[{key:'all',label:'All'},{key:'ready',label:'Ready'},{key:'getting',label:'Getting there'},{key:'build',label:'To build'},{key:'unrated',label:'Not rated'}];
 /** Every skill the goal needs, grouped by category, with the person's level against the role's target. */
-export function SkillsNeeded({skills,categories,outcomes,evidence,pending=()=>false,talk=()=>{}}:{skills:ReviewSkill[];categories?:SkillGroupMap;outcomes?:Record<string,Requirement>|null;evidence?:Record<string,{name?:string;text:string}>;pending?:(skill:ReviewSkill)=>boolean;talk?:(row:Row,mode:'talk'|'build')=>void}){
+export function SkillsNeeded({skills,categories,outcomes,profileLevels,evidence,pending=()=>false,talk=()=>{}}:{skills:ReviewSkill[];categories?:SkillGroupMap;outcomes?:Record<string,Requirement>|null;profileLevels?:ProfileLevel[];evidence?:Record<string,{name?:string;text:string}>;pending?:(skill:ReviewSkill)=>boolean;talk?:(row:Row,mode:'talk'|'build')=>void}){
  const [filter,setFilter]=useState<'all'|LevelStatus>('all');
- const rows=new Map<ReviewSkill,Row>(skills.map(skill=>{const outcome=skill.item_id?outcomes?.[skill.item_id]:undefined,{level,target}=goalSkillLevel(skill,outcome);return [skill,{skill,outcome,level,target,status:levelStatus(level,target),key:skill.item_id||skill.name,pending:pending(skill)}];}));
+ const rows=new Map<ReviewSkill,Row>(skills.map(skill=>{const outcome=skill.item_id?outcomes?.[skill.item_id]:undefined,{level,target}=goalSkillLevel(skill,outcome,profileLevels);return [skill,{skill,outcome,level,target,status:levelStatus(level,target),key:skill.item_id||skill.name,pending:pending(skill)}];}));
  const count=(key:'all'|LevelStatus)=>key==='all'?skills.length:[...rows.values()].filter(row=>row.status===key).length;
  const ordered=[...skills].sort((a,b)=>priorityOrder.indexOf(a.priority)-priorityOrder.indexOf(b.priority)).filter(skill=>filter==='all'||rows.get(skill)!.status===filter);
  const best=(items:ReviewSkill[])=>Math.min(...items.map(skill=>priorityOrder.indexOf(skill.priority)));
@@ -208,13 +210,13 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
  const scheduled=useMemo(()=>(planner?.active_sessions??[]).filter(item=>item.status==='scheduled'),[planner]);
  const pending=(skill:ReviewSkill)=>scheduled.some(item=>item.origin==='user'&&namesSkill(item.skills,{name:skill.name,canonicalId:skill.canonical_skill_id}));
  const goalLabel=[goal.role,goal.company].filter(Boolean).join(' at ');
+ const profileLevels=profile.state.status==='ready'?profile.state.data.levels:undefined;
  const talkSkill=useMemo(():TalkSkill|null=>{
   const skill=talking&&goal.skills.find(item=>(item.item_id||item.name)===talking.key);
   if(!skill)return null;
-  const {level,target}=goalSkillLevel(skill,skill.item_id?outcomes?.[skill.item_id]:undefined);
+  const {level,target}=goalSkillLevel(skill,skill.item_id?outcomes?.[skill.item_id]:undefined,profileLevels);
   return {key:`${talking!.key}:${talking!.mode}`,name:skill.name,canonicalId:skill.canonical_skill_id,level,target,meaning:skill.competence_target?.explanation,tasks:(skill.learning_items??[]).map(item=>({name:item.name,reason:item.reason}))};
- },[talking,goal.skills,outcomes]);
- const tools=profile.state.status==='ready'?profile.state.data.groups.flatMap(group=>group.skills):[];
+ },[talking,goal.skills,outcomes,profileLevels]);
  const roleCards:RoleCardInput[]=[
   {card_id:'eligibility',title:'Eligibility and commitment',icon:'check',items:goal.non_skill_requirements.map(item=>({ref:`req:${item.requirement_id}`,text:item.description,note:originLabel(item),urls:item.source_urls}))},
   {card_id:'work',title:'What you would work on',icon:'code',items:[...(goal.summary?[{ref:'summary',text:goal.summary}]:[]),...goal.responsibilities.map((text,index)=>({ref:`resp:${index}`,text}))].map((item,index)=>index===0&&goal.job_url?{...item,urls:[goal.job_url]}:item)},
@@ -241,8 +243,8 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   {view==='skills'&&<>
    {!working&&<EvaluateBanner comparison={comparison} here="/career-goal"/>}
    <CvGoalConfirmationCard pill key={confirmationKey} goal={goal} selectionVersion={workspace.current.selection_version} token={token} onReload={onReload}/>
-   <SkillsNeeded key={`${goal._id}:${goal.version}`} skills={goal.skills} categories={workspace.current.skill_groups} outcomes={outcomes} evidence={current?comparison.result?.evidence:undefined} pending={pending} talk={(row,mode)=>setTalking({key:row.key,mode})}/>
-   <TalkItThrough skill={talkSkill} mode={talking?.mode} onClose={()=>setTalking(null)} token={token} goalLabel={goalLabel} comparison={comparison} tools={tools} onRoadmapChanged={roadmap.retry}/>
+   <SkillsNeeded key={`${goal._id}:${goal.version}`} skills={goal.skills} categories={workspace.current.skill_groups} outcomes={outcomes} profileLevels={profileLevels} evidence={current?comparison.result?.evidence:undefined} pending={pending} talk={(row,mode)=>setTalking({key:row.key,mode})}/>
+   <TalkItThrough skill={talkSkill} mode={talking?.mode} onClose={()=>setTalking(null)} token={token} goalLabel={goalLabel} comparison={comparison} onRoadmapChanged={roadmap.retry}/>
   </>}
   {view!=='skills'&&research(view)}
  </section>;

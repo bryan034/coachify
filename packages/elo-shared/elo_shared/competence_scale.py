@@ -1,42 +1,51 @@
-"""One 1-10 competence scale for the level a role needs and the level a person has shown.
+"""One 1-10 scale for how well a skill is understood: the level a role expects and the level a person has shown.
 
-Career rates each required skill on it, CV rates each of the person's skills on it, and
-Assessment compares the two. Evidence of a person's level is read pessimistically: what is
-not stated is assumed not to have happened.
+AI tools can produce work for anyone, so the scale measures understanding of the subject, not whether the
+person can carry out the tasks alone. Career rates each required skill on it, CV rates each of the person's
+skills on it, and Assessment compares the two. Evidence of a person's level is read pessimistically: what is
+not stated or explained is assumed not to be understood.
 """
-SCALE_VERSION = 'competence-1-10-v1'
+SCALE_VERSION = 'understanding-1-10-v2'
 MIN_LEVEL, MAX_LEVEL = 1, 10
-# Working alone with understanding is the midpoint; below it the person still needs guidance.
-INDEPENDENT_LEVEL = 5
-# Without stated independence the work is assumed guided.
-GUIDED_CEILING = 3
+# Moderate understanding (4-6) is the midpoint: enough to explain the concepts.
+MODERATE_LEVEL = 5
+# Evidence of use alone, without the person explaining the subject, shows at most little understanding.
+UNEXPLAINED_CEILING = 3
 # A skill that is only named, with no described use.
 MENTION_CEILING = 2
 
 ANCHORS = {
-    1: 'Not competent: no real use shown, at most named or briefly seen.',
-    2: 'Basic exposure: coursework, tutorials or a listed skill with no described use.',
-    3: 'Guided use: applied on real tasks with guidance, supervision or an unclear personal part.',
-    4: 'Mostly independent: works alone on routine tasks, results not yet proven.',
-    5: 'Independent and understands: delivers working results alone and can explain why they work.',
-    6: 'Independent on non-routine tasks, solving unfamiliar problems.',
-    7: 'Complex work: designs and delivers complex solutions and debugs hard problems.',
-    8: 'Sustained complex work over years, and guides others.',
-    9: 'Leads and architects complex systems or work at scale; a recognised authority.',
-    10: 'Expert on the most complex work in the field, setting direction for others.',
+    1: 'No understanding: only named, or cannot answer questions about the skill.',
+    2: 'Little understanding: heard of or briefly seen; would struggle with most questions.',
+    3: 'Basic understanding: knows the vocabulary and basic ideas but cannot proficiently answer most questions on the skill.',
+    4: 'Moderate understanding: can explain the main concepts, with gaps.',
+    5: 'Moderate understanding: explains the concepts and why they work, with a decent grasp.',
+    6: 'Solid moderate understanding: explains concepts and trade-offs and handles follow-up questions on common situations.',
+    7: 'Good understanding: eloquently articulates the core concepts and how they connect.',
+    8: 'Strong good understanding: articulates core concepts and edge cases clearly and answers probing questions well.',
+    9: 'Expert understanding: deep knowledge of the subject, including internals, trade-offs and limits.',
+    10: 'Expert understanding at the deepest level: authoritative knowledge that others consult.',
 }
 
-SCALE_TEXT = ('Competence scale, whole numbers 1-10 (1 = not competent, 5 = works independently and understands the skill, '
-              '10 = handles the most complex work in the field):\n'
+SCALE_TEXT = ('Understanding scale, whole numbers 1-10. It rates how well the skill is UNDERSTOOD, not whether the person can do the tasks '
+              'alone; AI tools can produce work for anyone, so having done or delivered work is not itself understanding. '
+              '1-3 = no, little or basic understanding: if questioned, could not proficiently answer most questions on the skill. '
+              '4-6 = moderate understanding: enough to explain the concepts, with a decent level of understanding. '
+              '7-8 = good understanding: able to eloquently articulate the core concepts. '
+              '9-10 = expert understanding with deep knowledge.\n'
               + '\n'.join(f'{level} = {text}' for level, text in ANCHORS.items()))
 
 PESSIMISM_TEXT = ('Be pessimistic about a person\'s level: choose the lower level whenever the evidence allows two readings. '
-                  'What is not stated did not happen. If the evidence shows a skill was used but does not say the person did it '
-                  f'independently, assume it was done under guidance: at most level {GUIDED_CEILING}. '
+                  'Judge understanding from what the person explains or demonstrates they know, such as their review answers '
+                  'and how they describe concepts, reasons and trade-offs. '
+                  'What is not stated or explained is not understood. Using a skill, delivering results or finishing a project does '
+                  'not show understanding by itself, because AI may have done the work; whether it was done independently is '
+                  'irrelevant to the level. '
+                  f'If the evidence shows a skill was used but nothing shows the person understands it, give at most level {UNEXPLAINED_CEILING}. '
                   f'A skill that is only named, with no described use, is at most level {MENTION_CEILING}. '
-                  f'Level {INDEPENDENT_LEVEL} and above need stated independent work; 6-7 also need described complexity and '
-                  'problem solving in that skill; 8 and above need sustained, repeated complex work. '
-                  'Titles, tenure, team results and tool lists alone never raise a level.')
+                  f'Levels {MODERATE_LEVEL} and above need explanations that show the concepts are understood; 7-8 need clear, '
+                  'articulate explanation of the core concepts; 9-10 need deep knowledge shown through detail, trade-offs and edge cases. '
+                  'Titles, tenure, team results, tool lists and self-ratings alone never raise a level.')
 
 
 def clamp_level(level, ceiling=MAX_LEVEL):
