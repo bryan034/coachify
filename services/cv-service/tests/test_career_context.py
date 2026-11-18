@@ -4,7 +4,7 @@ import httpx
 import pytest
 from app.clients.career import CareerTargetProvider, service_url, MAX_CONTEXT_BYTES
 from app.domain.errors import CvError
-from tests.conftest import ready, mutation, upload
+from tests.conftest import storage_backends, ready, mutation, upload
 from tests.test_clarification import prepare_context
 
 
@@ -108,6 +108,7 @@ def test_career_origin_rejects_credentials_paths_and_non_http(url):
     with pytest.raises(RuntimeError): service_url(url)
 
 
+@storage_backends
 def test_empty_prepared_context_is_persisted_and_distinct_from_deferred(harness):
     client, app, _, targets, _ = harness
     cv = ready(harness)
@@ -168,6 +169,7 @@ def test_old_documents_require_explicit_prepare_without_losing_answers(harness):
     assert next(q for q in result['questions'] if q['id'] == questions[0]['id'])['answer'] == saved['clarifications'][0]['answer']
 
 
+@storage_backends
 def test_selection_revision_fences_switch_away_and_back(harness):
     client, app, _, targets, _ = harness
     cv = ready(harness)

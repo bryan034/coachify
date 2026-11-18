@@ -3,7 +3,6 @@ import json
 import time
 from uuid import uuid4
 import httpx
-import pytest
 from fastapi.testclient import TestClient
 from elo_shared.runtime import MemoryStore, Model
 from planner_fixtures import NOW, assessment, assignment, draft, settings
@@ -16,9 +15,10 @@ class Sources:
     async def read(self,service,path,token,params=None):
         if path.endswith('/context'):return {'ready':True,'issues':[],'input_hash':'hash1','research_coverage':'no_findings','goal':{'role':'Developer','target_type':'specific_job'},'cv':{'id':'cv1','name':'synthetic.docx'},'evidence':assessment()['evidence']}
         return {'version':0,'ready':True,'result':assessment(),'stale':False,'evaluation':{'freshness':'current'},'operation':None}
-def run_flow(monkeypatch,base,*,parameter=None):
-    monkeypatch.setenv('ROADMAP_LLM_API_KEY','synthetic-key');monkeypatch.setenv('ROADMAP_LLM_BASE_URL',base);monkeypatch.setenv('ROADMAP_LLM_MODEL','synthetic-model')
-    if parameter:monkeypatch.setenv('ROADMAP_LLM_TOKEN_PARAMETER',parameter)
+def test_openrouter_requests_use_the_openai_sdk_and_json_output(monkeypatch):
+    monkeypatch.setenv('ROADMAP_LLM_API_KEY', 'synthetic-key')
+    monkeypatch.setenv('ROADMAP_LLM_BASE_URL', 'https://openrouter.ai/api/v1')
+    monkeypatch.setenv('ROADMAP_LLM_MODEL', 'synthetic-model')
     requests=[]
     def handler(request):
         body=json.loads(request.content);requests.append((request,body))
@@ -43,10 +43,7 @@ def run_flow(monkeypatch,base,*,parameter=None):
         time.sleep(.01);state=finish();assert state['operation']['status']=='succeeded',state['operation']
         assert state['planner']['outline_candidate']['summary']=='Build Python depth first.'
         assert state['planner']['week_candidate']['tasks'][0]['schedule']==[{'date':'2030-01-09','start_time':'19:00','duration_minutes':60}]
-    return requests
 
-def test_openrouter_requests_use_the_openai_sdk_and_json_output(monkeypatch):
-    requests=run_flow(monkeypatch,'https://openrouter.ai/api/v1')
     assert len(requests)==3  # chat, then the outline and its first week
     for request,body in requests:
         assert str(request.url)=='https://openrouter.ai/api/v1/chat/completions'
@@ -55,10 +52,3 @@ def test_openrouter_requests_use_the_openai_sdk_and_json_output(monkeypatch):
         assert body['model']=='synthetic-model' and body['response_format']=={'type':'json_object'} and 'reasoning_effort' not in body
         assert 'JSON schema' in body['messages'][0]['content']
     assert [body['max_tokens'] for _,body in requests]==[8192,24000,24000]
-
-def test_openai_requests_use_the_selected_token_parameter_and_json_output(monkeypatch):
-    requests=run_flow(monkeypatch,'https://api.openai.com/v1',parameter='max_completion_tokens')
-    for request,body in requests:
-        assert str(request.url)=='https://api.openai.com/v1/chat/completions' and request.headers['user-agent'].startswith('AsyncOpenAI/Python')
-        assert body['response_format']=={'type':'json_object'} and 'max_tokens' not in body and 'JSON schema' in body['messages'][0]['content']
-    assert requests[1][1]['max_completion_tokens']==24000

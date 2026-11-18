@@ -40,19 +40,14 @@ describe('skipping review topics', () => {
   expect(within(rail).queryByRole('button', {name: 'Skip Business Analyst — Synapxe'})).not.toBeInTheDocument();
   expect(within(rail).queryByRole('button', {name: 'Skip Coachify'})).not.toBeInTheDocument();
   fireEvent.click(within(rail).getByRole('button', {name: 'Skip Analyst — SEA Bridge'}));
+  fireEvent.click(within(rail).getByRole('button', {name: 'Keep reviewing'}));
+  expect(within(rail).queryByRole('group', {name: 'Skip this topic?'})).not.toBeInTheDocument();
+  expect(cvApi.sendMessage).not.toHaveBeenCalled();
+  fireEvent.click(within(rail).getByRole('button', {name: 'Skip Analyst — SEA Bridge'}));
   const confirm = within(rail).getByRole('group', {name: 'Skip this topic?'});
   expect(cvApi.sendMessage).not.toHaveBeenCalled();
   fireEvent.click(within(confirm).getByRole('button', {name: 'Skip topic'}));
   await waitFor(() => expect(sent()).toEqual([expect.objectContaining({text: 'Skip Analyst — SEA Bridge.', command: 'skip_topic', item_id: 'two', expected_revision: 4})]));
- });
-
- it('keeps reviewing when the sidebar confirmation is dismissed', async () => {
-  render(panel());
-  const rail = await screen.findByRole('group', {name: 'Review topics'});
-  fireEvent.click(within(rail).getByRole('button', {name: 'Skip Co-founder — SportsFinder'}));
-  fireEvent.click(within(rail).getByRole('button', {name: 'Keep reviewing'}));
-  expect(within(rail).queryByRole('group', {name: 'Skip this topic?'})).not.toBeInTheDocument();
-  expect(cvApi.sendMessage).not.toHaveBeenCalled();
  });
 
  it('skips every remaining topic from the button beside the Topics heading', async () => {
@@ -65,13 +60,6 @@ describe('skipping review topics', () => {
   expect(sent()[0]).not.toHaveProperty('item_id');
  });
 
- it('reopens a skipped topic', async () => {
-  render(panel());
-  const rail = await screen.findByRole('group', {name: 'Review topics'});
-  fireEvent.click(within(rail).getByRole('button', {name: 'Review Coachify instead'}));
-  await waitFor(() => expect(sent()).toEqual([expect.objectContaining({command: 'review_topic', item_id: 'three'})]));
- });
-
  it('removes the review-complete card the moment a skipped topic is reopened', async () => {
   const finished = {...chat(), active_question: null, interview: {status: 'reviewed_with_gaps' as const, reviewed_items: 3, total_items: 4, estimates: [], topics: topics.map(topic => topic.status === 'deferred' ? topic : {...topic, status: 'reviewed' as const})}};
   vi.mocked(cvApi.openConversation).mockResolvedValue(finished); vi.mocked(cvApi.conversation).mockResolvedValue(finished);
@@ -81,6 +69,7 @@ describe('skipping review topics', () => {
   expect(await screen.findByRole('heading', {name: 'Your CV review is complete'})).toBeVisible();
   fireEvent.click(within(screen.getByRole('group', {name: 'Review topics'})).getByRole('button', {name: 'Review Coachify instead'}));
   await waitFor(() => expect(screen.queryByRole('heading', {name: 'Your CV review is complete'})).not.toBeInTheDocument());
+  expect(sent()).toEqual([expect.objectContaining({command: 'review_topic', item_id: 'three'})]);
   reply({...chat(), revision: 5});
   expect(await screen.findByText(question, {selector: 'p'})).toBeVisible();
  });

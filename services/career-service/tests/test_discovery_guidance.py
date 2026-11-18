@@ -44,11 +44,13 @@ def conversation():
     return engine,row,send
 
 
-@pytest.mark.parametrize('message,reply',[
-    ('What does a data analyst do?','Data analysts interpret data to help people make decisions.'),
-    ('How can I prepare for an internship interview?','Start by discussing the role and preparing examples.'),
+@pytest.mark.parametrize('message,reply,status', [
+    ('What does a data analyst do?', 'Data analysts interpret data to help people make decisions.', 'conversation'),
+    ('How can I prepare for an internship interview?', 'Start by discussing the role and preparing examples.', 'researching'),
+    ('What does a data analyst do?', 'Data analysts interpret data to help people make decisions.', 'waiting'),
+    ('How can I prepare for an internship interview?', 'Start by discussing the role and preparing examples.', 'review'),
+    ('What does a data analyst do?', 'Data analysts interpret data to help people make decisions.', 'confirmed'),
 ])
-@pytest.mark.parametrize('status',['conversation','researching','waiting','review','confirmed'])
 def test_guidance_is_answered_before_fields_are_complete(conversation,message,reply,status):
     engine,row,send=conversation
     row['status']=status
@@ -197,13 +199,6 @@ def test_local_chat_constrains_decision_fields_and_explains_output_shape(mode):
     assert incoming['conversation']==[{'role':'user','content':'hi'}]
 
 
-def test_deepseek_chat_requests_schema_constrained_output():
-    payload=AIAdapter(local_settings(provider='deepseek',base_url='https://api.deepseek.com/v1',
-        api_key='synthetic'),None)._payload(AIInput(stage='discovery_turn',context='{}'))
-    assert payload['response_format']['type']=='json_schema'
-    assert payload['response_format']['json_schema']['strict'] is True
-
-
 def test_compatible_json_only_endpoint_cannot_silently_drop_constraints():
     adapter=AIAdapter(local_settings(provider='compatible',base_url='https://example.test/v1',api_key='synthetic'),None)
     with pytest.raises(AIError,match='unsupported_structured_output'):
@@ -243,8 +238,14 @@ def test_real_adapter_repairs_failed_sections_or_returns_safe_partial_chat(conve
     engine.research_values.assert_not_called()
 
 
-@pytest.mark.parametrize('message',['hi',' HI! ','Hello elo','How do I use this?','How does this work?','Thanks'])
-@pytest.mark.parametrize('status',['conversation','researching','waiting','review','confirmed'])
+@pytest.mark.parametrize('message,status', [
+    ('hi', 'conversation'),
+    (' HI! ', 'conversation'),
+    ('Hello elo', 'researching'),
+    ('How do I use this?', 'waiting'),
+    ('How does this work?', 'review'),
+    ('Thanks', 'confirmed'),
+])
 def test_social_turns_work_without_model_and_leave_context_intact(conversation,message,status):
     engine,row,send=conversation
     previous=Decision(action='ASK_CLARIFICATION',scope=Scope(field='Finance',area='Finance'),

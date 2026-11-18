@@ -11,11 +11,13 @@ from app.live import LiveJobs
 from app.main import create_app
 from app.providers import ProviderUnavailable
 from app.store import search_filter
+from conftest import storage_backends
 from jobs_fixtures import GREENHOUSE, LEVER, NOW, SyntheticUpstream, greenhouse_job, lever_job
 
 OWNER = {'Authorization': 'Bearer owner'}
 
 
+@storage_backends
 def test_each_search_reads_provider_again_and_never_uses_seeded_data(database):
     calls = []
     jobs = [greenhouse_job()]

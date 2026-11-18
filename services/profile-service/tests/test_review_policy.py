@@ -15,7 +15,8 @@ class Accounts:
 
     def session(self, token, settings):
         return {'name': 'Synthetic', 'email': 'person@example.test', 'email_verified': True,
-                'provider': 'email', 'expires_at': datetime.now(timezone.utc), **self.records[token]}
+                'provider': 'email', 'owner': self.records[token]['id'],
+                'expires_at': datetime.now(timezone.utc), **self.records[token]}
 
     def finish(self, data, settings, verify_google):
         return self.session('free-token', settings)
@@ -33,6 +34,9 @@ def test_session_projects_same_current_review_policy_for_all_accounts():
             assert response.status_code == 200
             assert response.json()['cv_review_scope'] == 'item'
             assert response.json()['cv_review_policy_version'] == 1
+        invalid = client.patch('/api/v1/profile', headers={'Authorization': 'Bearer paid-token'},
+                               json={'expected_version': 0, 'cv_review_scope': 'section'})
+        assert invalid.status_code == 422
     # Project the policy on read without rewriting existing account records.
     assert accounts.records['free-token']['cv_review_scope'] == 'section'
     assert accounts.records['paid-token']['cv_review_policy_version'] == 1

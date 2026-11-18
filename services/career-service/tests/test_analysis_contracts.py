@@ -52,16 +52,12 @@ def test_objectids_roundtrip_bson_without_changing_account_uuid(documents):
     assert 'create_key' not in read_stored_goal(restored).model_dump()
 
 
-@pytest.mark.parametrize('field,value', [('source_text', 'full description'), ('raw_jd', 'full description'),
-    ('extracted_text', 'full description'), ('career_target_id', '000000000000000000000002')])
-def test_raw_jd_and_obsolete_fields_are_rejected(documents, field, value):
-    data = documents['goal']; data[field] = value
-    with pytest.raises(ValidationError): CareerGoal.model_validate(data)
-
-
-@pytest.mark.parametrize('field,value', [('user_id', 'not-an-account'), ('_id', 'bad'), ('version', 0),
-    ('version', True), ('created_at', '2026-01-01T00:00:00'), ('role', 'x'*161)])
-def test_invalid_identity_versions_dates_and_bounds(documents, field, value):
+@pytest.mark.parametrize('field,value', [
+    ('raw_jd', 'full description'), ('career_target_id', '000000000000000000000002'),
+    ('user_id', 'not-an-account'), ('_id', 'bad'), ('version', 0), ('version', True),
+    ('created_at', '2026-01-01T00:00:00'), ('role', 'x'*161),
+])
+def test_goal_rejects_private_obsolete_or_invalid_fields(documents, field, value):
     data = documents['goal']; data[field] = value
     with pytest.raises(ValidationError): CareerGoal.model_validate(data)
 

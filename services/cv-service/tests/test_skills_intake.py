@@ -5,7 +5,7 @@ import httpx
 import pytest
 from elo_shared.skills_profile import SkillsProfile
 from app.conversation.intake import next_target, skip_target
-from tests.conftest import ready
+from tests.conftest import storage_backends, ready
 from tests.test_conversation_security import PREFIX, send, settled
 
 
@@ -115,6 +115,7 @@ def test_unsupported_or_forged_evidence_never_changes_profile(harness):
     assert profiles.records['Bearer owner-a']['entries'] == []
 
 
+@storage_backends
 def test_lost_profile_response_retries_same_write_without_duplicate_entries(harness):
     client, app, *_ = harness
     chat, provider, profiles = open_profile(harness)
@@ -244,6 +245,7 @@ def test_cv_interpretation_accepts_semantic_proficiency_and_independence_only_wi
         assert claim['proficiency'] == 'Basic joins' and claim['assistance'] == 'independent'
 
 
+@storage_backends
 def test_old_refresh_cannot_clear_a_concurrently_published_review_question(harness, monkeypatch):
     import asyncio
     client, app, *_ = harness
@@ -280,6 +282,7 @@ def test_old_refresh_cannot_clear_a_concurrently_published_review_question(harne
     assert refreshed['active_question'] is None
 
 
+@storage_backends
 def test_old_profile_refresh_preserves_a_newer_intake_question(harness, monkeypatch):
     import asyncio
     import app.conversation.intake as intake

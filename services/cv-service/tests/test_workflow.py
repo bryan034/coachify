@@ -7,9 +7,10 @@ from pydantic_core import PydanticCustomError
 from app.domain.service import detail, now
 from app.domain.errors import Conflict
 from app.workers.ingestion import _log_invalid_extraction
-from tests.conftest import ready, upload, mutation, docx
+from tests.conftest import storage_backends, ready, upload, mutation, docx
 
 
+@storage_backends
 def test_saved_sparse_upload_reload_and_idempotency(harness):
     client, app, *_ = harness
     key = str(uuid4())
@@ -45,6 +46,7 @@ def test_owner_isolation_revocation_and_onboarding(harness):
     assert client.get('/api/v1/cv').status_code == 401
     client.headers.pop('Authorization')
     assert client.get('/api/v1/cv').status_code == 401
+    assert client.get('/api/v1/cv/' + cv['id']).status_code == 401
 
 
 def test_explicit_selection_failure_preserves_previous_result(harness):
@@ -105,6 +107,7 @@ def test_invalid_known_months_and_blank_edits(harness):
     assert client.patch(path, json=mutation(cv['version'], action='update', experience_months=None)).status_code == 200
 
 
+@storage_backends
 def test_capability_snapshot_selection_and_declaration_races(harness):
     client, app, _, _, profile = harness
     cv = ready(harness)
@@ -126,6 +129,7 @@ def test_capability_snapshot_selection_and_declaration_races(harness):
     assert client.get(path).status_code == 409
 
 
+@storage_backends
 def test_expired_lease_recovery_fencing_and_cleanup(harness):
     client, app, *_ = harness
     response = upload(client).json()
@@ -287,6 +291,7 @@ def test_cleanup_recovers_after_file_deleted_before_tracking(harness, monkeypatc
     assert repo.get('owner-a', cv['id'])['original_available'] is False
 
 
+@storage_backends
 def test_concurrent_corrections_have_single_winner(harness):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
@@ -328,6 +333,7 @@ def test_upload_enforces_exact_file_limit_and_actual_format(harness):
         assert limited.get('/api/v1/cv/policy').json()['max_file_bytes'] == 2048
 
 
+@storage_backends
 def test_new_worker_recovers_persisted_queued_job(harness):
     from app.workers.ingestion import IngestionWorker
     client, app, extractor, *_ = harness

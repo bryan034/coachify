@@ -103,7 +103,7 @@ python -m pytest
 ```
 
 - Profile, CV and Career integration tests need a disposable MongoDB (`MONGODB_TEST_URI`); ordinary unit tests do not. Career needs its tiktoken tokenizer cache (see CI). Full-stack browser journeys and fixtures: [testing](docs/testing.md), `compose.test.yaml`, `infrastructure/testing/`.
-- CI (`.github/workflows/ci.yml`) runs frontend typecheck/unit, Playwright, a backend matrix over all eight services, shared-package tests (via the assessment job), and Mongo integration jobs. Run the equivalent for what you touched. Changes to `elo-shared` affect every service: run more than one service's tests.
+- CI (`.github/workflows/ci.yml`) runs frontend typecheck/unit, Playwright, each backend service once, and shared-package tests via the Assessment job. Profile, Career, CV and Jobs run in their MongoDB jobs. Run the equivalent for what you touched. Changes to `elo-shared` affect every service: run more than one service's tests.
 - For logic changes, add meaningful coverage and keep fixing/rerunning relevant tests until they pass. Never remove, skip or weaken valid tests to get a pass; report blockers honestly. Report exact current results, not historical totals.
 - Review the final diff for unintended changes and secrets. Report changes, checks actually run and remaining limitations.
 

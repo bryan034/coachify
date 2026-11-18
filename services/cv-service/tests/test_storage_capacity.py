@@ -12,7 +12,7 @@ from app.domain.errors import Conflict
 from app.domain.service import CvService, now
 from app.domain.storage import CapacityError, CapacityUnavailable, UploadCapacity
 from app.repositories.files import FileStore
-from tests.conftest import docx, mutation, ready, upload
+from tests.conftest import storage_backends, docx, mutation, ready, upload
 
 
 def limits(app, **values):
@@ -39,6 +39,7 @@ def reset_ledger(repository):
     else: ledger.document = None
 
 
+@storage_backends
 def test_parallel_owner_and_global_admission_is_bounded(harness):
     _, app, *_ = harness
     limits(app, max_saved_cvs_per_owner=3, max_saved_cvs_global=4)
@@ -57,6 +58,7 @@ def test_parallel_owner_and_global_admission_is_bounded(harness):
     assert len(list(app.state.files.originals())) == 4
 
 
+@storage_backends
 def test_parallel_duplicate_upload_reuses_identity_and_capacity(harness):
     _, app, *_ = harness
     key = str(uuid4())
@@ -69,6 +71,7 @@ def test_parallel_duplicate_upload_reuses_identity_and_capacity(harness):
     assert app.state.files.read(results[0]) == docx()
 
 
+@storage_backends
 def test_expiry_releases_bytes_but_preserves_saved_record_limit(harness):
     client, app, *_ = harness
     limits(app, max_saved_cvs_per_owner=2, max_original_bytes_per_owner=len(docx()))
@@ -92,6 +95,7 @@ class SimulatedCrash(BaseException):
     pass
 
 
+@storage_backends
 @pytest.mark.parametrize('stage', ['reserved', 'partial-file', 'published-file', 'inserted-record'])
 def test_restart_recovers_every_upload_publication_boundary(harness, monkeypatch, stage):
     _, app, *_ = harness
@@ -125,6 +129,7 @@ def test_restart_recovers_every_upload_publication_boundary(harness, monkeypatch
     assert len(repo.admission.read()['entries']) == 1
 
 
+@storage_backends
 def test_ambiguous_insert_acknowledgement_never_deletes_committed_original(harness, monkeypatch):
     _, app, *_ = harness
     service, repo = app.state.service, app.state.repository
@@ -143,6 +148,7 @@ def test_ambiguous_insert_acknowledgement_never_deletes_committed_original(harne
     assert len(repo.admission.read()['entries']) == 1
 
 
+@storage_backends
 def test_recovery_cannot_release_a_live_writer(harness, monkeypatch):
     _, app, *_ = harness
     started, release = Event(), Event()
@@ -164,6 +170,7 @@ def test_recovery_cannot_release_a_live_writer(harness, monkeypatch):
     assert app.state.files.read(saved['_id']) == docx()
 
 
+@storage_backends
 def test_expired_generation_cannot_release_resupplied_bytes(harness):
     client, app, *_ = harness
     cv = ready(harness)
@@ -186,6 +193,7 @@ def test_expired_generation_cannot_release_resupplied_bytes(harness):
     assert app.state.files.read(cv['id']) == docx()
 
 
+@storage_backends
 def test_legacy_overlimit_records_remain_readable_and_selected(harness):
     client, app, *_ = harness
     cvs = [ready(harness) for _ in range(3)]
@@ -213,6 +221,7 @@ def test_legacy_overlimit_records_remain_readable_and_selected(harness):
     assert set(seen) == {cv['id'] for cv in cvs}
 
 
+@storage_backends
 def test_legacy_untracked_and_partial_files_remain_charged_until_removed(harness):
     _, app, *_ = harness
     original, partial = str(uuid4()), str(uuid4())
@@ -230,6 +239,7 @@ def test_legacy_untracked_and_partial_files_remain_charged_until_removed(harness
     assert capacity.ledger.read()['entries'] == {}
 
 
+@storage_backends
 def test_legacy_orphan_credit_recovers_after_unlink_crash(harness, monkeypatch):
     _, app, *_ = harness
     identifier = str(uuid4())
@@ -251,6 +261,7 @@ def test_legacy_orphan_credit_recovers_after_unlink_crash(harness, monkeypatch):
     assert list(app.state.files.storage_files()) == []
 
 
+@storage_backends
 def test_list_uses_bounded_projection_and_validates_cursor(harness, monkeypatch):
     client, app, *_ = harness
     saved = ready(harness)

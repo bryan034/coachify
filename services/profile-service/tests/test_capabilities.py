@@ -59,9 +59,12 @@ class MemoryCollection:
             return SimpleNamespace(modified_count=0)
 
 
-@pytest.fixture(params=["memory", "mongo"])
+storage_backends = pytest.mark.parametrize("database", ["memory", "mongo"], indirect=True)
+
+
+@pytest.fixture
 def database(request):
-    if request.param == "memory":
+    if getattr(request, "param", "memory") == "memory":
         yield SimpleNamespace(accounts=MemoryCollection(), capability_mutations=MemoryCollection())
     else:
         if not os.getenv("MONGODB_TEST_URI"):
@@ -104,6 +107,7 @@ def client(repo):
         yield client
 
 
+@storage_backends
 def test_before_cv_fields_versions_and_account_preservation(repo):
     before = repo.account("alice")
     saved = repo.create("alice", payload())
@@ -180,6 +184,7 @@ def test_matching_requires_explicit_choice_and_preserves_source_identity(repo):
     assert error.value.code == "match_changed"
 
 
+@storage_backends
 def test_duplicate_noop_stale_and_old_replay_do_not_change_versions(repo):
     request = payload()
     saved = repo.create("alice", request)
@@ -197,6 +202,7 @@ def test_duplicate_noop_stale_and_old_replay_do_not_change_versions(repo):
         repo.create("alice", payload(expected_version=1, mutation_id="stale", name="Java"))
 
 
+@storage_backends
 def test_atomic_races_duplicate_and_different_keys(repo):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: repo.create("alice", payload()), range(2)))
@@ -212,6 +218,7 @@ def test_atomic_races_duplicate_and_different_keys(repo):
     assert sorted(map(str, results)) == ["2", "conflict"]
 
 
+@storage_backends
 def test_same_key_different_payload_race_cannot_publish_both(repo):
     def save(index):
         try:
@@ -224,6 +231,7 @@ def test_same_key_different_payload_race_cannot_publish_both(repo):
     assert len(repo.current("alice")["declarations"]) == 1
 
 
+@storage_backends
 def test_crash_after_account_publication_replays_and_seals_prior_receipt(repo):
     original = repo.seal
     count = 0
@@ -324,6 +332,7 @@ def source_item(fingerprint="a" * 64):
         "_matched_skill_id": "skill:python", "_attachment_fingerprint": fingerprint}
 
 
+@storage_backends
 def test_attachment_reconciliation_preserves_manual_content_and_history(repo):
     saved = repo.create("alice", payload())
     original = deepcopy(saved["declarations"][0])
@@ -392,6 +401,7 @@ def test_attachment_failures_stale_replay_and_foreign_declaration_preserve_input
     assert repo.current("alice") == linked
 
 
+@storage_backends
 def test_attachment_same_key_race_and_lost_response_recover_once(repo):
     saved = repo.create("alice", payload())
     request = attachment(saved["declarations"][0]["id"])
@@ -469,6 +479,7 @@ def test_withdrawing_one_of_several_descriptions_keeps_the_rest(repo):
     assert kept["description"] == "I cleaned synthetic tabular data using pandas."
 
 
+@storage_backends
 def test_withdrawal_is_idempotent_scoped_to_the_owner_and_checks_the_version(repo):
     saved = repo.create("alice", payload())
     row = saved["declarations"][0]

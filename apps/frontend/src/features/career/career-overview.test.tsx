@@ -46,12 +46,9 @@ it('shows each skill’s level against the role target from the saved comparison
  expect(screen.queryByRole('button',{name:/^SQL/})).not.toBeInTheDocument();expect(screen.getByRole('button',{name:/^Teamwork/})).toBeVisible();
  vi.unstubAllGlobals();
 });
-it('offers the evaluation once the goal is set and the Skills Profile is reviewed',async()=>{
+it('offers the evaluation on the Career Goal page when inputs are ready',async()=>{
  serve({});overview();
- fireEvent.click(await screen.findByRole('button',{name:'Evaluate skills'}));
- expect(screen.getByRole('heading',{name:'Evaluate skills with career goal'})).toBeVisible();
- await waitFor(()=>expect(vi.mocked(fetch).mock.calls.filter(call=>call[1]?.method==='POST')).toHaveLength(1));
- expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(call=>call[1]?.method==='POST')![1]!.body))).toMatchObject({expected_version:0,allow_partial:true,mutation_id:expect.any(String)});
+ expect(await screen.findByRole('button',{name:'Evaluate skills'})).toBeEnabled();
  vi.unstubAllGlobals();
 });
 it('hides the banner once a current evaluation exists and asks again when it is stale',async()=>{

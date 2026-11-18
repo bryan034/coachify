@@ -1,9 +1,10 @@
 """Owner-scoped metadata titles preserve source identity and effective evidence."""
 from uuid import uuid4
 import pytest
-from tests.conftest import ready, upload
+from tests.conftest import storage_backends, ready, upload
 
 
+@storage_backends
 def test_rename_persists_replays_and_preserves_evidence(harness):
     client, app, *_ = harness
     repository = app.state.repository

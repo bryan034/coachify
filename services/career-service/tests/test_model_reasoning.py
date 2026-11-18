@@ -5,12 +5,11 @@ import json
 import httpx
 import pytest
 
-from app.ai.adapter import AIAdapter,AIError,MODEL_OUTPUTS,Operation
+from app.ai.adapter import AIAdapter,AIError,Operation
 from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 from app.ai.opportunity_config import OpportunitySettings
 from app.ai.opportunity_contracts import StructuredFindings,FIELD_GUIDANCE,structure_input
-from app.ai.routing import ModelRouter
 from app.clients.search_sources import SourceAPIs
 from app.repositories.goals import now
 from app.schemas.analysis import ResearchContext,ResearchSource
@@ -37,22 +36,6 @@ def test_runtime_ignores_legacy_credentials_models_and_chat_switch(monkeypatch):
     monkeypatch.setenv('AI_ENABLED','true');monkeypatch.delenv('CAREER_LLM_API_KEY')
     with pytest.raises(ValueError) as error:AISettings.from_env()
     assert 'synthetic-legacy' not in str(error.value)
-
-
-@pytest.mark.parametrize('stage',MODEL_OUTPUTS)
-def test_every_stage_routes_to_the_same_model_adapter(stage):
-    async def run():
-        class RecordingAdapter:
-            settings=AISettings(enabled=True,api_key='synthetic')
-            async def generate(self,request,operation,**kwargs):
-                assert request.stage==stage and operation.stage==stage
-                return self.settings.model
-        adapter=RecordingAdapter()
-        # Routing does not mutate requests; stage-specific contracts are tested by
-        # the real adapter flows and by the research conversion below.
-        from types import SimpleNamespace
-        assert await ModelRouter(adapter,adapter).generate(SimpleNamespace(stage=stage),Operation('synthetic','1',stage))=='openai/gpt-4o-mini'
-    asyncio.run(run())
 
 
 @pytest.mark.parametrize('category',CATEGORIES)

@@ -12,7 +12,7 @@ import pytest
 from pymongo.errors import AutoReconnect
 from app.core.config import Settings
 from app.domain.model_usage import ModelAdmissionError, ModelUsage
-from tests.conftest import mutation, ready, upload
+from tests.conftest import storage_backends, mutation, ready, upload
 from tests.test_conversation import Router, source_chat
 from tests.test_conversation_security import open_chat, send, settled, PREFIX
 from tests.test_interpretation import project_question, PERSONAL
@@ -28,6 +28,7 @@ def count(repository, owner=None):
     return document['owners'].get(hashlib.sha256(owner.encode()).hexdigest(), 0) if owner else document['total']
 
 
+@storage_backends
 def test_daily_owner_and_global_budgets_survive_new_instances(repository, tmp_path):
     limits = {'model_calls_per_owner_per_day': 2, 'model_calls_global_per_day': 3}
     first = usage(repository, tmp_path, **limits)
@@ -42,6 +43,7 @@ def test_daily_owner_and_global_budgets_survive_new_instances(repository, tmp_pa
     assert 'owner-a' not in str(repository.model_usage.read())
 
 
+@storage_backends
 def test_concurrent_budget_cas_has_no_extra_provider_calls(repository, tmp_path):
     limits = {'model_calls_per_owner_per_day': 1, 'model_calls_global_per_day': 2,
               'model_concurrent_global': 8}
@@ -65,6 +67,7 @@ def test_failed_attempts_count_and_disabled_configuration_is_free(repository, tm
     assert count(repository) == 1
 
 
+@storage_backends
 def test_ambiguous_committed_counter_write_fails_closed_without_refund(repository, tmp_path, monkeypatch):
     guard = usage(repository, tmp_path)
     store_replace = repository.model_usage.replace
@@ -81,6 +84,7 @@ def test_ambiguous_committed_counter_write_fails_closed_without_refund(repositor
     assert calls == ['provider'] and count(repository, 'owner-a') == 2
 
 
+@storage_backends
 def test_day_rollover_keeps_revision_monotonic_and_clock_rollback_does_not_reset(repository, tmp_path):
     guard = usage(repository, tmp_path, model_calls_per_owner_per_day=1)
     guard.day = lambda: '2026-10-29'

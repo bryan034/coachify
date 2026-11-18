@@ -81,19 +81,6 @@ def test_registration_retries_names_and_private_ownership(setup):
     assert not repo.sessions.find_one({'token': body['session_token']})
 
 
-def test_cv_review_policy_is_the_same_for_all_accounts(setup):
-    client, repo = setup
-    a, headers, _, _ = register(client)
-    b, other, _, _ = register(client)
-    assert client.get(BASE + '/auth/session', headers=headers).json()['cv_review_scope'] == 'item'
-    # A legacy stored section policy cannot reduce the new shared allowance.
-    repo.accounts.update_one({'id': a['id']}, {'$set': {'cv_review_scope': 'section', 'cv_review_policy_version': 1}})
-    policy = client.get(BASE + '/auth/session', headers=headers).json()
-    assert (policy['cv_review_scope'], policy['cv_review_policy_version']) == ('item', 1)
-    assert client.get(BASE + '/auth/session', headers=other).json()['cv_review_scope'] == 'item'
-    assert client.patch(BASE, headers=other, json={'expected_version': 0, 'cv_review_scope': 'section'}).status_code == 422
-
-
 def test_logout_revokes_replay_and_preserves_history_and_reentry(setup):
     client, _ = setup
     a, headers, _, _ = register(client)

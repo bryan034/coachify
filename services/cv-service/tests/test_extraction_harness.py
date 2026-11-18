@@ -87,6 +87,8 @@ def test_schema_contains_decoding_constraints_and_no_optional_object_fields():
     assert schema['properties']['items']['minItems'] == 1
     assert schema['properties']['items']['maxItems'] == 160
     assert item['properties']['evidence']['maxItems'] == 6
+    assert schema['properties']['other_information']['maxItems'] == 160
+    assert item['properties']['experience_months']['anyOf'][0]['minimum'] == 0
     assert 'maxLength' not in item['properties']['evidence']['items']['properties']['excerpt']
     assert item['properties']['explicit']['type'] == 'boolean'
     assert item['properties']['kind']['enum'] == ['education', 'experience', 'project', 'skill']
@@ -108,6 +110,8 @@ def test_repair_recovers_overlong_quotes_and_conflicting_dates(harness, monkeypa
     assert len(calls) == count(app.state.repository) == 2
     assert calls[0]['response_format'] == calls[1]['response_format']
     assert calls[0]['response_format']['json_schema']['strict'] is True
+    assert calls[0]['response_format']['json_schema']['schema'] == extraction_schema()
+    assert all('"maxItems": 160' not in request['messages'][0]['content'] for request in calls)
     repair = json.loads(calls[1]['messages'][1]['content'])
     assert repair['rejected_candidate'] == invalid
     assert [block['text'] for block in repair['source_blocks']] == SOURCES
@@ -392,30 +396,6 @@ def test_failed_reprocessing_preserves_other_information(harness, monkeypatch):
     assert failed['status'] == 'failed'
     assert failed['other_information'] == saved['other_information']
     assert failed['extraction_version'] == saved['extraction_version']
-
-
-@pytest.mark.parametrize('defect', ['items_count', 'citation_count', 'duration', 'other_count', 'extra', 'enum'])
-def test_decoding_schema_keeps_all_backend_constraints(harness, monkeypatch, defect):
-    _, invalid = candidates()
-    if defect == 'items_count': invalid['items'] *= 81
-    # Every item carries the defect, so nothing verifies and the whole extraction fails.
-    elif defect == 'citation_count':
-        for item in invalid['items']: item['evidence'] = [{'block_id': 'b1', 'excerpt': 'A'}] * 7
-    elif defect == 'duration':
-        for item in invalid['items']: item['experience_months'] = -1
-    elif defect == 'other_count': invalid['other_information'] = [{'block_id': 'b1', 'excerpt': 'A'}] * 161
-    elif defect == 'extra':
-        for item in invalid['items']: item['invented_field'] = 'untrusted'
-    elif defect == 'enum':
-        for item in invalid['items']: item['kind'] = 'invented'
-    client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, invalid])
-    app.state.worker.run_once()
-    result = read_result(client, queued)
-    assert result['status'] == 'failed' and result['error']['failure_category'] == 'schema_validation'
-    assert result['items'] == [] and result['extraction_version'] == 0
-    assert len(calls) == 2
-    for request in calls:
-        assert 'maxItems' in request['response_format']['json_schema']['schema']['properties']['items']
 
 
 @pytest.mark.parametrize('other', [False, True])

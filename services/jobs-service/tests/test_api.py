@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.store import JobsStore
 from app.sync import sync_source
+from conftest import storage_backends
 from jobs_fixtures import ASHBY, GREENHOUSE, LEVER, NOW, SyntheticUpstream, ashby_job, greenhouse_job, lever_job
 
 OWNER = {'Authorization': 'Bearer owner'}
@@ -52,6 +53,7 @@ def test_results_are_newest_first_without_internal_fields(client):
     assert client.get('/api/v1/jobs/search', headers=OWNER).headers['cache-control'] == 'no-store'
 
 
+@storage_backends
 @pytest.mark.parametrize('query,expected', [
     ('c++', {'C++ Engineer'}),
     ('c+', set()),
@@ -76,6 +78,7 @@ def test_a_query_of_only_symbols_is_treated_as_no_keyword(client):
     assert len(titles(client, q='.* ( [')) == 5
 
 
+@storage_backends
 def test_filter_by_job_type_industry_workplace_and_company(client):
     assert set(titles(client, job_type='internship')) == {'Quant Intern', 'Operations Intern'}
     assert set(titles(client, job_type=['contract', 'full_time'])) == {'C++ Engineer', 'Data Analyst', 'Research Scientist'}
@@ -87,6 +90,7 @@ def test_filter_by_job_type_industry_workplace_and_company(client):
     assert set(titles(client, job_type='internship', industry='financial_services')) == {'Quant Intern'}
 
 
+@storage_backends
 def test_filter_by_posted_date_uses_singapore_calendar_days(client):
     # 00:00 on 1 November in Singapore is still 31 October in UTC, so a UTC day boundary would miss it.
     assert titles(client, posted_from='2026-11-04', posted_to='2026-11-04') == ['Quant Intern']
@@ -104,6 +108,7 @@ def test_invalid_filters_are_rejected(client, params):
     assert response.status_code == 422 and response.json()['code'] == 'validation'
 
 
+@storage_backends
 def test_cursor_pages_through_every_result_once(client):
     seen, cursor = [], None
     for _ in range(5):
@@ -122,6 +127,7 @@ def test_invalid_cursor_is_rejected(client):
         assert client.get('/api/v1/jobs/search', params={'cursor': cursor}, headers=OWNER).status_code == 422
 
 
+@storage_backends
 def test_filter_options_report_available_values(client):
     body = client.get('/api/v1/jobs/filters', headers=OWNER).json()
     assert {'value': 'internship', 'count': 2} in body['job_types']
@@ -130,6 +136,7 @@ def test_filter_options_report_available_values(client):
     assert body['last_synced_at'].startswith('2026-11-05T04:00')
 
 
+@storage_backends
 def test_closed_postings_leave_search_but_remain_readable(client):
     identifier = client.get('/api/v1/jobs/search', params={'company': 'Synthetic Labs'}, headers=OWNER).json()['items'][0]['id']
     client.store.postings.update_one({'_id': identifier}, {'$set': {'status': 'closed'}})
@@ -143,6 +150,7 @@ def first_posting(client):
     return client.get('/api/v1/jobs/search', headers=OWNER).json()['items'][0]
 
 
+@storage_backends
 def test_saving_a_job_is_idempotent_and_private_to_its_owner(client):
     posting = first_posting(client)
     created = client.post('/api/v1/jobs/applications', json={'posting_id': posting['id']}, headers=OWNER)
@@ -161,6 +169,7 @@ def test_saving_a_job_is_idempotent_and_private_to_its_owner(client):
     assert other['id'] != saved['id']
 
 
+@storage_backends
 def test_status_updates_keep_history_and_reject_stale_versions(client):
     saved = client.post('/api/v1/jobs/applications', json={'posting_id': first_posting(client)['id']}, headers=OWNER).json()
     path = '/api/v1/jobs/applications/' + saved['id']
@@ -226,6 +235,7 @@ def test_a_pasted_link_is_saved_cleaned_and_tracked_like_any_other_job(client):
     assert client.delete(f"/api/v1/jobs/applications/{saved['id']}?expected_version=2", headers=OWNER).status_code == 204
 
 
+@storage_backends
 def test_saving_the_same_link_again_returns_the_record_and_keeps_owners_apart(client):
     first = client.post('/api/v1/jobs/applications/link', json=LINK, headers=OWNER).json()
     client.patch(f"/api/v1/jobs/applications/{first['id']}", json={'expected_version': 1, 'status': 'applied'}, headers=OWNER)
@@ -236,6 +246,7 @@ def test_saving_the_same_link_again_returns_the_record_and_keeps_owners_apart(cl
     assert len(client.get('/api/v1/jobs/applications', headers=OTHER).json()['items']) == 1
 
 
+@storage_backends
 def test_a_link_matching_a_saved_listing_returns_that_listing(client):
     posting = client.get('/api/v1/jobs/search', headers=OWNER).json()['items'][0]
     saved = client.post('/api/v1/jobs/applications', json={'posting_id': posting['id']}, headers=OWNER).json()

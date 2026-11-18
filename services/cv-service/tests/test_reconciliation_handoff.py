@@ -1,7 +1,7 @@
 from copy import deepcopy
 import pytest
 from app.domain.attachments import assess_links
-from tests.conftest import ready, upload, mutation, docx
+from tests.conftest import storage_backends, ready, upload, mutation, docx
 
 
 def changed_candidate(harness, remove=False):
@@ -45,6 +45,7 @@ def test_reprocessing_candidate_is_saved_and_keep_restores_previous_ready_result
     assert app.state.repository.get('owner-a', cv['id'])['history'][-1]['candidate']['id'] == candidate['candidate_id']
 
 
+@storage_backends
 @pytest.mark.parametrize('reapply', [True, False])
 def test_candidate_requires_explicit_mapping_and_retains_previous_history(harness, reapply):
     client, app, *_ = harness
@@ -78,6 +79,7 @@ def test_reconciliation_owner_and_stale_choices_are_rejected(harness):
     assert client.post(path, json=mutation(cv['version'], candidate_id=candidate['candidate_id'], action='keep_previous')).status_code == 404
 
 
+@storage_backends
 def test_replacement_comparison_is_explicit_and_does_not_modify_previous_cv(harness):
     client, app, *_ = harness
     old = ready(harness)

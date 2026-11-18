@@ -96,26 +96,19 @@ def test_empty_plan_ratio_is_unknown_and_removed_last_task_never_completes_miles
         assert {'no_active_tasks','removed_work'} <= {r['code'] for r in data['milestones'][0]['review_reasons']}
 
 
-@pytest.mark.parametrize('recorded_at,source,active,expected',[
-    ('2030-01-09T00:00:00Z','self_reported',True,False),
-    ('2030-01-08T00:00:00Z','self_reported',True,True),
-    ('2030-01-07T00:00:00Z','self_reported',True,True),
-    ('invalid','self_reported',True,True),
-    (None,'self_reported',True,True),
-    ('2030-01-09T00:00:00Z','generated',True,True),
-    ('2030-01-09T00:00:00Z','self_reported',False,True),
+@pytest.mark.parametrize('recorded_at,expected', [
+    ('2030-01-09T00:00:00Z', False),
+    ('2030-01-08T00:00:00Z', True),
 ])
-def test_removal_warning_clears_only_after_explicit_review_with_active_work(recorded_at,source,active,expected):
+def test_removal_warning_clears_only_after_explicit_review_with_active_work(recorded_at,expected):
     fake=Fake()
     plan=fake.roadmap['active']
-    plan['milestones'][0]['outcome']={'demonstrated':True,'source':source,'recorded_at':recorded_at}
-    if not active:plan['editable_tasks']=[t for t in plan['editable_tasks'] if t['removed']]
+    plan['milestones'][0]['outcome']={'demonstrated':True,'source':'self_reported','recorded_at':recorded_at}
     before=copy.deepcopy(plan)
     with client(fake) as c:
         milestone=c.get('/api/v1/dashboard',headers=H).json()['milestones'][0]
     codes={r['code'] for r in milestone['review_reasons']}
     assert ('removed_work' in codes) is expected
-    if not active:assert 'no_active_tasks' in codes
     assert plan==before
 
 

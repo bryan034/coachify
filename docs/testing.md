@@ -14,7 +14,12 @@ and newer interpreters use different HTTP status phrases for 413 and 422.
 The planning integration journey checks Profile defaults through the Roadmap
 workspace response and adviser opening, then returns through Profile to edit them.
 
-Preserve checks for distinct behavior and boundaries, including cross-service contracts. If a UI journey is replaced, retain its useful ownership, draft, retry and validation assertions against the new flow. Do not weaken or remove valid failures to obtain a pass. Historical discovery totals and earlier passing logs are not evidence for the current merged tree; report exact current results separately.
+Preserve checks for distinct behavior and boundaries, including cross-service contracts. If a UI journey is replaced, retain its useful ownership, draft, retry and validation assertions against the new flow. Do not weaken or remove valid failures to obtain a pass. Report case counts and test results from the revision you checked.
+
+Test shared rules at their owner, with representative end-to-end checks of each
+caller. Use representative inputs for each distinct mode, provider or viewport.
+Use both storage backends for persistence, query behavior, concurrency and
+recovery. Run request validation and other storage-independent checks once.
 
 Profile's test extra includes PyYAML for the published YAML contract comparisons.
 The goal-confirmation browser journey holds the concurrent workspace refresh while
@@ -76,14 +81,14 @@ python -m pip install -e '.[test]'
 python -m pytest
 ```
 
-Each service's `tests/` directory is the pytest discovery root. Raw pytest exits 5
-when no tests are collected; CI permits it only for the three unimplemented scaffolds. Other nonzero exits fail. Profile, CV and Career integration jobs start MongoDB; ordinary backend unit jobs do not.
+Each service's `tests/` directory is the pytest discovery root. CI accepts an empty suite only for the Review scaffold. Set `MONGODB_TEST_URI` to a disposable instance to enable the MongoDB cases.
 
 ## Automation
 
 `.github/workflows/ci.yml` runs on PRs targeting `main`, every push to `main`
-(including merges), merge-queue checks, and manual dispatch. All six backend suites
-run independently. Frontend jobs run TypeScript/unit checks and Playwright browser
+(including merges), merge-queue checks, and manual dispatch. Profile, Career, CV and
+Jobs run their complete pytest suites in the MongoDB jobs. Assessment, Roadmap,
+Dashboard and Review run in the backend matrix. Frontend jobs run TypeScript/unit checks and Playwright browser
 tests against a production Next.js build. Unit and browser test discovery are separate.
 There are no path filters that could skip required jobs. The final `Test gate` fails
 if any test job fails, is cancelled, or is skipped. Browser reports and failure
@@ -157,8 +162,8 @@ python -m pytest
 ```
 
 The provisioning command downloads the vocabulary used by the pinned tokenizer;
-reuse an already populated `TIKTOKEN_CACHE_DIR` when running offline. Both Career
-CI paths provision it into a disposable runner cache after dependency installation
+reuse an already populated `TIKTOKEN_CACHE_DIR` when running offline. Career CI
+provisions it into a disposable runner cache after dependency installation
 and before pytest. Do not collect Profile and Career together
 in one Python process because both use an `app` package. The shared Career harness
 clears inherited application database, provider and tracing settings before collection
@@ -179,8 +184,8 @@ no live key, external provider calls or billing are needed. Career and CV each
 validate the exported MongoDB schemas. Their `MONGODB_TEST_URI` tests create/drop
 random `elo_analysis_test_*` / `elo_cv_test_*` databases, checking real
 BSON, indexes, private ownership and idempotent/versioned writes. Use only a
-disposable MongoDB. The required `analysis-integration` CI matrix runs both suites
-against MongoDB; ordinary backend jobs skip only their database-dependent tests.
+disposable MongoDB. The required `analysis-integration` CI matrix runs the complete Career, CV and
+Jobs suites with MongoDB. Local runs without the opt-in skip database-dependent cases.
 
 J08/J09 add fake-provider + real MongoDB flow tests, CV API ownership checks,
 component/browser adaptive chat and JD handoff checks, and a full-stack confirmed-goal reload
@@ -193,7 +198,9 @@ labelled inferences, structured job fields and URL metadata, context-only chat,
 proposal approval, invalid history, empty results and recoverable failures. They
 verify raw JD text is excluded from chat requests and unknown requirements are not
 promoted to employer facts; they do not establish live-model extraction accuracy. Browser coverage checks
-automatic document reading, the shared chat and explicit proposal approval. Session compatibility checks verify draft-preserving revalidation, explicit retry and actual authentication expiry. The upstream idle-activity component is not mounted by the merged workspace; its standalone tests do not establish an active inactivity policy.
+automatic document reading, the shared chat and explicit proposal approval. Session
+compatibility checks cover draft preservation through tab switches, explicit
+revalidation retries and authentication expiry.
 
 Docker hot-reload verification uses an isolated Compose project with `/dev/null`
 as its environment-file source and explicit synthetic settings. A disposable client

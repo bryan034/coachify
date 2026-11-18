@@ -36,20 +36,6 @@ def test_large_requests_repeat_without_local_token_admission_or_output_reduction
     asyncio.run(run())
 
 
-def test_model_provider_quota_is_still_enforced_without_immediate_retry():
-    async def run():
-        calls=[]
-        def handler(request):
-            calls.append(request)
-            return httpx.Response(429,headers={'Retry-After':'3'})
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(AISettings(enabled=True,api_key='fixture'),client)
-            with pytest.raises(AIError) as error:await adapter._complete({'model':'fixture','messages':[]},owner='alice')
-            assert error.value.limit_scope=='provider' and error.value.provider=='compatible'
-            assert error.value.retry_after==3 and len(calls)==1
-    asyncio.run(run())
-
-
 @pytest.mark.parametrize('code,scope,status,fragment',[
     ('input_limit',None,422,'configured model context'),
     ('rate_limited','provider',429,'AI provider')])

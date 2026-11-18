@@ -4,7 +4,7 @@ import pytest
 from app.domain.capabilities import effective_items, skills_for, validate_interpretation
 from app.schemas.cv import AnswerMutation, ItemMutation, validate_item_dates
 from app.clarification.service import answer as save_domain_answer
-from tests.conftest import ready, mutation, FakeInterpreter
+from tests.conftest import storage_backends, ready, mutation, FakeInterpreter
 from tests.test_clarification import prepare_context
 
 
@@ -96,6 +96,7 @@ def test_failure_keeps_answer_retry_is_distinct_and_idempotent(harness):
     assert app.state.interpreter.calls == 2
 
 
+@storage_backends
 def test_pending_answer_is_durable_before_provider_and_recoverable(harness):
     client, app, *_ = harness
     cv, question, path = project_question(harness)
@@ -121,6 +122,7 @@ def test_pending_answer_is_durable_before_provider_and_recoverable(harness):
     assert next(q for q in response.json()['clarifications'] if q['id'] == question['id'])['interpretation_status'] == 'ready'
 
 
+@storage_backends
 def test_newer_answer_fences_late_interpretation(harness):
     client, app, *_ = harness
     from dataclasses import replace
@@ -491,6 +493,7 @@ def test_one_denied_parent_preserves_other_supporting_parent(reverse):
     assert derived['skill_ids'] == []
 
 
+@storage_backends
 @pytest.mark.parametrize('operation', ['answer', 'retry'])
 def test_concurrent_same_key_invokes_provider_once(harness, monkeypatch, operation):
     from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
@@ -551,6 +554,7 @@ def test_concurrent_same_key_invokes_provider_once(harness, monkeypatch, operati
     assert interpreter.calls == 1
 
 
+@storage_backends
 def test_live_pending_lease_blocks_fresh_retries_and_expiry_allows_recovery(harness, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event

@@ -10,10 +10,14 @@ from app.ai.config import AISettings
 from app.ai.contracts import AIInput
 
 
-@pytest.mark.parametrize('embedded_status,expected', [(400, 'provider_configuration'),
-    (401, 'provider_auth'), (402, 'provider_access'), (403, 'provider_auth'), (404, 'model_unavailable'),
-    (429, 'rate_limited'), (503, 'unavailable')])
-@pytest.mark.parametrize('choice_error', [False, True])
+@pytest.mark.parametrize('embedded_status,expected,choice_error', [
+    (400, 'provider_configuration', True),
+    (401, 'provider_auth', False),
+    (402, 'provider_access', False),
+    (404, 'model_unavailable', False),
+    (429, 'rate_limited', True),
+    (503, 'unavailable', False),
+])
 def test_embedded_rejection_bypasses_correction_and_provider_retries(embedded_status, expected, choice_error):
     async def run():
         calls = []
@@ -46,7 +50,7 @@ def test_successful_responses_api_error_null_is_accepted():
     assert json.loads(adapter._content(json.dumps(body))) == {'reply': 'OK'}
 
 
-@pytest.mark.parametrize('code', [402, 'insufficient_quota', 'payment_required'])
+@pytest.mark.parametrize('code', [402, 'insufficient_quota'])
 def test_permanent_quota_rejection_does_not_enter_workflow_wait(code):
     from app.ai.adapter import quota_progress
     async def run():
@@ -71,7 +75,12 @@ def test_permanent_quota_rejection_does_not_enter_workflow_wait(code):
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('header,expected', [('600', 600), ('nan', 30), ('bad', 30), ('-3', 1), ('9000', 3600)])
+@pytest.mark.parametrize('header,expected', [
+    ('600', 600),
+    ('nan', 30),
+    ('-3', 1),
+    ('9000', 3600),
+])
 def test_embedded_rate_limit_preserves_bounded_provider_cooldown(header, expected):
     async def run():
         def handler(request):

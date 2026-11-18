@@ -6,7 +6,7 @@ import pytest
 from pymongo.errors import AutoReconnect
 from app.schemas.cv import Mutation, SelectionMutation
 from app.domain.errors import Conflict
-from tests.conftest import docx, ready, upload, mutation
+from tests.conftest import storage_backends, docx, ready, upload, mutation
 from tests.test_storage_capacity import reset_ledger
 
 
@@ -14,6 +14,7 @@ def remove(client, cv, **fields):
     return client.request('DELETE', '/api/v1/cv/' + cv['id'], json=mutation(cv['version'], **fields))
 
 
+@storage_backends
 def test_delete_selected_cv_erases_content_chats_file_and_capacity(harness):
     client, app, *_ = harness
     cv = ready(harness)
@@ -40,6 +41,7 @@ def test_delete_selected_cv_erases_content_chats_file_and_capacity(harness):
                  'history', 'extraction', 'candidate', 'prepared_context'} & receipt.keys())
 
 
+@storage_backends
 def test_delete_retry_is_idempotent_and_does_not_clear_new_selection(harness):
     client, app, *_ = harness
     first, second = ready(harness), ready(harness)
@@ -91,6 +93,7 @@ def test_delete_queued_failed_and_expired_originals(harness, state):
     assert client.get('/api/v1/cv/' + cv['id']).status_code == 404
 
 
+@storage_backends
 def test_delete_during_extraction_fences_late_publication(harness, monkeypatch):
     client, app, extractor, *_ = harness
     queued = upload(client).json()
@@ -106,6 +109,7 @@ def test_delete_during_extraction_fences_late_publication(harness, monkeypatch):
     assert not app.state.files.exists(queued['id'])
 
 
+@storage_backends
 def test_inflight_edit_cannot_resurrect_tombstone(harness):
     client, app, *_ = harness
     cv = ready(harness)
@@ -133,6 +137,7 @@ def test_file_failure_hides_content_and_worker_recovers(harness, monkeypatch):
     assert remove(client, cv).status_code == 200
 
 
+@storage_backends
 def test_quota_release_interruption_recovers_without_double_credit(harness, monkeypatch):
     client, app, *_ = harness
     cv = ready(harness)
@@ -148,6 +153,7 @@ def test_quota_release_interruption_recovers_without_double_credit(harness, monk
     assert remove(client, cv).status_code == 200
 
 
+@storage_backends
 def test_lost_tombstone_acknowledgement_is_recovered(harness, monkeypatch):
     client, app, *_ = harness
     cv = ready(harness)
@@ -163,6 +169,7 @@ def test_lost_tombstone_acknowledgement_is_recovered(harness, monkeypatch):
     assert not app.state.files.exists(cv['id']) and cv['id'] not in app.state.repository.admission.read()['entries']
 
 
+@storage_backends
 def test_deletion_preserves_concurrently_selected_other_cv(harness, monkeypatch):
     client, app, *_ = harness
     first, second = ready(harness), ready(harness)
@@ -176,6 +183,7 @@ def test_deletion_preserves_concurrently_selected_other_cv(harness, monkeypatch)
     assert result.status_code == 200 and result.json()['selection'] == {'cv_id': second['id'], 'version': 2}
 
 
+@storage_backends
 def test_deleted_upload_receipt_blocks_recreation_and_releases_capacity(harness):
     client, app, *_ = harness
     settings = replace(app.state.settings, max_saved_cvs_per_owner=1)

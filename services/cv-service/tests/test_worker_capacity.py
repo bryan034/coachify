@@ -4,7 +4,7 @@ from bson import BSON
 import pytest
 from app.domain.errors import CvError
 from app.domain.service import HISTORY_LIMIT_BYTES, OPERATIONAL_ALLOWANCE_BYTES, bump, now
-from tests.conftest import ready, upload
+from tests.conftest import storage_backends, ready, upload
 from tests.test_storage_capacity import expire, limits, send, SimulatedCrash
 
 
@@ -17,6 +17,7 @@ def fill_history(repository, identifier, remaining=20):
     return repository.replace(previous, document)
 
 
+@storage_backends
 def test_near_limit_history_does_not_block_expired_original_deletion(harness):
     client, app, *_ = harness
     full = ready(harness)
@@ -84,6 +85,7 @@ def test_cleanup_crash_after_unlink_keeps_quota_until_recovery(harness, monkeypa
     assert app.state.repository.get('owner-a', saved['_id'])['original_available'] is False
 
 
+@storage_backends
 def test_cleanup_advances_past_a_full_page_of_poison_records(harness, monkeypatch):
     _, app, *_ = harness
     limits(app, max_saved_cvs_per_owner=200, max_saved_cvs_global=200)
@@ -104,6 +106,7 @@ def test_cleanup_advances_past_a_full_page_of_poison_records(harness, monkeypatc
     assert all(app.state.files.exists(identifier) for identifier in poisoned)
 
 
+@storage_backends
 def test_ingestion_advances_past_a_full_page_of_poison_records(harness, monkeypatch):
     _, app, *_ = harness
     limits(app, max_saved_cvs_per_owner=20, max_saved_cvs_global=20)
@@ -121,6 +124,7 @@ def test_ingestion_advances_past_a_full_page_of_poison_records(harness, monkeypa
     assert all(app.state.repository.get('owner-a', identifier)['operation']['status'] == 'queued' for identifier in poisoned)
 
 
+@storage_backends
 def test_worker_candidate_pages_exclude_retained_history(harness):
     _, app, *_ = harness
     saved = send(app.state.service)

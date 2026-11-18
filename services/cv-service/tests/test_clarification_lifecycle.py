@@ -8,7 +8,7 @@ from app.domain.capabilities import effective_fingerprint
 from app.domain.errors import CvError
 from app.domain.service import HISTORY_LIMIT_BYTES, OPERATIONAL_ALLOWANCE_BYTES
 from app.schemas.cv import AnswerMutation, ItemMutation, Mutation, SavedInterpretation
-from tests.conftest import ready, mutation
+from tests.conftest import storage_backends, ready, mutation
 from tests.test_clarification import prepare_context
 from tests.test_interpretation import mixed_output, PERSONAL, project_question
 from tests.test_conversation import Router, actions, source_chat
@@ -74,6 +74,7 @@ def test_chat_can_add_new_context_after_a_source_correction(harness):
     assert not fresh['reconciliation_required'] and fresh['interpretation_status'] == 'ready'
 
 
+@storage_backends
 @pytest.mark.parametrize('duplicate_source_id', [False, True])
 def test_reconciliation_keeps_distinct_chat_facts_and_followup_links(harness, duplicate_source_id):
     client, app, *_ = harness
@@ -215,6 +216,7 @@ def test_capacity_rejects_before_accepting_a_pending_answer_or_retry(harness, op
     assert app.state.service.get('owner-a', cv['id']) == before
 
 
+@storage_backends
 def test_concurrent_edit_cannot_spend_an_accepted_answers_reserved_space(harness):
     client, app, *_ = harness
     cv, question, path = project_question(harness)
@@ -239,6 +241,7 @@ def test_concurrent_edit_cannot_spend_an_accepted_answers_reserved_space(harness
     assert next(q for q in saved['clarifications'] if q['id'] == question['id'])['interpretation_status'] == 'ready'
 
 
+@storage_backends
 @pytest.mark.parametrize('remaining', [RETRY_BYTES, 0])
 def test_interrupted_answer_retries_at_reserved_limit_without_copying_claim_history(harness, monkeypatch, remaining):
     client, app, *_ = harness

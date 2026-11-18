@@ -62,12 +62,10 @@ jobs:
     name: Backend tests (${{ matrix.service }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      TIKTOKEN_CACHE_DIR: /tmp/elo-tiktoken
     strategy:
       fail-fast: false
       matrix:
-        service: [profile, cv, career, assessment, roadmap, jobs, dashboard, review]
+        service: [assessment, roadmap, dashboard, review]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}-service
@@ -80,9 +78,6 @@ jobs:
       - name: Verify shared API contracts and model transport
         if: matrix.service == 'assessment'
         run: python -m pytest ../../packages/elo-shared/tests/test_api_contract.py ../../packages/elo-shared/tests/test_model.py ../../packages/elo-shared/tests/test_model_sdk.py ../../packages/elo-shared/tests/test_model_errors.py ../../packages/elo-shared/tests/test_milestone_review.py ../../packages/elo-shared/tests/test_skill_groups.py
-      - name: Provision Career tokenizer before test network isolation
-        if: matrix.service == 'career'
-        run: python -c "import tiktoken; tiktoken.get_encoding('o200k_harmony')"
       - name: Run pytest (only unimplemented services may have empty suites)
         shell: bash
         run: |

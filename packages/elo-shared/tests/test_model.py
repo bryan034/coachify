@@ -10,9 +10,12 @@ class Answer(BaseModel):
     reply:str
 
 
-@pytest.mark.parametrize('prefix', ['ASSESSMENT', 'ROADMAP'])
-@pytest.mark.parametrize('embedded_status,code,status', [(429, 'model_quota', 429), (402, 'model_provider', 503),
-    (401, 'model_provider', 503), (400, 'model_provider', 503), (503, 'model_provider', 503)])
+@pytest.mark.parametrize('prefix,embedded_status,code,status', [
+    ('ASSESSMENT', 429, 'model_quota', 429),
+    ('ROADMAP', 402, 'model_provider', 503),
+    ('ASSESSMENT', 400, 'model_provider', 503),
+    ('ROADMAP', 503, 'model_provider', 503),
+])
 def test_embedded_provider_errors_do_not_spend_schema_retries(monkeypatch, prefix, embedded_status, code, status):
     from elo_shared.runtime import Problem
     monkeypatch.setenv(prefix + '_LLM_API_KEY', 'synthetic-key')
@@ -43,8 +46,9 @@ def test_embedded_rate_limit_keeps_provider_cooldown(monkeypatch, prefix):
         assert caught.value.code == 'model_quota' and caught.value.retry_after == 600
     asyncio.run(run())
 
-@pytest.mark.parametrize('prefix',['ASSESSMENT','ROADMAP'])
-@pytest.mark.parametrize('provider',['local','openrouter','deepseek'])
+@pytest.mark.parametrize('prefix,provider', [
+    ('ASSESSMENT', 'local'), ('ROADMAP', 'openrouter'), ('ASSESSMENT', 'deepseek'),
+])
 def test_model_endpoint_json_contract_and_credential_isolation(monkeypatch,prefix,provider):
     base={'local':'http://host.docker.internal:11434/v1','openrouter':'https://openrouter.ai/api/v1','deepseek':'https://api.deepseek.com/v1'}[provider]
     monkeypatch.setenv('APP_ENV','development')
@@ -139,11 +143,10 @@ def test_token_parameter_can_be_selected_for_models_that_require_it(monkeypatch)
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('prefix',['ASSESSMENT','ROADMAP'])
-@pytest.mark.parametrize('base,override,expected',[
-    ('https://openrouter.ai/api/v1','','synthetic-shared'),
-    ('https://openrouter.ai/api/v1','synthetic-specific','synthetic-specific'),
-    ('https://api.openai.com/v1','',''),
+@pytest.mark.parametrize('prefix,base,override,expected', [
+    ('ASSESSMENT', 'https://openrouter.ai/api/v1', '', 'synthetic-shared'),
+    ('ROADMAP', 'https://openrouter.ai/api/v1', 'synthetic-specific', 'synthetic-specific'),
+    ('ASSESSMENT', 'https://api.openai.com/v1', '', ''),
 ])
 def test_adviser_models_use_shared_key_only_for_openrouter(monkeypatch,prefix,base,override,expected):
     monkeypatch.setenv(prefix+'_LLM_BASE_URL',base)

@@ -1,7 +1,7 @@
 import {expect, test} from '@playwright/test';
 import {clarificationState, emptyDeclarations, policy, savedCv} from '../fixtures/cv';
 
-for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:390,height:844}]) {
+for (const viewport of [{width:1280,height:800},{width:390,height:844}]) {
  test(`CV chat keeps question actions in the transcript at ${viewport.width}x${viewport.height}`, async ({page}, testInfo) => {
   await page.setViewportSize(viewport);
   await page.addInitScript(() => {

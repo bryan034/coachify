@@ -2,10 +2,9 @@
 
 API and snapshot tests use pytest. MongoDB integration requires MONGODB_TEST_URI pointing at a disposable instance. See the [application testing guide](../../../docs/testing.md) for commands and fixture boundaries.
 
-`test_capabilities.py` exercises the actual account declaration repository with an
-isolated memory collection and real MongoDB: before-CV entry, preserved account
-fields, same-name attach/distinct, stable manual provenance, limits, owner checks,
-concurrent saves, no-op revisions, restart/lost-response replay and storage failure.
+`test_capabilities.py` exercises the account declaration repository with isolated
+in-memory collections. The `storage_backends` cases also run against MongoDB for
+declaration persistence, version conflicts, concurrent saves and lost-response replay.
 `test_capability_cv_match.py` checks the authenticated service boundary, stale or
 removed CV matches, redirect rejection and safe errors. These synthetic tests do
 not claim live model quality or J/G analysis integration.

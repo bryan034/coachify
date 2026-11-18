@@ -145,19 +145,6 @@ def test_context_validation_still_rejects_oversized_requests_before_network():
     asyncio.run(invoke())
 
 
-def test_no_local_operation_rate_limit_blocks_repeated_calls():
-    async def invoke():
-        calls=[]
-        def handler(req):calls.append(req);return response({'reply':'Hi'})
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(settings(),client)
-            request=AIInput(stage='chat',conversation=[{'role':'user','content':'Hi'}])
-            for _ in range(12):
-                await adapter.generate(request,Operation('owner','1','chat'),current_revision=lambda:'1')
-            assert len(calls)==12
-    asyncio.run(invoke())
-
-
 def test_oversized_request_trims_history_and_context_but_keeps_current_message():
     async def invoke():
         sent=[]

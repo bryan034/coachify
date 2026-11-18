@@ -1,6 +1,6 @@
 # Jobs tests
 
-Tests use synthetic listings and adapters; none calls a live provider or reads environment files. Store, sync and API tests run on `mongomock`, and also on real MongoDB when `MONGODB_TEST_URI` points to a disposable server. Each run creates and drops a uniquely named database.
+Tests use synthetic listings and adapters; none calls a live provider or reads environment files. Store, sync and API tests use `mongomock` by default. The `storage_backends` cases also exercise real MongoDB queries, indexes, saved applications and leases when `MONGODB_TEST_URI` points to a disposable server. Each MongoDB case creates and drops a uniquely named database.
 
 ```sh
 python -m pip install -e ../../packages/elo-shared -e '.[test]'

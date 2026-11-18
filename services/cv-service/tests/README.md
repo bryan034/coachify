@@ -8,11 +8,11 @@ python3 -m venv .venv
 MONGODB_TEST_URI=mongodb://127.0.0.1:27028 .venv/bin/python -m pytest -q
 ```
 
-Use a disposable MongoDB instance. Each Mongo test creates a unique `elo_cv_test_*` database and drops only that database. Without `MONGODB_TEST_URI`, Mongo cases are explicitly skipped; memory-only results do not prove Mongo behavior.
+Use a disposable MongoDB instance. Each Mongo test creates a unique `elo_cv_test_*` database and drops only that database. CV API tests use the in-memory repository by default. The `storage_backends` cases also run on MongoDB when `MONGODB_TEST_URI` is set.
 
-Synthetic fixtures cover text PDF/DOCX sources, sparse CVs, exact/over size limits, corrupt/encrypted/image-only/unsafe archives, provider JSON structure, unsupported evidence and strict unknown numeric values. Both repositories exercise persisted status, owner isolation/revoked sessions, replay/conflicts, explicit selection, independent capability evidence, answer/skip/deferred context, same-source overrides, cleanup interruption, expired worker fencing, concurrent writers and changing declarations during input assembly.
+Synthetic fixtures cover text PDF/DOCX sources, sparse CVs, exact/over size limits, corrupt/encrypted/image-only/unsafe archives, provider JSON structure, unsupported evidence and strict unknown numeric values. MongoDB cases focus on saved operation state, owner isolation, version conflicts, worker fencing and restart recovery.
 
-Career adapter tests verify authenticated versioned requests, strict bounded context fields, canonical skill IDs, absent versus failed context, timeout/redirect handling and safe service configuration. Memory and real Mongo cases exercise empty-but-prepared results, old saved history, current-context relevance filtering, selection revisions including switch-away/back, target changes during preparation, removed sources and preparation invalidation after re-extraction.
+Career adapter tests verify authenticated versioned requests, strict bounded context fields, canonical skill IDs, absent versus failed context, timeout/redirect handling and safe service configuration. CV cases exercise empty-but-prepared results, old saved history, current-context relevance filtering, selection revisions including switch-away/back, target changes during preparation, removed sources and preparation invalidation after re-extraction.
 
 Interpretation cases cover personal/team/guided/observed/denied contribution, explicitly named new skills, independent evidence, attribute-specific updates, cross-source conflicts, partial/unknown answers, distinct follow-ups, semantic no-ops, exact excerpts, invalid output, invented date precision in extraction and answers, correction/interpretation ordering, interrupted leases, same-key concurrent calls and late-result fencing. Reconciliation cases cover retained candidates, explicit mapping/archival, replacement ownership, stale choices and safe dismissal after the previous source changes, and date conflicts after reapplication without losing the comparison. Handoff tests cover both target types and source/target/declaration races; they do not claim atomic admission.
 
@@ -87,7 +87,7 @@ provider's constrained-decoding implementation or extraction accuracy.
 Saved-source deletion tests exercise ready/queued/failed/expired CVs, ownership and
 stale versions, selected/other sources, late workers/edits, conversation removal,
 filesystem failure, lost tombstone acknowledgements, quota recovery, bootstrap and
-old-upload replay prevention on both repositories. UI/API tests verify explicit
+old-upload replay prevention. UI/API tests verify explicit
 confirmation, review/selection reset, cancellation, interrupted-request identity,
 stale-version refresh and strict deletion acknowledgements.
 Deletion OpenAPI checks also simulate Python 3.12's older HTTP status phrases;
@@ -120,8 +120,7 @@ schema repair/conversational recovery, old failed-answer retry, stable topic cou
 and typed progress contracts. Existing legacy clarification and extraction tests
 retain their separate evidence-validation requirements.
 
-Upload progress regression checks queued/ready milestones and public detail/list
-reads while parsing and extraction are running, on both repository adapters.
+Upload progress checks queued and ready milestones and public detail and list reads during parsing and extraction.
 Interview recall regression verifies context retrieval preserves the three
 invalid-decision attempts without reinterpreting or resubmitting the answer.
 

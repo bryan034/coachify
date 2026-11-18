@@ -19,11 +19,12 @@ def test_generated_title_word_limit():
     with pytest.raises(ValidationError,match='at most 11'):
         WeekTask.model_validate(generated(title=title+' endpoint'))
 
-@pytest.mark.parametrize('description',[None,'','   ','x'*4001])
-def test_generated_description_is_required_and_bounded(description):
-    with pytest.raises(ValidationError):WeekTask.model_validate(generated(description=description))
-    missing=generated();missing.pop('description')
-    with pytest.raises(ValidationError):WeekTask.model_validate(missing)
+@pytest.mark.parametrize('fields', [{}, {'description': None}, {'description': '   '}, {'description': 'x'*4001}])
+def test_generated_description_is_required_and_bounded(fields):
+    task = generated()
+    del task['description']
+    with pytest.raises(ValidationError):
+        WeekTask.model_validate({**task, **fields})
 
 def test_description_survives_preview_acceptance_reads_and_edits():
     model=Scripted([draft()],weeks=[week_draft(tasks=[generated()])])

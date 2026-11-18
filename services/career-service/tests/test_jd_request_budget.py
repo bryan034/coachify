@@ -19,10 +19,15 @@ def settings(mode='json_object',**overrides):
         'response_mode':mode,'context_tokens':16384,**overrides})
 
 
-@pytest.mark.parametrize('stage,cap',[('jd_scope',8192),('jd_extraction',8192)])
-@pytest.mark.parametrize('mode',['json_object','json_schema','json_schema_strict'])
-@pytest.mark.parametrize('repair',[False,True])
-def test_full_8000_character_jd_fits_with_instructions_schema_output_and_margin(stage,cap,mode,repair):
+@pytest.mark.parametrize('stage,mode,repair', [
+    ('jd_scope', 'json_object', False),
+    ('jd_scope', 'json_schema', True),
+    ('jd_extraction', 'json_object', True),
+    ('jd_extraction', 'json_schema_strict', False),
+    ('jd_extraction', 'json_schema_strict', True),
+])
+def test_full_8000_character_jd_fits_with_instructions_schema_output_and_margin(stage,mode,repair):
+    cap=8192
     source=jd_text();assert len(source)==8000
     token=validation_feedback.set({'reason':'schema_validation','fields':['role'],
         'violations':[{'field':'role','issue':'missing'}]} if repair else None)
@@ -41,9 +46,12 @@ def test_full_8000_character_jd_fits_with_instructions_schema_output_and_margin(
     if repair:assert 'Latest validation issues:' in payload['messages'][0]['content']
 
 
-@pytest.mark.parametrize('stage,cap',[('jd_scope',8192),('jd_extraction',8192)])
-@pytest.mark.parametrize('mode',['json_object','json_schema','json_schema_strict'])
-def test_context_boundary_uses_the_entire_prompt_not_just_the_jd(stage,cap,mode):
+@pytest.mark.parametrize('stage,mode', [
+    ('jd_scope', 'json_object'),
+    ('jd_extraction', 'json_schema_strict'),
+])
+def test_context_boundary_uses_the_entire_prompt_not_just_the_jd(stage,mode):
+    cap=8192
     request=AIInput(stage=stage,source_text=jd_text())
     payload=AIAdapter(settings(mode),None)._payload(request)
     count=input_tokens(payload)

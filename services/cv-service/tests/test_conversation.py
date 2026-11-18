@@ -6,7 +6,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from app.conversation.service import MAX_MESSAGES, key, now
-from tests.conftest import ready, mutation
+from tests.conftest import storage_backends, ready, mutation
 from tests.test_clarification import prepare_context
 from tests.test_interpretation import mixed_output, PERSONAL
 from tests.test_conversation_security import open_chat, settled, send, PREFIX
@@ -44,6 +44,7 @@ def source_chat(harness):
     return cv, question, chat
 
 
+@storage_backends
 def test_resumes_same_conversation_and_paginates_without_duplicate_history(harness):
     client, app, *_ = harness
     chat = open_chat(client)
@@ -59,6 +60,7 @@ def test_resumes_same_conversation_and_paginates_without_duplicate_history(harne
     assert len(client.get(PREFIX).json()['conversations']) == 1
 
 
+@storage_backends
 def test_same_message_key_is_idempotent_and_reuse_with_new_text_conflicts(harness):
     client, app, *_ = harness
     chat = open_chat(client)
@@ -239,6 +241,7 @@ def test_context_switch_on_resume_clears_old_question_without_losing_history(har
     assert resumed['messages'] == saved_messages
 
 
+@storage_backends
 @pytest.mark.parametrize('byte_capacity', [False, True])
 def test_capacity_rollover_retains_discoverable_old_history(harness, byte_capacity):
     client, app, *_ = harness
@@ -378,6 +381,7 @@ def test_recovers_crash_after_question_creation_before_answer(harness, monkeypat
     assert len([q for q in result['clarifications'] if q['followup_of'] == question['id']]) == 1
 
 
+@storage_backends
 def test_recovers_lost_answer_receipt_without_duplicate_interpretation(harness, monkeypatch):
     client, app, *_ = harness
     cv, question, chat = source_chat(harness)
@@ -405,6 +409,7 @@ def test_recovers_lost_answer_receipt_without_duplicate_interpretation(harness, 
     assert client.get('/api/v1/cv/' + cv['id']).json()['version'] == before['version']
 
 
+@storage_backends
 def test_late_failure_cannot_overwrite_successful_action_receipt(harness):
     client, app, *_ = harness
     chat = open_chat(client)
@@ -601,6 +606,7 @@ def test_guided_recovery_retains_original_confirmed_target_binding(harness, monk
     assert result['clarifications'] == before['clarifications']
 
 
+@storage_backends
 def test_history_listing_projects_metadata_without_loading_old_transcripts(harness, monkeypatch):
     client, app, *_ = harness
     chat = open_chat(client)

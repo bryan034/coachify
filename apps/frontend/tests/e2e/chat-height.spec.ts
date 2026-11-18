@@ -1,8 +1,16 @@
 import {test,expect} from '@playwright/test';
 import {careerFixture} from './career-fixture';
 
-for(const [name,path] of [['career chat','/career-goal/chat'],['job description chat','/career-goal/chat?source=jd'],['career discovery','/career-goal/discovery']] as const){
- for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:820,height:1100},{width:390,height:844}]){
+const desktop = {width: 1280, height: 720};
+const tablet = {width: 820, height: 1100};
+const phone = {width: 390, height: 844};
+for (const [name, path, viewport] of [
+ ['career chat', '/career-goal/chat', desktop],
+ ['career chat', '/career-goal/chat', phone],
+ ['job description chat', '/career-goal/chat?source=jd', desktop],
+ ['career discovery', '/career-goal/discovery', tablet],
+ ['career discovery', '/career-goal/discovery', phone],
+] as const) {
   test(`${name} gives the conversation at least 70% of a ${viewport.width}x${viewport.height} screen`,async({page})=>{
    await page.setViewportSize(viewport);
    await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
@@ -33,5 +41,4 @@ for(const [name,path] of [['career chat','/career-goal/chat'],['job description 
    if(viewport.height>=844&&!(name==='career chat'&&viewport.width<=390))expect(scroll).toBeLessThanOrEqual(0);
    await page.screenshot({path:test.info().outputPath('chat.png')});
   });
- }
 }

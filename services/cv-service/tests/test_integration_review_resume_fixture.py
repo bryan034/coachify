@@ -27,31 +27,6 @@ class FixtureProvider:
         return frozenset((r['block_id'], r['excerpt']) for r in refs)
 
 
-def test_mixed_answer_keeps_a_valid_followup_and_resumes_it(harness):
-    client, app, extractor, *_ = harness
-    extractor.payload = {'items': [
-        {'kind': 'project', 'title': 'Team dashboard', 'description': TEXT[1], 'explicit': True,
-         'evidence': [{'block_id': 'b2', 'excerpt': TEXT[1]}], 'skill_names': ['Python', 'SQL'],
-         'uncertainties': ['personal_contribution']},
-    ]}
-    cv = ready(harness)
-    provider = app.state.conversations.provider = FixtureProvider()
-    app.state.interpreter.verify_evidence = provider.verify_evidence
-    response = client.post(PREFIX, json={'cv_id': cv['id'], 'purpose': 'skills_profile', 'mutation_id': str(uuid4())})
-    assert response.status_code == 200, response.text
-    chat = send(client, response.json(), 'Review my CV', command='review')
-    first = chat['active_question']
-    assert first, chat['messages'][-1]
-    chat = send(client, chat, fixture.CHAT_MIXED_ANSWER)
-    assert chat['active_question'], chat['messages'][-1]
-    assert chat['active_question']['id'] != first['id']
-    detail = client.get('/api/v1/cv/' + cv['id']).json()
-    assert sum(q['answer'] == fixture.CHAT_MIXED_ANSWER for q in detail['clarifications']) == 1
-    resumed = client.post(PREFIX, json={'cv_id': cv['id'], 'purpose': 'skills_profile', 'mutation_id': str(uuid4())})
-    assert resumed.status_code == 200, resumed.text
-    assert resumed.json()['active_question'] == chat['active_question']
-
-
 def test_complete_chat_fixture_journey_preserves_evidence_and_question_budget(harness):
     client, app, extractor, *_ = harness
     extractor.payload = {'items': [
@@ -83,7 +58,7 @@ def test_complete_chat_fixture_journey_preserves_evidence_and_question_budget(ha
     assert detail() == before
     chat = send(client, chat, fixture.CHAT_EXTRA_CONTEXT)
     assert months('python') == 6 and months('power bi') == 2
-    assert any(question['answer'] == fixture.CHAT_MIXED_ANSWER for question in detail()['clarifications'])
+    assert sum(question['answer'] == fixture.CHAT_MIXED_ANSWER for question in detail()['clarifications']) == 1
     chat = send(client, chat, fixture.CHAT_CORRECTION)
     action = actions(chat, 'correct')[-1]
     assert action['status'] == 'awaiting_confirmation' and months('python') == 6
@@ -99,7 +74,7 @@ def test_complete_chat_fixture_journey_preserves_evidence_and_question_budget(ha
     assert resumed.status_code == 200, resumed.text
     chat = resumed.json()
     assert chat['id'] == before['id'] and chat['messages'] == before['messages']
-    assert chat['active_question'], chat['messages'][-1]
+    assert chat['active_question'] and chat['active_question'] == before['active_question']
     skipped = chat['active_question']['id']; before = detail()
     chat = send(client, chat, 'Skip', command='skip')
     after = detail()

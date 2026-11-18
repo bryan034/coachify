@@ -8,6 +8,7 @@ from app.normalise import posting_id
 from app.providers import MAX_RESPONSE_BYTES, ProviderUnavailable, fetch_json, read_board
 from app.store import JobsStore
 from app.sync import interval_from_environment, load_sources, sync_all, sync_source
+from conftest import storage_backends
 from jobs_fixtures import ASHBY, GREENHOUSE, LEVER, NOW, ashby_job, greenhouse_job, lever_job
 
 SIX_HOURS = timedelta(hours=6)
@@ -60,6 +61,7 @@ def test_only_singapore_roles_enter_the_catalogue(store):
     assert sync_source(store, ASHBY, board([ashby_job(isListed=False)]), NOW, SIX_HOURS) == 0
 
 
+@storage_backends
 def test_postings_close_only_after_three_complete_reads_without_them(store):
     sync_source(store, GREENHOUSE, board([greenhouse_job()]), NOW, SIX_HOURS)
     for run in range(1, 4):
@@ -108,6 +110,7 @@ def test_missing_or_implausible_dates_use_first_seen_and_are_marked(store):
     assert stored(store, ASHBY, 'none')['posted_at'] == NOW
 
 
+@storage_backends
 def test_a_board_is_held_by_one_worker_and_recovers_after_its_lease(store):
     token = store.claim_source('lever:one', NOW)
     assert token and store.claim_source('lever:one', NOW) is None
@@ -116,6 +119,7 @@ def test_a_board_is_held_by_one_worker_and_recovers_after_its_lease(store):
     assert store.sources.find_one({'_id': 'lever:one'})['last_synced_at'] is None
 
 
+@storage_backends
 def test_removing_a_board_from_the_registry_removes_its_listings(store):
     pauses = []
     assert sync_all(store, [GREENHOUSE, LEVER], lambda url: {'jobs': [greenhouse_job()]} if 'greenhouse' in url else [lever_job()], SIX_HOURS, lambda: NOW, pauses.append) == 2

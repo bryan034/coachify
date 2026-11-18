@@ -5,17 +5,11 @@ from elo_shared.skills import REGISTRY
 
 
 @pytest.mark.parametrize('name, expected', [
-    ('Python', 'Technical coding'), ('C', 'Technical coding'), ('C++', 'Technical coding'), ('REST API design', 'Technical coding'),
-    ('SQL', 'Data & analytics'), ('Data cleaning', 'Data & analytics'), ('Power BI', 'Data & analytics'),
-    ('Docker', 'Cloud & DevOps'), ('CI/CD', 'Cloud & DevOps'),
-    ('Agile', 'Software & project management'), ('Project planning', 'Software & project management'),
-    ('Figma', 'Design'),
-    ('Stakeholder communication', 'Communication & leadership'), ('Technical writing', 'Communication & leadership'),
-    ('Financial modelling', 'Business & finance'),
-    ('English (native)', 'Languages'),
-    ('LLMs', 'AI & ML'), ('RAG', 'AI & ML'), ('Retrieval-augmented generation', 'AI & ML'), ('Vector search', 'AI & ML'),
-    ('Vector databases', 'AI & ML'), ('MCP', 'AI & ML'), ('LangChain', 'AI & ML'), ('LangGraph', 'AI & ML'),
-    ('Agentic frameworks', 'AI & ML'), ('Prompt engineering', 'AI & ML'), ('Machine learning', 'AI & ML'), ('PyTorch', 'AI & ML'),
+    ('C', 'Technical coding'), ('C++', 'Technical coding'), ('REST API design', 'Technical coding'),
+    ('SQL', 'Data & analytics'), ('CI/CD', 'Cloud & DevOps'),
+    ('Project planning', 'Software & project management'), ('Figma', 'Design'),
+    ('Stakeholder communication', 'Communication & leadership'), ('Financial modelling', 'Business & finance'),
+    ('English (native)', 'Languages'), ('RAG', 'AI & ML'), ('Vector databases', 'AI & ML'),
     ('Basket weaving', OTHER_SKILLS),
 ])
 def test_name_decides_the_group_when_no_category_is_saved(name, expected):

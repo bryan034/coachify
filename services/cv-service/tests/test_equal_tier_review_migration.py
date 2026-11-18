@@ -6,7 +6,7 @@ import pytest
 from app.clarification import service as clarification
 from app.conversation.interview_memory import reconcile_memory, topic_question_count
 from app.schemas.cv import PrepareMutation
-from tests.conftest import mutation, ready
+from tests.conftest import storage_backends, mutation, ready
 from tests.test_conversation import actions, decide
 from tests.test_conversation_security import PREFIX, send
 from tests.test_cv_interview import opened, start_two_topics
@@ -431,6 +431,7 @@ def test_retained_question_recovers_after_target_prepare_changes_policy_or_ledge
     assert counts.get('item:' + planned['item_id'], 0) <= 2
 
 
+@storage_backends
 @pytest.mark.parametrize('legacy_scope', ['section', 'item'])
 def test_target_prepare_upgrades_legacy_snapshot_and_replays_without_duplicate_questions(harness, legacy_scope):
     _, app, *_ = harness

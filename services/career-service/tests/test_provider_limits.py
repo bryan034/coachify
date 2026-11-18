@@ -18,6 +18,7 @@ def test_provider_429_has_no_automatic_retry_or_subsequent_local_block():
             adapter=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),client)
             with pytest.raises(AIError) as error:await adapter._complete({'model':'fixture','messages':[]},owner='alice')
             assert len(calls)==1 and error.value.limit_scope=='provider' and error.value.retry_after==17
+            assert error.value.provider=='compatible'
             assert await adapter._complete({'model':'fixture','messages':[]},owner='alice')=='{}'
             assert len(calls)==2
     asyncio.run(invoke())

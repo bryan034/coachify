@@ -32,8 +32,11 @@ def claim(**changes):
         'scope':'exact','conflict_group':None,**changes}
 
 
-@pytest.mark.parametrize('category',CATEGORIES)
-@pytest.mark.parametrize('provider',['local','compatible','deepseek'])
+@pytest.mark.parametrize('category,provider', [
+    *((category, 'local') for category in CATEGORIES),
+    ('internship_insights', 'compatible'),
+    ('internship_insights', 'deepseek'),
+])
 def test_decoding_schema_is_bound_to_actual_category_sources_and_passages(category,provider):
     sources=[source(0,('A complete sentence about mentorship. '*25)),source(1)]
     context=structure_input({},category,sources)

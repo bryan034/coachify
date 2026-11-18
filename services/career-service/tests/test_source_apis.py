@@ -37,9 +37,13 @@ def test_unconfigured_platforms_do_not_make_network_calls():
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('mode',['search','answers','llm_context'])
-@pytest.mark.parametrize('method',['collect','collect_platform','collect_query','collect_opportunity_query'])
-def test_all_legacy_modes_and_workflows_use_llm_context(mode,method):
+@pytest.mark.parametrize('mode,method', [
+    ('search', 'collect'),
+    ('answers', 'collect_platform'),
+    ('llm_context', 'collect_query'),
+    ('llm_context', 'collect_opportunity_query'),
+])
+def test_legacy_modes_and_workflows_use_llm_context(mode,method):
     async def run():
         def handler(request):
             assert request.method=='GET' and request.url.path=='/res/v1/llm/context'

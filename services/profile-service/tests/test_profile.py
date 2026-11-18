@@ -42,8 +42,13 @@ def payload(**updates):
     return {"expected_version": 0, "occupational_status": "student", "school_category": "university", **updates}
 
 
-@pytest.mark.parametrize("status", ["student", "national_service", "unemployed", "employed"])
-@pytest.mark.parametrize("category", ["secondary", "ite", "polytechnic", "junior_college", "university"])
+@pytest.mark.parametrize('status,category', [
+    ('student', 'secondary'),
+    ('national_service', 'ite'),
+    ('unemployed', 'polytechnic'),
+    ('employed', 'junior_college'),
+    ('student', 'university'),
+])
 def test_status_category_round_trip(client, status, category):
     response = client.patch("/api/v1/profile", json=payload(occupational_status=status, school_category=category))
     assert response.status_code == 200

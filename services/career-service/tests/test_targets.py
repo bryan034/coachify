@@ -29,9 +29,14 @@ def profile():
     return httpx.AsyncClient(base_url='http://profile.test', transport=httpx.MockTransport(handle))
 
 
-@pytest.fixture(params=['memory', 'mongo'])
+storage_backends = pytest.mark.parametrize('repository', ['memory', 'mongo'], indirect=True)
+
+
+@pytest.fixture
 def repository(request):
-    if request.param == 'memory': yield MemoryTargetRepository(); return
+    if getattr(request, 'param', 'memory') == 'memory':
+        yield MemoryTargetRepository()
+        return
     uri = os.getenv('MONGODB_TEST_URI')
     if not uri: pytest.skip('Set MONGODB_TEST_URI to test real target persistence and concurrency.')
     mongo = MongoClient(uri, serverSelectionTimeoutMS=3000)
@@ -66,6 +71,7 @@ def select_body(target, version=0, **changes):
     return {'mutation_id': str(uuid4()), 'expected_version': version, 'career_target_id': target['id'], 'career_target_version': target['version'], **changes}
 
 
+@storage_backends
 def test_draft_review_confirmation_and_selection_are_separate(harness):
     client, repository = harness
     assert client.get(BASE + '/selected-context').json() is None
@@ -92,6 +98,7 @@ def test_draft_review_confirmation_and_selection_are_separate(harness):
     assert response.headers['Cache-Control'] == 'no-store'
 
 
+@storage_backends
 def test_full_source_never_reaches_documents_or_retry_receipts(harness):
     client, repository = harness
     body = draft()
@@ -106,6 +113,7 @@ def test_full_source_never_reaches_documents_or_retry_receipts(harness):
     assert 'Transient material' not in mismatch.text
 
 
+@storage_backends
 def test_owner_isolation_and_authentication(harness):
     client, repository = harness
     target = confirmed(client)
@@ -235,6 +243,7 @@ def test_legacy_targets_without_conditions_remain_readable_and_replayable():
     assert targets.present(repository.get(OWNER_A, target['id']))['conditions'] == []
 
 
+@storage_backends
 def test_noop_selection_and_old_replays_cannot_roll_back(harness):
     client, repository = harness
     first, second = confirmed(client), confirmed(client, role='Research analyst')
@@ -252,6 +261,7 @@ def test_noop_selection_and_old_replays_cannot_roll_back(harness):
     assert client.get(BASE + '/' + first['id']).json() == first
 
 
+@storage_backends
 def test_same_key_concurrent_create_and_select_are_idempotent(repository):
     body = TargetCreate.model_validate(draft())
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -268,6 +278,7 @@ def test_same_key_concurrent_create_and_select_are_idempotent(repository):
     assert all(row['version'] == 1 for row in selected)
 
 
+@storage_backends
 def test_concurrent_different_selections_accept_only_one_expected_version(harness):
     from fastapi import HTTPException
     client, repository = harness
@@ -360,6 +371,7 @@ def test_failed_database_initialization_recovers_on_later_request(monkeypatch):
         assert len(attempts) == 2
 
 
+@storage_backends
 def test_target_history_pages_preserve_all_rows_and_old_selection(harness, monkeypatch):
     from datetime import datetime, timezone
     from app.schemas.targets import ConfirmTarget
@@ -405,6 +417,7 @@ def test_target_history_pages_preserve_all_rows_and_old_selection(harness, monke
     assert client.get(BASE + '/' + oldest['id']).json() == oldest
 
 
+@storage_backends
 def test_cursor_rejects_tampering_and_other_owners_without_exposing_data(harness):
     import base64
     client, repository = harness

@@ -29,25 +29,25 @@ def test_http_requires_explicit_development_setting(monkeypatch):
     assert Extractor().base_url.startswith('http://fixture')
 
 
-@pytest.mark.parametrize('provider_class',[Extractor,ConversationRouter,Interpreter])
 @pytest.mark.parametrize('key',['','preserved-cloud-key'])
-def test_local_ollama_is_keyless_and_never_forwards_cloud_credentials(monkeypatch,provider_class,key):
+def test_local_ollama_is_keyless_and_never_forwards_cloud_credentials(monkeypatch,key):
     monkeypatch.setenv('APP_ENV','development')
     monkeypatch.setenv('CV_LLM_BASE_URL','http://host.docker.internal:11434/v1')
     monkeypatch.setenv('CV_LLM_ALLOW_HTTP','true')
     monkeypatch.setenv('CV_LLM_MODEL','elo-deepseek-r1:1.5b')
     monkeypatch.setenv('CV_LLM_API_KEY',key)
-    provider=provider_class()
+    provider=Extractor()
     assert provider.configured and provider._provider_headers()=={}
     assert provider._provider_options()=={}
     assert provider._request_timeout(90)==120 and provider._request_timeout(20)==60
 
 
-@pytest.mark.parametrize('provider_class',[Extractor,ConversationRouter,Interpreter])
-@pytest.mark.parametrize('base,override,expected',[
-    ('https://openrouter.ai/api/v1','','synthetic-shared'),
-    ('https://openrouter.ai/api/v1','synthetic-specific','synthetic-specific'),
-    ('https://api.openai.com/v1','',''),
+@pytest.mark.parametrize('provider_class,base,override,expected', [
+    (Extractor, 'https://openrouter.ai/api/v1', '', 'synthetic-shared'),
+    (ConversationRouter, 'https://openrouter.ai/api/v1', '', 'synthetic-shared'),
+    (Interpreter, 'https://openrouter.ai/api/v1', '', 'synthetic-shared'),
+    (Extractor, 'https://openrouter.ai/api/v1', 'synthetic-specific', 'synthetic-specific'),
+    (Extractor, 'https://api.openai.com/v1', '', ''),
 ])
 def test_cv_adapters_resolve_shared_key_only_for_openrouter(monkeypatch,provider_class,base,override,expected):
     monkeypatch.setenv('CV_LLM_BASE_URL',base)
@@ -104,19 +104,14 @@ def test_compatible_provider_contract_and_incomplete_output(monkeypatch, finish,
         with pytest.raises(ValueError): extractor.extract([])
 
 
-@pytest.mark.parametrize('base_url,deepseek', [
-    ('https://api.deepseek.com', True),
-    ('https://api.deepseek.com/v1/', True),
-    ('https://API.DEEPSEEK.COM', True),
-    ('https://api.groq.com/openai/v1', False),
-    ('https://openrouter.ai/api/v1', False),
-    ('https://openrouter.ai.example/v1', False),
-    ('https://api.openai.com/v1', False),
-    ('https://api.deepseek.com.example/v1', False),
-    ('https://proxy.example/api.deepseek.com', False),
-    ('https://deepseek.com', False),
+@pytest.mark.parametrize('base_url,deepseek,operation', [
+    ('https://API.DEEPSEEK.COM', True, 'extract'),
+    ('https://api.deepseek.com/v1/', True, 'route'),
+    ('https://api.deepseek.com/v1', True, 'interpret'),
+    ('https://api.deepseek.com.example/v1', False, 'extract'),
+    ('https://openrouter.ai/api/v1', False, 'route'),
+    ('https://proxy.example/api.deepseek.com', False, 'interpret'),
 ])
-@pytest.mark.parametrize('operation', ['extract', 'route', 'interpret'])
 def test_vendor_options_are_host_scoped_for_all_cv_requests(monkeypatch, base_url, deepseek, operation):
     configure(monkeypatch)
     monkeypatch.setenv('CV_LLM_BASE_URL', base_url)
@@ -165,42 +160,6 @@ def test_vendor_options_are_host_scoped_for_all_cv_requests(monkeypatch, base_ur
     else:
         assert 'thinking' not in payload
     assert 'reasoning_effort' not in payload
-
-
-@pytest.mark.parametrize('base_url', [
-    'https://openrouter.ai/api/v1',
-    'https://api.openai.com/v1',
-])
-@pytest.mark.parametrize('repair', [False, True])
-def test_decoding_schema_keeps_full_bounds_for_every_host(monkeypatch, base_url, repair):
-    configure(monkeypatch)
-    monkeypatch.setenv('CV_LLM_BASE_URL', base_url)
-    captured = []
-    def handler(request):
-        captured.append(json.loads(request.content))
-        return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': '{"items":[]}'}}]})
-    original = httpx.Client
-    monkeypatch.setattr('app.clients.extractor.Client', lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs))
-    extractor = Extractor()
-    if repair:
-        extractor.repair([], {'items': []}, [{'field': 'items', 'issue': 'too_short'}])
-    else:
-        extractor.extract([])
-    request = captured[0]
-    grammar = request['response_format']['json_schema']
-    assert grammar['strict'] is True
-    schema = grammar['schema']
-    assert 'maxItems' in schema['properties']['items']
-    item = schema['properties']['items']['items']
-    assert 'maxItems' in item['properties']['evidence']
-    assert 'maximum' in item['properties']['experience_months']['anyOf'][0]
-    assert item['additionalProperties'] is False
-    assert set(item['required']) == set(item['properties'])
-    assert item['properties']['kind']['enum'] == ['education', 'experience', 'project', 'skill']
-    assert {'type': 'null'} in item['properties']['end_date']['anyOf']
-    assert 'other_information' in schema['required']
-    assert '"maxItems": 160' not in request['messages'][0]['content']
-    assert '"maxLength": 500' not in request['messages'][0]['content']
 
 
 def test_json_object_compatibility_keeps_schema_in_prompt(monkeypatch):

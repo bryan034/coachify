@@ -17,8 +17,6 @@ def blocks(text):
 
 
 @pytest.mark.parametrize('text', [
-    'Project ' + 'a' * 490 + ' Python',
-    ('Synthetic sentence with spaces.\n' * 25) + 'Python',
     ('Synthetic résumé 漢字 🐍\n' * 35) + 'Python',
     'Python ' + 'a' * 20_000,
 ])

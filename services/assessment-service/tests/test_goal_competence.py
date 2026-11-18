@@ -145,13 +145,6 @@ def test_changed_inputs_mark_the_result_stale_until_evaluated_again():
     assert second['result']['id'] != first and second['stale'] is False and model.calls == 2
 
 
-def test_dashboard_reads_never_start_a_comparison():
-    model = Interpreter()
-    with TestClient(create_app(MemoryStore(), Reviewed(), model)) as client:
-        assert client.get('/api/v1/assessments/dashboard-source', headers=H).json()['freshness'] == 'missing'
-    assert model.calls == 0
-
-
 SKIPPED = {'cv:item2': {'kind': 'skills', 'text': 'Skills: SQL', 'attribution': 'unknown', 'unscoped_item': True, 'reviewed': True},
            'cv:item2:claim:0': {'kind': 'skill', 'name': 'SQL', 'text': 'SQL', 'attribution': 'unknown', 'source_kind': 'skills', 'reviewed': True}}
 

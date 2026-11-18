@@ -185,17 +185,23 @@ def create_result(client):
     return state
 
 
-def test_dashboard_read_does_not_resume_pending_operation_or_write():
-    store=MemoryStore();model=Interpreter();sources=Sources()
-    begin(store,OWNER,Generate(expected_version=0,mutation_id=uuid4(),allow_partial=True),'assessment')
-    before=store.load(OWNER)
-    with TestClient(create_app(store,sources,model)) as client:
-        response=client.get(PATH,headers=H)
-        assert response.status_code==200,response.text
-        result=response.json()
-        assert result['freshness']=='missing' and result['ready'] is True
-        assert result['operation']['status']=='pending'
-        assert model.calls==0 and store.load(OWNER)==before
+def test_dashboard_read_neither_starts_nor_resumes_an_assessment():
+    store, model, sources = MemoryStore(), Interpreter(), Sources()
+    with TestClient(create_app(store, sources, model)) as client:
+        before = store.load(OWNER)
+        empty = client.get(PATH, headers=H)
+        assert empty.status_code == 200 and empty.json()['freshness'] == 'missing'
+        assert empty.json()['operation'] is None
+        assert model.calls == 0 and store.load(OWNER) == before
+
+        begin(store, OWNER, Generate(expected_version=0, mutation_id=uuid4(), allow_partial=True), 'assessment')
+        before = store.load(OWNER)
+        pending = client.get(PATH, headers=H)
+        assert pending.status_code == 200, pending.text
+        result = pending.json()
+        assert result['freshness'] == 'missing' and result['ready'] is True
+        assert result['operation']['status'] == 'pending'
+        assert model.calls == 0 and store.load(OWNER) == before
 
 
 def test_source_reports_current_stale_and_owner_isolation():

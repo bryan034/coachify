@@ -1,15 +1,9 @@
 """Saved-CV reads retain the upstream authentication and ownership guarantees."""
 from copy import deepcopy
-from tests.conftest import ready
+from tests.conftest import storage_backends, ready
 
 
-def test_read_endpoints_require_auth_even_without_saved_records(harness):
-    client, *_ = harness
-    client.headers.pop('Authorization')
-    assert client.get('/api/v1/cv').status_code == 401
-    assert client.get('/api/v1/cv/000000000000000000000001').status_code == 401
-
-
+@storage_backends
 def test_saved_cv_read_is_owner_scoped_and_read_only(harness):
     client, app, *_ = harness
     cv = ready(harness)

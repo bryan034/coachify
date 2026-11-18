@@ -125,9 +125,14 @@ class ProfileTransport:
         return httpx.Response(200, json={'onboarding_complete': self.onboarding, 'version': 4})
 
 
-@pytest.fixture(params=['memory', 'mongo'])
+storage_backends = pytest.mark.parametrize('repository', ['memory', 'mongo'], indirect=True)
+
+
+@pytest.fixture
 def repository(request):
-    if request.param == 'memory': yield MemoryCvRepository(); return
+    if getattr(request, 'param', 'memory') == 'memory':
+        yield MemoryCvRepository()
+        return
     uri = os.getenv('MONGODB_TEST_URI')
     if not uri: pytest.skip('Set MONGODB_TEST_URI to exercise real MongoDB CAS and recovery.')
     client = MongoClient(uri, serverSelectionTimeoutMS=3000)

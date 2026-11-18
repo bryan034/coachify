@@ -12,7 +12,7 @@ from app.repositories.extraction_state import MemoryExtractionStateStore
 from app.workers.ingestion import IngestionWorker
 from app.workflows.checkpoints import LatestStateSaver
 from app.workflows.extraction import ExtractionHarness
-from tests.conftest import docx, mutation, upload
+from tests.conftest import storage_backends, docx, mutation, upload
 
 SOURCE = 'I built the Python reporting API.'
 VALID = {'items': [{'kind': 'project', 'title': 'Reporting API', 'description': SOURCE, 'explicit': True,
@@ -142,6 +142,7 @@ def retry(client, cv):
     assert response.status_code in (200, 202), response.text
 
 
+@storage_backends
 def test_a_process_restart_mid_run_resumes_from_mongodb_state(harness):
     client, app, extractor, *_ = harness
     worker, counts = counted_worker(app)
@@ -438,6 +439,7 @@ def test_state_persists_after_success_and_a_reupload_replaces_it(harness):
     assert states.get(cv['id'])['thread_id'] != first['thread_id']
 
 
+@storage_backends
 def test_deleting_a_cv_erases_its_saved_state(harness):
     client, app, *_ = harness
     cv = upload(client).json()
@@ -449,6 +451,7 @@ def test_deleting_a_cv_erases_its_saved_state(harness):
     assert states.get(cv['id']) is None
 
 
+@storage_backends
 def test_a_cv_deleted_mid_run_leaves_no_state_behind(harness):
     client, app, extractor, *_ = harness
     states = app.state.repository.extraction_states

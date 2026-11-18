@@ -5,7 +5,7 @@ import pytest
 from app.conversation.interview import build_context, reconcile_memory, validate_decision
 from app.domain.capabilities import effective_items, validate_extraction, evidence_requiring_semantic_check
 from app.schemas.interview import InterviewTurn
-from tests.conftest import ready, mutation
+from tests.conftest import storage_backends, ready, mutation
 from tests.test_conversation_security import PREFIX, send, settled
 from tests.interview_fixture import InterviewProvider
 
@@ -47,6 +47,7 @@ def evaluate(context):
             'resolved_uncertainties': [], 'remaining_uncertainties': [active.get('uncertainty', 'claim')]}]}
 
 
+@storage_backends
 def test_resume_memory_and_accept_rich_answer_without_another_interpretation_call(harness):
     client, app, *_ = harness
     cv, chat, provider = start(harness)
@@ -101,9 +102,8 @@ def test_skip_is_source_bound_and_does_not_make_the_entire_project_unanswerable(
     assert chat['active_question']['question'] == 'What was the scope of your task?'
 
 
-@pytest.mark.parametrize('text', ['Skip', 'skip this question.', 'Please skip that one', 'Pass',
-    "I don't want to answer that", 'I don’t want to answer this question', 'do not want to answer',
-    "I'd rather not say", 'Prefer not to answer!'])
+@pytest.mark.parametrize('text', ['Please skip that one.', 'Pass',
+    'I don’t want to answer this question', "I'd rather not say", 'Prefer not to answer!'])
 def test_typed_refusal_skips_without_asking_the_model_to_interpret_it(harness, text):
     client, app, *_ = harness
     cv, chat, provider = start(harness)
@@ -196,20 +196,6 @@ def test_finish_closes_a_skipped_topic_when_the_planner_omits_its_coverage(harne
     assert chat['active_question'] is None, chat['messages'][-1]
     assert next(t for t in chat['interview']['topics'] if t['id'] == first)['status'] == 'reviewed_with_gaps'
     assert chat['interview']['status'] == 'reviewed_with_gaps'
-
-
-def test_review_accepts_user_statement_without_evidence_verification(harness):
-    client, app, *_ = harness
-    cv, chat, provider = start(harness)
-    provider.evaluation = evaluate
-    def forbidden(*args, **kwargs):
-        raise AssertionError('Review must not call an evidence verifier')
-    app.state.interpreter.verify_evidence = forbidden
-    chat = send(client, chat, 'I built the Python API with guidance.')
-    saved = client.get('/api/v1/cv/' + cv['id']).json()
-    assert any(q['answer'] == 'I built the Python API with guidance.' and q['interpretation_status'] == 'ready' for q in saved['clarifications'])
-    assert chat['active_question']['question'] == 'What was the scope of your task?'
-    assert not any(a['status'] == 'failed' for m in chat['messages'] for a in m['actions'])
 
 
 def test_review_latest_answer_overrides_cv_and_earlier_answer(harness):
@@ -380,8 +366,8 @@ def test_old_evidence_failure_retries_under_review_policy_and_resumes(harness, m
     assert continuation_states == [('pending', True)]
 
 
-def test_review_model_paraphrase_does_not_block_relevant_answer(harness):
-    client, _, *_ = harness
+def test_review_paraphrase_saves_the_answer_without_an_evidence_verifier(harness):
+    client, app, *_ = harness
     cv, chat, provider = start(harness)
     def paraphrase(context):
         result = evaluate(context)
@@ -389,7 +375,11 @@ def test_review_model_paraphrase_does_not_block_relevant_answer(harness):
         result['memory_notes'] = [{'source_id': 'answer', 'quote': 'An invalid optional memory quote.'}]
         return result
     provider.evaluation = paraphrase
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Review must not call an evidence verifier')
+    app.state.interpreter.verify_evidence = forbidden
     chat = send(client, chat, 'I built the Python API with guidance.')
+    assert not any(action['status'] == 'failed' for message in chat['messages'] for action in message['actions'])
     assert chat['active_question']['question'] == 'What was the scope of your task?'
     saved = client.get('/api/v1/cv/'+cv['id']).json()
     assert any(q['answer'] == 'I built the Python API with guidance.' and q['interpretation_status'] == 'ready' for q in saved['clarifications'])
@@ -518,6 +508,7 @@ def test_estimate_requires_source_specific_personal_skill_use_and_independence(h
     assert validate_decision(decision, context, memory)[0].estimates[0].level == 'independent_application'
 
 
+@storage_backends
 def test_late_plan_cannot_publish_against_changed_source(harness):
     client, app, *_ = harness
     cv, chat, provider = opened(harness)
@@ -1286,6 +1277,7 @@ def test_two_questions_per_item_preserve_source_scoped_skill_evidence(harness):
     assert {(e['item_id'], e['skill_name']) for e in chat['interview']['estimates']} == set(baseline)
 
 
+@storage_backends
 @pytest.mark.parametrize('scope, expected', [('section', [1, 1]), ('item', [1, 1])])
 def test_question_counts_rebuild_from_all_group_receipts(harness, scope, expected):
     from app.conversation.interview_memory import topic_question_count
