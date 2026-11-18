@@ -31,7 +31,7 @@ Service-to-service dependencies (read through APIs only, forwarding the owner's 
 - Assessment → Profile/CV/Career; Roadmap → Assessment/Profile/CV/Career; Dashboard → Roadmap/Assessment; Jobs → Profile only
 - Full table and rationale: [service boundaries](docs/architecture/service-boundaries.md). Private `/internal/v1` routes are never exposed by the gateway.
 
-Other moving parts: `mongodb` (local container, Mongo 8.3) with one-shot `mongodb-*-init` containers running `infrastructure/mongodb/init-*.js`; `mailpit` (development profile) for captured email. Production DB proposal is MongoDB Atlas, external to containers.
+Other moving parts: `mongodb` (local container, Mongo 8.2) with one-shot `mongodb-*-init` containers running `infrastructure/mongodb/init-*.js`; `mailpit` (development profile) for captured email. Production DB proposal is MongoDB Atlas, external to containers.
 
 AI: all model calls use the OpenAI Python SDK, routed to OpenRouter by default (shared `OPENROUTER_API_KEY`/`OPENROUTER_MODEL`, per-service overrides `CAREER_/CV_/ASSESSMENT_/ROADMAP_LLM_*`). Career public research uses Brave (test) or DeepSeek Search (production). Tests use synthetic providers; live-model quality is unverified.
 
@@ -122,7 +122,7 @@ python -m pytest
 ## Gotchas
 
 - Python 3.12 and newer print different HTTP status phrases for 413/422; Assessment/Roadmap contract tests fix them explicitly. Do not regenerate OpenAPI snapshots on another interpreter without checking.
-- CI Mongo jobs use `ubuntu-22.04` and `mongo:8.3` for kernel compatibility (see `docs/testing.md`).
+- CI Mongo jobs use `ubuntu-22.04` and `mongo:8.2` for kernel compatibility (see `docs/testing.md`).
 - Career needs the `o200k_harmony` tiktoken encoding cached before network-isolated tests (`TIKTOKEN_CACHE_DIR`).
 - Uploads: gateway limit is 11 MB on CV/JD document routes while `CV_MAX_FILE_BYTES` is 10 MiB; change both together.
 - Existing installs keep old private env values and volumes; changing `.env.example` does not change a private `.env`, and renamed defaults do not migrate volumes (see `docs/setup.md#renamed-installations`).

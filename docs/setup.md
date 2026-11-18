@@ -250,11 +250,13 @@ saved-result staleness and roadmap generation remain unimplemented. See the
 docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml down
 ```
 
-### Upgrade an existing MongoDB volume
+### MongoDB image compatibility
 
-Fresh installations use `mongo:8.3`. Before upgrading an existing volume, stop application writers, keep an access-controlled backup outside Git, and verify restore to a separate volume. For an existing 8.2 deployment, confirm that it is still healthy on 8.2 and that its feature compatibility version (FCV) is `8.2` before starting 8.3 on that volume. A volume carried forward from 8.0 may still report FCV `8.0`. Follow MongoDB’s upgrade procedure for the installed version and FCV, including any required intermediate steps. Verify service access and retained data on 8.3 before changing the FCV to `8.3`. Preserve the original backup until the upgrade is accepted. [MongoDB upgrade procedures](https://www.mongodb.com/docs/manual/release-notes/8.3-upgrade/)
+The stack and CI use `mongo:8.2`. MongoDB 8.3 refuses startup on some Docker Desktop hosts with Linux kernels 6.19 and newer (SERVER-121912). Existing installations that still have an 8.2 data volume can reuse that volume and their stored credentials.
 
-Run the image on a Docker host supported by that MongoDB release. Some Docker Desktop hosts with Linux kernels 6.19 and newer trigger MongoDB’s startup guard. Use a compatible host if the image rejects the current kernel.
+For a volume already upgraded to 8.3, verify MongoDB’s downgrade requirements or restore a verified, 8.2-compatible backup from before the upgrade to a separate volume before running 8.2. Keep backups outside Git. [MongoDB downgrade procedure](https://www.mongodb.com/docs/manual/release-notes/8.3-downgrade/)
+
+MongoDB 8.2 reached vendor end of life on 31 July 2026. A future version change should verify host-kernel compatibility and the data upgrade path before deployment. [MongoDB lifecycle](https://www.mongodb.com/legal/support-policy/lifecycles)
 See [testing](testing.md) for automated checks and disposable test stacks.
 
 ## Career model and search configuration

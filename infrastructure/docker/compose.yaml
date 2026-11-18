@@ -141,7 +141,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   mongodb-career-init:
-    image: mongo:8.3
+    image: mongo:8.2
     environment:
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       CAREER_DB_PASSWORD: ${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}
@@ -251,7 +251,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   mongodb-jobs-init:
-    image: mongo:8.3
+    image: mongo:8.2
     environment:
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       JOBS_DB_PASSWORD: ${JOBS_DB_PASSWORD:?Set JOBS_DB_PASSWORD}
@@ -263,7 +263,7 @@ services:
     networks: [database]
     restart: "no"
   mongodb-planning-init:
-    image: mongo:8.3
+    image: mongo:8.2
     environment:
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       ASSESSMENT_DB_PASSWORD: ${ASSESSMENT_DB_PASSWORD:?Set ASSESSMENT_DB_PASSWORD}
@@ -282,7 +282,7 @@ services:
     networks: [backend]
   mongodb:
     # See docs/setup.md for volume upgrades and host kernel compatibility.
-    image: mongo:8.3
+    image: mongo:8.2
     environment:
       MONGO_INITDB_ROOT_USERNAME: elo_admin
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
