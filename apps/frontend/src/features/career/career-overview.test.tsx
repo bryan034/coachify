@@ -117,6 +117,10 @@ it('reads a level from the skill’s own score, or from progress towards the tar
  expect(goalSkillLevel(sql,outcome({demonstrated_score:6,required_score:7}))).toEqual({level:6,target:7});
  expect(goalSkillLevel(sql,outcome({competence_score:5,required_score:8}))).toEqual({level:4,target:8});
  expect(goalSkillLevel(sql,undefined)).toEqual({level:null,target:8});
+ // A skill the evaluation hasn't rated shows its Skills Profile level; an evaluated level still wins.
+ expect(goalSkillLevel(sql,undefined,[{name:' sql ',level:4}])).toEqual({level:4,target:8});
+ expect(goalSkillLevel(sql,outcome({demonstrated_score:6,required_score:7}),[{name:sql.name,level:4}])).toEqual({level:6,target:7});
+ expect(goalSkillLevel(sql,undefined,[{name:'Python',level:4}])).toEqual({level:null,target:8});
 });
 it('opens Talk it through for a skill and explains its target',()=>{
  render(<CareerSessionProvider><SkillsNeeded skills={[sql]} talk={vi.fn()}/></CareerSessionProvider>);
@@ -130,7 +134,7 @@ it('opens the drawer from a skill row on the Career Goal page',async()=>{
  fireEvent.click(row('SQL').querySelector('button')!);
  fireEvent.click(within(row('SQL')).getByRole('button',{name:'Rate this skill'}));
  const dialog=await screen.findByRole('dialog',{name:'SQL'});
- expect(within(dialog).getByText(/Have you used it anywhere/)).toBeVisible();
+ expect(within(dialog).getByText(/If your CV review doesn’t show solid evidence/)).toBeVisible();
  fireEvent.click(within(dialog).getByRole('button',{name:'Close chat'}));
  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'SQL'})).not.toBeInTheDocument());
 });

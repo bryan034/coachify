@@ -53,6 +53,10 @@ export const skillRatings = (token: string, signal?: AbortSignal) => assessmentA
 /** Sets (1–10) or clears (null) one self-rating against the expected workspace version. */
 export const rateSkill = (token: string, body: { expected_version: number; name: string; canonical_skill_id: string | null; score: number | null }) =>
  assessmentApi<SkillRatings>('/skill-ratings', token, body);
+/** Re-judges one skill after the person added evidence for it; only that skill's evidence reaches the model. */
+export type ReevaluatedSkill = { version: number; skill: { name: string; canonical_skill_id: string | null; competence_score: number | null; required_score: number | null; relevance: string; explanation: string } };
+export const reevaluateSkill = (token: string, body: { name: string; canonical_skill_id: string | null }, signal?: AbortSignal) =>
+ assessmentApi<ReevaluatedSkill>('/skills/reevaluate', token, body, signal);
 /** The same identity the backend keys ratings by: registry id, else the case-folded name. */
 export const ratingKey = (skill: { canonicalId?: string | null; name: string }) => skill.canonicalId || skill.name.trim().toLowerCase();
 

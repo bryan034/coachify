@@ -84,5 +84,6 @@ def test_model_must_rate_every_goal_skill_once_and_cite_real_findings():
 
 def test_rating_prompt_uses_the_shared_scale_and_research():
     prompt = PROMPTS['opportunity_skill_levels']
-    assert '1 = Not competent' in prompt and '5 = Independent and understands' in prompt and '10 = Expert' in prompt
+    assert '1 = No understanding' in prompt and '4-6 = moderate understanding' in prompt and '10 = Expert understanding' in prompt
+    assert 'crowd-sourced' in prompt and 'not what tasks they can execute alone' in prompt
     assert 'findings' in prompt and 'exactly one entry per skill' in prompt

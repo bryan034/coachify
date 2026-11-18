@@ -996,7 +996,7 @@
     },
     "SkillLevelRating": {
       "additionalProperties": false,
-      "description": "The level a role needs in one skill on elo's shared 1-10 competence scale, rated from research.",
+      "description": "The level a role needs in one skill on elo's shared 1-10 understanding scale, rated from research.",
       "properties": {
         "skill": {
           "maxLength": 200,

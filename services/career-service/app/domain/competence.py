@@ -1,11 +1,11 @@
 """Role targets are planning standards on the shared 1-10 competence scale, never employer pass marks.
 
-1 = not competent, 5 = works independently and understands the skill, 10 = the most complex work.
+Levels rate understanding of the subject: 1-3 basic, 4-6 moderate, 7-8 good, 9-10 expert.
 The level a role needs is rated by the research model from cited public findings. A level the
 job description states outright is the floor, and without a rating the stated wording decides.
 """
 import re
-from elo_shared.competence_scale import INDEPENDENT_LEVEL
+from elo_shared.competence_scale import MODERATE_LEVEL
 from app.schemas.analysis import CompetenceTarget
 from app.repositories.goals import now
 
@@ -16,8 +16,8 @@ def level_for(text, proficiency=None):
     if re.search(r'\b(expert|expertise|mastery|authoritative)\b', text, re.I): return 9
     if proficiency == 'advanced' or re.search(r'\b(advanced|proficient|proficiency|complex|in.depth)\b', text, re.I): return 7
     if proficiency == 'beginner' or re.search(r'\b(beginner|basic|exposure)\b', text, re.I): return 3
-    # Familiarity and unstated expectations both mean doing the work alone with understanding.
-    return INDEPENDENT_LEVEL
+    # Familiarity and unstated expectations both mean moderate understanding: able to explain the concepts.
+    return MODERATE_LEVEL
 
 
 def _key(name): return ' '.join(name.casefold().split())
@@ -52,7 +52,7 @@ def target_for(skill, research=None):
             source_urls=list(dict.fromkeys([*urls,*skill.source_urls]))[:10])
     return CompetenceTarget(level=level, basis='job_description' if stated and skill.origin=='employer' else 'inferred',
         explanation=f'Role target: {level}/10. '+('Taken from the stated skill expectations.' if stated else
-            'The description does not state a level, so working independently with understanding (5/10) is assumed until research rates it.')+
+            'The description does not state a level, so moderate understanding (5/10) is assumed until research rates it.')+
             ' This is a planning standard, not an employer test score.',
         source_urls=skill.source_urls[:10])
 

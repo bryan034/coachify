@@ -77,9 +77,13 @@ def test_conflicting_evidence_is_labelled_uncertain_not_rated():
 
 
 def test_model_level_cannot_exceed_the_evidence_ceiling():
-    guided = item(skill_claims=[{'skill_id': 'skill:python', 'name': 'Python', 'attribution': 'personal', 'assistance': 'unknown'}])
-    source = review_source(document(), guided)
-    assert validate_level_review({'levels': [rating(level=9)]}, [source])['item-1']['levels'][0]['level'] == 3
+    # Use without any explanation from the person shows only basic understanding.
+    unexplained = item(skill_claims=[{'skill_id': 'skill:python', 'name': 'Python', 'attribution': 'personal', 'assistance': 'independent'}])
+    source = review_source(document(clarifications=[]), unexplained)
+    from_cv = rating(level=9, evidence=[{'source_id': 'b1', 'quote': 'ran a Python pipeline alone'}])
+    assert validate_level_review({'levels': [from_cv]}, [source])['item-1']['levels'][0]['level'] == 3
+    explained = review_source(document(), unexplained)
+    assert validate_level_review({'levels': [rating(level=9)]}, [explained])['item-1']['levels'][0]['level'] == 9
 
 
 def test_a_bare_skill_mention_is_rated_at_the_bottom():

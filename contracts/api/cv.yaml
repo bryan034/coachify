@@ -7281,7 +7281,7 @@
           "evidence"
         ],
         "title": "SkillLevelInfo",
-        "description": "The skill's own 1-10 level on the shared competence scale (not a goal comparison).\n\n`uncertain` means the CV and review were not conclusive; the level is then null."
+        "description": "The skill's own 1-10 level on the shared understanding scale (1-3 basic, 4-6 moderate, 7-8 good, 9-10 expert; not a goal comparison).\n\n`uncertain` means the CV and review were not conclusive; the level is then null."
       }
     },
     "securitySchemes": {

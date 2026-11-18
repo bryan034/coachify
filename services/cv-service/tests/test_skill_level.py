@@ -116,8 +116,8 @@ def test_review_level_overrides_cv_level_and_aggregates_highest():
     document = {'original_items': [deepcopy(item)], 'overlays': {}, 'clarifications': [
         {'id': 'q1', 'item_id': item['id'], 'interpretation': interpretation, 'reconciliation_required': False}]}
     claim = effective_items(document)[0]['skill_claims'][0]
-    # Personal but not stated as independent: still assumed guided.
-    assert claim['skill_level']['level'] == 3 and claim['skill_level']['source'] == 'review'
+    # Independence is irrelevant; the review explanation sets the level.
+    assert claim['skill_level']['level'] == 8 and claim['skill_level']['source'] == 'review'
     assert claim['skill_level']['evidence'][0]['excerpt'] == 'I maintain Python for the whole org.'
     interpretation['claims'][0].update(assistance='independent', changed_fields=['attribution', 'assistance', 'skill_level'])
     claim = effective_items(document)[0]['skill_claims'][0]
@@ -125,12 +125,15 @@ def test_review_level_overrides_cv_level_and_aggregates_highest():
     assert skills_for(effective_items(document))[0]['skill_level']['level'] == 8
 
 
-def test_ceiling_is_pessimistic_without_stated_independence():
+def test_ceiling_rates_understanding_not_independence():
     from app.domain.capabilities import level_ceiling
     project = {'kind': 'project', 'review_evidence': []}
-    assert level_ceiling(project, {'skill_id': 'skill:python', 'attribution': 'personal', 'assistance': 'unknown'}) == 3
+    # Use alone, even independent, shows no understanding; AI may have done the work.
+    assert level_ceiling(project, {'skill_id': 'skill:python', 'attribution': 'personal', 'assistance': 'independent'}) == 3
     assert level_ceiling(project, {'skill_id': 'skill:python', 'attribution': 'unknown', 'assistance': 'independent'}) == 3
-    assert level_ceiling(project, {'skill_id': 'skill:python', 'attribution': 'personal', 'assistance': 'independent'}) == 10
+    explained = {'kind': 'project', 'review_evidence': [{'status': 'supported', 'field': 'complexity', 'skill_name': 'Python'}]}
+    assert level_ceiling(explained, {'skill_id': 'skill:python', 'attribution': 'personal', 'assistance': 'unknown'}) == 10
+    assert level_ceiling(explained, {'skill_id': 'skill:python', 'attribution': 'unknown'}) == 3
     listed = {'kind': 'skill', 'review_evidence': []}
     assert level_ceiling(listed, {'skill_id': 'skill:python'}) == 2
     assert level_ceiling(listed, {'skill_id': 'skill:english', 'proficiency': 'native'}) == 5

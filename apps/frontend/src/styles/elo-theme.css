@@ -747,3 +747,5 @@ body.cv-rail-dragging{ cursor: col-resize; user-select: none; }
 :root[data-theme="dark"] .btn.pri{color:var(--snow)}
 :root[data-theme="dark"] .brand-logo{content:url('/brand/elo-logo-dark.svg')}
 :root[data-theme="dark"] .brand-symbol{content:url('/brand/elo-mark-dark.svg')}
+/* Development-only reset strip at the top of every workspace page. */
+.dev-reset{ display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 20px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 12px; background: var(--side); }

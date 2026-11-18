@@ -24,7 +24,7 @@ class Interpreted(Contract):
     recommendation:Text|None=None
     mapping_method:Literal['canonical','semantic','unresolved']
     mapping_reason:Text
-    # Job skills only: the model's whole-number levels on one 0–10 scale (3 guided, 6 independent, 9 complex).
+    # Job skills only: the model's whole-number levels on one 0–10 scale (1-3 basic, 4-6 moderate, 7-8 good, 9-10 expert understanding).
     demonstrated_level:int|None=Field(default=None,ge=1,le=10)
     required_level:int|None=Field(default=None,ge=1,le=10)
     score_explanation:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=600)]|None=None
@@ -183,6 +183,14 @@ class SkillRating(Contract):
 class SkillRatings(Contract):
     version:int
     ratings:list[SkillRating]
+
+class SkillReevaluateInput(Contract):
+    """Re-judge one skill after the person added evidence for it. Nothing else is re-evaluated."""
+    name:SkillName
+    canonical_skill_id:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=160)]|None=None
+class SkillReevaluated(Contract):
+    version:int
+    skill:EvaluatedSkill
 
 class DashboardSource(Contract):
     evaluation:EvaluationStatus

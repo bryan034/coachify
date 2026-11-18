@@ -33,7 +33,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
  const [cvText,setCVText]=useState('');const [cvName,setCVName]=useState('');const [busy,setBusy]=useState(false);const [loading,setLoading]=useState(true);
  const [error,setError]=useState(''),[code,setCode]=useState('');const [notice,setNotice]=useState('');const [retry,setRetry]=useState(0);
  const [showDetails,setShowDetails]=useState(false);const controller=useRef<AbortController|null>(null);const seq=useRef(0);
- const mutation=useRef<{signature:string;key:string}|null>(null);const {transcript,followReply,showJump,jumpToLatest,scrollProps}=useChatScroll();
+ const mutation=useRef<{signature:string;key:string}|null>(null);const {transcript,followReply,resumeFollow,showJump,jumpToLatest,scrollProps}=useChatScroll();
  const latestSession=useRef(session);latestSession.current=session;
  const draftId=useRef<string|null>(null);const dirty=useRef(false);dirty.current=!!(message||cvText );
  useEffect(()=>()=>{seq.current++;controller.current?.abort();},[]);
@@ -65,6 +65,7 @@ function ExplorationChat({initialDraftId}:{initialDraftId:string|null}){
   headers:{'Idempotency-Key':actionKey(path+JSON.stringify(body))}});}
  async function send(skip=false){
   if(!token||busy||!consent||(!skip&&!message.trim()))return;
+  resumeFollow();
   const n=++seq.current;const abort=new AbortController();controller.current?.abort();controller.current=abort;
   setActivity('Considering your career direction…');setBusy(true);setError('');setCode('');setNotice('');setPending(skip?'I’m not sure about that.':message.trim());
   try{
