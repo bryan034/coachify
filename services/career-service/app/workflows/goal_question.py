@@ -33,8 +33,20 @@ def question_queries(title, focus, terms=None):
                 r'\b(?:my|email|phone|password|secret|passport|address|resume|cv)\b', terms, re.I):
             terms=None
     subject=terms or FOCUSES[focus]
-    identity=' '.join(str(title.get(key) or '') for key in ('company','role','location')).strip()[:240]
-    suffixes=('', 'official employer information', 'candidate reports experiences')
+    from app.domain.source_scope import SINGAPORE,target_place
+    # Keep the market in every query: Brave has no Singapore country filter and
+    # DeepSeek has none at all, so the query text is the only geographic anchor.
+    parts=[str(title.get(key) or '').strip() for key in ('company','role','location')]
+    if target_place(title)==SINGAPORE and not any(re.search(r'\bsingapore\b',part,re.I) for part in parts):
+        parts.append('Singapore')
+    market=' '.join(part for part in parts[2:] if part)
+    prefix=' '.join(part for part in parts[:2] if part)
+    # Reserve space for the market before bounding the employer/role prefix.
+    identity=' '.join(part for part in (prefix[:max(0,239-len(market))],market) if part)
+    # Later searches narrow towards employer-published and local sources rather than
+    # broadening to global candidate reports.
+    local={'compensation':'SGD per month','location':'office address'}.get(focus,'employee reviews')
+    suffixes=('', 'official careers', local)
     return list(dict.fromkeys(' '.join((identity,subject,suffix)).strip() for suffix in suffixes))[:MAX_QUESTION_SEARCHES]
 
 
@@ -71,7 +83,7 @@ async def research_question(request, title, focus, check, *, query=None):
     await check()
     facts = [{'ref': f'web{i}', 'kind': 'public_source',
               'data': {'title': source.title, 'evidence': source.evidence,
-                       'scope': 'Public source; verify exact role, location and dates.'}}
+                       'scope': 'Public source; verify exact employer, role, Singapore location and dates.'}}
              for i, source in enumerate(sources) if source.evidence]
     links = {f'web{i}': [source.model_dump(mode='json')] for i, source in enumerate(sources) if source.evidence}
     return facts, links

@@ -7,6 +7,10 @@ from app.schemas.analysis import InterviewResearch,Generation
 from app.domain.review import MAPPING_VERSION
 from app.workflows.opportunity.domain import public_opportunity
 
+# v1 records saved topical excerpts without scope verification (they could hold
+# another country's figures). Only v2 records, re-verified here, are served.
+VERIFIED_EVIDENCE='saved-question-evidence-v2'
+
 
 class QuestionMemory:
     def __init__(self,workspace,research):
@@ -26,13 +30,16 @@ class QuestionMemory:
         records=[]
         for pointer in pointers:
             record=self.research.records.get_research(pointer['research_id'])
-            if record and record.question_focus and record.question_findings:records.append(record)
+            if record and record.question_focus and record.question_findings and record.generation.prompt_version==VERIFIED_EVIDENCE:
+                records.append(record)
         self.workspace.check(owner,w['session_id'],w['revision'])
         return records
 
     def save(self,owner,row,focus,findings,sources):
         if not findings:return
+        from app.domain.source_scope import verify
         context=self.context(owner,row);w=row['workspace'];stamp=now()
+        goal=context.model_dump(include={'company','role','location'})
         # Separate public context for focused snapshots: never replace the main
         # report cache or compete for its context/version uniqueness constraint.
         focused=context.model_copy(update={'details_fingerprint':fingerprint({'base':context.reuse_key(),'question_focus':focus})})
@@ -40,6 +47,9 @@ class QuestionMemory:
         for attempt in range(4):
             previous=self.rows.find_one({'_id':pointer_id})
             old=self.research.records.get_research(previous['research_id']) if previous else None
+            # Never promote legacy, unverified findings into a v2 snapshot.
+            if old and old.generation.prompt_version != VERIFIED_EVIDENCE:
+                old = None
             merged={f.finding_id:f for f in (old.question_findings if old else [])}
             merged.update({f.finding_id:f for f in findings});kept=list(merged.values())[-12:]
             used={sid for f in kept for sid in f.source_ids}
@@ -51,6 +61,13 @@ class QuestionMemory:
                 if finding.field!=focus or any(not any(quote in text for text in original.get(sid,[]))
                     for sid,quote in zip(finding.source_ids,finding.quotes)):
                     raise GoalError('Question evidence did not match the retrieved public source.',503)
+            for finding in findings:
+                # Defence in depth: the store re-runs the deterministic scope check
+                # against the saved goal, whatever the caller decided.
+                if finding.scope!='exact' or any(not (source:=source_map.get(sid)) or not verify(
+                        focus,source.url,source.title,quote,goal,published=source.published_date,scope_only=True).verified
+                        for sid,quote in zip(finding.source_ids,finding.quotes)):
+                    raise GoalError('Only verified job evidence can be saved.',422)
             # Store exact retained passages, not entire pages; merging another
             # excerpt from the same URL must preserve earlier cited passages.
             retained=[source.model_copy(update={'evidence':'\n'.join(dict.fromkeys(
@@ -61,7 +78,7 @@ class QuestionMemory:
             record=InterviewResearch(_id=str(ObjectId()),version=counter['version'],skill_mapping_version=MAPPING_VERSION,
                 created_at=stamp,updated_at=stamp,**focused.model_dump(),question_focus=focus,question_findings=kept,
                 sources=retained,research_status='succeeded',last_researched_at=stamp,
-                generation=Generation(provider='python',model='exact-public-excerpts',prompt_version='saved-question-evidence-v1',generated_at=stamp))
+                generation=Generation(provider='python',model='exact-public-excerpts',prompt_version=VERIFIED_EVIDENCE,generated_at=stamp))
             record=self.research.records.save_research(record,trusted_sources={s.source_id:s for s in retained})
             self.workspace.check(owner,w['session_id'],w['revision'])
             pointer={'kind':'question_result','owner':owner,'goal_id':str(row['goal_id']),'goal_version':w['revision'],

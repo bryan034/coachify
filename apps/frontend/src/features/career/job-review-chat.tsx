@@ -11,7 +11,7 @@ import {careerOperation,type CareerOperation} from '@/lib/api/career-operation';
 import {retryCareerRead} from '@/lib/api/career-polling';
 import {careerApi,refreshWorkspace,type OpportunityView,type CareerWorkspace} from '@/lib/api/career';
 import { errorText } from '@/lib/errors';
-import { ProcessingCard, SkeletonRows, type ProcessingStep } from '@/components/ui/processing-card';
+import { ProcessingCard, type ProcessingStep } from '@/components/ui/processing-card';
 import '@/styles/goal.css';
 
 type QueuedMessage={id:string;input:string;key:string;body?:string;session?:string|null};
@@ -187,7 +187,6 @@ export function JobReviewChat(){
    <ProcessingCard title="Skills needed" intro="elo is working out what this role needs." progressLabel={goal?'Researching the role':'Reading the job description'} steps={steps}
     footer={<p>{waiting?(secondsLeft>0?`${waitLabel}. Resuming in ${secondsLeft} seconds.`:`${waitLabel}.`):connectionIssue?'Connection interrupted. Reconnecting to task updates…':'You can leave this page. elo keeps working, and your goal conversation will open here when it’s done.'}</p>}>
     <AgentProgress steps={[...extractionSteps,...(activeOperation?.activities||[]),...(workspace?.activities||[])]}/>
-    {!goal?.skills.length&&<SkeletonRows rows={4}/>}
    </ProcessingCard>
   </section>;
  }

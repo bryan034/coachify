@@ -27,7 +27,7 @@ def test_javascript_shell_requests_renderer_only_after_successful_robots_and_htm
     assert error.value.url==URL and seen==['https://synthetic.test/robots.txt',URL]
 
 
-@pytest.mark.parametrize('status,message',[(401,'requires authentication'),(403,'blocked automated access'),(404,'no longer available'),(410,'no longer available'),(429,'limiting requests'),(503,'temporarily unavailable')])
+@pytest.mark.parametrize('status,message',[(401,'could not be extracted'),(403,'could not be extracted'),(404,'no longer available'),(410,'no longer available'),(429,'could not be extracted'),(503,'temporarily unavailable')])
 def test_http_failures_are_precise_and_never_request_browser(status,message):
     def fetch(url,deadline):return (404,{},b'') if url.endswith('/robots.txt') else (status,{'content-type':'text/html'},SHELL)
     with patch('socket.getaddrinfo',public_dns),pytest.raises(ValueError,match=message) as error:
@@ -37,7 +37,7 @@ def test_http_failures_are_precise_and_never_request_browser(status,message):
 
 @pytest.mark.parametrize('page',[b'<title>Just a moment...</title><script src="/challenge"></script>',b'<h1>Sign in</h1>',b'<main>Verify you are human</main>'])
 def test_success_status_challenge_pages_do_not_become_jobs_or_trigger_browser(page):
-    with pytest.raises(ValueError,match='verification or sign-in'):job_url.check_access_page(page)
+    with pytest.raises(job_url.AccessBlocked,match='Copy and paste the job description'):job_url.check_access_page(page)
 
 
 def test_short_structured_job_does_not_need_browser():
@@ -111,7 +111,7 @@ def test_browser_cannot_fetch_private_destinations_or_disallowed_robots():
     request=route()
     acquisition=BrowserAcquisition(time.monotonic()+25,lambda *args:(200,{},b'User-agent: *\nDisallow: /'))
     with patch('socket.getaddrinfo',public_dns):acquisition.route(request)
-    assert acquisition.requests==1 and 'restricts' in str(acquisition.failure)
+    assert acquisition.requests==1 and isinstance(acquisition.failure,job_url.AccessBlocked)
     request.abort.assert_called_once()
 
 

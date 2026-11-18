@@ -20,7 +20,7 @@ test('Career Goal supports three temporary inputs, recovery and responsive navig
   expect(route.request().headers().authorization).toBe('Bearer synthetic-session');
   if(path.endsWith('/url')){
    const {url}=route.request().postDataJSON();
-   if(url.includes('blocked'))return route.fulfill({status:422,json:careerFixture(route.request().url(),{detail:'This website restricts automated access. Paste the description instead.'})});
+   if(url.includes('blocked'))return route.fulfill({status:422,json:careerFixture(route.request().url(),{detail:'The information could not be extracted from this website. Copy and paste the job description instead.'})});
    return route.fulfill({json:careerFixture(route.request().url(),{kind:'url',text:'Imported analyst\n• SQL',source_name:'example.test',source_url:url,notices:['Review this temporary preview.']})});
   }
   return route.fulfill({json:careerFixture(route.request().url(),{kind:'document',text:'Document analyst\n• Communication',source_name:'role.txt',notices:[]})});
@@ -41,7 +41,7 @@ test('Career Goal supports three temporary inputs, recovery and responsive navig
  await page.getByLabel('Job description URL',{exact:true}).fill('https://example.test/blocked');
  page.once('dialog',dialog=>dialog.accept());
  await page.getByRole('button',{name:'Import job page'}).click();
- await expect(page.getByRole('tabpanel').getByRole('alert')).toContainText('restricts automated access');
+ await expect(page.getByRole('tabpanel').getByRole('alert')).toContainText('The information could not be extracted from this website.');
  await expect(page.getByRole('textbox',{name:'Review and edit the preview'})).toHaveValue('Edited preview');
  await page.getByRole('tab',{name:'Upload document'}).click();
  await page.getByLabel('Job description document',{exact:true}).setInputFiles({name:'role.txt',mimeType:'text/plain',buffer:Buffer.from('Document analyst\n• Communication')});

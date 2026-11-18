@@ -45,9 +45,17 @@ disabled for imports; request bodies/URL fields/documents are not logged.
   at most three followed redirects, five-second network operations and robots checks.
   A timed-out request gets one retry within the shared 25-second import deadline;
   redirect robots checks do not multiply that retry. Access restrictions and TLS
-  certificate failures are not retried. Timeout messages identify robots.txt versus
-  webpage reads; certificate, TLS and other connection failures have distinct safe
-  messages. Robots access checks must complete before fetching HTML job pages.
+  certificate failures are not retried. A robots.txt that still times out after its
+  retry is treated as absent and the job page is read within the remaining deadline;
+  robots disallow rules and robots 401/403/429/5xx responses still refuse the import.
+  Timeout messages identify robots.txt versus webpage reads; certificate, TLS and
+  other connection failures have distinct safe messages. Robots access checks must
+  complete or time out before fetching HTML job pages.
+- Blocked sites: robots refusals, page 401/403/429 responses, sign-in, captcha or
+  verification pages, and the job aggregators LinkedIn, Indeed, Glassdoor and
+  JobStreet (refused before any network request) all return one message: the
+  information could not be extracted from this website; copy and paste the job
+  description instead. The Career Goal page shows that message with a paste option.
   Pin connections to validated globally routable DNS addresses; reject mixed
   private/public results and private/loopback/link-local/metadata destinations.
   HTTPS verifies the original hostname using TLS and never follows unchecked DNS.

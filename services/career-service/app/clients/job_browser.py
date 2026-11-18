@@ -2,7 +2,6 @@
 import time
 import tempfile
 from urllib.parse import urlsplit,urlunsplit
-from urllib.robotparser import RobotFileParser
 from app.clients import job_url
 
 MAX_REQUESTS=24
@@ -32,15 +31,10 @@ class BrowserAcquisition:
         origin=urlunsplit((parsed.scheme,parsed.netloc,'','',''))
         if origin not in self.robots:
             # Redirect robots files go through the existing bounded public fetcher.
-            _,status,_,data=job_url.fetch_following(origin+'/robots.txt',self.deadline,self.read)
-            if status in (401,403,429) or status>=500:
-                raise ValueError('This website restricts automated access. Paste the description or upload a document.')
-            rules=RobotFileParser()
-            rules.parse(data.decode('utf-8',errors='replace').splitlines() if status==200 else [])
-            self.robots[origin]=rules if status==200 else None
+            self.robots[origin]=job_url.robots_rules(origin+'/robots.txt',self.deadline,self.read)
         rules=self.robots[origin]
         if rules is not None and not rules.can_fetch(job_url.AGENT,url):
-            raise ValueError('This website restricts automated access. Paste the description or upload a document.')
+            raise job_url.AccessBlocked()
 
     def route(self,route):
         request=route.request

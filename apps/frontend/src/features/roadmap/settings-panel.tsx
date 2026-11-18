@@ -207,7 +207,10 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
  const blackoutPeriods = defaults.availability_periods.filter(period => period.weekly_hours === 0);
  const reduced = defaults.availability_periods.filter(period => period.weekly_hours > 0);
  const jobDates = (context.goal?.job_dates || []).filter(date => date.date && date.date > runway.resolved.today);
- const themes = [...new Set(Object.values(planner.inputs.skill_groups))].filter(Boolean).slice(0,12);
+ // Focus options are the skills the Career goal expects; the roadmap accepts at most 12 topics.
+ const themes = [...new Set((planner.inputs.goal?.skills ?? []).map(skill => skill.name).filter((name): name is string => !!name))].slice(0, 12);
+ const topics = config.learning_topics ?? [];
+ const allChosen = themes.length > 0 && themes.every(theme => topics.includes(theme));
  // Themes come from the Skills Profile; earlier saved generic focuses still show until removed.
  const chosenFocus = [...(config.learning_topics ?? []), ...focuses.filter(([value]) => config.learning_focus.includes(value)).map(([, label]) => label)];
  const showFocus = choosingFocus || !!config.learning_notes.trim();
@@ -237,7 +240,8 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
   { name: 'Learning focus', required: false, filled: chosenFocus.length > 0 || !!config.learning_notes.trim(), content: <>
    <p className="road-clause">I’d like to focus on <button type="button" className={`token token-button${chosenFocus.length ? '' : ' empty'}`} aria-expanded={showFocus} aria-label="Choose learning focus" onClick={() => setChoosingFocus(!showFocus)}>{chosenFocus.length ? chosenFocus.join(', ') : <><span aria-hidden="true">+ </span>choose focus</>}</button> <span className="small">Optional</span></p>
    {showFocus && <div className="focus-panel">
-    <div className="focus-chips">{themes.map(theme=><label key={theme} className="focus-chip"><input type="checkbox" checked={config.learning_topics?.includes(theme)??false} onChange={e=>update({learning_topics:e.target.checked?[...(config.learning_topics??[]),theme]:(config.learning_topics??[]).filter(value=>value!==theme)})}/>{theme}</label>)}{themes.length===0&&<p>Review your Skills Profile to get focus suggestions.</p>}</div>
+    {themes.length > 0 && <div className="focus-toolbar"><span className="small" aria-live="polite">{topics.filter(value => themes.includes(value)).length} of {themes.length} selected</span><label className={`focus-all${allChosen ? ' on' : ''}`}><input type="checkbox" checked={allChosen} onChange={e => update({ learning_topics: e.target.checked ? [...topics.filter(value => !themes.includes(value)), ...themes].slice(-12) : topics.filter(value => !themes.includes(value)) })} /><svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="M3 8.5l3.2 3L13 4.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>Select all</label></div>}
+    <div className="focus-chips">{themes.map(theme => { const on = topics.includes(theme); return <label key={theme} className={`focus-chip${on ? ' on' : ''}`}><input type="checkbox" checked={on} onChange={e => update({ learning_topics: e.target.checked ? [...topics, theme] : topics.filter(value => value !== theme) })} />{theme}</label>; })}{themes.length === 0 && <p>Your Career goal has no skills listed yet, so there’s nothing to choose from.</p>}</div>
     <label className="settings-field"><span>Anything else about how you like to learn?</span><textarea maxLength={1000} value={config.learning_notes} onChange={e => update({ learning_notes: e.target.value })} /></label>
    </div>}
   </> },

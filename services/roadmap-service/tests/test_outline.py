@@ -3,7 +3,7 @@ import copy
 from datetime import date
 from planner_fixtures import NOW, assessment, assignment, draft, gap, milestone, settings
 from app.planning.capacity import Capacity
-from app.planning.outlines import build_outline, draft_from_outline, validate_outline
+from app.planning.outlines import build_outline, clamp_to_start, draft_from_outline, validate_outline
 from app.schemas.outlines import OutlineDraft
 from app.schemas.roadmap import PlannerConfig
 from app.schemas.weeks import WeekDraft
@@ -247,3 +247,16 @@ def test_outline_rejects_routine_titles_that_cannot_be_materialised():
     routine={'id':'r1','milestone_key':'m1','activity':'word '*20,'weekdays':[2],
         'duration_minutes':30,'start_date':'2030-01-09','end_date':'2030-01-09'}
     assert 'routine_title' in codes(outline(routine_rules=[routine]))
+
+def test_milestone_dated_from_an_earlier_week_start_is_moved_to_the_planning_start():
+    capacity=Capacity(PlannerConfig.model_validate(settings()),NOW)
+    routine={'id':'r1','milestone_key':'m1','activity':'Practise arrays','weekdays':[0],
+        'duration_minutes':30,'start_date':'2030-01-07','end_date':'2030-01-14'}
+    value=outline(milestones=[milestone(projected_start='2030-01-07',checkpoints=[{'key':'c1','title':'First endpoint','date':'2030-01-08'}])],routine_rules=[routine])
+    assert 'milestone_before_start' in {e['code'] for e in validate_outline(value,capacity,assessment(),{})}
+    fixed=clamp_to_start(value,capacity)
+    assert str(fixed.milestones[0].projected_start)=='2030-01-09' and str(fixed.milestones[0].checkpoints[0].date)=='2030-01-09'
+    assert str(fixed.routine_rules[0].start_date)=='2030-01-09'
+    assert 'milestone_before_start' not in {e['code'] for e in validate_outline(fixed,capacity,assessment(),{})}
+    kept=clamp_to_start(outline(milestones=[milestone(projected_start='2030-01-07')]),capacity,[{'milestone_key':'m1','duration_minutes':60}])
+    assert str(kept.milestones[0].projected_start)=='2030-01-07'

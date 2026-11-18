@@ -202,12 +202,22 @@ router; grounded answers use at most 768 output tokens, subject to the existing 
 Independent questions omit chat history; follow-ups include only two short recent
 messages. Unrelated tasks are refused. Q&A may perform up to three distinct searches for missing/current public information.
 The router summarises the specific public question into a bounded keyword phrase;
-Python adds the saved employer/role/location and tries public, official-employer and
-candidate-report searches. Empty results or an answering-model `not_found` permit
-the next search; a supported answer stops further searches. New complex-question
-findings are saved only when cited in a validated answer. Exact excerpts/sources
-append to the existing owner/version-linked `question_research` JSON and are reused
-on later turns. Existing research remains readable. Unanswered details stay unknown;
+Python adds the saved employer/role/location (Singapore when no location is saved,
+since neither search provider can filter by Singapore) and narrows later searches
+towards official and local sources. Empty results or an answering-model `not_found`
+permit the next search; a supported answer stops further searches.
+Saved information is checked first. Salary/location lookups answer without a model
+or search from JD details or verified findings, and search only when none exist.
+Retrieved passages are checked deterministically (`app/domain/source_scope.py`):
+any other country, currency or foreign site drops the passage before a model sees
+it; a passage is *verified* only when it also names Singapore (or the saved
+location), the employer, every core role word, the question topic (salaries need an
+amount) and is under three years old. Only verified passages are saved (`scope=exact`),
+and the store re-checks them; unverified passages may inform an answer as general
+context but are never stored. Answers quoting a foreign currency are rejected.
+Exact excerpts/sources append to the existing owner/version-linked
+`question_research` JSON and are reused on later turns; records saved before
+verification (`saved-question-evidence-v1`) are no longer served. Existing research remains readable. Unanswered details stay unknown;
 this path never silently edits the goal. JD chat history remains temporary browser memory.
 
 Provider rejections include safe `provider_error` metadata: HTTP status, known

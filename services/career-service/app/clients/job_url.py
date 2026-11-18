@@ -14,6 +14,37 @@ from app.schemas.preview import MAX_JD_TEXT,URL_NETWORK_TIMEOUT,URL_IMPORT_TIMEO
 
 MAX_DOWNLOAD = 2 * 1024 * 1024
 AGENT = 'eloPreview/1.0'
+# One user-facing message whenever a site refuses or blocks automated reading.
+BLOCKED = 'The information could not be extracted from this website. Copy and paste the job description instead.'
+# Job aggregators whose terms and bot protection forbid automated import.
+BLOCKED_HOSTS = ('linkedin.com', 'indeed.com', 'glassdoor.com', 'glassdoor.sg', 'jobstreet.com', 'jobstreet.com.sg')
+
+
+class AccessBlocked(ValueError):
+    """The site refused automated reading; the user should paste the description."""
+    def __init__(self):
+        super().__init__(BLOCKED)
+
+
+def blocked_host(host):
+    host = (host or '').lower().rstrip('.')
+    return any(host == name or host.endswith('.' + name) for name in BLOCKED_HOSTS)
+
+
+def robots_rules(robots, deadline, fetch):
+    """Parsed rules, or None when robots.txt is absent or does not answer in time."""
+    try:
+        _, status, _, data = fetch_following(robots, deadline, fetch)
+    except PageTimeout:
+        # An unresponsive robots.txt is unknown, not a refusal: try the page itself.
+        network_timeout(deadline)
+        return None
+    if status in {401,403,429} or status >= 500:
+        raise AccessBlocked()
+    if status != 200:
+        return None
+    rules = RobotFileParser(); rules.parse(data.decode('utf-8', errors='replace').splitlines())
+    return rules
 
 
 class RenderRequired(ValueError):
@@ -46,6 +77,8 @@ def destination(url):
         port = parsed.port or (443 if parsed.scheme == 'https' else 80)
     except (ValueError, UnicodeError) as exc:
         raise ValueError('Use a public HTTP or HTTPS page URL without credentials or custom ports.') from exc
+    if blocked_host(host):
+        raise AccessBlocked()
     try:
         addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
         if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
@@ -211,13 +244,9 @@ def import_url(url, fetch=request_page):
     public_job=public_job_api_preview(parsed,url,deadline,fetch)
     if public_job is not None:return public_job
     robots = urlunsplit((parsed.scheme, parsed.netloc, '/robots.txt', '', ''))
-    _, status, _, data = fetch_following(robots, deadline, fetch)
-    if status in {401,403,429} or status >= 500:
-        raise ValueError('This website restricts automated access. Paste the description or upload a document.')
-    if status == 200:
-        rules = RobotFileParser(); rules.parse(data.decode('utf-8', errors='replace').splitlines())
-        if not rules.can_fetch(AGENT, url):
-            raise ValueError('This website restricts automated access. Paste the description or upload a document.')
+    rules = robots_rules(robots, deadline, fetch)
+    if rules is not None and not rules.can_fetch(AGENT, url):
+        raise AccessBlocked()
     # Re-check robots at a redirect destination before retrieving that page.
     final, status, headers, data = fetch_following(url, deadline,
         lambda u,d: fetch(u,d) if u == url else checked_redirect(u,d,fetch))
@@ -239,21 +268,15 @@ def public_job_api_preview(parsed,url,deadline,fetch):
 def checked_redirect(url, deadline, fetch):
     parsed, _, _, _ = destination(url)
     robots = urlunsplit((parsed.scheme, parsed.netloc, '/robots.txt', '', ''))
-    _, status, _, data = fetch_following(robots, deadline, fetch)
-    if status in {401,403,429} or status >= 500:
-        raise ValueError('The destination restricts automated access. Paste the description instead.')
-    if status == 200:
-        rules=RobotFileParser(); rules.parse(data.decode('utf-8',errors='replace').splitlines())
-        if not rules.can_fetch(AGENT,url): raise ValueError('The destination restricts automated access. Paste the description instead.')
+    rules = robots_rules(robots, deadline, fetch)
+    if rules is not None and not rules.can_fetch(AGENT,url): raise AccessBlocked()
     return fetch(url,deadline)
 
 
 def check_page_status(status):
     if status==200:return
-    if status==401:message='This website requires authentication.'
-    elif status==403:message='This website blocked automated access; this does not necessarily mean you need to sign in.'
-    elif status==429:message='This website is limiting requests. Try again later.'
-    elif status in (404,410):message='This job page is no longer available or the link is incorrect.'
+    if status in (401,403,429):raise AccessBlocked()
+    if status in (404,410):message='This job page is no longer available or the link is incorrect.'
     elif status>=500:message='This website is temporarily unavailable.'
     else:message='This website did not return an accessible job page.'
     raise ValueError(message+' Paste the description or upload a document.')
@@ -265,7 +288,7 @@ def check_access_page(data):
     text=html_text(str(soup)).lower()
     if (any(term in heading for term in ('access denied','just a moment','security check','sign in','log in','captcha'))
         or any(term in text for term in ('verify you are human','verify that you are human','complete the captcha','enable javascript and cookies to continue'))):
-        raise ValueError('This website returned an access verification or sign-in page instead of the job description. Paste the description or upload a document.')
+        raise AccessBlocked()
 
 
 def needs_rendering(data):

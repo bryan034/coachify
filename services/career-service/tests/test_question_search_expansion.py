@@ -14,7 +14,7 @@ from app.workflows.goal_question import question_queries
 from tests.test_goal_chat_presentation import environment
 from tests.test_workspace import flow,ingest,wait,headers,BASE,OWNER
 
-ALLOWANCE='Interns receive a housing allowance during the programme.'
+ALLOWANCE='Data Analyst interns at Example in Singapore receive a housing allowance during the programme.'
 
 
 def source(identifier,text):
@@ -52,7 +52,7 @@ def setup(monkeypatch,batches,*,direct=False,answer=None,saved_research=None):
 
 def test_empty_queries_continue_until_third_search_finds_salary(monkeypatch):
     async def run():
-        salary='Analyst internship salary is SGD 1500 per month.'
+        salary='Example Analyst internship salary in Singapore is SGD 1500 per month.'
         request,body,queries,saved,calls=setup(monkeypatch,[[],[],[source('salary',salary)]],direct=True)
         result=await semantic_chat(request,'owner',{'workspace':{}},body)
         assert len(queries)==3 and len(set(queries))==3
@@ -62,10 +62,11 @@ def test_empty_queries_continue_until_third_search_finds_salary(monkeypatch):
     asyncio.run(run())
 
 
-def test_specific_question_retries_irrelevant_results_and_saves_only_cited_passage(monkeypatch):
+def test_specific_question_retries_irrelevant_results_and_saves_only_verified_passage(monkeypatch):
     async def run():
         def answer(context,saved):
-            assert not saved  # No page is stored before relevance/citations are checked.
+            # Only the deterministically verified passage is ever stored.
+            assert all(f.value==ALLOWANCE for _,findings,_ in saved for f in findings)
             supported=[f['ref'] for f in context['facts'] if f['data']['value']==ALLOWANCE]
             return FocusedAnswer(reply='Housing support is reported.',references=supported) if supported else FocusedAnswer(status='not_found',reply='Not found.')
         request,body,queries,saved,calls=setup(monkeypatch,
@@ -131,13 +132,13 @@ def test_router_contract_rejects_contact_numeric_or_oversized_search_subject(ter
 
 
 def test_expanded_question_appends_json_preserves_other_focus_and_reuses_after_reload(flow):
-    from app.domain.question_memory import exact_question_findings
+    from app.domain.question_memory import scoped_question_findings
     from app.repositories.question_memory import QuestionMemory
     ingest(flow);current=wait(flow);client,db,ai,_=flow
     repo=client.app.state.workspace_store
     memory=QuestionMemory(repo,client.app.state.research_store)
-    salary=source('salary','Internship salary is SGD 1500 per month.')
-    memory.save(OWNER,repo.row(OWNER),'compensation',*exact_question_findings('compensation',[],{'web0':[salary.model_dump()]}))
+    salary=source('salary','Data Analyst internship salary in Singapore is SGD 1500 per month.')
+    memory.save(OWNER,repo.row(OWNER),'compensation',*scoped_question_findings('compensation',{'web0':[salary.model_dump()]},{'role':'Data Analyst'})[:2])
     queries=[]
     async def collect(context,query):
         queries.append(query)

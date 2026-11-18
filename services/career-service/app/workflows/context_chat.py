@@ -18,7 +18,9 @@ from app.ai.routing import chat_models
 from app.workflows.activity import activity
 from app.workflows.goal_question import research_question,question_queries,MAX_QUESTION_SEARCHES
 from app.workflows.citations import fact_citations
-from app.domain.question_memory import direct_public_plan,focused_saved_facts,exact_question_findings,excerpt_facts,saved_fact_reply
+from app.domain.question_memory import (direct_public_plan,focused_saved_facts,scoped_question_findings,excerpt_facts,
+    saved_fact_reply,factual_reply,trusted_fact,foreign_fact)
+from app.domain.source_scope import FOREIGN_CURRENCY,SINGAPORE,target_place
 
 PUBLIC_FOCUS={'role':'role_details','skills':'role_details','requirements':'eligibility',
     'interview_process':'interviews','interview_skills':'interviews','preparation':'interviews',
@@ -83,8 +85,15 @@ async def semantic_chat(request,account,row,body):
             g,r=await thread(store.fetch,account,row,topic,plan.include_evidence)
             goal.update(g);research=merge_projection(research,r)
         facts,links,partial=focused_saved_facts(plan.research_focus,goal,research) if plan.research_focus else selected_facts(plan,goal,research)
+        # Saved findings about another market never answer a question about this goal.
+        facts=[fact for fact in facts if not foreign_fact(fact,state['title'])]
+        links={ref:value for ref,value in links.items() if ref in {fact['ref'] for fact in facts}}
         focus=plan.research_focus or PUBLIC_FOCUS.get(plan.topic)
-        return {**state,'facts':facts,'links':links,'partial':partial,'focus':focus,'needs_search':bool(focus) and (not facts or plan.missing)}
+        # Database first: direct salary/location lookups search only when no trusted
+        # (JD-sourced or verified) fact is saved; other questions when nothing relevant is.
+        untrusted=state.get('direct') and not any(trusted_fact(fact) for fact in facts)
+        return {**state,'facts':facts,'links':links,'partial':partial,'focus':focus,'saved_facts':facts,'saved_links':links,
+                'needs_search':bool(focus) and (not facts or plan.missing or bool(untrusted))}
 
     async def search_public(state):
         facts,links=await public_facts(state['title'],state['focus'],state['plan'].public_search_terms)
@@ -97,12 +106,15 @@ async def semantic_chat(request,account,row,body):
             await thread(store.save_question,account,current,state['focus'],findings,sources)
 
     async def prepare_findings(state):
-        findings,sources=exact_question_findings(state['focus'],state['retrieved_facts'],state['retrieved_links'],
-                                                require_focus=bool(state.get('direct')))
-        # Simple salary/location lookups use exact topical excerpts. For richer
-        # questions, the answering model must cite the passages that address the
-        # actual question before any new finding is persisted.
-        if state.get('direct'):await persist(state,findings,sources)
+        verified,verified_sources,unverified,unverified_sources=scoped_question_findings(
+            state['focus'],state['retrieved_links'],state['title'],terms=state['plan'].public_search_terms,
+            require_focus=bool(state.get('direct')))
+        # Only passages that pass every deterministic scope check become saved job
+        # facts. Unverified candidates may inform this answer but are never stored.
+        known={f.finding_id for f in state.get('candidates',[])}
+        fresh=[f for f in verified if f.finding_id not in known]
+        if fresh:await persist(state,fresh,[s for s in verified_sources if s.source_id in {i for f in fresh for i in f.source_ids}])
+        findings=[*verified,*unverified];sources=[*verified_sources,*unverified_sources]
         candidates={f.finding_id:f for f in state.get('candidates',[])}
         candidates.update({f.finding_id:f for f in findings})
         findings=list(candidates.values())[-12:]
@@ -114,6 +126,7 @@ async def semantic_chat(request,account,row,body):
             source_map[sid]=source.model_copy(update={'evidence':'\n'.join(dict.fromkeys(quotes))})
         sources=list(source_map.values())
         facts,links=excerpt_facts(findings,sources)
+        facts=[*state.get('saved_facts',[]),*facts];links={**state.get('saved_links',{}),**links}
         return {**state,'facts':facts,'links':links,'partial':False,'needs_search':False,
                 'candidates':findings,'candidate_sources':sources}
 
@@ -129,22 +142,24 @@ async def semantic_chat(request,account,row,body):
             if result.status!='answered':return {'result':JDReply(reply=REFUSAL,proposed_skills=None)}
             await thread(repo.check,account,body.session_id,body.expected_version)
             return {'result':JDReply(reply=result.reply,proposed_skills=None),'needs_search':False}
+        if state.get('direct'):
+            reply=factual_reply(state.get('facts',[]),state.get('links',{}))
+            if reply:
+                await thread(repo.check,account,body.session_id,body.expected_version)
+                return {'result':JDReply(reply=reply,proposed_skills=None),'needs_search':False}
         def missing():
             return 'I could not verify that detail in the public sources retrieved for this goal. What would you like to clarify or research next?' if searches else MISSING
         if not state.get('facts'):
             if state.get('focus') and len(searches)<MAX_QUESTION_SEARCHES:
                 return {**state,'needs_search':True}
             return {'result':JDReply(reply=missing(),proposed_skills=None)}
-        if state.get('direct'):
-            reply=saved_fact_reply(state['facts'],state['links'],state['partial'])
-            if reply:
-                await thread(repo.check,account,body.session_id,body.expected_version)
-                return {'result':JDReply(reply=reply,proposed_skills=None),'needs_search':False}
         activity('answering_question')
         stage='focused_answer' if plan.needs_reasoning else 'context_answer'
         def validate(output):
             if output.status=='answered':
                 fact_citations(output.reply,output.references,state['links'])
+                if target_place(state['title'])==SINGAPORE and FOREIGN_CURRENCY.search(output.reply):
+                    raise AIError('invalid_output',True,reason='scope',fields=('reply',))
         @structured_node
         async def answer_facts(_):
             result=await generate(stage,{'goal':state['title'],'facts':state['facts'],'partial':state['partial']},
@@ -155,6 +170,10 @@ async def semantic_chat(request,account,row,body):
         except AIError as error:
             if error.code not in ('invalid_output','incomplete_output','context_limit'):raise
             if state.get('candidates') and not state.get('direct'):
+                verified=factual_reply(state['facts'],state['links'])
+                if verified:
+                    await thread(repo.check,account,body.session_id,body.expected_version)
+                    return {'result':JDReply(reply=verified,proposed_skills=None),'needs_search':False}
                 if len(searches)<MAX_QUESTION_SEARCHES:return {**state,'needs_search':True}
                 return {'result':JDReply(reply=missing(),proposed_skills=None),'needs_search':False}
             reply=saved_fact_reply(state['facts'],state['links'],state['partial'])
@@ -166,11 +185,6 @@ async def semantic_chat(request,account,row,body):
         validate(result)
         if result.status!='answered':return {'result':JDReply(reply=REFUSAL if result.status=='off_topic' else missing(),proposed_skills=None)}
         reply=fact_citations(result.reply,result.references,state['links'])
-        if state.get('candidates') and not state.get('direct'):
-            cited={int(ref[3:]) for ref in result.references if ref.startswith('web') and ref[3:].isdigit()}
-            findings=[finding for index,finding in enumerate(state['candidates']) if index in cited]
-            used={sid for finding in findings for sid in finding.source_ids}
-            await persist(state,findings,[s for s in state['candidate_sources'] if s.source_id in used])
         await thread(repo.check,account,body.session_id,body.expected_version)
         return {'result':JDReply(reply=reply,proposed_skills=None),'needs_search':False}
 

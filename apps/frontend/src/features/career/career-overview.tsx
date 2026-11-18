@@ -19,7 +19,7 @@ import { LEVEL_COLORS, LEVEL_LABELS, levelStatus, namesSkill, type LevelStatus }
 import { TalkItThrough, type TalkSkill } from '@/features/assessment/talk-it-through';
 import { PageFlow } from '@/components/ui/page-flow';
 import { loadRoadmap, loadSkills, useSection, type ProfileLevel } from '@/lib/api/workspace-summary';
-import { ProcessingCard, SkeletonRows, type ProcessingStep } from '@/components/ui/processing-card';
+import { ProcessingCard, type ProcessingStep } from '@/components/ui/processing-card';
 import type { Requirement } from '@/features/roadmap/types';
 import { formatDayMonthYear } from '@/lib/format';
 import { PageSkeleton } from '@/components/ui/workspace-ui';
@@ -239,7 +239,7 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   {goal.requirements_need_review&&<p className="notice">Your role context changed. Refine your goal to review which requirements still apply.</p>}
   {working&&view!=='skills'&&<p className="notice" role="status">{waitingText}</p>}
   {view==='skills'&&working&&<ProcessingCard title="Skills needed" intro="elo is working out what this role needs and how your skills compare." progressLabel="Working out the skills needed" steps={processingSteps}
-   footer={<p>{workspace.phase==='waiting_quota'?waitingText:'You can leave this page. elo keeps working, and your skills will be here when it’s done.'}</p>}>{!goal.skills.length&&<SkeletonRows rows={4}/>}</ProcessingCard>}
+   footer={<p>{workspace.phase==='waiting_quota'?waitingText:'You can leave this page. elo keeps working, and your skills will be here when it’s done.'}</p>}></ProcessingCard>}
   {workspace.phase==='research_failed'&&<div className="notice" role="alert"><p>Opportunity research could not finish. Your saved goal remains available.</p><button className="btn ghost sm" disabled={retrying} onClick={()=>void retryResearch()}>{retrying?'Resuming research…':'Retry research'}</button>{retryError&&<p>{retryError}</p>}</div>}
   {view==='skills'&&<>
    {!working&&<EvaluateBanner comparison={comparison} here="/career-goal"/>}

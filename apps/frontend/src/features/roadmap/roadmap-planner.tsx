@@ -257,7 +257,7 @@ function Planner({ token }: { token: string }) {
   {!activeView && context.availability === 'unavailable' && <div className="roadmap-notice"><p>We can’t check your latest CV and Career goal right now. Your saved roadmap and conversation are still here; new plans and accepting a preview need this check.</p><button className="btn ghost" onClick={() => void load()}>Retry source check</button></div>}
   {!activeView && <EvaluationStatusPanel comparison={evaluation} actions disabled={frozen} />}
   {blocked && <Prerequisites issues={context.issues} />}
-  <GenerationProgress active={starting || running} stage={running ? workspace.operation?.stage : undefined} context={context} />
+  <GenerationProgress active={starting || (running && stages.some(([key]) => key === workspace.operation?.stage))} stage={running ? workspace.operation?.stage : undefined} context={context} />
   {(failedOutline || failedWeek) && <div className="roadmap-notice" role="status"><p>{friendlyOperationError(workspace.operation?.error, 'Your roadmap could not be created. Your saved work is unchanged.')}</p><button className="btn" disabled={busy || !context.ready || !context.model_available || !!workspace.operation?.retry_after} onClick={() => retryPlanning(failedOutline ? '/planner/outlines/generate' : '/planner/weeks/generate', (failedOutline || failedWeek)!, workspace.operation?.error?.code === 'inputs_changed')}>Try again</button></div>}
   <div id="plan-panel">
    {!configuring && !activeView && weeklyPlanning}

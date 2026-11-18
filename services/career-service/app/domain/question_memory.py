@@ -57,33 +57,97 @@ def focused_saved_facts(focus,goal,research):
         add('opportunity_finding',{key:item[key] for key in ('field','value','confidence','scope','evidence_type') if key in item},item.get('source_ids',[]))
     return facts[:6],{k:v for k,v in links.items() if k in {f['ref'] for f in facts[:6]}},len(facts)>6
 
-def exact_question_findings(focus,facts,links,*,require_focus=True):
-    """Keep only topical verbatim source passages; generated answers are never stored."""
+def passage_finding(focus,text,source,*,verified=False,official=False):
+    if verified:
+        confidence='high' if official else 'medium'
+        evidence='official' if official else 'candidate_reported' if source.platform=='reddit' else 'third_party'
+    else:
+        confidence='low';evidence='official' if source.platform=='employer' or source.reliability=='official' else 'third_party'
+    return Finding(finding_id='f'+fingerprint({'focus':focus,'quote':text,'url':source.url})[:16],
+        field=focus,value=text,quotes=[text],source_ids=[source.source_id],confidence=confidence,
+        scope='exact' if verified else 'general',evidence_type=evidence,last_verified_at=now())
+
+def link_sources(links):
     sources=[]
     for values in links.values():
         for value in values:
             source=ResearchSource.model_validate(value)
             if source.source_id not in {s.source_id for s in sources}:sources.append(source)
     from app.workflows.opportunity.sources import pool
-    sources=pool(sources)
+    return pool(sources)
+
+def exact_question_findings(focus,facts,links,*,require_focus=True):
+    """Keep only topical verbatim source passages; generated answers are never stored."""
+    sources=link_sources(links)
     findings=[]
     for passage in evidence_passages(sources):
         text=passage['text'];source=sources[passage['source_ref']]
         if require_focus and not re.search(FOCUS_WORDS[focus],text,re.I):continue
         if sum(source.source_id in f.source_ids for f in findings)>=2:continue
-        findings.append(Finding(finding_id='f'+fingerprint({'focus':focus,'quote':text,'url':source.url})[:16],
-            field=focus,value=text,quotes=[text],source_ids=[source.source_id],confidence='low',
-            scope='general',evidence_type='official' if source.platform=='employer' or source.reliability=='official' else 'third_party',last_verified_at=now()))
+        findings.append(passage_finding(focus,text,source))
         if len(findings)==6:break
     used={sid for finding in findings for sid in finding.source_ids}
     return findings,[source for source in sources if source.source_id in used]
+
+def scoped_question_findings(focus,links,goal,*,terms=None,require_focus=True):
+    """Split exact passages into verified job facts and unverified candidates.
+
+    Foreign-market passages are dropped. Verified passages pass every deterministic
+    check in source_scope and are the only ones that may be saved; candidates may
+    inform an answer as general context but are never stored.
+    """
+    from app.domain.source_scope import verify
+    sources=link_sources(links)
+    verified=[];candidates=[]
+    for passage in evidence_passages(sources):
+        text=passage['text'];source=sources[passage['source_ref']]
+        verdict=verify(focus,source.url,source.title,text,goal,terms=terms,published=source.published_date)
+        if verdict.foreign:continue
+        if verdict.verified:
+            if sum(source.source_id in f.source_ids for f in verified)<2 and len(verified)<6:
+                verified.append(passage_finding(focus,text,source,verified=True,official=verdict.official))
+            continue
+        if require_focus and not re.search(FOCUS_WORDS[focus],text,re.I):continue
+        if sum(source.source_id in f.source_ids for f in candidates)>=2 or len(candidates)>=6:continue
+        candidates.append(passage_finding(focus,text,source))
+    def used(findings):
+        ids={sid for finding in findings for sid in finding.source_ids}
+        return [source for source in sources if source.source_id in ids]
+    return verified,used(verified),candidates,used(candidates)
+
+def trusted_fact(fact):
+    """JD-sourced details and deterministically verified findings are job facts."""
+    return fact.get('kind')=='job_details' or (fact.get('data') or {}).get('scope')=='exact'
+
+def foreign_fact(fact,goal):
+    from app.domain.source_scope import foreign_text,target_place
+    return foreign_text(' '.join(str(v) for v in (fact.get('data') or {}).values()),target_place(goal))
+
+def factual_reply(facts,links):
+    """Concise, model-free answer from trusted saved facts with source links."""
+    points=[]
+    for fact in [f for f in facts if trusted_fact(f)][:3]:
+        data=fact['data'];value=data.get('value') or data.get('location') or data.get('description')
+        if not value:continue
+        sources={s['source_id']:s['url'] for s in links.get(fact['ref'],[]) if s.get('url')}
+        citations=source_links(sources,sources)
+        label='From the saved job description' if fact.get('kind')=='job_details' and not citations else ''
+        point=summary_text(str(value))+(' '+citations if citations else '')+(f' ({label})' if label else '')
+        points.append(point)
+    if not points:return None
+    return points[0] if len(points)==1 else '\n'.join('- '+point for point in points)
 
 def excerpt_facts(findings,sources):
     links={};facts=[]
     for index,finding in enumerate(findings):
         ref=f'web{index}'
-        facts.append({'ref':ref,'kind':'opportunity_finding','data':finding.model_dump(exclude={'quotes','source_ids'})})
-        links[ref]=[s.model_dump(mode='json') for s in sources if s.source_id in finding.source_ids]
+        linked=[s for s in sources if s.source_id in finding.source_ids]
+        data=finding.model_dump(exclude={'quotes','source_ids','finding_id','last_verified_at','round_number','round_name','conflict_group'})
+        from app.domain.source_scope import host
+        data['source']=', '.join(dict.fromkeys(host(s.url) for s in linked))
+        data['verified']=finding.scope=='exact'
+        facts.append({'ref':ref,'kind':'opportunity_finding','data':data})
+        links[ref]=[s.model_dump(mode='json') for s in linked]
     return facts,links
 
 def saved_fact_reply(facts,links,partial=False):

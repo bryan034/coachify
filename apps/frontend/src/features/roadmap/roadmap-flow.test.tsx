@@ -225,15 +225,23 @@ it('writes settings into the sentence and flags a start date in the past', async
  expect(screen.getByLabelText('Break minutes per hour of study')).toHaveValue(10);
 });
 
-it('offers learning focus themes from the Skills Profile and adds a study block from the week', async () => {
- serve(workspace({ planner: planner({ config: config({ learning_focus: [], learning_notes: '' }) }) })); render(<RoadmapPlanner />);
+it('offers the Career goal skills as learning focus, with select all, and adds a study block from the week', async () => {
+ const base = planner({ config: config({ learning_focus: [], learning_notes: '' }) });
+ serve(workspace({ planner: { ...base, inputs: { ...base.inputs, goal: { ...base.inputs.goal!, skills: [{ name: 'Python' }, { name: 'SQL' }] } } } })); render(<RoadmapPlanner />);
  fireEvent.click(await screen.findByRole('button', { name: 'Choose learning focus' }));
  expect(screen.queryByRole('checkbox', { name: 'Certification' })).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('checkbox', { name: 'Tools' }));
- expect(within(screen.getByRole('group', { name: 'Learning focus' })).getByRole('button', { name: 'Choose learning focus' })).toHaveTextContent('Tools');
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
+ expect(screen.getByRole('checkbox', { name: 'Python' })).toBeChecked();
+ expect(screen.getByRole('checkbox', { name: 'SQL' })).toBeChecked();
+ fireEvent.click(screen.getByRole('checkbox', { name: 'SQL' }));
+ expect(screen.getByRole('checkbox', { name: 'Select all' })).not.toBeChecked();
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Python' }));
+ expect(within(screen.getByRole('group', { name: 'Learning focus' })).getByRole('button', { name: 'Choose learning focus' })).toHaveTextContent('Python');
  fireEvent.click(screen.getByRole('button', { name: 'Add study block on Tuesday' }));
  expect(screen.getByRole('combobox', { name: 'Block 4 day' })).toHaveValue('1');
- await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config.learning_topics).toEqual(['Tools']));
+ await waitFor(() => expect(calls('/planner/runway').at(-1)?.[2].config.learning_topics).toEqual(['Python']));
  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
  expect(screen.queryByRole('combobox', { name: 'Block 4 day' })).not.toBeInTheDocument();
 });

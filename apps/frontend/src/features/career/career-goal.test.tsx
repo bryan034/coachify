@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CareerGoal } from './career-goal';
 import {CareerSessionProvider} from './career-session';
@@ -6,6 +6,8 @@ const push=vi.fn();
 vi.mock('next/navigation',()=>({useRouter:()=>({push,replace:vi.fn()})}));
 const renderPage=(node:React.ReactNode)=>(render(<CareerSessionProvider>{node}</CareerSessionProvider>));
 import { importCareer } from '@/lib/api/career';
+import { careerOperation } from '@/lib/api/career-operation';
+vi.mock('@/lib/api/career-operation',()=>({careerOperation:vi.fn()}));
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-session'})}));
 vi.mock('@/lib/api/career',()=>({importCareer:vi.fn(),careerApi:vi.fn(async()=>({goals:[],reviews:[]}))}));
 afterEach(()=>{vi.restoreAllMocks();vi.mocked(importCareer).mockClear();});
@@ -81,38 +83,53 @@ describe('temporary Career Goal inputs',()=>{
  });
 });
 
-it('opens the single chat page after explicitly selecting a JD, without a save API call',()=>{
- renderPage(<CareerGoal/>);
- expect(screen.getByRole('button',{name:'Extract career goal'})).toBeDisabled();
- fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:'Backend engineer — build APIs with Python.'}});
- fireEvent.click(screen.getByRole('button',{name:'Extract career goal'}));
- expect(push).toHaveBeenCalledWith('/career-goal/chat?source=jd');
- expect(importCareer).not.toHaveBeenCalled();
+describe('extracting a career goal',()=>{
+ const type=()=>fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:'Backend engineer — build APIs with Python.'}});
+ it('extracts on this page and opens the chat only after success',async()=>{
+  push.mockClear();vi.mocked(careerOperation).mockResolvedValueOnce({} as never);
+  renderPage(<CareerGoal/>);
+  expect(screen.getByRole('button',{name:'Extract career goal'})).toBeDisabled();
+  type();fireEvent.click(screen.getByRole('button',{name:'Extract career goal'}));
+  await waitFor(()=>expect(push).toHaveBeenCalledWith('/career-goal/chat?source=jd'));
+  expect(importCareer).not.toHaveBeenCalled();
+ });
+ it('stays on this page on failure, keeps the input and offers a retry',async()=>{
+  push.mockClear();vi.mocked(careerOperation).mockRejectedValueOnce(new Error('Extraction failed.')).mockResolvedValueOnce({} as never);
+  renderPage(<CareerGoal/>);type();
+  fireEvent.click(screen.getByRole('button',{name:'Extract career goal'}));
+  await screen.findByText('Extraction failed.');
+  expect(push).not.toHaveBeenCalled();
+  expect(screen.getByRole('textbox',{name:'Job description'})).toHaveValue('Backend engineer — build APIs with Python.');
+  fireEvent.click(screen.getByRole('button',{name:'Retry extraction'}));
+  await waitFor(()=>expect(push).toHaveBeenCalledWith('/career-goal/chat?source=jd'));
+  const keys=vi.mocked(careerOperation).mock.calls.map(c=>(c[2].headers as Record<string,string>)['Idempotency-Key']);
+  expect(keys[0]).toBe(keys[1]);
+ });
 });
 
-it('automatically reads a selected document and allows explicit retry after failure',async()=>{
- vi.mocked(importCareer).mockRejectedValueOnce(new Error('Could not read this file.')).mockResolvedValueOnce({...preview,kind:'document',source_name:'role.txt'});
- renderPage(<CareerGoal/>);fireEvent.click(screen.getByRole('tab',{name:'Upload document'}));
- fireEvent.change(screen.getByLabelText('Job description document'),{target:{files:[new File(['SQL required'],'role.txt',{type:'text/plain'})]}});
- expect(await screen.findByRole('alert')).toHaveTextContent('Could not read this file.');
- fireEvent.click(screen.getByRole('button',{name:'Retry reading document'}));
- expect(await screen.findByRole('textbox',{name:'Review and edit the preview'})).toHaveValue(preview.text);
- expect(importCareer).toHaveBeenCalledTimes(2);
- expect(screen.queryByRole('button',{name:'Read document'})).not.toBeInTheDocument();
-});
-
-it('offers immediate paste and upload alternatives after a blocked URL without discarding drafts',async()=>{
- vi.mocked(importCareer).mockRejectedValueOnce(new Error('This website blocked automated access.'));
+it('tells the user to copy and paste when a website blocks extraction, keeping drafts',async()=>{
+ vi.mocked(importCareer).mockRejectedValueOnce(new Error('The information could not be extracted from this website. Copy and paste the job description instead.'));
  renderPage(<CareerGoal/>);
  fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:'My pasted draft'}});
  fireEvent.click(screen.getByRole('tab',{name:'Job URL'}));
  fireEvent.change(screen.getByLabelText('Job description URL'),{target:{value:preview.source_url}});
  fireEvent.click(screen.getByRole('button',{name:'Import job page'}));
- await screen.findByRole('alert');
- expect(screen.getByRole('button',{name:'Upload document'})).toBeVisible();
- fireEvent.click(screen.getByRole('button',{name:'Paste description'}));
+ const alert=await screen.findByRole('alert');
+ expect(alert).toHaveTextContent('The information could not be extracted from this website.');
+ expect(alert).toHaveTextContent('copy its description and paste it instead');
+ expect(alert).not.toHaveTextContent('Retry');
+ fireEvent.click(within(alert).getByRole('button',{name:'Paste description'}));
  expect(screen.getByRole('tab',{name:'Paste description'})).toHaveAttribute('aria-selected','true');
  expect(screen.getByRole('textbox',{name:'Job description'})).toHaveValue('My pasted draft');
+});
+
+it('keeps the specific message and other sources for non-blocking URL failures',async()=>{
+ vi.mocked(importCareer).mockRejectedValueOnce(new Error('This job page is no longer available or the link is incorrect.'));
+ renderPage(<CareerGoal/>);
  fireEvent.click(screen.getByRole('tab',{name:'Job URL'}));
- expect(screen.getByLabelText('Job description URL')).toHaveValue(preview.source_url);
+ fireEvent.change(screen.getByLabelText('Job description URL'),{target:{value:preview.source_url}});
+ fireEvent.click(screen.getByRole('button',{name:'Import job page'}));
+ const alert=await screen.findByRole('alert');
+ expect(alert).toHaveTextContent('no longer available');
+ expect(within(alert).getByRole('button',{name:'Upload document'})).toBeVisible();
 });
