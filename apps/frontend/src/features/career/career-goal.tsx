@@ -30,6 +30,7 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
  const [url,setUrl] = useState(()=>typeof window!=='undefined'?new URLSearchParams(window.location.search).get('job_url')||'':''); const [file,setFile] = useState<File>();
  const [error,setError] = useState(''); const [busy,setBusy] = useState(false);
  const [extracting,setExtracting]=useState(false),[extractError,setExtractError]=useState(''),[extractSteps,setExtractSteps]=useState<string[]>([]);
+ const [extractWait,setExtractWait]=useState('');
  const extractController=useRef<AbortController|null>(null),extractKey=useRef<{body:string;key:string}|null>(null);
  const controller = useRef<AbortController | null>(null); const request = useRef(0); const input = useRef<HTMLInputElement>(null);
  const active = methods.find(m=>m.id===method)!; const draft=drafts[method];
@@ -77,9 +78,9 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
   const body=JSON.stringify({text:draft.text,source_url:draft.preview?.source_url||null,source_kind:method});
   if(extractKey.current?.body!==body)extractKey.current={body,key:crypto.randomUUID()};
   extractController.current?.abort();const abort=new AbortController();extractController.current=abort;
-  setExtracting(true);setExtractError('');setExtractSteps([]);
+  setExtracting(true);setExtractError('');setExtractSteps([]);setExtractWait('');
   try{
-   await careerOperation<CareerWorkspace>('/workspace/jd',token,{signal:abort.signal,method:'POST',headers:{'Idempotency-Key':extractKey.current.key},body},job=>setExtractSteps(previous=>[...new Set([...previous,...(job.activities||[])])]));
+   await careerOperation<CareerWorkspace>('/workspace/jd',token,{signal:abort.signal,method:'POST',headers:{'Idempotency-Key':extractKey.current.key},body},job=>{setExtractWait(job.status==='waiting_quota'?(job.limit_scope==='user'?'Waiting for the AI service to resume. Extraction continues automatically.':'Waiting for the research service to resume. Extraction continues automatically.'):'');setExtractSteps(previous=>[...new Set([...previous,...(job.activities||[])])]);});
    if(abort.signal.aborted)return;
    chooseJD(null);router.push('/career-goal/chat?source=jd');
   }catch(cause){if(!abort.signal.aborted)setExtractError(errorText(cause,'Could not extract a career goal from this description.'));}
@@ -97,7 +98,7 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
      {(method==='url'||!!error)&&<button className="btn pri" disabled={busy||(method==='url'?!url:!file)}>{busy?'Preparing preview…':method==='url'?'Import job page':'Retry reading document'}</button>}
     </form>}
     {busy&&<p role="status" className="goal-status">Preparing a temporary preview. You can switch methods to cancel.</p>}
-    {extracting&&<div role="status" className="goal-status"><p>Extracting your career goal. This can take a moment.</p><AgentProgress steps={extractSteps}/></div>}
+    {extracting&&<div role="status" className="goal-status"><p>{extractWait||'Extracting your career goal. This can take a moment.'}</p><AgentProgress steps={extractSteps}/></div>}
     {extractError&&<div role="alert" className="goal-error"><p>{extractError}</p><p className="small">Your description is still here. Retry, edit it or choose another source.</p></div>}
     {error&&(method==='url'&&error.includes(BLOCKED_SITE)
      ?<div role="alert" className="goal-error"><p>The information could not be extracted from this website.</p><p className="small">Open the job listing, copy its description and paste it instead.</p><div className="row"><button type="button" className="btn pri sm" onClick={()=>changeMethod('text')}>Paste description</button></div></div>
