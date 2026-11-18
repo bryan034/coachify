@@ -566,3 +566,26 @@ def test_people_can_rate_a_skill_elo_could_not_rate():
         begin(store,OWNER,Generate(expected_version=3,mutation_id=uuid4(),allow_partial=True),'assessment')
         blocked=client.post('/api/v1/assessments/skill-ratings',headers=H,json={'expected_version':4,'name':'FastAPI','score':5})
         assert blocked.status_code==409 and blocked.json().get('code','operation_pending')
+
+
+def test_new_operation_reuses_complete_result_for_identical_inputs():
+    class CompleteResearch(Sources):
+        async def read(self, service, path, token, params=None):
+            result = await super().read(service, path, token, params)
+            if service == 'career':
+                result['research'] = {'_id':'synthetic', 'version':1, 'research_status':'no_findings', 'skills':[]}
+            return result
+
+    model = Interpreter()
+    with TestClient(create_app(MemoryStore(), CompleteResearch(), model)) as client:
+        def evaluate(version):
+            response = client.post('/api/v1/assessments', headers=H,
+                json={'expected_version':version, 'mutation_id':str(uuid4()), 'allow_partial':False})
+            assert response.status_code == 202
+            return finish(client)
+        first = evaluate(0)
+        assert first['evaluation']['completeness'] == 'complete'
+        counts = model.calls, model.skill_calls
+        second = evaluate(first['version'])
+        assert second['result']['id'] == first['result']['id']
+        assert (model.calls, model.skill_calls) == counts

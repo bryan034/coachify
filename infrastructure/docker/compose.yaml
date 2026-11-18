@@ -1,4 +1,10 @@
 name: elo-profile
+x-model-budget: &model-budget
+  MODEL_BUDGET_OWNER_CALLS_PER_DAY: ${MODEL_BUDGET_OWNER_CALLS_PER_DAY:-250}
+  MODEL_BUDGET_GLOBAL_CALLS_PER_DAY: ${MODEL_BUDGET_GLOBAL_CALLS_PER_DAY:-4000}
+  MODEL_BUDGET_OWNER_UNITS_PER_DAY: ${MODEL_BUDGET_OWNER_UNITS_PER_DAY:-8000000}
+  MODEL_BUDGET_GLOBAL_UNITS_PER_DAY: ${MODEL_BUDGET_GLOBAL_UNITS_PER_DAY:-160000000}
+
 services:
   gateway:
     image: nginx:1.28-alpine
@@ -41,6 +47,7 @@ services:
       context: ../..
       dockerfile: services/career-service/Dockerfile
     environment:
+      <<: *model-budget
       PROFILE_SERVICE_URL: http://profile-service:8000
       CV_SERVICE_URL: http://cv-service:8000
       MONGODB_URI: mongodb://elo_career:${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}@mongodb:27017/elo_career
@@ -84,6 +91,7 @@ services:
         condition: service_completed_successfully
     networks: [backend, database]
     read_only: true
+    volumes: [model_budget:/var/lib/elo-model-budget]
     tmpfs:
       - /tmp:size=128m,mode=0700,uid=10001,gid=10001
     mem_limit: 768m
@@ -95,6 +103,7 @@ services:
       context: ../..
       dockerfile: services/cv-service/Dockerfile
     environment:
+      <<: *model-budget
       APP_ENV: ${APP_ENV:-production}
       PROFILE_SERVICE_URL: http://profile-service:8000
       CAREER_SERVICE_URL: http://career-service:8000
@@ -124,7 +133,7 @@ services:
         condition: service_completed_successfully
     networks: [backend, database]
     read_only: true
-    volumes: [cv_uploads:/app/uploads]
+    volumes: [cv_uploads:/app/uploads, model_budget:/var/lib/elo-model-budget]
     tmpfs:
       - /tmp:size=64m,mode=0700,uid=10001,gid=10001
     mem_limit: 768m
@@ -132,7 +141,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   mongodb-career-init:
-    image: mongo:8.2
+    image: mongo:8.3
     environment:
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       CAREER_DB_PASSWORD: ${CAREER_DB_PASSWORD:?Set CAREER_DB_PASSWORD}
@@ -150,6 +159,7 @@ services:
       context: ../..
       dockerfile: services/assessment-service/Dockerfile
     environment:
+      <<: *model-budget
       APP_ENV: ${APP_ENV:-production}
       PROFILE_SERVICE_URL: http://profile-service:8000
       CV_SERVICE_URL: http://cv-service:8000
@@ -168,6 +178,7 @@ services:
         condition: service_completed_successfully
     networks: [backend, database]
     read_only: true
+    volumes: [model_budget:/var/lib/elo-model-budget]
     tmpfs: ["/tmp:size=32m,mode=0700,uid=10001,gid=10001"]
     mem_limit: 512m
     pids_limit: 64
@@ -178,6 +189,7 @@ services:
       context: ../..
       dockerfile: services/roadmap-service/Dockerfile
     environment:
+      <<: *model-budget
       APP_ENV: ${APP_ENV:-production}
       PROFILE_SERVICE_URL: http://profile-service:8000
       CV_SERVICE_URL: http://cv-service:8000
@@ -196,6 +208,7 @@ services:
         condition: service_completed_successfully
     networks: [backend, database]
     read_only: true
+    volumes: [model_budget:/var/lib/elo-model-budget]
     tmpfs: ["/tmp:size=32m,mode=0700,uid=10001,gid=10001"]
     mem_limit: 512m
     pids_limit: 64
@@ -238,7 +251,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   mongodb-jobs-init:
-    image: mongo:8.2
+    image: mongo:8.3
     environment:
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       JOBS_DB_PASSWORD: ${JOBS_DB_PASSWORD:?Set JOBS_DB_PASSWORD}
@@ -250,7 +263,7 @@ services:
     networks: [database]
     restart: "no"
   mongodb-planning-init:
-    image: mongo:8.2
+    image: mongo:8.3
     environment:
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
       ASSESSMENT_DB_PASSWORD: ${ASSESSMENT_DB_PASSWORD:?Set ASSESSMENT_DB_PASSWORD}
@@ -268,8 +281,8 @@ services:
     ports: ["127.0.0.1:${MAILPIT_PORT:-8025}:8025"]
     networks: [backend]
   mongodb:
-    # 8.0 and 8.3 images refuse to start on Docker Desktop kernels 6.19+; 8.2 starts.
-    image: mongo:8.2
+    # See docs/setup.md for volume upgrades and host kernel compatibility.
+    image: mongo:8.3
     environment:
       MONGO_INITDB_ROOT_USERNAME: elo_admin
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
@@ -278,7 +291,8 @@ services:
       - profile_data:/data/db
       - ../mongodb/init-profile.js:/docker-entrypoint-initdb.d/init-profile.js:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      # The initialization server only listens on loopback. Wait for the server reachable by the service containers.
+      test: ["CMD", "mongosh", "--host", "mongodb", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -291,3 +305,4 @@ networks:
 volumes:
   profile_data: {}
   cv_uploads: {}
+  model_budget: {}

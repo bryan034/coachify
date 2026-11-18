@@ -12,6 +12,8 @@ from uuid import uuid4
 from urllib.parse import urlsplit
 
 import httpx
+from elo_shared.model_budget import (ModelBudgetExceeded, ModelBudgetUnavailable, budget_owner,
+                                     current_budget_owner, reserve_provider_call)
 from elo_shared.dev_reset import dev_reset_enabled, reset_owner_data
 from elo_shared.model_sdk import async_model_response, resolve_model_api_key
 from elo_shared.model_telemetry import fingerprint, operation_scope
@@ -78,7 +80,8 @@ class Upstream:
 MAX_CONTEXT_BYTES=120000
 
 class Model:
-    def __init__(self, client, prefix, max_context_bytes=MAX_CONTEXT_BYTES):
+    def __init__(self, client, prefix, max_context_bytes=MAX_CONTEXT_BYTES, *, reserve_call=None):
+        self.reserve_call = reserve_call
         self.client, self.prefix, self.max_context_bytes = client, prefix, max_context_bytes
         self.base_url=os.getenv(prefix+'_LLM_BASE_URL','https://openrouter.ai/api/v1').rstrip('/')
         parsed=urlsplit(self.base_url)
@@ -115,6 +118,13 @@ class Model:
             try:
                 payload={'model':os.getenv(self.prefix+'_LLM_MODEL','openai/gpt-4o-mini'), 'messages':messages,
                          self.token_parameter:max_tokens,**options,'response_format':response_format}
+                if self.reserve_call is not None and not self.local:
+                    try:
+                        await run_in_threadpool(self.reserve_call, current_budget_owner(), payload)
+                    except ModelBudgetExceeded as exc:
+                        raise Problem(str(exc), 429, 'model_daily_allowance', exc.retry_after) from None
+                    except ModelBudgetUnavailable as exc:
+                        raise Problem(str(exc), 503, 'model_budget_unavailable') from None
                 async with async_model_response(self.client,self.base_url,
                     self.api_key,self.timeout,payload,local=self.local, telemetry={"service": self.prefix.lower(),
                     "stage": schema.__name__, "prompt_version": fingerprint(instructions),
@@ -245,7 +255,7 @@ def application(title,prefix,*,store=None,upstream=None,model=None,max_context_b
                     mongo=MongoClient(os.environ['MONGODB_URI'],tz_aware=True,serverSelectionTimeoutMS=5000)
                 app.state.store=Store(mongo[os.getenv('MONGODB_DATABASE','elo_'+prefix.lower())] if mongo is not None else None, 'skill_gap_analyses' if prefix=='ASSESSMENT' else 'roadmaps')
             app.state.upstream=upstream or Upstream(client)
-            app.state.model=model or Model(cloud_client,prefix,max_context_bytes)
+            app.state.model=model or Model(cloud_client,prefix,max_context_bytes,reserve_call=reserve_provider_call)
             if model is None and app.state.model.local: app.state.model.client=client
             app.state.tasks={}; app.state.slots=asyncio.Semaphore(3)
             yield
@@ -309,7 +319,11 @@ def begin(store,owner,body,kind,work_seconds=None,bind_kind=False):
         return row
     failed=row.get('last_operation') or {}
     remaining=max(0,math.ceil((failed.get('retry_at') or 0)-time.time()))
-    if remaining:raise Problem('The adviser is waiting for provider capacity. Retry after the saved delay.',429,'model_quota',remaining)
+    if remaining:
+        saved_error = failed.get('error') or {}
+        if saved_error.get('code') == 'model_daily_allowance':
+            raise Problem(saved_error['detail'], 429, 'model_daily_allowance', remaining)
+        raise Problem('The adviser is waiting for provider capacity. Retry after the saved delay.',429,'model_quota',remaining)
     retry=failed.get('id')==key and failed.get('status')=='failed'
     if retry and failed['hash']!=fingerprint: raise Problem('This retry key was used with different content.')
     if not retry and row['version']!=payload['expected_version']: raise Problem('Your workspace changed. Reload before continuing.')
@@ -333,7 +347,7 @@ async def run_operation(app,owner,token,worker):
             account=await app.state.upstream.account(token)
             if account['id']!=owner: raise Problem('The account changed.',401,'session')
             working=copy.deepcopy(row)
-            with operation_scope(pending['id']):
+            with operation_scope(pending['id']), budget_owner(owner):
                 updated=await asyncio.wait_for(worker(working,account),timeout=worker_seconds)
             # Revalidate the revocable bearer before publication, never store it.
             account=await app.state.upstream.account(token)
@@ -346,8 +360,9 @@ async def run_operation(app,owner,token,worker):
         except asyncio.CancelledError: raise
         except Exception as exc:
             error=exc if isinstance(exc,Problem) else Problem('The operation could not finish. Retry your saved request.',503,'operation_failed')
-            # Only the fixed problem code and message are logged, never request content.
-            logging.getLogger('uvicorn.error').warning('Operation %s failed: %s (%s)',pending.get('kind'),error.detail,error.code,**({'exc_info':exc} if not isinstance(exc,Problem) else {}))
+            # Error details and exception tracebacks may contain private plan or model input.
+            logging.getLogger('uvicorn.error').warning('Operation %s failed (%s)',
+                                                      pending.get('kind'), error.code)
             current=await run_in_threadpool(app.state.store.load,owner)
             if (current.get('pending') or {}).get('token')!=nonce: return
             failed_pending=current['pending']

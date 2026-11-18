@@ -510,3 +510,24 @@ def test_usage_correlates_career_retries_without_logging_operation_or_content(ca
     assert events[0]['prompt_version'] == 'career-ai-v23'
     assert events[0]['schema_version'].startswith('sha256:')
     assert 'synthetic-operation' not in caplog.text and 'private question' not in caplog.text and 'private provider body' not in caplog.text
+
+
+def test_provider_retry_reserves_separately_and_stops_before_second_request(tmp_path, monkeypatch):
+    from elo_shared.model_budget import reserve_provider_call
+    monkeypatch.setenv('MODEL_BUDGET_PATH', str(tmp_path / 'usage.sqlite3'))
+    monkeypatch.setenv('MODEL_BUDGET_OWNER_CALLS_PER_DAY', '1')
+    calls = []
+    def unavailable(request):
+        calls.append(request)
+        return httpx.Response(503)
+    async def no_wait(delay):
+        pass
+    async def exercise():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(unavailable)) as client:
+            adapter = AIAdapter(settings(retries=1), client, sleep=no_wait, reserve_call=reserve_provider_call)
+            request = AIInput(stage='chat', conversation=[{'role':'user','content':'A synthetic question.'}])
+            with pytest.raises(AIError) as caught:
+                await adapter.generate(request, Operation('owner','r1','chat'), current_revision=lambda:'r1')
+            assert caught.value.code == 'model_daily_allowance' and caught.value.retry_after > 0
+    asyncio.run(exercise())
+    assert len(calls) == 1

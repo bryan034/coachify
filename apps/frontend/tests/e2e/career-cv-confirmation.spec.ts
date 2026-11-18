@@ -1,5 +1,5 @@
-import {test,expect} from '@playwright/test';
-import {careerFixture} from './career-fixture';
+import {expect} from '@playwright/test';
+import {careerFixture,test} from './career-fixture';
 
 test('canonical goal confirmation is explicit, survives reload and must follow the current revision',async({page})=>{
  await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});

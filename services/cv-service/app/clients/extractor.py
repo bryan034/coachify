@@ -5,6 +5,8 @@ import time
 from urllib.parse import urlparse
 import httpx
 from httpx import Client
+from elo_shared.model_budget import ModelBudgetExceeded, ModelBudgetUnavailable, current_budget_owner
+from app.domain.model_usage import ModelAdmissionError
 from elo_shared.model_sdk import resolve_model_api_key, sync_model_response
 from elo_shared.competence_scale import PESSIMISM_TEXT, SCALE_TEXT
 from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
@@ -89,7 +91,15 @@ skill_name must be one of the item's skill_names (or its title for a skill item)
 
 
 class Extractor:
-    def __init__(self):
+    def reserve_dispatch(self, payload):
+        if self.reserve_call is not None and not self.local:
+            try:
+                self.reserve_call(current_budget_owner(), payload)
+            except (ModelBudgetExceeded, ModelBudgetUnavailable) as exc:
+                raise ModelAdmissionError(str(exc)) from None
+
+    def __init__(self, *, reserve_call=None):
+        self.reserve_call = reserve_call
         self.model = os.getenv('CV_LLM_MODEL', '')
         self.response_mode = os.getenv('CV_LLM_RESPONSE_MODE', 'json_schema')
         if self.response_mode not in ('json_schema', 'json_object'):
@@ -183,6 +193,7 @@ class Extractor:
             # Cloud requests need the deployment's proxy and CA trust. Keep
             # local model traffic direct, including when NO_PROXY is absent.
             with Client(timeout=request_timeout, follow_redirects=False, trust_env=not self.local) as client:
+                self.reserve_dispatch(payload)
                 with sync_model_response(client, self.base_url, self.api_key,
                                          request_timeout, payload, local=self.local, telemetry={"service": "cv", "stage": usage_stage,
                                              "prompt_version": PROMPT_VERSION, "schema_version": SCHEMA_VERSION}) as response:

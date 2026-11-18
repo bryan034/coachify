@@ -31,7 +31,7 @@ Service-to-service dependencies (read through APIs only, forwarding the owner's 
 - Assessment → Profile/CV/Career; Roadmap → Assessment/Profile/CV/Career; Dashboard → Roadmap/Assessment; Jobs → Profile only
 - Full table and rationale: [service boundaries](docs/architecture/service-boundaries.md). Private `/internal/v1` routes are never exposed by the gateway.
 
-Other moving parts: `mongodb` (local container, Mongo 8.2) with one-shot `mongodb-*-init` containers running `infrastructure/mongodb/init-*.js`; `mailpit` (development profile) for captured email. Production DB proposal is MongoDB Atlas, external to containers.
+Other moving parts: `mongodb` (local container, Mongo 8.3) with one-shot `mongodb-*-init` containers running `infrastructure/mongodb/init-*.js`; `mailpit` (development profile) for captured email. Production DB proposal is MongoDB Atlas, external to containers.
 
 AI: all model calls use the OpenAI Python SDK, routed to OpenRouter by default (shared `OPENROUTER_API_KEY`/`OPENROUTER_MODEL`, per-service overrides `CAREER_/CV_/ASSESSMENT_/ROADMAP_LLM_*`). Career public research uses Brave (test) or DeepSeek Search (production). Tests use synthetic providers; live-model quality is unverified.
 
@@ -65,7 +65,7 @@ work/                        Git-ignored scratch/reports — not source
 
 Key documents (read only what the task needs): [README](README.md) · [architecture](docs/architecture/README.md) · [service boundaries](docs/architecture/service-boundaries.md) · [API route map](docs/api/README.md) · [setup](docs/setup.md) · [testing](docs/testing.md) · [frontend](apps/frontend/README.md) · [design](docs/design/README.md) · [Docker](infrastructure/docker/README.md) · [gateway](infrastructure/gateway/README.md) · per-service `README.md`/`SPEC.md`.
 
-Stale items to ignore: `*.egg-info` dirs (including `coachify_*` names from before the rename), `elo-mongo-8.0-backup.tgz`, `.claude/worktrees`. Do not treat them as current.
+Stale items to ignore: `*.egg-info` dirs (including `coachify_*` names from before the rename) and `.claude/worktrees`. Do not treat them as current.
 
 ## Architecture and safety rules
 
@@ -122,7 +122,7 @@ python -m pytest
 ## Gotchas
 
 - Python 3.12 and newer print different HTTP status phrases for 413/422; Assessment/Roadmap contract tests fix them explicitly. Do not regenerate OpenAPI snapshots on another interpreter without checking.
-- CI Mongo jobs pin `ubuntu-22.04` and `mongo:8.2` because `mongo:8.0` refuses to start on Linux kernels 6.19+ (see `docs/testing.md`).
+- CI Mongo jobs use `ubuntu-22.04` and `mongo:8.3` for kernel compatibility (see `docs/testing.md`).
 - Career needs the `o200k_harmony` tiktoken encoding cached before network-isolated tests (`TIKTOKEN_CACHE_DIR`).
 - Uploads: gateway limit is 11 MB on CV/JD document routes while `CV_MAX_FILE_BYTES` is 10 MiB; change both together.
 - Existing installs keep old private env values and volumes; changing `.env.example` does not change a private `.env`, and renamed defaults do not migrate volumes (see `docs/setup.md#renamed-installations`).

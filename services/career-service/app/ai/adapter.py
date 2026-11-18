@@ -31,6 +31,7 @@ from app.ai.research_planning import ResearchPlan,ResearchAssessment,PLAN_PROMPT
 from app.ai.config import AISettings
 from app.ai.sdk import model_client, completion_response
 from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
+from elo_shared.model_budget import ModelBudgetExceeded, ModelBudgetUnavailable
 from elo_shared.model_telemetry import operation_scope
 from app.ai.discovery_config import EXTRACTION_OUTPUT_TOKENS
 from app.ai.usage import input_tokens
@@ -425,7 +426,8 @@ class AIAdapter:
     }
     _context_truncation_marker = ' …[truncated]'
 
-    def __init__(self, settings: AISettings, client: httpx.AsyncClient, *, clock=time.monotonic, sleep=asyncio.sleep):
+    def __init__(self, settings: AISettings, client: httpx.AsyncClient, *, clock=time.monotonic, sleep=asyncio.sleep, reserve_call=None):
+        self.reserve_call = reserve_call
         self.settings, self.client = settings, client
         self.sdk = model_client(settings, client) if client is not None else None
         self.clock, self.sleep = clock, sleep
@@ -887,6 +889,13 @@ class AIAdapter:
                 'text':{'format':{'type':'json_schema','name':schema['name'],'schema':schema['schema']}},
                 'max_output_tokens':payload[self.settings.token_parameter],'reasoning':{'effort':'none'}}
         for provider_attempt in range(self.settings.retries + 1):
+            if self.reserve_call is not None and self.settings.provider != 'local':
+                try:
+                    await asyncio.to_thread(self.reserve_call, owner, payload)
+                except ModelBudgetExceeded as exc:
+                    raise AIError('model_daily_allowance', True, retry_after=exc.retry_after) from None
+                except ModelBudgetUnavailable:
+                    raise AIError('model_budget_unavailable', True) from None
             async with completion_response(self.sdk, payload, local=self.settings.provider == 'local',responses=responses, telemetry={"service": "career", "stage": stage, "prompt_version": PROMPT_VERSION,
                     "attempt_reason": "initial" if attempt == 1 and provider_attempt == 0 else "retry"}) as response:
                 status = response.status_code

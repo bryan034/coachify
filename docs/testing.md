@@ -91,14 +91,9 @@ traces are uploaded for seven days; use synthetic data because artifacts may con
 page content. Linting is not configured yet.
 
 MongoDB-backed jobs (`profile-integration`, `analysis-integration` and
-`local-ui-integration`) use `mongo:8.2` and explicitly use `ubuntu-22.04`, whose
-hosted image uses the Linux 6.8 Azure kernel. The pin dates from `mongo:8.0`, which
-refuses to start on kernels 6.19 and newer, before test steps run. `mongo:8.2` starts
-on those kernels locally, but newer runners are unverified. Other jobs retain
-`ubuntu-latest`. This is a temporary compatibility pin: review it before Ubuntu 22.04
-runner retirement, and move to a newer runner only after verifying its kernel with
-the MongoDB image. See the
-[runner image inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md).
+`local-ui-integration`) use `mongo:8.3` on `ubuntu-22.04` for kernel compatibility.
+Verify the image starts on the replacement runner before changing that pin.
+See the [runner image inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md).
 
 ## GitHub enforcement (repository administrator)
 
@@ -471,7 +466,7 @@ The integrated browser journey should save a canonical goal using synthetic fixt
 
 Use disposable databases and synthetic documents/accounts. Never mount a personal environment file into tests. One upstream public-template test has a narrow user-approved exception: run that exact test against a clean tracked public template in an isolated test copy. It does not authorize inspecting modified local examples or other environment files.
 
-On Docker Desktop kernels 6.19 and newer, the `mongo:8.0` and `mongo:8.3` images refuse startup because of their kernel compatibility guard. Use `mongo:8.2`, the version the stack and CI run, for disposable test databases. Report local functional checks, intended-version CI, browser fixtures and real-service journeys distinctly. Do not bypass the guard or change host settings as an incidental test repair.
+Use the stack’s `mongo:8.3` image on a supported kernel for disposable test databases. Some Docker Desktop hosts with newer kernels trigger MongoDB’s startup guard. Report the MongoDB and kernel versions used for database-backed checks.
 
 The previous C-series captioned recording uses synthetic models and the pre-integration build. It is retained as a workflow reference, not proof of the merged Career confirmation flow or live-model accuracy. Re-record or exercise the integrated journey after the final code changes. Cost, latency, interpretation quality and comparative usability require separately authorized live-model/user evaluation.
 

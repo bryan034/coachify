@@ -28,7 +28,7 @@ def run(args):
     def save_report():
         report_path.parent.mkdir(parents=True,exist_ok=True)
         report_path.write_text(json.dumps(report,indent=2)+'\n')
-    env={name:os.environ[name] for name in ('PATH','TMPDIR') if name in os.environ}
+    env={name:os.environ[name] for name in ('PATH','TMPDIR','PLAYWRIGHT_BROWSERS_PATH') if name in os.environ}
     env.update({
         'APP_ENV':'development','AUTH_MODE':'local_test','COMPOSE_PROFILES':'development',
         'SMTP_HOST':'mailpit','SMTP_PORT':'1025','SMTP_SECURITY':'plain','SMTP_FROM':'no-reply@elo.test',
@@ -43,7 +43,7 @@ def run(args):
         'MAILPIT_BASE_URL':f'http://localhost:{args.mail_port}',
         'CAREER_FLOW_E2E':'1','ELO_TEST_COMPOSE_PROJECT':project,
     })
-    for name in ('MONGO_ROOT_PASSWORD','PROFILE_DB_PASSWORD','CAREER_DB_PASSWORD','CV_DB_PASSWORD','ASSESSMENT_DB_PASSWORD','ROADMAP_DB_PASSWORD'):
+    for name in ('MONGO_ROOT_PASSWORD','PROFILE_DB_PASSWORD','CAREER_DB_PASSWORD','CV_DB_PASSWORD','ASSESSMENT_DB_PASSWORD','ROADMAP_DB_PASSWORD','JOBS_DB_PASSWORD'):
         env[name]='synthetic-career-flow-'+name.lower()
     compose=['docker','compose','--env-file','/dev/null','-p',project,
         '-f',str(ROOT/'infrastructure/docker/compose.yaml'),

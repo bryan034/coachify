@@ -155,7 +155,9 @@ def test_cloud_calls_still_reject_an_untrusted_proxy_certificate(monkeypatch, pr
 
 @pytest.mark.parametrize('prefix', ['ASSESSMENT', 'ROADMAP'])
 @pytest.mark.parametrize('local', [False, True])
-def test_planning_service_uses_proxy_for_cloud_and_direct_client_for_local(monkeypatch, provider_certificate, prefix, local):
+def test_planning_service_uses_proxy_for_cloud_and_direct_client_for_local(monkeypatch, tmp_path, provider_certificate, prefix, local):
+    from elo_shared.model_budget import budget_owner
+
     class Answer(BaseModel):
         reply: str
     certificate, key = provider_certificate
@@ -170,9 +172,15 @@ def test_planning_service_uses_proxy_for_cloud_and_direct_client_for_local(monke
         monkeypatch.setenv(prefix + '_LLM_BASE_URL', f'http://127.0.0.1:{port}/v1' if local else 'https://provider.example.invalid/v1')
         monkeypatch.setenv(prefix + '_LLM_MODEL', 'synthetic-model')
         monkeypatch.setenv(prefix + '_LLM_API_KEY', 'synthetic-provider-key')
+        monkeypatch.setenv('MODEL_BUDGET_PATH', str(tmp_path / 'ledger.sqlite3'))
         app = application('Synthetic planning service', prefix, store=MemoryStore(), upstream=object())
+
+        async def generate():
+            with budget_owner('synthetic-account'):
+                return await app.state.model.generate(Answer, 'Answer in JSON.', {})
+
         with TestClient(app) as client:
-            result = client.portal.call(app.state.model.generate, Answer, 'Answer in JSON.', {})
+            result = client.portal.call(generate)
         assert result.reply == 'Synthetic answer'
     assert [method for method, _, _ in requests] == (['POST'] if local else ['CONNECT', 'POST'])
     assert ('Authorization' in requests[-1][2]) is not local

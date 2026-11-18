@@ -3,6 +3,21 @@ import smtplib
 import ssl
 from app.core.auth import auth_settings
 from app.core.mail import mail_settings
+from app.api.v1.accounts import password_source
+from starlette.requests import Request
+
+
+def test_password_source_accepts_only_the_gateway_peer(monkeypatch):
+    gateway = '192.0.2.10'
+    client = '192.0.2.11'
+    monkeypatch.setattr('app.api.v1.accounts.getaddrinfo',
+                        lambda *_: [(None, None, None, None, (gateway, 0))])
+    def source(peer, forwarded):
+        return password_source(Request({'type': 'http', 'client': (peer, 5000),
+                                        'headers': [(b'x-real-ip', forwarded.encode())]}))
+    assert source(gateway, client) == client
+    assert source(client, '192.0.2.19') == client
+    assert source(gateway, 'unrecognized') == gateway
 
 
 def production(monkeypatch):

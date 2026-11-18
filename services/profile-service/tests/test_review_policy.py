@@ -17,7 +17,7 @@ class Accounts:
         return {'name': 'Synthetic', 'email': 'person@example.test', 'email_verified': True,
                 'provider': 'email', 'expires_at': datetime.now(timezone.utc), **self.records[token]}
 
-    def finish(self, data, settings, verify_google):
+    def finish(self, data, settings, verify_google, source):
         return self.session('free-token', settings)
 
     def verify_email(self, data, settings):

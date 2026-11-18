@@ -101,11 +101,6 @@ class IngestionWorker:
         try: return self.repository.replace(candidate, document)
         except Conflict: return None
 
-    def _erase_state_if_deleted(self, claimed):
-        # The last save of a stale worker can land after the CV's deletion finished.
-        if not self.repository.get(claimed['user_id'], claimed['_id']):
-            self.repository.extraction_states.delete(claimed['_id'])
-
     def process(self, claimed):
         token = claimed['operation']['lease_token']
         stage = 'source_read'
@@ -215,7 +210,6 @@ class IngestionWorker:
             observe('publication')
             error = None
         except StaleExtraction:
-            self._erase_state_if_deleted(claimed)
             return False
         except ValidationError as exc:
             _log_invalid_extraction(exc, claimed, bool(harness and harness.repair_attempted))
@@ -252,7 +246,6 @@ class IngestionWorker:
         # Re-read to apply retained overlays; only the currently live lease can publish.
         current = self.repository.get(claimed['user_id'], claimed['_id'])
         if not current or current['operation']['lease_token'] != token or current['operation']['status'] != 'processing' or current['operation']['lease_until'] <= now():
-            self._erase_state_if_deleted(claimed)
             return False
         if error and error.get('failure_category') in _RESTART_AFTER:
             self.repository.extraction_states.discard(claimed['_id'])

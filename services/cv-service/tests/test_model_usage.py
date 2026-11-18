@@ -345,3 +345,18 @@ def test_routing_blocks_same_owner_extraction_and_answers_but_other_owner_runs(h
 def test_model_configuration_rejects_unbounded_or_unfair_limits(monkeypatch, name, value):
     monkeypatch.setenv(name, value)
     with pytest.raises(RuntimeError): Settings.environment()
+
+
+def test_cloud_dispatch_uses_current_owner_and_shared_allowance(repository, tmp_path, monkeypatch):
+    from app.clients.extractor import Extractor
+    from elo_shared.model_budget import reserve_provider_call
+    monkeypatch.setenv('CV_LLM_BASE_URL', 'https://example.test/v1')
+    monkeypatch.setenv('MODEL_BUDGET_PATH', str(tmp_path / 'deployment.sqlite3'))
+    monkeypatch.setenv('MODEL_BUDGET_OWNER_CALLS_PER_DAY', '1')
+    guard = usage(repository, tmp_path)
+    extractor = Extractor(reserve_call=reserve_provider_call)
+    payload = {'model':'synthetic', 'messages':[], 'max_tokens':10}
+    guard.run('owner', extractor.reserve_dispatch, payload)
+    with pytest.raises(ModelAdmissionError, match='daily model allowance'):
+        guard.run('owner', extractor.reserve_dispatch, payload)
+    guard.run('other-owner', extractor.reserve_dispatch, payload)

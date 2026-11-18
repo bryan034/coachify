@@ -201,6 +201,7 @@ class cv_model_usage {
 class cv_extraction_states {
     <<private>>
     +String _id [CV id, one per CV]
+    +Boolean erased? [erased records contain only _id and erased]
     +String user_id
     +String thread_id [operation and workflow version]
     +String checkpoint_id
@@ -210,7 +211,7 @@ class cv_extraction_states {
     +Boolean discarded?
     +Number updated_at
 }
-cvs "1" --> "0..1" cv_extraction_states : latest graph state, erased with the CV
+cvs "1" --> "0..1" cv_extraction_states : latest graph state or content-free erasure marker
 
 class cv_conversations {
     <<operational>>

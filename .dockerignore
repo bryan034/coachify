@@ -8,5 +8,14 @@ node_modules
 **/.env.*
 **/playwright-report
 **/test-results
+**/mongo-data
+**/*mongo*backup*.tgz
+**/*mongo*backup*.tar*
+**/*mongo*backup*.zip
+**/*mongo*backup*.archive*
+**/*mongo*dump*.archive*
+**/*.bson
+**/*.wt
+**/WiredTiger*
 outputs
 work

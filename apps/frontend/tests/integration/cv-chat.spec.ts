@@ -95,7 +95,21 @@ test('ambiguous and stale proposals cannot edit the wrong source; duplicate send
   const edited = await page.request.patch(`/api/v1/cv/${cvId}/items/${project.id}`, {headers: account.headers,
     data: {mutation_id: crypto.randomUUID(), expected_version: before.version, action: 'update', title: 'Newer project title'}});
   expect(edited.ok()).toBeTruthy(); const newer = await cv();
-  await correction.getByRole('button', {name: 'Save change', exact: true}).click();
+  const saveChange = correction.getByRole('button', {name: 'Save change', exact: true});
+  const decision = page.waitForResponse(response => response.request().method() === 'POST' &&
+    new URL(response.url()).pathname.startsWith(`/api/v1/cv/conversations/${conversation.id}/actions/`));
+  await saveChange.click();
+  const response = await decision;
+  if (response.status() === 409) {
+    // A pending review refresh may change the conversation revision before the source check runs.
+    const detail = 'The conversation changed. Refresh and review this action again.';
+    expect(await response.json()).toEqual({detail});
+    await expect(page.getByRole('alert').filter({hasText: detail})).toBeVisible();
+    expect(await cv()).toEqual(newer);
+    await saveChange.click();
+  } else {
+    expect(response.ok()).toBeTruthy();
+  }
   await expect(correction).toContainText('Source changed');
   expect(await cv()).toEqual(newer);
 });

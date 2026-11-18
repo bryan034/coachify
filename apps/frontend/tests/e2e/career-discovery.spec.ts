@@ -1,5 +1,5 @@
-import {careerFixture} from './career-fixture';
-import {test,expect,type Route} from '@playwright/test';
+import {careerFixture,test} from './career-fixture';
+import {expect,type Route} from '@playwright/test';
 test('career discovery restores saved history, starts a new chat explicitly and automatically updates the goal without saving',async({page},testInfo)=>{
  await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
  await page.route('**/api/v1/profile**',route=>{const path=new URL(route.request().url()).pathname;

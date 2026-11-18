@@ -82,6 +82,8 @@ it.each([
  ['provider_schema','rejected the JSON schema'],
  ['provider_parameter','rejected a request setting'],
  ['provider_configuration','connection settings were rejected'],
+ ['model_budget_unavailable','could not reserve model usage'],
+ ['model_daily_allowance','resets at midnight UTC'],
  ['output_limit','exceeded the allowed size'],
  ['incomplete_output','ended before the answer was complete'],
  ['timeout','took too long to respond'],

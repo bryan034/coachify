@@ -1,5 +1,7 @@
 from typing import Annotated, Literal
 from datetime import datetime
+from ipaddress import ip_address
+from socket import gaierror, getaddrinfo
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -104,6 +106,21 @@ def repo(request: Request):
         raise HTTPException(503, 'Account storage unavailable. Please retry.')
     return request.app.state.accounts
 
+
+def password_source(request: Request):
+    peer = request.client.host if request.client else 'unknown'
+    forwarded = request.headers.get('x-real-ip')
+    if forwarded:
+        # The Compose gateway replaces this header. Direct clients and other
+        # backend services cannot choose the address used for password limits.
+        try:
+            source = str(ip_address(forwarded))
+            if peer in {address[4][0] for address in getaddrinfo('gateway', None)}:
+                return source
+        except (ValueError, gaierror):
+            pass
+    return peer
+
 @router.get('/local-accounts', response_model=list[Choice])
 def local_accounts(request: Request, accounts=Depends(repo)):
     if request.app.state.auth_settings.mode != 'local_test':
@@ -132,7 +149,7 @@ def cancel(data: Attempt, accounts=Depends(repo)):
     404: {'description': 'No account found. Choose Create new account.'},
 })
 def complete(data: Complete, request: Request, accounts=Depends(repo)):
-    return accounts.finish(data, request.app.state.auth_settings, verify_google)
+    return accounts.finish(data, request.app.state.auth_settings, verify_google, password_source(request))
 
 @router.post('/verify-email', response_model=AccountView)
 def verify(data: Verify, request: Request, accounts=Depends(repo)):

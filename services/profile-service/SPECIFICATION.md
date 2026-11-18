@@ -211,8 +211,14 @@ truth. The [README](README.md) lists available endpoints, and the
   email returns 404 with a clear missing-account message and a frontend link to
   `/register`; an incorrect password for an existing account returns 401.
   Unknown addresses still perform the dummy password check before the response.
-  Credential requests are bounded to ten per identity in a 15-minute window, with a
-  gateway IP rate limit. Password recovery is described above.
+  Within a 15-minute window, ten failed password checks block that source for that
+  account. One hundred failed checks block the source across accounts. Ten failures
+  across sources require the mailbox owner to confirm a valid password login with
+  an emailed code. Existing sessions keep their expiry. The gateway throttles
+  public attempt creation, completion, verification and recovery by source before
+  forwarding requests. Profile accepts the gateway's client address only from its
+  Compose network peer. An outer proxy must preserve distinct client addresses
+  through a trusted ingress configuration for source-based limits to distinguish them.
 - Google verifies audience, expiry, official issuer and the per-attempt nonce. New
   Google accounts also require a verified email claim and elo OTP verification.
   Stable `google:<subject>` identity retains existing Google-owned profiles. Earlier

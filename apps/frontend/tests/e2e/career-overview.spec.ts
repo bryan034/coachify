@@ -1,7 +1,7 @@
-import {careerFixture} from './career-fixture';
+import {careerFixture,test} from './career-fixture';
 import {mockEmptyConversation} from '../fixtures/cv-ui';
 import {policy,emptyDeclarations} from '../fixtures/cv';
-import {test,expect} from '@playwright/test';
+import {expect} from '@playwright/test';
 
 test('saved briefing accordions, guided refinement, replacement and CV handoff on desktop and mobile',async({page},testInfo)=>{
  await mockEmptyConversation(page);

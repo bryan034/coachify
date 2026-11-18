@@ -54,7 +54,7 @@ export function AgentProgress({steps}:{steps:string[]}){
  return labels.length?<div className="agent-progress" role="status" aria-label="Career goal progress"><p className="small">Career goal progress</p><ul>{labels.map(label=><li key={label}>{label}</li>)}</ul></div>:null;
 }
 
-export function isTokenLimit(code:unknown){return code==='rate_limited'||code==='input_limit';}
+export function isTokenLimit(code:unknown){return code==='rate_limited'||code==='input_limit'||code==='model_daily_allowance';}
 export function errorCode(cause:unknown){return cause&&typeof cause==='object'&&'code' in cause&&typeof cause.code==='string'?cause.code:'';}
 
 /** Explain known failures without repeating raw provider diagnostics. */
@@ -73,6 +73,7 @@ export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry'
   provider_auth:'The AI service could not authenticate. Its connection needs to be fixed before retrying.',
   provider_access:'The AI service is not currently accessible. Its access needs to be restored before retrying.',
   model_unavailable:'The configured AI model is unavailable. Retry when the service is available.',
+  model_budget_unavailable:'The service could not reserve model usage. Retry when the service is available.',
   provider_schema:'The model service rejected the JSON schema. Check its supported response format before retrying.',
   provider_parameter:'The model service rejected a request setting. Check its supported parameters before retrying.',
   provider_configuration:'The model connection settings were rejected. Check the endpoint, model and response format before retrying.',
@@ -82,7 +83,7 @@ export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry'
   {scope&&<p>Please provide a job description to set your career goal. This assistant cannot process unrelated documents or carry out unrelated tasks.</p>}
   {unavailable&&<p>AI is disabled. Configure the Career service to enable the assistant, then retry.</p>}
   {conflict&&<p>{code==='operation_in_progress'?'Another request is still being processed. Wait for it to finish before submitting different input.':'This request changed after it started. Return to Career Goal and submit the updated description again.'}</p>}
-  {tokenLimit&&<p>{seconds!==undefined?message.replace(/ Retry after [\d.]+ seconds\./,''):message}</p>}
+  {tokenLimit&&<p>{code==='model_daily_allowance'?'The daily model allowance has been reached. It resets at midnight UTC.':seconds!==undefined?message.replace(/ Retry after [\d.]+ seconds\./,''):message}</p>}
   {tokenLimit&&seconds!==undefined&&<p role="status">{seconds>0?`Try again in ${seconds} seconds.`:'You can retry now.'}</p>}
   {!tokenLimit&&!conflict&&!unavailable&&!scope&&<p>{explanations[code]||'The request could not be completed because of a connection or service problem. Retry your request.'}</p>}
   <button className="btn ghost sm" disabled={disabled} onClick={onRetry}>{label}</button>
