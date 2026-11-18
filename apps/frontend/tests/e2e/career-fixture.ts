@@ -1,12 +1,24 @@
 import {test as base} from '@playwright/test';
+import {blankPlanner, workspace} from '../fixtures/roadmap-workspace';
+import {policy} from '../fixtures/cv';
 
-// The Career pages also read assessment and roadmap state for the shared change banner.
+// The shared change banner and adjacent pages read these services even in a Career-only scenario.
 export const test = base.extend({
   page: async ({page}, use) => {
-    await page.route('**/api/v1/assessments/current', route => route.fulfill({
-      json: {version: 0, stale: false, ready: false, model_available: true, result: null, operation: null, issues: []},
+    const evaluation = {freshness: 'missing', processing: 'idle', completeness: null, evaluated_at: null, reasons: []};
+    await page.route(url => url.pathname === '/api/v1/assessments/context', route => route.fulfill({
+      json: {ready: false, issues: [], goal: null, cv: null, input_hash: null, inputs: null,
+        research_coverage: 'unavailable', evidence: {}, cv_reviewed: false, research_pending: false, model_available: false, evaluation},
     }));
-    await page.route('**/api/v1/roadmaps/dashboard-source', route => route.fulfill({
+    await page.route(url => url.pathname === '/api/v1/cv', route => route.fulfill({json: {cvs: [], selection: {cv_id: null, version: 0}}}));
+    await page.route(url => url.pathname === '/api/v1/cv/policy', route => route.fulfill({json: policy}));
+    await page.route(url => url.pathname === '/api/v1/roadmaps/workspace', route => route.fulfill({
+      json: workspace({planner: blankPlanner(), context: {...workspace().context, ready: false, goal: null, cv: null}}),
+    }));
+    await page.route(url => url.pathname === '/api/v1/assessments/current', route => route.fulfill({
+      json: {version: 0, stale: false, ready: false, result: null, operation: null, issues: [], evaluation},
+    }));
+    await page.route(url => url.pathname === '/api/v1/roadmaps/dashboard-source', route => route.fulfill({
       json: {version: 0, active: null, active_review: null, task_readiness: {}},
     }));
     await use(page);
