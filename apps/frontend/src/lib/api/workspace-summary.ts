@@ -5,6 +5,7 @@ import { deviceTimeZone } from '@/features/profile/planning-preferences';
 import type { Workspace } from '@/features/roadmap/types';
 import { groupSkills } from '@/lib/skill-groups';
 import { careerApi, type CurrentGoal } from './career';
+import { skillRatings, ratingKey } from './assessment';
 import { cvApi } from './cv';
 import { listApplications } from './jobs';
 import { roadmapApi } from './roadmap';
@@ -37,15 +38,21 @@ export const loadGoal = (token: string, signal: AbortSignal) => careerApi<Curren
  * The Skills Profile's own numbers. Every page that mentions the user's skills reads these,
  * so Home, Roadmap and Search Jobs never count differently from Skills Profile.
  */
-export type SkillsSummary = { reviewNeeded?: boolean; total: number; experiences: number; groups: { name: string; count: number; skills: string[] }[] };
+export type ProfileLevel = { name: string; canonicalId?: string | null; level: number };
+export type SkillsSummary = { reviewNeeded?: boolean; total: number; experiences: number; levels?: ProfileLevel[]; groups: { name: string; count: number; skills: string[] }[] };
 export async function loadSkills(token: string, signal: AbortSignal): Promise<SkillsSummary> {
- const [profile, declarations, list] = await Promise.all([cvApi.skillsProfile(token, signal), cvApi.declarations(token, signal), cvApi.list(token, signal)]);
+ const [profile, declarations, list, ratings] = await Promise.all([cvApi.skillsProfile(token, signal), cvApi.declarations(token, signal), cvApi.list(token, signal),
+  // The person's own ratings are optional here: without them only the CV and review levels are shown.
+  skillRatings(token, signal).catch(() => null)]);
  const cv = list.selection.cv_id ? await cvApi.get(list.selection.cv_id, token, signal) : null;
  const skills = profileSkillList(cv, profile, declarations);
  const groups = groupSkills(skills, skill => skill.name, profileSkillGroups(cv, profile, declarations));
  // Same rule as the Skills Profile page: CV items that are not skills, plus profile entries.
  const experiences = (cv ? cv.items.filter(item => !item.removed && item.kind !== 'skill').length : 0) + profile.entries.length;
- return { reviewNeeded: Boolean(cv && cv.profile_reviewed_effective_version !== cv.effective_version), total: skills.length, experiences, groups: groups.map(group => ({ name: group.name, count: group.items.length, skills: group.items.map(skill => skill.name) })) };
+ const own = new Map((ratings?.ratings ?? []).map(rating => [rating.key, rating.score]));
+ // The level the Skills Profile shows for a skill: the CV or review level, else the person's own rating.
+ const levels = skills.flatMap((skill): ProfileLevel[] => { const level = skill.ownLevel?.level ?? own.get(ratingKey(skill)); return level == null ? [] : [{ name: skill.name, canonicalId: skill.canonicalId, level }]; });
+ return { levels, reviewNeeded: Boolean(cv && cv.profile_reviewed_effective_version !== cv.effective_version), total: skills.length, experiences, groups: groups.map(group => ({ name: group.name, count: group.items.length, skills: group.items.map(skill => skill.name) })) };
 }
 
 export async function loadRoadmap(token: string, signal: AbortSignal) {

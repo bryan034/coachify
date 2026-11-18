@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
+from elo_shared.dev_reset import dev_reset_enabled, reset_owner_data
 from app.core.auth import bearer, current_account
 from elo_shared.model_budget import reserve_provider_call
 from app.ai.adapter import AIAdapter
@@ -250,6 +251,14 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
 
     @app.get('/health', include_in_schema=False)
     async def health(): return {'status':'ok'}
+
+    if dev_reset_enabled():
+        # Development only and absent from the published contract: delete the caller's goal, chats and research.
+        @app.post('/api/v1/career/dev/reset', include_in_schema=False)
+        async def dev_reset(request: Request, account=Depends(authenticated)):
+            store = request.app.state.goal_store
+            if store is None: raise HTTPException(503, 'Career storage is not configured.')
+            return {'deleted': await run_in_threadpool(reset_owner_data, store.db, account['id'])}
 
     errors = {status: {'model': ImportErrorView} for status in (400,401,403,413,415,422,429,503)}
 

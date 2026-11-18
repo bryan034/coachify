@@ -23,7 +23,7 @@ def batch(refs, **levels):
 def test_model_levels_cannot_inflate_the_evidence_or_lower_the_role_target():
     [outcome] = validate_batch(batch(['cv:item1:claim:0'], demonstrated_level=10, required_level=2), [REQUIREMENT], EVIDENCE)
     assert (outcome['competence_score'], outcome['demonstrated_score'], outcome['required_score']) == (6, 3, 5)
-    assert outcome['scoring_rubric_version'] == 'evidence-role-v4'
+    assert outcome['scoring_rubric_version'] == 'evidence-role-v5'
     assert outcome['relevance'] == 'high' and outcome['score_status'] == 'estimated'
 
 
@@ -34,7 +34,7 @@ def test_a_demonstrated_level_without_personal_evidence_stays_unrated():
 
 def test_only_a_required_level_leaves_the_score_unknown():
     [outcome] = validate_batch(batch([], required_level=8), [REQUIREMENT], EVIDENCE)
-    assert outcome['competence_score'] is None and outcome['scoring_rubric_version'] == 'evidence-role-v4'
+    assert outcome['competence_score'] is None and outcome['scoring_rubric_version'] == 'evidence-role-v5'
 
 
 def test_levels_are_ignored_outside_job_skills():
@@ -55,7 +55,7 @@ def test_goal_skills_link_to_profile_skills_and_borrow_their_estimate_only_when_
                 {'ref': 'interview:1', 'kind': 'interview_preparation'}]
     testing, python, docker, interview = link_profile(outcomes, profile)
     assert [s['name'] for s in testing['profile_skills']] == ['pytest'] and testing['competence_score'] == 5
-    assert testing['scoring_rubric_version'] == 'evidence-role-v4' and 'pytest' in testing['score_explanation']
+    assert testing['scoring_rubric_version'] == 'evidence-role-v5' and 'pytest' in testing['score_explanation']
     assert python['competence_score'] == 9 and python['scoring_rubric_version'] == 'llm-ratio-v1'
     assert python['profile_skills'][0]['name'] == 'Python'
     assert docker['profile_skills'] == [] and docker['competence_score'] is None

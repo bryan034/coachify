@@ -7,13 +7,14 @@ import logging
 import math
 import os
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from uuid import uuid4
 from urllib.parse import urlsplit
 
 import httpx
 from elo_shared.model_budget import (ModelBudgetExceeded, ModelBudgetUnavailable, budget_owner,
                                      current_budget_owner, reserve_provider_call)
+from elo_shared.dev_reset import dev_reset_enabled, reset_owner_data
 from elo_shared.model_sdk import async_model_response, resolve_model_api_key
 from elo_shared.model_telemetry import fingerprint, operation_scope
 from elo_shared.model_errors import ModelResponseError, raise_for_completion_error
@@ -283,6 +284,20 @@ def application(title,prefix,*,store=None,upstream=None,model=None,max_context_b
     async def storage(request,exc): return JSONResponse({'detail':'Storage is unavailable. Retry your saved operation.','code':'storage'},503)
     @app.get('/health')
     async def health(): return {'status':'ok'}
+    if dev_reset_enabled():
+        # Development only and absent from the published contract: wipe the caller's own data to start afresh.
+        path={'ASSESSMENT':'assessments','ROADMAP':'roadmaps','JOBS':'jobs'}.get(prefix,prefix.lower())
+        @app.post(f'/api/v1/{path}/dev/reset',include_in_schema=False)
+        async def dev_reset(account=Depends(authenticated)):
+            store=app.state.store
+            database=getattr(store,'database',None)
+            if database is not None: deleted=await run_in_threadpool(reset_owner_data,database,account['id'])
+            else:
+                deleted={}
+                with getattr(store,'lock',nullcontext()):
+                    for key in [k for k in getattr(store,'data',{}) if k==account['id']]: del store.data[key]; deleted['workspaces']=1
+                    for key in [k for k in getattr(store,'results',{}) if k[0]==account['id']]: del store.results[key]; deleted['results']=deleted.get('results',0)+1
+            return {'deleted':deleted}
     return app
 
 def operation_view(row):

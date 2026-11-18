@@ -3,7 +3,10 @@ import asyncio
 from contextlib import asynccontextmanager, AsyncExitStack, suppress
 import os
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
+from elo_shared.dev_reset import dev_reset_enabled, reset_owner_data
+from app.api.v1.cv import authenticated
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pymongo import MongoClient
@@ -94,6 +97,22 @@ def create_app(repository=None, profile_client=None, extractor=None, settings=No
 
     @app.get('/health', include_in_schema=False)
     async def health(): return {'status': 'ok'}
+
+    if dev_reset_enabled():
+        # Development only and absent from the published contract: delete the caller's CVs, files and conversations.
+        @app.post('/api/v1/cv/dev/reset', include_in_schema=False)
+        async def dev_reset(request: Request, account=Depends(authenticated)):
+            repository = request.app.state.repository
+            collection = getattr(repository, 'collection', None)
+            if collection is None: raise HTTPException(503, 'CV storage is not configured.')
+            def work():
+                identifiers = [str(row['_id']) for row in collection.find({'user_id': account['id']}, {'_id': 1})]
+                deleted = reset_owner_data(collection.database, account['id'])
+                for identifier in identifiers:
+                    try: request.app.state.files.remove(identifier)
+                    except ValueError: pass
+                return deleted
+            return {'deleted': await run_in_threadpool(work)}
 
     @app.middleware('http')
     async def private(request, call_next):

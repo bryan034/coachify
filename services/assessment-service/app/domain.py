@@ -85,7 +85,7 @@ def planning_estimate(requirement,outcome,evidence):
         'Your review did not confirm your personal part, so this is a rough estimate rather than evidence-based. '+
         (outcome.score_explanation or '')).strip() if estimated else (f'Your evidence supports level {have}/10; this role targets {need}/10. '+
         ('Level 3 is a provisional project baseline because your personal part is unclear. ' if provisional else '')+
-        'Independent successful delivery establishes level 5; higher levels need complex, sustained evidence. Self-ratings do not override the evidence.') if have is not None else 'The supplied evidence does not establish a personal skill level.'
+        'Moderate understanding (4-6) needs explained concepts; higher levels need clearly articulated, deeper knowledge. Self-ratings do not override the evidence.') if have is not None else 'The supplied evidence does not establish a personal skill level.'
     return {'relevance':relevance,'competence_score':goal_score(have,need) if have is not None and need else None,
         'required_score':need,'demonstrated_score':have,'score_status':'estimated' if have is not None else 'insufficient_evidence',
         'score_confidence':'low' if estimated or provisional or have is None or have<=4 else 'medium',

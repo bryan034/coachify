@@ -2,12 +2,13 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { FreeTimes, Workspace } from '@/features/roadmap/types';
-import { rateSkill, skillRatings } from '@/lib/api/assessment';
+import { reevaluateSkill } from '@/lib/api/assessment';
 import { cvApi } from '@/lib/api/cv';
 import { roadmapApi } from '@/lib/api/roadmap';
 import { loadRoadmap } from '@/lib/api/workspace-summary';
 import { errorText } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
+import { HelperComposer, HelperHeader, HelperOpening, HelperStatus } from '@/components/ui/helper-chat';
 import { announceInputsChanged, type Comparison } from './comparison';
 import { levelText } from './levels';
 
@@ -26,22 +27,31 @@ export type TalkSkill = {
 };
 type Props = {
  skill: TalkSkill | null; onClose: () => void; token?: string; goalLabel?: string; comparison: Comparison;
- /** The person's own skills, offered as "tools used". */
- tools?: string[]; allowSelfRating?: boolean;
- /** 'build' opens straight at the task that builds the skill. */
- mode?: 'talk' | 'build'; onRoadmapChanged?: () => void; onRated?: () => void;
-};
-type Message = { id: number; kind: 'elo' | 'me' | 'task' | 'alert' | 'result' | 'wait'; body: ReactNode; undo?: boolean };
-type Reply = { label: string; solid?: boolean; href?: string; run?: () => void };
-type Saved = { declaration_id: string; contribution_id: string };
 
-const running = (c: Comparison) => !!c.current?.operation && ['pending', 'running'].includes(c.current.operation.status);
+ /** 'build' opens straight at the task that builds the skill. */
+ mode?: 'talk' | 'build'; onRoadmapChanged?: () => void;
+};
+type Message = { id: number; kind: 'elo' | 'me' | 'task' | 'alert' | 'result' | 'wait'; body: ReactNode };
+type Reply = { label: string; solid?: boolean; href?: string; run?: () => void };
+
+const words = (value: string) => value.trim().split(/\s+/).filter(Boolean);
+/** One line, under 20 words, on why the skill has its level. */
+export function ratingReason(skill: Pick<TalkSkill, 'name' | 'level' | 'sources' | 'note'>) {
+ if (skill.note && words(skill.note).length < 20) return skill.note;
+ if (skill.level == null) return 'I couldn’t find enough in your CV to rate this.';
+ const base = `Rated ${skill.level} out of 10 based on`, sources = (skill.sources ?? []).filter(Boolean);
+ if (!sources.length) return `${base} your CV and review answers.`;
+ const room = 19 - words(base).length;
+ const both = sources.length > 1 ? `${sources[0]} and ${sources[1]}` : '';
+ const named = both && words(both).length <= room ? both : words(sources[0]).slice(0, room).join(' ');
+ return `${base} ${named}.`;
+}
 /** Roadmap task names hold at most 19 words and 160 characters. */
 const taskTitle = (value: string) => value.trim().split(/\s+/).slice(0, 19).join(' ').slice(0, 160);
 
 /**
- * "Talk it through": tell elo about experience that isn't on the CV, or get one task that builds the skill.
- * Evidence is saved to the Skills Profile and the level changes only when the evaluation is run again.
+ * Skills Helper: tell elo about experience that isn't on the CV. The answer is saved to the Skills Profile and
+ * only this skill is judged again. Opened from "build", it offers one task that builds the skill instead.
  */
 export function TalkItThrough(props: Props) {
  const { skill, onClose } = props;
@@ -57,113 +67,56 @@ export function TalkItThrough(props: Props) {
  }, [open, onClose]);
  return <>
   <div className={`ws-scrim${open ? ' on' : ''}`} onClick={onClose}/>
-  <aside className={`ws-drawer${open ? ' on' : ''}`} role="dialog" aria-modal="true" aria-labelledby="talk-title" aria-hidden={!open}>
-   <div className="ws-dr-head">
-    <div className="t"><span>Talk it through</span><b id="talk-title">{skill?.name}</b></div>
-    {skill && <span className="ws-dr-score">{levelText(skill.level, skill.target)}</span>}
-    <button ref={close} className="ws-x" type="button" aria-label="Close chat" onClick={onClose}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-   </div>
+  <aside className={`ws-drawer${open ? ' on' : ''}`} role="dialog" aria-modal="true" aria-label={skill?.name ?? 'Skill helper'} aria-hidden={!open}>
+   <HelperHeader title="Skills Helper" onClose={onClose} closeRef={close}/>
+   {skill && <HelperStatus><strong>{skill.name}</strong> · {levelText(skill.level, skill.target)}</HelperStatus>}
    {skill && <Conversation key={skill.key} {...props} skill={skill}/>}
   </aside>
  </>;
 }
 
-function Conversation({ skill, onClose, token, goalLabel, comparison, tools = [], allowSelfRating, mode, onRoadmapChanged, onRated }: Props & { skill: TalkSkill }) {
- const intro = (): Message[] => [
-  { id: 0, kind: 'elo', body: skill.target != null
-   ? <>For {goalLabel ?? 'your goal'}, the target for <b>{skill.name}</b> is {skill.target} out of 10.{skill.meaning ? ` ${skill.meaning}` : ''}</>
-   : <><b>{skill.name}</b> is rated out of 10 from your CV and review answers.</> },
-  { id: 1, kind: 'elo', body: <>{skill.level == null ? 'I couldn’t find enough in your CV to rate this.' : `You’re at ${skill.level} now${skill.sources?.length ? `, based on ${skill.sources.slice(0, 2).join(' and ')}` : ''}.`}{skill.note ? ` From your CV review: ${skill.note}` : ''} {skill.level == null ? 'Have you used it anywhere, like a project, internship or club?' : 'Have you used this somewhere that isn’t on your CV yet?'}</> },
- ];
- const [messages, setMessages] = useState<Message[]>(intro);
+function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged }: Props & { skill: TalkSkill }) {
+ const [messages, setMessages] = useState<Message[]>([]);
  const [replies, setReplies] = useState<Reply[]>([]);
- const [asking, setAsking] = useState<null | ((text: string) => void)>(null), [draft, setDraft] = useState('');
- const [picking, setPicking] = useState<null | { what: string }>(null), [picked, setPicked] = useState<string[]>([]);
- const [rating, setRating] = useState<number | null>(null);
- const [busy, setBusy] = useState(false);
- /** Set while a saved change waits for the next evaluation. */
- const [watch, setWatch] = useState<{ before: number | null; resultId: string | null; saved: Saved | null; started: boolean } | null>(null);
- const next = useRef(2), saved = useRef<Saved | null>(null);
+ const [draft, setDraft] = useState(''), [busy, setBusy] = useState(false);
+ const next = useRef(0);
  const lifetime = useRef(new AbortController()), list = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
  useEffect(() => { if (lifetime.current.signal.aborted) lifetime.current = new AbortController(); return () => lifetime.current.abort(); }, []);
- const push = (kind: Message['kind'], body: ReactNode, undo = false) => setMessages(all => [...all.filter(item => item.kind !== 'wait'), { id: next.current++, kind, body, undo }]);
- useEffect(() => { const node = list.current; if (node) node.scrollTop = node.scrollHeight; }, [messages, replies, asking, picking, rating]);
- useEffect(() => { if (asking) input.current?.focus(); }, [asking]);
+ const push = (kind: Message['kind'], body: ReactNode) => setMessages(all => [...all.filter(item => item.kind !== 'wait'), { id: next.current++, kind, body }]);
+ useEffect(() => { const node = list.current; if (node) node.scrollTop = node.scrollHeight; }, [messages, replies]);
+ useEffect(() => { if (mode !== 'build') input.current?.focus(); }, [mode]);
+ useEffect(() => { if (mode === 'build') build('Help me build it'); /* the opening, once */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
  const done = (): Reply[] => [{ label: 'Close', solid: true, run: onClose }];
- const fail = (cause: unknown, fallback: string, retry: Reply[]) => { push('alert', errorText(cause, fallback)); setReplies(retry); };
 
- const start = (): Reply[] => [
-  { label: 'Yes, let me tell you', solid: true, run: () => prove('Yes, let me tell you') },
-  { label: 'Not yet, help me build it', run: () => build('Not yet, help me build it') },
-  ...(allowSelfRating && skill.level == null ? [{ label: 'Set my own level', run: () => { setReplies([]); setRating(5); } }] : []),
- ];
- useEffect(() => { if (mode === 'build') build('Help me build it'); else setReplies(start()); /* the opening, once */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
- /* ---- Path A: experience that isn't on the CV ---- */
- function prove(label: string) {
-  push('me', label); setReplies([]);
-  push('elo', 'Great. What did you do, and what came out of it?');
-  setAsking(() => (what: string) => {
-   push('me', what); setAsking(null);
-   const options = tools.filter(name => name.trim().toLowerCase() !== skill.name.trim().toLowerCase()).slice(0, 6);
-   if (!options.length) { void saveEvidence(what, []); return; }
-   push('elo', 'Which of your skills or tools did you use? Pick any.');
-   setPicked([]); setPicking({ what });
-  });
- }
- async function saveEvidence(what: string, used: string[]) {
-  if (!token) return;
-  setPicking(null); setReplies([]); setBusy(true);
-  const description = `${what}${used.length ? `\nTools used: ${used.join(', ')}` : ''}`.slice(0, 2000);
+ /* ---- What the person tells elo: saved as evidence, then only this skill is judged again ---- */
+ async function share(what: string) {
+  if (!token || busy) return;
+  push('me', what); setDraft(''); setBusy(true); push('wait', 'Saving your answer…');
   const signal = lifetime.current.signal;
+  const before = skill.level;
   try {
    const current = await cvApi.declarations(token, signal);
    const match = current.declarations.find(item => item.name.trim().toLowerCase() === skill.name.trim().toLowerCase());
-   const result = await cvApi.addDeclaration({ expected_version: current.version, mutation_id: crypto.randomUUID(), name: match?.name ?? skill.name, description, mode: match ? 'attach' : 'new', ...(match ? { attach_to_id: match.id } : {}) }, token, signal);
+   await cvApi.addDeclaration({ expected_version: current.version, mutation_id: crypto.randomUUID(), name: match?.name ?? skill.name, description: what.slice(0, 2000), mode: match ? 'attach' : 'new', ...(match ? { attach_to_id: match.id } : {}) }, token, signal);
    if (signal.aborted) return;
-   const declaration = result.declarations.find(item => match ? item.id === match.id : !current.declarations.some(old => old.id === item.id));
-   const contribution = declaration?.contributions?.find(item => item.description === description && !match?.contributions?.some(old => old.id === item.id));
-   saved.current = declaration && contribution ? { declaration_id: declaration.id, contribution_id: contribution.id } : null;
-   const evaluated = !!comparison.current?.result;
-   push('elo', evaluated ? 'Thanks. I’ve added it to your Skills Profile and I’m checking your level again. This takes a minute or two.' : 'Thanks. I’ve added it to your Skills Profile. Your level shows once your skills are evaluated against your goal.');
-   if (evaluated) { push('wait', 'Checking your level…'); setWatch({ before: skill.level, resultId: comparison.current!.result!.id, saved: saved.current, started: false }); }
-   else setReplies(done());
-   announceInputsChanged();
   } catch (cause) {
-   if (!signal.aborted) fail(cause, 'Your answer could not be saved. Try again.', [{ label: 'Try again', solid: true, run: () => void saveEvidence(what, used) }, { label: 'Close', run: onClose }]);
-  } finally { if (!signal.aborted) setBusy(false); }
- }
- async function undo(change: Saved, messageId: number) {
-  if (!token || busy) return;
-  setBusy(true);
-  const signal = lifetime.current.signal;
-  try {
-   const current = await cvApi.declarations(token, signal);
-   await cvApi.withdrawDeclaration({ expected_version: current.version, mutation_id: crypto.randomUUID(), ...change }, token, signal);
-   if (signal.aborted) return;
-   setMessages(all => all.map(item => item.id === messageId ? { ...item, body: 'Change undone', undo: false } : item));
-   push('wait', 'Checking your level…');
-   setWatch({ before: skill.level, resultId: comparison.current?.result?.id ?? null, saved: null, started: false });
-   announceInputsChanged();
-  } catch (cause) { if (!signal.aborted) push('alert', errorText(cause, 'The change could not be undone. Try again.')); }
-  finally { if (!signal.aborted) setBusy(false); }
- }
- // The level only moves when the evaluation finishes; report it then.
- const resultId = comparison.result?.id ?? null, failed = comparison.current?.operation?.status === 'failed', active = running(comparison);
- useEffect(() => {
-  if (!watch) return;
-  if (active && !watch.started) { setWatch({ ...watch, started: true }); return; }
-  if (resultId && resultId !== watch.resultId) {
-   const text = watch.before === skill.level ? `${skill.name}: stays at ${levelText(skill.level, skill.target)}` : `${skill.name}: ${watch.before ?? 'Not rated'} → ${skill.level ?? 'Not rated'}`;
-   push('result', text, !!watch.saved);
-   setWatch(null); setReplies(done());
-  } else if ((watch.started && !active && (failed || comparison.error)) || (!active && comparison.current?.stale && comparison.context && (!comparison.context.model_available || comparison.context.cv_reviewed === false))) {
-   push('alert', 'Your answer is saved, but your level couldn’t be checked just now. It updates the next time your skills are evaluated.');
-   setWatch(null); setReplies(done());
+   if (!signal.aborted) { push('alert', errorText(cause, 'Your answer could not be saved. Try again.')); setDraft(what); setBusy(false); }
+   return;
   }
- }, [watch, resultId, failed, active, comparison.error, comparison.current, comparison.context, skill.level, skill.target, skill.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  push('wait', `Checking ${skill.name} again…`);
+  try {
+   const result = await reevaluateSkill(token, { name: skill.name, canonical_skill_id: skill.canonicalId ?? null }, signal);
+   if (signal.aborted) return;
+   const after = result.skill.competence_score;
+   push('result', before === after ? `${skill.name}: stays at ${after ?? 'Not rated'}` : `${skill.name}: ${before ?? 'Not rated'} → ${after ?? 'Not rated'}`);
+  } catch (cause) {
+   if (!signal.aborted) push('alert', cause && typeof cause === 'object' && 'status' in cause && cause.status === 409
+    ? 'Your answer is saved. Your level updates the next time your skills are evaluated.'
+    : errorText(cause, 'Your answer is saved, but your level couldn’t be checked just now. It updates the next time your skills are evaluated.'));
+  } finally { if (!signal.aborted) { setBusy(false); announceInputsChanged(); } }
+ }
 
- /* ---- Path B: one task that builds the skill ---- */
+ /* ---- Opened from "Build this skill": one task that builds the skill ---- */
  function build(label: string) {
   push('me', label); setReplies([]);
   if (!skill.tasks.length) {
@@ -204,56 +157,40 @@ function Conversation({ skill, onClose, token, goalLabel, comparison, tools = []
    setReplies([{ label: 'Close', solid: true, run: onClose }, { label: 'Open roadmap', href: '/roadmap' }]);
    onRoadmapChanged?.();
   } catch (cause) {
-   if (!signal.aborted) fail(cause, 'The task could not be added to your roadmap. Try again.', [{ label: 'Try again', solid: true, run: () => void add(index) }, { label: 'Close', run: onClose }]);
+   if (!signal.aborted) { push('alert', errorText(cause, 'The task could not be added to your roadmap. Try again.')); setReplies([{ label: 'Try again', solid: true, run: () => void add(index) }, { label: 'Close', run: onClose }]); }
   } finally { if (!signal.aborted) setBusy(false); }
- }
-
- /* ---- A level the person sets for a skill elo could not rate ---- */
- async function rate(score: number) {
-  if (!token) return;
-  const signal = lifetime.current.signal;
-  setBusy(true);
-  try {
-   const current = await skillRatings(token, signal);
-   await rateSkill(token, { expected_version: current.version, name: skill.name, canonical_skill_id: skill.canonicalId ?? null, score });
-   if (signal.aborted) return;
-   setRating(null);
-   push('result', `You set ${skill.name} to ${score} / 10. It’s shown as your own rating.`);
-   setReplies(done());
-   announceInputsChanged(); onRated?.();
-  } catch { if (!signal.aborted) push('alert', 'Your rating could not be saved. Try again.'); }
-  finally { if (!signal.aborted) setBusy(false); }
  }
 
  function submit(event: FormEvent) {
   event.preventDefault();
   const value = draft.trim();
-  if (!value || !asking) return;
-  setDraft(''); asking(value);
+  if (value && !busy) void share(value);
  }
  return <>
   <div className="ws-msgs" ref={list} aria-live="polite">
+   <HelperOpening title={skill.level == null ? `Why isn’t ${skill.name} rated?` : `Why is ${skill.name} rated ${skill.level} out of 10?`}>
+    <p>{ratingReason(skill)}{skill.target != null ? ` The target for ${goalLabel ?? 'your goal'} is ${skill.target}.` : ''}</p>
+    <p>If your CV review doesn’t show solid evidence, elo assumes you used complete guidance, so it doesn’t assume you understand this topic.</p>
+    <p><b>Want elo to take another look?</b> Tell me about this skill, in your own words:</p>
+    <ul>
+     <li>Projects outside your CV where you’ve used it</li>
+     <li>How confident you feel with it</li>
+     <li>What you built or solved on your own, without step-by-step guidance</li>
+    </ul>
+    <p>elo will add it to your Skills Profile and re-evaluate your level.</p>
+   </HelperOpening>
    {messages.map(message => message.kind === 'result'
-    ? <div key={message.id} className="ws-m result">{message.body}{message.undo && saved.current && <button className="u" type="button" disabled={busy} onClick={() => void undo(saved.current!, message.id)}>Undo</button>}</div>
+    ? <div key={message.id} className="ws-m result">{message.body}</div>
     : message.kind === 'wait' ? <div key={message.id} className="ws-m result" role="status"><span className="ws-spin" aria-hidden="true"/>{message.body}</div>
     : <div key={message.id} className={`ws-m ${message.kind}`} role={message.kind === 'alert' ? 'alert' : undefined}>{message.body}</div>)}
   </div>
-  {picking && <div className="ws-replies" role="group" aria-label="Skills or tools you used">
-   {tools.filter(name => name.trim().toLowerCase() !== skill.name.trim().toLowerCase()).slice(0, 6).map(name => <button key={name} type="button" className="ws-reply" aria-pressed={picked.includes(name)} onClick={() => setPicked(all => all.includes(name) ? all.filter(item => item !== name) : [...all, name])}>{name}</button>)}
-   <button type="button" className="ws-reply solid" disabled={busy} onClick={() => { push('me', picked.length ? picked.join(', ') : 'None of these'); void saveEvidence(picking.what, picked); }}>Done</button>
-  </div>}
-  {rating != null && <form className="ws-rate" onSubmit={event => { event.preventDefault(); void rate(rating); }}>
-   <label htmlFor="talk-rating">Your level for {skill.name}: <b>{rating} / 10</b></label>
-   <input id="talk-rating" type="range" min={1} max={10} step={1} value={rating} onChange={event => setRating(Number(event.target.value))}/>
-   <span className="ws-sub">1 is just starting, 5 is working independently, 10 is expert. This is your own rating; it isn’t checked against evidence.</span>
-   <div className="ws-replies" style={{ padding: 0 }}><button type="submit" className="ws-reply solid" disabled={busy}>{busy ? 'Saving…' : 'Save my rating'}</button><button type="button" className="ws-reply" disabled={busy} onClick={() => { setRating(null); setReplies(start()); }}>Cancel</button></div>
-  </form>}
-  {!picking && rating == null && <div className="ws-replies">{replies.map(reply => reply.href
+  {!!replies.length && <div className="ws-replies">{replies.map(reply => reply.href
    ? <Link key={reply.label} className={`ws-reply${reply.solid ? ' solid' : ''}`} href={reply.href}>{reply.label}</Link>
    : <button key={reply.label} type="button" className={`ws-reply${reply.solid ? ' solid' : ''}`} disabled={busy} onClick={reply.run}>{reply.label}</button>)}</div>}
-  {asking && <form className="ws-composer" onSubmit={submit}>
-   <textarea ref={input} rows={2} maxLength={1800} value={draft} aria-label="Your answer" placeholder="What did you do, and what was the result?" onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}/>
-   <button type="submit" disabled={!draft.trim()}>Send</button>
-  </form>}
+  <form className="ws-composer" onSubmit={submit}>
+   <HelperComposer hint="Everything you add stays yours to change." canSend={!!draft.trim() && !busy}>
+    <textarea ref={input} rows={3} maxLength={1800} value={draft} disabled={busy} aria-label="Your answer" placeholder="Tell me about your experience with this skill…" onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}/>
+   </HelperComposer>
+  </form>
  </>;
 }

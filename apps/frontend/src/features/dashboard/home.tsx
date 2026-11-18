@@ -23,11 +23,12 @@ const flag = <T,>(section: Section<T>, test: (data: T) => boolean): Flag => sect
 
 /** The set-up steps, in the order the pages build on each other. */
 const stops = [
- { name: 'Background', href: '/profile' },
- { name: 'Career goal', href: '/career-goal' },
- { name: 'Skills profile', href: '/cv' },
- { name: 'Roadmap', href: '/roadmap' },
+ { name: 'Background', href: '/profile', x: 6, y: 84 },
+ { name: 'Career goal', href: '/career-goal', x: 28, y: 61 },
+ { name: 'Skills profile', href: '/cv', x: 50, y: 38 },
+ { name: 'Roadmap', href: '/roadmap', x: 72, y: 15 },
 ];
+const stateWords: Record<StopState, string> = { done: 'Done', next: 'Up next', later: 'Later', checking: 'Checking', unavailable: 'Not available' };
 
 /** The first unfinished stop is only named once every stop is known, so the path never points at the wrong one. */
 export function journeyStates(flags: Flag[]): StopState[] {
@@ -47,8 +48,17 @@ function SetupPath({ states }: { states: StopState[] }) {
  const done = states.filter(state => state === 'done').length;
  return <div className="ws-hero-path">
   <div className="ws-tl-top"><span><b>Setting up</b></span>{!states.includes('unavailable') && <span>{done} of {stops.length} steps done</span>}</div>
-  <ol className="ws-tl-bar" aria-label="Setup steps">{stops.map((stop, index) => <li key={stop.name} style={{ flex: 1, display: 'block' }}><i className={states[index] === 'done' ? 's1' : 'sb'} style={{ display: 'block', height: 14 }}/></li>)}</ol>
-  <ol className="ws-tl-steps">{stops.map((stop, index) => <li key={stop.name} className={states[index] === 'done' ? 'is-done' : undefined} style={{ flex: 1 }}><Link href={stop.href} style={{ color: 'inherit', textDecoration: 'none' }} aria-current={states[index] === 'next' ? 'step' : undefined}>{states[index] === 'done' ? '✓ ' : ''}{stop.name}</Link></li>)}</ol>
+  <div className="ws-journey">
+   <svg className="ws-journey-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    {stops.slice(1).map((stop, index) => { const from = stops[index], walked = states[index] === 'done' && (states[index + 1] === 'done' || states[index + 1] === 'next');
+     return <line key={stop.name} className={walked ? 'is-walked' : ''} x1={from.x} y1={from.y} x2={stop.x} y2={stop.y} vectorEffect="non-scaling-stroke"/>; })}
+   </svg>
+   <ol aria-label="Setup steps">
+    {stops.map((stop, index) => <li key={stop.name} className={`ws-stop is-${states[index]}`} style={{ left: `${stop.x}%`, top: `${stop.y}%` }}>
+     <Link href={stop.href} aria-current={states[index] === 'next' ? 'step' : undefined}><span className="ws-stop-node">{states[index] === 'done' && <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m4 8.4 2.6 2.6L12 5.4"/></svg>}</span><span className="ws-stop-text"><strong>{stop.name}</strong><small>{stateWords[states[index]]}</small></span></Link>
+    </li>)}
+   </ol>
+  </div>
  </div>;
 }
 

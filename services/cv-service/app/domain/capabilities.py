@@ -8,7 +8,7 @@ from app.schemas.cv import Extraction, InterpretationOutput, validate_item_dates
 from app.domain.extraction_errors import EvidenceValidationError
 from app.schemas.interview_evidence import ReviewFact, fact_key, fact_statement, unique_facts
 from pydantic import ValidationError
-from elo_shared.competence_scale import GUIDED_CEILING, INDEPENDENT_LEVEL, MAX_LEVEL, MENTION_CEILING, clamp_level
+from elo_shared.competence_scale import UNEXPLAINED_CEILING, MODERATE_LEVEL, MAX_LEVEL, MENTION_CEILING, clamp_level
 
 
 def normalized_name(name):
@@ -182,22 +182,23 @@ def validate_other_information(refs, blocks, semantic_support=frozenset()):
     return result
 
 
-def level_ceiling(item, claim):
+def level_ceiling(item, claim, answered=False):
     """The highest level this source can support, read pessimistically.
 
-    Project or work use counts as guided unless the person's own independent work is stated.
-    A skill that is only named cannot rise above basic exposure.
+    The level rates understanding, so independence is irrelevant. Project or work use shows
+    understanding only when the person's own part is stated and they explained it in review; otherwise it stays at basic.
+    A skill that is only named cannot rise above little understanding.
     """
     facts = [f for f in item.get('review_evidence', []) if f['status'] == 'supported'
              and (not f.get('skill_name') or skill_id(f['skill_name']) == claim['skill_id'])]
     if item['kind'] in {'project', 'experience'}:
-        independent = claim.get('assistance') == 'independent' or any(
-            f['field'] == 'assistance' and f.get('value') == 'independent' for f in facts)
         personal = claim.get('attribution') == 'personal' or any(
             f['field'] in {'skill_use', 'personal_contribution'} and f.get('attribution') == 'personal' for f in facts)
-        return MAX_LEVEL if independent and personal else GUIDED_CEILING
+        # The person's own review explanation is what shows understanding; the CV text alone does not.
+        explained = answered or bool(facts) or (claim.get('skill_level') or {}).get('source') == 'review'
+        return MAX_LEVEL if personal and explained else UNEXPLAINED_CEILING
     described = claim.get('proficiency') or claim.get('experience_months') is not None or facts
-    return INDEPENDENT_LEVEL if described else MENTION_CEILING
+    return MODERATE_LEVEL if described else MENTION_CEILING
 
 
 def cap_skill_level(item, claim):

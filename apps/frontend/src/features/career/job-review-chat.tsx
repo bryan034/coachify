@@ -56,7 +56,7 @@ export function JobReviewChat(){
  const [workspace,setWorkspace]=useState<CareerWorkspace>(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[code,setCode]=useState('');
  const workspaceRef=useRef<CareerWorkspace|undefined>(undefined);workspaceRef.current=workspace;
  const [reload,setReload]=useState(0),[pendingMessage,setPendingMessage]=useState<string|null>(null);
- const {transcript,followReply,showJump,jumpToLatest,scrollProps}=useChatScroll();
+ const {transcript,followReply,resumeFollow,showJump,jumpToLatest,scrollProps}=useChatScroll();
  const [operation,setOperation]=useState<CareerOperation|null>(null);
  const [extractionSteps,setExtractionSteps]=useState<string[]>([]);
  const [connectionIssue,setConnectionIssue]=useState(false);
@@ -146,6 +146,7 @@ export function JobReviewChat(){
  async function retry(){if(!token||busy||secondsLeft>0)return;setBusy(true);setError('');setCode('');try{receive(await careerApi<CareerWorkspace>('/workspace/retry',token,{method:'POST'}));}catch(c){reportError(c,'Retry failed.');}finally{setBusy(false);}}
  function send(text=message,retryId?:string){
   if(!token||!text.trim())return;
+  resumeFollow();
   const input=text.trim();
   const previous=retryId?failedJobs.current.get(retryId):failedMessage===input&&failedTurn.current?failedJobs.current.get(failedTurn.current):undefined;
   const job=previous||{id:crypto.randomUUID(),input,key:crypto.randomUUID(),session:workspace?.session_id};

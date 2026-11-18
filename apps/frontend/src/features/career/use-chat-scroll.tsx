@@ -17,13 +17,14 @@ export function useChatScroll(){
  },[]);
  const pause=useCallback(()=>{following.current=false;},[]);
  const jumpToLatest=useCallback(()=>{following.current=true;setShowJump(false);followReply();},[followReply]);
+ const resumeFollow=useCallback(()=>{following.current=true;setShowJump(false);},[]);
  useLayoutEffect(()=>{followReply();});
- return {transcript,followReply,showJump,jumpToLatest,scrollProps:{
+ return {transcript,followReply,resumeFollow,showJump,jumpToLatest,scrollProps:{
   onScroll,onWheel:(event:React.WheelEvent)=>{if(event.deltaY<0)pause();},
   onKeyDown:(event:React.KeyboardEvent)=>{if(['ArrowUp','PageUp','Home'].includes(event.key))pause();},
   tabIndex:0,
  }};
 }
 export function ChatScrollControl({visible,onClick}:{visible:boolean;onClick:()=>void}){
- return visible?<div className="agent-scroll-controls"><button type="button" className="btn ghost sm" onClick={onClick}>↓ Jump to latest</button></div>:null;
+ return visible?<div className="agent-scroll-controls"><button type="button" className="agent-scroll-btn" aria-label="Jump to latest" title="Jump to latest" onClick={onClick}><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></svg></button></div>:null;
 }

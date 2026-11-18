@@ -9,6 +9,7 @@ import type { ActiveQuestion, ConversationAction, ConversationDecision, Conversa
 import { errorText } from '@/lib/errors';
 import { humaniseText, formatDate } from '@/lib/format';
 import { ChatSkeleton } from '@/components/ui/workspace-ui';
+import { ChatScrollControl } from '@/features/career/use-chat-scroll';
 const RAIL_MIN = 220, RAIL_MAX = 520, RAIL_DEFAULT = 280;
 
 const statusLabel: Record<ConversationAction['status'], string> = {
@@ -83,6 +84,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
  const uploadedReview = Boolean(cvId && purpose === 'skills_profile');
  const [conversation, setConversation] = useState<CvConversation | null>(null);
  const [localDraft, setLocalDraft] = useState('');
+ const [showJump, setShowJump] = useState(false);
  const draft = persistedDraft ?? localDraft, setDraft = onDraftChange ?? setLocalDraft;
  const [error, setError] = useState(''), [busy, setBusy] = useState(''), [loading, setLoading] = useState(true), [historyLoading, setHistoryLoading] = useState(false), [announcement, setAnnouncement] = useState('');
  const [unconfirmedMessage, setUnconfirmedMessage] = useState<ConversationInput | null>(null);
@@ -193,7 +195,15 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
   const timer = setInterval(() => {if (checking) return; checking = true; void refresh().catch(() => {if (!lifetime.current.signal.aborted) setError('Connection interrupted while checking your saved message. Check saved messages to resume.');}).finally(() => {checking = false;});}, 1000);
   return () => clearInterval(timer);
  }, [pending, busy, loading, refresh]);
- useEffect(() => {if (nearBottom.current && scrollArea.current) scrollArea.current.scrollTop = scrollArea.current.scrollHeight;}, [conversation?.messages, busy]);
+ useEffect(() => {
+  const area = scrollArea.current; if (!area) return;
+  if (nearBottom.current) area.scrollTop = area.scrollHeight;
+  else setShowJump(area.scrollHeight - area.scrollTop - area.clientHeight > 4);
+ }, [conversation?.messages, busy]);
+ function jumpToLatest() {
+  const area = scrollArea.current; if (!area) return;
+  nearBottom.current = true; setShowJump(false); area.scrollTop = area.scrollHeight;
+ }
 
  async function send(text: string, command?: ConversationInput['command'], itemId?: string) {
   const active = current.current;
@@ -370,7 +380,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
   </aside>}
 {(conversation?.context_error || conversation?.context) && <div className="cv-chat-context">{conversation?.context_error ? <><span>{conversation.context_error}</span><button type="button" className="text-link" onClick={() => void refresh().catch(cause => setError(errorText(cause, 'Could not refresh the career context.')))}>Retry career context</button></> : conversation?.context ? <><span>Reviewing for <strong>{conversation.context.role}</strong></span></> : null}</div>}
   {historical && <div className="cv-chat-history-banner"><span>Earlier conversation · read only</span><button className="btn ghost sm" type="button" disabled={Boolean(busy) || historyLoading} onClick={() => void history(newestId.current!)}>Return to current conversation</button></div>}
-  <div ref={scrollArea} className="cv-chat-messages" onScroll={() => {const area = scrollArea.current; if (area) nearBottom.current = area.scrollHeight - area.scrollTop - area.clientHeight < 90;}}>
+  <div ref={scrollArea} className="cv-chat-messages" onScroll={() => {const area = scrollArea.current; if (area) {const gap = area.scrollHeight - area.scrollTop - area.clientHeight; nearBottom.current = gap < 90; setShowJump(gap > 4 && !nearBottom.current);}}}>
    {loading && <ChatSkeleton label="Opening your saved conversation…"/>}
    {resumeBlocked && !error && <ChatSkeleton label="Checking your saved review…"/>}
    {!loading && !conversation && <div className="cv-chat-welcome"><h3>Your conversation will be here.</h3><p>Retry to restore your messages. Your saved CV details are still available in the summary.</p><button className="btn ghost" type="button" onClick={() => void open()}>Retry conversation</button></div>}
@@ -401,6 +411,7 @@ export function CvConversationPanel({cvId, detail, token, onChanged, onOpenSumma
    </div>
    {busy === 'message' && <p className="cv-chat-working" role="status">{uploadedReview && !hasReviewHistory ? 'Preparing your first question…' : 'Checking your message…'}</p>}
   </div>
+  <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
   <div className="cv-chat-composer-wrap">
    {(error || unconfirmedMessage) && <div role="alert" className="cv-error"><p>{unconfirmedMessage ? 'We couldn’t confirm your last message was sent.' : error}</p>
     {/* One action per failure. Resending reuses the same message ID, so it also confirms a send that did arrive. */}

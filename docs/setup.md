@@ -555,6 +555,10 @@ docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/co
 
 For Career interpretation/research, configure `AI_ENABLED`, an OpenRouter key or `CAREER_LLM_API_KEY`, and the separate `CAREER_RESEARCH_API_KEY` yourself. Without those settings, temporary import previews and saved reads remain available; model-backed extraction, discovery and research report their unavailable state. Use the implemented Resume & Tracker upload/review for durable CV context, or deliberately continue Career without a CV. Temporary Career attachments are not durable CV extraction. Structured goals save through the canonical workspace; explicit CV confirmation does not claim job readiness or completed analysis.
 
+## Start afresh (development only)
+
+With the development override (`dc`), every workspace page shows a **Development** strip with a **Start afresh** button. After confirmation it calls `POST /api/v1/<prefix>/dev/reset` on the Career, CV, Assessment, Roadmap, Jobs and Profile services. These delete the signed-in account's goal and chats, CVs and uploaded files, assessments, roadmaps, job applications, and manual skills. The account, session, onboarding answers and shared job postings stay. The routes exist only when `APP_ENV=development` (set by `compose.dev.yaml`), are not in the OpenAPI contracts, and return 404 otherwise. In-flight background work is not cancelled.
+
 ## Docker hot reload
 
 Use the opt-in [development Compose override](../infrastructure/docker/README.md#hot-reload-during-development)
