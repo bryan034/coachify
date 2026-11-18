@@ -121,7 +121,7 @@ jobs:
     timeout-minutes: 15
     services:
       mongodb:
-        image: mongo:8.3
+        image: mongo:8.2
         ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
@@ -151,7 +151,7 @@ jobs:
         service: [career, cv, jobs]
     services:
       mongodb:
-        image: mongo:8.3
+        image: mongo:8.2
         ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"

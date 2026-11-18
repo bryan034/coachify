@@ -91,7 +91,7 @@ traces are uploaded for seven days; use synthetic data because artifacts may con
 page content. Linting is not configured yet.
 
 MongoDB-backed jobs (`profile-integration`, `analysis-integration` and
-`local-ui-integration`) use `mongo:8.3` on `ubuntu-22.04` for kernel compatibility.
+`local-ui-integration`) use `mongo:8.2` on `ubuntu-22.04` for kernel compatibility.
 Verify the image starts on the replacement runner before changing that pin.
 See the [runner image inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md).
 
@@ -466,7 +466,7 @@ The integrated browser journey should save a canonical goal using synthetic fixt
 
 Use disposable databases and synthetic documents/accounts. Never mount a personal environment file into tests. One upstream public-template test has a narrow user-approved exception: run that exact test against a clean tracked public template in an isolated test copy. It does not authorize inspecting modified local examples or other environment files.
 
-Use the stack’s `mongo:8.3` image on a supported kernel for disposable test databases. Some Docker Desktop hosts with newer kernels trigger MongoDB’s startup guard. Report the MongoDB and kernel versions used for database-backed checks.
+Use the stack’s `mongo:8.2` image on a supported kernel for disposable test databases. MongoDB 8.3 refuses startup on some Docker Desktop hosts with Linux kernels 6.19 and newer (SERVER-121912). Report the MongoDB and kernel versions used for database-backed checks.
 
 The previous C-series captioned recording uses synthetic models and the pre-integration build. It is retained as a workflow reference, not proof of the merged Career confirmation flow or live-model accuracy. Re-record or exercise the integrated journey after the final code changes. Cost, latency, interpretation quality and comparative usability require separately authorized live-model/user evaluation.
 
