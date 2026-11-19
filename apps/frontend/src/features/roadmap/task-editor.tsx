@@ -8,7 +8,7 @@ export type EditableRoadmapTask = {
  id: string; title: string; instructions: string; completion_outcome: string;
  estimated_minutes: number; milestone_key: string | null; removed?: boolean;
  status: 'not_started' | 'in_progress' | 'completed';
- schedule: { date: string; start_time: string; duration_minutes: number }[];
+ schedule: { date: string; start_time: string; duration_minutes: number; id?: string }[];
 };
 type Fields = Pick<EditableRoadmapTask, 'title' | 'instructions' | 'completion_outcome' | 'estimated_minutes' | 'milestone_key'>;
 type Draft = { original: Fields | null; taskId: string | null; fields: Fields };

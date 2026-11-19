@@ -54,20 +54,34 @@ def test_failed_automatic_regeneration_preserves_saved_roadmap():
         assert state['planner']['outline_candidate'] is None and state['planner']['week_candidate'] is None
 
 
-def test_checkpoints_and_timeouts_do_not_expose_an_automatic_creation_preview():
+def test_checkpoints_never_save_an_automatic_creation_preview():
+    from fastapi.testclient import TestClient
+    from elo_shared.runtime import MemoryStore
     from planner_fixtures import NOW, OWNER
-    from app.planning.state import planner_state, planner_view
-    with client_for(Scripted([draft()])) as client:
-        saved=accepted(client)
-        row=client.app.state.store.load(OWNER)
-        state=planner_state(row)
-        expected=planner_view(row,saved['context'],NOW)['active']
-        state['outline_candidate']=copy.deepcopy(state['outline_active'])
-        for field in ('pending','last_operation'):
-            row['pending']=None
-            row[field]={'kind':'outline_generate','body':{'auto_accept':True},'status':'failed' if field=='last_operation' else 'running'}
-            view=planner_view(row,saved['context'],NOW)
-            assert view['outline_candidate'] is None and view['week_candidate'] is None
-            assert view['preview_sessions']==[]
-            assert view['active']==expected
-            assert state['outline_candidate'] is not None
+    from test_planner_flow import Sources
+    from app.main import create_app
+    from app.planning.state import planner_state
+    store=MemoryStore();seen=[]
+    class Watching(Scripted):
+        async def generate(self,schema,instructions,context,max_tokens=8192):
+            saved=planner_state(store.load(OWNER))
+            seen.append((schema.__name__,saved['outline_candidate'],saved['week_candidate']))
+            return await super().generate(schema,instructions,context,max_tokens)
+    with TestClient(create_app(store,Sources(),Watching([draft()]),clock=lambda:NOW)) as client:
+        state,_=create(client,configure(client))
+        assert state['operation']['status']=='succeeded',state['operation']
+    assert [name for name,_,_ in seen]==['OutlineDraft','WeekDraft']
+    assert all(outline is None and week is None for _,outline,week in seen)
+
+
+def test_failed_automatic_creation_keeps_an_existing_outline_preview():
+    from test_planner_flow import generate
+    model=Scripted([draft(),Problem('Synthetic unavailable provider.',503,'model_provider')])
+    with client_for(model) as client:
+        state=generate(client,configure(client))
+        preview=state['planner']['outline_candidate'];week=state['planner']['week_candidate']
+        assert preview is not None and week is not None
+        state,_=create(client,state)
+        assert state['operation']['status']=='failed'
+        assert state['planner']['outline_candidate']==preview
+        assert state['planner']['week_candidate']==week

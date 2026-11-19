@@ -40,6 +40,20 @@ def ensure_tasks(plan):
     return plan['editable_tasks']
 
 
+def slot_id(task,index):
+    """The session id of one schedule slot: its saved id, else the task id for the first slot and a derived id for later ones. None means the task's anytime day."""
+    if index is None:return task['id']
+    saved=(task.get('schedule') or [])[index].get('id') if index<len(task.get('schedule') or []) else None
+    if saved:return saved
+    return task['id'] if index==0 else str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(index)))
+
+
+def fix_slot_ids(task):
+    """Save every slot's current id before the schedule is reordered, so the remaining sessions keep their ids."""
+    ids=[slot_id(task,index) for index in range(len(task.get('schedule') or []))]
+    for slot,ident in zip(task.get('schedule') or [],ids):slot['id']=ident
+
+
 def task_link_source_is_current(plan,task):
     """A requirement link is current only with complete matching provenance."""
     old_hash=task.get('requirement_source_hash');old_id=task.get('requirement_source_id')
@@ -116,10 +130,9 @@ def project_assignments(plan):
                 if event.get(field) in ('not_started','in_progress'):
                     event[field]='scheduled'
         for i,slot in enumerate(task.get('schedule',[])):
-            ident=task['id'] if i==0 else str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(i)))
             key=primary[task['id']] if i==0 else split[(task['id'],i)]
-            output.append({'id':ident,'key':key,'milestone_key':task['milestone_key'],
-                'gap_id':gap_id,'skill_gap_ids':skill_gap_ids,'kind':source.get('kind','study'),**slot,
+            output.append({'key':key,'milestone_key':task['milestone_key'],
+                'gap_id':gap_id,'skill_gap_ids':skill_gap_ids,'kind':source.get('kind','study'),**slot,'id':slot_id(task,i),
                 'title':task.get('title') or task.get('instructions'),
                 'task':task['title'] if source.get('calendar_uses_title') else task['instructions'],'completion_criterion':task['completion_outcome'],
                 'status':'completed' if task['status']=='completed' else 'scheduled',

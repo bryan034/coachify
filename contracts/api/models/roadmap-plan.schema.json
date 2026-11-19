@@ -469,7 +469,7 @@
         },
         "schedule": {
           "items": {
-            "$ref": "#/$defs/TaskSlot"
+            "$ref": "#/$defs/SavedTaskSlot"
           },
           "title": "Schedule",
           "type": "array"
@@ -1213,6 +1213,22 @@
           ],
           "default": null,
           "title": "Attempts"
+        },
+        "clamped_milestones": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Milestones whose generated start was before the planning start and was moved up to it.",
+          "title": "Clamped Milestones"
         }
       },
       "title": "PlanGeneration",
@@ -1649,6 +1665,48 @@
         "text"
       ],
       "title": "Run",
+      "type": "object"
+    },
+    "SavedTaskSlot": {
+      "additionalProperties": false,
+      "description": "A saved schedule slot. id is set by the service once a session must keep its identity when the schedule is reordered.",
+      "properties": {
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "start_time": {
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Start Time",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "maximum": 480,
+          "minimum": 1,
+          "title": "Duration Minutes",
+          "type": "integer"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        }
+      },
+      "required": [
+        "date",
+        "start_time",
+        "duration_minutes"
+      ],
+      "title": "SavedTaskSlot",
       "type": "object"
     },
     "SelfRating": {
@@ -2203,7 +2261,7 @@
           "anyOf": [
             {
               "items": {
-                "$ref": "#/$defs/TaskSlot"
+                "$ref": "#/$defs/SavedTaskSlot"
               },
               "type": "array"
             },
@@ -2315,34 +2373,6 @@
         "name"
       ],
       "title": "TaskSkill",
-      "type": "object"
-    },
-    "TaskSlot": {
-      "additionalProperties": false,
-      "properties": {
-        "date": {
-          "format": "date",
-          "title": "Date",
-          "type": "string"
-        },
-        "start_time": {
-          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
-          "title": "Start Time",
-          "type": "string"
-        },
-        "duration_minutes": {
-          "maximum": 480,
-          "minimum": 1,
-          "title": "Duration Minutes",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "date",
-        "start_time",
-        "duration_minutes"
-      ],
-      "title": "TaskSlot",
       "type": "object"
     },
     "TextBlock": {

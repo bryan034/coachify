@@ -3,14 +3,8 @@ from datetime import date
 from typing import Annotated, Literal
 from pydantic import Field, StringConstraints
 from .base import Contract, Mutation, Text
-from .roadmap import Key
+from .roadmap import Key, WeekFeedback
 from .tasks import TaskTitle
-
-class WeekFeedback(Contract):
-    """Optional, self-reported. It shapes the next week and never changes assessed skills."""
-    workload:Literal['too_much','about_right','too_light']|None=None
-    difficulty:Literal['too_hard','about_right','too_easy']|None=None
-    note:str=Field(default='',max_length=500)
 
 class GenerateWeek(Mutation):
     week_start:date

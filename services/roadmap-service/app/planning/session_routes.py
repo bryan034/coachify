@@ -11,7 +11,7 @@ from app.schemas.planner import Workspace
 from app.schemas.roadmap import AddSession, BacklogPlan, BacklogPlanRequest, FreeTimes, FreeTimesRequest, MoveSessions, SaveSession, SkipSession
 
 
-def register_session_routes(app,context,mutate):
+def register_session_routes(app,mutate):
     prefix='/api/v1/roadmaps/planner/sessions'
     def active(row):
         plan=planner_state(row)['active']
@@ -37,7 +37,7 @@ def register_session_routes(app,context,mutate):
 
     @app.post(prefix+'/move',response_model=Workspace)
     async def move(body:MoveSessions,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             plan=active(row);capacity=calendar(plan,app.state.clock())
             if len({item.session_id for item in body.moves})!=len(body.moves):raise Problem('Move each task only once.',422,'validation')
             # Release all moving slots before validating the final schedule.
@@ -52,9 +52,10 @@ def register_session_routes(app,context,mutate):
             for task in ensure_tasks(final):
                 task['schedule']=[slot for index,slot in enumerate(task.get('schedule') or []) if (task['id'],index) not in moving]
                 if (task['id'],None) in moving:task['anytime_date']=None
+            placed=[]
             for item,task,index,minutes,old_day,previous in prepared:
-                check_time(final,capacity,{'id':'batch:'+item.session_id},None,item.date,item.start_time,minutes,strict=True)
-                ensure_tasks(final).append({'id':'batch:'+item.session_id,'title':task['title'],'schedule':[{'date':item.date.isoformat(),'start_time':item.start_time,'duration_minutes':minutes}]})
+                check_time(final,capacity,None,item.date,item.start_time,minutes,strict=True,extra=placed)
+                placed.append((task['title'],{'date':item.date.isoformat(),'start_time':item.start_time,'duration_minutes':minutes}))
             for item,task,index,minutes,old_day,previous in prepared:
                 place(task,index,item.date,item.start_time,minutes,update_estimate=False)
                 if old_day<capacity.today.isoformat():
@@ -85,7 +86,7 @@ def register_session_routes(app,context,mutate):
 
     @app.post(prefix+'/skip',response_model=Workspace)
     async def skip(body:SkipSession,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             plan=active(row);skip_session(plan,calendar(plan,app.state.clock()),body.session_id)
             project_assignments(plan);return row
         return await mutate(body,account,apply,operation='sessions.skip')

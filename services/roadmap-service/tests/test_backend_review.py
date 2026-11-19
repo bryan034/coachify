@@ -14,7 +14,8 @@ from test_planner_flow import (Clock, Scripted, Sources, H, accepted, accept_wee
 from app.planning.capacity import Capacity
 from app.planning.generator import set_stage
 from app.planning.outlines import validate_outline
-from app.planning.placement import Placer, week_target
+from app.planning.capacity import Placer
+from app.planning.placement import week_target
 from app.planning.sessions import free_times
 from app.planning.state import planning_source_changed
 from app.planning.weeks import (check_week, first_open_week, remaining_scope, unfinished,

@@ -1,22 +1,18 @@
 """Timed-roadmap endpoints. Writes reuse the workspace's version and receipt protection."""
-from fastapi import Depends, Request
-from uuid import NAMESPACE_URL, uuid5
 import copy
+from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, authenticated, stamp, digest
 from app.planning.capacity import Capacity, normalized
-from app.planning.state import completed_sessions, learning_view, planner_state, with_periods
-from app.planning.tasks import change_status, ensure_tasks, project_assignments
-from app.planning.task_routes import register_task_routes
+from app.planning.outlines import register_outline_routes
 from app.planning.session_routes import register_session_routes
-from app.schemas.roadmap import (AssignmentStatus, CheckpointReached, ExperienceConfirmation, LearningPlan, Runway, MilestoneOutcome,
-    RunwayRequest, SaveConfig)
-from app.schemas.planner import Mutation, Workspace
-
-from pydantic import Field
-class ConfirmEvidence(Mutation):
-    expected_declarations_version:int=Field(ge=0)
-    proposal_hash:str=Field(min_length=64,max_length=64)
+from app.planning.state import completed_sessions, learning_view, planner_state, with_periods
+from app.planning.task_routes import register_task_routes
+from app.planning.tasks import change_status, ensure_tasks, project_assignments, slot_id
+from app.planning.weeks import register_week_routes
+from app.schemas.roadmap import (AssignmentStatus, CheckpointReached, ConfirmEvidence, EvidenceProposals, ExperienceConfirmation, LearningPlan, Runway,
+    MilestoneOutcome, RunwayRequest, SaveConfig)
+from app.schemas.planner import Workspace
 
 def evidence_proposals(row):
     state=planner_state(row);plan=copy.deepcopy(state.get('active'))
@@ -40,9 +36,7 @@ def evidence_proposals(row):
 def register_planner(app,context,mutate,worker):
     prefix='/api/v1/roadmaps/planner'
     register_task_routes(app,context,mutate)
-    register_session_routes(app,context,mutate)
-    from app.planning.outlines import register_outline_routes
-    from app.planning.weeks import register_week_routes
+    register_session_routes(app,mutate)
     register_outline_routes(app,context,mutate,worker)
     register_week_routes(app,context,mutate,worker)
     @app.get('/api/v1/roadmaps/learning',response_model=LearningPlan)
@@ -66,7 +60,7 @@ def register_planner(app,context,mutate,worker):
             return row
         return await mutate(body,account,apply)
 
-    @app.get(prefix+'/evidence-proposals')
+    @app.get(prefix+'/evidence-proposals',response_model=EvidenceProposals)
     async def proposals(request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id'])
         declarations=await app.state.upstream.read('profile','/api/v1/profile/capabilities',account['token'])
@@ -76,7 +70,7 @@ def register_planner(app,context,mutate,worker):
     async def confirm_evidence(proposal_id:str,body:ConfirmEvidence,request:Request,account=Depends(authenticated)):
         row=await thread(app.state.store.load,account['id'])
         if any(receipt['id']==str(body.mutation_id) for receipt in row['receipts']):
-            return await mutate(body,account,lambda current,source:current,operation='evidence.confirm')
+            return await mutate(body,account,lambda current,_source:current,operation='evidence.confirm')
         if row.get('pending'):raise Problem('Wait for the current adviser response before confirming evidence.',409,'operation_pending')
         if row['version']!=body.expected_version:raise Problem('Your roadmap changed. Review the evidence proposal again.',409,'inputs_changed')
         proposal=next((item for item in evidence_proposals(row) if item['id']==proposal_id and item['proposal_hash']==body.proposal_hash),None)
@@ -84,7 +78,7 @@ def register_planner(app,context,mutate,worker):
         await app.state.upstream.write('profile','/api/v1/profile/capabilities',account['token'],
             {'expected_version':body.expected_declarations_version,'mutation_id':'roadmap_'+body.proposal_hash,
              'name':proposal['name'],'description':proposal['description'],'mode':'new'})
-        def apply(current,source):
+        def apply(current,_source):
             if not any(item['proposal_hash']==body.proposal_hash for item in evidence_proposals(current)):raise Problem('The session note changed before confirmation.',409,'inputs_changed')
             state=planner_state(current);state.setdefault('confirmed_evidence',[]).append(body.proposal_hash)
             return current
@@ -97,10 +91,10 @@ def register_planner(app,context,mutate,worker):
 
     @app.post(prefix+'/assignments/status',response_model=Workspace)
     async def assignment_status(body:AssignmentStatus,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             plan=active_plan(row)
             tasks=ensure_tasks(copy.deepcopy(plan))
-            task=next((t for t in tasks if not t.get('removed') and (t['id']==body.assignment_id or any(str(uuid5(NAMESPACE_URL,t['id']+':slot:'+str(i)))==body.assignment_id for i in range(1,len(t['schedule']))))),None)
+            task=next((t for t in tasks if not t.get('removed') and (t['id']==body.assignment_id or any(slot_id(t,i)==body.assignment_id for i in range(len(t['schedule']))))),None)
             if not task:raise Problem('This session was not found.',404,'not_found')
             if len(task['schedule'])!=1:raise Problem('This task has multiple sessions. Update its status using the task endpoint.',409,'task_status_required')
             desired='completed' if body.status=='completed' else 'not_started'
@@ -114,7 +108,7 @@ def register_planner(app,context,mutate,worker):
 
     @app.post(prefix+'/milestones/outcome',response_model=Workspace)
     async def milestone_outcome(body:MilestoneOutcome,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             milestone=next((m for m in active_plan(row)['milestones'] if m['id']==body.milestone_id),None)
             if not milestone:raise Problem('This milestone was not found.',404,'not_found')
             note=(body.note or '').strip()
@@ -131,7 +125,7 @@ def register_planner(app,context,mutate,worker):
     @app.post(prefix+'/milestones/checkpoint',response_model=Workspace)
     async def checkpoint(body:CheckpointReached,request:Request,account=Depends(authenticated)):
         """Self-reported: tick or untick one checkpoint inside a milestone."""
-        def apply(row,source):
+        def apply(row,_source):
             milestone=next((m for m in active_plan(row)['milestones'] if m['id']==body.milestone_id),None)
             item=next((c for c in (milestone or {}).get('checkpoints',[]) if c['key']==body.checkpoint_key),None)
             if not item:raise Problem('This checkpoint was not found.',404,'not_found')
@@ -141,7 +135,7 @@ def register_planner(app,context,mutate,worker):
 
     @app.post(prefix+'/confirmations',response_model=Workspace)
     async def confirmation(body:ExperienceConfirmation,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             state=planner_state(row)
             plan=state['outline_candidate'] or state['active']
             gap=next((g for g in (plan or {}).get('gaps',[]) if g['id']==body.gap_id),None)

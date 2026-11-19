@@ -20,7 +20,7 @@ class Sources:
     async def read(self,service,path,token,params=None):
         self.reads.append(path)
         if path.endswith('/context'):
-            return {'ready':self.ready,'issues':[] if self.ready else [{'source':'cv','message':'Select a CV.','href':'/cv'}],'input_hash':self.hash,'research_coverage':'no_findings','goal':{'role':'Developer','target_type':'specific_job','job_dates':[]},'cv':{'id':'cv1','name':'synthetic.docx'},'evidence':assessment()['evidence']}
+            return {'ready':self.ready,'issues':[] if self.ready else [{'source':'cv','message':'Select a CV.','href':'/cv'}],'input_hash':self.hash,'research_coverage':'no_findings','goal':{'role':'Developer','target_type':'specific_job','job_dates':[]},'cv':{'id':'cv1','name':'synthetic.docx'},'evidence':assessment()['evidence'],'evaluation':{'freshness':'current'}}
         if path.endswith('/operation'):return {'operation':{'status':'succeeded'},'result':self.result,'retry_request':None}
         return {'version':0,'ready':self.ready,'result':self.result,'stale':False,'evaluation':{'freshness':'current'},'operation':None}
     async def write(self,service,path,token,body):

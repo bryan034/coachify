@@ -8,8 +8,14 @@ from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, authenticated, begin, digest, launch, operation_view, stamp
 from app.planning.capacity import Capacity
 from app.planning.generator import PLAN_MAX_TOKENS, planning_assessment, set_stage
-from app.planning.state import ASSESSMENT_FIELDS, completed_sessions, config_digest, planner_state, saved_config, shape_digest, schedule_digest, with_periods, planning_source_changed
+from app.planning.milestone_membership import mark_plan_membership_changes
+from app.planning.partial_outline import recover_outline
+from app.planning.placement import reservations
+from app.planning.state import (ASSESSMENT_FIELDS, completed_sessions, config_digest, evaluation_current, planner_state, saved_config, shape_digest,
+    schedule_digest, with_periods, planning_source_changed)
+from app.planning.tasks import ensure_tasks
 from app.planning.validator import check_gaps, check_milestones, issue
+from app.planning.weeks import accept_week, publish_outline, routine_occurrences
 from app.schemas.base import Mutation
 from app.schemas.outlines import OutlineDraft, EditOutline
 from app.schemas.roadmap import GeneratePlan, OperationAccepted, PlannerConfig
@@ -18,12 +24,12 @@ from app.schemas.planner import Workspace
 # The outline and its first week are written in one operation.
 OUTLINE_SECONDS=420
 OUTLINE_MODEL_ATTEMPTS=2
-OUTLINE_INSTRUCTIONS='''Create a milestone outline for the user's career goal from the supplied assessment and capacity. Return milestones, prerequisite order, demonstrable outcomes, dates, effort and any beyond-deadline work. No milestone, checkpoint or routine may start before planning_start, even when its first week_start is earlier. Do not create tasks. Also return weeks: one objective for every entry in weekly_capacity through the target date, including rest or contingency weeks, using its week_start. Each objective names the main thing to achieve that week, an expected_outcome the user could observe, estimated_minutes within that week's usable_minutes, the milestone_key it advances (weeks with positive effort must fall inside that milestone's dates; use zero effort for unavailable or post-scope weeks and explain that no additional work is planned) and the gap_ids it works on. A week's objectives for one milestone must not total more than the milestone's estimated_minutes. Later weeks are projections that are refined as the user progresses. Material unknowns must have a diagnostic intent or a confirmation question; do not invent a skill gap. Include routine rules only where the user requested recurring practice; show weekdays, duration, topic progression and difficulty. Keep each combined activity, difficulty and topic title under 12 whitespace-separated words (at most 11), summarising the action. Routine effort is included in its milestone estimate, not additional effort. Keep work within the runway and capacity. Preserve completed work and milestone keys. Exclusions require an exact quote from the user's instruction. Correct all validation errors when supplied.'''
+OUTLINE_INSTRUCTIONS='''Create a milestone outline for the user's career goal from the supplied assessment and capacity. Return milestones, prerequisite order, demonstrable outcomes, dates, effort and any beyond-deadline work. No milestone, checkpoint or routine may start before planning_start, even when its first week_start is earlier. Do not create tasks. Also return weeks: one objective for every entry in weekly_capacity through the target date, including rest or contingency weeks, using its week_start. Each objective names the main thing to achieve that week, an expected_outcome the user could observe, estimated_minutes within that week's usable_minutes, the milestone_key it advances (weeks with positive effort must fall inside that milestone's dates; use zero effort for unavailable or post-scope weeks and explain that no additional work is planned) and the gap_ids it works on. A week's objectives for one milestone must not total more than the milestone's estimated_minutes. Later weeks are projections that are refined as the user progresses. Every requirement_ref, on a gap or an exclusion, must be one of permitted_requirement_refs; a gap without one is inferred and has no requirement_ref. Material unknowns must have a diagnostic intent or a confirmation question; do not invent a skill gap. Include routine rules only where the user requested recurring practice; show weekdays, duration, topic progression and difficulty. Keep each combined activity, difficulty and topic title under 12 whitespace-separated words (at most 11), summarising the action. Routine effort is included in its milestone estimate, not additional effort. Keep work within the runway and capacity. Preserve completed work and milestone keys. Exclusions require an exact quote from the user's instruction. Correct all validation errors when supplied.'''
 
 def clamp_to_start(draft,capacity,completed=()):
     """Move unfinished milestones, checkpoints and routines that begin before the planning start up to it.
 
-    Milestones with completed work keep their dates.
+    Milestones with completed work keep their dates. Returns the draft and the keys of the moved milestones.
     """
     start=capacity.start;finished={s['milestone_key'] for s in completed};moved=set()
     for milestone in draft.milestones:
@@ -33,7 +39,7 @@ def clamp_to_start(draft,capacity,completed=()):
             if checkpoint.date<start:checkpoint.date=start
     for rule in draft.routine_rules:
         if rule.milestone_key in moved and rule.start_date<start<=rule.end_date:rule.start_date=start
-    return draft
+    return draft,sorted(moved)
 
 def check_objectives(draft,capacity,omitted_weeks=()):
     """Weekly objectives: one for each week that can hold study, inside its milestone and that week's hours."""
@@ -51,7 +57,7 @@ def check_objectives(draft,capacity,omitted_weeks=()):
             errors.append(issue('week_outside_milestone',f"{label} falls outside the dates of milestone '{item.milestone_key}'."))
         else:effort[item.milestone_key]=effort.get(item.milestone_key,0)+item.estimated_minutes
         if item.estimated_minutes>rows[item.week_start]['usable_minutes']:
-            errors.append(issue('week_effort_exceeds_hours',f"{label} estimates {item.estimated_minutes} minutes, above that week's {capacity.cap_for(item.week_start)}."))
+            errors.append(issue('week_effort_exceeds_hours',f"{label} estimates {item.estimated_minutes} minutes, above that week's {rows[item.week_start]['usable_minutes']} usable minutes."))
         for gap in sorted(set(item.gap_ids)-gaps):errors.append(issue('unknown_gap',f"{label} names unknown gap '{gap}'."))
     missing=[week.isoformat() for week in rows if week not in seen and week.isoformat() not in omitted_weeks]
     if missing:errors.append(issue('week_missing','Give every week through the target date an objective, including weeks without additional study work. Missing: '+', '.join(missing[:8])+'.'))
@@ -63,7 +69,6 @@ def check_objectives(draft,capacity,omitted_weeks=()):
 def validate_outline(draft, capacity, assessment, confirmations, completed=(), instruction=None, existing=None, authorized_exclusions=(), require_weeks=False, partial_review=None):
     # Milestone capacity is checked on a copy whose estimates exclude work already saved.
     plan=draft.model_copy(deep=True)
-    from app.planning.tasks import ensure_tasks
     tasks=ensure_tasks(copy.deepcopy(existing)) if existing else []
     allocated={};saved_effort={}
     for task in tasks:
@@ -82,8 +87,7 @@ def validate_outline(draft, capacity, assessment, confirmations, completed=(), i
         if saved_effort.get(milestone.key,0)>milestone.estimated_minutes:
             errors.append(issue('milestone_effort_below_saved_work',f"Milestone '{milestone.key}' estimates less effort than its saved tasks."))
     partial_review=partial_review or {}
-    errors.extend(e for e in check_gaps(plan,assessment,confirmations,instruction,authorized_exclusions,partial_review.get('uncovered_requirements',[]))
-        if not (e['code']=='unresolved_material_unknown' and 'diagnostic assignment' in e['message']))
+    errors.extend(check_gaps(plan,assessment,confirmations,instruction,authorized_exclusions,partial_review.get('uncovered_requirements',[])))
     if draft.gaps and not draft.milestones and not draft.beyond_deadline:
         errors.append(issue('no_milestones','Define milestones for the gaps you identified.'))
     if require_weeks or draft.weeks:errors.extend(check_objectives(draft,capacity,{item['id'] for item in partial_review.get('omitted_items',[]) if item['kind']=='week'}))
@@ -126,7 +130,6 @@ def validate_outline(draft, capacity, assessment, confirmations, completed=(), i
                 week=capacity.week(day);weekly[week]=weekly.get(week,0)+rule.duration_minutes
             day+=timedelta(days=1)
     if draft.routine_rules and capacity.target:
-        from app.planning.weeks import routine_occurrences
         preview={**draft.model_dump(mode='json'),'assessment_id':'validation','assessment_hash':'validation'}
         try:routine_occurrences(preview,capacity.config,capacity.start,capacity.target+timedelta(days=1),capacity.now,existing)
         except Problem as error:errors.append(issue('routine_conflict',error.detail))
@@ -141,8 +144,6 @@ def validate_outline(draft, capacity, assessment, confirmations, completed=(), i
     return errors[:100]
 
 def outline_reservations(plan):
-    if not plan:return []
-    from app.planning.placement import reservations
     return reservations(plan)
 
 def authorized_exclusions(outline):
@@ -157,7 +158,7 @@ def draft_from_outline(outline):
         for checkpoint in m.get('checkpoints',[]):checkpoint.pop('reached_at',None)
     return OutlineDraft.model_validate(data)
 
-def build_outline(draft,result,config,first_week,operation_id,attempts,active,confirmations,progress_plan=None):
+def build_outline(draft,result,config,first_week,operation_id,attempts,active,confirmations,progress_plan=None,clamped=()):
     data=draft.model_dump(mode='json')
     previous={m['key']:m for m in (active or {}).get('milestones',[])}
     previous.update({m['key']:m for m in (progress_plan or {}).get('milestones',[])})
@@ -185,18 +186,24 @@ def build_outline(draft,result,config,first_week,operation_id,attempts,active,co
         'assessment':{k:result.get(k) for k in ASSESSMENT_FIELDS},'config':config.model_dump(mode='json'),
         'config_hash':config_digest(config),'confirmations_hash':digest(confirmations),'base_active_id':(active or {}).get('id'),
         'base_progress_hash':digest(progress_plan),
-        'created_at':stamp(),'first_planning_week':first_week,'generation':{'prompt_version':'roadmap-outline-v1','attempts':attempts}}
+        'created_at':stamp(),'first_planning_week':first_week,'generation':{'prompt_version':'roadmap-outline-v1','attempts':attempts,
+            **({'clamped_milestones':list(clamped)} if clamped else {})}}
 
-async def prepare_outline(app,row,account,assess,read_context,*,config=None,instruction=None,user_message=None):
-    owner=account['id'];state=planner_state(row);operation_id=row['pending']['id']
+async def prepare_outline(app,row,account,assess,read_context,*,config=None,instruction=None,user_message=None,into=None):
+    """Write and validate an outline preview into `into`, or into the planner state.
+
+    A checkpoint replaces the row's planner state, so it is read again after each stage.
+    """
+    def destination():return planner_state(row) if into is None else into
+    state=destination();owner=account['id'];operation_id=row['pending']['id']
     periods=account['profile'].get('availability_periods',[])
     config=with_periods(config or saved_config(state),periods)
     await set_stage(app,row,owner,'assessing')
-    result=await assess(account,operation_id,row['pending']['body'].get('allow_partial_assessment',False))
+    result=await assess(account)
     source=await read_context(account)
     if not source['ready'] or source.get('input_hash')!=result['input_hash']:raise Problem('Your selected inputs changed. Refresh before planning.',409,'inputs_changed')
     await set_stage(app,row,owner,'writing')
-    state=planner_state(row);active=state['active'];accepted=state['outline_active'];confirmations=state['confirmations'];now=app.state.clock()
+    state=destination();active=state['active'];accepted=state['outline_active'];confirmations=state['confirmations'];now=app.state.clock()
     completed=completed_sessions(active);capacity=Capacity(config,now,outline_reservations(active))
     report=capacity.report(allow_past_start=bool(active or accepted))
     if not report['can_generate']:raise Problem(' '.join(i['message'] for i in report['issues']),409,'generation_blocked')
@@ -204,18 +211,18 @@ async def prepare_outline(app,row,account,assess,read_context,*,config=None,inst
         'assessment':planning_assessment(result),'settings':config.model_dump(mode='json',exclude={'reduced_periods','time_format','goal_unit'}),
         'planning_start':capacity.start.isoformat(),'runway':{k:report[k] for k in ('calendar','study')},'weekly_capacity':report['weeks'],
         'completed_work':completed,'confirmations':confirmations,'current_outline':state['outline_candidate'] or accepted,
-        'instruction':instruction,'user_message':user_message}
-    errors=[];previous=None;partial_review=None
+        'instruction':instruction,'user_message':user_message,
+        'permitted_requirement_refs':sorted({r['ref'] for section in ('job_skill_gaps','interview_prep_gaps') for r in result.get(section,[])})}
+    errors=[];previous=None;partial_review=None;clamped=[]
     for attempt in range(1,OUTLINE_MODEL_ATTEMPTS+1):
         request={**context,'attempt':attempt}
         if errors:
             await set_stage(app,row,owner,'correcting');request.update(validation_errors=errors,previous_output=previous)
-        draft=clamp_to_start(await app.state.model.generate(OutlineDraft,OUTLINE_INSTRUCTIONS,request,max_tokens=PLAN_MAX_TOKENS),capacity,completed)
+        draft,clamped=clamp_to_start(await app.state.model.generate(OutlineDraft,OUTLINE_INSTRUCTIONS,request,max_tokens=PLAN_MAX_TOKENS),capacity,completed)
         errors=validate_outline(draft,capacity,result,confirmations,completed,user_message,active,authorized_exclusions(state['outline_candidate'] or accepted),require_weeks=True)
         if not errors:break
         previous=draft.model_dump(mode='json')
     else:
-        from app.planning.partial_outline import recover_outline
         recovered,partial_review=recover_outline(draft,result,active)
         if recovered:
             remaining=validate_outline(recovered,capacity,result,confirmations,completed,user_message,active,authorized_exclusions(state['outline_candidate'] or accepted),require_weeks=True,partial_review=partial_review)
@@ -225,9 +232,10 @@ async def prepare_outline(app,row,account,assess,read_context,*,config=None,inst
     latest=await app.state.upstream.account(account['token']);fresh=await read_context(latest)
     if latest['id']!=owner:raise Problem('Your account changed while preparing this outline.',401,'session')
     if planning_source_changed(source,fresh):raise Problem('Your evidence, goal, evaluation or availability changed. Retry with the latest inputs.',409,'inputs_changed')
-    planner_state(row)['config']=config.model_dump(mode='json')
-    state=planner_state(row)
-    state['outline_candidate']=build_outline(draft,result,config,report['first_planning_week'],operation_id,attempt,accepted,confirmations,active)
+    state=destination();state['config']=config.model_dump(mode='json')
+    retained={m.key for m in draft.milestones}
+    state['outline_candidate']=build_outline(draft,result,config,report['first_planning_week'],operation_id,attempt,accepted,confirmations,active,
+        [key for key in clamped if key in retained])
     if partial_review:state['outline_candidate']['partial_review']=partial_review
     # A week preview belongs to one outline preview.
     state['week_candidate']=None
@@ -235,13 +243,12 @@ async def prepare_outline(app,row,account,assess,read_context,*,config=None,inst
 
 def accept_outline(state,source,identifier,now,*,require_first_week=False):
     """Publish the outline, and with it the first week when its preview is still valid."""
-    from app.planning.weeks import accept_week, publish_outline
     candidate=state['outline_candidate'];active=state['outline_active']
     if not candidate or candidate['id']!=identifier:raise Problem('This outline preview was not found.',404,'not_found')
     if not source.get('ready') or source.get('input_hash')!=candidate['assessment_hash'] or shape_digest(saved_config(state))!=shape_digest(PlannerConfig.model_validate(candidate['config'])) \
             or digest(state['confirmations'])!=candidate['confirmations_hash'] or (active or {}).get('id')!=candidate['base_active_id']:
         raise Problem('The outline inputs changed. Generate a fresh preview.',409,'inputs_changed')
-    if (source.get('evaluation') or {}).get('freshness','current')!='current':
+    if not evaluation_current(source):
         raise Problem('Update your skill evaluation before accepting this roadmap.',409,'assessment_required')
     if candidate['base_progress_hash']!=digest(state['active']):
         raise Problem('Your saved progress changed. Review a fresh outline preview.',409,'progress_changed')
@@ -275,7 +282,6 @@ def accept_outline(state,source,identifier,now,*,require_first_week=False):
     state['outline_active']=candidate;state['outline_candidate']=None
     previous=state['active']
     state['active']=publish_outline(candidate,previous)
-    from app.planning.milestone_membership import mark_plan_membership_changes
     mark_plan_membership_changes(previous,state['active'])
     week=state.get('week_candidate')
     if require_first_week and (not week or week['outline_id']!=candidate['id']):
@@ -333,7 +339,7 @@ def register_outline_routes(app,context,mutate,worker):
         return await mutate(body,account,apply,operation='outline.accept:'+identifier,mark_baseline=True)
     @app.post(prefix+'/{identifier}/discard',response_model=Workspace)
     async def discard(identifier:str,body:Mutation,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             state=planner_state(row);candidate=state['outline_candidate']
             if not candidate or candidate['id']!=identifier:raise Problem('This outline preview was not found.',404,'not_found')
             week=state.get('week_candidate')

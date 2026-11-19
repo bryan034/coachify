@@ -252,9 +252,10 @@ def test_milestone_dated_from_an_earlier_week_start_is_moved_to_the_planning_sta
         'duration_minutes':30,'start_date':'2030-01-07','end_date':'2030-01-14'}
     value=outline(milestones=[milestone(projected_start='2030-01-07',checkpoints=[{'key':'c1','title':'First endpoint','date':'2030-01-08'}])],routine_rules=[routine])
     assert 'milestone_before_start' in {e['code'] for e in validate_outline(value,capacity,assessment(),{})}
-    fixed=clamp_to_start(value,capacity)
+    fixed,moved=clamp_to_start(value,capacity)
+    assert moved==['m1']
     assert str(fixed.milestones[0].projected_start)=='2030-01-09' and str(fixed.milestones[0].checkpoints[0].date)=='2030-01-09'
     assert str(fixed.routine_rules[0].start_date)=='2030-01-09'
     assert 'milestone_before_start' not in {e['code'] for e in validate_outline(fixed,capacity,assessment(),{})}
-    kept=clamp_to_start(outline(milestones=[milestone(projected_start='2030-01-07')]),capacity,[{'milestone_key':'m1','duration_minutes':60}])
-    assert str(kept.milestones[0].projected_start)=='2030-01-07'
+    kept,moved=clamp_to_start(outline(milestones=[milestone(projected_start='2030-01-07')]),capacity,[{'milestone_key':'m1','duration_minutes':60}])
+    assert str(kept.milestones[0].projected_start)=='2030-01-07' and moved==[]
