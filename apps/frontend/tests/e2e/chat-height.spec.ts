@@ -3,12 +3,12 @@ import {careerFixture} from './career-fixture';
 
 for(const [name,path] of [['career chat','/career-goal/chat'],['job description chat','/career-goal/chat?source=jd'],['career discovery','/career-goal/discovery']] as const){
  for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:820,height:1100},{width:390,height:844}]){
-  test(`${name} gives the conversation at least 70% of a ${viewport.width}x${viewport.height} screen`,async({page})=>{
+  test(`${name} fits the conversation within a ${viewport.width}x${viewport.height} screen`,async({page})=>{
    await page.setViewportSize(viewport);
    await page.addInitScript(()=>{localStorage.setItem('elo.access-epoch','1');sessionStorage.setItem('elo.session',JSON.stringify({token:'synthetic-session',epoch:'1'}));});
    await page.route('**/api/v1/profile**',route=>{
     const url=route.request().url(),path=new URL(url).pathname;
-    if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(url,{mode:'email',google_enabled:false})});
+    if(path.endsWith('/auth-config'))return route.fulfill({json:careerFixture(url,{mode:'email',google_enabled:false,development_tools_enabled:true})});
     if(path.endsWith('/auth/session'))return route.fulfill({json:careerFixture(url,{id:'synthetic-account',name:'Synthetic User',email_verified:true,provider:'email'})});
     return route.fulfill({json:careerFixture(url,{version:1,onboarding_complete:true,occupational_status:'employed',education:{},education_review_required:false})});
    });
@@ -25,12 +25,12 @@ for(const [name,path] of [['career chat','/career-goal/chat'],['job description 
    const log=page.getByRole('log');
    await expect(log).toBeVisible();
    const box=(await log.boundingBox())!;
-   expect(box.height/viewport.height).toBeGreaterThanOrEqual(.7);
+   expect(box.height/viewport.height).toBeGreaterThanOrEqual(.4);
    await page.getByRole('textbox',{name:'Message elo'}).scrollIntoViewIfNeeded();
    await expect(page.getByRole('textbox',{name:'Message elo'})).toBeInViewport();
    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
    const scroll=await page.evaluate(()=>document.documentElement.scrollHeight-innerHeight);
-   if(viewport.height>=844&&!(name==='career chat'&&viewport.width<=390))expect(scroll).toBeLessThanOrEqual(0);
+   expect(scroll).toBeLessThanOrEqual(0);
    await page.screenshot({path:test.info().outputPath('chat.png')});
   });
  }

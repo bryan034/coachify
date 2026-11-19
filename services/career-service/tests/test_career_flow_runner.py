@@ -31,11 +31,11 @@ def test_every_attempt_is_retained_and_failure_cannot_be_hidden_by_later_success
             return Ready()
     monkeypatch.setattr(module,'build_opener',lambda *args:Opener())
     calls=[]
-    results=iter([1,0,0,0])
+    results=iter([1,0])
     def execute(command,**kwargs):
         calls.append((command,kwargs))
         env=kwargs['env']
-        assert env['CAREER_LLM_API_KEY']=='' and 'UNRELATED_SECRET' not in env
+        assert env['CAREER_LLM_API_KEY']=='synthetic-fixture-key' and 'UNRELATED_SECRET' not in env
         if command[0]=='npx':return SimpleNamespace(returncode=next(results))
         if 'logs' in command:
             if kwargs.get('capture_output'):assert '--since' in command
@@ -45,16 +45,16 @@ def test_every_attempt_is_retained_and_failure_cannot_be_hidden_by_later_success
         assert command[:4]==['docker','compose','--env-file','/dev/null']
         return SimpleNamespace(returncode=0)
     monkeypatch.setattr(module.subprocess,'run',execute)
-    args=SimpleNamespace(mode='both',port=8093,mail_port=8036,no_build=True,skip_boundary=True,repeat=2,keep=False)
+    args=SimpleNamespace(port=8093,mail_port=8036,no_build=True,skip_boundary=True,repeat=2,keep=False)
     with pytest.raises(RuntimeError,match='Career journey failed'):module.run(args)
     reports=list((tmp_path/'apps/frontend/test-results/career-flow/reports').glob('*.json'))
     assert len(reports)==1
     report=json.loads(reports[0].read_text())
-    assert [attempt['passed'] for attempt in report['attempts']]==[False,True,True,True]
-    assert [attempt['mode'] for attempt in report['attempts']]==['fixture','fixture','local','local']
-    assert [attempt['attempt'] for attempt in report['attempts']]==[1,2,1,2]
+    assert [attempt['passed'] for attempt in report['attempts']]==[False,True]
+    assert [attempt['mode'] for attempt in report['attempts']]==['fixture','fixture']
+    assert [attempt['attempt'] for attempt in report['attempts']]==[1,2]
     assert all(len(attempt['diagnostics'])==1 for attempt in report['attempts'])
     assert 'PRIVATE' not in reports[0].read_text()
     assert 'down' in calls[-1][0] and '--volumes' in calls[-1][0]
     outputs=[call[0][call[0].index('--output')+1] for call in calls if call[0][0]=='npx']
-    assert len(set(outputs))==4
+    assert len(set(outputs))==2

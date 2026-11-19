@@ -157,10 +157,19 @@ class LearningItem(Contract):
         if self.importance_origin=='stated' and not self.evidence:raise ValueError('Stated learning detail needs source evidence.')
         return self
 
+class TargetExample(Contract):
+    """Something candidates or public sources reported about the skill, with the source that reported it."""
+    text: Evidence
+    source_url: SourceUrl | None = None
+
 class CompetenceTarget(Contract):
     level: int = Field(ge=1, le=10, strict=True)
     basis: Literal['job_description', 'research', 'inferred']
+    # A short summary of why the role needs this level; the parts below hold the detail when research rated it.
     explanation: Evidence
+    employer_demand: Evidence | None = None
+    reported_examples: list[TargetExample] = Field(default_factory=list, max_length=2)
+    rating_reason: Evidence | None = None
     source_urls: list[SourceUrl] = Field(default_factory=list, max_length=10)
 
 class TargetSkill(Contract):
@@ -431,7 +440,7 @@ class ResearchContext(Contract):
 
 class ResearchCoverage(Contract):
     # Keep historical mixed-provider records readable beside configured search.
-    platform: Literal['brave','reddit','deepseek']
+    platform: Literal['brave','reddit']
     status: Literal['succeeded','no_findings','unavailable','not_connected']
     round: int = Field(default=0,ge=0,le=5)
     useful_sources:int|None=Field(default=None,ge=0,le=6)

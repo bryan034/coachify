@@ -78,11 +78,12 @@ it('keeps provenance and safe sources, and shows the job’s own words only as e
  const goal={...workspace.current.goal!,skills:[{...sql,group_id:'alternatives',group_operator:'any' as const,context:'Maintain relational data.',evidence:'SQL or another query language.',source_urls:['https://example.test/job','javascript:alert(1)']},{...extraction.skills[1],origin:'generated_guidance' as const,priority:'suggested' as const}]};
  overview({...workspace,current:{...workspace.current,goal}});
  fireEvent.click(within(row('SQL')).getByRole('button',{name:/^SQL/}));
+ expect(within(row('SQL')).getByText('Why the target is 8 / 10')).toBeVisible();
+ expect(within(row('SQL')).getByText(/Write joins and window queries unaided\./)).toBeVisible();
  fireEvent.click(within(row('SQL')).getByRole('button',{name:'See evidence'}));
  expect(screen.getByText('Maintain relational data.')).toBeVisible();
  expect(screen.queryByText('SQL or another query language.')).not.toBeInTheDocument();
  expect(screen.getByText(/Alternative requirement/)).toBeVisible();
- expect(screen.getByText(/Target 8 \/ 10\. Write joins and window queries unaided\./)).toBeVisible();
  expect(screen.getByRole('link',{name:/example\.test/})).toHaveAttribute('href','https://example.test/job');
  expect(document.querySelector('a[href^="javascript:"]')).toBeNull();
  expect(within(row('Teamwork')).getByText(/Nice to have · inferred by elo/)).toBeInTheDocument();
@@ -113,6 +114,39 @@ it('counts skills as ready, getting there, to build or not rated against each ta
  fireEvent.click(screen.getByRole('button',{name:'1 Not rated'}));
  expect(screen.getByRole('button',{name:/^D/})).toBeVisible();expect(screen.queryByRole('button',{name:/^A/})).not.toBeInTheDocument();
 });
+it('shows the goal’s target beside a skill that is not rated yet',()=>{
+ const target={level:7,basis:'inferred' as const,explanation:'Estimated from the role.',source_urls:[]};
+ render(<SkillsNeeded skills={[{...sql,competence_target:target}]}/>);
+ expect(row('SQL').querySelector('.ws-score')).toHaveTextContent('Not rated / 7');
+});
+it('explains a researched target by the employer’s demand, what people report and elo’s reason',()=>{
+ const target={level:8,basis:'research' as const,explanation:'Interviews probe SQL hard.',rating_reason:'Interviews probe SQL hard, so elo set 8.',employer_demand:'Write the team’s reporting queries.',
+  reported_examples:[{text:'Candidates wrote a window query live.',source_url:'https://www.example.test/post'},{text:'Asked to explain joins.',source_url:'javascript:alert(1)'}],source_urls:[]};
+ render(<SkillsNeeded skills={[{...sql,competence_target:target}]}/>);
+ fireEvent.click(screen.getByRole('button',{name:/^SQL/}));
+ const why=within(row('SQL'));
+ expect(why.getByText('Write the team’s reporting queries.')).toBeVisible();
+ expect(why.getByText('What people report.')).toBeVisible();
+ expect(why.getByRole('link',{name:/example\.test/})).toHaveAttribute('href','https://www.example.test/post');
+ expect(why.getByText('Asked to explain joins.')).toBeVisible();
+ expect(document.querySelector('a[href^="javascript:"]')).toBeNull();
+ expect(why.getByText('Interviews probe SQL hard, so elo set 8.')).toBeVisible();
+ expect(why.getByText('From role research')).toBeVisible();
+});
+it('explains the target and the person’s level when a skill is opened',()=>{
+ const skill={...sql,item_id:'sql'};
+ const {rerender}=render(<SkillsNeeded skills={[skill]} outcomes={{sql:outcome({demonstrated_score:6,required_score:8,score_explanation:'Wrote reporting queries in one internship.'})}}/>);
+ fireEvent.click(screen.getByRole('button',{name:/^SQL/}));
+ expect(within(row('SQL')).getByText('Why the target is 8 / 10')).toBeVisible();
+ expect(within(row('SQL')).getByText('From the job description')).toBeVisible();
+ expect(within(row('SQL')).getByText('Why you’re at 6 / 10')).toBeVisible();
+ expect(within(row('SQL')).getByText('Wrote reporting queries in one internship.')).toBeVisible();
+ fireEvent.click(within(row('SQL')).getByRole('button',{name:'See evidence'}));
+ expect(screen.getAllByText('Wrote reporting queries in one internship.')).toHaveLength(1);
+ // An evaluation's own target isn't explained by the goal's reason for a different level.
+ rerender(<SkillsNeeded skills={[skill]} outcomes={{sql:outcome({demonstrated_score:6,required_score:7})}}/>);
+ expect(within(row('SQL')).queryByText(/Why the target/)).not.toBeInTheDocument();
+});
 it('reads a level from the skill’s own score, or from progress towards the target on older evaluations',()=>{
  expect(goalSkillLevel(sql,outcome({demonstrated_score:6,required_score:7}))).toEqual({level:6,target:7});
  expect(goalSkillLevel(sql,outcome({competence_score:5,required_score:8}))).toEqual({level:4,target:8});
@@ -121,6 +155,20 @@ it('reads a level from the skill’s own score, or from progress towards the tar
  expect(goalSkillLevel(sql,undefined,[{name:' sql ',level:4}])).toEqual({level:4,target:8});
  expect(goalSkillLevel(sql,outcome({demonstrated_score:6,required_score:7}),[{name:sql.name,level:4}])).toEqual({level:6,target:7});
  expect(goalSkillLevel(sql,undefined,[{name:'Python',level:4}])).toEqual({level:null,target:8});
+});
+it('lists the person’s skills that count towards a goal skill and the smaller skills it breaks down into',()=>{
+ const python={...extraction.skills[0],name:'Python',item_id:'python',canonical_skill_id:'python',learning_items:[
+  {item_id:'l1',name:'pytest',importance:'high' as const,importance_origin:'inferred' as const,reason:'Tests show reliable code.',source_urls:[]},
+  {item_id:'l2',name:'Type hints',importance:'medium' as const,importance_origin:'inferred' as const,reason:'Readable interfaces.',source_urls:[]},
+  {item_id:'l3',name:'SQL',importance:'low' as const,importance_origin:'inferred' as const,reason:'Repeats a goal skill.',source_urls:[]}]};
+ const outcomes={python:outcome({ref:'job:python',name:'Python',profile_skills:[{name:'Pandas',competence_score:6,required_score:8}]})};
+ render(<SkillsNeeded skills={[python,sql]} outcomes={outcomes} profileSkills={[{name:'Python',canonicalId:'python',level:5},{name:'Pandas',level:null},{name:'pytest',level:null},{name:'Docker',level:3}]}/>);
+ const counted=screen.getByRole('list',{name:'Your skills that count towards Python'});
+ expect(within(counted).getAllByRole('listitem').map(item=>item.textContent)).toEqual(['Python5/10','Pandas6/10','pytest']);
+ const parts=screen.getByRole('list',{name:'Python breaks down into'});
+ expect(within(parts).getAllByRole('listitem').map(item=>item.textContent)).toEqual(['In your skills: pytest','Type hints']);
+ // A goal skill matched only by its own name repeats nothing, so it shows no breakdown.
+ expect(screen.queryByRole('list',{name:/towards SQL/})).not.toBeInTheDocument();
 });
 it('opens Talk it through for a skill and explains its target',()=>{
  render(<CareerSessionProvider><SkillsNeeded skills={[sql]} talk={vi.fn()}/></CareerSessionProvider>);
@@ -134,7 +182,7 @@ it('opens the drawer from a skill row on the Career Goal page',async()=>{
  fireEvent.click(row('SQL').querySelector('button')!);
  fireEvent.click(within(row('SQL')).getByRole('button',{name:'Rate this skill'}));
  const dialog=await screen.findByRole('dialog',{name:'SQL'});
- expect(within(dialog).getByText(/If your CV review doesn’t show solid evidence/)).toBeVisible();
+ expect(within(dialog).getByText('Without clear evidence, elo assumes you had guidance.')).toBeVisible();
  fireEvent.click(within(dialog).getByRole('button',{name:'Close chat'}));
  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'SQL'})).not.toBeInTheDocument());
 });

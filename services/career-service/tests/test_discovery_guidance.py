@@ -142,15 +142,15 @@ def test_previous_intro_stays_display_only_after_guidance_copy_changes():
         {'role':'user','content':'Hi'}])==[{'role':'user','content':'Hi'}]
 
 
-def local_settings(**updates):
-    return AISettings(**{'enabled':True,'provider':'local','model':'synthetic',
-        'base_url':'http://127.0.0.1:11434/v1','response_mode':'json_object',
+def model_settings(**updates):
+    return AISettings(**{'enabled':True,'model':'synthetic','api_key':'synthetic',
+        'base_url':'https://example.test/v1','response_mode':'json_schema_strict',
         'context_tokens':16384,**updates})
 
 
 @pytest.mark.parametrize('context_tokens',[16384,65536])
 def test_discovery_history_fits_token_budget_without_clipping_messages(context_tokens):
-    adapter=AIAdapter(local_settings(context_tokens=context_tokens),None)
+    adapter=AIAdapter(model_settings(context_tokens=context_tokens),None)
     context=json.dumps({'memory':{'preferences':['Avoid desk work']},'understanding':{},'facts':[]})
     history=[Message(role='user' if i%2==0 else 'assistant',
         content=f'Turn {i}: '+('數據 career preferences '*130)) for i in range(28)]
@@ -169,7 +169,7 @@ def test_discovery_history_fits_token_budget_without_clipping_messages(context_t
 
 
 def test_discovery_current_input_and_memory_cannot_be_trimmed_to_fit():
-    adapter=AIAdapter(local_settings(context_tokens=8192),None)
+    adapter=AIAdapter(model_settings(context_tokens=8192),None)
     with pytest.raises(AIError,match='context_limit'):
         adapter._payload(AIInput(stage='discovery_turn',context=json.dumps({'memory':'數據 '*4000},ensure_ascii=False),
             conversation=[Message(role='user',content='Keep my preferences.')]))
@@ -180,32 +180,22 @@ def test_long_discovery_history_does_not_widen_other_chat_inputs():
         AIInput(stage='jd_chat',context='{}',conversation=[{'role':'user','content':'x'*4001}])
 
 
-@pytest.mark.parametrize('mode',['json_object','json_schema','json_schema_strict'])
-def test_local_chat_constrains_decision_fields_and_explains_output_shape(mode):
-    payload=AIAdapter(local_settings(response_mode=mode),None)._payload(AIInput(
+def test_chat_constrains_decision_fields_and_explains_output_shape():
+    payload=AIAdapter(model_settings(),None)._payload(AIInput(
         stage='discovery_turn',context='{"scope":null,"facts":[]}',conversation=[Message(role='user',content='hi')]))
     response=payload['response_format']
-    assert response['type']=='json_schema'
+    assert response['type']=='json_schema' and response['json_schema']['strict'] is True
     schema=response['json_schema']['schema']
     assert {'action','scope','question','reply'}<=set(schema['required'])
     assert schema['additionalProperties'] is False
-    if mode=='json_object':assert response['json_schema']['strict'] is True
-    prompt=payload['messages'][0]['content']
-    assert 'TOP LEVEL' in prompt and 'JSON schema:' in prompt
+    assert 'TOP LEVEL' in payload['messages'][0]['content']
     incoming=json.loads(payload['messages'][1]['content'])
     assert incoming['context']=={'scope':None,'facts':[]}
     assert incoming['conversation']==[{'role':'user','content':'hi'}]
 
 
-def test_deepseek_chat_requests_schema_constrained_output():
-    payload=AIAdapter(local_settings(provider='deepseek',base_url='https://api.deepseek.com/v1',
-        api_key='synthetic'),None)._payload(AIInput(stage='discovery_turn',context='{}'))
-    assert payload['response_format']['type']=='json_schema'
-    assert payload['response_format']['json_schema']['strict'] is True
-
-
 def test_compatible_json_only_endpoint_cannot_silently_drop_constraints():
-    adapter=AIAdapter(local_settings(provider='compatible',base_url='https://example.test/v1',api_key='synthetic'),None)
+    adapter=AIAdapter(model_settings(response_mode='json_object'),None)
     with pytest.raises(AIError,match='unsupported_structured_output'):
         adapter._payload(AIInput(stage='discovery_turn',context='{}'))
 
@@ -223,7 +213,7 @@ def test_real_adapter_repairs_failed_sections_or_returns_safe_partial_chat(conve
         return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            engine.ai=AIAdapter(local_settings(),client)
+            engine.ai=AIAdapter(model_settings(),client)
             action=engine.converse(row['_id'],row['owner'],'adapter-key',DiscoveryMessage(expected_version=1,message='What does an analyst do?'))
             result=await action
             if permanently_invalid:

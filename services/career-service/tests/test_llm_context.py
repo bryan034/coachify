@@ -172,15 +172,18 @@ def test_rich_retrieval_keeps_citation_quotes_within_the_existing_contract():
     assert all(v['source_ids']==['rich'] for v in items)
 
 
-def test_opportunity_requests_and_retains_only_three_brave_sources():
+def test_opportunity_requests_five_brave_sources_with_wider_page_text():
     async def run():
         def handler(request):
-            assert request.url.params['maximum_number_of_urls']=='3'
+            params=request.url.params
+            assert params['maximum_number_of_urls']=='5' and params['maximum_number_of_tokens']=='16384' and params['count']=='50'
+            assert params['context_threshold_mode']=='lenient'
+            assert params['maximum_number_of_snippets_per_url']=='12' and params['maximum_number_of_snippets']=='60'
             return httpx.Response(200,json={'grounding':{'generic':[
                 {'url':f'https://example.test/{i}','snippets':[f'Candidate {i} reports an interview.']}
                 for i in range(6)]}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             sources=await SourceAPIs(client,brave_key='fixture').collect_opportunity_query(
                 ResearchContext(role='Analyst',field='Data'),'Analyst interview')
-        assert len(sources)==3 and len({s.url for s in sources})==3
+        assert len(sources)==5 and len({s.url for s in sources})==5
     asyncio.run(run())

@@ -29,7 +29,7 @@ No live provider or real CV is used. These tests validate contracts and storage/
 
 The public `contracts/api/models/cv.schema.json` is generated from `CvDetail`, the saved-CV API response. Career may project that response into its own context contract; that projection does not replace the CV schema or create another CV store. Read-contract checks exercise authenticated sparse listings, owner isolation, private-field exclusion, read-only GET behavior, and strict rejection of injected write controls. Repository checks retain idempotency and conflicting-upload protection for both adapters.
 
-Storage regressions run against both adapters: concurrent owner/global admission,
+Storage regressions run against both adapters: concurrent per-account admission,
 same-key uploads, original-byte expiry versus persistent record limits, every
 reservation/file/record publication interruption, ambiguous Mongo acknowledgements,
 live-writer exclusion, stale-generation release, preserved over-limit legacy data,
@@ -39,7 +39,7 @@ retain prior evidence after oversized extraction, recover deletion interruptions
 and advance past full pages of poison cleanup/ingestion records. Mongo7 local
 functional results do not establish Mongo8 compatibility or live-provider quality.
 
-Model-admission regressions exercise shared owner/global daily budgets across
+Model-admission regressions exercise shared per-account daily budgets across
 instances/restarts, real Mongo CAS contention, committed acknowledgement loss,
 UTC rollover and backwards clocks, bounded owner maps, disabled providers and
 receipt replays. Actual OS-lock tests cover owner fairness across routing,
@@ -62,8 +62,8 @@ maximum interpretation fields plus worker bookkeeping. Private reservation data
 is excluded from public CV responses.
 
 Provider adapter tests exercise OpenAI SDK requests using explicit HTTP mocks,
-including full-bound decoding schemas, backend limits, DeepSeek extensions and local credential
-isolation. Shared transport tests cover bounded bodies, redirects and SDK retry
+including full-bound decoding schemas, backend limits, absence of vendor extensions and
+credential handling. Shared transport tests cover bounded bodies, redirects and SDK retry
 suppression. No live provider credentials are used.
 
 Extraction-failure tests cover provider HTTP status, SDK connection/timeouts,

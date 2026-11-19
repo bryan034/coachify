@@ -47,8 +47,7 @@ def next_query(state,context):
 
 async def renew(workflow,state):
     await workflow.valid(state)
-    local=getattr(getattr(workflow.app.state.ai,'settings',None),'provider',None)=='local'
-    expires=now()+timedelta(seconds=660 if local else 240)
+    expires=now()+timedelta(seconds=240)
     await thread(workflow.db.career_state.update_one,{'_id':state['owner'],'workspace.run_id':state['run']},
                  {'$set':{'workspace.worker_until':expires}})
     token=state.get('cache',{}).get('token')

@@ -10,8 +10,8 @@ export function levelStatus(level: number | null | undefined, target: number | n
  return level >= need ? 'ready' : level >= need * 0.7 ? 'getting' : 'build';
 }
 
-/** "4 / 8" against a target, "4 / 10" without one. */
-export const levelText = (level: number | null | undefined, target: number | null | undefined) => level == null ? 'Not rated' : `${level} / ${target ?? 10}`;
+/** "4 / 8" against a target, "4 / 10" without one; an unrated skill still shows the goal's target ("Not rated / 8"). */
+export const levelText = (level: number | null | undefined, target: number | null | undefined) => level == null ? (target == null ? 'Not rated' : `Not rated / ${target}`) : `${level} / ${target ?? 10}`;
 
 const fold = (value: string) => value.trim().toLowerCase();
 /** Whether a roadmap task names this skill, by registry identity or by name. */

@@ -2,12 +2,10 @@
 
 Provider configuration: the service now reads its own `*_LLM_BASE_URL`,
 `*_LLM_MODEL`, `*_LLM_API_KEY` and `*_LLM_ALLOW_HTTP`. HTTPS is required outside
-explicit development HTTP mode. Local testing can share the 16K-context
-`elo-deepseek-r1:1.5b` Ollama alias, without sending preserved cloud keys.
-Providers receive JSON Output plus the schema in the prompt;
-all responses still undergo the existing Pydantic and domain checks. Local calls
-serialize per service instance and use a 180-second HTTP timeout; operations use
-240-second weekly budgets; combined outline-plus-first-week generation has a 420-second budget. Checkpoints preserve each operation’s full lease with a 30-second margin for both local and cloud operations.
+explicit development HTTP mode for synthetic fixture providers. Providers receive
+JSON Output plus the schema in the prompt; all responses still undergo the existing
+Pydantic and domain checks. Model calls use a 55-second HTTP timeout; operations use
+240-second weekly budgets; combined outline-plus-first-week generation has a 420-second budget. Checkpoints preserve each operation’s full lease with a 30-second margin.
 
 
 ## Product direction — 4 November 2026
@@ -195,7 +193,7 @@ Roadmap never starts a missing/outdated Assessment automatically. The UI offers 
 skills or Update evaluation, with independent freshness, progress and completeness indicators.
 If an explicit evaluation is already pending/running, Roadmap can reconnect with at most 60
 polls at two-second intervals. The operation budgets are 240 seconds for a week and 420 seconds for a combined
-outline and first week for cloud and local models; Assessment's timeouts are unchanged. Publication rechecks the exact source
+outline and first week; Assessment's timeouts are unchanged. Publication rechecks the exact source
 fingerprint, and accepting a preview requires a current evaluation and unchanged inputs.
 
 ### Roadmap views and session planning

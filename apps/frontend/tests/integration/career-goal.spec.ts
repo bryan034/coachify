@@ -50,8 +50,8 @@ test('Career goal confirmation persists through the real gateway and owner datab
  await expect(page.getByRole('heading',{name:'Career discovery'})).toBeVisible();
  const saved=await page.request.post('/api/v1/career/goals/confirm',{headers:{...account.headers,'Idempotency-Key':crypto.randomUUID()},data:{target_type:'specific_job',role:'Synthetic analyst',field:'Research',expected_selection_version:0}});
  expect(saved.status()).toBe(200);expect((await saved.json()).goal.readiness).toBe('pending');
- await page.goto('/career-goal/chat');await page.reload();await page.getByRole('button',{name:'Role and research details'}).click();
- await expect(page.getByRole('heading',{name:'Synthetic analyst',exact:true})).toBeVisible();
+ await page.goto('/career-goal/chat');await page.reload();
+ await expect(page.getByRole('main')).toContainText('Synthetic analyst');
  const restored=await account.get('/api/v1/career/goals/current');
  expect((await restored.json()).goal.role).toBe('Synthetic analyst');
 });

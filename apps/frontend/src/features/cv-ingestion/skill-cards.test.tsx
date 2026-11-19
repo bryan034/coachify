@@ -1,6 +1,6 @@
 import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {beforeEach, expect, it, vi} from 'vitest';
-import {SkillsOverview} from './skills-overview';
+import {SkillsOverview,targetGap} from './skills-overview';
 import {evaluatedSkill, profileSkillGroups, profileSkillList, skillStatus} from './skill-cards';
 import type {Comparison} from '@/features/assessment/comparison';
 import {rateSkill, reevaluateSkill, skillRatings} from '@/lib/api/assessment';
@@ -37,20 +37,23 @@ it('before a comparison, lists every skill under the backend’s categories with
  expect(profileSkillList(cv([skill('Python')],[estimate('Python','independent_application')]),null,null)[0].label).toBe('Independent');
 });
 
-it('puts the skills the goal needs first with level and target, and the rest behind Show all skills',()=>{
+it('shows only the skills the goal needs with level and target, and the rest behind Show all skills',()=>{
  const detail=cv([{...skill('Python'),canonical_skill_id:'python'},skill('SQL'),skill('Tableau')]);
+ // Tableau is rated but not on the goal, so it stays behind Show all skills even if the evaluation thought it relevant.
+ const goal=ready({skills:[{name:'Python',canonical_skill_id:'python',priority:'required'},{name:'SQL',priority:'unspecified'}]});
  view(detail,null,null,judged([
   {name:'Python',relevance:'high',competence_score:6,required_score:8},
   {name:'SQL',relevance:'medium',competence_score:8,required_score:8,category:'Data & analytics'},
-  {name:'Tableau',category:'Data & analytics',relevance:'none',competence_score:3}]));
- expect(screen.getByRole('heading',{name:'Relevant to Product Manager'})).toBeVisible();
+  {name:'Tableau',category:'Data & analytics',relevance:'medium',competence_score:3}]),goal);
  expect(chip('Python')).toHaveTextContent('Python6/8');
  expect(chip('SQL')).toHaveTextContent('SQL8/8');
- expect(chip('Python').querySelector('.lv')).toHaveClass('getting');expect(chip('SQL').querySelector('.lv')).toHaveClass('ready');
+ // The badge colour says how far the level is from the target: 6/8 is within 2, 8/8 meets it.
+ expect(chip('Python').querySelector('.lv')?.className).toBe('lv near');expect(chip('SQL').querySelector('.lv')?.className).toBe('lv met');
+ expect(chip('Python')).toHaveClass('important');
  expect(screen.queryByRole('button',{name:/^Tableau/})).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Show all skills (1 more)'}));
  expect(chip('Tableau')).toHaveTextContent('Tableau3');
- expect(chip('Tableau').querySelector('.lv')).toHaveClass('neutral');
+ expect(chip('Tableau').querySelector('.lv')?.className).toBe('lv');
  fireEvent.click(screen.getByRole('button',{name:'Show fewer'}));
  expect(screen.queryByRole('button',{name:/^Tableau/})).not.toBeInTheDocument();
 });
@@ -71,10 +74,10 @@ it('opens the Skills Helper on a skill, with the role’s target, review note an
  fireEvent.click(chip('Python'));
  const panel=dialog('Python');
  expect(within(panel).getByRole('heading',{name:'Why is Python rated 6 out of 10?'})).toBeVisible();
- expect(within(panel).getByText(/You wrote the ETL scripts yourself\. The target for .* is 8\./)).toBeVisible();
- expect(within(panel).getByText(/If your CV review doesn’t show solid evidence, elo assumes you used complete guidance/)).toBeVisible();
+ expect(within(panel).getByText('You wrote the ETL scripts yourself. Target: 8.')).toBeVisible();
+ expect(within(panel).getByText('Without clear evidence, elo assumes you had guidance.')).toBeVisible();
  expect(within(panel).getByText('Skills Helper')).toBeVisible();
- expect(within(panel).getByText(/Want elo to take another look\?/)).toBeVisible();
+ expect(within(panel).getByText('Want a re-rating?')).toBeVisible();
  expect(within(panel).getByRole('textbox',{name:'Your answer'})).toBeVisible();
  expect(within(panel).queryByRole('button',{name:/help me build it|evidence to add/i})).not.toBeInTheDocument();
  fireEvent.click(within(panel).getByRole('button',{name:'Close chat'}));
@@ -107,15 +110,44 @@ it('keeps the answer saved and says so when the skill cannot be re-judged yet',a
  expect(await within(panel).findByText(/Your answer is saved\. Your level updates the next time/)).toBeVisible();
 });
 
-it('lists goal skills first in each category, most important first, and can filter to them',()=>{
+it('counts skills the evaluation linked to a goal skill or that are part of one, and shows missing smaller skills dotted',()=>{
+ const goal=ready({skills:[{item_id:'py',name:'Python',priority:'required',learning_items:[{name:'pytest',reason:'Tests show reliable code.'},{name:'Type hints',reason:'Readable interfaces.'}]}]});
+ const assessment={...comparison([outcome({ref:'job:py',name:'Python',profile_skills:[{name:'Pandas',competence_score:6,required_score:8}]})]),inputs:{goal_id:'g',goal_version:1,cv_id:null}} as Assessment;
+ view(cv([skill('Python'),skill('Pandas'),skill('pytest'),skill('Docker')]),null,null,assessment,goal);
+ for(const name of ['Python','Pandas','pytest'])expect(chip(name)).toHaveClass('important');
+ expect(screen.queryByRole('button',{name:/^Docker,/})).not.toBeInTheDocument();
+ expect(chip('Type hints')).toHaveAccessibleName('Type hints, Part of Python, not in your skills yet. Talk it through');
+ expect(chip('Type hints')).toHaveClass('missing');
+ expect(screen.queryByRole('button',{name:/^pytest, Part of/})).not.toBeInTheDocument();
+});
+
+it('lists only goal skills in each category, most important first, until Show all skills adds the rest',()=>{
  const goal=ready({skills:[{name:'FastAPI',priority:'preferred'},{name:'SQL',priority:'unspecified'},{name:'Python',priority:'required'}]});
  view(cv([skill('Docker','Cloud & DevOps'),skill('FastAPI'),skill('Python'),skill('SQL')]),null,null,null,goal);
  const names=(region:string)=>within(screen.getByRole('region',{name:region})).getAllByRole('button').map(button=>button.getAttribute('aria-label')?.split(',')[0]);
  expect(names('Technical coding')).toEqual(['Python','FastAPI']);
  expect(names('Data & analytics')).toEqual(['SQL']);
- fireEvent.click(screen.getByRole('button',{name:'Show only skills relevant to your goal'}));
  expect(screen.queryByRole('button',{name:/^Docker,/})).not.toBeInTheDocument();
- expect(screen.getByRole('button',{name:/^Python,/})).toBeVisible();
+ expect(screen.queryByRole('button',{name:/relevant to your goal/})).not.toBeInTheDocument();
+ const toggle=screen.getByRole('button',{name:'Show all skills (1 more)'});
+ expect(toggle.compareDocumentPosition(screen.getByRole('button',{name:/^Python,/}))&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ fireEvent.click(toggle);
+ expect(screen.getByRole('button',{name:/^Docker,/})).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Show fewer'}));
+ expect(screen.queryByRole('button',{name:/^Docker,/})).not.toBeInTheDocument();
+});
+
+it('adds goal skills the CV does not show with a dotted outline, explained in the legend',()=>{
+ const goal={status:'ready' as const,data:{goal:{skills:[{name:'Python',priority:'required'},{name:'Kubernetes',canonical_skill_id:'kubernetes',priority:'required',competence_target:{level:6,explanation:'Deploys a service.'}},{name:'Cobol',priority:'conflicting'}]},skill_groups:{Kubernetes:'Cloud & DevOps'},selection_version:1,dependent_results_need_review:false}} as never;
+ view(cv([skill('Python'),skill('SQL')]),null,null,null,goal);
+ const expected=screen.getByRole('button',{name:'Kubernetes, Expected by your goal, not in your skills yet, target 6. Talk it through'});
+ expect(expected).toHaveClass('ws-sc','missing','important');
+ expect(within(screen.getByRole('region',{name:'Cloud & DevOps'})).getByRole('button',{name:/^Kubernetes,/})).toBe(expected);
+ expect(chip('Python')).not.toHaveClass('missing');
+ expect(screen.queryByRole('button',{name:/^Cobol,/})).not.toBeInTheDocument();
+ expect(screen.getByText('Expected by your goal, not in your skills yet')).toBeInTheDocument();
+ fireEvent.click(expected);
+ expect(dialog('Kubernetes')).toBeVisible();
 });
 
 it('merges the same skill from several sources into one chip and labels described and added skills',()=>{
@@ -149,4 +181,8 @@ it('shows a saved own rating on the chip when elo has no score for the skill',as
  vi.mocked(skillRatings).mockResolvedValue({version:3,ratings:[{key:'fastapi',name:'FastAPI',canonical_skill_id:null,score:7,updated_at:'2026-11-12T00:00:00Z'}]});
  view(cv([skill('FastAPI')]));
  await waitFor(()=>expect(chip('FastAPI')).toHaveAccessibleName('FastAPI, Level 7 out of 10, your rating. Talk it through'));
+});
+
+it('colours a rating by its distance from the target',()=>{
+ expect([targetGap(9,8),targetGap(8,8),targetGap(6,8),targetGap(5,8),targetGap(2,9),targetGap(4,null)]).toEqual(['met','met','near','far','far',null]);
 });

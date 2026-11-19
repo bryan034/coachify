@@ -1,5 +1,6 @@
 from app.repositories.goals import GoalError
 """Interpret saved context and retrieve public evidence when needed."""
+from elo_shared.model_budget import budget_owner
 import json
 from langgraph.graph import StateGraph,START,END
 from langsmith import tracing_context
@@ -44,7 +45,7 @@ async def semantic_chat(request,account,row,body):
         await check()
         # Completed queries are recorded for this turn; quota waits retry only the
         # unfinished request inside research_question, without advancing the budget.
-        result=await research_question(request,title,focus,check,query=query)
+        with budget_owner(account):result=await research_question(request,title,focus,check,query=query)
         search_count+=1
         return result
     async def generate(stage,context,history=(),question=None,validate=None):

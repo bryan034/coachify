@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {CareerChat} from './career-chat';
 import {CareerSessionProvider,useCareerSession} from './career-session';
@@ -99,7 +99,7 @@ it('keeps the imported JD chat mounted when an older workspace read returns empt
 });
 async function chat(){mount();await screen.findByText(/Let’s look at Engineer/);}
 
-it('reloads research JSON after an answer and shows saved follow-up findings in details',async()=>{
+it('reloads research JSON after an answer',async()=>{
  await chat();
  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;
  api.mockImplementation(async(path,token,options)=>{
@@ -113,9 +113,7 @@ it('reloads research JSON after an answer and shows saved follow-up findings in 
  fireEvent.change(screen.getByRole('textbox',{name:'Message elo'}),{target:{value:'What is the salary?'}});
  fireEvent.click(screen.getByRole('button',{name:'Send message'}));
  await screen.findByText('Salary information has been saved.');
- fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
- expect(await screen.findByRole('heading',{name:'Saved follow-up: compensation'})).toBeVisible();
- expect(screen.getByText(/Synthetic salary is SGD 1500 monthly/)).toBeVisible();
+ await waitFor(()=>expect(api.mock.calls.filter(([path])=>path.includes('/opportunity-research')).length).toBeGreaterThanOrEqual(2));
  expect(api.mock.calls.filter(([path])=>path.includes('/opportunity-research')).length).toBeGreaterThanOrEqual(2);
 });
 describe('single career conversation',()=>{
@@ -277,8 +275,6 @@ it('presents category summaries with source links without duplicate interview st
  await chat();
  expect(screen.getByRole('log')).toHaveTextContent('Technical interview');
  expect(screen.getByRole('log')).not.toHaveTextContent('Brave');
- fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
- expect(screen.getAllByRole('link').some(link=>link.getAttribute('href')==='https://example.test/interview')).toBe(true);
  expect(active).not.toHaveProperty('research');
 });
 
@@ -527,13 +523,11 @@ it('does not publish a failed research record belonging to a different goal',asy
 });
 
 
-it.each(['research_failed','expired'])('keeps saved goal details readable after research stops: %s',async phase=>{
+it.each(['research_failed','expired'])('keeps the saved goal chat usable after research stops: %s',async phase=>{
  active={...active,phase,research_id:null,error_code:'not_configured',error:'PRIVATE provider diagnostic'};
- mount();const details=await screen.findByRole('button',{name:'Role and research details'});
- await waitFor(()=>expect(details).toBeEnabled());fireEvent.click(details);
- expect(screen.getByRole('heading',{name:/^Engineer$/})).toBeVisible();
- expect(screen.getByText('Research is incomplete. Your saved goal details remain available.')).toBeVisible();
- expect(screen.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ mount();
+ expect(await screen.findByRole('textbox',{name:'Message elo'})).toBeEnabled();
+ expect(screen.queryByRole('button',{name:'Role and research details'})).toBeNull();
  expect(screen.queryByRole('heading',{name:'Interview findings'})).toBeNull();
  expect(screen.queryByText('PRIVATE provider diagnostic')).toBeNull();
 });
@@ -567,14 +561,13 @@ it('waits for the generated overview and sends its exact saved snapshot',async()
  expect(screen.queryByText('Preparing your career-goal summary…')).toBeNull();
 });
 
-it('retries a failed overview with the same key and keeps saved details accessible',async()=>{
+it('retries a failed overview with the same key',async()=>{
  const api=vi.mocked(careerApi),original=api.getMockImplementation()!;let fail=true;
  api.mockImplementation(async(path,token,options)=>{
   if(path==='/workspace/summary'&&fail)throw new Error('Synthetic failure');
   return original(path,token,options);
  });
  mount();await screen.findByRole('button',{name:'Retry'});
- expect(screen.getByRole('button',{name:'Role and research details'})).toBeEnabled();
  const first=api.mock.calls.find(([path])=>path==='/workspace/summary')![2]?.headers;
  fail=false;fireEvent.click(screen.getByRole('button',{name:'Retry'}));
  await screen.findByText(/Let’s look at Engineer/);
@@ -650,8 +643,6 @@ it('shows the generated key points rather than requiring all findings in the cha
  api.mockImplementation(async(path,token,options)=>path==='/workspace/summary'?{reply:'## Your career goal\n\nFocus on Python and prepare for a technical interview.\n\nAsk me anything about this goal set!'} as never:original(path,token,options));
  mount();await screen.findByText('Ask me anything about this goal set!');
  expect(screen.getByRole('log')).not.toHaveTextContent('A lower-priority saved detail.');
- fireEvent.click(screen.getByRole('button',{name:'Role and research details'}));
- expect(screen.getByText(/A lower-priority saved detail/)).toBeVisible();
 });
 
 it('waits for a published report to finish without offering to restart research',async()=>{
@@ -724,7 +715,10 @@ it('queues multiple messages and dispatches them with the latest goal version an
  }
  expect(box).toHaveValue('');expect(box).toBeEnabled();
  expect(api.mock.calls.filter(([path])=>path==='/workspace/messages')).toHaveLength(1);
- expect(screen.getAllByText('Message queued…')).toHaveLength(2);
+ // Waiting messages sit above the composer, not in the transcript, until elo starts answering them.
+ const waiting=screen.getByRole('list',{name:'Queued messages'});
+ expect(within(waiting).getAllByRole('listitem').map(item=>item.querySelector('.agent-queued-text')!.textContent)).toEqual(['What skills matter?','What should I practise?']);
+ expect(within(screen.getByRole('log')).queryByText('What skills matter?')).not.toBeInTheDocument();
  active={...active,revision:2,current:{...active.current,goal:{...active.current.goal!,version:2,location:'London'}}};
  await act(async()=>finish({reply:'Saved London.',workspace:active} as never));
  await waitFor(()=>expect(api.mock.calls.filter(([path])=>path==='/workspace/messages')).toHaveLength(3));
@@ -733,6 +727,35 @@ it('queues multiple messages and dispatches them with the latest goal version an
  expect(bodies[1].expected_version).toBe(2);
  expect(bodies[1].conversation).toEqual([{role:'user',content:'Change my location to London'},{role:'assistant',content:'Saved London.'}]);
  expect(bodies[2].conversation[0].content).toBe('What skills matter?');
+});
+
+it('removes a queued message before it is sent',async()=>{
+ await chat();
+ let finish!:(value:never)=>void;
+ const api=vi.mocked(careerApi),original=api.getMockImplementation()!;let count=0;
+ api.mockImplementation((path,token,options)=>{
+  if(path==='/workspace/messages'&&++count===1)return new Promise(resolve=>{finish=resolve;});
+  return original(path,token,options);
+ });
+ const box=screen.getByRole('textbox',{name:'Message elo'});
+ for(const text of ['Explain SQL','Explain Python']){fireEvent.change(box,{target:{value:text}});fireEvent.click(screen.getByRole('button',{name:'Send message'}));}
+ fireEvent.click(screen.getByRole('button',{name:'Remove queued message: Explain Python'}));
+ expect(screen.queryByRole('list',{name:'Queued messages'})).not.toBeInTheDocument();
+ await act(async()=>finish({reply:'SQL answer.',workspace:active} as never));
+ await screen.findByText('SQL answer.');
+ expect(api.mock.calls.filter(([path])=>path==='/workspace/messages')).toHaveLength(1);
+});
+
+it('fills the composer from a starter prompt and sends it on Enter',async()=>{
+ await chat();
+ fireEvent.click(screen.getByRole('button',{name:'What should I learn first?'}));
+ const box=screen.getByRole('textbox',{name:'Message elo'});
+ expect(box).toHaveValue('What should I learn first?');
+ await waitFor(()=>expect(box).toHaveFocus());
+ fireEvent.keyDown(box,{key:'Enter'});
+ await waitFor(()=>expect(vi.mocked(careerApi).mock.calls.filter(([path])=>path==='/workspace/messages')).toHaveLength(1));
+ const body=JSON.parse(vi.mocked(careerApi).mock.calls.find(([path])=>path==='/workspace/messages')![2]!.body as string);
+ expect(body.message).toBe('What should I learn first?');
 });
 
 it.each(['research_failed'] as const)('answers saved-goal questions while research is %s',async phase=>{

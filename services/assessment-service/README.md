@@ -20,9 +20,8 @@ Model calls use the shared OpenAI Python SDK transport with OpenRouter as the cl
 default. No provider-specific SDK is required. SDK retries are disabled; existing response
 limits, provider quota handling and schema repair attempts remain enforced.
 
-Local testing can use the shared 1.5B Ollama alias through this service's own
-`*_LLM_BASE_URL`, `*_LLM_MODEL` and explicit development `*_LLM_ALLOW_HTTP` flag.
-Local requests omit stored cloud credentials; cloud requests retain authentication.
-JSON/domain validation stays mandatory. See [all-service local setup](../../docs/setup.md#career-model-and-search-configuration).
+Each service has its own `*_LLM_BASE_URL`, `*_LLM_MODEL` and `*_LLM_API_KEY`;
+`*_LLM_ALLOW_HTTP` permits plain HTTP only for synthetic fixture providers in
+development. JSON/domain validation stays mandatory. See [model setup](../../docs/setup.md#career-model-and-search-configuration).
 
 Standalone comparison is available before a roadmap exists. Without a selected CV, saved Profile declarations can supply the evidence. Selected incomplete CVs still block comparison. Each completed comparison also includes `skill_profile`. Context/current/dashboard reads expose evaluation freshness, processing state, completeness, evaluation time and change reasons. Reviewed CV levels are reused with existing evidence checks. For every profile skill, the model judges a display category, a sub-category, relevance to the goal, and a 0–10 competence score next to the goal's level, using the reviewed CV evidence. Skills Profile shows these judgements. See [SPEC](SPEC.md#per-skill-profile-evaluation).

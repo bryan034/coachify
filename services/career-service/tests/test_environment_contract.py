@@ -79,7 +79,6 @@ def test_public_example_covers_every_active_compose_input_without_real_secrets()
     ('https://api.openai.com/v1', '', ''),
 ])
 def test_career_openrouter_shared_key_is_provider_scoped(monkeypatch,base,override,expected):
-    monkeypatch.setenv('CAREER_LLM_PROVIDER','compatible')
     monkeypatch.setenv('CAREER_LLM_BASE_URL',base)
     monkeypatch.setenv('CAREER_LLM_API_KEY',override)
     monkeypatch.setenv('CAREER_LLM_MODEL','@preset/synthetic')

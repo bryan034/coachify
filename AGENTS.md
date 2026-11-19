@@ -33,7 +33,7 @@ Service-to-service dependencies (read through APIs only, forwarding the owner's 
 
 Other moving parts: `mongodb` (local container, Mongo 8.2) with one-shot `mongodb-*-init` containers running `infrastructure/mongodb/init-*.js`; `mailpit` (development profile) for captured email. Production DB proposal is MongoDB Atlas, external to containers.
 
-AI: all model calls use the OpenAI Python SDK, routed to OpenRouter by default (shared `OPENROUTER_API_KEY`/`OPENROUTER_MODEL`, per-service overrides `CAREER_/CV_/ASSESSMENT_/ROADMAP_LLM_*`). Career public research uses Brave (test) or DeepSeek Search (production). Tests use synthetic providers; live-model quality is unverified.
+AI: all model calls use the OpenAI Python SDK, routed to OpenRouter by default (shared `OPENROUTER_API_KEY`/`OPENROUTER_MODEL`, per-service overrides `CAREER_/CV_/ASSESSMENT_/ROADMAP_LLM_*`). Career public research uses Brave LLM Context. Tests use synthetic providers; live-model quality is unverified.
 
 ## Where things are
 

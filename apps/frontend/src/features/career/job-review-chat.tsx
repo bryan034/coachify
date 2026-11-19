@@ -1,12 +1,11 @@
 "use client";
 import { BrandLogo } from '@/components/ui/brand-logo';
 import {ChatScrollControl,useChatScroll} from './use-chat-scroll';
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {useRouter} from 'next/navigation';
 import {useProfile} from '@/features/profile/profile-provider';
 import {useCareerSession} from './career-session';
-import {AgentMarkdown,AgentActivity,AgentProgress,AgentReply,AgentRecovery,errorCode,isTokenLimit,observedActivity} from './agent-message';
-import {sourceCitations} from './source-links';
+import {AgentActivity,AgentProgress,AgentReply,AgentRecovery,errorCode,isTokenLimit,observedActivity} from './agent-message';
 import {careerOperation,type CareerOperation} from '@/lib/api/career-operation';
 import {retryCareerRead} from '@/lib/api/career-polling';
 import {careerApi,refreshWorkspace,type OpportunityView,type CareerWorkspace} from '@/lib/api/career';
@@ -24,25 +23,9 @@ function reportPending(research:OpportunityView){
 function responseReady(workspace:CareerWorkspace,research?:OpportunityView){
  return !!workspace.current.goal&&['ready','research_failed'].includes(workspace.phase)&&!!research&&research.career_target_id===workspace.current.goal._id&&research.research_id===workspace.research_id&&research.finished!==false&&['completed','partial','failed'].includes(research.status)&&Object.values(research.categories).every(category=>category&&!['pending','running'].includes(category.status));
 }
-function researchSummary(research?:OpportunityView,coverage:CareerWorkspace['coverage']=[]){
- if(!research)return '';
- const ranked=[...(research.summary?.overview_refs||[]),...(research.summary?.key_takeaway_refs||[]),...(research.summary?.consideration_refs||[])];
- const labels={interview_intelligence:'Interview findings',internship_insights:'Internship experience',career_progression:'Career progression and conversion salary',conversion_outcomes:'Historical full-time conversion rates',company_intelligence:'Company and team culture'};
- const reach=[...coverage].reverse().find(v=>v.target_sources!=null);
- const sections:string[]=reach?[`Research found useful interview information from **${reach.useful_sources||0} distinct sources**.${(reach.useful_sources||0)<(reach.target_sources||3)?' Findings remain limited.':''}`]:[];
- for(const [key,category] of Object.entries(research.categories)){
-  if(!category)continue;
-  sections.push('### '+labels[key as keyof typeof labels]);
-  const selected=[...category.findings].sort((a,b)=>(ranked.includes(a.finding_id)?ranked.indexOf(a.finding_id):ranked.length)-(ranked.includes(b.finding_id)?ranked.indexOf(b.finding_id):ranked.length));
-  sections.push(selected.map(f=>'- '+f.value+(f.scope!=='exact'?' (related context)':'')+' '+sourceCitations(f.source_ids,research.sources||[])).join('\n')||(category.status==='failed'?'No validated findings are available for this category.':'Information pertaining to this category was not found in the retrieved sources.'));
-  if(category.status==='failed')sections.push('This category could not finish. Your goal is saved; you can retry research.');
- }
- for(const saved of research.question_research||[]){
-  sections.push('### Saved follow-up: '+saved.focus.replaceAll('_',' '));
-  sections.push(saved.findings.map(f=>'- '+f.value+' (related or general context) '+sourceCitations(f.source_ids,saved.sources)).join('\n'));
- }
- sections.push('Your career goal and its category cards are saved. Ask about this role, its requirements or the findings, or tell me how you want to refine your goal.');
- return sections.join('\n\n');
+/** CV-review style message: elo avatar, speaker label and a bordered bubble. */
+function ChatBubble({role,children}:{role:'assistant'|'user';children:ReactNode}){
+ return <div className={`agent-message ${role}`}>{role==='assistant'&&<span className="agent-message-avatar" aria-hidden="true"><BrandLogo compact decorative/></span>}<span className="agent-message-label">{role==='user'?'You':'elo'}</span><div className="agent-bubble">{children}</div></div>;
 }
 export function JobReviewChat(){
  const {token}=useProfile(),session=useCareerSession(),router=useRouter();
@@ -73,11 +56,12 @@ export function JobReviewChat(){
   const update=()=>setSecondsLeft(retryAt?Math.max(0,Math.ceil((retryAt-Date.now())/1000)):0);
   update();if(!retryAt)return;const timer=setInterval(update,1000);return()=>clearInterval(timer);
  },[retryAt]);
- const [message,setMessage]=useState(''),[turns,setTurns]=useState<{id:string;message:string;reply:string|null;failed?:boolean}[]>([]),[details,setDetails]=useState(false);
+ const [message,setMessage]=useState(''),[turns,setTurns]=useState<{id:string;message:string;reply:string|null;failed?:boolean}[]>([]);
  const failedTurn=useRef<string|null>(null);
  const [pendingTurn,setPendingTurn]=useState<string|null>(null);
  const queue=useRef<QueuedMessage[]>([]),failedJobs=useRef(new Map<string,QueuedMessage>());
  const [queueRevision,setQueueRevision]=useState(0);
+ const composer=useRef<HTMLTextAreaElement>(null);
  const turnsRef=useRef(turns);turnsRef.current=turns;
  const sending=useRef(false);
  const [failedMessage,setFailedMessage]=useState('');
@@ -102,7 +86,6 @@ export function JobReviewChat(){
    .finally(()=>{if(!abort.signal.aborted)setSummaryOperation(null);});
   return()=>abort.abort();
  },[token,researchReady,summaryKey,summaryRetry]);
- const detailsReady=!!goal;
  useEffect(()=>{
   if(!token||!goal||!workspace?.research_id)return;const abort=new AbortController();
   let timer:ReturnType<typeof setTimeout>;setError('');setCode('');
@@ -156,6 +139,12 @@ export function JobReviewChat(){
   setMessage(current=>current.trim()===input?'':current);
   setQueueRevision(value=>value+1);
  }
+ // A starter prompt fills the composer; Enter then sends it like a typed message.
+ function choosePrompt(prompt:string){setMessage(prompt);requestAnimationFrame(()=>{const box=composer.current;if(box){box.focus();box.setSelectionRange(prompt.length,prompt.length);}});}
+ function removeQueued(id:string){queue.current=queue.current.filter(item=>item.id!==id);failedJobs.current.delete(id);setTurns(current=>current.filter(turn=>turn.id!==id));setQueueRevision(value=>value+1);}
+ // Waiting messages stay out of the transcript until elo starts answering them.
+ const isQueued=(turn:{id:string;reply:string|null;failed?:boolean})=>turn.reply===null&&!turn.failed&&turn.id!==pendingTurn;
+ const queuedTurns=turns.filter(isQueued);
  useEffect(()=>{
   if(!token||busy||sending.current||chatCooldown||!workspace?.session_id||!goal||source.current||workspace.phase==='expired'||!queue.current.length)return;
   const job=queue.current.shift()!;
@@ -190,23 +179,18 @@ export function JobReviewChat(){
    </ProcessingCard>
   </section>;
  }
- return <section className="page on career-agent-page">
-  <header className="agent-page-header"><div><p className="small">Your direction, one conversation</p><h1>Goal conversation</h1></div><button className="btn ghost sm" disabled={busy} onClick={()=>{if(!dirty.current||window.confirm('Leave and discard unsent edits? Your saved goal stays current.'))router.push('/career-goal');}}>← Career Goal</button></header>
+ return <section className="page on career-agent-page goal-chat-screen">
+  <header className="goal-chat-header"><div className="goal-chat-title"><span className="goal-chat-logo"><BrandLogo decorative/></span><span className="goal-chat-divider" aria-hidden="true"/><div><h1>Goal conversation</h1><p>{goal?.role||'Understanding your career goal'}{goal&&<><span className="goal-chat-saved-dot" aria-hidden="true"/>Saved automatically</>}</p></div></div>
+   <div className="goal-chat-actions"><button className="btn ghost sm" disabled={busy} onClick={()=>{if(!dirty.current||window.confirm('Leave and discard unsent edits? Your saved goal stays current.'))router.push('/career-goal');}}>← Career Goal</button></div></header>
   {refining.current&&<p className="notice">Your saved progress is kept as you refine this goal. You can leave and return to the saved refinement.</p>}
   {refinementDone&&<div className="refinement-complete" role="dialog" aria-modal="true" aria-label="Goal updated"><h2>Your goal is updated</h2><p>Your changes are saved. You can review the updated goal now.</p><button className="btn pri" autoFocus onClick={()=>router.push('/career-goal')}>Return to Career Goal</button><button className="btn ghost" onClick={()=>setRefinementDone(false)}>Keep chatting</button></div>}
-  <div className="agent-workspace"><div className="agent-chat-top"><div className="agent-identity"><span className="agent-avatar" aria-hidden="true"><BrandLogo compact decorative/></span><div><strong>elo agent</strong><p className="small">{goal?.role||'Understanding your career goal'}</p></div></div><button className="btn ghost sm" disabled={!detailsReady} onClick={()=>setDetails(v=>!v)}>{details?'Hide details':'Role and research details'}</button></div>
+  <div className="agent-workspace">
    {workspace?.phase==='empty'&&<p role="status">No job description is available. Import a JD from Career Goal or explore a direction.</p>}
-   {details&&detailsReady&&goal&&<aside className="agent-details"><h2>{goal.role}</h2><p>{goal.company||'General career direction'} · v{goal.version} · Saved automatically</p>
-    <h3>Main job skills</h3><ul>{goal.skills.map((s,i)=><li key={s.item_id||i}>{s.name} · {s.priority}</li>)}</ul>
-    {!!goal.job_dates?.length&&<><h3>Job dates</h3><ul>{goal.job_dates.map((date,index)=><li key={index}>{date.kind.replaceAll('_',' ')}: {date.text}</li>)}</ul></>}
-    {researchReady?<AgentMarkdown>{researchSummary(research,workspace?.coverage)}</AgentMarkdown>:<p className="small">Research is incomplete. Your saved goal details remain available.</p>}
-   </aside>}
 
    <div ref={transcript} className="agent-transcript" {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">
     {connectionIssue&&<p role="status" className="small">Connection interrupted. Reconnecting to task updates…</p>}
     {!ready&&<AgentProgress steps={[...extractionSteps,...(activeOperation?.activities||[]),...(workspace?.activities||[])]}/>}
-    <div className="agent-message assistant" key="initial-answer"><span className="agent-message-label">elo</span>
-     {ready&&<details className="agent-completed-progress"><summary>✓ Goal and research saved</summary><p>✓ Goal extracted · ✓ Research completed · ✓ Overview prepared</p></details>}
+    <ChatBubble role="assistant" key="initial-answer">
      {ready&&<AgentReply onProgress={followReply}>{refining.current?'What would you like to refine in your career goal? We can work through your role, location, skills, qualifications or responsibilities. Tell me what feels different, and I’ll ask for any details needed before saving the update.':summary!.reply}</AgentReply>}{<>
       {(!workspace||researchPending(workspace)||loadingResearch||researchReady&&!ready)&&!error&&<AgentActivity step
        label={activeOperation?.status==='waiting_quota'||workspace?.phase==='waiting_quota'?waitLabel:activeOperation?.status==='repairing'?'Refining the response…':activeOperation?observedActivity(activeOperation.activities)||(source.current?'Extracting your career goal…':'Preparing your career-goal summary…'):researchReady&&!ready?'Preparing your career-goal summary…':workspace&&researchPending(workspace)?observedActivity(workspace?.activities)||'Researching interview expectations…':loadingResearch?'Loading your saved research…':source.current?'Extracting your career goal…':'Opening your career goal…'}
@@ -214,14 +198,15 @@ export function JobReviewChat(){
       {!researchReady&&workspace?.error&&(workspace.phase==='waiting_quota'||isTokenLimit(workspace.error_code))&&<p role="alert" className="small">{workspace.phase==='waiting_quota'?'Research is waiting for the service quota to reset. Your career goal remains saved.':workspace.error}</p>}
       {workspace&&!loadingResearch&&(matchingResearch&&research?.status==='failed'||!researchReady&&(['research_failed','expired'].includes(workspace.phase)||workspace.phase==='ready'&&!workspace.research_id))&&<button className="btn pri" disabled={busy} onClick={()=>void retry()}>Resume research</button>}
      </>}
-    </div>
-    {ready&&workspace?.edit_question&&!turns.length&&!pendingMessage&&<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply onProgress={followReply}>{workspace.edit_question}</AgentReply></div>}
-    {turns.map((turn,i)=><div className="agent-exchange" key={turn.id}><div className="agent-message user"><span className="agent-message-label">You</span><p>{turn.message}</p></div>{turn.reply!==null?<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply animate={i===turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></div>:turn.id===pendingTurn?<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentProgress steps={activeOperation?.activities||[]}/><AgentActivity step label={activeOperation?.status==='waiting_quota'?waitLabel:activeOperation?.status==='repairing'?'Refining the response…':observedActivity(activeOperation?.activities)||'Preparing your answer…'} detail={activeOperation?.status==='waiting_quota'?`Resuming automatically in ${secondsLeft} seconds.`:'Using your career goal and saved interview research.'}/></div>:turn.failed?<p className="small">Message failed. <button type="button" className="btn ghost sm" onClick={()=>send(turn.message,turn.id)}>Retry message</button></p>:<p role="status" className="small">Message queued…</p>}</div>)}
+    </ChatBubble>
+    {ready&&workspace?.edit_question&&!turns.length&&!pendingMessage&&<ChatBubble role="assistant"><AgentReply onProgress={followReply}>{workspace.edit_question}</AgentReply></ChatBubble>}
+    {turns.map((turn,i)=>isQueued(turn)?null:<div className="agent-exchange" key={turn.id}><ChatBubble role="user"><p>{turn.message}</p></ChatBubble>{turn.reply!==null?<ChatBubble role="assistant"><AgentReply animate={i===turns.length-1} onProgress={followReply}>{turn.reply}</AgentReply></ChatBubble>:turn.id===pendingTurn?<ChatBubble role="assistant"><AgentProgress steps={activeOperation?.activities||[]}/><AgentActivity step label={activeOperation?.status==='waiting_quota'?waitLabel:activeOperation?.status==='repairing'?'Refining the response…':observedActivity(activeOperation?.activities)||'Preparing your answer…'} detail={activeOperation?.status==='waiting_quota'?`Resuming automatically in ${secondsLeft} seconds.`:'Using your career goal and saved interview research.'}/></ChatBubble>:turn.failed?<p className="small">Message failed. <button type="button" className="btn ghost sm" onClick={()=>send(turn.message,turn.id)}>Retry message</button></p>:null}</div>)}
     {error&&<AgentRecovery message={error} code={code} seconds={retryAt?secondsLeft:undefined} disabled={busy||chatCooldown} onRetry={()=>{if(source.current)setReload(v=>v+1);else if(failedMessage)void send(failedMessage);else if(goal&&message.trim())void send();else if(researchReady&&!ready)setSummaryRetry(v=>v+1);else if(loadingResearch)setResearchRetry(v=>v+1);else void retry();}}/>}
    </div>
    <ChatScrollControl visible={showJump} onClick={jumpToLatest}/>
-   {ready&&!refining.current&&<div className="agent-starter-prompts">{['What should I learn first?','How do I prepare for this interview?','Is my timeline realistic?'].map(prompt=><button type="button" className="chip" key={prompt} onClick={()=>setMessage(prompt)}>{prompt}</button>)}</div>}
-   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}><div className="agent-compose-row"><textarea aria-label="Message elo" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={!token||!message.trim()}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
+   {ready&&!refining.current&&<div className="agent-starter-prompts">{['What should I learn first?','How do I prepare for this interview?'].map(prompt=><button type="button" className="chip" key={prompt} onClick={()=>choosePrompt(prompt)}>{prompt}</button>)}</div>}
+   <form className="agent-composer" onSubmit={e=>{e.preventDefault();void send();}}>{queuedTurns.length>0&&<ul className="agent-queue" aria-label="Queued messages">{queuedTurns.map(turn=><li key={turn.id} className="agent-queued"><span className="agent-queued-text">{turn.message}</span><span className="agent-queued-note">Sends when elo finishes</span><button type="button" className="agent-queued-remove" aria-label={`Remove queued message: ${turn.message}`} onClick={()=>removeQueued(turn.id)}>×</button></li>)}</ul>}<div className="agent-compose-row"><textarea ref={composer} aria-label="Message elo" placeholder="Ask a question or describe a change to your career goal…" value={message} maxLength={600} onChange={e=>setMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}}/><button className="btn pri" aria-label="Send message" disabled={!token||!message.trim()}>↑</button></div><p className="small">Enter to send · Shift+Enter for a new line</p></form>
+   <p className="goal-chat-footnote">Your goal and research save automatically. You can return to this conversation from Career Goal.</p>
   </div>
  </section>;
 }

@@ -168,6 +168,26 @@ test('upload opens the review and save for later restores the same question afte
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
+test('Your CVs spans the full Skills Profile width once the review is finished',async({page})=>{
+ await workspace(page);
+ await page.route('**/api/v1/profile/capabilities',route=>route.fulfill({json:emptyDeclarations}));
+ const source={...savedCv('reviewed-cv'),display_name:'Reviewed CV'};source.profile_reviewed_effective_version=source.effective_version;
+ await page.route('**/api/v1/cv{,/**}',route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.includes('/conversations'))return route.fallback();
+  if(path.endsWith('/policy'))return route.fulfill({json:policy});
+  if(path==='/api/v1/cv')return route.fulfill({json:{cvs:[source],selection:{cv_id:source.id,version:1}}});
+  if(path.endsWith('/clarifications'))return route.fulfill({json:clarificationState(source)});
+  return route.fulfill({json:source});
+ });
+ await page.goto('/cv');
+ await openCvLibrary(page);
+ // The upload panel sits beside the CV card here, so Your CVs is not squeezed into one column of the upload grid.
+ const saved=page.getByRole('region',{name:'Saved CVs',exact:true});await expect(saved).toBeVisible();
+ const box=await saved.boundingBox(),grid=await page.locator('#your-cvs').boundingBox();
+ expect(Math.abs(box!.width-grid!.width)).toBeLessThan(2);
+});
+
 test('CV library scrolls internally, persists renamed titles and opens full-page review',async({page},testInfo)=>{
  await workspace(page);
  await page.route('**/api/v1/profile/capabilities',route=>route.fulfill({json:emptyDeclarations}));

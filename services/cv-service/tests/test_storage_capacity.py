@@ -39,9 +39,9 @@ def reset_ledger(repository):
     else: ledger.document = None
 
 
-def test_parallel_owner_and_global_admission_is_bounded(harness):
+def test_parallel_storage_admission_is_bounded_per_owner(harness):
     _, app, *_ = harness
-    limits(app, max_saved_cvs_per_owner=3, max_saved_cvs_global=4)
+    limits(app, max_saved_cvs_per_owner=3)
     other = CvService(app.state.repository, FileStore(app.state.settings.storage_path), app.state.settings)
     def attempt(index):
         try: return send(app.state.service if index % 2 else other)['_id']
@@ -49,12 +49,12 @@ def test_parallel_owner_and_global_admission_is_bounded(harness):
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(attempt, range(8)))
     assert len([value for value in results if value]) == 3
-    send(other, 'owner-b')
+    for _ in range(3): send(other, 'owner-b')
     with pytest.raises(CapacityError): send(other, 'owner-b')
     ledger = app.state.repository.admission.read()
-    assert len(ledger['entries']) == 4
-    assert sum(entry['bytes'] for entry in ledger['entries'].values()) == 4 * len(docx())
-    assert len(list(app.state.files.originals())) == 4
+    assert len(ledger['entries']) == 6
+    assert sum(entry['bytes'] for entry in ledger['entries'].values()) == 6 * len(docx())
+    assert len(list(app.state.files.originals())) == 6
 
 
 def test_parallel_duplicate_upload_reuses_identity_and_capacity(harness):
@@ -198,7 +198,7 @@ def test_legacy_overlimit_records_remain_readable_and_selected(harness):
         legacy['revision'] += 1
         app.state.repository.replace(original, legacy)
     reset_ledger(app.state.repository)
-    settings = limits(app, max_saved_cvs_per_owner=1, max_saved_cvs_global=2)
+    settings = limits(app, max_saved_cvs_per_owner=1)
     restarted = CvService(app.state.repository, app.state.files, settings)
     assert len(restarted.capacity.ledger.read()['entries']) == 3
     with pytest.raises(CapacityError): send(restarted)
@@ -213,17 +213,19 @@ def test_legacy_overlimit_records_remain_readable_and_selected(harness):
     assert set(seen) == {cv['id'] for cv in cvs}
 
 
-def test_legacy_untracked_and_partial_files_remain_charged_until_removed(harness):
+def test_legacy_orphan_and_partial_files_do_not_charge_an_account(harness):
     _, app, *_ = harness
     original, partial = str(uuid4()), str(uuid4())
     app.state.files.write(original, b'x' * 100)
     app.state.files.temporary(partial).write_bytes(b'x' * 50)
     for path in app.state.files.storage_files(): os.utime(path, (now() - 7200, now() - 7200))
     reset_ledger(app.state.repository)
-    settings = limits(app, max_original_bytes_global=150)
+    settings = limits(app, max_original_bytes_per_owner=1)
     capacity = UploadCapacity(app.state.repository, app.state.files, settings)
     assert sum(entry['bytes'] for entry in capacity.ledger.read()['entries'].values()) == 150
-    with pytest.raises(CapacityError): capacity.reserve('owner-a', str(uuid4()), 1, str(uuid4()), 'a' * 64)
+    identifier = str(uuid4())
+    generation = capacity.reserve('owner-a', identifier, 1, str(uuid4()), 'a' * 64)
+    capacity.release_bytes(identifier, generation)
     capacity.cleanup_orphans(now() - 3600)
     assert list(app.state.files.storage_files()) == []
     assert capacity.ledger.read()['untracked_bytes'] == 0

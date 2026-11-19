@@ -2,12 +2,9 @@
 
 Provider configuration: the service now reads its own `*_LLM_BASE_URL`,
 `*_LLM_MODEL`, `*_LLM_API_KEY` and `*_LLM_ALLOW_HTTP`. HTTPS is required outside
-explicit development HTTP mode. Local testing can share the 16K-context
-`elo-deepseek-r1:1.5b` Ollama alias, without sending preserved cloud keys.
-Providers receive JSON Output plus the schema in the prompt;
-all responses still undergo the existing Pydantic and domain checks. Local calls
-serialize per service instance and use a 180-second HTTP timeout; operations use
-600-second budgets and 630-second leases. Cloud limits remain unchanged.
+explicit development HTTP mode for synthetic fixture providers. Providers receive
+JSON Output plus the schema in the prompt; all responses still undergo the existing
+Pydantic and domain checks. Model calls use a 55-second HTTP timeout.
 
 
 ## Scope and authority

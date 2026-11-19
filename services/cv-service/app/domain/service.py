@@ -1,7 +1,6 @@
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
-from threading import BoundedSemaphore
 from uuid import NAMESPACE_URL, uuid4, uuid5
 from bson import BSON
 from app.domain.capabilities import digest, effective_items, effective_fingerprint, skills_for, skill_id, normalized_name
@@ -100,7 +99,6 @@ class CvService:
         self.capacity = UploadCapacity(repository, files, settings)
         self.deletion = CvDeletion(repository, files, self.capacity)
         self.model_usage = ModelUsage(repository.model_usage, files.root, settings)
-        self.interpretation_slots = BoundedSemaphore(2)
 
     def get(self, owner, identifier):
         document = self.repository.get(owner, identifier)

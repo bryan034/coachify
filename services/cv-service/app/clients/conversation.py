@@ -105,14 +105,14 @@ class ConversationRouter(Extractor):
         options = {'ensure_ascii': False, 'separators': (',', ':')}
         payload = {'model': self.model, 'temperature': 0, 'response_format': {'type': 'json_object'}, 'max_tokens': 5000,
             'messages': [{'role': 'system', 'content': SKILL_LEVEL_SYSTEM + '\nSchema: ' + json.dumps(SkillLevelReview.model_json_schema(), **options)},
-                         {'role': 'user', 'content': json.dumps(context, **options)}], **self._provider_options()}
+                         {'role': 'user', 'content': json.dumps(context, **options)}]}
         try:
-            timeout = self._request_timeout(20)
+            timeout = 20
             deadline = time.monotonic() + timeout + 5
-            with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=not self.local) as client:
+            with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=True) as client:
                 self.reserve_dispatch(payload)
                 with sync_model_response(client, self.base_url, self.api_key,
-                                         httpx.Timeout(timeout, connect=5), payload, local=self.local,
+                                         httpx.Timeout(timeout, connect=5), payload,
                                          telemetry={'service': 'cv', 'stage': 'cv_skill_levels',
                                                     'prompt_version': 'cv-skill-levels-2', 'schema_version': '1'}) as response:
                     response.raise_for_status()
@@ -150,15 +150,14 @@ class ConversationRouter(Extractor):
         json_options = {'ensure_ascii': False, 'separators': (',', ':')} if interview else {}
         payload = {'model': self.model, 'temperature': 0, 'response_format': {'type': 'json_object'},
             'messages': [{'role': 'system', 'content': system + '\nSchema: ' + json.dumps(schema.model_json_schema(), **json_options)},
-                         {'role': 'user', 'content': json.dumps(model_context, **json_options)}], 'max_tokens': 5000,
-            **self._provider_options()}
+                         {'role': 'user', 'content': json.dumps(model_context, **json_options)}], 'max_tokens': 5000}
         try:
-            timeout=self._request_timeout(20)
+            timeout=20
             deadline = time.monotonic() + timeout + 5
-            with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=not self.local) as client:
+            with Client(timeout=httpx.Timeout(timeout, connect=5), follow_redirects=False, trust_env=True) as client:
                 self.reserve_dispatch(payload)
                 with sync_model_response(client, self.base_url, self.api_key,
-                                         httpx.Timeout(timeout, connect=5), payload, local=self.local,
+                                         httpx.Timeout(timeout, connect=5), payload,
                                          telemetry={"service": "cv", "stage": context.get("task", "conversation"),
                                                     "prompt_version": "cv-interview-15" if context.get("task", "").startswith("cv_interview_") else "cv-conversation-2",
                                                     "schema_version": "1"}) as response:

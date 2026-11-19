@@ -1,4 +1,5 @@
 """Resumable goal-setting and market research using existing Career stores/providers."""
+from elo_shared.model_budget import budget_owner
 import asyncio
 import json
 import logging
@@ -442,7 +443,8 @@ class DiscoveryEngine:
         async def fetch(query):
             for attempt in range(2):
                 try:
-                    async with asyncio.timeout(30):return await self.source.collect_discovery_query(context,query)
+                    with budget_owner(row['owner']):
+                        async with asyncio.timeout(30):return await self.source.collect_discovery_query(context,query)
                 except SourceRateLimit:raise
                 except (TimeoutError,GoalError):
                     if attempt:raise
@@ -514,7 +516,8 @@ class DiscoveryEngine:
         scope=Scope.model_validate(row['scope'])
         context=ResearchContext(field=scope.field,role=scope.area,location=scope.location,seniority_level=scope.career_stage)
         try:
-            async with asyncio.timeout(30):found=await self.source.collect_discovery_query(context,query)
+            with budget_owner(row['owner']):
+                async with asyncio.timeout(30):found=await self.source.collect_discovery_query(context,query)
         except SourceRateLimit:raise
         except (TimeoutError,GoalError):
             await thread(self.update,row,replacement_query=None,replacement_shortfall=True,stage='assess_job_listings')
@@ -737,7 +740,7 @@ class DiscoveryEngine:
         task.add_done_callback(lambda _:self.tasks.pop(identifier,None))
 
     async def run(self,identifier):
-        seconds=600 if getattr(getattr(self.ai,'settings',None),'provider',None)=='local' else 300
+        seconds=300
         row=await thread(self.rows.find_one_and_update,{'_id':identifier,'kind':'career_discovery','status':{'$in':['researching','waiting']},'next_attempt_at':{'$lte':now()},'lease_until':{'$lte':now()}},{'$set':{'lease':uuid4().hex,'lease_until':now()+timedelta(seconds=seconds+30),'status':'researching'}},return_document=ReturnDocument.AFTER)
         if not row:return
         try:

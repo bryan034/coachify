@@ -1,8 +1,8 @@
 """Run browser -> gateway -> services -> MongoDB with explicit synthetic settings.
 
 Never loads deployment env files. The disposable project is always removed unless
---keep is selected. 'both' verifies fixture behaviour then deepseek-r1:1.5b, with
-controlled empty public retrieval in both modes. This is not a live-search test.
+--keep is selected. It verifies finite fixture model behaviour with controlled
+empty public retrieval. This is not a live-model or live-search test.
 """
 import argparse
 from datetime import datetime, timezone
@@ -34,10 +34,11 @@ def run(args):
         'SMTP_HOST':'mailpit','SMTP_PORT':'1025','SMTP_SECURITY':'plain','SMTP_FROM':'no-reply@elo.test',
         'GOOGLE_CLIENT_ID':'test-client.apps.googleusercontent.com',
         'GATEWAY_PORT':str(args.port),'MAILPIT_PORT':str(args.mail_port),
-        'AI_ENABLED':'true','CAREER_LLM_PROVIDER':'local','CAREER_LLM_RESPONSE_MODE':'json_schema_strict',
+        'AI_ENABLED':'true','CAREER_LLM_RESPONSE_MODE':'json_schema_strict',
         'CAREER_LLM_TOKEN_PARAMETER':'max_tokens','AI_CONTEXT_TOKENS':'16384','AI_MAX_OUTPUT_TOKENS':'8192',
-        'CAREER_LOCAL_TIMEOUT_SECONDS':'90','AI_RETRIES':'0',
-        'CAREER_LLM_API_KEY':'','CAREER_RESEARCH_API_KEY':'','OPPORTUNITY_ENABLED':'true',
+        'AI_RETRIES':'0',
+        'CAREER_LLM_MODEL':'synthetic-career-fixture','CAREER_LLM_BASE_URL':'http://127.0.0.1:8000/__synthetic__',
+        'CAREER_LLM_API_KEY':'synthetic-fixture-key','CAREER_RESEARCH_API_KEY':'','OPPORTUNITY_ENABLED':'true',
         'NEXT_TELEMETRY_DISABLED':'1',
         'PROFILE_E2E_BASE_URL':f'http://localhost:{args.port}',
         'MAILPIT_BASE_URL':f'http://localhost:{args.mail_port}',
@@ -61,13 +62,10 @@ def run(args):
             except (URLError,OSError):pass
             time.sleep(1)
         raise RuntimeError('Disposable test stack did not become ready.')
-    modes=('fixture','local') if args.mode=='both' else (args.mode,)
+    modes=('fixture',)
     print(json.dumps({'project':project,'modes':modes,'gateway':args.port,'public_retrieval':'synthetic-empty'}),flush=True)
     try:
         for index,mode in enumerate(modes):
-            env['CAREER_LLM_MODEL']='deepseek-r1:1.5b' if mode=='local' else 'synthetic-career-fixture'
-            env['CAREER_LLM_BASE_URL']='http://host.docker.internal:11434/v1' if mode=='local' else 'http://127.0.0.1:8000/__synthetic__'
-            env['CAREER_FLOW_LIVE']='1' if mode=='local' else '0'
             if index==0:
                 execute([*compose,'up','--no-build' if args.no_build else '--build','-d'])
             else:
@@ -118,7 +116,6 @@ def run(args):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--mode',choices=('fixture','local','both'),default='both')
     parser.add_argument('--port',type=int,default=8093)
     parser.add_argument('--mail-port',type=int,default=8036)
     parser.add_argument('--no-build',action='store_true',help='Use the previously built verification images.')

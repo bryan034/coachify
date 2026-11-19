@@ -1,10 +1,9 @@
 # Conversational Career Discovery
 
-Current provider configuration (31 October 2026): all model stages use the selected
-Career model, including local OpenAI-compatible or DeepSeek cloud inference. Retrieval
-uses Brave LLM Context for testing or DeepSeek Search for production. Earlier model/Brave
-names below describe the original path. DeepSeek retrieval accepts original page content
-only, leaves missing employer metadata unknown and uses a distinct cache policy. See
+Current provider configuration: all model stages use the configured HTTPS
+OpenAI-compatible Career model (OpenRouter by default). Retrieval uses Brave LLM
+Context, the only search provider. Earlier model/Brave names below describe the
+original path. Missing employer metadata stays unknown. See
 [model/search setup](../../docs/setup.md#career-model-and-search-configuration).
 
 
@@ -145,13 +144,8 @@ of perfect semantic classification. Existing research may continue independently
 Discovery uses its own stage-specific system prompts; these scope instructions are
 sent in that prompt, rather than relying on the generic Career prompt.
 All five Discovery model stages request schema-constrained generation from their
-Pydantic contracts. Local inference uses native JSON Schema through the compatible
-Chat Completions transport.
-DeepSeek Discovery uses `/responses` with `text.format.type=json_schema`, independently
-of the JSON-only Chat Completions setting used by other Career workflows.
-DeepSeek's standard `/v1` base alias is normalized to its documented provider root
-for Responses calls; custom proxy paths are preserved. Generic
-compatible endpoints must explicitly use verified `json_schema_strict` support;
+Pydantic contracts through Chat Completions. Compatible endpoints must explicitly
+use verified `json_schema_strict` support;
 Discovery never silently downgrades to JSON-only mode. Unsupported configurations
 return `unsupported_structured_output`. No additional credentials or dependencies
 are required. User-configurable values remain in the single private Docker environment

@@ -65,7 +65,7 @@ def test_an_operation_can_request_a_longer_work_budget_without_changing_the_defa
     assert 'work_seconds' not in begin(store,'owner',Body(expected_version=0,mutation_id='one'),'plan')['pending']
 
 
-def test_explicit_worker_budget_applies_to_local_and_cloud_without_changing_defaults(monkeypatch):
+def test_explicit_worker_budget_applies_without_changing_defaults(monkeypatch):
     import asyncio
     from types import SimpleNamespace
     from elo_shared.runtime import MemoryStore, run_operation
@@ -74,21 +74,20 @@ def test_explicit_worker_budget_applies_to_local_and_cloud_without_changing_defa
         budgets.append(timeout)
         return await work
     monkeypatch.setattr('elo_shared.runtime.asyncio.wait_for',wait_for)
-    async def exercise(local,explicit):
+    async def exercise(explicit):
         store=MemoryStore()
         pending={'id':'run','hash':'synthetic','kind':'generate','lease':0}
         if explicit:pending['work_seconds']=240
         store.cas('owner',0,{'pending':pending,'receipts':[],'messages':[]})
         class Upstream:
             async def account(self,token):return {'id':'owner'}
-        app=SimpleNamespace(state=SimpleNamespace(store=store,model=SimpleNamespace(local=local),
+        app=SimpleNamespace(state=SimpleNamespace(store=store,model=SimpleNamespace(),
             slots=asyncio.Semaphore(3),upstream=Upstream()))
         async def worker(row,account):return row
         await run_operation(app,'owner','synthetic',worker)
         assert store.load('owner')['last_operation']['status']=='succeeded'
-    for local in (False,True):
-        for explicit in (False,True):asyncio.run(exercise(local,explicit))
-    assert budgets==[210,240,600,240]
+    for explicit in (False,True):asyncio.run(exercise(explicit))
+    assert budgets==[210,240]
 
 
 def test_worker_keeps_private_error_on_owner_record_and_out_of_logs(caplog):

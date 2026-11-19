@@ -30,19 +30,11 @@ failed sections get at most two corrections, valid replies reach the transcript 
 unrecoverable dependent content uses a safe partial-result message. Malformed output
 is never accepted by unwrapping it.
 
-`test_discovery_sections.py` checks all five constrained Discovery stages, DeepSeek
-Responses transport, targeted repair schemas, preservation of valid sibling items,
+`test_discovery_sections.py` checks all five constrained Discovery stages, targeted repair schemas, preservation of valid sibling items,
 memory/understanding updates, unsupported citations and safe action dependencies.
 Generic JSON-only compatible endpoints are rejected instead of silently dropping
 constraints. Mock tests verify transport and recovery; they do not prove enforcement
 by a live inference server or the semantic quality of generated guidance.
-
-Run `python tests/local_discovery_probe.py --model elo-deepseek-r1:1.5b` explicitly
-to check native schema enforcement against local Ollama with synthetic adversarial
-inputs. It uses explicit local settings, no private environment file or database,
-and validates the first raw response with correction retries disabled. A populated
-tokenizer cache is required. Passing cases establish observed schema conformance,
-not semantic correctness or every possible constraint on every server version.
 
 Tests use synthetic text/files, fake Profile responses and mocked website
 transport/DNS. They cover PDF/DOCX/TXT parsing in real child processes,
@@ -166,150 +158,57 @@ also checks the real renderer worker's resource limits and output. In Docker, us
 the Career image with the documented seccomp/tmp/PID settings and `--network none`,
 mounting this one test file read-only if it is not included in the image.
 
-`test_deepseek_providers.py` covers synthetic local/cloud model payloads, key isolation,
-DeepSeek Search page-content normalization, unsafe citations, query/response limits,
-quota handling and automatic follow-up retrieval when saved facts are insufficient.
-These tests do not download/launch a local model or call live paid APIs.
-
-Local-model regressions verify serialized cross-owner requests, preserved submitted
-snapshots, stale/cancelled queued requests, slot release after failures, queue admission
-before inference deadlines, 16K context defaults and independent local/cloud timeouts.
-They use synthetic HTTP transports and do not execute a local model.
-
-## Opt-in local model probe
-
-From `services/career-service`, run:
-
-```sh
-PYTHONPATH=../../packages/elo-shared:. ../../.venv/bin/python tests/local_model_probe.py
-```
-
-The probe makes one request to local Ollama using the exact
-`deepseek-r1:1.5b` model, the actual `jd_scope` prompt and a fixed 8,000-character synthetic JD.
-Add `--compare-legacy` to compare the old 768-token cap with the current 8,192-token local cap. Add `--max-output-tokens 4096` to reproduce the
-previous identification limit; `--max-output-tokens 8192` tests the larger allowance.
-Use `--timeout 45` for this comparison: a longer timeout alone does not change the
-output ceiling. A `length` finish is still rejected, even when partial JSON looks valid.
-By default it prints only finish reason, token counts, elapsed time, schema issue codes/fields,
-the model's `is_job_description` decision and whether the identity passes source-evidence checks.
-Schema-valid JSON with `is_job_description=false` is reported as `career_scope`, not a valid identity.
-It uses the app's response normalizer, job-identity schema and evidence validator.
-Local job identification requests a small native strict JSON Schema containing
-`document_type` and mandatory verbatim `evidence`; its focused prompt describes
-classification intent while full JD metadata stays in the extraction stage. Reports include `response_format` and retain safe adapter
-reasons: `json_syntax` for malformed JSON and `response_envelope` for an unexpected
-message format. Missing/invalid fields, scope refusal and fabricated evidence remain
-separate validation failures. No failed-response text is printed by default. It never reads/loads `.env`.
-No application settings are changed. A populated `TIKTOKEN_CACHE_DIR` may be supplied
-explicitly if the local tokenizer cache is not already available. This script is
-excluded from automatic pytest discovery and runs local inference only when invoked.
-`stop` plus valid schema is necessary, but does not establish extraction quality,
-source grounding or the full research workflow's reliability.
-
-To inspect a public job advert, save its text as `/tmp/public-jd.txt` (maximum 8,000
-characters), then run from this same directory:
-
-```sh
-PYTHONPATH=../../packages/elo-shared:. ../../.venv/bin/python tests/local_model_probe.py --jd-file /tmp/public-jd.txt --show-content --dry-run
-PYTHONPATH=../../packages/elo-shared:. ../../.venv/bin/python tests/local_model_probe.py --jd-file /tmp/public-jd.txt --show-content --timeout 45
-```
-
-The first command prints the complete JSON request (system instructions, schema,
-source text and output cap) without invoking Ollama. The second sends that request
-to `http://127.0.0.1:11434/v1/chat/completions` and prints the raw HTTP response,
-including any reasoning returned by the provider. Full content is opt-in and printed
-only to the invoking terminal; use public adverts only, never private CV/chat data.
-Use `--model elo-deepseek-r1:1.5b` only for a separately reported alias comparison.
-These explicit settings bypass application configuration, queue,
-automatic repair and persistence: this is a reproducible first-attempt scope probe,
-not interception of the running application's requests. It does not run extraction
-or web research. `--timeout` changes this diagnostic's HTTP timeout only.
+`test_research_chat_routing.py` covers automatic follow-up retrieval when saved
+facts are insufficient, questions that must never search, and Brave availability
+for Opportunity Intelligence. These tests do not call live paid APIs.
 
 In the running application, `jd_scope.JobIdentity.check` raises `career_scope`
 when the classifier returns false or an explicit assistant-task/override guard rejects the input. A genuine internship advert with qualifications
 is in scope even if it lacks a separate title heading or detailed responsibilities.
 Use a backend debugger at `AIAdapter._complete` to inspect `payload` before sending
-and `_content` to inspect `raw` on receipt if the application differs from the probe.
-Existing `ai_usage` logs show stage, attempts, counters and finish reason without
-logging source text or the model's classification. Do not enable full-payload
-production logging to diagnose a public example.
+and `_content` to inspect `raw` on receipt. Existing `ai_usage` logs show stage,
+attempts, counters and finish reason without logging source text or the model's
+classification. Do not enable full-payload production logging to diagnose a public example.
 
 `test_jd_request_budget.py` covers full-length JDs under JSON Object and native/strict
 JSON Schema modes, repair overhead, exact full-prompt context boundaries, retained
 explicit global ceilings and dense Unicode context rejection without source truncation.
 The budget checks use synthetic inputs and never invoke a real model or load `.env`.
 
-`test_local_summary_schema.py` verifies local summary native decoding from JSON Object
-configuration, the required blocks/nested reference shape, unchanged cloud JSON mode,
-full-prompt token admission and real-adapter summary rendering with synthetic HTTP
-responses. Wrong output shapes, unknown citations and missing research references
-remain rejected. Automatic tests do not invoke Ollama or load environment files.
+`test_summary_schema.py` verifies native summary decoding, the required blocks/nested
+reference shape, unchanged JSON Object mode, full-prompt token admission and
+real-adapter summary rendering with synthetic HTTP responses. Wrong output shapes,
+unknown citations and missing research references remain rejected.
 
-
-`test_local_identity_schema.py` checks local schema-constrained job identification,
-cloud compatibility, successful identity extraction and continued rejection of
-wrong fields, forged evidence, unrelated input and truncated completions.
-Probe regressions retain safe syntax/envelope reasons without exposing model text.
-These synthetic checks do not establish live Ollama output quality.
-
-Job-identity probe output includes field-level `provenance` violations without
-printing source/model values. `missing_source_evidence` means no supporting quote;
-`quote_not_in_source` identifies a non-verbatim evidence entry;
+`test_identity_schema.py` checks schema-constrained job identification, JSON Object
+compatibility, successful identity extraction and continued rejection of wrong fields,
+forged evidence, unrelated input and truncated completions. Field-level `provenance`
+violations never print source/model values: `missing_source_evidence` means no
+supporting quote; `quote_not_in_source` identifies a non-verbatim evidence entry;
 `identity_not_in_source` identifies an inferred or rewritten role/company/location/
 seniority; `invalid_public_identity` rejects contact/link-like public metadata.
 The same metadata reaches the application's bounded automatic correction prompts.
-Tests verify that transport, schema, scope and grounding remain separate and that
-provider repairs retain the exact field/check without exposing rejected text.
 
-
-To verify local R1 classification with the actual production scope gate, from
-`services/career-service` run:
-
-```sh
-PYTHONPATH=../../packages/elo-shared:. ../../.venv/bin/python tests/local_model_probe.py --model deepseek-r1:1.5b --timeout 45 --suite --repeat 3
-```
-
-The eight fixed synthetic cases include the original 8,000-character advert, a
-short advert, a different job family, title-free requirements, a candidate resume,
-a question, coding homework and an instruction override. Every repetition must
-pass. Invalid provider output on a negative case fails the evaluation; only an
-actual scope refusal counts as correct rejection. Exit status is nonzero for any
-failed case; the single probe likewise exits nonzero for an invalid identity.
-This opt-in suite does not load private configuration, persist goals or run web
-research. `--dry-run` cannot be combined with `--suite`. Tests cover failure scoring,
-exact evidence checks, contract conversion and rejection before paid inference.
-
-Live verification on the installed `deepseek-r1:1.5b` passed all eight scope cases
-for three consecutive runs (24/24) with the 45-second timeout. The unchanged
-8,000-character single probe returned `valid_job_identity=true` in 3.58 seconds.
-This is bounded scope-preflight evidence, not full extraction/research quality or
-proof that all future inputs will classify correctly.
-
-
-`test_local_extraction_schema.py` checks complete native-schema decoding for local
-JD extraction, nested additional-property restrictions, stage-appropriate origins,
-cloud JSON-mode compatibility, and continued rejection of flattened output, invalid
-priorities and unsupported provenance. Synthetic adapter tests preserve supplied
-required/preferred distinctions. Live extraction trials reproduced request-envelope
-echoes under generic JSON mode; native constraints enforce the shape but do not
-establish faithful or complete extraction by the fixed 1.5B model. The 24/24 live
-scope result above covers the preflight classifier only.
+`test_extraction_schema.py` checks complete native-schema decoding for JD extraction,
+nested additional-property restrictions, JSON Object compatibility, and continued
+rejection of flattened output, invalid priorities and unsupported provenance.
+Synthetic adapter tests do not establish faithful or complete extraction by a live model.
 
 ## Reproduce the complete Career extraction journey
 
 From repository root, with Docker Desktop, Node.js dependencies and Playwright Chromium
-installed, and Ollama serving the installed `deepseek-r1:1.5b` model:
+installed:
 
 ```sh
-python infrastructure/testing/run-career-flow.py --mode both
+python infrastructure/testing/run-career-flow.py
 ```
 
 This builds an isolated Compose project, runs the Career boundary browser suites,
 then exercises real email verification/onboarding, TXT import, JD extraction, automatic
 goal saving, research completion, grounded Q&A, a versioned location edit and reload.
-Fixture mode also verifies that invalid model output cannot replace a saved goal.
-The live mode uses the actual local model through the OpenAI SDK. Retrieval is an
-explicit empty synthetic source in both modes, so this verifies missing-evidence
+It also verifies that invalid model output cannot replace a saved goal. The model is
+a finite synthetic fixture reached through the real OpenAI SDK HTTP boundary.
+Retrieval is an explicit empty synthetic source, so this verifies missing-evidence
 handling, not live search or citation quality. Existing synthetic tests cover sourced
 findings, citations, provider failures, ownership and concurrent mutations.
 
@@ -325,7 +224,7 @@ Journey artifacts use a unique project directory so subsequent runs cannot erase
 earlier failures. Each run also writes
 `apps/frontend/test-results/career-flow/reports/<project>.json`, with every attempt's
 result, elapsed time, model usage, corrections and terminal diagnostic codes.
-Use `--repeat 3` for three fixed attempts per mode; all attempts run and any failure
+Use `--repeat 3` for three fixed attempts; all attempts run and any failure
 keeps the command unsuccessful. Counts are per attempt, not retry-until-success.
 Extraction errors fail the browser journey immediately instead of waiting for the
 success control's three-minute timeout. The runner regression verifies failure
@@ -335,25 +234,23 @@ The opt-in integration spec is `career-extraction-flow.spec.ts`. Default integra
 runs skip it because its labelled fixture and empty research require the dedicated
 test application; normal production endpoints never mount the synthetic model route.
 
-`test_openai_sdk.py` covers model/endpoint/token-parameter changes, local native schemas
+`test_openai_sdk.py` covers model/endpoint/token-parameter changes, default native schemas
 for downstream stages, response/body limits, malformed envelopes, compressed errors,
 HTTP-client ownership and a browser fixture validated against the backend response
 model. Frontend response tests cover nested shape failures and completed operation
 validation. The existing provider tests retain bounded retries and safe diagnostics.
 
-See [the 1 November verification record](LOCAL_MODEL_VERIFICATION.md) for observed
-results and the unresolved exact-model extraction limit. A fixture journey or
-scope-preflight pass must not be reported as a successful live extraction journey.
+A fixture journey must not be reported as a successful live extraction journey.
 
 `test_career_reliability.py` covers 60-second defaults, research output allowances,
-explicit local research schemas, bounded advert scope rechecks and content-free
+JSON Object research schemas, bounded advert scope rechecks and content-free
 field-level research diagnostics. Frontend chat regressions cover ordered queued
 turns, initial extraction, research failures, current versions/history after edits,
 and failed-turn receipt reuse while preserving newer drafts. All use synthetic
 providers; these tests do not establish live model classification/research quality.
 
 `test_opportunity_evidence_refs.py` verifies category-specific decoding enums across
-local, OpenRouter and JSON Object providers; source/passages with different indexes;
+strict JSON Schema and JSON Object modes; source/passages with different indexes;
 exact Unicode passage copying; forged/coerced references; partial preservation;
 selected-passage numeric support; bounded repairs and content-free diagnostics. Its
 isolated-MongoDB test uses the real provider adapter with a mock HTTP transport and

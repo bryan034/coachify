@@ -17,12 +17,12 @@ from app.workflows.opportunity.engine import OpportunityEngine
 
 @pytest.mark.parametrize('stage', ['opportunity_plan', 'opportunity_structure'])
 @pytest.mark.parametrize('ceiling', [512, 8192])
-def test_research_output_has_room_and_local_schema_is_explicit(stage, ceiling):
-    settings=AISettings(provider='local',max_output_tokens=ceiling,response_mode='json_object')
+def test_research_output_has_room_and_json_object_schema_is_explicit(stage, ceiling):
+    settings=AISettings(max_output_tokens=ceiling,response_mode='json_object')
     context=structure_input({},'internship_insights',[ResearchSource(source_id='synthetic',platform='other',url='https://example.test/intern',evidence='Example interns report mentorship.')]) if stage=='opportunity_structure' else {}
     payload=AIAdapter(settings,None)._payload(AIInput(stage=stage,context=json.dumps(context)))
     assert payload['max_tokens']==min(4096,ceiling)
-    assert payload['response_format']['json_schema']['strict'] is True
+    assert payload['response_format']=={'type':'json_object'}
     assert 'JSON schema:' in payload['messages'][0]['content']
     if stage=='opportunity_plan':
         assert all(category in payload['messages'][0]['content'] for category in CATEGORIES)
@@ -31,8 +31,7 @@ def test_research_output_has_room_and_local_schema_is_explicit(stage, ceiling):
 
 def test_model_deadline_defaults_to_sixty_seconds(monkeypatch):
     assert AISettings().timeout_seconds==60
-    monkeypatch.setenv('CAREER_LLM_PROVIDER','local')
-    monkeypatch.delenv('CAREER_LOCAL_TIMEOUT_SECONDS',raising=False)
+    monkeypatch.delenv('AI_TIMEOUT_SECONDS',raising=False)
     assert AISettings.from_env().timeout_seconds==60
 
 
@@ -43,10 +42,10 @@ def test_advert_negative_classification_gets_one_grounded_recheck(recheck_accept
         calls=[]
         def handler(request):
             calls.append(json.loads(request.content))
-            output={'document_type':'job_description' if len(calls)==2 and recheck_accepts else 'resume',
+            output={'is_job_description':len(calls)==2 and recheck_accepts,
                     'evidence':['Responsibilities: evaluate agent workflows.']}
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
-        settings=AISettings(enabled=True,provider='local')
+        settings=AISettings(enabled=True,api_key='synthetic')
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             token=recover_responses.set(True)
             try:

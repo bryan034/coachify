@@ -218,7 +218,7 @@ career_goals *-- RoleSuggestion : draft suggestions
 career_goals *-- CvContext : optional context
 
 class ResearchCoverage {
-    +String platform [brave/deepseek; reddit for historical records only]
+    +String platform [brave; reddit for historical records only]
     +String status
     +Number round [0|1]
 }
@@ -853,9 +853,17 @@ class CompetenceTarget {
     +Integer level [1..10; familiarity_minimum_8]
     +String basis [job_description|research|inferred]
     +String explanation
+    +String employer_demand?
+    +TargetExample[] reported_examples [max_2]
+    +String rating_reason?
     +String[] source_urls
 }
+class TargetExample {
+    +String text
+    +String source_url?
+}
 TargetSkill *-- CompetenceTarget
+CompetenceTarget *-- TargetExample
 note for CompetenceTarget "Career prepares weighted role targets. Current goal, workspace and Assessment handoff use fresh model ratings when available, subject to employer-stated bounds. The rating uses public role context and findings when available."
 note for ReviewFact "self_rating is an explicitly stated skill-specific whole number 1..10, saved as a string with an exact answer quote. It informs review but never overrides evidence-based competence."
 
@@ -869,9 +877,16 @@ class SkillLevelInfo {
 class RequiredSkillLevel {
     +String skill
     +Integer level [1_to_10]
+    +String employer_demand?
+    +SkillLevelExample[] reported_examples [max_2]
     +String rationale
     +String[] finding_ids
 }
+class SkillLevelExample {
+    +String text
+    +String finding_id
+}
+RequiredSkillLevel *-- SkillLevelExample
 CvSkill *-- SkillLevelInfo
 SkillClaim *-- SkillLevelInfo
 OpportunityReport *-- RequiredSkillLevel

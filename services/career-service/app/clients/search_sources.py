@@ -8,12 +8,18 @@ import re
 from urllib.parse import urlsplit
 import httpx
 from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
+from elo_shared.model_budget import (ModelBudgetExceeded, ModelBudgetUnavailable,
+                                     current_budget_owner, reserve_search)
 from app.repositories.goals import GoalError,now
 from app.schemas.analysis import ResearchSource
 from app.ai.discovery_config import MAX_URLS_PER_QUERY, BRAVE_CONTEXT_TOKENS
 
 
-OPPORTUNITY_SOURCE_LIMIT=3
+# Pages kept per research search. Five gives each category a Google-results-page sized pool.
+OPPORTUNITY_SOURCE_LIMIT=5
+# Largest built-in URLs-per-search (goal research/chat); a configured cap only lowers it.
+MAX_URLS_LIMIT=6
 OPPORTUNITY_EXCERPT_LIMIT=8000
 
 def excerpt(text):return re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]*>',' ',text or ''))).strip()[:600]
@@ -140,6 +146,26 @@ class SourceRateLimit(GoalError):
         self.retry_after=max(1,min(3600,int(delay))) if math.isfinite(delay) else 30
         super().__init__('Research API rate limit reached (HTTP 429). Wait before retrying interview research.',503)
 
+
+class SearchAllowanceExceeded(SourceRateLimit):
+    """The configured daily search allowance, not the provider, stopped this search."""
+    def __init__(self,scope,retry_after):
+        super().__init__(retry_after)
+        self.scope=scope
+        self.limit_scope='user'
+        GoalError.__init__(self,'Your account has reached its daily research search allowance. '
+            'Saved results remain available; retry after the next UTC day.',503)
+
+
+async def charge_search(owner,limit):
+    """Reserve one search for the current account before any provider request."""
+    if owner is None:raise GoalError('Public research could not be attributed to an account. Retry shortly.',503)
+    try:await run_in_threadpool(reserve_search,owner,limit)
+    except ModelBudgetExceeded as error:
+        raise SearchAllowanceExceeded(error.scope,error.retry_after) from None
+    except ModelBudgetUnavailable:
+        raise GoalError('Research usage could not be recorded. Retry when the service is available.',503) from None
+
 # Only fixed codes/field names leave this boundary; provider prose can echo secrets or queries.
 BRAVE_CODES={
     'INTERNAL':'Brave reported an internal API error. Retry shortly.',
@@ -202,19 +228,28 @@ async def body(client,method,url,**kwargs):
 
 class SourceAPIs:
     provider='brave'
-    def __init__(self,client,*,brave_key='',brave_mode='llm_context'):
+    def __init__(self,client,*,brave_key='',brave_mode='llm_context',metered=False,searches_per_account=None,max_urls=None):
         # Accept the legacy argument so existing callers migrate without an outage.
         # Every retrieval now uses LLM Context, irrespective of old mode settings.
         self.client,self.brave_key,self.brave_mode=client,brave_key,'llm_context'
+        # Deployed instances record each search against the current account; a
+        # None allowance is unlimited. max_urls caps every workflow's URL count.
+        self.metered,self.searches_per_account,self.max_urls=metered,searches_per_account,max_urls
 
     @classmethod
     def from_environment(cls,client):
         provider=os.getenv('CAREER_RESEARCH_PROVIDER','brave').strip()
-        if provider=='deepseek':
-            from app.clients.deepseek_search import DeepSeekSearch
-            return DeepSeekSearch(client,api_key=os.getenv('CAREER_RESEARCH_API_KEY','').strip())
-        if provider!='brave':raise ValueError('Invalid CAREER_RESEARCH_PROVIDER. Use brave or deepseek.')
-        return cls(client,brave_key=os.getenv('CAREER_RESEARCH_API_KEY',os.getenv('BRAVE_API_KEY','')).strip())
+        if provider!='brave':raise ValueError('Invalid CAREER_RESEARCH_PROVIDER. Use brave.')
+        def setting(name,low,high):
+            raw=os.getenv(name,'').strip()
+            if not raw:return None
+            try:value=int(raw)
+            except ValueError:value=None
+            if value is None or not low<=value<=high:raise ValueError(f'Invalid {name}. Use a whole number from {low} to {high}, or leave it blank.')
+            return value
+        return cls(client,brave_key=os.getenv('CAREER_RESEARCH_API_KEY',os.getenv('BRAVE_API_KEY','')).strip(),metered=True,
+            searches_per_account=setting('CAREER_RESEARCH_SEARCHES_PER_ACCOUNT_PER_DAY',0,100000),
+            max_urls=setting('CAREER_RESEARCH_MAX_URLS_PER_SEARCH',1,MAX_URLS_LIMIT))
 
     @property
     def cache_policy(self):return 'public-interview-brave-context-v9:'+self.brave_mode
@@ -249,7 +284,9 @@ class SourceAPIs:
         return await self.search(query,country='ALL')
 
     async def collect_opportunity_query(self,context,query):
-        return await self.search(query,country=search_country(context.location),focus=query,max_sources=OPPORTUNITY_SOURCE_LIMIT,evidence_chars=OPPORTUNITY_EXCERPT_LIMIT)
+        # Lenient relevance and more passages per page keep useful text that does not echo the query words.
+        return await self.search(query,country=search_country(context.location),focus=query,max_sources=OPPORTUNITY_SOURCE_LIMIT,
+            evidence_chars=OPPORTUNITY_EXCERPT_LIMIT,context_tokens=16384,threshold='lenient',snippets_per_url=12,snippets=60,search_count=50)
 
     async def collect_discovery_query(self,context,query):
         # Brave ranks up to 50 results before returning at most five contexts.
@@ -258,14 +295,16 @@ class SourceAPIs:
             max_sources=MAX_URLS_PER_QUERY,evidence_chars=8000,context_tokens=BRAVE_CONTEXT_TOKENS,search_count=50,threshold='strict',discovery=True)
 
     async def brave(self,query,*,country='ALL',focus=None,max_sources=6,evidence_chars=2400,
-                    context_tokens=8192,search_count=30,threshold='balanced',discovery=False):
+                    context_tokens=8192,search_count=30,threshold='balanced',discovery=False,snippets_per_url=6,snippets=30):
         if not self.brave_key:raise GoalError('The running career service has no research API key. After configuring CAREER_RESEARCH_API_KEY, recreate the career-service container and retry.',503)
+        if self.metered:await charge_search(current_budget_owner(),self.searches_per_account)
+        if self.max_urls is not None:max_sources=min(max_sources,self.max_urls)
         headers={'X-Subscription-Token':self.brave_key,'Accept':'application/json'}
         country=country if country in SEARCH_COUNTRIES else 'ALL'
         raw=await body(self.client,'GET','https://api.search.brave.com/res/v1/llm/context',headers=headers,timeout=30,
             params={'q':query,'country':country,'count':search_count,'maximum_number_of_urls':max_sources,
                 'maximum_number_of_tokens':context_tokens,'maximum_number_of_tokens_per_url':2048,
-                'maximum_number_of_snippets':30,'maximum_number_of_snippets_per_url':6,
+                'maximum_number_of_snippets':snippets,'maximum_number_of_snippets_per_url':snippets_per_url,
                 'context_threshold_mode':threshold,'enable_local':'false',
                 'search_lang':'en','operators':'true','operators_fallback':'false',
                 'spellcheck':'false','enable_source_metadata':'true'})

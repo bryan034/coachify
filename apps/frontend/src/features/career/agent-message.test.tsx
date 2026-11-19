@@ -1,6 +1,6 @@
 import {act,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {AgentProgress,AgentMarkdown,AgentReply,AgentRecovery} from './agent-message';
+import {AgentProgress,AgentMarkdown,AgentReply,AgentRecovery,formatWait} from './agent-message';
 
 describe('assistant Markdown',()=>{
  it('renders emphasis, headings, lists and code instead of literal markers',()=>{
@@ -159,4 +159,24 @@ it('shows source links inside the interview stage instead of internal fact marke
  expect(stages[1].querySelector('a')).toHaveAttribute('href','https://candidates.test/report');
  expect(container).not.toHaveTextContent(/\[f\d/);
  expect(container).not.toHaveTextContent('Sources:');
+});
+
+it('links the summary to its Career Goal tab in the same window',()=>{
+ render(<AgentMarkdown>{'#### Interview expectations\n\nAn interview is reported.\n\nFind out more on the [Interview preparation](/career-goal/interview) page.'}</AgentMarkdown>);
+ const link=screen.getByRole('link',{name:'Interview preparation'});
+ expect(link).toHaveAttribute('href','/career-goal/interview');
+ expect(link).not.toHaveAttribute('target');
+});
+
+describe('daily allowance wait',()=>{
+ it('shows hours and minutes, rounded up, without seconds',()=>{
+  expect(formatWait(59183)).toBe('16 hours 27 minutes');
+  expect(formatWait(3600)).toBe('1 hour');
+  expect(formatWait(61)).toBe('2 minutes');
+  expect(formatWait(5)).toBe('1 minute');
+ });
+ it('uses it in the recovery message for the daily allowance',()=>{
+  render(<AgentRecovery message="x" code="model_daily_allowance" onRetry={()=>{}} seconds={59183}/>);
+  expect(screen.getByRole('status')).toHaveTextContent('Try again in 16 hours 27 minutes.');
+ });
 });

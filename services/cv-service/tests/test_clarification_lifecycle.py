@@ -357,3 +357,15 @@ def test_target_prepare_groups_multiple_projects_by_trusted_scope(harness, scope
     project_questions = [q for q in latest['clarifications'] if q['kind'] == 'project']
     assert len(project_questions) == expected
     assert {q['item_id'] for q in project_questions} == {project['id'], second['id']}
+
+
+def test_clarified_statement_is_evidence_and_never_replaces_the_cv_description(harness):
+    client, app, *_ = harness
+    cv, question, path = project_question(harness)
+    original = next(item for item in cv['items'] if item['id'] == question['item_id'])
+    app.state.interpreter.payload = lambda *args: {**mixed_output(*args), 'statement_excerpt': PERSONAL}
+    saved = client.put(path, json=mutation(cv['version'], action='answer', answer=PERSONAL)).json()
+    item = next(item for item in saved['items'] if item['id'] == question['item_id'])
+    assert item['description'] == original['description'] != PERSONAL
+    assert {'id': 'answer:' + question['id'], 'location': 'Your clarification', 'excerpt': PERSONAL} in item['evidence']
+    assert 'Python' in item['skill_names']

@@ -63,7 +63,6 @@ def test_openrouter_template_renders_and_career_discovery_uses_strict_schema(tmp
 def test_openrouter_model_does_not_override_other_provider_models(tmp_path):
     services = render(tmp_path, '/dev/null', {
         'OPENROUTER_API_KEY': 'synthetic-openrouter', 'OPENROUTER_MODEL': '@preset/synthetic',
-        'CAREER_LLM_PROVIDER': 'compatible',
         'CAREER_LLM_BASE_URL': 'https://openrouter.ai/api/v1',
         'CV_LLM_BASE_URL': 'https://api.openai.com/v1',
         'CV_LLM_MODEL': 'openai-specific-model',

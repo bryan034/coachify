@@ -1,9 +1,7 @@
 """Fair bounded provider admission, held inside the synchronous provider call.
 
-The slot guard is an OS lock, not an expiring lease: cancelling an async waiter
-cannot release capacity while its provider thread continues. A short gate makes
-slot-owner tags consistent across processes; it is never held during MongoDB or
-provider I/O. Every process must share the volume and capacity configuration.
+An account's OS lock stays held while its provider thread runs, including
+after cancellation of an async waiter. All processes share the same volume.
 """
 from copy import deepcopy
 from datetime import date, datetime, timezone
@@ -26,8 +24,8 @@ class ModelAdmissionError(ValueError):
 
 UNAVAILABLE = 'CV model usage could not be reserved. Your saved inputs are safe; retry shortly.'
 OWNER_BUSY = 'Another CV model request for your account is still running. Your saved inputs are safe; retry shortly.'
-GLOBAL_BUSY = 'CV model processing is busy. Your saved inputs are safe; retry shortly.'
 OWNER_DAILY = 'Your daily CV model-call limit has been reached. Your saved inputs are safe; retry after the next UTC day.'
+# Recognise this message in extraction failures persisted by older releases.
 GLOBAL_DAILY = 'The daily CV model-call capacity has been reached. Your saved inputs are safe; retry after the next UTC day.'
 
 
@@ -42,40 +40,21 @@ class ModelUsage:
         self.directory.chmod(0o700)
 
     def _slot(self, owner_hash):
-        gate, selected = None, None
-        descriptors = []
         try:
-            gate = os.open(self.directory / 'gate', os.O_RDWR | os.O_CREAT, 0o600)
-            fcntl.flock(gate, fcntl.LOCK_EX)
-            owner_active = 0
-            for index in range(self.settings.model_concurrent_global):
-                descriptor = os.open(self.directory / str(index), os.O_RDWR | os.O_CREAT, 0o600)
-                descriptors.append(descriptor)
+            for index in range(self.settings.model_concurrent_per_owner):
+                path = self.directory / f'{owner_hash}-{index}'
+                descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
                 try:
                     fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    if selected is None: selected = descriptor
+                    return descriptor
                 except BlockingIOError:
-                    os.lseek(descriptor, 0, os.SEEK_SET)
-                    tag = os.read(descriptor, 65)
-                    if re.fullmatch(rb'[0-9a-f]{64}', tag) is None:
-                        raise ModelAdmissionError(UNAVAILABLE)
-                    if tag.decode('ascii') == owner_hash: owner_active += 1
-            if owner_active >= self.settings.model_concurrent_per_owner: raise ModelAdmissionError(OWNER_BUSY)
-            if selected is None: raise ModelAdmissionError(GLOBAL_BUSY)
-            os.lseek(selected, 0, os.SEEK_SET)
-            os.ftruncate(selected, 0)
-            if os.write(selected, owner_hash.encode('ascii')) != 64: raise ModelAdmissionError(UNAVAILABLE)
-            descriptors.remove(selected)
-            return selected
-        except ModelAdmissionError:
-            raise
+                    os.close(descriptor)
+                except OSError:
+                    os.close(descriptor)
+                    raise
         except OSError as exc:
             raise ModelAdmissionError(UNAVAILABLE) from exc
-        finally:
-            for descriptor in descriptors: os.close(descriptor)
-            if gate is not None:
-                fcntl.flock(gate, fcntl.LOCK_UN)
-                os.close(gate)
+        raise ModelAdmissionError(OWNER_BUSY)
 
     @staticmethod
     def _validate(document):
@@ -108,8 +87,7 @@ class ModelUsage:
                 # A backwards clock never resets or rewinds a consumed window.
             count = document['owners'].get(owner_hash, 0)
             if count >= self.settings.model_calls_per_owner_per_day: raise ModelAdmissionError(OWNER_DAILY)
-            if document['total'] >= self.settings.model_calls_global_per_day: raise ModelAdmissionError(GLOBAL_DAILY)
-            if not count and len(document['owners']) >= MAX_OWNER_ENTRIES: raise ModelAdmissionError(GLOBAL_DAILY)
+            if not count and len(document['owners']) >= MAX_OWNER_ENTRIES: raise ModelAdmissionError(UNAVAILABLE)
             document['owners'][owner_hash] = count + 1
             document['total'] += 1
             document['revision'] += 1

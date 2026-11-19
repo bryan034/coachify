@@ -8,7 +8,7 @@
 
 .career-briefing .briefing-jump-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:16px;padding:0;border:0}
 .career-briefing .briefing-jump-links a{padding:7px 14px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-size:12.5px;font-weight:500;color:var(--ink)}
-.career-briefing .briefing-jump-links a:hover{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.career-briefing .briefing-jump-links a:hover{background:var(--fill);border-color:var(--fill);color:var(--on-fill)}
 .career-briefing .goal-confirmation{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 20px;align-items:center;margin-bottom:20px;padding:14px 20px;border-radius:16px}
 .career-briefing .goal-confirmation>*{grid-column:1}
 .career-briefing .goal-confirmation>:is(.row, .btn){grid-column:2;grid-row:1 / span 3;margin:0}
@@ -22,7 +22,7 @@
 .skill-rank-filters button{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-size:12.5px;font-weight:500;color:var(--ink)}
 .skill-rank-filters button:hover{background:var(--cloud)}
 .skill-rank-filters button span{font-size:12px;color:var(--slate)}
-.skill-rank-filters button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.skill-rank-filters button[aria-pressed=true]{background:var(--fill);border-color:var(--fill);color:var(--on-fill)}
 .skill-rank-filters button[aria-pressed=true] span{color:var(--mint)}
 .skill-rank-filters button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .skill-rank-list{display:grid;gap:10px;list-style:none}
@@ -42,7 +42,7 @@
 .career-briefing .briefing-context-banner{margin-bottom:16px}
 .career-briefing .briefing-context-banner .briefing-assessment .btn.pri{width:auto;margin:0}
 .career-briefing .briefing-context-banner .briefing-assessment h2{margin-top:0}
-.career-briefing .briefing-assessment{padding:22px;border:1px solid var(--ink);border-radius:20px;background:var(--ink);color:var(--white)}
+.career-briefing .briefing-assessment{padding:22px;border:1px solid var(--fill);border-radius:20px;background:var(--fill);color:var(--on-fill)}
 .career-briefing .briefing-assessment h2{margin:12px 0 8px;font-size:18px;font-weight:500;letter-spacing:-.02em;color:var(--white)}
 .career-briefing .briefing-assessment p{color:color-mix(in srgb,var(--white) 74%,transparent);font-size:13px;line-height:1.55}
 .career-briefing .briefing-assessment .briefing-mini-icon{background:color-mix(in srgb,var(--mint) 22%,transparent);color:var(--mint)}
@@ -84,7 +84,7 @@
 .agent-message.user{max-width:80%;align-self:flex-end;background:var(--mint-mist,#ecfdf5);}
 
 /* ---- Career Goal redesign: dark goal header, tab pages, importance colour and competence ---- */
-.career-briefing .goal-header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:20px 28px;padding:24px 28px;margin-bottom:18px;background:var(--ink);color:var(--white);border:0;border-radius:14px}
+.career-briefing .goal-header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:20px 28px;padding:24px 28px;margin-bottom:18px;background:var(--fill);color:var(--on-fill);border:0;border-radius:14px}
 .career-briefing .goal-header .briefing-target-copy{flex:1 1 320px;min-width:0}
 .career-briefing .goal-header .briefing-eyebrow{margin:0 0 4px;font-size:12px;font-weight:600;color:var(--mint)}
 .career-briefing .goal-header h1{margin:0;font-size:30px;font-weight:500;letter-spacing:-.03em;line-height:1.2;color:var(--white)}
@@ -94,37 +94,107 @@
 .goal-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin-bottom:18px}
 .goal-tabs a{display:inline-flex;align-items:center;min-height:38px;padding:0 18px;border-radius:999px;font-size:14px;font-weight:500;color:var(--slate);text-decoration:none;background:var(--white);border:1px solid var(--line);margin-right:4px}
 .goal-tabs a:hover{color:var(--ink);background:var(--cloud)}
-.goal-tabs a.on{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.goal-tabs a.on{background:var(--fill);border-color:var(--fill);color:var(--on-fill)}
 .card{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:24px}
 @media (max-width:700px){.career-briefing .card{padding:18px 14px}.career-briefing .goal-header{padding:20px}}
-/* Research tabs */
-.goal-research-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
-.goal-research-head h2{margin:0;font-size:22px;font-weight:600}
-.research-status{display:flex;align-items:center;gap:12px}
-.research-status .small{margin:0}
-.research-warning{display:flex;gap:10px;align-items:flex-start;margin:14px 0 20px;padding:12px 14px;border-radius:12px;background:#fffbeb;color:#78350f;font-size:13px}
-.research-warning svg{flex:none;width:18px;height:18px}
-.fact-tiles{list-style:none;margin:0 0 24px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-.fact-tile{display:flex;flex-direction:column;gap:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--snow)}
-.fact-tile strong{font-size:16px;font-weight:600}
-.fact-source{font-size:12px;font-weight:600;color:var(--forest);text-decoration:none;margin-right:10px}
-.finding-flag{display:inline-block;margin:0 6px 0 0;font-size:11px;font-weight:600;color:var(--slate)}
-.rounds-title{margin:8px 0 4px;font-size:17px;font-weight:600}
-.rounds{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
-.round{border:1px solid var(--line);border-radius:14px;background:var(--white)}
-.round-head{display:grid;grid-template-columns:32px minmax(0,1fr);gap:14px;align-items:center;padding:14px 16px;min-height:44px}
-.round-head .small{display:block}
-.round-num{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--white);font-weight:600}
-.round-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;padding:0 16px 16px 62px}
-.round-list{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
-.fact-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:14px}
-.fact-card{padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--white)}
-.fact-card h3{margin:0 0 8px;font-size:14px;font-weight:600}
-.fact-card-item + .fact-card-item{margin-top:10px;padding-top:10px;border-top:1px solid var(--soft2)}
-.fact-card-item p{margin:0}
-.fact-sources{margin-top:6px!important}
-.role-details details{margin-bottom:10px;padding:14px 16px;border:1px solid var(--line);border-radius:14px}
-@media (max-width:700px){.round-body{padding-left:16px}}
+/* ---- Research tabs (Interview preparation, About the role), from the 19 Nov 2026 redesign canvas ---- */
+.goal-research{border-radius:24px;padding:clamp(20px,3vw,36px)}
+.goal-research-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:24px}
+.goal-research-head>div{flex:1 1 320px;max-width:660px}
+.goal-research-head h2{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em}
+.research-meta{margin:6px 0 0;font-size:13px;line-height:1.6;color:var(--slate)}
+.research-refresh.btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 14px;border-radius:12px;font-size:14px;font-weight:500;color:var(--ink)}
+.research-refresh svg{flex:none;width:16px;height:16px}
+.goal-research>.notice{margin:0 0 16px}
+/* Numbered source pills; the Sources list at the foot holds the links. */
+.fn{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--mint-mist);color:var(--forest-ink);font-size:11px;font-weight:600;line-height:1;text-decoration:none;vertical-align:2px;box-sizing:border-box}
+.fn:hover{background:var(--ready-bg)}
+.research-sources{margin-top:24px;padding:20px 22px;border-radius:16px;background:var(--snow)}
+.research-sources h3{margin:0 0 10px;font-size:14px;font-weight:600}
+.research-sources ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)}
+.research-sources a{color:var(--ink);text-decoration:none;overflow-wrap:anywhere}
+.research-sources a:hover{color:var(--forest);text-decoration:underline}
+.research-sources li:target a{color:var(--forest);text-decoration:underline}
+/* Fields the AI wrote carry an amber Estimated chip, explained in the header line. */
+.ai-made{display:inline-flex;align-items:center;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--growing-ink);font-size:12px;font-weight:500;line-height:18px;letter-spacing:0;text-transform:none;white-space:nowrap;vertical-align:1px}
+.research-meta .ai-made{margin-left:0}
+.finding-flag{display:inline-block;margin:0 0 0 6px;font-size:11px;font-weight:600;color:var(--slate)}
+.fact-tile.is-empty strong, .not-filled{color:var(--slate);font-weight:500}
+.not-filled{margin:0}
+
+/* Interview preparation: dark process timeline, fact tiles, then each stage. */
+.process-panel{padding:24px;border-radius:18px;background:radial-gradient(120% 140% at 100% 0%,#134e4a 0%,var(--hero) 62%);color:#fff}
+.process-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px}
+.process-head h3{margin:0;font-size:15px;font-weight:600;color:#fff}
+.process-head p{margin:0;font-size:13px;color:#d1fae5}
+.process-panel .fn{background:rgb(255 255 255 / .14);color:#d1fae5}
+.process-steps{list-style:none;margin:22px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.process-steps li{display:flex;flex-direction:column;gap:10px;min-width:0}
+.process-dot{display:flex;align-items:center;gap:8px;height:12px}
+.process-dot span{flex:none;width:12px;height:12px;border-radius:6px;background:var(--mint)}
+.process-dot i{flex:1;height:2px;background:rgb(52 211 153 / .35)}
+.process-steps li:last-child .process-dot span{background:transparent;border:2px solid var(--mint);box-sizing:border-box}
+.process-steps strong{display:block;font-weight:600;color:#fff}
+.process-format{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13px;color:#a7f3d0}
+.fact-tiles{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.process-panel+.fact-tiles{margin-top:16px}
+.fact-tile{display:flex;flex-direction:column;gap:4px;min-width:0;padding:20px 22px;background:var(--white)}
+.fact-tile-label{font-size:13px;color:var(--slate)}
+.fact-tile strong{font-size:20px;font-weight:600;line-height:1.3;letter-spacing:-.02em;color:var(--ink)}
+.difficulty-scale+strong{font-size:13px;font-weight:400;letter-spacing:0;color:var(--slate)}
+.fact-tile-foot{font-size:13px;color:var(--slate)}
+.fact-tile-foot>.fn:first-child{margin-left:0}
+.difficulty-scale{display:flex;gap:4px;margin:6px 0 4px}
+.difficulty-scale span{flex:1;padding:6px 0;border-radius:4px;background:var(--cloud);color:var(--slate);font-size:13px;text-align:center}
+.difficulty-scale span:first-child{border-radius:8px 4px 4px 8px}
+.difficulty-scale span:last-child{border-radius:4px 8px 8px 4px}
+.difficulty-scale span.on{background:var(--forest);color:var(--white);font-weight:600}
+.rounds-title{margin:40px 0 4px;font-size:18px;font-weight:700;letter-spacing:-.01em}
+.rounds-intro{margin:0;font-size:14px;color:var(--slate)}
+.rounds{list-style:none;margin:20px 0 0;padding:0;display:flex;flex-direction:column}
+.round{display:flex;gap:20px;padding:24px 0;border-top:1px solid var(--line)}
+.round-num{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--fill);color:var(--on-fill);font-size:14px;font-weight:600}
+.round-main{flex:1;min-width:0}
+.round-main h4{margin:4px 0 0;font-size:17px;font-weight:600}
+.round-format{margin:4px 0 0;font-size:14px;color:var(--slate)}
+.round-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px 32px;margin-top:16px}
+.slot-label{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--forest)}
+.round-list{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:15px;line-height:1.55}
+.round-main>.round-list{margin-top:10px}
+.round-quote{display:flex;gap:12px;margin:18px 0 0;padding:14px 16px;border-radius:12px;background:var(--snow)}
+.round-quote-mark{flex:none;margin-top:2px;color:var(--field-line)}
+.round-quote blockquote{margin:0;padding:0;border:0;font-size:14px;color:var(--ink)}
+.round-quote figcaption{margin-top:4px;font-size:13px;color:var(--slate)}
+
+/* About the role: an at-a-glance strip, then one labelled row per topic group. */
+.role-glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:1px;margin:0 0 8px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.role-glance>div{min-width:0;padding:20px 22px;background:var(--white)}
+.role-glance dt{font-size:13px;color:var(--slate)}
+.role-glance dd{margin:6px 0 0;font-size:22px;font-weight:600;line-height:1.25;letter-spacing:-.02em;color:var(--ink)}
+.role-glance dd.role-glance-foot{margin-top:4px;font-size:13px;font-weight:400;letter-spacing:0}
+.role-glance-foot>.fn:first-child{margin-left:0}
+.role-rows{display:flex;flex-direction:column}
+.role-row{display:flex;flex-wrap:wrap;gap:8px 40px;padding:28px 0;border-bottom:1px solid var(--cloud)}
+.role-row:first-child{padding-top:20px}
+.role-row:last-child{border-bottom:0}
+.role-row>h3{flex:0 0 180px;margin:0;font-size:15px;font-weight:600}
+.role-row-body{flex:999 1 420px;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:24px 32px}
+.role-row-body.is-single{display:block}
+.role-row-body.is-single>p{margin:0}
+.role-item{min-width:0}
+.role-item h4{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--slate)}
+.role-card-headline{margin:0 0 8px;font-size:17px;font-weight:600;line-height:1.3;color:var(--ink)}
+.role-bullets{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:15px;line-height:1.55;color:var(--ink)}
+.role-bullets li::marker{color:var(--forest)}
+.role-bullets strong{font-weight:650;color:var(--ink)}
+.role-bullets.is-checks{padding:0;list-style:none;gap:10px}
+.role-bullets.is-checks li{position:relative;padding-left:30px}
+.role-check{position:absolute;left:0;top:3px;color:var(--forest)}
+.role-card-note{margin:10px 0 0;font-size:12.5px;line-height:1.4;color:var(--slate)}
+.role-empty{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;padding:0;list-style:none}
+.role-empty li{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1px dashed var(--field-line);border-radius:999px;font-size:13px;color:var(--slate)}
+.role-empty svg{width:14px;height:14px}
+@media (max-width:700px){.process-panel{padding:20px}.round{gap:14px}.role-row{padding:22px 0}}
 
 /* The three Career Goal pages are one pill group (redesign canvas), not three separate buttons. */
 .goal-tabs{justify-content:space-between;gap:8px 16px}
@@ -133,61 +203,105 @@
 .goal-tabs{margin-bottom:18px}
 /* Tabs sit on the page, not in the old editor's toolbar. */
 .career-briefing .goal-tabs{padding:0;border:0;background:none;position:static}
-/* About the role: every field is a card (icon, fact, source), as in the redesign. */
-.role-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:14px}
-.role-details+.fact-cards{margin-top:14px}
-.fact-card{display:flex;flex-direction:column;gap:10px;padding:20px;border-radius:16px}
-.fact-card h3{display:flex;align-items:center;gap:12px;margin:0;font-size:14px;font-weight:600;color:var(--slate)}
-.role-card-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--mint-mist);color:var(--forest)}
-.role-card-icon svg{width:16px;height:16px}
-.role-card ul{margin:0;padding-left:18px;display:grid;gap:6px}
-.role-card li p{margin:0}
-.role-card>p, .role-card li>p:first-child{font-size:15px;line-height:1.5;color:var(--ink)}
-.briefing-sources a{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--mint-mist);font-size:12px;font-weight:600;color:var(--forest);text-decoration:none}
-.round-body.is-process{padding:14px 0 0}
-.fact-tile.is-empty strong, .not-filled{color:var(--slate);font-weight:500}
-.role-bullets{margin:0;padding-left:18px;display:grid;gap:6px;font-size:14.5px;line-height:1.5;color:var(--ink)}
-.role-bullets li::marker{color:var(--forest)}
-.role-bullets .finding-flag{margin-left:6px}
-.role-card-note{margin:0;color:var(--slate)}
-/* AI-made marker and legend: a deeper orange than the amber research warning. */
-.ai-made{display:inline-grid;place-items:center;width:18px;height:18px;margin-left:6px;border-radius:50%;background:#ffedd5;color:#c2410c;vertical-align:-3px;text-transform:none}
-.ai-made svg{width:11px;height:11px}
-.ai-made-legend{display:flex;gap:10px;align-items:center;margin:-8px 0 20px;padding:12px 14px;border-radius:12px;background:#ffedd5;color:#9a3412;font-size:13px}
-.ai-made-legend .ai-made{margin:0;background:#fff7ed;flex:none}
-.fact-tile.is-ai-made, .role-card.is-ai-made{border-color:#fed7aa}
-.role-card>p.role-card-note, .role-card>p.not-filled{font-size:12.5px;line-height:1.4;color:var(--slate)}
-
-/* About the role as a dashboard: a stats strip, then themed groups on a dense grid. */
-.role-board{display:grid;gap:28px;margin-top:8px}
-.role-glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;margin:0;border:1px solid var(--line);border-radius:14px;background:var(--line);overflow:hidden}
-.role-glance>div{padding:14px 18px;background:var(--white)}
-.role-glance dt{font-size:12.5px;color:var(--slate)}
-.role-glance dd{margin:2px 0 0;font-size:28px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--ink)}
-.role-glance dd small{font-size:13px;font-weight:500;color:var(--slate)}
-/* One card per category; its topics flow inside as sections. Cards pack into columns. */
-.role-board .role-groups{columns:2 420px;column-gap:16px}
-.role-group{display:block;min-width:0;break-inside:avoid;margin:0 0 16px;padding:20px 22px;border:1px solid var(--line);border-radius:16px;background:var(--white)}
-.role-group-title{display:flex;align-items:baseline;gap:10px;margin:0 0 4px;font-size:17px;font-weight:600;color:var(--ink)}
-.role-group-title .small{font-weight:500;color:var(--slate)}
-.role-group .fact-cards{display:block;margin:0}
-.role-group .fact-card.role-card{display:flex;padding:16px 0;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}
-.role-group .fact-card.role-card:first-child{border-top:0}
-.role-group .fact-card h3{font-size:13.5px;color:var(--ink)}
-.role-group .role-card-icon{width:28px;height:28px;border-radius:8px}
-.role-group .role-bullets{font-size:13.5px;line-height:1.45;gap:5px;padding-left:20px}
-.role-empty{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
-.role-empty li{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1px dashed var(--field-line);border-radius:999px;font-size:13px;color:var(--slate)}
-.role-empty svg{width:14px;height:14px}
 .career-briefing.is-wide{max-width:none}
-.role-board .role-groups{columns:3 380px}
-@media (max-width:900px){.role-board .role-groups{columns:1}}
-/* Category cards are stacked full width; topics flow in columns inside each. */
-.role-board .role-groups{columns:auto;display:grid;gap:16px}
-.role-group{margin:0}
-.role-group .fact-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:0 32px}
-.role-group .fact-card.role-card, .role-group .fact-card.role-card:first-child{border-top:1px solid var(--line)}
-.role-group .fact-cards{grid-template-columns:minmax(0,1fr);gap:0}
-.role-board{margin-top:0}
-.role-card-headline{margin:0;font-size:17px;font-weight:600;line-height:1.3;color:var(--ink)}
-.role-bullets strong{font-weight:650;color:var(--ink)}
+
+/* Goal conversation: a full-screen chat matching the CV review screen, without its topics rail. */
+.app:has(.goal-chat-screen){display:block}
+.app:has(.goal-chat-screen)>.side, .app:has(.goal-chat-screen)>.workspace-menu, .app:has(.goal-chat-screen)>.workspace-topbar, .app:has(.goal-chat-screen)>.workspace-tabbar{display:none !important}
+.app:has(.goal-chat-screen)>main{margin:0;padding:0;width:100%;height:100dvh;overflow:hidden}
+.app:has(.goal-chat-screen) .change-banner, .app:has(.goal-chat-screen) .evaluate-banner{display:none}
+.app .page.on.goal-chat-screen{display:flex;flex-direction:column;height:100dvh;max-height:100dvh;overflow:hidden;background:var(--snow, #f8fafc)}
+.goal-chat-header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 24px;background:var(--white, #fff);border-bottom:1px solid var(--line)}
+.goal-chat-title{display:flex;align-items:center;gap:14px;min-width:0}
+.goal-chat-title>div{min-width:0}
+.goal-chat-logo img{display:block;width:92px;height:32px;object-fit:contain}
+.goal-chat-divider{width:1px;height:28px;background:rgb(71 85 105 / .25)}
+.goal-chat-header h1{margin:0;font-size:15px;font-weight:600;line-height:1.35;letter-spacing:0}
+.goal-chat-header p{margin:0;font-size:12px;color:var(--slate, var(--mute));overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.goal-chat-saved-dot{display:inline-block;width:6px;height:6px;margin:0 4px 1px 8px;border-radius:50%;background:var(--mint)}
+.goal-chat-actions{display:flex;gap:8px;flex:none}
+.goal-chat-actions .btn{min-height:32px;height:32px;padding:0 14px;border:1px solid rgb(71 85 105 / .35);border-radius:999px;background:var(--white, #fff);color:var(--ink);font-size:13px;font-weight:600}
+.goal-chat-actions .btn:hover:not(:disabled){background:var(--cloud)}
+.goal-chat-screen>.notice{flex:none;margin:8px 24px 0}
+.app .page.goal-chat-screen .agent-workspace{flex:1;min-height:0;height:auto;width:100%;max-width:none;margin:0;border:0;border-radius:0;box-shadow:none;background:transparent}
+.app .page.goal-chat-screen .agent-details{flex:none;max-height:35dvh}
+.app .page.goal-chat-screen .agent-workspace>p[role=status]{flex:none;margin:12px 24px 0}
+.app .page.goal-chat-screen .agent-transcript{flex:1;min-height:0;padding:20px 24px}
+
+/* Messages: avatar beside a bordered elo bubble; mint bubble for the user. */
+.app .page.goal-chat-screen .agent-message{max-width:min(75%, 900px);margin:0 0 20px;padding:0;background:none;border-radius:0}
+.app .page.goal-chat-screen .agent-message.assistant{display:grid;grid-template-columns:30px minmax(0,auto);column-gap:10px;justify-content:start;align-items:start}
+.app .page.goal-chat-screen .agent-message.assistant>.agent-message-label, .app .page.goal-chat-screen .agent-message.assistant>.agent-bubble{grid-column:2}
+.app .page.goal-chat-screen .agent-message-avatar{grid-column:1;grid-row:1 / span 2;align-self:end;display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--mint-mist)}
+.app .page.goal-chat-screen .agent-message-avatar img{width:18px;height:21px;object-fit:contain}
+.app .page.goal-chat-screen .agent-message.assistant>.agent-message-avatar{grid-row:2;align-self:start;margin-top:6px}
+.app .page.goal-chat-screen .agent-message-label{margin-bottom:4px;font-size:11px;font-weight:600;color:var(--slate, var(--mute))}
+.app .page.goal-chat-screen .agent-message.user{display:flex;flex-direction:column;align-items:flex-end;width:fit-content;max-width:min(60%, 640px);margin-left:auto;margin-right:0}
+.app .page.goal-chat-screen .agent-bubble{min-width:0;padding:12px 16px;font-size:14px;line-height:1.5}
+.app .page.goal-chat-screen .agent-message.assistant>.agent-bubble{border:1px solid rgb(71 85 105 / .18);border-radius:4px 16px 16px 16px;background:var(--white, #fff)}
+.app .page.goal-chat-screen .agent-message.user>.agent-bubble{border:1px solid var(--mint-line);border-radius:16px 4px 16px 16px;background:var(--mint-mist)}
+.app .page.goal-chat-screen .agent-bubble p{line-height:1.5}
+.app .page.goal-chat-screen .agent-bubble>p:last-child{margin-bottom:0}
+.app .page.goal-chat-screen .agent-bubble .agent-markdown{line-height:1.6}
+
+/* Composer: full width, pinned to the bottom with a short footnote. */
+.app .page.goal-chat-screen .agent-starter-prompts{flex:none;padding:8px 24px 0;background:var(--white, #fff);border-top:1px solid var(--line)}
+.app .page.goal-chat-screen .agent-composer{flex:none;padding:10px 24px 4px;background:var(--white, #fff);border-top:1px solid var(--line)}
+.app .page.goal-chat-screen .agent-starter-prompts+.agent-composer{border-top:0}
+.app .page.goal-chat-screen .agent-composer>.small{margin-top:4px}
+/* Queued messages wait above the composer as faded boxes until elo starts answering them. */
+.agent-queue{display:grid;gap:6px;margin:0 0 8px;padding:0;list-style:none}
+.agent-queued{display:flex;align-items:center;gap:10px;min-width:0;padding:8px 8px 8px 14px;border:1px solid var(--line);border-radius:16px;background:var(--snow, #f8fafc);opacity:.65}
+.agent-queued:hover, .agent-queued:focus-within{opacity:1}
+.agent-queued-text{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:14px;color:var(--ink)}
+.agent-queued-note{flex:none;font-size:12px;color:var(--slate, var(--mute))}
+.agent-queued-remove{flex:none;display:grid;place-items:center;width:26px;height:26px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--slate, var(--mute));font-size:18px;line-height:1;cursor:pointer}
+.agent-queued-remove:hover{background:var(--cloud)}
+.agent-queued-remove:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+@media (max-width:640px){.agent-queued-note{display:none}}
+.goal-chat-footnote{flex:none;margin:0;padding:0 24px max(6px, env(safe-area-inset-bottom));background:var(--white, #fff);text-align:center;font-size:11px;color:var(--slate, var(--mute))}
+@media (max-height:700px){.goal-chat-footnote{display:none}}
+@media (max-width:700px){
+ .goal-chat-header{padding:8px 14px}
+ .goal-chat-logo, .goal-chat-divider{display:none}
+ .goal-chat-actions .btn{padding:0 10px;font-size:12px}
+ .app .page.goal-chat-screen .agent-starter-prompts{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
+ .app .page.goal-chat-screen .agent-starter-prompts .chip{flex:none}
+ .app .page.goal-chat-screen .agent-transcript{padding:14px}
+ .app .page.goal-chat-screen .agent-message{max-width:100%}
+ .app .page.goal-chat-screen .agent-message.user{max-width:88%}
+ .app .page.goal-chat-screen .agent-composer, .app .page.goal-chat-screen .agent-starter-prompts{padding-left:12px;padding-right:12px}
+ .goal-chat-footnote{display:none}
+}
+
+/* ---- Career Goal pages fill the workspace width; reading measures stay capped inside. ---- */
+.app>main:has(.goal-overview, .career-goal, .goal-return){max-width:none}
+.app>main:has(.career-goal){padding:28px clamp(16px,3vw,40px) 56px}
+.page.goal-overview, .page.goal-overview.career-briefing, .page.career-goal{width:100%;max-width:none}
+.goal-overview .ws-goal{gap:24px clamp(28px,4vw,64px)}
+.goal-overview .ws-goal h1{max-width:24ch}
+.goal-overview .ws-row{gap:10px 16px}
+.goal-overview .ws-tabs{flex:0 1 auto}
+.goal-overview .ws-panel .ws-row>div{min-width:0}
+/* Skill rows: the level bar stops growing so the score stays near the name on wide screens. */
+@media (min-width:1280px){
+ .goal-overview .ws-sk-row{grid-template-columns:minmax(220px,1fr) minmax(240px,640px) 92px 22px;gap:24px}
+}
+.goal-overview .ws-sk-more p, .goal-overview .ws-why dd, .goal-overview .ws-evidence p{max-width:80ch}
+/* Research tabs: wider label column and multi-column rows once there is room. */
+@media (min-width:1280px){
+ .goal-overview .role-row>h3{flex-basis:220px}
+ .goal-overview .round-slots{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+}
+.goal-overview :is(.round-list, .role-bullets, .rounds-intro, .research-meta){max-width:90ch}
+/* Job description entry: guide column widens with the screen; the lede keeps a readable measure. */
+.career-goal .goal-lede{max-width:70ch}
+.career-goal .ptitle{display:flex;justify-content:space-between}
+@media (min-width:1151px){.career-goal .goal-grid{grid-template-columns:minmax(0,1fr) clamp(280px,24vw,380px);gap:clamp(24px,2.5vw,40px)}}
+@media (max-width:640px){
+ .goal-overview .ws-row{align-items:stretch}
+ .goal-overview .ws-tabs{width:100%;border-radius:20px}
+ .goal-overview .ws-tabs a{flex:1 1 0;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 6px;font-size:13px;line-height:1.25;white-space:normal;border-radius:16px}
+ .career-goal .goal-title-actions{width:100%}
+ .career-goal .goal-title-actions .btn{flex:1 1 auto}
+}

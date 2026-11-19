@@ -1,4 +1,6 @@
 from copy import deepcopy
+import hashlib
+import os
 from uuid import uuid4
 import pytest
 from app.domain.capabilities import effective_items, skills_for, validate_interpretation
@@ -601,19 +603,17 @@ def test_interpretation_capacity_is_nonblocking_and_recoverable(harness):
     client, app, *_ = harness
     cv, question, path = project_question(harness)
     app.state.interpreter.payload = mixed_output
-    assert app.state.service.interpretation_slots.acquire(blocking=False)
-    assert app.state.service.interpretation_slots.acquire(blocking=False)
+    descriptor = app.state.service.model_usage._slot(hashlib.sha256(b'owner-a').hexdigest())
     try:
         response = client.put(path, json=mutation(cv['version'], action='answer', answer=PERSONAL))
         assert response.status_code == 200
         failed = response.json()
         q = next(q for q in failed['clarifications'] if q['id'] == question['id'])
         assert q['answer'] == PERSONAL and q['interpretation_status'] == 'failed'
-        assert 'busy' in q['interpretation_error']
+        assert 'account is still running' in q['interpretation_error']
         assert app.state.interpreter.calls == 0
     finally:
-        app.state.service.interpretation_slots.release()
-        app.state.service.interpretation_slots.release()
+        os.close(descriptor)
     result = client.post(path + '/interpretation/retry', json=mutation(failed['version']))
     assert result.status_code == 200
     assert next(q for q in result.json()['clarifications'] if q['id'] == question['id'])['interpretation_status'] == 'ready'

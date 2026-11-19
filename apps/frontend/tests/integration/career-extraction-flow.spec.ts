@@ -2,7 +2,6 @@ import {test,expect} from '@playwright/test';
 import {createLocalAccount,fillCurrentEmployment} from './account-helpers';
 
 const enabled=process.env.CAREER_FLOW_E2E==='1';
-const live=process.env.CAREER_FLOW_LIVE==='1';
 const source='Synthetic ExampleCo is hiring a Software Engineer Intern. The role is in Singapore. Build Python APIs. Python is required. Git is preferred. A computing diploma is required. Apply by 31 December 2026.';
 
 test.describe('Career extraction through real services',()=>{
@@ -21,18 +20,12 @@ test.describe('Career extraction through real services',()=>{
   await page.getByRole('button',{name:'Extract career goal'}).click();
   await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
   await Promise.race([
-   expect(page.getByRole('button',{name:'Role and research details'})).toBeEnabled({timeout:180_000}),
+   expect(page.getByRole('log')).toContainText('Ask me anything about this goal set!',{timeout:180_000}),
    page.getByRole('log').getByRole('alert').waitFor({state:'visible',timeout:180_000}).then(async()=>{
     throw new Error('Career extraction failed: '+await page.getByRole('log').getByRole('alert').innerText());
    }),
   ]);
-  await page.getByRole('button',{name:'Role and research details'}).click();
-  await expect(page.getByRole('heading',{name:/Software Engineer/})).toBeVisible();
-  await expect(page.getByText('Python · required')).toBeVisible();
-  await expect(page.getByText('Git · preferred')).toBeVisible();
-  await expect(page.getByText('application deadline: 31 December 2026')).toBeVisible();
-  await page.getByRole('button',{name:'Hide details'}).click();
-  await expect(page.getByRole('log')).toContainText('Ask me anything about this goal set!',{timeout:180_000});
+  await expect(page.locator('.goal-chat-header')).toContainText('Software Engineer');
   const before=await (await account.get('/api/v1/career/goals/current')).json();
   expect(before.goal).toMatchObject({company:'Synthetic ExampleCo',location:'Singapore',employment_type:'internship',
    job_dates:[{kind:'application_deadline',text:'31 December 2026',date:'2026-12-31'}]});
@@ -50,23 +43,19 @@ test.describe('Career extraction through real services',()=>{
   expect(edited.goal._id).toBe(before.goal._id);expect(edited.goal.version).toBeGreaterThan(before.goal.version);
   expect(edited.goal.skills).toEqual(before.goal.skills);expect(edited.goal.job_dates).toEqual(before.goal.job_dates);
   await page.reload();
-  await expect(page.getByRole('button',{name:'Role and research details'})).toBeEnabled({timeout:180_000});
-  await page.getByRole('button',{name:'Role and research details'}).click();
-  await expect(page.getByText('application deadline: 31 December 2026')).toBeVisible();
+  await expect(page.getByRole('textbox',{name:'Message elo'})).toBeVisible({timeout:180_000});
   const restored=await (await account.get('/api/v1/career/goals/current')).json();expect(restored.goal).toEqual(edited.goal);
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await page.screenshot({path:test.info().outputPath(live?'career-local-model.png':'career-fixture.png'),fullPage:true});
+  await page.screenshot({path:test.info().outputPath('career-fixture.png'),fullPage:true});
   const noOwner=await page.request.get('/api/v1/career/goals/current');expect(noOwner.status()).toBe(401);
-  if(!live){
-   await page.goto('/career-goal?new=1');
-   await page.getByRole('textbox',{name:'Job description',exact:true}).fill(source+' Synthetic malformed output.');
-   await page.getByRole('button',{name:'Extract career goal'}).click();
-   await expect(page.getByRole('log').getByRole('alert')).toBeVisible({timeout:30_000});
-   await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeEnabled();
-   const unchanged=await (await account.get('/api/v1/career/goals/current')).json();expect(unchanged.goal).toEqual(edited.goal);
-   await page.getByRole('button',{name:'← Career Goal',exact:true}).click();
-   await expect(page.getByRole('heading',{name:/Software Engineer/})).toBeVisible();
-  }
+  await page.goto('/career-goal?new=1');
+  await page.getByRole('textbox',{name:'Job description',exact:true}).fill(source+' Synthetic malformed output.');
+  await page.getByRole('button',{name:'Extract career goal'}).click();
+  await expect(page.getByRole('log').getByRole('alert')).toBeVisible({timeout:30_000});
+  await expect(page.getByRole('button',{name:'Retry',exact:true})).toBeEnabled();
+  const unchanged=await (await account.get('/api/v1/career/goals/current')).json();expect(unchanged.goal).toEqual(edited.goal);
+  await page.getByRole('button',{name:'← Career Goal',exact:true}).click();
+  await expect(page.getByRole('heading',{name:/Software Engineer/})).toBeVisible();
  });
 });

@@ -6,34 +6,24 @@ Research also rates each goal skill’s required competence on the shared 1–10
 
 ## Model and search providers
 
-All Career stages share the configured model through the OpenAI Python SDK. The
-public template selects OpenRouter plus Brave LLM Context. Optional configurations
-include local inference and DeepSeek cloud plus its Search API.
+All Career stages share the configured model through the OpenAI Python SDK over
+HTTPS. The public template selects OpenRouter; Brave LLM Context is the only search
+provider.
 Follow-up questions automatically retrieve public evidence when saved facts are
 missing or the answering model returns `not_found`, with up to three distinct scoped searches
 per unanswered turn and reuse during answer repairs. Ambiguous/off-topic/edit requests do not
-search. See [exact local/cloud settings](../../docs/setup.md#career-model-and-search-configuration).
+search. See [exact model and search settings](../../docs/setup.md#career-model-and-search-configuration).
 Older model/Brave names below describe the original provider path; the same domain
-validation and workflow apply to the selected providers. No live local/cloud quality
-or deployment verification is claimed by synthetic tests.
-
-Local testing defaults to the exact `deepseek-r1:1.5b` Ollama model, a single
-in-flight model call per Career worker and `CAREER_LOCAL_TIMEOUT_SECONDS=60`
-(1–300 seconds per admitted call). Queuing happens before the inference deadline;
-versions/cancellation are rechecked after waiting. Local job identification and
-extraction allow up to 8,192 output tokens each, bounded by `AI_MAX_OUTPUT_TOKENS`
-and context admission. Incomplete output still fails validation; a larger allowance
-does not guarantee model quality or completion. Local workflow runs allow up to
-600 seconds, with matching leases. Cloud inference remains concurrent and keeps
-its existing 60-second default / 60-second maximum. See the setup link above for
-private settings, the optional fixed-context alias and gateway reload instructions.
+validation and workflow apply to the selected providers. No live model quality
+or deployment verification is claimed by synthetic tests. Model calls run
+concurrently with a 60-second default / 60-second maximum deadline.
 
 ## JD inputs — J01 / J06 / J07
 
 Pasted text stays in browser memory until explicitly submitted for extraction. `POST /api/v1/career/imports/url` and `/imports/document` return bounded temporary previews; `/explorations/cv/document` supplies optional temporary CV context. Inputs and originals are not retained as raw JD/CV text. URL/document safeguards are detailed in [SPECIFICATION.md](SPECIFICATION.md).
 
-JD inputs retain an 8,000-character cap. Local job identification and extraction
-allow up to 8,192 output tokens each; cloud identification allows up to 4,096. `AI_MAX_OUTPUT_TOKENS` bounds both and now
+JD inputs retain an 8,000-character cap. JD extraction allows up to 8,192 output
+tokens and identification up to 4,096. `AI_MAX_OUTPUT_TOKENS` bounds both and now
 defaults to 8,192. JD context admission accounts for the full instructions, source,
 schema and repair feedback in estimated tokens, plus output space and a safety
 margin. Over-limit requests fail without truncating the JD. Existing private
@@ -42,35 +32,29 @@ completion settings can still lower these budgets; agents never read/change them
 ## Canonical goal and chat — J02–J05 / J09
 
 - `GET /api/v1/career/workspace` returns one owner-scoped saved workspace, with `current.skill_groups` mapping each goal skill to its display category; `/workspace/progress` supports lightweight polling.
-- `POST /api/v1/career/workspace/jd` starts or reconnects to versioned JD intake. A validated cloud identity overlaps full extraction with public-only retrieval; local R1 defers metadata and retrieval until full extraction. Successful extraction saves the goal; combined chat output waits for extraction and research to complete.
+- `POST /api/v1/career/workspace/jd` starts or reconnects to versioned JD intake. A validated identity overlaps full extraction with public-only retrieval. Successful extraction saves the goal; combined chat output waits for extraction and research to complete.
 - `POST /api/v1/career/workspace/summary` generates a concise AI overview from the saved goal and finished revision-linked research, including partial reports with explicit limitations. It supports the same owner-scoped background operations and snapshot retries.
 - `POST /api/v1/career/workspace/messages` asks scoped questions or refines the current goal. Ambiguous edits retain a private pending question; valid edits save with owner/version checks and retry receipts. While an edit is pending, clarification answers take precedence over direct public-question shortcuts; unrelated task execution remains refused. With `mode=refine`, questions are answered first (edit requests fall through to the guided edit flow) and general career questions, including exploring new career paths, are allowed via the `career_guidance` route: unverified general guidance with no citations, never saved to the goal. `mode=question` stays limited to the saved goal.
 - `/api/v1/career/goals` and `/goals/current` expose canonical structured history/current state; `/goals/current` includes the same `skill_groups` as the workspace. Goals edit in place with versions. A replacement becomes current only after validated saving.
 
 Observed progress describes completed/running stages, never hidden model reasoning. Temporary chat/workflow context and 24-hour checkpoints are distinct from persistent goals and immutable research. Older compatibility review/guidance endpoints remain available as described in [ANALYSIS_CONTRACTS.md](ANALYSIS_CONTRACTS.md).
 
-After extraction and research finish, chat automatically loads the saved report and presents a concise overview with section headings and bold topic labels (for example, **Field:** and **Required skills:**), ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Failed reports produce a local digest of category failures and any retained cited findings without another model call, with Resume research available. `finished` means processing stopped, not that research succeeded. Progress distinguishes completed, partial and failed runs. Saved goal cards are available immediately after extraction, while the composer remains open during research, summary generation and failures.
+After extraction and research finish, chat automatically loads the saved report and presents a concise overview with section headings and bold topic labels (for example, **Field:** and **Required skills:**), with a “Find out more” link to the Interview preparation or About the role tab after the research topics it covers, ending with “Ask me anything about this goal set!” Finished partial reports retain explicit limitations. Failed reports produce a local digest of category failures and any retained cited findings without another model call, with Resume research available. `finished` means processing stopped, not that research succeeded. Progress distinguishes completed, partial and failed runs. Saved goal cards are available immediately after extraction, while the composer remains open during research, summary generation and failures.
 
 Inference uses the OpenAI Python SDK with Pydantic-derived JSON schemas.
 Schema compaction preserves field descriptions, including exact date wording and
 source-evidence instructions, while removing generated titles and defaults.
 `CAREER_LLM_TOKEN_PARAMETER` selects `max_tokens` or `max_completion_tokens` when
-switching models. The local default is `json_schema_strict` for every stage,
+switching models. The default is `json_schema_strict` for every stage,
 including routing, research planning, questions and edits. SDK retries are disabled;
 existing workflow deadlines, bounded retries and response-size limits remain in force.
 
 Goal summaries use bounded corrections for invalid model output, with at most six
-repairs. Local job identification, full JD extraction and summaries upgrade JSON Object
-mode to native strict JSON Schema decoding. Local extraction constrains the complete
-nested job/skill/condition response at temperature zero and excludes user-declared
-origins from the decoding schema; backend validation remains mandatory. Local identification uses a small `document_type`
-and mandatory verbatim `evidence` contract at temperature zero; detailed role,
-employer and location extraction stays in the full JD stage. Local public research
-therefore starts after full extraction supplies that metadata. Cloud identity and
-its early research path remain unchanged. Summaries use the `blocks` structure
-with the complete schema also supplied in their prompt;
+repairs. Native schema modes constrain the complete nested job/skill/condition
+extraction response; backend validation remains mandatory. Summaries use the `blocks` structure
+with the complete schema supplied natively or, in JSON Object mode, in their prompt;
 prompt/schema input, reserved output and safety margin are budgeted in estimated
-tokens. Cloud JSON Object mode remains supported without assuming native schema
+tokens. JSON Object mode remains supported without assuming native schema
 support. The model returns plain-text blocks with backend-assigned fact references; Python
 escapes model text and attaches only saved source links beside each point. Unknown fact
 references fail validation. Each summary request restricts reference strings to the exact saved-fact catalogue in its decoding schema. If the overview remains invalid after bounded repairs, or exceeds its context allowance, Python formats the saved goal and cited findings with explicit coverage limits. Rejected model prose is discarded; the fallback does not run more research or change its status. Follow-up answers resolve inline fact references to saved
@@ -175,7 +159,7 @@ Legacy interview endpoints remain readable/compatible:
 
 Legacy Search/Answers mode values are ignored. Opportunity Intelligence
 uses the existing `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY` when `OPPORTUNITY_ENABLED=true`
-(default), independently of the legacy chat switch and legacy Brave mode. It calls the selected Brave LLM Context or DeepSeek Search adapter; no silent provider substitution occurs. Availability responses
+(default), independently of the legacy chat switch and legacy Brave mode. It calls the Brave LLM Context adapter; no silent provider substitution occurs. Availability responses
 name the specific disabled/missing capability without exposing configuration values.
 Quota pauses retain successful evaluations and resume only unfinished calls; response
 repair budgets survive pauses. Workspace errors preserve the actual category/quota
@@ -252,8 +236,8 @@ help and career/job/internship questions are welcome before any fields are compl
 Exact greetings and basic usage help work without a model call. Discovery's five
 model stages use schema-constrained generation. Valid sections survive an invalid
 section, with at most two targeted corrections after initial generation and an honest
-partial-result notice when some details remain unavailable. DeepSeek Discovery uses
-its schema-capable Responses transport; other Career workflows retain their existing transport.
+partial-result notice when some details remain unavailable. Discovery requires
+strict JSON Schema output from the configured model.
 Partial answers guide one useful follow-up at a time, building on prior messages and
 saved preferences. Whole recent messages use an 8k-token history allowance within
 the request budget; repeated introductions and duplicate follow-ups are discouraged
@@ -314,17 +298,14 @@ private. Valid JSON alone never bypasses these checks.
 
 Clear standalone assistant tasks and instruction-override requests are rejected
 before model inference. Genuine job requirements still pass the model scope gate,
-and positive local classifications require exact source evidence. The opt-in
-`tests/local_model_probe.py --suite --repeat 3` exercises this production preflight
-on eight synthetic advert/resume/question/task/override cases without application
-credentials, environment files, paid research or database writes.
+and positive classifications require exact source evidence.
 
-Local extraction uses its full `ExtractedJD` schema rather than accepting any
+Extraction uses its full `ExtractedJD` schema rather than accepting any
 syntactically valid JSON object. Unknown top-level fields, flattened skill objects
 and echoed request envelopes remain validation failures. Schema enforcement does
-not establish semantic completeness: live R1 trials have also omitted named skills
-and misassigned priorities, so the verified scope classifier must not be treated
-as verification of the full extraction/research/chat journey.
+not establish semantic completeness: live models may omit named skills or
+misassign priorities, so synthetic checks must not be treated as verification of
+the full extraction/research/chat journey.
 
 Saved-goal chat accepts additional messages while the agent is working. Messages
 queue in page memory and run in order after a goal is available, using the latest

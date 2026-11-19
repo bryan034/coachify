@@ -15,13 +15,9 @@ class Settings:
     extraction_retry_delays: tuple[int, ...] = (20, 40)
     storage_path: str = '/tmp/elo-cv'
     max_saved_cvs_per_owner: int = 3
-    max_saved_cvs_global: int = 10_000
     max_original_bytes_per_owner: int = 100 * 1024 * 1024
-    max_original_bytes_global: int = 10 * 1024 * 1024 * 1024
     model_calls_per_owner_per_day: int = 120
-    model_calls_global_per_day: int = 2000
     model_concurrent_per_owner: int = 1
-    model_concurrent_global: int = 3
     interview_max_target_attempts: int = 2
 
     @classmethod
@@ -31,19 +27,13 @@ class Settings:
             raise RuntimeError('CV_MAX_FILE_BYTES must be between 1024 and 20971520.')
         limits = {}
         for name, default, upper in (
-            ('max_saved_cvs_per_owner', 3, 20_000), ('max_saved_cvs_global', 10_000, 20_000),
+            ('max_saved_cvs_per_owner', 3, 20_000),
             ('max_original_bytes_per_owner', 100 * 1024 * 1024, 1024 ** 4),
-            ('max_original_bytes_global', 10 * 1024 * 1024 * 1024, 1024 ** 4),
             ('model_calls_per_owner_per_day', 120, 1_000_000),
-            ('model_calls_global_per_day', 2000, 1_000_000),
-            ('interview_max_target_attempts', 2, 5), ('model_concurrent_per_owner', 1, 31), ('model_concurrent_global', 3, 32)):
+            ('interview_max_target_attempts', 2, 5), ('model_concurrent_per_owner', 1, 31)):
             value = int(os.getenv('CV_' + name.upper(), str(default)))
             if not 1 <= value <= upper: raise RuntimeError('CV_' + name.upper() + f' must be between 1 and {upper}.')
             limits[name] = value
-        if limits['model_concurrent_per_owner'] >= limits['model_concurrent_global']:
-            raise RuntimeError('CV_MODEL_CONCURRENT_PER_OWNER must be less than CV_MODEL_CONCURRENT_GLOBAL to reserve capacity for another account.')
-        if limits['model_calls_per_owner_per_day'] > limits['model_calls_global_per_day']:
-            raise RuntimeError('CV_MODEL_CALLS_PER_OWNER_PER_DAY must not exceed CV_MODEL_CALLS_GLOBAL_PER_DAY.')
         return cls(max_file_bytes=maximum, storage_path=os.getenv('CV_STORAGE_PATH', '/tmp/elo-cv'), **limits)
 
     def policy(self):

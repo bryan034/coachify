@@ -8011,6 +8011,40 @@
             "minLength": 1,
             "title": "Explanation"
           },
+          "employer_demand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employer Demand"
+          },
+          "reported_examples": {
+            "items": {
+              "$ref": "#/components/schemas/TargetExample"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "title": "Reported Examples"
+          },
+          "rating_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Reason"
+          },
           "source_urls": {
             "items": {
               "type": "string"
@@ -8028,6 +8062,34 @@
           "explanation"
         ],
         "title": "CompetenceTarget"
+      },
+      "TargetExample": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "TargetExample",
+        "description": "Something candidates or public sources reported about the skill, with the source that reported it."
       }
     },
     "securitySchemes": {

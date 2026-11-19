@@ -80,7 +80,6 @@ def test_longer_supported_value_uses_same_bound_as_storage():
 @pytest.mark.parametrize('summary',[
     'SGD 6000 per month in 2025',
     'SGD 5000 per month in 2026',
-    'SGD 5,000 per month in 2025',
 ])
 def test_numbers_must_match_cited_source_exactly(summary):
     text='Graduate salary was SGD 5000 per month in 2025.'
@@ -88,6 +87,13 @@ def test_numbers_must_match_cited_source_exactly(summary):
     output=StructuredFindings(findings=[claim(field='conversion_salary',value=summary,quotes=[text])])
     with pytest.raises(AIError) as caught:validate_claims(output,'career_progression',[source])
     assert caught.value.violations[0]['issue']=='unsupported_number'
+
+
+def test_a_number_written_in_another_format_is_the_same_number():
+    text='Graduate salary was SGD 5000 per month in 2025.'
+    source=ResearchSource(source_id='a',platform='other',url='https://example.test/a',evidence=text)
+    output=StructuredFindings(findings=[claim(field='conversion_salary',value='SGD 5,000 per month in 2025',quotes=[text])])
+    assert validate_claims(output,'career_progression',[source])
 
 
 def test_numbers_can_come_from_the_cited_excerpt_outside_the_selected_quote():

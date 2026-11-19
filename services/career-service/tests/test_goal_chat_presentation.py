@@ -38,7 +38,7 @@ def test_overview_uses_structured_data_and_restores_verified_links():
     async def run():
         request,body,checks,calls,_=environment()
         result=await summarize(request,'owner',body)
-        assert '**Interview expectations:** An interview is reported. [Source](<https://example.test/job>)' in result['reply']
+        assert '#### Interview expectations\n\nAn interview is reported. [Source](<https://example.test/job>)' in result['reply']
         assert len(checks)==4 and calls[0].stage=='goal_summary'
         context=json.loads(calls[0].context)
         assert context['goal']['role']=='Analyst' and context['categories']['interviews']['findings'][0]['reference']=='research_0'
@@ -54,7 +54,7 @@ def test_summary_rejects_missing_or_unapproved_labels(label):
     with pytest.raises(ValidationError):GoalSummary(blocks=[block])
 
 
-def test_summary_renders_career_field_with_a_bold_label():
+def test_summary_renders_career_field_under_a_heading():
     async def run():
         request,body,*_=environment()
         async def generate(*args,**kwargs):
@@ -66,9 +66,59 @@ def test_summary_renders_career_field_with_a_bold_label():
             return NS(data=output)
         request.app.state.ai=NS(generate=generate)
         reply=(await summarize(request,'owner',body))['reply']
-        assert '**Field:** Data.\n\n### Research findings\n\n**Interview expectations:**' in reply
+        assert '#### Field\n\nData.\n\n### Research findings\n\n#### Interview expectations\n\n' in reply
         assert reply.count('Ask me anything about this goal set!')==1
     asyncio.run(run())
+
+
+def test_summary_links_research_topics_to_their_career_goal_tabs():
+    async def run():
+        request,body,*_=environment()
+        async def generate(*args,**kwargs):
+            output=GoalSummary(blocks=[
+                {'label':'Role','text':'Analyst.','references':['goal']},
+                {'label':'Interview expectations','text':'An interview is reported.','references':['research_0']},
+                {'label':'Internship insights','text':'Interns join a team.','references':['research_0']},
+                {'label':'Company culture','text':'Teams are small.','references':['research_0']},
+            ])
+            kwargs['validate_output'](output)
+            return NS(data=output)
+        request.app.state.ai=NS(generate=generate)
+        reply=(await summarize(request,'owner',body))['reply']
+        interview='Find out more on the [Interview preparation](/career-goal/interview) page.'
+        role='Find out more on the [About the role](/career-goal/role) page.'
+        assert reply.count(interview)==1 and reply.count(role)==1
+        # Each link follows the last topic it covers, before the next heading.
+        assert reply.index('An interview is reported.')<reply.index(interview)<reply.index('#### Internship insights')
+        assert reply.index('Teams are small.')<reply.index(role)<reply.index('Ask me anything about this goal set!')
+    asyncio.run(run())
+
+
+def test_summary_without_research_topics_adds_no_tab_links():
+    async def run():
+        request,body,*_=environment()
+        async def generate(*args,**kwargs):
+            output=GoalSummary(blocks=[{'label':'Role','text':'Analyst.','references':['goal']},
+                                       {'label':'Field','text':'Data.','references':['research_0']}])
+            kwargs['validate_output'](output)
+            return NS(data=output)
+        request.app.state.ai=NS(generate=generate)
+        assert 'Find out more' not in (await summarize(request,'owner',body))['reply']
+    asyncio.run(run())
+
+
+def test_saved_facts_fallback_links_each_research_category_to_its_tab():
+    from app.workflows.goal_summary import saved_evidence_summary
+    finding=NS(source_ids=['s1'],value='A finding.',scope='exact',confidence=None)
+    goal=NS(role='Analyst',company=None,field=None,location=None,skills=[],job_url=None)
+    record=NS(sources=[ResearchSource(source_id='s1',platform='other',url='https://example.test/job',evidence='Evidence.')],
+              intelligence=NS(categories={'interview_intelligence':NS(status='completed',findings=[finding]),
+                                          'internship_insights':NS(status='completed',findings=[finding]),
+                                          'career_progression':NS(status='completed',findings=[])}))
+    reply=saved_evidence_summary(goal,record)['reply']
+    assert '### Interview expectations' in reply and '[Interview preparation](/career-goal/interview)' in reply
+    assert reply.count('[About the role](/career-goal/role)')==1
+    assert 'Role and research details' not in reply
 
 
 @pytest.mark.parametrize('ref',['missing_fact','https://untrusted.test','s999'])

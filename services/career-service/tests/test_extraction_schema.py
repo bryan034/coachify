@@ -1,4 +1,4 @@
-"""Local extraction uses its full native schema and retains backend validation."""
+"""JD extraction uses its full native schema and retains backend validation."""
 import asyncio
 import json
 import httpx
@@ -12,12 +12,12 @@ SOURCE='ExampleCo is hiring a Software Engineer Intern. Python is required. Git 
 
 
 def settings(**values):
-    return AISettings(**{'enabled':True,'provider':'local','model':'synthetic',
-        'base_url':'http://127.0.0.1:11434/v1','response_mode':'json_object',
+    return AISettings(**{'enabled':True,'model':'synthetic','api_key':'synthetic',
+        'base_url':'https://example.test/v1','response_mode':'json_schema_strict',
         'context_tokens':16384,'timeout_seconds':45,**values})
 
 
-def test_local_extraction_constrains_the_complete_nested_contract():
+def test_extraction_constrains_the_complete_nested_contract():
     payload=AIAdapter(settings(),None)._payload(AIInput(stage='jd_extraction',source_text=SOURCE))
     response=payload['response_format']
     assert response['type']=='json_schema' and response['json_schema']['strict']
@@ -34,15 +34,12 @@ def test_local_extraction_constrains_the_complete_nested_contract():
     assert skill['additionalProperties'] is False
     assert set(skill['required'])==set(skill['properties'])
     assert 'priority' in skill['properties'] and 'evidence' in skill['properties']
-    assert skill['properties']['origin']['enum']==['employer','generated_guidance']
-    assert schema['$defs']['ExtractedCondition']['properties']['origin']['enum']==['employer','generated_guidance']
-    assert payload['temperature']==0
+    assert 'temperature' not in payload
     assert json.loads(payload['messages'][1]['content'])['source_text']==SOURCE
 
 
-@pytest.mark.parametrize('provider',['deepseek','compatible'])
-def test_cloud_extraction_retains_its_configured_json_mode(provider):
-    payload=AIAdapter(settings(provider=provider,base_url='https://api.deepseek.com/v1',api_key='synthetic'),None)._payload(AIInput(stage='jd_extraction',source_text=SOURCE))
+def test_json_object_extraction_retains_its_configured_mode():
+    payload=AIAdapter(settings(response_mode='json_object'),None)._payload(AIInput(stage='jd_extraction',source_text=SOURCE))
     assert payload['response_format']=={'type':'json_object'}
     schema=json.loads(payload['messages'][0]['content'].split('JSON schema: ',1)[1])
     job_date=schema['$defs']['ExtractedJobDate']
@@ -51,7 +48,7 @@ def test_cloud_extraction_retains_its_configured_json_mode(provider):
 
 
 @pytest.mark.parametrize('defect',[None,'flat_shape','bad_priority','wrong_origin'])
-def test_local_extraction_still_rejects_bad_provider_output(defect):
+def test_extraction_still_rejects_bad_provider_output(defect):
     async def run():
         output={'role':'Software Engineer Intern','field':'Software','company':'ExampleCo',
             'employment_type':'internship','skills':[

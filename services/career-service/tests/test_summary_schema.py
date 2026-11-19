@@ -1,4 +1,4 @@
-"""Local summary decoding uses the blocks contract, without relaxing provenance."""
+"""Summary decoding uses the blocks contract, without relaxing provenance."""
 import asyncio
 import json
 import httpx
@@ -12,13 +12,13 @@ from tests.test_goal_chat_presentation import environment
 
 
 def settings(**values):
-    return AISettings(**{'enabled': True, 'provider': 'local', 'model': 'synthetic',
-        'base_url': 'http://127.0.0.1:11434/v1', 'response_mode': 'json_object',
+    return AISettings(**{'enabled': True, 'model': 'synthetic', 'api_key': 'synthetic',
+        'base_url': 'https://example.test/v1', 'response_mode': 'json_schema_strict',
         'context_tokens': 16384, **values})
 
 
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema', 'json_schema_strict'])
-def test_local_summary_sends_native_blocks_grammar_and_explicit_prompt(mode):
+@pytest.mark.parametrize('mode', ['json_schema', 'json_schema_strict'])
+def test_summary_sends_native_blocks_grammar_and_explicit_prompt(mode):
     payload = AIAdapter(settings(response_mode=mode), None)._payload(AIInput(stage='goal_summary', context='{}'))
     output = payload['response_format']
     assert output['type'] == 'json_schema'
@@ -31,21 +31,19 @@ def test_local_summary_sends_native_blocks_grammar_and_explicit_prompt(mode):
     assert block['additionalProperties'] is False
     assert block['properties']['references']['minItems'] == 1
     assert schema['properties']['blocks']['maxItems'] == 12
-    assert 'JSON schema:' in payload['messages'][0]['content']
     assert 'Never put references at the' in payload['messages'][0]['content']
     assert input_tokens(payload) + payload['max_tokens'] + 1638 <= 16384
-    if mode == 'json_object': assert output['json_schema']['strict'] is True
+    assert output['json_schema']['strict'] is (mode == 'json_schema_strict')
 
 
-@pytest.mark.parametrize('provider', ['deepseek', 'compatible'])
-def test_cloud_json_mode_is_not_upgraded_without_provider_support(provider):
-    payload = AIAdapter(settings(provider=provider, base_url='https://api.deepseek.com/v1', api_key='synthetic'), None)._payload(AIInput(stage='goal_summary', context='{}'))
+def test_json_object_mode_is_not_upgraded_without_provider_support():
+    payload = AIAdapter(settings(response_mode='json_object'), None)._payload(AIInput(stage='goal_summary', context='{}'))
     assert payload['response_format'] == {'type': 'json_object'}
     assert 'JSON schema:' in payload['messages'][0]['content']
 
 
 @pytest.mark.parametrize('defect', [None, 'wrong_shape', 'unknown_reference', 'no_research'])
-def test_real_local_adapter_summary_preserves_validation_and_attaches_only_saved_links(defect):
+def test_real_adapter_summary_preserves_validation_and_attaches_only_saved_links(defect):
     async def run():
         request, body, checks, _, _ = environment()
         calls = []
@@ -66,7 +64,7 @@ def test_real_local_adapter_summary_preserves_validation_and_attaches_only_saved
                 assert 'An interview is reported. [Source](<https://example.test/job>)' in result['reply']
             else:
                 result = await summarize(request, 'owner', body)
-                assert '**Interview expectations:** An interview is reported.' in result['reply']
+                assert '#### Interview expectations\n\nAn interview is reported.' in result['reply']
                 assert '[Source](<https://example.test/job>)' in result['reply']
                 assert result['reply'].endswith('Ask me anything about this goal set!')
                 assert len(calls) == 1
@@ -76,7 +74,7 @@ def test_real_local_adapter_summary_preserves_validation_and_attaches_only_saved
     asyncio.run(run())
 
 
-def test_local_summary_uses_tokens_for_full_prompt_instead_of_utf8_bytes():
+def test_summary_uses_tokens_for_full_prompt_instead_of_utf8_bytes():
     context = json.dumps({'goal': {'role': 'Analyst', 'summary': 'SQL data analysis. ' * 650}})
     adapter = AIAdapter(settings(), None)
     payload = adapter._payload(AIInput(stage='goal_summary', context=context))

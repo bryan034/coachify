@@ -189,7 +189,7 @@ extracted information.
 
 For OpenRouter, use `https://openrouter.ai/api/v1` for all four model endpoints
 and select your model or preset, for example `@preset/your-preset-slug`.
-Use `CAREER_LLM_PROVIDER=compatible`. Each service uses its non-empty
+Each service uses its non-empty
 `*_LLM_API_KEY` first, otherwise `OPENROUTER_API_KEY` for the exact OpenRouter
 HTTPS host. Clear obsolete service-specific keys when using the shared key.
 Compose supplies this fallback, and direct processes use the same host-restricted
@@ -213,18 +213,10 @@ configuration at startup. For Compose, recreate the service as shown below.
 Cloud model requests use the process's proxy and CA settings with TLS
 verification enabled. Diagnose `connection_error` separately from absent
 configuration, provider credential rejections and schema/evidence failures.
-Local model traffic remains direct and omits cloud credentials. After resolving
+After resolving
 the cause, retry the saved upload and poll its operation until `ready`;
 HTTP 202 means saved for processing, not extracted.
 
-For DeepSeek, use `CV_LLM_BASE_URL=https://api.deepseek.com`,
-`CV_LLM_MODEL=deepseek-flash`, `CV_LLM_RESPONSE_MODE=json_object` and your private
-`CV_LLM_API_KEY`. This explicitly opts out of schema-constrained decoding for
-DeepSeek Chat Completions, which documents only JSON-object output. The CV adapter
-automatically sends `thinking: {type: disabled}` to the exact
-`api.deepseek.com` host for extraction, chat routing and answer interpretation.
-Other provider hosts do not receive this option; no extra environment flag is
-required. See [DeepSeek's API reference](https://api-docs.deepseek.com/api/create-chat-completion/).
 After changing private configuration, recreate the CV container with
 `docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/compose.yaml up -d --build --no-deps --force-recreate cv-service`
 from the repository root with the supporting stack already running.
@@ -274,7 +266,6 @@ For a new installation, copy the public template as described above and privatel
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=openai/gpt-4o-mini
 AI_ENABLED=true
-CAREER_LLM_PROVIDER=compatible
 CAREER_LLM_BASE_URL=https://openrouter.ai/api/v1
 CAREER_LLM_MODEL=${OPENROUTER_MODEL}
 CAREER_LLM_RESPONSE_MODE=json_schema_strict
@@ -312,94 +303,29 @@ Existing deployments retain their configured providers until their private setti
 
 Keep `AI_ENABLED=true` for Career inference and configure public search independently. SDK retries are disabled; each service retains its own retry, quota, timeout and validation policy.
 
-Career, CV, Assessment and Roadmap reserve capacity before every cloud model dispatch, including provider and validation retries. The default per-account daily allowance is 250 calls and 8 million units. The deployment shares 4,000 calls and 160 million units per UTC day across all accounts and provider keys. One unit is one serialized request byte or one requested output token. Charges stay reserved when the provider fails or times out. See the four `MODEL_BUDGET_*` settings in the public Compose template. A zero allowance stops cloud dispatches. Local inference and disabled models do not consume the allowance.
+Career, CV, Assessment and Roadmap share a per-account allowance of 250 cloud model calls per UTC day. Each dispatch, including provider and validation retries, reserves one call for the account. Failed or timed-out attempts consume the reservation. Disabled models do not consume the allowance. Set `MODEL_BUDGET_OWNER_CALLS_PER_DAY` in `infrastructure/docker/.env` to override the Compose default (0 stops cloud calls). Compose supplies the default when the variable is absent or empty. The public `.env.example` documents optional settings and is not loaded into existing private files. Legacy unit-budget and deployment-wide quota variables can be removed from private files. `CAREER_RESEARCH_SEARCHES_PER_ACCOUNT_PER_DAY` caps Brave searches per account per UTC day (blank = unlimited); a reached allowance pauses research workflows until the next UTC day (rechecked hourly) and is reported immediately in chat, with saved results still available. `CAREER_RESEARCH_MAX_URLS_PER_SEARCH` (1–6) lowers the number of source URLs Brave reads per search; blank keeps the built-in 6/5/3 limits for goal research and chat, Discovery and Opportunity Intelligence.
 
-The counters contain hashed account IDs and reside on the `model_budget` named volume. Keep this volume mounted across restarts and replicas on the same Docker host. Independent hosts require a coordinated ledger or provider-side spending limits to bound their combined usage. Provider billing depends on the selected model and its prices. For a direct service run, point `MODEL_BUDGET_PATH` at the same writable SQLite file for all four processes.
+The counters contain hashed account IDs and reside on the `model_budget` named volume. Keep this volume mounted across restarts and replicas on the same Docker host. Enforcing one per-account allowance across independent hosts requires a coordinated ledger. Provider billing depends on the selected model and its prices. For a direct service run, point `MODEL_BUDGET_PATH` at the same writable SQLite file for all four processes.
 
 
-For optional local testing, select an Ollama-compatible server on the Docker host
-and keep Brave LLM Context for search:
-
-```dotenv
-AI_ENABLED=true
-CAREER_LLM_PROVIDER=local
-CAREER_LLM_BASE_URL=http://host.docker.internal:11434/v1
-CAREER_LLM_MODEL=deepseek-r1:1.5b
-CAREER_LLM_RESPONSE_MODE=json_schema_strict
-CAREER_LLM_TOKEN_PARAMETER=max_tokens
-CAREER_LLM_API_KEY=
-CAREER_LOCAL_TIMEOUT_SECONDS=60
-AI_MAX_OUTPUT_TOKENS=8192
-AI_CONTEXT_TOKENS=32768
-OPPORTUNITY_RUN_SECONDS=600
-CAREER_RESEARCH_PROVIDER=brave
-CAREER_RESEARCH_API_KEY=YOUR_PRIVATE_BRAVE_KEY
-```
-
-Career uses the OpenAI Python SDK for Chat Completions. All local stages default
+Career uses the OpenAI Python SDK for Chat Completions over HTTPS. Every stage defaults
 to strict JSON Schema, generated from the existing Pydantic output models. Backend
 validation still checks evidence, provenance and allowed references. To swap models,
-set provider, base URL, model, response mode and token parameter together. HTTPS
-OpenAI-compatible services use `CAREER_LLM_PROVIDER=compatible`; providers without
-native schema support can select `json_object`, which requires validation/repair.
-The legacy local JSON Object setting still upgrades identification, JD extraction
-summary and public research to native schema. Select `CAREER_LLM_TOKEN_PARAMETER=max_completion_tokens`
-for models requiring that parameter. SDK retries are disabled; the existing workflow
-owns retries, deadlines and cooldowns. No model credentials reach the frontend.
+set base URL, model, response mode and token parameter together. Providers without
+native schema support can select `json_object`, which requires validation/repair;
+Career Discovery requires `json_schema_strict` and reports `unsupported_structured_output`
+otherwise. Select `CAREER_LLM_TOKEN_PARAMETER=max_completion_tokens` for models
+requiring that parameter. SDK retries are disabled; the existing workflow owns
+retries, deadlines and cooldowns. Requests use `AI_TIMEOUT_SECONDS=60` (maximum 60).
+No model credentials reach the frontend.
 
-Install and serve the chosen local model yourself; this stack does not download or launch
-one. The model name must match your server's installed model. For a directly run Career
-process, use `http://127.0.0.1:11434/v1`; inside Docker, localhost refers to the Career
-container. Docker Desktop provides `host.docker.internal`; Linux Docker users must map
-that hostname to the host gateway in their deployment. Keep the local server private.
-HTTP and an empty model key are accepted only with the explicit `local` provider.
-Local inference is serialized across Career chat, extraction, discovery and research
-within the single Career worker. `CAREER_LOCAL_TIMEOUT_SECONDS=60` gives each admitted
-model call 60 seconds; supported values are 1–300 seconds. Waiting for the model
-slot does not consume that call's inference budget. Cancellation and goal/version
-changes are checked before a queued request reaches the model. Cloud requests remain
-concurrent and use `AI_TIMEOUT_SECONDS=60` (maximum 60); the local setting is ignored.
-The Opportunity pipeline defaults to a 600-second local run budget unless explicitly
-configured otherwise. Local discovery and legacy research also have 600-second run
-budgets with leases lasting longer than the run; search HTTP deadlines remain unchanged.
-Work can still fail if it exceeds a workflow deadline or cannot fit the model context.
-Use one Career worker/replica for local testing; the model slot is process-local.
-
-The local provider defaults to the exact `deepseek-r1:1.5b` model. Verify that the server's
-actual context is at least `AI_CONTEXT_TOKENS`; this application setting does not
-configure Ollama. If a fixed smaller profile is preferred, the optional
-`elo-deepseek-r1:1.5b` alias fixes Ollama's context at 16,384 tokens while reusing the
-installed `deepseek-r1:1.5b` weights. It leaves the original model unchanged. To recreate
-this preset on another machine after installing the base model:
-
-```sh
-cat > /tmp/elo-career.Modelfile <<'EOF'
-FROM deepseek-r1:1.5b
-PARAMETER num_ctx 16384
-EOF
-ollama create elo-deepseek-r1:1.5b -f /tmp/elo-career.Modelfile
-ollama show elo-deepseek-r1:1.5b --parameters
-```
-
-When using this optional alias, select it with `CAREER_LLM_MODEL` and set
-`AI_CONTEXT_TOKENS=16384` to match its smaller context. The app's token count is
-an estimate, and setting it does not configure Ollama by itself. Ollama's OpenAI-compatible
-endpoint requires a model preset to change context; see [its documentation](https://docs.ollama.com/api/openai-compatibility).
-JD input allows 8,000 characters. Local identification and extraction each have an 8,192-output-token ceiling,
-both subject to `AI_MAX_OUTPUT_TOKENS`. Cloud identification retains its 4,096-token
-ceiling. A `length` finish means the output ceiling was reached; increasing the HTTP
-timeout alone does not increase that ceiling.
-Use `AI_MAX_OUTPUT_TOKENS=8192` in your private configuration yourself to enable
-the full extraction budget; an existing lower value still takes precedence.
-The code measures the full provider prompt, including instructions/schema/repair
-feedback, in estimated tokens and reserves output plus a 10% context margin
-(minimum 1,024). Typical full-length English JDs fit the 16K profile; dense Unicode
-or larger overhead may not. Such requests fail rather than silently losing source
-text. Raising output limits does not establish a small model's schema/semantic accuracy.
-
-The base model's thinking behavior remains unchanged. No model inference is required
-for alias creation/verification. Existing private settings override the public template;
-apply the values above yourself before rebuilding/recreating Career.
+JD input allows 8,000 characters. Identification has a 4,096-output-token ceiling
+and extraction 8,192, both subject to `AI_MAX_OUTPUT_TOKENS`. A `length` finish means
+the output ceiling was reached; increasing the HTTP timeout alone does not increase
+that ceiling. The code measures the full provider prompt, including
+instructions/schema/repair feedback, in estimated tokens and reserves output plus a
+10% context margin (minimum 1,024). Requests that do not fit `AI_CONTEXT_TOKENS`
+fail rather than silently losing source text.
 
 The gateway permits 610 seconds of upstream inactivity for model-backed Career routes.
 For model work, prefer `Prefer: respond-async` and operation polling (as the application
@@ -407,86 +333,21 @@ UI does), especially when requests queue. Preview/import timeouts remain unchang
 Recreate Career to apply environment changes; reload/restart the gateway to apply its
 updated mounted NGINX config. Do not recreate databases or delete volumes.
 
-The local test profile can use this same 1.5B alias across all four AI services.
-Set these additional values in the same private environment file, preserving existing
-API keys and database credentials:
+Profile, Dashboard and Review do not currently call an LLM. Rebuild/recreate
+`career-service`, `cv-service`, `assessment-service` and `roadmap-service` after
+changing model settings. The `*_LLM_ALLOW_HTTP` flags exist only for synthetic
+fixture providers in disposable development stacks; they require `APP_ENV=development`
+and must not be used as a production shortcut.
 
-```dotenv
-APP_ENV=development
-CV_LLM_BASE_URL=http://host.docker.internal:11434/v1
-CV_LLM_MODEL=elo-deepseek-r1:1.5b
-CV_LLM_ALLOW_HTTP=true
-CV_MODEL_CONCURRENT_PER_OWNER=1
-CV_MODEL_CONCURRENT_GLOBAL=3
-ASSESSMENT_LLM_BASE_URL=http://host.docker.internal:11434/v1
-ASSESSMENT_LLM_MODEL=elo-deepseek-r1:1.5b
-ASSESSMENT_LLM_ALLOW_HTTP=true
-ROADMAP_LLM_BASE_URL=http://host.docker.internal:11434/v1
-ROADMAP_LLM_MODEL=elo-deepseek-r1:1.5b
-ROADMAP_LLM_ALLOW_HTTP=true
-```
+`CAREER_RESEARCH_PROVIDER=brave` (the only supported search provider) uses the
+existing `GET /res/v1/llm/context` API. Only returned page snippets are accepted as
+evidence. Saved-goal question queries stay within 128 characters while retaining
+their public context/focus. Response size, source counts, URL validation, retries
+and citation checks remain bounded. Search results are untrusted. No raw JD, private
+CV or chat message is sent to search.
 
-CV requires `CV_MODEL_CONCURRENT_PER_OWNER < CV_MODEL_CONCURRENT_GLOBAL`, including
-local testing. Setting both to `1` prevents CV from starting. These admission limits
-do not serialize requests across the separate AI services.
-
-Local model requests omit Authorization headers even when cloud keys remain configured;
-those values can be preserved for a later switch. Assessment/Roadmap now support independent
-OpenAI-compatible endpoints; providers use JSON Output with the schema in the prompt. Every response still passes the
-existing domain/schema validation. Their local calls use a 180-second HTTP timeout and
-serialize per service worker; durable operations retain a 600-second local execution
-budget with a longer lease. CV keeps its quota/ownership boundaries and uses 120-second
-local extraction and 60-second local chat/interpretation timeouts, below its existing
-leases. These fixed local defaults do not change cloud timeouts. Career, Assessment and
-Roadmap serialization is per process, not a global lock across services; run one test
-workflow at a time if you want to avoid simultaneous GPU work from different services.
-
-Profile, Dashboard and Review do not currently call an LLM. Brave remains the search
-provider. The smaller model is a testing configuration, not a claim of reliable extraction,
-assessment or planning quality. No live personal CV or private chat is used for verification.
-Rebuild/recreate `career-service`, `cv-service`, `assessment-service` and `roadmap-service`
-after changing these values; keep the original provider keys private and unchanged.
-For cloud use, restore the appropriate HTTPS endpoints/models, disable HTTP flags and
-provide each service's own API key. HTTP requires development mode and must not be used
-as a production shortcut.
-
-For production DeepSeek cloud inference and search, replace these settings:
-
-```dotenv
-AI_ENABLED=true
-CAREER_LLM_PROVIDER=deepseek
-CAREER_LLM_BASE_URL=https://api.deepseek.com/v1
-CAREER_LLM_MODEL=deepseek-flash
-CAREER_LLM_RESPONSE_MODE=json_object
-AI_TIMEOUT_SECONDS=60
-AI_CONTEXT_TOKENS=65536
-OPPORTUNITY_RUN_SECONDS=300
-CAREER_LLM_API_KEY=YOUR_PRIVATE_DEEPSEEK_KEY
-CAREER_RESEARCH_PROVIDER=deepseek
-CAREER_RESEARCH_API_KEY=YOUR_PRIVATE_DEEPSEEK_KEY
-```
-
-The keys are separate settings even when the same DeepSeek account/key is used.
-Career Discovery's five stages use DeepSeek Responses with a JSON Schema in
-`text.format`; this overrides JSON-only mode for those stages without another key
-or environment setting. Other DeepSeek requests use JSON Output with a schema in the prompt and thinking disabled
-so existing small output budgets apply to final JSON. Local requests receive no
-DeepSeek-specific thinking parameter. Every output still passes backend schema,
-provenance, ownership and version validation; provider/model changes never bypass it.
-See [DeepSeek JSON Output](https://api-docs.deepseek.com/guides/json_mode/) and
-[Search & Fetch](https://api-docs.deepseek.com/guides/search/).
-
-`CAREER_RESEARCH_PROVIDER=brave` uses the existing `GET /res/v1/llm/context` API.
-`deepseek` uses `POST https://api.deepseek.com/v1/tools/search` with `need_content=true`.
-Only original returned page content is accepted as evidence; missing content stays
-missing, and generated search summaries are not treated as source quotes. Queries
-are bounded to the API's 128-character limit while retaining their public context/focus.
-Response size, source counts, URL validation, retries and citation checks remain bounded.
-Search results are untrusted. No raw JD, private CV or chat message is sent to search.
-Search provider changes use distinct research cache policies; historical evidence remains readable.
-
-Career defaults to OpenRouter (`CAREER_LLM_PROVIDER=compatible`, `CAREER_LLM_BASE_URL=https://openrouter.ai/api/v1`, `CAREER_LLM_RESPONSE_MODE=json_schema_strict`). Explicit nonblank model values override
-provider defaults, so update the model as well when switching providers.
+Career defaults to OpenRouter (`CAREER_LLM_BASE_URL=https://openrouter.ai/api/v1`, `CAREER_LLM_RESPONSE_MODE=json_schema_strict`). Explicit nonblank model values override
+the default, so update the model as well when switching providers.
 Direct non-Compose processes may use the deprecated `BRAVE_API_KEY` alias
 only for Brave when the canonical key is absent. Compose requires
 the canonical `CAREER_*` keys; rename old private entries yourself before recreating
@@ -649,12 +510,12 @@ All user-configurable deployment inputs belong in the single ignored `infrastruc
 |---|---|
 | `ASSESSMENT_DB_PASSWORD` | New scoped `elo_assessment` MongoDB user/database |
 | `ROADMAP_DB_PASSWORD` | New scoped `elo_roadmap` MongoDB user/database |
-| `ASSESSMENT_LLM_API_KEY` | Server-only cloud credential for evidence comparison; optional for explicit local HTTP |
-| `ROADMAP_LLM_API_KEY` | Server-only cloud credential for adviser recommendations; optional for explicit local HTTP |
-| `ASSESSMENT_LLM_MODEL`, `ROADMAP_LLM_MODEL` | Independent model identifiers; the public local profile uses `elo-deepseek-r1:1.5b`; absent settings fall back to OpenRouter defaults |
-| `ASSESSMENT_LLM_BASE_URL`, `ROADMAP_LLM_BASE_URL` | Independent OpenAI-compatible endpoints; local profile uses the Docker-host Ollama `/v1` URL |
+| `ASSESSMENT_LLM_API_KEY` | Server-only cloud credential for evidence comparison |
+| `ROADMAP_LLM_API_KEY` | Server-only cloud credential for adviser recommendations |
+| `ASSESSMENT_LLM_MODEL`, `ROADMAP_LLM_MODEL` | Independent model identifiers; absent settings fall back to OpenRouter defaults |
+| `ASSESSMENT_LLM_BASE_URL`, `ROADMAP_LLM_BASE_URL` | Independent OpenAI-compatible HTTPS endpoints |
 | `ASSESSMENT_LLM_TOKEN_PARAMETER`, `ROADMAP_LLM_TOKEN_PARAMETER` | `max_tokens` by default; set `max_completion_tokens` for models that reject `max_tokens` |
-| `ASSESSMENT_LLM_ALLOW_HTTP`, `ROADMAP_LLM_ALLOW_HTTP` | Explicit local HTTP permission; also requires `APP_ENV=development` |
+| `ASSESSMENT_LLM_ALLOW_HTTP`, `ROADMAP_LLM_ALLOW_HTTP` | HTTP permission for synthetic fixture providers only; also requires `APP_ENV=development` |
 
 Generate only the new database passwords locally, then paste the printed lines into `infrastructure/docker/.env`:
 
@@ -664,7 +525,7 @@ for setting in ASSESSMENT_DB_PASSWORD ROADMAP_DB_PASSWORD; do
 done
 ```
 
-Keep passwords already associated with existing database users. For local testing, use the all-service profile above. For a cloud deployment, restore the HTTPS base URLs, disable the HTTP flags, and add keys from your provider account to the same private file:
+Keep passwords already associated with existing database users. Keep the HTTPS base URLs and disabled HTTP flags, and add keys from your provider account to the same private file:
 
 ```dotenv
 ASSESSMENT_LLM_API_KEY=YOUR_OPENROUTER_API_KEY
@@ -687,12 +548,11 @@ Older extracted goals will not gain job dates automatically because their raw JD
 
 Career research planning and category structuring each allow up to 4,096 output
 tokens, bounded by `AI_MAX_OUTPUT_TOKENS`. A 60-second model deadline does not
-prevent output-token truncation. Local research includes its JSON schema in the
-prompt as well as the native decoding format. Planning uses the model deadline
-in both early retrieval and durable research; search HTTP deadlines stay separate.
-Existing private settings override defaults: apply `CAREER_LOCAL_TIMEOUT_SECONDS=60`
-for local inference or `AI_TIMEOUT_SECONDS=60` for cloud inference in your private
-`infrastructure/docker/.env`, then recreate Career yourself.
+prevent output-token truncation. Planning uses the model deadline in both early
+retrieval and durable research; search HTTP deadlines stay separate. Existing private
+settings override defaults: apply `AI_TIMEOUT_SECONDS=60` in your private
+`infrastructure/docker/.env`, then recreate Career yourself. Remove any obsolete
+`CAREER_LLM_PROVIDER` and `CAREER_LOCAL_TIMEOUT_SECONDS` entries; they are no longer read.
 
 ### Skills Profile deployment update
 

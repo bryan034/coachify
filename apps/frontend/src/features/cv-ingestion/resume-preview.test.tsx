@@ -76,6 +76,18 @@ describe('saved CV workspace',()=>{
   fireEvent(window,new Event('focus'));await waitFor(()=>expect(cvApi.list).toHaveBeenCalledTimes(5));
   expect(screen.getByLabelText('CV older-cv')).toBeVisible();expect(input).toHaveValue('A draft while browsing.');expect(cvApi.select).not.toHaveBeenCalled();
  });
+ it('opens Chat to edit as the full-page CV review chat, not a chat docked under the profile',async()=>{
+  const cv={...savedCv('cv-one'),profile_reviewed_effective_version:1};vi.mocked(cvApi.list).mockResolvedValue({cvs:[cv],selection:{cv_id:cv.id,version:1}});vi.mocked(cvApi.get).mockResolvedValue(cv);
+  const view=renderWorkspace();
+  fireEvent.click(await screen.findByRole('button',{name:'Chat to edit'}));
+  await waitFor(()=>expect(view.container.querySelector('.cv-workspace')).toHaveClass('cv-review-screen'));
+  expect(window.location.search).toContain('review=cv-one');
+  expect(screen.queryByRole('button',{name:'Chat to edit'})).toBeNull();
+  fireEvent.click(await screen.findByRole('button',{name:/review later/i}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Chat to edit'})).toBeVisible());
+  fireEvent.click(within(screen.getByRole('region',{name:'Your CV'})).getByRole('button',{name:'Refine CV'}));
+  await waitFor(()=>expect(view.container.querySelector('.cv-workspace')).toHaveClass('cv-review-screen'));
+ });
  it('ignores a delayed older page after a new saved-status refresh',async()=>{
   const recent=savedCv('recent-cv'),obsolete=savedCv('obsolete-page-cv');let resolve!:(value:CvList)=>void;
   vi.mocked(cvApi.list).mockImplementation(async(_token,_signal,cursor)=>cursor?new Promise(done=>resolve=done):{cvs:[recent],selection:{cv_id:recent.id,version:1},next_cursor:'older-page'});

@@ -14,8 +14,9 @@ def rate(flow, level=None, error=None):
         data = json.loads(request.context); calls.append(data)
         if error: raise error
         finding = data['findings'][0]['id']
-        output = SkillLevels(levels=[{'skill': s['name'], 'level': level, 'rationale': 'Interviews test this in practice.',
-                                      'finding_ids': [finding]} for s in data['skills']])
+        output = SkillLevels(levels=[{'skill': s['name'], 'level': level, 'employer_demand': 'Use it in daily analysis work.',
+                                      'reported_examples': [{'text': 'Candidates were asked about it in interviews.', 'finding_id': finding}],
+                                      'rationale': 'Interviews test this in practice.', 'finding_ids': [finding]} for s in data['skills']])
         if kwargs.get('validate_output'): kwargs['validate_output'](output)
         return SimpleNamespace(data=output)
     primary.generate = generate
@@ -27,15 +28,18 @@ def test_research_rates_every_goal_skill_and_sets_its_target(opportunity_flow):
     assert ingest(flow).status_code == 202
     workspace, result, _ = research(flow)
     assert result['status'] == 'completed' and len(calls) == 1
-    # Only public role facts, skill names and validated findings are sent: no job text or CV.
+    # Only public role facts, skill names with the employer's stated context, and validated findings are sent: no whole job text or CV.
     assert set(calls[0]) == {'opportunity', 'skills', 'findings'}
-    assert all(set(s) == {'name', 'priority', 'stated_proficiency', 'required_experience_months', 'reference_level', 'reference_factors'}
+    assert all(set(s) == {'name', 'priority', 'stated_proficiency', 'required_experience_months', 'employer_context', 'reference_level', 'reference_factors'}
                for s in calls[0]['skills'])
     assert all(s['reference_factors'][0].endswith(f"baseline {s['reference_level']}") or len(s['reference_factors']) > 1 for s in calls[0]['skills'])
     skills = [s for s in workspace['current']['goal']['skills'] if s['origin'] != 'user_declaration']
     assert skills and all(s['competence_target']['level'] >= 4 for s in skills)  # Stated floors can lift a rating.
-    assert any(s['competence_target']['level'] == 4 and s['competence_target']['basis'] == 'research'
-               and s['competence_target']['source_urls'] for s in skills)
+    rated = [s['competence_target'] for s in skills if s['competence_target']['level'] == 4 and s['competence_target']['basis'] == 'research']
+    assert rated and all(t['source_urls'] for t in rated)
+    assert all(t['employer_demand'] == 'Use it in daily analysis work.' and t['rating_reason'] == 'Interviews test this in practice.'
+               and [e['text'] for e in t['reported_examples']] == ['Candidates were asked about it in interviews.']
+               and t['reported_examples'][0]['source_url'] for t in rated)
     saved = flow[1].interview_research.find_one({'intelligence': {'$ne': None}})['intelligence']['skill_levels']
     assert {r['skill'] for r in saved} == {s['name'] for s in calls[0]['skills']}
 

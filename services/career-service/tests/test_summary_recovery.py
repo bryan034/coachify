@@ -8,18 +8,17 @@ from app.ai.goal_summary import summary_schema
 from app.repositories.goals import GoalError
 from app.workflows.goal_summary import summarize
 from tests.test_goal_chat_presentation import environment
-from tests.test_local_summary_schema import settings
+from tests.test_summary_schema import settings
 
 
-@pytest.mark.parametrize('provider',['local','deepseek','compatible'])
-def test_summary_schema_contains_only_references_from_this_snapshot(provider):
+def test_summary_schema_contains_only_references_from_this_snapshot():
     context={'goal':{'reference':'goal','skills':[{'reference':'skill_0'}],
                      'non_skill_requirements':[{'reference':'condition_0'}]},
              'categories':{'interviews':{'reference':'coverage_interviews','findings':[{'reference':'research_0','source_ids':['not_a_fact']} ]}}}
     schema=summary_schema(context)
     assert schema['$defs']['SummaryBlock']['properties']['references']['items']['enum']==[
         'goal','skill_0','condition_0','coverage_interviews','research_0']
-    adapter=AIAdapter(settings(provider=provider,base_url='https://example.test/v1',api_key='synthetic',response_mode='json_schema_strict'),None)
+    adapter=AIAdapter(settings(),None)
     from app.ai.contracts import AIInput
     payload=adapter._payload(AIInput(stage='goal_summary',context=json.dumps(context)))
     refs=payload['response_format']['json_schema']['schema']['$defs']['SummaryBlock']['properties']['references']['items']['enum']
@@ -68,7 +67,8 @@ def test_oversized_summary_context_uses_a_bounded_saved_digest_without_model_cal
             for index in range(20)]) for name in CATEGORIES}
         reply=(await summarize(request,'owner',body))['reply']
         assert not calls
-        assert reply.count('More findings are available')==5
+        assert reply.count('[Interview preparation](/career-goal/interview)')==1
+        assert reply.count('[About the role](/career-goal/role)')==1
         assert reply.count('[Source](<https://example.test/job>)')==10
         assert len(reply)<10000
     asyncio.run(run())

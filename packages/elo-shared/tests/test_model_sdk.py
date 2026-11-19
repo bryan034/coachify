@@ -14,23 +14,22 @@ BASE = 'https://provider.example.test/v1'
 
 
 @pytest.mark.parametrize('asynchronous', [False, True])
-@pytest.mark.parametrize('local', [False, True])
-def test_sdk_preserves_request_extensions_credentials_and_http_client(asynchronous, local):
+def test_sdk_preserves_request_credentials_and_http_client(asynchronous):
     calls = []
     def handler(request):
         calls.append(request)
         return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': '{}'}}]})
-    payload = {**PAYLOAD, 'thinking': {'type': 'disabled'}}
+    payload = dict(PAYLOAD)
     if asynchronous:
         async def run():
             async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-                async with async_model_response(http, BASE, 'synthetic-secret', 12, payload, local=local) as response:
+                async with async_model_response(http, BASE, 'synthetic-secret', 12, payload) as response:
                     assert json.loads(await response.aread())['choices'][0]['finish_reason'] == 'stop'
                 assert not http.is_closed
         asyncio.run(run())
     else:
         with httpx.Client(transport=httpx.MockTransport(handler)) as http:
-            with sync_model_response(http, BASE, 'synthetic-secret', 12, payload, local=local) as response:
+            with sync_model_response(http, BASE, 'synthetic-secret', 12, payload) as response:
                 assert json.loads(response.read())['choices'][0]['finish_reason'] == 'stop'
             assert not http.is_closed
     assert len(calls) == 1
@@ -38,11 +37,8 @@ def test_sdk_preserves_request_extensions_credentials_and_http_client(asynchrono
     assert str(request.url) == BASE + '/chat/completions'
     assert json.loads(request.content) == payload
     assert request.extensions['timeout'] == dict(connect=12, read=12, write=12, pool=12)
-    if local:
-        assert 'authorization' not in request.headers
-    else:
-        assert request.headers['authorization'] == 'Bearer synthetic-secret'
-    assert payload['thinking'] == {'type': 'disabled'}  # SDK must not mutate caller input.
+    assert request.headers['authorization'] == 'Bearer synthetic-secret'
+    assert payload == PAYLOAD  # SDK must not mutate caller input.
 
 
 @pytest.mark.parametrize('asynchronous', [False, True])

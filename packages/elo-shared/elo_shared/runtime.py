@@ -85,24 +85,20 @@ class Model:
         self.client, self.prefix, self.max_context_bytes = client, prefix, max_context_bytes
         self.base_url=os.getenv(prefix+'_LLM_BASE_URL','https://openrouter.ai/api/v1').rstrip('/')
         parsed=urlsplit(self.base_url)
-        self.local=parsed.scheme=='http' and os.getenv('APP_ENV')=='development' and os.getenv(prefix+'_LLM_ALLOW_HTTP')=='true'
-        if (parsed.scheme!='https' and not self.local) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        # Plain HTTP is only for synthetic fixture providers in development.
+        development_http=parsed.scheme=='http' and os.getenv('APP_ENV')=='development' and os.getenv(prefix+'_LLM_ALLOW_HTTP')=='true'
+        if (parsed.scheme!='https' and not development_http) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError(prefix+'_LLM_BASE_URL requires HTTPS or explicitly enabled development HTTP, without credentials, query or fragment.')
         self.token_parameter=os.getenv(prefix+'_LLM_TOKEN_PARAMETER','max_tokens').strip() or 'max_tokens'
         if self.token_parameter not in ('max_tokens','max_completion_tokens'):
             raise ValueError(prefix+'_LLM_TOKEN_PARAMETER must be max_tokens or max_completion_tokens.')
-        self.deepseek=parsed.hostname=='api.deepseek.com'
-        self.timeout=180 if self.local else 55
-        self.slot=asyncio.Lock() if self.local else None
+        self.timeout=55
     @property
     def api_key(self):
         return resolve_model_api_key(self.base_url, os.getenv(self.prefix + '_LLM_API_KEY', ''))
     @property
-    def configured(self): return bool(os.getenv(self.prefix+'_LLM_MODEL','').strip()) if self.local else bool(self.api_key)
+    def configured(self): return bool(self.api_key)
     async def generate(self, schema, instructions, context, max_tokens=8192):
-        if self.slot is not None:
-            context=copy.deepcopy(context)
-            async with self.slot:return await self._generate(schema,instructions,context,max_tokens)
         return await self._generate(schema,instructions,context,max_tokens)
     async def _generate(self, schema, instructions, context, max_tokens):
         if not self.configured: raise Problem('Your adviser is unavailable. Your saved work is retained; please try again later.',503,'model_not_configured')
@@ -113,12 +109,11 @@ class Model:
                     {'role':'user','content':content}]
         response_format={'type':'json_object'}
         messages[0]['content']+='\nJSON schema: '+json.dumps(original,separators=(',',':'))
-        options={'thinking':{'type':'disabled'}} if self.deepseek else {}
         for attempt in range(3):
             try:
                 payload={'model':os.getenv(self.prefix+'_LLM_MODEL','openai/gpt-4o-mini'), 'messages':messages,
-                         self.token_parameter:max_tokens,**options,'response_format':response_format}
-                if self.reserve_call is not None and not self.local:
+                         self.token_parameter:max_tokens,'response_format':response_format}
+                if self.reserve_call is not None:
                     try:
                         await run_in_threadpool(self.reserve_call, current_budget_owner(), payload)
                     except ModelBudgetExceeded as exc:
@@ -126,7 +121,7 @@ class Model:
                     except ModelBudgetUnavailable as exc:
                         raise Problem(str(exc), 503, 'model_budget_unavailable') from None
                 async with async_model_response(self.client,self.base_url,
-                    self.api_key,self.timeout,payload,local=self.local, telemetry={"service": self.prefix.lower(),
+                    self.api_key,self.timeout,payload, telemetry={"service": self.prefix.lower(),
                     "stage": schema.__name__, "prompt_version": fingerprint(instructions),
                     "schema_version": fingerprint(original), "attempt_reason": "initial" if attempt == 0 else "schema_retry"}) as response:
                     if response.status_code == 429:
@@ -256,7 +251,6 @@ def application(title,prefix,*,store=None,upstream=None,model=None,max_context_b
                 app.state.store=Store(mongo[os.getenv('MONGODB_DATABASE','elo_'+prefix.lower())] if mongo is not None else None, 'skill_gap_analyses' if prefix=='ASSESSMENT' else 'roadmaps')
             app.state.upstream=upstream or Upstream(client)
             app.state.model=model or Model(cloud_client,prefix,max_context_bytes,reserve_call=reserve_provider_call)
-            if model is None and app.state.model.local: app.state.model.client=client
             app.state.tasks={}; app.state.slots=asyncio.Semaphore(3)
             yield
             tasks=list(app.state.tasks.values())
@@ -338,8 +332,7 @@ async def run_operation(app,owner,token,worker):
     async with app.state.slots:
         row=await run_in_threadpool(app.state.store.load,owner); pending=row.get('pending')
         if not pending or pending.get('lease',0)>time.time(): return
-        local=getattr(app.state.model,'local',False)
-        worker_seconds=pending.get('work_seconds',600 if local else 210)
+        worker_seconds=pending.get('work_seconds',210)
         nonce=str(uuid4()); pending.update(lease=time.time()+worker_seconds+30,token=nonce,status='running')
         try: row=await run_in_threadpool(app.state.store.cas,owner,row['version'],row)
         except Problem: return

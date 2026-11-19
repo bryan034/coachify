@@ -1,4 +1,5 @@
 """J12 acquisition/reuse and J13 owner-scoped versioned evidence reads."""
+from elo_shared.model_budget import budget_owner
 import asyncio
 from pymongo.errors import PyMongoError
 from bson import ObjectId
@@ -71,7 +72,8 @@ async def acquire(goal_id:str,body:ResearchRequest,request:Request,account=Depen
     token=started['token']
     try:
         async with asyncio.timeout(85):
-            batch=normalize_batch(await request.app.state.research_client.collect(context));sources=batch.sources
+            with budget_owner(account):batch=normalize_batch(await request.app.state.research_client.collect(context))
+            sources=batch.sources
             result=await request.app.state.ai.generate(AIInput(stage='interview_synthesis',public_context=context,sources=sources,summaries=batch.summaries),
                 Operation(account,goal.id,'interview_synthesis'),current_revision=lambda:goal.id)
             skills=topics_from(result.data,sources,batch.summaries)

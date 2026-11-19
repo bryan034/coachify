@@ -42,7 +42,7 @@ top level. Do not copy the input's goal/categories keys or return a schema defin
 Each block has a label from the schema, plain text and references,
 a list of the supplied reference values. Select the label that describes the point's topic.
 Aim for 6-8 short blocks when enough information exists; use fewer when evidence is limited.
-Python renders each block as a separate paragraph with a bold label. Keep each block to one main idea
+Python renders each block's label as a heading with its text as a paragraph beneath it. Keep each block to one main idea
 and one short sentence, ideally 15-25 words. Split different topics into separate blocks;
 never combine several sentences into a long paragraph. Do not repeat the label in text.
 Start with the role/employer/location, then prioritise skills, eligibility, interview
@@ -53,7 +53,9 @@ Use goal for role metadata/responsibilities, skill_/condition_ references for sp
 requirements, research_ references for research findings, and coverage_ references for
 missing information or failed categories. Copy reference values exactly; never invent them.
 Keep references next to their own point in the blocks array. Python will attach the
-corresponding source links to that point. Do not output URLs, Markdown citation markers,
+corresponding source links to that point. In each block's text, bold the one to three most important keywords or short
+phrases (skills, tools, figures, qualifications) by wrapping them in **double asterisks**;
+never bold whole sentences. Do not output URLs, Markdown citation markers, other Markdown,
 HTML, headings, lists, a source list or a closing invitation in text; use ordinary prose.
 Plain bracketed terms and parentheses are allowed. You may paraphrase saved facts.
 Select important findings rather than repeating every field. Preserve required/preferred

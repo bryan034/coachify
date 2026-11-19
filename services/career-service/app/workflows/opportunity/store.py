@@ -6,7 +6,7 @@ from pymongo.errors import DuplicateKeyError
 from app.repositories.goals import GoalError,fingerprint,now
 from app.repositories.research import ResearchStore
 from app.schemas.opportunity import CATEGORIES,CategoryResult
-from app.clients.search_sources import OPPORTUNITY_SOURCE_LIMIT
+from app.workflows.opportunity.sources import RETAINED_SOURCE_LIMIT
 from .domain import public_opportunity,rating_skills
 
 class OpportunityStore:
@@ -54,7 +54,7 @@ class OpportunityStore:
                 categories[category]={**categories[category],'status':'pending','error_code':None,'outcome':None}
         pending=[k for k,v in categories.items() if v['status']=='pending']
         summary_pending=bool(cached and any(w.startswith('Overall summary unavailable;') for w in cached.intelligence.warnings))
-        retained={category:[s for s in sources if s['source_id'] in set(value.get('source_ids',[]))|{sid for finding in value['findings'] for sid in finding['source_ids']}][:OPPORTUNITY_SOURCE_LIMIT] for category,value in categories.items()}
+        retained={category:[s for s in sources if s['source_id'] in set(value.get('source_ids',[]))|{sid for finding in value['findings'] for sid in finding['source_ids']}][:RETAINED_SOURCE_LIMIT] for category,value in categories.items()}
         row={'_id':identifier,'kind':'opportunity_job','owner':owner,'goal_id':goal.id,'goal_version':goal.version,'selection':selection,'session':session,'run':run,
              'digest':digest,'public':public,'context':context.model_dump(mode='json'),'status':'pending' if pending or summary_pending else cached.intelligence.status,
              'finished':not (pending or summary_pending),'prefetched':bool(seed),'queries_planned':bool((seed or {}).get('queries_planned')),'categories':categories,'sources':sources,'queries':(seed or {}).get('queries',{}),'evidence':(seed or {}).get('evidence',{}),'history':(seed or {}).get('history',{}),

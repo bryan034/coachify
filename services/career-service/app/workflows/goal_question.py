@@ -5,7 +5,7 @@ from app.schemas.analysis import ResearchContext
 from app.clients.research import normalize_sources
 from app.repositories.goals import GoalError
 from app.workflows.activity import activity
-from app.clients.search_sources import SourceRateLimit
+from app.clients.search_sources import SourceRateLimit, SearchAllowanceExceeded
 from app.ai.waiting import quota_progress, quota_reason
 
 FOCUSES = {
@@ -38,7 +38,7 @@ def question_queries(title, focus, terms=None):
     place=target_place(title)
     market='Singapore' if place==SINGAPORE else place
     def query(place, suffix=''):
-        # Fit DeepSeek's query limit without truncating the market or subject.
+        # Keep queries within 128 characters without truncating the market or subject.
         tail=' '.join(part for part in (subject,suffix) if part)
         place=place[:max(0,126-len(tail))].strip()
         budget=max(0,127-len(tail)-(len(place)+1 if place else 0))
@@ -64,6 +64,8 @@ async def research_question(request, title, focus, check, *, query=None):
         try:
             sources = normalize_sources(await collect(context, query))[:6]
             break
+        except SearchAllowanceExceeded:
+            raise  # A daily allowance does not reset within this chat turn.
         except SourceRateLimit as error:
             observer = quota_progress.get()
             if observer is None or attempt == 3:

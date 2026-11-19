@@ -31,19 +31,12 @@ The running service uses MongoDB and private originals. Model calls use the Open
 
 Cloud model calls honour the process's HTTP(S) proxy and CA settings, including
 `HTTPS_PROXY`, `NO_PROXY` and `SSL_CERT_FILE`; TLS verification and redirect
-blocking remain enabled. Explicit local model calls bypass these proxy settings
-and do not send preserved cloud credentials. Internal service requests remain
-direct. See [configuration troubleshooting](../../docs/setup.md#cv-extraction-configuration-troubleshooting).
+blocking remain enabled. Internal service requests remain direct. See [configuration troubleshooting](../../docs/setup.md#cv-extraction-configuration-troubleshooting).
 
-CV model requests share configurable daily attempt budgets and per-account/global concurrency across service instances. Admission failures preserve saved inputs and explain when to retry. Original storage quotas and model budgets are separate; the specification documents their limits, private-volume assumptions and recovery.
+CV model requests share configurable per-account daily attempt budgets and concurrency across service instances. Admission failures preserve saved inputs and explain when to retry. Original storage quotas and model budgets are separate; the specification documents their limits, private-volume assumptions and recovery.
 
-For DeepSeek Chat Completions, set `CV_LLM_BASE_URL=https://api.deepseek.com`, `CV_LLM_MODEL=deepseek-flash`, `CV_LLM_RESPONSE_MODE=json_object` and your private `CV_LLM_API_KEY`. This explicitly opts out of schema-constrained decoding because that endpoint documents JSON-object output only. The harness still validates and can repair once. Requests to the exact `api.deepseek.com` host automatically disable thinking for extraction, chat routing and clarification interpretation; other provider hosts keep their existing options. See [DeepSeek's request format](https://api-docs.deepseek.com/api/create-chat-completion/).
+For providers that document JSON-object output only, set `CV_LLM_RESPONSE_MODE=json_object`. This explicitly opts out of schema-constrained decoding; the harness still validates and can repair once. Requests carry no provider-specific extensions.
 
-For optional local testing, select `elo-deepseek-r1:1.5b` at
-`http://host.docker.internal:11434/v1`. `APP_ENV=development` and
-`CV_LLM_ALLOW_HTTP=true` are required. This known local endpoint supports keyless
-requests and never receives stored cloud API keys. Local extraction gets a 120-second
-HTTP timeout; chat/interpretation get 60 seconds, retaining their existing leases.
 Extraction and repair timeouts are capped by the remaining 180-second worker lease, reserving ten seconds for validation/publication. Existing output/domain checks remain enforced. Rebuild the CV image to install LangGraph before retrying saved uploads.
 
 ## Skills Profile guided entry

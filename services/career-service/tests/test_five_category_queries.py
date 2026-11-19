@@ -13,6 +13,7 @@ from app.schemas.analysis import ResearchSource
 from app.schemas.opportunity import CATEGORIES,LEGACY_FIELDS,CategoryResult,OpportunityReport
 from app.workflows.jd_prefetch import prefetch
 from app.workflows.opportunity.domain import validate_claims
+from app.workflows.opportunity.queries import broad_query
 from tests.test_opportunity import opportunity_flow
 
 @pytest.mark.parametrize('company',['Example',None])
@@ -36,8 +37,12 @@ def test_model_writes_all_five_initial_queries_before_brave(role,field,terms,com
             assert len(plans)==1;calls.append(query);return []
     engine=SimpleNamespace(ai=AI(),source=Search(),slots=asyncio.Semaphore(3),settings=SimpleNamespace(timeout_seconds=30,max_searches=2))
     result=asyncio.run(prefetch(engine,identity,'synthetic-owner','synthetic-revision'))
-    assert set(calls)=={values[0] for values in expected.values()}
-    assert result['queries_planned'] and result['queries']==expected
+    # A plain employer/role query runs first; the model's targeted query follows.
+    public={'company':company,'role':role}
+    planned={category:[broad_query(public,category),*values] for category,values in expected.items()}
+    assert set(calls)=={values[0] for values in planned.values()}
+    assert result['queries_planned'] and result['queries']==planned
+    assert all(' '.join(filter(None,[company,role])) in values[0] and 'Singapore' not in values[0] for values in planned.values())
     assert set(result['history'])==set(CATEGORIES)
     assert 'actual questions' in PROMPTS['opportunity_plan']
     assert 'historical' in PROMPTS['opportunity_plan']
@@ -114,3 +119,9 @@ def test_salary_numbers_are_exact_without_forcing_absent_currency(text,value,val
     if valid:assert validate_claims(output,'career_progression',[source])[0].value==value
     else:
         with pytest.raises(AIError):validate_claims(output,'career_progression',[source])
+
+
+def test_broad_query_is_a_plain_employer_role_search_per_category():
+    assert broad_query({'company':'Optiver','role':'Quantitative Trading Intern','location':'Singapore'},'interview_intelligence')=='Optiver Quantitative Trading Intern interview process questions'
+    assert broad_query({'company':None,'role':'Data Analyst'},'company_intelligence')=='Data Analyst work culture'
+    assert broad_query({'company':None,'role':''},'internship_insights') is None and broad_query(None,'internship_insights') is None
