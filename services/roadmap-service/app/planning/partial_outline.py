@@ -1,11 +1,13 @@
 """Conservative, backend-owned recovery of an outline with invalid requirement IDs."""
+from elo_shared.runtime import digest
 from app.schemas.outlines import OutlineDraft
 
 
 def recover_outline(draft,assessment,existing=None):
     """Drop invalid reference rows and their dependants, retaining an audit for review.
 
-    The recovered draft must still pass normal validation before it can be shown.
+    The recovered draft must still pass normal validation before it can be shown. The model's
+    deadline claim is never rewritten: a recovery that would contradict it fails instead.
     """
     data=draft.model_dump(mode='json')
     originally_placed={key for m in data['milestones']+data['beyond_deadline'] for key in m['gap_ids']}
@@ -55,12 +57,13 @@ def recover_outline(draft,assessment,existing=None):
     beyond=[]
     for item in data['beyond_deadline']:
         if item['gap_ids'] and set(item['gap_ids'])<=bad:
-            record('beyond_deadline',str(len(omitted)),item['title'],'Its learning gaps were omitted.')
+            record('beyond_deadline','beyond:'+digest(item)[:16],item['title'],'Its learning gaps were omitted.')
         else:
             item['gap_ids']=[key for key in item['gap_ids'] if key not in bad]
             beyond.append(item)
     data['beyond_deadline']=beyond
     if not data['milestones'] or not data['weeks']:return None,None
+    if draft.beyond_deadline and not beyond and not data['deadline_outcome']['fits_in_runway']:return None,None
     covered_ids={key for m in data['milestones']+data['beyond_deadline'] for key in m['gap_ids']}
     orphaned={g['id'] for g in data['gaps'] if g['id'] in originally_placed and g['id'] not in covered_ids}
     for gap in data['gaps']:
@@ -72,5 +75,4 @@ def recover_outline(draft,assessment,existing=None):
     data['summary']='This is a partial roadmap. Review the retained milestones and weekly objectives; omitted items are listed separately.'
     data['deadline_outcome']['summary']='Only the retained milestones are planned. This partial roadmap does not establish complete coverage of your career goal.'
     data['deadline_outcome']['achievable_by_target']=[m['demonstrable_outcome'] for m in retained]
-    if len(beyond)!=len(draft.beyond_deadline):data['deadline_outcome']['fits_in_runway']=not bool(beyond)
     return OutlineDraft.model_validate(data),{'omitted_items':omitted,'uncovered_requirements':uncovered}

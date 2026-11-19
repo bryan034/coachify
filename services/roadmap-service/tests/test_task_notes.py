@@ -2,8 +2,10 @@
 import pytest
 from pydantic import ValidationError
 
+from app.planning.weeks import revision_basis
+from app.schemas.roadmap import PlannerConfig
 from app.schemas.notes import MAX_TEXT, NotesDocument
-from planner_fixtures import draft
+from planner_fixtures import NOW, draft
 from test_editable_tasks import by_title, definition, request, save
 from test_planner_flow import Scripted, Sources, accepted, client_for, read
 
@@ -57,10 +59,19 @@ def test_notes_reject_unknown_markup_impossible_choices_and_oversized_documents(
 
 
 def test_a_task_with_notes_is_protected_when_the_plan_is_regenerated():
-    from app.planning.generator import protected_tasks
-    plan = {'editable_tasks': [{'id': 't1', 'origin': 'generated', 'status': 'not_started', 'notes': DOC},
-                               {'id': 't2', 'origin': 'generated', 'status': 'not_started'}]}
-    assert [task['id'] for task in protected_tasks(plan)] == ['t1']
+    with client_for(Scripted([draft()])) as client:
+        state = accepted(client)
+        plan = state['planner']['active']
+        block = state['planner']['week_blocks'][0]
+        task = plan['editable_tasks'][0]
+        config = PlannerConfig.model_validate(plan['config'])
+        _, replaced = revision_basis(plan, block, NOW, config)
+        assert task['id'] in replaced
+
+        state = save(client, 'notes', state, task_id=task['id'], notes=DOC)
+        revised, replaced = revision_basis(state['planner']['active'], block, NOW, config)
+        assert task['id'] not in replaced
+        assert revised['editable_tasks'][0]['notes'] == NotesDocument.model_validate(DOC).model_dump(mode='json')
 
 
 def test_each_projected_session_names_its_task_so_notes_can_be_found():

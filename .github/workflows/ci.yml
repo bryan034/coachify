@@ -114,6 +114,28 @@ jobs:
           fi
           exit "$status"
 
+  static-analysis:
+    name: Static analysis (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [roadmap]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e ../../packages/elo-shared -e '.[lint]'
+      - name: Ruff (unused arguments, nested imports, swallowed exceptions)
+        run: python -m ruff check app
+      - name: Vulture (unused code)
+        run: python -m vulture
+
   profile-integration:
     name: Profile MongoDB integration
     runs-on: ubuntu-22.04
@@ -230,7 +252,7 @@ jobs:
   test-gate:
     name: Test gate
     if: ${{ always() }}
-    needs: [database-artifacts, frontend-unit, frontend-e2e, backend, profile-integration, analysis-integration, local-ui-integration]
+    needs: [database-artifacts, frontend-unit, frontend-e2e, backend, static-analysis, profile-integration, analysis-integration, local-ui-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -240,6 +262,7 @@ jobs:
           UNIT_RESULT: ${{ needs.frontend-unit.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
+          STATIC_RESULT: ${{ needs.static-analysis.result }}
           LOCAL_UI_RESULT: ${{ needs.local-ui-integration.result }}
           ANALYSIS_RESULT: ${{ needs.analysis-integration.result }}
           INTEGRATION_RESULT: ${{ needs.profile-integration.result }}
@@ -248,6 +271,7 @@ jobs:
           test "$UNIT_RESULT" = success
           test "$E2E_RESULT" = success
           test "$BACKEND_RESULT" = success
+          test "$STATIC_RESULT" = success
           test "$INTEGRATION_RESULT" = success
           test "$LOCAL_UI_RESULT" = success
           test "$ANALYSIS_RESULT" = success

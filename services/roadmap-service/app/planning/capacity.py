@@ -1,4 +1,4 @@
-"""Runway and study-capacity arithmetic.
+"""Runway, study-capacity arithmetic and deterministic session placement.
 
 Times are wall-clock minutes on real local dates. A date is available only inside its
 configured blocks, so overlapping blocks merge and repeated daylight-saving hours count once.
@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from app.schemas.roadmap import Duration
 
 MAX_RUNWAY_DAYS=366
+STEP=5
 
 def to_minute(text):
     hours,minutes=text.split(':')
@@ -23,12 +24,6 @@ def session_break(minutes,config):
     return -(-minutes*config.break_minutes_per_hour//300)*5
 def shortest_session(config):
     return min(config.min_session_minutes,config.preferred_session_minutes)
-def studyable(length,config):
-    """Study minutes one free window can hold once sessions are capped and separated by breaks."""
-    longest=config.preferred_session_minutes;shortest=shortest_session(config);total=0
-    while length>=shortest:
-        minutes=min(longest,length);total+=minutes;length-=minutes+session_break(minutes,config)
-    return total
 def add_duration(start,duration):
     if duration.unit=='weeks':return start+timedelta(weeks=duration.value)
     index=start.month-1+duration.value
@@ -57,8 +52,6 @@ def subtract(intervals,holes):
             cursor=max(cursor,high)
         if cursor<end:result.append((cursor,end))
     return result
-def total(intervals):
-    return sum(end-start for start,end in intervals)
 def missing_local_minutes(day,zone):
     """Local minutes a forward clock change skips on this date."""
     opening=datetime(day.year,day.month,day.day,tzinfo=zone)
@@ -169,19 +162,8 @@ class Capacity:
         return windows is not None and any(low<=begin and end<=high for low,high,_ in windows)
     def week_left(self,week):
         return max(0,self.cap_for(week)-self.completed_by_week.get(week,0))
-    def day_minutes(self,day):
-        """Study minutes a day can still hold, as (study blocks, extra time), after breaks and the daily limit."""
-        windows=self.days.get(day)
-        if not windows:return 0,0
-        preferred=sum(studyable(high-low,self.config) for low,high in windows['preferred'])
-        overflow=sum(studyable(high-low,self.config) for low,high in windows['overflow'])
-        if self.config.max_daily_minutes is not None:
-            left=max(0,self.config.max_daily_minutes-self.busy_minutes.get(day,0))
-            preferred=min(preferred,left);overflow=min(overflow,left-preferred)
-        return preferred,overflow
     def _week_minutes(self,first,last):
         """Use the session placer for breaks, saved commitments, rest days and limits."""
-        from app.planning.placement import Placer
         key=(first,last)
         if key in self._capacity_cache:return self._capacity_cache[key]
         weeks={}
@@ -257,3 +239,166 @@ class Capacity:
             'resolved':{'today':self.today.isoformat(),'start_date':self.start_date.isoformat(),
                 'target_date':self.target.isoformat() if self.target else None,
                 'matched_duration':matched.model_dump() if matched else None}}
+
+def session_lengths(minutes,config):
+    """Split an estimate into sessions of roughly equal length, none above the session limit."""
+    longest=config.preferred_session_minutes
+    if minutes<=longest:return [minutes]
+    count=-(-minutes//longest)
+    size=-(-minutes//count//STEP)*STEP
+    lengths=[]
+    while minutes>0:
+        part=min(size,longest,minutes);lengths.append(part);minutes-=part
+    return lengths
+
+class Placer:
+    """Places sessions one at a time between start (inclusive) and end (exclusive).
+
+    The model decides what to study and for how long; the placer alone decides when. It
+    splits work into sessions no longer than the configured session length, leaves the
+    configured break after each one, and keeps every session inside a free window from
+    `Capacity`. Study blocks are filled first, in date order; extra time is used only when
+    they are full, and is spread across the least busy days.
+    """
+    def __init__(self,config,now,reserved,start,end):
+        self.config=config;self.start=start;self.end=end
+        self.capacity=Capacity(config,now,reserved)
+        self.busy={};self.day_used={};self.week_used={}
+        for slot in reserved:
+            day=date.fromisoformat(str(slot['date']))
+            if slot.get('start_time') is not None:
+                begin=to_minute(slot['start_time'])
+                self.busy.setdefault(day,[]).append((begin,begin+slot['duration_minutes']))
+            self.day_used[day]=self.day_used.get(day,0)+slot['duration_minutes']
+        earliest=self.capacity.now_minute+config.lead_minutes
+        self.earliest=(self.capacity.today+timedelta(days=earliest//1440),earliest%1440)
+    def days(self):
+        day=max(self.start,self.earliest[0],self.capacity.start)
+        while day<self.end:
+            if day in self.capacity.days:yield day
+            day+=timedelta(days=1)
+    def clear(self,day,begin,minutes):
+        """No overlap, and a break on both sides of any neighbouring session."""
+        end=begin+minutes+session_break(minutes,self.config)
+        return all(begin>=high+session_break(high-low,self.config) or end<=low for low,high in self.busy.get(day,[]))
+    def allowed(self,day,minutes):
+        week=self.capacity.week(day)
+        if self.week_used.get(week,0)+minutes>self.capacity.week_left(week):return False
+        limit=self.config.max_daily_minutes
+        if limit is not None and self.day_used.get(day,0)+minutes>limit:return False
+        if self.config.rest_days_per_week and not self.day_used.get(day):
+            used=sum(1 for offset in range(7) if self.day_used.get(week+timedelta(days=offset)))
+            if used>=7-self.config.rest_days_per_week:return False
+        return True
+    def slot(self,day,minutes,kind):
+        if not self.start<=day<self.end or day not in self.capacity.days or day<self.earliest[0]:return None
+        if not self.allowed(day,minutes):return None
+        for low,high,found in self.capacity.eligible(day) or []:
+            if found!=kind:continue
+            begin=-(-max(low,self.earliest[1] if day==self.earliest[0] else 0)//STEP)*STEP
+            while begin+minutes<=high:
+                if self.clear(day,begin,minutes):return begin
+                # Jump directly beyond conflicting sessions.
+                conflicts=[high+session_break(high-low,self.config) for low,high in self.busy.get(day,[])
+                    if begin<high+session_break(high-low,self.config) and begin+minutes+session_break(minutes,self.config)>low]
+                begin=-(-max([begin+STEP,*conflicts])//STEP)*STEP
+        return None
+    def find(self,minutes,only=None,kind=None):
+        """The next session time: the earliest study block, otherwise extra time on the least busy day."""
+        days=[only] if only else list(self.days())
+        for day in days if kind!='overflow' else []:
+            begin=self.slot(day,minutes,'preferred')
+            if begin is not None:return day,begin
+        for day in sorted(days,key=lambda item:(self.day_used.get(item,0),item)) if kind!='preferred' else []:
+            begin=self.slot(day,minutes,'overflow')
+            if begin is not None:return day,begin
+        return None
+    def take(self,day,begin,minutes):
+        self.busy.setdefault(day,[]).append((begin,begin+minutes))
+        self.day_used[day]=self.day_used.get(day,0)+minutes
+        week=self.capacity.week(day);self.week_used[week]=self.week_used.get(week,0)+minutes
+    def release(self,day,begin,minutes):
+        self.busy[day].remove((begin,begin+minutes))
+        self.day_used[day]-=minutes
+        week=self.capacity.week(day);self.week_used[week]-=minutes
+    def accepts(self,day,begin,minutes):
+        """Validate a fixed proposed slot using the same rules as generation."""
+        return (self.start<=day<self.end and day in self.capacity.days and day>=self.earliest[0]
+            and (day!=self.earliest[0] or begin>=self.earliest[1])
+            and shortest_session(self.config)<=minutes<=self.config.preferred_session_minutes
+            and self.allowed(day,minutes) and self.capacity.fits(day,begin,begin+minutes)
+            and self.clear(day,begin,minutes))
+    def place(self,minutes,only=None):
+        """Place all of a task, splitting further when shorter windows require it."""
+        minimum=shortest_session(self.config)
+        if minutes<minimum:return None
+        taken=[]
+        def rollback():
+            for day,begin,size in taken:self.release(day,begin,size)
+            taken.clear()
+        for length in session_lengths(minutes,self.config):
+            if length<minimum:break
+            found=self.find(length,only)
+            if not found:break
+            self.take(*found,length);taken.append((*found,length))
+        else:
+            return [{'date':day.isoformat(),'start_time':to_clock(begin),'duration_minutes':size} for day,begin,size in sorted(taken)]
+        rollback()
+        remaining=minutes;minimum=shortest_session(self.config)
+        while remaining:
+            found=None
+            for length in range(min(self.config.preferred_session_minutes,remaining),minimum-1,-1):
+                if 0<remaining-length<minimum:continue
+                found=self.find(length,only)
+                if found:break
+            if not found:
+                rollback();return None
+            self.take(*found,length);taken.append((*found,length));remaining-=length
+        return [{'date':day.isoformat(),'start_time':to_clock(begin),'duration_minutes':size} for day,begin,size in sorted(taken)]
+    def longest_fit(self,low,high,kind):
+        """The longest session from low to high minutes that fits somewhere, or None. A shorter session fits wherever a longer one does."""
+        if high<low or not self.find(low,kind=kind):return None
+        while low<high:
+            middle=(low+high+1)//2
+            if self.find(middle,kind=kind):low=middle
+            else:high=middle-1
+        return low
+    def room_details(self):
+        """Measure placeable study time, restoring all reservations afterwards."""
+        best=(0,0);minimum=shortest_session(self.config)
+        days=list(self.days());by_week={};longest=0
+        for day in days:
+            spans=self.capacity.eligible(day) or []
+            available=sum(high-low for low,high,_ in spans)
+            if self.config.max_daily_minutes is not None:
+                available=min(available,max(0,self.config.max_daily_minutes-self.day_used.get(day,0)))
+            longest=max(longest,min(available,max((high-low for low,high,_ in spans),default=0)))
+            by_week.setdefault(self.capacity.week(day),[]).append((day,available))
+        ceiling=0
+        for week,rows in by_week.items():
+            occupied={day for day,minutes in self.day_used.items() if minutes and self.capacity.week(day)==week}
+            new_days=max(0,7-self.config.rest_days_per_week-len(occupied))
+            available=sum(minutes for day,minutes in rows if day in occupied)
+            available+=sum(sorted((minutes for day,minutes in rows if day not in occupied),reverse=True)[:new_days])
+            ceiling+=min(self.capacity.week_left(week),available)
+        if ceiling<minimum:return best
+        limit=min(self.config.preferred_session_minutes,longest,max(self.capacity.week_left(week) for week in by_week))
+        seeds=[limit,*range(self.config.preferred_session_minutes,minimum-1,-STEP),minimum]
+        for maximum in dict.fromkeys(seed for seed in seeds if minimum<=seed<=limit):
+            taken=[];preferred=0;overflow=0
+            for kind in ('preferred','overflow'):
+                length=maximum
+                while length is not None:
+                    found=self.find(length,kind=kind)
+                    if not found:
+                        length=self.longest_fit(minimum,length-1,kind)
+                        continue
+                    self.take(*found,length);taken.append((*found,length))
+                    if kind=='preferred':preferred+=length
+                    else:overflow+=length
+            for day,begin,size in taken:self.release(day,begin,size)
+            if (preferred+overflow,preferred)>(sum(best),best[0]):best=(preferred,overflow)
+            if sum(best)>=ceiling:break
+        return best
+    def room(self):
+        return sum(self.room_details())

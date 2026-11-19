@@ -7,7 +7,7 @@ from .roadmap import OperationView, PlannerView, SavedRecord
 
 class Message(Mutation):
     message:Text
-    allow_partial_assessment:bool=False
+    allow_partial_assessment:bool=Field(default=False,deprecated=True,description='Ignored. Saved evaluations are reused only when current; kept so saved retry requests stay readable.')
 class DayBudget(Contract):
     day:int=Field(strict=True,ge=0,le=6)
     minutes:int=Field(strict=True,ge=0,le=1440)

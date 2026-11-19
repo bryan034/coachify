@@ -85,7 +85,7 @@ Stale items to ignore: `*.egg-info` dirs (including `coachify_*` names from befo
 
 ## Run and verify
 
-Tooling: Node.js 24, Python 3.12 (pinned in `.python-version` and CI; the system `python3` may be newer, so create venvs with 3.12), Docker Compose. No linter or formatter is configured; follow `.editorconfig` (LF, 2-space indent, 4 for Python) and match surrounding code.
+Tooling: Node.js 24, Python 3.12 (pinned in `.python-version` and CI; the system `python3` may be newer, so create venvs with 3.12), Docker Compose. No formatter is configured. Roadmap runs Ruff (selected rules) and vulture in CI (`python -m ruff check app`, `python -m vulture` after installing `.[lint]`); no other service is linted. Follow `.editorconfig` (LF, 2-space indent, 4 for Python) and match surrounding code.
 
 ```sh
 # Stack (from repo root; the user supplies the private .env)

@@ -1,11 +1,12 @@
 """Read projections and change detection for the timed roadmap. No model calls happen here."""
 import copy
-from uuid import NAMESPACE_URL, uuid5
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from elo_shared.runtime import digest
 from elo_shared.milestone_review import removal_needs_review
 from elo_shared.skill_groups import skill_groups
 from app.planning.capacity import Capacity, to_minute
-from app.schemas.roadmap import DISPLAY_FIELDS, SHAPE_FIELDS, PlannerConfig
+from app.planning.tasks import legacy_inference_source_is_safe, project_assignments, slot_id, task_link_source_is_current
+from app.schemas.roadmap import DISPLAY_FIELDS, SHAPE_FIELDS, PlannerConfig, ReducedPeriod
 
 ASSESSMENT_FIELDS=('id','input_hash','role','target_type','job_skill_gaps','interview_prep_gaps','constraints','groups','priorities','research_coverage','evidence','skill_profile')
 
@@ -17,27 +18,40 @@ def planner_state(row):
     state.setdefault('month_blocks',[])
     return state
 def reduced_periods(periods):
-    """Profile availability periods as planner minutes. A malformed period is skipped, never guessed."""
+    """Profile availability periods as planner minutes, latest-ending first up to the planner's 100.
+
+    A malformed or out-of-range period is skipped on its own, never guessed.
+    """
     result=[]
     for period in periods or []:
-        try:result.append({'start_date':str(period['start_date']),'end_date':str(period['end_date']),'weekly_minutes':round(float(period['weekly_hours'])*60)})
+        try:
+            value=ReducedPeriod(start_date=period['start_date'],end_date=period['end_date'],weekly_minutes=round(float(period['weekly_hours'])*60))
         except (KeyError,TypeError,ValueError):continue
-    return result
+        if value.end_date>=value.start_date:result.append(value)
+    result.sort(key=lambda value:value.end_date,reverse=True)
+    return [value.model_dump(mode='json') for value in result[:100]]
 def with_periods(config,periods):
     """Reduced periods belong to Profile; the service copies the current ones over anything a client sent."""
     if periods is None:return config
-    try:return PlannerConfig.model_validate({**config.model_dump(mode='json'),'reduced_periods':reduced_periods(periods)})
-    except ValueError:return config.model_copy(update={'reduced_periods':[]})
+    return PlannerConfig.model_validate({**config.model_dump(mode='json'),'reduced_periods':reduced_periods(periods)})
+def known_zone(name):
+    try:ZoneInfo(name)
+    except (ZoneInfoNotFoundError,ValueError):return False
+    return True
 def saved_config(state,default_zone=None,periods=None):
-    if state['config'] is None and default_zone:
-        try:return with_periods(PlannerConfig(time_zone=default_zone,allow_overflow=True),periods)
-        except ValueError:pass
-    return with_periods(PlannerConfig.model_validate(state['config']) if state['config'] is not None else PlannerConfig(allow_overflow=True),periods)
+    """Saved settings, or defaults in the browser's time zone when that hint names a real zone."""
+    if state['config'] is not None:config=PlannerConfig.model_validate(state['config'])
+    elif default_zone and known_zone(default_zone):config=PlannerConfig(time_zone=default_zone,allow_overflow=True)
+    else:config=PlannerConfig(allow_overflow=True)
+    return with_periods(config,periods)
+def evaluation_current(source):
+    """True only when Assessment explicitly reports the evaluation as current. A missing status is never current."""
+    return (source.get('evaluation') or {}).get('freshness')=='current'
 def planning_source_changed(before,after):
     """Fence publication against owner evidence, evaluation and current availability changes."""
     def capture(source):
         return {'input_hash':source.get('input_hash'),'ready':source.get('ready'),
-            'freshness':(source.get('evaluation') or {}).get('freshness','current'),
+            'freshness':(source.get('evaluation') or {}).get('freshness'),
             'periods':(source.get('planning_defaults') or {}).get('availability_periods',[])}
     return digest(capture(before))!=digest(capture(after))
 def config_digest(config):
@@ -55,7 +69,6 @@ def completed_sessions(plan):
     if not plan:return []
     if isinstance(plan.get('editable_tasks'),list):
         # Rebuild assignments from canonical tasks in memory without mutating the snapshot.
-        from app.planning.tasks import project_assignments
         projection={'editable_tasks':plan['editable_tasks'],'milestones':plan.get('milestones',[])}
         assignments=project_assignments(projection)
     else:
@@ -101,7 +114,6 @@ def learning_view(plan,now):
     # Rebuild the session view on a copy.
     canonical=isinstance(plan.get('editable_tasks'),list)
     if canonical:
-        from app.planning.tasks import legacy_inference_source_is_safe, project_assignments, task_link_source_is_current
         plan=copy.deepcopy(plan)
         project_assignments(plan)
     review=plan_review(plan,now);missed=set(review['missed_assignment_ids'])
@@ -127,8 +139,7 @@ def learning_view(plan,now):
             related=[task for task in plan['editable_tasks'] if task_belongs(task)]
             active=[task for task in related if not task.get('removed')]
             # Match every projected session to its authoritative task.
-            session_ids={task['id'] if i==0 else str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(i)))
-                         for task in active for i,_ in enumerate(task.get('schedule') or [])}
+            session_ids={slot_id(task,i) for task in active for i,_ in enumerate(task.get('schedule') or [])}
             sessions=sorted((a for a in plan['assignments'] if a['id'] in session_ids),key=lambda a:(str(a['date']),a['start_time']))
         else:
             def belongs(session):
@@ -166,7 +177,7 @@ def learning_view(plan,now):
     return {'has_roadmap':True,'roadmap_id':plan['id'],'skills_total':len(steps),'skills_started':sum(s['state'] in ('in_progress','done') for s in steps),
         'skills_done':sum(s['state']=='done' for s in steps),'steps':steps}
 
-def revision_signals(state,source,now):
+def revision_signals(state,source):
     """Changes since the outline was accepted that the user may want a revised outline for."""
     outline=state['outline_active'];active=state['active'];signals=[]
     add=lambda kind,message:signals.append({'kind':kind,'message':message})
@@ -187,67 +198,3 @@ def retry_body(row,kind):
     last=row.get('last_operation') or {}
     if last.get('status')=='failed' and last.get('kind','message')==kind:return last.get('body')
     return None
-
-def week_overview(state,config,now):
-    """Every week of the outline with its objective and whether its tasks exist yet."""
-    from app.planning.tasks import ensure_tasks
-    from app.planning.weeks import day_of, week_is_planned
-    from datetime import timedelta
-    outline=state['outline_candidate'] or state['outline_active']
-    if not outline or not outline.get('weeks'):return []
-    capacity=Capacity(config,now);current=capacity.week(capacity.today)
-    tasks=[t for t in ensure_tasks(copy.deepcopy(state['active'])) if not t.get('removed')] if state['active'] else []
-    result=[]
-    for item in sorted(outline['weeks'],key=lambda w:w['week_start']):
-        week=day_of(item['week_start']);last=week+timedelta(days=6)
-        members=[t for t in tasks if any(week<=day_of(s['date'])<=last for s in t.get('schedule',[]))]
-        planned=bool(members) or (bool(state['active']) and week_is_planned(state,week,config,now) and week>=current)
-        status='past' if last<capacity.today else 'planned' if planned else 'open' if week<=current else 'projected'
-        result.append({**item,'start_date':max(week,capacity.start_date).isoformat(),'end_date':min(last,capacity.target or last).isoformat(),'status':status,
-            'tasks_total':len(members),'tasks_completed':sum(t['status']=='completed' for t in members),
-            'planned_minutes':sum(s['duration_minutes'] for t in members for s in t.get('schedule',[]) if week<=day_of(s['date'])<=last)})
-    return result
-
-def preview_sessions(state,now):
-    """The week preview as to-do rows, built on a copy: new tasks and carried work at their proposed times."""
-    from app.planning.tasks import ensure_tasks, project_assignments
-    from app.planning.sessions import session_views
-    from app.planning.weeks import publish_outline
-    candidate=state['week_candidate'];outline=state['outline_candidate'] or state['outline_active']
-    if not candidate or not outline:return []
-    plan=publish_outline(outline,state['active']);tasks={t['id']:t for t in ensure_tasks(plan)}
-    shown=set()
-    for entry in candidate['carryover']:
-        if entry['action'] in ('carry','split') and entry['task_id'] in tasks:
-            tasks[entry['task_id']]['schedule']=copy.deepcopy(entry['schedule']);shown.add(entry['task_id'])
-    plan['editable_tasks'].extend(copy.deepcopy(candidate['tasks']));shown.update(t['id'] for t in candidate['tasks'])
-    project_assignments(plan)
-    return [row for row in session_views(plan,now) if row['task_id'] in shown and candidate['start_date']<=row['date']<candidate['end_exclusive']]
-
-def planner_view(row,source,now,default_zone=None):
-    state=planner_state(row)
-    operation=row.get('pending') or row.get('last_operation') or {}
-    if operation.get('kind')=='outline_generate' and operation.get('body',{}).get('auto_accept'):
-        # Only published tasks belong in this response.
-        state=copy.deepcopy(state)
-        state['outline_candidate']=None;state['week_candidate']=None
-    # Legacy snapshots are converted only in the response; a read never saves an upgrade.
-    from app.planning.tasks import ensure_tasks, project_assignments, schedule_warnings
-    from app.planning.sessions import session_views
-    from app.planning.weeks import planning
-    active=copy.deepcopy(state['active'])
-    if active is not None:
-        ensure_tasks(active)
-        project_assignments(active)
-    config=saved_config(state,default_zone,(source.get('planning_defaults') or {}).get('availability_periods'))
-    capacity=Capacity(config,now,completed_sessions(active))
-    return {'config':config.model_dump(mode='json'),'config_saved':state['config'] is not None,
-        'runway':capacity.report(allow_past_start=bool(active or state['outline_active'])),'inputs':plan_inputs(source),
-        'active':active,'active_review':plan_review(active,now),
-        'outline_candidate':copy.deepcopy(state['outline_candidate']),'outline_active':copy.deepcopy(state['outline_active']),
-        'week_candidate':copy.deepcopy(state['week_candidate']),'week_blocks':copy.deepcopy(state['week_blocks']),'month_blocks':copy.deepcopy(state['month_blocks']),
-        'weeks':week_overview(state,config,now),'week_planning':planning(state,now,config),'preview_sessions':preview_sessions(state,now),
-        'task_warnings':schedule_warnings(active,now) if active else [],
-        'active_sessions':session_views(active,now) if active else [],'confirmations':state['confirmations'],
-        'signals':revision_signals(state,source,now),
-        'retry_outline':retry_body(row,'outline_generate'),'retry_week':retry_body(row,'week_generate')}

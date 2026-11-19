@@ -14,7 +14,7 @@ H={'Authorization':'Bearer synthetic'}
 class Sources:
     async def account(self,token):return {'id':'owner','token':token,'profile':{'version':1,'weekly_hours':5,'availability_periods':[]}}
     async def read(self,service,path,token,params=None):
-        if path.endswith('/context'):return {'ready':True,'issues':[],'input_hash':'hash1','research_coverage':'no_findings','goal':{'role':'Developer','target_type':'specific_job'},'cv':{'id':'cv1','name':'synthetic.docx'},'evidence':assessment()['evidence']}
+        if path.endswith('/context'):return {'ready':True,'issues':[],'input_hash':'hash1','research_coverage':'no_findings','goal':{'role':'Developer','target_type':'specific_job'},'cv':{'id':'cv1','name':'synthetic.docx'},'evidence':assessment()['evidence'],'evaluation':{'freshness':'current'}}
         return {'version':0,'ready':True,'result':assessment(),'stale':False,'evaluation':{'freshness':'current'},'operation':None}
 def run_flow(monkeypatch,base,*,parameter=None):
     monkeypatch.setenv('ROADMAP_LLM_API_KEY','synthetic-key');monkeypatch.setenv('ROADMAP_LLM_BASE_URL',base);monkeypatch.setenv('ROADMAP_LLM_MODEL','synthetic-model')

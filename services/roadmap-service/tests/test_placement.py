@@ -1,6 +1,7 @@
 """Deterministic session placement: session length, breaks, windows and limits, with no model involved."""
 from datetime import date, datetime, timezone
-from app.planning.placement import Placer, session_lengths, week_target
+from app.planning.capacity import Placer, session_lengths
+from app.planning.placement import week_target
 from app.schemas.roadmap import PlannerConfig
 
 NOW=datetime(2030,1,13,0,0,tzinfo=timezone.utc)  # Sunday 08:00 in Singapore; the week of Monday the 14th is ahead.

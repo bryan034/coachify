@@ -5,13 +5,11 @@ Editable tasks stay the saved record; nothing here is stored separately.
 """
 import copy
 from datetime import date, timedelta
-from uuid import NAMESPACE_URL, uuid5
 from elo_shared.runtime import Problem, stamp
 from elo_shared.skills import normalize, resolve
-from app.planning.placement import Placer
-from app.planning.capacity import Capacity, merge, subtract, to_clock, to_minute
+from app.planning.capacity import Capacity, Placer, merge, to_minute, to_clock
 from app.planning.milestone_membership import mark_membership_review
-from app.planning.tasks import ensure_tasks, gap_skill, requirement_ids, validate_links
+from app.planning.tasks import ensure_tasks, fix_slot_ids, gap_skill, requirement_ids, slot_id, validate_links
 from app.schemas.roadmap import PlannerConfig
 
 STEP=15
@@ -19,9 +17,6 @@ SKIP_REASON='Skipped missed session.'
 
 def calendar(plan,now):
     return Capacity(PlannerConfig.model_validate(plan['config']),now)
-
-def slot_id(task,index):
-    return task['id'] if not index else str(uuid5(NAMESPACE_URL,task['id']+':slot:'+str(index)))
 
 def task_day(task,index):
     """The local date of one session, as text."""
@@ -109,24 +104,30 @@ def link_own_task(plan,task):
 
 # Time
 
-def busy_on(plan,day,skip=None):
-    """Scheduled time of every current task on a day, except the one session being placed."""
+def busy_on(plan,day,skip=None,extra=()):
+    """Scheduled time of every current task on a day, except the one session being placed, plus extra (title, slot) reservations."""
     spans=[]
     for task in ensure_tasks(plan):
         if task.get('removed'):continue
         for index,slot in enumerate(task.get('schedule') or []):
             if str(slot['date'])!=day.isoformat() or skip==(task['id'],index):continue
             begin=to_minute(slot['start_time']);spans.append((begin,begin+slot['duration_minutes'],task['title']))
+    for title,slot in extra:
+        if str(slot['date'])==day.isoformat():
+            begin=to_minute(slot['start_time']);spans.append((begin,begin+slot['duration_minutes'],title))
     return spans
 
 def slot_placer(plan,capacity,day,skip=None,extra=()):
     reserved=[dict(slot) for task in ensure_tasks(plan) if not task.get('removed') for i,slot in enumerate(task.get('schedule') or []) if skip!=(task['id'],i)]
     reserved.extend({'date':task['anytime_date'],'start_time':None,'duration_minutes':task['estimated_minutes']} for task in ensure_tasks(plan) if not task.get('removed') and not task.get('schedule') and task.get('anytime_date') and skip!=(task['id'],None))
-    reserved.extend({'date':day.isoformat(),'start_time':to_clock(low),'duration_minutes':high-low} for low,high in extra)
+    reserved.extend(dict(slot) for _,slot in extra)
     return Placer(capacity.config,capacity.now,reserved,capacity.start_date,(capacity.target or day)+timedelta(days=1))
 
-def check_time(plan,capacity,task,index,day,start,minutes,*,strict,allow_overlap=False):
-    """Reject a time the day cannot hold. Moves are strict; a detail edit may keep a past time or a confirmed overlap."""
+def check_time(plan,capacity,skip,day,start,minutes,*,strict,allow_overlap=False,extra=()):
+    """Reject a time the day cannot hold. Moves are strict; a detail edit may keep a past time or a confirmed overlap.
+
+    skip is the (task id, slot index) being placed, or None; extra holds (title, slot) reservations not yet saved on the plan.
+    """
     begin=to_minute(start);end=begin+minutes
     if end>1440:raise Problem('A task must end by midnight. Choose an earlier start or a shorter duration.',422,'validation')
     upcoming=day>capacity.today or (day==capacity.today and begin>=capacity.now_minute)
@@ -134,33 +135,28 @@ def check_time(plan,capacity,task,index,day,start,minutes,*,strict,allow_overlap
     if strict and capacity.target and day>capacity.target:raise Problem('That day is after your target date.',409,'outside_plan')
     if day>=capacity.today and any(begin<high and low<end for low,high in capacity.blackout_windows(day)):
         raise Problem('That time is blocked out in your plan settings. Choose another time.',409,'blackout')
-    clash=next((title for low,high,title in busy_on(plan,day,(task['id'],index)) if begin<high and low<end),None)
+    clash=next((title for low,high,title in busy_on(plan,day,skip,extra) if begin<high and low<end),None)
     if clash and (strict or not allow_overlap):
         raise Problem(f'That time overlaps “{clash}”. Choose another time.' if strict else f'That time overlaps “{clash}”.',409,'slot_taken' if strict else 'overlap')
-    if strict and not slot_placer(plan,capacity,day,(task['id'],index)).accepts(day,begin,minutes):
+    if strict and not slot_placer(plan,capacity,day,skip,extra).accepts(day,begin,minutes):
         raise Problem('That time does not fit your study windows, session limit, breaks or available hours. Choose an available time.',409,'schedule_constraint')
 
 def place(task,index,day,start,minutes,*,update_estimate=True):
+    """Put one session at a new time, keeping its saved session id."""
     slot={'date':day.isoformat(),'start_time':start,'duration_minutes':minutes}
     if index is None or not task.get('schedule'):task['schedule']=[slot]
-    else:task['schedule'][index]=slot
+    else:
+        if task['schedule'][index].get('id'):slot['id']=task['schedule'][index]['id']
+        task['schedule'][index]=slot
     task['anytime_date']=None
     if update_estimate and len(task['schedule'])==1:task['estimated_minutes']=minutes
 
 def study_spans(capacity,day):
     return merge([(to_minute(b.start_time),to_minute(b.start_time)+b.duration_minutes) for b in capacity.config.blocks if b.day==day.weekday()])
 
-def free_starts(spans,holes,minutes):
-    starts=[]
-    for low,high in subtract(spans,holes):
-        minute=-(-low//STEP)*STEP
-        while minute+minutes<=high:
-            starts.append(minute);minute+=STEP
-    return starts
-
-def day_options(plan,capacity,day,minutes,skip=None,extra=()):
+def day_options(plan,capacity,day,minutes,skip=None):
     """Free start times on one day: inside study blocks, then the extra-time window around them. Never in a blackout."""
-    placer=slot_placer(plan,capacity,day,skip,extra)
+    placer=slot_placer(plan,capacity,day,skip)
     study=study_spans(capacity,day)
     def starts(kind):
         return [begin for low,high,found in capacity.eligible(day) or [] if found==kind
@@ -218,18 +214,6 @@ def backlog_plan(plan,now,session_ids=None):
 
 # Writes
 
-def move_session(plan,capacity,session_id,day,start):
-    task,index=locate(plan,session_id)
-    if task['status']=='completed':raise Problem('A finished task cannot be moved. Untick it first.',409,'session_completed')
-    old_day=task_day(task,index)
-    minutes=task['estimated_minutes'] if index is None else task['schedule'][index]['duration_minutes']
-    check_time(plan,capacity,task,index,day,start,minutes,strict=True)
-    previous={'schedule':[dict(slot) for slot in task.get('schedule') or []]}
-    if index is None:previous['anytime_date']=old_day
-    place(task,index,day,start,minutes,update_estimate=False)
-    if old_day<capacity.today.isoformat():task['backlog_moved_at']=stamp()
-    record_edit(task,previous)
-
 def skip_session(plan,capacity,session_id):
     task,index=locate(plan,session_id)
     if task['status']=='completed' or task_day(task,index)>=capacity.today.isoformat():
@@ -237,6 +221,7 @@ def skip_session(plan,capacity,session_id):
     now=stamp()
     if index is not None and len(task['schedule'])>1:
         previous={'schedule':[dict(slot) for slot in task['schedule']]}
+        fix_slot_ids(task)
         task['schedule'].pop(index);record_edit(task,previous)
         return
     task['removed']=True;task['removal']={'at':now,'reason':SKIP_REASON}
@@ -279,7 +264,7 @@ def save_session(plan,capacity,source,session_id,changes,allow_overlap=False):
             if index is not None:previous['anytime_date']=None
             task['schedule']=[];task['anytime_date']=day.isoformat();task['estimated_minutes']=new_minutes
         else:
-            check_time(plan,capacity,task,index,day,new_start,new_minutes,strict=False,allow_overlap=allow_overlap)
+            check_time(plan,capacity,(task['id'],index),day,new_start,new_minutes,strict=False,allow_overlap=allow_overlap)
             place(task,index,day,new_start,new_minutes,update_estimate='duration_minutes' in changes and new_minutes!=minutes)
     record_edit(task,previous)
     if had_original and not task.get('original'):
@@ -306,7 +291,7 @@ def new_task(plan,capacity,source,identifier,session,allow_overlap=False):
     if session.get('notes'):task['notes']=session['notes'];task['notes_updated_at']=stamp()
     if session['start_time'] is None:task['anytime_date']=day.isoformat()
     else:
-        check_time(plan,capacity,task,None,day,session['start_time'],minutes,strict=False,allow_overlap=allow_overlap)
+        check_time(plan,capacity,None,day,session['start_time'],minutes,strict=False,allow_overlap=allow_overlap)
         place(task,None,day,session['start_time'],minutes)
     ensure_tasks(plan).append(task)
     link_own_task(plan,task)

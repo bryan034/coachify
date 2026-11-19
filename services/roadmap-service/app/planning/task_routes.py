@@ -49,7 +49,7 @@ def register_task_routes(app,context,mutate):
 
     @app.post(prefix+'/add',response_model=Workspace)
     async def add(body:AddTask,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             plan=active(row);tasks=ensure_tasks(plan)
             if len(tasks)>=1000:raise Problem('This roadmap reached its task capacity.',413,'workspace_capacity')
             task={**body.task.model_dump(mode='json'),'id':str(uuid5(NAMESPACE_URL,account['id']+':task:'+str(body.mutation_id))),
@@ -64,7 +64,7 @@ def register_task_routes(app,context,mutate):
 
     @app.post(prefix+'/edit',response_model=Workspace)
     async def edit(body:EditTask,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             plan=active(row);task=find_task(copy.deepcopy(plan),body.task_id)
             changes=body.changes.model_dump(mode='json',exclude_unset=True)
             if any(v is None and k!='milestone_key' for k,v in changes.items()):raise Problem('Task fields cannot be empty.',422,'validation')
@@ -90,7 +90,7 @@ def register_task_routes(app,context,mutate):
 
     @app.post(prefix+'/remove',response_model=Workspace)
     async def remove(body:RemoveTask,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             plan=active(row);task=find_task(plan,body.task_id);now=stamp()
             task['removed']=True;task['removal']={'at':now,'reason':(body.reason or '').strip() or None}
             task.setdefault('history',[]).append({'at':now,'event':'removed','reason':task['removal']['reason']})
@@ -101,7 +101,7 @@ def register_task_routes(app,context,mutate):
     @app.post(prefix+'/notes',response_model=Workspace)
     async def notes(body:SaveTaskNotes,request:Request,account=Depends(authenticated)):
         """Save the task's notes document. Notes never change status, evidence or the schedule."""
-        def apply(row,source):
+        def apply(row,_source):
             plan=active(row);task=find_task(plan,body.task_id)
             document=body.notes.model_dump(mode='json')
             if task.get('notes')==document:return row
@@ -111,7 +111,7 @@ def register_task_routes(app,context,mutate):
 
     @app.post(prefix+'/status',response_model=Workspace)
     async def status(body:ChangeTaskStatus,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             plan=active(row);task=find_task(copy.deepcopy(plan),body.task_id)
             note=(body.evidence_note or '').strip() or None
             if task['status']==body.status and (body.status!='completed' or task.get('evidence_note')==note) and not task.get('definition_review_required'):return row
