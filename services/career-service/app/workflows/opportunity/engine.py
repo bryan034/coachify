@@ -89,7 +89,8 @@ class OpportunityEngine:
         self.tasks={};self.stopping=False;self.slots=asyncio.Semaphore(settings.concurrency)
         source=app.state.research_client
         self.source=source.for_opportunity() if callable(getattr(source,'for_opportunity',None)) else source
-        if getattr(self.source,'provider','brave')!='brave':
+        # 'provider' is the persisted channel id; 'backend' names the search service.
+        if getattr(self.source,'backend',getattr(self.source,'provider','brave'))!='brave':
             self.store.research.policy+=':'+self.source.cache_policy
         self.availability_issues=availability_issues(settings,ai,self.source)
         self.available=not self.availability_issues

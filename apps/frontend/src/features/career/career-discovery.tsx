@@ -96,7 +96,7 @@ function DiscoveryConversation({token}:{token:string|undefined}){
    <div className="agent-transcript" ref={transcript} {...scrollProps} role="log" aria-label="Career agent conversation" aria-live="polite">
     {introduction&&<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentMarkdown>{introduction}</AgentMarkdown></div>}
     {!view&&<ChatSkeleton label="Opening career discovery…"/>}
-    {view&&!view.available&&<p role="alert">Discovery needs the configured AI model and Brave services. Saved progress remains available.</p>}
+    {view&&!view.available&&<p role="alert">Discovery needs the configured AI model and web search. Saved progress remains available.</p>}
     {session?.messages?.map((turn,index)=><div className={`agent-message ${turn.role==='user'?'user':'assistant'}`} key={`${session.id}-${index}`}><span className="agent-message-label">{turn.role==='user'?'You':'elo'}</span>{turn.role==='user'?<p>{turn.content}</p>:<AgentReply animate={restored.current?.id!==session.id||index>=restored.current.count} onProgress={followReply}>{turn.content}</AgentReply>}</div>)}
     {!session?.messages?.length&&session?.decision&&<div className="agent-message assistant"><span className="agent-message-label">elo</span><AgentReply animate={restored.current?.id!==session.id||restored.current.reply!==JSON.stringify(session.decision)} onProgress={followReply}>{[session.decision.reply,session.decision.question].filter(Boolean).join("\n\n")}</AgentReply></div>}
     {pending&&<div className="agent-message user"><span className="agent-message-label">You</span><p>{pending}</p></div>}

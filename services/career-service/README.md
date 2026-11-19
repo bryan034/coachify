@@ -7,8 +7,14 @@ Research also rates each goal skill’s required competence on the shared 1–10
 ## Model and search providers
 
 All Career stages share the configured model through the OpenAI Python SDK over
-HTTPS. The public template selects OpenRouter; Brave LLM Context is the only search
-provider.
+HTTPS. The public template selects OpenRouter for models and for search: with
+`CAREER_RESEARCH_PROVIDER=openrouter`, `CAREER_RESEARCH_MODEL` runs its provider's own
+web search tool (`openrouter:web_search`, engine `native`). Brave LLM Context is the
+fallback (`CAREER_RESEARCH_FALLBACK_PROVIDER=brave`) when OpenRouter hits a rate or
+credit limit, fails, times out or returns no cited sources. It can also be selected
+as the only provider. Both return the same bounded source records, so citation and
+provenance checks are unchanged. Persisted records and API enums keep the historical
+`brave` channel name for either backend.
 Follow-up questions automatically retrieve public evidence when saved facts are
 missing or the answering model returns `not_found`, with up to three distinct scoped searches
 per unanswered turn and reuse during answer repairs. Ambiguous/off-topic/edit requests do not
@@ -176,7 +182,7 @@ answers receive up to 1,600 fact tokens. The same configured model handles compa
 goal edits, JD extraction and interview synthesis. Citation and ownership checks
 remain mandatory. Follow-up chat can search for missing/current public details; unknown details stay unknown when no usable evidence is returned.
 `AI_ENABLED` is the master switch; unused provider/model/chat settings are ignored.
-No provider fallback exists. Model and search providers are independently selected
+No model provider fallback exists (search has the Brave fallback above). Model and search providers are independently selected
 as described in [setup](../../docs/setup.md#career-model-and-search-configuration).
 
 Ordinary Q&A sends only relevant projected fields and matching facts, without full

@@ -172,7 +172,7 @@ def aggregate(scope,listings,settings=None):
 class DiscoveryEngine:
     def __init__(self,app,db,ai,source):
         self.app,self.ai,self.source=app,ai,source
-        self.policy=POLICY if getattr(source,'provider','brave')=='brave' else POLICY+':'+source.cache_policy
+        self.policy=POLICY if getattr(source,'backend',getattr(source,'provider','brave'))=='brave' else POLICY+':'+source.cache_policy
         self.settings=DiscoverySettings.from_env()
         self.rows=app.state.goal_store.db.research_contexts
         self.tasks={};self.stopping=False
