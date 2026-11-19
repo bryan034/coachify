@@ -4,7 +4,7 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { createLocalAccount } from './account-helpers';
 
-test('saved CVs retain corrections, require explicit selection and compose manual inputs through real services', async ({ page, browser }) => {
+test('saved CVs retain corrections, keep the active CV and compose manual inputs through real services', async ({ page, browser }) => {
  test.setTimeout(210_000);
  page.setDefaultTimeout(15_000);
  const account = await createLocalAccount(page, 'Synthetic CV reviewer');
@@ -97,8 +97,9 @@ test('saved CVs retain corrections, require explicit selection and compose manua
   return route.continue({url:url.toString()});
  });
  await page.reload(); await openCvReviewTools(page);
- await expect(page.getByLabel('Selected CV', {exact:true})).toContainText(cvId);
+ await expect(page.getByLabel('Selected CV', {exact:true})).toHaveText('Active CV: synthetic-cv.docx');
  await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true})).toHaveCount(0);
+ await expect(page.getByRole('region', {name:'CV review',exact:true})).toContainText(`CV ${cvId} · Source Profile version`);
  await expect(page.getByRole('region', {name:'Projects',exact:true}).locator('.cv-copy')).toHaveText(project.description);
  await page.getByRole('button', {name:'Show more saved CVs',exact:true}).click();
  await expect(page.getByRole('article', {name:`CV ${cvId}`,exact:true}).getByText('Active CV',{exact:true})).toBeVisible();

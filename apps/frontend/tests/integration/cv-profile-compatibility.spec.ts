@@ -43,9 +43,9 @@ for (const scenario of cases) {
     }, { timeout: 30_000 }).toBe('ready');
     await openCvReviewTools(page);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    page.once('dialog', dialog => dialog.accept());
-    await expect(page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByText('Active CV',{exact:true})).toBeVisible();
-    await expect(page.getByLabel('Selected CV', { exact: true })).toContainText(cvId);
+    const activeBadge = page.getByRole('article', { name: `CV ${cvId}`, exact: true }).getByText('Active CV', { exact: true });
+    await expect(activeBadge).toBeVisible();
+    await expect(page.getByLabel('Selected CV', { exact: true })).toHaveText('Active CV: synthetic-cv.docx');
     await expect(page.getByText(`Source Profile version ${background.version}`, { exact: false })).toBeVisible();
     const saved = await (await account.get(`/api/v1/cv/${cvId}`)).json();
     const declarations = await (await account.get('/api/v1/profile/capabilities')).json();
@@ -57,7 +57,8 @@ for (const scenario of cases) {
     expect(current.version).toBeGreaterThan(background.version);
     expect(current.onboarding_complete).toBe(true);
     await page.reload();await openCvReviewTools(page);
-    await expect(page.getByLabel('Selected CV', { exact: true })).toContainText(cvId);
+    await expect(activeBadge).toBeVisible();
+    await expect(page.getByLabel('Selected CV', { exact: true })).toHaveText('Active CV: synthetic-cv.docx');
     await expect(page.getByRole('region', {name: 'Manual capabilities', exact: true}).getByText('I presented a synthetic group project.', { exact: true })).toBeVisible();
     expect(await (await account.get('/api/v1/profile/capabilities')).json()).toEqual(declarations);
   });
