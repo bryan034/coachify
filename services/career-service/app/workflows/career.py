@@ -1,7 +1,7 @@
-"""LangGraph orchestration. Raw JD extraction has NO durable checkpointer.
+"""LangGraph orchestration. Raw JD extraction has no durable checkpointer.
 
 The resumable graph contains only owner-scoped record references and bounded
-public evidence. No secrets, raw documents or chat transcripts enter checkpoints.
+public evidence.
 """
 from elo_shared.model_budget import budget_owner
 import asyncio
@@ -77,7 +77,6 @@ class CareerWorkflow:
     def workspaces(self):return self.app.state.workspace_store
 
     async def extract(self,body,account,key,*,early=True):
-        # Scope/identity is transient and cannot save a goal by itself.
         identity=await identify_job(self.app.state.ai,body.text,account)
         engine=getattr(self.app.state,'opportunities',None)
         if early and engine is not None and engine.available and identity.role:
@@ -90,7 +89,6 @@ class CareerWorkflow:
             finally:activity_observer.reset(token)
             self.early[(account,key)]=entry
         activity('extracting_requirements')
-        # Full source text and failed model output stay in worker memory only.
         async def interpret(state):
             if recover_responses.get():
                 row=await thread(self.workspaces.row,account)
@@ -268,8 +266,7 @@ class CareerWorkflow:
             if not replace:return
             old.cancel()
         async def start():
-            # Research owns its durable checkpoint/lease pause handling; do not
-            # inherit a foreground operation's in-memory quota callback.
+            # Research owns its own quota-wait handling.
             quota_progress.set(None)
             validation_progress.set(None)
             if old and not old.done():await asyncio.gather(old,return_exceptions=True)
@@ -294,7 +291,7 @@ class CareerWorkflow:
             if job and job['run']==w.get('run_id'):
                 if job.get('research_id'):await opportunity.attach(job)
                 if not job['finished']:opportunity.launch(job['_id'])
-                return  # The durable worker owns its wait/status; polling must not restart the legacy graph.
+                return
         config=self.config(owner,w);session=w['session_id'];run=w['run_id']
         lease_seconds=180
         # A database lease prevents duplicate graph execution by API replicas.
@@ -313,8 +310,7 @@ class CareerWorkflow:
             value=None if state.values and state.next else {'owner':owner,'session':session,'run':run,'goal_id':str(row['goal_id']),'revision':w['revision'],'selection':row['version'],'sources':[],'summaries':[],'coverage':[]}
             async def repairing(feedback):
                 if feedback is None:return
-                # Every corrective call gets a fresh model deadline. Keep both
-                # leases alive and reject superseded work before spending again.
+                # Keep both leases alive and reject superseded work before each corrective call.
                 latest=await thread(self.workspaces.check,owner,session,w['revision'])
                 if latest['workspace']['run_id']!=run:raise GoalError('A newer goal replaced this work.')
                 if latest['workspace'].get('expires_at',now())<=now():raise GoalError('Temporary workflow expired.')

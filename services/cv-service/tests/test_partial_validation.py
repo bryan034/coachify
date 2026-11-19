@@ -43,7 +43,6 @@ def test_an_unverifiable_item_is_flagged_and_keeps_its_extracted_context():
     flagged = result.items[1]
     assert flagged['validation_issue'] == {'status': 'unverified', 'code': 'source_excerpt', 'message': ISSUE_MESSAGE}
     assert flagged['id'] in result.flagged and len(result.flagged) == 1
-    # What was extracted stays visible, but nothing is claimed as verified.
     assert flagged['title'] == 'Project Finch' and flagged['description'] == 'Reporting tool built with a team'
     assert flagged['evidence'] == [{'id': 'b2', 'location': 'Paragraph 2', 'excerpt': 'Invented text not in the CV'}]
     assert flagged['skill_names'] == ['Python'] and flagged['provenance'] == 'inferred'
@@ -66,7 +65,7 @@ def test_nothing_verified_still_fails_the_whole_extraction():
 
 @pytest.mark.parametrize('candidate', [
     {'items': []}, {'items': 'invalid'}, 'invalid', None,
-    {'items': [education()] * 2},                      # a duplicated claim is not one item's fault
+    {'items': [education()] * 2},
 ])
 def test_failures_that_are_not_item_specific_stay_whole_failures(candidate):
     assert kept(candidate) is None
@@ -113,7 +112,6 @@ def test_relationships_to_kept_items_are_remapped_and_dropped_items_are_ignored(
     derived = {**skill(), 'supporting_items': [1, 3, 99, 0, 'x', 2]}
     result = kept({'items': [education(), project(), derived, {**project(), 'kind': 'invented'}]})
     by_kind = {i['kind']: i for i in result.items}
-    # Unknown, dropped, self and non-integer references vanish; real ones point at the final item IDs.
     assert by_kind['skill']['supporting_item_ids'] == [by_kind['project']['id'], by_kind['education']['id']]
     assert by_kind['project']['supporting_item_ids'] == []
 
@@ -218,7 +216,6 @@ def test_the_chat_and_topic_list_flag_the_section_and_say_it_again_in_the_first_
     assert 'explain this section to me here in the chat' in first
     focused = next(c for c in provider.calls if c.get('task') == 'cv_interview_plan')['focused_source']
     assert focused['validation_issue']['status'] == 'unverified'
-    # Said once, before the first question about that section only.
     chat = send(client, chat, 'Skip', command='skip')
     texts = [m['text'] for m in chat['messages'] if m['role'] == 'assistant']
     assert texts[-1] == 'What was the scope of your task?' and sum('Heads up' in text for text in texts) == 1

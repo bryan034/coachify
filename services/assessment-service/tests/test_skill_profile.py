@@ -187,7 +187,6 @@ def test_reviewed_cv_level_is_reused_even_when_goal_model_omits_it():
     python,_=validate_skill_batch(output,skills,{'job:req1'},evidence)
     assert python['competence_score']==3 and python['required_score']==5
     assert 'cv:item1:claim:0' in python['evidence_refs']
-    # An unreviewed or team-only source cannot lend an established level.
     record['reviewed']=False
     output.skills[0].competence_score=None
     python,_=validate_skill_batch(output,profile_skills(evidence),{'job:req1'},evidence)

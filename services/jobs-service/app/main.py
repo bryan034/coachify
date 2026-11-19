@@ -22,7 +22,6 @@ def start_of_day(value):
 
 
 def create_app(store=None, upstream=None, clock=None, catalogue=None):
-    # This service makes no model calls; the shared runtime's model slot stays unused.
     app = application('elo Jobs API', 'JOBS', store=store, upstream=upstream, model=object())
     app.state.clock = clock or (lambda: datetime.now(timezone.utc))
 

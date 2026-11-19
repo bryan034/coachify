@@ -1,4 +1,5 @@
 "use client";
+import {useCvDraft} from './draft-state';
 import { useEffect, useRef, useState } from 'react';
 import { cvApi, CvApiError } from '@/lib/api/cv';
 import type { CvDetail, DeclarationInput, DeclarationLinks, Declarations } from './types';
@@ -19,9 +20,10 @@ export function CapabilityDeclarations({data,selectedCv,token,signal,onSaved,ref
  const matchingIds=new Set(selectedCv?.skills.filter(skill=>normalized(skill.name)===normalized(name)).flatMap(skill=>skill.item_ids)??[]);
  const cvMatches=selectedCv?.items.filter(item=>!item.removed&&matchingIds.has(item.id))??[];
  const matches=manualMatches.length+cvMatches.length>0;
- const maxName=data.limits?.name??120,maxDescription=data.limits?.description??2000;
+ const maxName=data.limits.name,maxDescription=data.limits.description;
  const dirty=Boolean(name||description),stale=dirty&&(version!==data.version||Boolean(sourceVersion&&(sourceVersion.id!==selectedCv?.id||sourceVersion.version!==selectedCv?.version)));
  const invalid=!name.trim()||!description.trim()||Array.from(name).length>maxName||Array.from(description).length>maxDescription;
+ useCvDraft(dirty, busy);
  async function save(){
   if(busy||invalid||stale||conflict||(matches&&!choice))return;
   const body:Omit<DeclarationInput,'mutation_id'>={expected_version:version,name,description,mode:!matches?'new':choice==='distinct'?'distinct':'attach'};
@@ -35,7 +37,7 @@ export function CapabilityDeclarations({data,selectedCv,token,signal,onSaved,ref
   finally{if(!signal.aborted)setBusy(false);}
  }
  return <section className="card pad cv-declarations" aria-label="Manual capabilities"><h2>Add what your CV leaves out</h2><p className="small">Describe a capability in your own words. A CV or proof is not required. Your declaration stays with your account when you change CVs.</p>
-  <form className="cv-form" data-unsaved={dirty} aria-busy={busy} onSubmit={e=>{e.preventDefault();void save();}}>
+  <form className="cv-form" aria-busy={busy} onSubmit={e=>{e.preventDefault();void save();}}>
    <label>Capability name<input value={name} onChange={e=>{if(!dirty)setVersion(data.version);setName(e.target.value);setChoice('');setSourceVersion(null);setNotice('');}} disabled={busy} maxLength={maxName} required/></label>
    <label>Capability description<textarea aria-label="Capability description" rows={4} value={description} onChange={e=>{if(!dirty)setVersion(data.version);setDescription(e.target.value);setNotice('');}} disabled={busy} aria-invalid={Array.from(description).length>maxDescription} required/><span className="small">{Array.from(description).length} / {maxDescription} characters. Include what you have done; unknown proficiency or experience stays unknown.</span></label>
    {matches&&<fieldset className="cv-match"><legend>Similar capability already recorded</legend><p className="small">Choose whether this adds context to existing evidence or describes a distinct claim. Repeated statements are not independent proof.</p>{manualMatches.map(match=><label key={match.id}><input type="radio" name="capability-match" value={`manual:${match.id}`} checked={choice===`manual:${match.id}`} onChange={e=>{setChoice(e.target.value);setSourceVersion(selectedCv?{id:selectedCv.id,version:selectedCv.version}:null);}}/><span>Add to your declaration: <strong>{match.name}</strong><span className="cv-copy">{match.description}</span></span></label>)}{cvMatches.map(match=><label key={match.id}><input type="radio" name="capability-match" value={`cv:${match.id}`} checked={choice===`cv:${match.id}`} onChange={e=>{setChoice(e.target.value);setSourceVersion(selectedCv?{id:selectedCv.id,version:selectedCv.version}:null);}}/><span>Attach to CV evidence: <strong>{match.title}</strong><span className="cv-copy">{selectedCv?.file_name} · Source {match.id} · {match.description}</span>{match.evidence.map((e,index)=><span className="cv-copy" key={`${e.id}:${index}`}>{e.excerpt} · {e.location}</span>)}</span></label>)}<label><input type="radio" name="capability-match" value="distinct" checked={choice==='distinct'} onChange={e=>{setChoice(e.target.value);setSourceVersion(selectedCv?{id:selectedCv.id,version:selectedCv.version}:null);}}/><span>Keep as a distinct claim</span></label></fieldset>}

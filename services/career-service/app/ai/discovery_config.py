@@ -1,4 +1,4 @@
-"""Optional server-side discovery bounds; no additional provider credentials."""
+"""Optional server-side discovery bounds."""
 import os
 from pydantic import BaseModel,ConfigDict,Field
 

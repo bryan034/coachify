@@ -311,8 +311,6 @@ def test_target_payload_limit_and_unicode_are_separate_from_preview_limits(harne
 
 
 def legacy_without_storage(*args):
-    # Retired API failure/recovery coverage uses an explicit test-only router.
-    # Production create_app() exposes only canonical-goal confirmation.
     from anyio import CapacityLimiter
     from app.api.v1.targets import router
     app=create_app(*args)
@@ -369,8 +367,6 @@ def test_target_history_pages_preserve_all_rows_and_old_selection(harness, monke
         def now(cls, tz=None): return datetime(2026, 1, 1, tzinfo=timezone.utc)
     with monkeypatch.context() as patch:
         patch.setattr(targets, 'datetime', SameCreationTime)
-        # Substantial structured history exercises the list boundary rather than
-        # depending on a handful of tiny records fitting in memory by accident.
         saved = [targets.create(repository, OWNER_A, TargetCreate.model_validate(draft(
             target_type='career_exploration', reviewed_source_text=None, role='Analyst ' + str(index),
             skills=[{'name': 'Skill ' + str(skill), 'context': 'Synthetic context. ' * 25,
@@ -383,8 +379,6 @@ def test_target_history_pages_preserve_all_rows_and_old_selection(harness, monke
     assert first['selected_target'] == oldest
     assert oldest['id'] not in {row['id'] for row in first['targets']}
     assert [row['id'] for row in first['targets']] == [row['id'] for row in ordered[:20]]
-    # A newer insertion after the first page does not shift an offset or cause
-    # existing rows to repeat/disappear while the user traverses older history.
     concurrent = targets.create(repository, OWNER_A, TargetCreate.model_validate(draft(role='New concurrent target')))
     seen = list(first['targets'])
     cursor = first['next_cursor']
@@ -399,8 +393,6 @@ def test_target_history_pages_preserve_all_rows_and_old_selection(harness, monke
     assert len({row['id'] for row in seen}) == 43
     assert concurrent['id'] not in {row['id'] for row in seen}
     assert client.get(BASE).json()['targets'][0]['id'] == concurrent['id']
-    # The API bound is implemented at the repository boundary, including the
-    # extra look-ahead record used to decide whether a next page exists.
     assert len(repository.list(OWNER_A)) == 21
     assert client.get(BASE + '/' + oldest['id']).json() == oldest
 

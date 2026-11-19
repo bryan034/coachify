@@ -404,7 +404,6 @@ def test_only_fixed_text_and_allowlisted_issues_reach_the_model():
 def test_rejected_output_stops_after_repair_and_explicit_retry_keeps_guidance(harness, monkeypatch):
     from tests.test_extraction_harness import candidates, read_result, setup_provider
     _, valid = candidates()
-    # An empty extraction cannot be salvaged, so explicit recovery remains available.
     invalid = {'items': []}
     client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, invalid, valid])
     worker = auto_retrying(app)
@@ -448,7 +447,6 @@ def test_deleting_a_cv_erases_its_saved_state(harness):
     assert checkpoint
     latest = status(client, cv['id'])
     assert client.request('DELETE', '/api/v1/cv/' + cv['id'], json=mutation(latest['version'])).status_code == 200
-    # A checkpoint already prepared by a worker must remain rejected at storage.
     states.save(checkpoint)
     states.set_writes(cv['id'], checkpoint['checkpoint_id'], checkpoint['writes'])
     states.discard(cv['id'])
@@ -469,7 +467,6 @@ def test_recovery_scrubs_legacy_orphans_and_preserves_live_checkpoints(harness):
     live = states.get(retained['id'])
     stale = states.get(removed['id'])
     assert live and stale
-    # Historical rows could accompany a completed receipt or lack a parent.
     parent = repository.get('owner-a', removed['id'])
     parent_receipt = {key: parent[key] for key in ('_id', 'user_id', 'upload_key')}
     parent_receipt.update(revision=parent['revision'] + 1, original_available=False,

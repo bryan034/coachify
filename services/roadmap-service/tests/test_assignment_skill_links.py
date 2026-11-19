@@ -79,8 +79,6 @@ def test_missing_or_changed_provenance_cannot_reassign_or_claim_a_skill():
         plan=copy.deepcopy(initial)
         plan[key]='changed'
         assert_projection(plan,plan['editable_tasks'][0],None,[])
-    # An inherited inferred source gap is not diagnostic evidence after a
-    # known provenance change, even though the old source is retained.
     plan=copy.deepcopy(initial)
     task=plan['editable_tasks'][0]
     task['requirement_refs']=[]

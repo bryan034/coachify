@@ -101,7 +101,7 @@ def test_metered_search_charges_the_current_account_before_any_provider_request(
             assert denied.value.limit_scope=='user' and 'daily research search allowance' in denied.value.message
             with budget_owner('another-owner'):await source.search('public interview stages')
     asyncio.run(run())
-    assert len(calls)==2  # Unattributed and over-allowance searches never reach Brave.
+    assert len(calls)==2
 
 
 def test_chat_does_not_wait_on_a_daily_search_allowance(monkeypatch):

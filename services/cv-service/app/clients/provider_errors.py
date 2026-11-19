@@ -12,13 +12,11 @@ def provider_failure(response, stage):
               404: 'not_found', 429: 'rate_limit_or_quota'}.get(status,
                   'provider_unavailable' if status >= 500 else 'http_error')
     parameter = None
-    # The SDK transport already limits rejections to 16 KiB; do not read any
-    # additional stream or retain the message, arbitrary fields or provider IDs.
+    # Read only the already bounded rejection body.
     try:
         body = response.content
         payload = json.loads(body) if len(body) <= 16 * 1024 else None
         # Some OpenAI-compatible rejections wrap their single error in a list.
-        # Never concatenate arbitrary/multiple errors or retain provider prose.
         if isinstance(payload, list) and len(payload) == 1:
             payload = payload[0]
         error = payload.get('error') if isinstance(payload, dict) else None
@@ -40,8 +38,7 @@ def provider_failure(response, stage):
                 if parameter is None:
                     parameter = next((name for name in sorted(PARAMETERS) if name in text), None)
     except (ValueError, TypeError, RuntimeError):
-        # Malformed/oversized/HTML bodies and unread streams retain a safe
-        # status-only classification. Never log parsing exceptions or the body.
+        # Malformed/oversized bodies keep a status-only classification.
         pass
     return classified_provider_failure(reason, parameter, stage, status)
 

@@ -88,7 +88,9 @@ tests against a production Next.js build. Unit and browser test discovery are se
 There are no path filters that could skip required jobs. The final `Test gate` fails
 if any test job fails, is cancelled, or is skipped. Browser reports and failure
 traces are uploaded for seven days; use synthetic data because artifacts may contain
-page content. Linting is not configured yet.
+page content. The `lint` job runs Ruff and the elo quick-fix rules over career-service
+`app/` code against a shrink-only baseline; new violations and fixed-but-unpruned
+baseline entries fail it. See [lint](../tools/lint/README.md).
 
 MongoDB-backed jobs (`profile-integration`, `analysis-integration` and
 `local-ui-integration`) use `mongo:8.2` on `ubuntu-22.04` for kernel compatibility.
@@ -220,6 +222,10 @@ synthetic fixtures; no live source API or model accuracy is claimed. An unconnec
 source API is tested as unavailable. Frontend checks cover the shared skills review,
 read-only historical evidence, retry preservation and mobile layout. Run Career
 with a disposable `MONGODB_TEST_URI` to include these database-backed tests.
+
+Skills Profile CI also runs `npm run lint:skills-profile --workspace apps/frontend` from the
+repository root. From `services/cv-service`, install `.[lint]` and run `python -m ruff check app`
+to check for imports inside functions.
 
 
 LangGraph single-workspace checks use real disposable MongoDB with synthetic models
@@ -483,7 +489,7 @@ cd services/assessment-service
 PYTHONPATH=../../packages/elo-shared:. python -m pytest
 ```
 
-Repeat in `services/roadmap-service`. Shared runtime MongoDB race/recovery tests live under `packages/elo-shared/tests` and require an explicit disposable `MONGODB_TEST_URI`; they create/drop only uniquely named `elo_planning_test_*` databases. Never point these tests at application databases. Existing service tests also need the shared package installed or on `PYTHONPATH`. Career tests need a populated local `TIKTOKEN_CACHE_DIR` so synthetic provider checks never download encodings.
+Repeat in `services/roadmap-service`, then run its static analysis with `python -m pip install -e '.[lint]'`, `python -m ruff check app` and `python -m vulture`. Shared runtime MongoDB race/recovery tests live under `packages/elo-shared/tests` and require an explicit disposable `MONGODB_TEST_URI`; they create/drop only uniquely named `elo_planning_test_*` databases. Never point these tests at application databases. Existing service tests also need the shared package installed or on `PYTHONPATH`. Career tests need a populated local `TIKTOKEN_CACHE_DIR` so synthetic provider checks never download encodings.
 
 New tests cover shared aliases, exact limitation/evidence references, complete requirement coverage, AND/OR rules, explicit partial research, source-change races, owner isolation, pending-operation restart recovery, idempotent lost-response retry, runway capacity, plan validation, preview acceptance, stale preview rejection and session completion. Frontend tests cover input gates, next-message preservation, partial-analysis choice, old-account response isolation and exact retry identities. `test_planner_model.py` sends chat and plan requests through the real model client and OpenAI SDK with a mock transport. `test_planner_capacity.py`, `test_planner_validator.py` and `test_planner_flow.py` cover runway arithmetic, each validation rule and the full API flow with a scripted model and fixed clock: a partial first week, one-off and recurring blackouts and time slots, preferred and backup blocks, insufficient runway with a bounded retry, and a schedule change after a completed session. `roadmap-flow.test.tsx` covers the planner form, chat helper, blackout rules, gating, review and revision UI. `roadmap.spec.ts` exercises chat helper → planner → generate → review → accept → complete → revise and desktop/mobile layout using synthetic HTTP fixtures.
 

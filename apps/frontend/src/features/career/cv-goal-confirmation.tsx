@@ -12,7 +12,6 @@ export function CvGoalConfirmationCard({goal,selectionVersion,token,onReload,onC
  const matches=useCallback((value:CvGoalConfirmation)=>value.goal_id===goal._id&&value.goal_version===goal.version&&value.selection_version===selectionVersion,[goal._id,goal.version,selectionVersion]);
  const load=useCallback(async()=>{
   if(!token)return;setLoading(true);setError('');
-  // Check this request's own signal: the ref may already hold a newer controller after a restart.
   const signal=lifetime.current.signal;
   try{const value=await getCvGoalConfirmation(token,signal);if(signal.aborted)return;setState(value);setStale(!matches(value));}
   catch(cause){if(!signal.aborted)setError(errorText(cause, 'Could not check this goal’s confirmation.'));}

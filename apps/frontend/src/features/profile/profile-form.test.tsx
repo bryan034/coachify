@@ -172,7 +172,6 @@ test('a delayed profile populates the editor before the first edit can be overwr
   const editorStates: { populated: boolean; locked: boolean }[] = [];
   function ReadinessCheck() {
     const { profile, loading } = useProfile();
-    // Inspect the committed controls before passive effects populate the editor.
     React.useLayoutEffect(() => {
       if (!profile || loading) return;
       const status = screen.getByRole('combobox', { name: 'Occupational status' }) as HTMLSelectElement;

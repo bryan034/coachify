@@ -49,7 +49,6 @@ def validator(context):
             if (fill.round_number,fill.field) not in wanted:
                 raise AIError('invalid_output',True,reason='provenance',fields=('fills',),
                     violations=({'field':f'fills.{index}','issue':'unrequested_gap'},))
-            # Headline facts are single values; extra items would read as separate facts.
             if fill.field in HEADLINE_FIELDS and len(fill.items)>1:
                 raise AIError('invalid_output',True,reason='schema',fields=('fills',),
                     violations=({'field':f'fills.{index}.items','issue':'one_item_expected'},))

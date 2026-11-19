@@ -23,16 +23,15 @@ def goal(role='Analyst', seniority=None, employment='unknown', skills=(), compan
     ('Senior Data Engineer', None, 'full_time', 7), ('Graduate Analyst', None, 'full_time', 5), ('Analyst', 'Mid-level', 'full_time', 6),
     ('Lead Engineer', None, 'unknown', 8), ('Principal Engineer', None, 'unknown', 9), ('Software Engineering Intern', None, 'unknown', 5)])
 def test_the_role_band_sets_the_baseline(role, seniority, employment, base):
-    # A conflicting-priority skill not named in the title adds nothing to the baseline.
     target = target_for(skill('Excel', priority='conflicting', evidence='Excel'), None, goal(role, seniority, employment))
     assert (target.level, target.basis) == (base, 'inferred') and 'estimated it from the role' in target.explanation
 
 
 def test_importance_title_and_experience_move_the_score():
     role = goal('Machine Learning Engineer', 'Graduate')
-    assert target_for(skill('Machine learning'), None, role).level == 9           # 5 + essential 2 + core to the title 2
-    assert target_for(skill('SQL'), None, role).level == 7                        # 5 + essential 2
-    assert target_for(skill('SQL', priority='preferred'), None, role).level == 7  # Preferred is essential too.
+    assert target_for(skill('Machine learning'), None, role).level == 9
+    assert target_for(skill('SQL'), None, role).level == 7
+    assert target_for(skill('SQL', priority='preferred'), None, role).level == 7
     assert target_for(skill('SQL', priority='unspecified'), None, role).level == 6
     assert target_for(skill('SQL', required_experience_months=12), None, role).level == 8
     assert target_for(skill('SQL', required_experience_months=13), None, role).level == 9
@@ -48,10 +47,8 @@ def test_targets_spread_instead_of_clustering():
 
 def test_a_skill_sharing_a_significant_title_word_is_core_but_generic_title_words_are_not():
     target = target_for(skill('Statistical modelling'), None, goal('Statistics Intern', employment='internship'))
-    assert target.level == 9 and 'core to the role title' in target.explanation   # 5 + essential 2 + core 2
-    # Abbreviations and other word forms count: "Quant" names quantitative skills.
+    assert target.level == 9 and 'core to the role title' in target.explanation
     assert 'core to the role title' in target_for(skill('Quantitative methods'), None, goal('Quant Intern')).explanation
-    # "Intern", "Analyst" and "Engineer" describe the position, not a skill the role is built on.
     assert target_for(skill('Engineering design'), None, goal('Software Engineer Intern', employment='internship')).level == 7
     assert target_for(skill('Financial modelling'), None, goal('Financial Analyst')).level == 9
 
@@ -63,7 +60,7 @@ def test_a_skill_sharing_a_significant_title_word_is_core_but_generic_title_word
 def test_selective_hiring_raises_every_skill(role, company, field):
     selective = goal(role, employment='internship', company=company, field=field)
     target = target_for(skill('Probability'), None, selective)
-    assert target.level == 9 and 'selective hiring' in target.explanation             # 5 + selective 2 + essential 2
+    assert target.level == 9 and 'selective hiring' in target.explanation
     assert target_for(skill('Excel', priority='unspecified'), None, selective).level == 8
 
 
@@ -75,9 +72,8 @@ def test_ordinary_internships_are_not_treated_as_selective():
 
 def test_a_selective_internship_core_skill_reaches_a_high_target_without_an_internship_cap():
     optiver = goal('Quantitative Trading Intern', employment='internship', company='Optiver')
-    target = target_for(skill('Quantitative problem solving'), None, optiver)    # 5 + 2 + 2 + 2, clamped to 10
+    target = target_for(skill('Quantitative problem solving'), None, optiver)
     assert target.level == 10 and 'Research hasn’t rated' in target.explanation
-    # The research model may rate an internship's core skill at the top of the scale.
     rated = report(9, name='Quantitative problem solving')
     assert target_for(skill('Quantitative problem solving'), rated, goal('Quant Intern', employment='internship')).level == 9
 
@@ -86,7 +82,6 @@ def test_a_selective_internship_core_skill_reaches_a_high_target_without_an_inte
     ('Expert Python knowledge', None, 9, 'job_description'), ('Advanced Python', None, 7, 'inferred'),
     ('Python', 'intermediate', 7, 'inferred'), ('Basic Python', None, 3, 'job_description'), ('Python', 'beginner', 3, 'job_description')])
 def test_stated_employer_wording_is_a_floor_or_basic_ceiling(text, proficiency, level, basis):
-    # Internship baseline 5 + essential 2 = 7: a higher floor lifts it, the basic ceiling caps it.
     target = target_for(skill(evidence=text, required_proficiency=proficiency), None, goal('Analyst', employment='internship'))
     assert (target.level, target.basis) == (level, basis)
     assert target_for(skill(evidence='Basic Python'), None, goal('Analyst', 'Senior')).level == 3
@@ -119,7 +114,6 @@ def test_wide_and_interview_research_each_add_a_level_and_cite_sources():
     assert (target.level, target.basis) == (8, 'research') and len(target.source_urls) == 3
     probed = report(findings=[('interview_intelligence', finding(1, 'Interviewers ask Python questions.', ['a']))])
     assert target_for(skill(), probed, goal()).level == 8
-    # A finding about another skill is not evidence for this one.
     assert target_for(skill('Java'), probed, goal()).level == 7
 
 
@@ -136,9 +130,7 @@ def test_the_research_model_decides_the_level_and_the_weights_are_its_reference(
     target = target_for(skill(), report(9), goal())
     assert (target.level, target.basis) == (9, 'research') and target.source_urls == ['https://example.test/source1']
     assert target.explanation == target.rating_reason == 'Interviews test scripting.'
-    # The model may rate below the weighted reference too, e.g. an internship needing only basics.
     assert target_for(skill(), report(2), goal('Analyst', employment='internship')).level == 2
-    # A rating that cites no findings still decides, but is labelled inferred.
     uncited = target_for(skill(), report(3, cited=()), goal())
     assert (uncited.level, uncited.basis) == (3, 'inferred') and uncited.rating_reason == 'Interviews test scripting.'
 
@@ -177,7 +169,6 @@ def test_a_research_rating_explains_the_employer_demand_examples_and_reason():
     assert target.employer_demand == 'Write and maintain Python services independently.'
     assert [(e.text, e.source_url) for e in target.reported_examples] == [('Candidates were asked to debug a Python script live.', 'https://example.test/a')]
     assert target.rating_reason == target.explanation == 'Interviews test scripting.'
-    # Ratings saved before these parts existed still explain the level.
     old = report(8); target = target_for(skill(), old, goal())
     assert (target.employer_demand, target.reported_examples, target.rating_reason) == (None, [], 'Interviews test scripting.')
 
@@ -197,7 +188,7 @@ def test_rating_input_carries_the_weighted_reference_for_each_skill():
     assert rows[0]['reference_factors'] == ['internship baseline 5', 'essential to the role +2', 'probed in reported interviews +1']
     selective = weighted_skills([{'name': 'Python', 'priority': 'required'}],
                                 {'role': 'Trading Intern', 'seniority_level': None, 'employment_type': 'internship', 'company': 'Optiver'}, None)
-    assert selective[0]['reference_level'] == 9   # The employer reaches the reference: 5 + selective 2 + essential 2.
+    assert selective[0]['reference_level'] == 9
     assert selective[0]['reference_factors'][1] == 'selective hiring (highly selective employer) +2'
 
 

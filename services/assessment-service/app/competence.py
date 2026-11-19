@@ -3,7 +3,6 @@ import math
 import re
 from elo_shared.competence_scale import MODERATE_LEVEL
 
-# v5: levels rate understanding of the subject, not independent execution.
 RUBRIC_VERSION='evidence-role-v5'
 _NOT_PERSONAL={'team','observed','denied'}
 
@@ -40,28 +39,24 @@ def source_level(record):
     known={f['field'] for f in facts if f['status']=='supported' and f['field'] not in {'self_rating','replication_confidence'}}
     # Nothing explained about the skill: use alone shows only basic understanding.
     if not known: return 3
-    # The level rates understanding, not independent delivery: AI may have done the work, so
-    # independence and outcomes do not matter. Explained complexity and problem solving show depth.
+    # Explained complexity and problem solving show depth.
     if not {'complexity','problem_solving'}<=known: return 5
     if not {'frequency','recency'}<=known or (record.get('experience_months') or 0)<24: return 7
     return 9
 
 
 def evidence_level(records, proposed=None):
-    # Valid CV review levels already judged this evidence on the shared scale.
     reviewed=[r for r in records if r.get('reviewed') is True]
     own=cv_level(reviewed)
     if own is not None:proposed=own
     levels=[level for record in records if (level:=source_level(record)) is not None]
     if not levels: return None
     ceiling=max(levels)
-    # Missing ownership is an explicit provisional baseline, never verified mastery.
     if ceiling<=5: return within_cv_level(ceiling,records)
     return within_cv_level(min(proposed,ceiling) if proposed is not None else ceiling,records)
 
 
-# A finished review (answers or skipped topics) lets the model's own level stand where the
-# evidence cannot set one; it stays a capped, low-confidence estimate, never verified mastery.
+# A finished review lets the model's own level stand, capped as a low-confidence estimate.
 MODEL_ESTIMATE_CEILING=5
 
 
@@ -79,5 +74,5 @@ def unreviewed(records):
 
 
 def goal_score(have,need):
-    # Only actual target attainment reaches 10; rounding must not turn 9.6 into 10.
+    # Only actual target attainment reaches 10.
     return min(10,math.floor(100*have/need)/10)

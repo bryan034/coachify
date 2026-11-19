@@ -1,30 +1,33 @@
-"""Saved student schedules reserve time during synthetic plan revisions."""
-import pytest
-from planner_fixtures import assignment, draft
-from test_planner_flow import Scripted, accepted, client_for, generate
-from test_editable_tasks import definition, save, by_title
+"""Saved unfinished sessions reduce the model's budget for their scheduled week."""
+from datetime import timedelta
+
+from planner_fixtures import NOW, assignment
+from test_editable_tasks import by_title, definition, save
+from test_planner_flow import Clock, Scripted, accept_week, accepted, client_for, long_draft, plan_week, read, task, week_draft
 
 
-def test_missed_unfinished_slot_does_not_consume_weekly_capacity():
-    from app.planning.generator import reserved_sessions
-    from planner_fixtures import NOW
-    with client_for(Scripted([draft()])) as client:
+def test_missed_sessions_reduce_the_model_budget_for_the_current_week():
+    clock = Clock()
+
+    def proposal(minutes):
+        return lambda context: week_draft(
+            [task('b1', 'Add a second endpoint', 80), task('b2', 'Validate request bodies', minutes)],
+            carryover=[{'task_id': item['task_id'], 'action': 'defer', 'reason': 'Review later.'}
+                       for item in context['progress']['unfinished']],
+        )
+
+    model = Scripted([long_draft()], weeks=[week_draft([assignment()]), proposal(160), proposal(100)])
+    with client_for(model, clock=clock) as client:
         state = accepted(client)
-        state = save(client, 'add', state, task=definition(title='Missed',
-            schedule=[{'date':'2030-01-08','start_time':'19:00','duration_minutes':45}]))
-        plan = state['planner']['active']
-        assert not any(s['id'] == by_title(state, 'Missed')['id'] for s in reserved_sessions(plan, NOW))
-        state = save(client, 'status', state, task_id=by_title(state, 'Missed')['id'], status='completed')
-        assert any(s['id'] == by_title(state, 'Missed')['id'] for s in reserved_sessions(state['planner']['active'], NOW))
-
-
-def test_running_slot_reserves_only_the_remaining_time():
-    from app.planning.generator import reserved_sessions
-    from planner_fixtures import NOW
-    with client_for(Scripted([draft()])) as client:
-        state = accepted(client)
-        state = save(client, 'add', state, task=definition(title='Partly elapsed',
-            schedule=[{'date':'2030-01-09','start_time':'19:00','duration_minutes':60}]))
-        slots = reserved_sessions(state['planner']['active'], NOW.replace(hour=11, minute=30))
-        slot = next(s for s in slots if s['id'] == by_title(state, 'Partly elapsed')['id'])
-        assert slot['start_time'] == '19:30' and slot['duration_minutes'] == 30
+        state = save(client, 'add', state, task=definition(title='Missed practice', estimated_minutes=120,
+            schedule=[{'date': day, 'start_time': '19:00', 'duration_minutes': 60}
+                      for day in ('2030-01-14', '2030-01-15')]))
+        clock.now = NOW + timedelta(days=7)
+        state = plan_week(client, read(client), '2030-01-14')
+        assert state['operation']['status'] == 'succeeded', state['operation']
+        first, retry = model.sent('WeekDraft')[-2:]
+        assert first['target_minutes'] == first['new_task_minutes'] == 180
+        assert by_title(state, 'Missed practice')['id'] in {item['task_id'] for item in first['progress']['unfinished']}
+        assert any('room for 180' in error for error in retry['validation_errors'])
+        state = accept_week(client, state)
+        assert by_title(state, 'Missed practice')['deferred_week'] == '2030-01-14'

@@ -21,7 +21,7 @@ const longDay = (value: string) => new Date(`${value}T12:00:00Z`).toLocaleDateSt
 const toMinutes = (clock: string) => { const [hour, minute] = clock.split(':').map(Number); return hour * 60 + minute; };
 export type DatedMark = { date: string; label: string; kind: 'deadline' | 'milestone' | 'interview' };
 const weekdayIndex = (value: string) => (new Date(`${value}T12:00:00Z`).getUTCDay() + 6) % 7;
-/** Whole days the user blocked out (no start/end time), so the grid can hatch them. */
+/** Whole days the user blocked out (no start/end time). */
 const blockedDay = (rules: BlackoutRule[], day: string) => rules.some(rule => !rule.start_time && !rule.end_time && day >= rule.start_date && (!rule.end_date || day <= rule.end_date) && (rule.frequency === 'once' ? day === rule.start_date : blockedOn(rule, weekdayIndex(day))));
 
 function SessionBlock({ item, top, height }: { item: PlanAssignment; top: number; height: number }) {

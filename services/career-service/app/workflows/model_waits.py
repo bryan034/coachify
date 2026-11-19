@@ -8,8 +8,6 @@ def resume_obsolete_model_waits(rows,kind):
     if kind=='opportunity_job':
         eligible={'kind':kind,'status':'pending','finished':False,
             '$or':[{'worker_until':{'$exists':False}},{'worker_until':{'$lte':stamp}}],
-            # Another category may still be waiting for Brave. Its real provider
-            # cooldown must survive even if an earlier branch stored unsupported provider state.
             '$nor':[{f'categories.{category}.status':'pending',
                 f'categories.{category}.error_code':'source_rate_limited'} for category in CATEGORIES]}
     elif kind=='career_discovery':

@@ -8,7 +8,7 @@ export type EditableRoadmapTask = {
  id: string; title: string; instructions: string; completion_outcome: string;
  estimated_minutes: number; milestone_key: string | null; removed?: boolean;
  status: 'not_started' | 'in_progress' | 'completed';
- schedule: { date: string; start_time: string; duration_minutes: number }[];
+ schedule: { date: string; start_time: string; duration_minutes: number; id?: string }[];
 };
 type Fields = Pick<EditableRoadmapTask, 'title' | 'instructions' | 'completion_outcome' | 'estimated_minutes' | 'milestone_key'>;
 type Draft = { original: Fields | null; taskId: string | null; fields: Fields };
@@ -23,8 +23,7 @@ export function TaskEditor({ tasks, milestones, frozen, change }: { tasks: Edita
  const [error, setError] = useState('');
  const current = draft?.taskId ? tasks.find(t => t.id === draft.taskId && !t.removed) : undefined;
  const edited = draft?.original ? fieldNames.filter(k => draft.fields[k] !== draft.original![k]) : [];
- // Keep the draft on screen if saved work changed; never overwrite a field
- // that was changed in another session since this editor opened.
+ // Conflicted when saved work changed or a field was changed in another session since this editor opened.
  const conflicted = !!draft?.taskId && (!current || edited.some(k => fieldsOf(current)[k] !== draft.original![k]));
  const titleChanged = !draft?.original || draft.fields.title !== draft.original.title;
  const words = draft ? wordCount(draft.fields.title) : 0;

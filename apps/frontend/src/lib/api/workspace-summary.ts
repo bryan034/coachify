@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import { profileSkillGroups, profileSkillList } from '@/features/cv-ingestion/skill-cards';
+import { skillCardGroups, skillCards } from '@/features/cv-ingestion/skill-cards';
 import { deviceTimeZone } from '@/features/profile/planning-preferences';
 import type { Workspace } from '@/features/roadmap/types';
 import { groupSkills } from '@/lib/skill-groups';
@@ -34,20 +34,17 @@ export function useSection<T>(load: (token: string, signal: AbortSignal) => Prom
 
 export const loadGoal = (token: string, signal: AbortSignal) => careerApi<CurrentGoal>('/goals/current', token, { signal });
 
-/**
- * The Skills Profile's own numbers. Every page that mentions the user's skills reads these,
- * so Home, Roadmap and Search Jobs never count differently from Skills Profile.
- */
+/** The Skills Profile's own numbers, shared by every page that mentions the user's skills. */
 export type ProfileLevel = { name: string; canonicalId?: string | null; level: number };
-/** `skills`: every Skills Profile entry, rated or not, so goal skills can list the person's skills that count towards them. */
+/** `skills`: every Skills Profile entry, rated or not. */
 export type SkillsSummary = { reviewNeeded?: boolean; total: number; experiences: number; levels?: ProfileLevel[]; skills?: { name: string; canonicalId?: string | null; level: number | null }[]; groups: { name: string; count: number; skills: string[] }[] };
 export async function loadSkills(token: string, signal: AbortSignal): Promise<SkillsSummary> {
- const [profile, declarations, list, ratings] = await Promise.all([cvApi.skillsProfile(token, signal), cvApi.declarations(token, signal), cvApi.list(token, signal),
+ const [profile, merged, ratings] = await Promise.all([cvApi.skillsProfile(token, signal), cvApi.skills(token, signal),
   // The person's own ratings are optional here: without them only the CV and review levels are shown.
   skillRatings(token, signal).catch(() => null)]);
- const cv = list.selection.cv_id ? await cvApi.get(list.selection.cv_id, token, signal) : null;
- const skills = profileSkillList(cv, profile, declarations);
- const groups = groupSkills(skills, skill => skill.name, profileSkillGroups(cv, profile, declarations));
+ const cv = merged.cv_id ? await cvApi.get(merged.cv_id, token, signal) : null;
+ const skills = skillCards(merged);
+ const groups = groupSkills(skills, skill => skill.name, skillCardGroups(merged));
  // Same rule as the Skills Profile page: CV items that are not skills, plus profile entries.
  const experiences = (cv ? cv.items.filter(item => !item.removed && item.kind !== 'skill').length : 0) + profile.entries.length;
  const own = new Map((ratings?.ratings ?? []).map(rating => [rating.key, rating.score]));

@@ -3,10 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { NoteBlock, NoteRun, NotesDocument } from './types';
 
 /*
- * A Word-like notes page. People type freely; the toolbar formats text and inserts a
- * checkbox or a single-choice question at the cursor. What is saved is a small,
- * validated document (see NotesDocument), never the editor's HTML, so pasted markup
- * is reduced to plain text with bold, italic and underline.
+ * A Word-like notes page. The toolbar formats text and inserts a checkbox or a
+ * single-choice question at the cursor. Saves a validated NotesDocument, not HTML;
+ * pasted markup is reduced to plain text with bold, italic and underline.
  */
 
 const escape = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
@@ -101,7 +100,7 @@ function insertAtCaret(root: HTMLElement, html: string) {
  const holder = document.createElement('div'); holder.innerHTML = html;
  const nodes = [...holder.childNodes];
  if (!range) { nodes.forEach(node => root.appendChild(node)); return; }
- // Insert after the block that holds the caret, so a checkbox never lands mid-sentence.
+ // Insert after the block that holds the caret.
  let block: Node | null = range.startContainer;
  while (block && block.parentNode !== root) block = block.parentNode;
  const anchor = block?.nextSibling ?? null;

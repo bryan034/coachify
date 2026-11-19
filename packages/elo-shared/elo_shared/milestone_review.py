@@ -1,4 +1,4 @@
-"""Conservative review of removed roadmap work without modifying saved data."""
+"""Review of removed roadmap work without modifying saved data."""
 from datetime import datetime
 
 
@@ -15,9 +15,7 @@ def _timestamp(value):
 def removal_needs_review(task, outcome, has_active_members):
     """Check for a later self-report while retaining the removal tombstone.
 
-    Missing or ambiguous times, pending review, and an empty milestone fail
-    closed. Either self-reported demonstrated value can acknowledge a change;
-    this function does not decide whether the milestone has been achieved.
+    Missing or ambiguous times, pending review, and an empty milestone fail closed.
     """
     if not task.get('removed'):
         return False

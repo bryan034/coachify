@@ -2,8 +2,7 @@
 from time import time
 from langgraph.checkpoint.base import BaseCheckpointSaver, CheckpointTuple, WRITES_IDX_MAP
 
-# LangGraph records a failed step's exception as a write. Its text can quote model
-# output, and a failed step reruns on resume anyway, so it is never saved.
+# LangGraph's failed-step error write is never saved.
 ERROR_CHANNEL = '__error__'
 
 

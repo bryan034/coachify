@@ -11,8 +11,7 @@ def words(text):return set(TOKENS.findall(text.casefold()))-STOP
 
 def blocked_task(message):
     text=message.casefold()
-    # Narrow execution/override patterns; ordinary goal edits such as "ignore
-    # Java as a requirement" and technical skill explanations remain allowed.
+    # Narrow execution/override patterns.
     return bool(re.search(r'\b(?:ignore|override|disregard)\b.{0,40}\b(?:previous|system|all)\s+(?:instructions|rules|prompts)\b|\b(?:reveal|print|show)\b.{0,35}\b(?:system prompt|api keys?|secrets?)\b',text) or
         re.search(r'\b(?:write|generate|build|create|solve|translate|summari[sz]e)\b.{0,70}\b(?:recipe|homework|poem|political speech|medical report|legal contract|entire document|python script|sql query|application code)\b',text))
 
@@ -90,7 +89,7 @@ def facts_for(route,goal,research,include_evidence=False):
             add('interview_round_count',{'round_count':process['round_count']},(process.get('round_count_evidence') or {}).get('source_ids',[]))
         if route.terms!=['round_count']:
             for v in process.get('stages',[]):add('interview_stage',{k:v[k] for k in ('name','assessment_type') if v.get(k)},v.get('evidence',{}).get('source_ids',[]))
-            # Old research has no process field; explicit recorded stages remain usable.
+            # Without a process field, fall back to explicit recorded stages.
             if not process.get('stages'):
                 seen=set()
                 for v in research.get('skills',[]):

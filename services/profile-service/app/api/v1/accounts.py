@@ -46,19 +46,15 @@ class AccountView(BaseModel):
     email_verified: bool
     provider: Literal['google', 'local_test', 'email']
     expires_at: datetime
-    # The current service-wide policy gives every account the same item scope.
-    # Keep these server-owned fields in the response for CV service consumers.
+    # Every account has the same item scope; server-owned fields for CV service consumers.
     cv_review_scope: Literal['item'] = 'item'
-    # Item scope keeps its existing v1 wire contract, so older CV deployments
-    # can authenticate while the CV service upgrades its saved policy state.
+    # Item scope keeps its v1 wire contract.
     cv_review_policy_version: Literal[1] = 1
 
     @model_validator(mode='before')
     @classmethod
     def current_review_policy(cls, value):
-        # Legacy accounts can carry the earlier tier-specific settings. Project
-        # the current policy without mutating stored account data or accepting
-        # a browser-supplied entitlement.
+        # Project the current policy for legacy accounts without mutating stored data.
         if isinstance(value, dict):
             return {**value, 'cv_review_scope': 'item', 'cv_review_policy_version': 1}
         return value
@@ -111,8 +107,7 @@ def password_source(request: Request):
     peer = request.client.host if request.client else 'unknown'
     forwarded = request.headers.get('x-real-ip')
     if forwarded:
-        # The Compose gateway replaces this header. Direct clients and other
-        # backend services cannot choose the address used for password limits.
+        # The Compose gateway replaces this header.
         try:
             source = str(ip_address(forwarded))
             if peer in {address[4][0] for address in getaddrinfo('gateway', None)}:

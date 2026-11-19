@@ -24,7 +24,8 @@ routes are retired. Existing accepted plans and month blocks remain readable.
 
 ## Weekly planning
 
-Outline generation makes at most two domain-generation attempts. The second receives
+Outline generation makes at most two domain-generation attempts. Each request lists the
+assessment's `permitted_requirement_refs`. The second receives
 validation errors and the previous output. If invalid assessment requirement IDs
 remain, the backend performs recovery on that second draft without a third outline
 model call: it removes invalid gap/exclusion rows and affected dependent milestones,
@@ -37,7 +38,9 @@ or removal of milestones with saved work means recovery fails safely. Explicit
 `partial_review` metadata records omissions and uncovered assessment priorities;
 only those recorded omissions permit partial weekly/priority coverage. The UI shows
 them before acceptance and retains the notice on the accepted roadmap. Recovery
-replaces whole-plan outcome claims with a partial-coverage explanation. Editing and
+replaces whole-plan outcome claims with a partial-coverage explanation but never changes
+`fits_in_runway`; if removing beyond-deadline rows would contradict it, recovery fails.
+Omitted beyond-deadline rows have content-derived IDs. Editing and
 accepting a partial outline still use the ordinary authenticated validation and CAS
 paths. Provider transport/JSON-format repair handling remains unchanged.
 
@@ -50,6 +53,8 @@ returns the active tasks without a review step. Updates whose weeks are already
 scheduled activate the revised outline while keeping those tasks; they do not require
 a redundant first-week preview. Each worker lease captures its own snapshot so a
 publication retry cannot mix a prior capture with newly generated outline/week data.
+Automatic creation writes its previews to an in-memory working copy, so checkpoints never
+save them and a failure leaves any existing preview unchanged.
 First-week or activation failure
 preserves the saved roadmap, clears failed candidates and retains the exact retry
 request. Source freshness, bearer revalidation, workspace CAS and receipts still apply.
@@ -72,7 +77,7 @@ not count as study. The extra-time option is enabled for new accounts. Backup bl
 are retired: enabled saved backup blocks become ordinary study blocks; disabled ones
 are omitted on read.
 
-Unfinished work has explicit carry, split, defer or drop proposals. The user can review
+Saved sessions, including missed unfinished sessions, count against the weekly capacity of their scheduled dates when drafting, reviewing and accepting a week. New and carried sessions share the remaining capacity. Unfinished work has explicit carry, split, defer or drop proposals. The user can review
 choices at `/planner/weeks/{id}/carryover`, then `/accept` or `/discard`. A split keeps
 the original ID for this week's portion and creates a linked deferred remainder, so
 completing the first portion cannot discard the rest. Notes and edits stay on the
@@ -101,7 +106,7 @@ This module is the only source of runway numbers; the frontend displays its resu
 - A week's usable time is `min(cap - completed minutes, merged minutes)`. Preferred time, extra-time capacity and usable time are reported separately.
 - A duration resolves to a target date, with months clamped to the month's end. The target is authoritative for planning; a matching duration is reported so both controls stay synchronised.
 
-Current Profile reduced periods lower the weekly target when enabled; zero-hour periods remove their affected dates. Publication rechecks current availability and evaluation freshness, even when the evidence hash has not changed.
+Current Profile reduced periods lower the weekly target when enabled; zero-hour periods remove their affected dates. A malformed or out-of-range period is skipped on its own; at most the 100 latest-ending periods are applied. Publication rechecks current availability and evaluation freshness, even when the evidence hash has not changed.
 
 ### Blackouts
 
@@ -115,7 +120,7 @@ Current Profile reduced periods lower the weekly target when enabled; zero-hour 
 
 ## Model ownership and validation
 
-The model owns gaps, priorities, prerequisite order, effort, milestones, task content and the deadline outcome. Milestone estimates include already saved work; completed effort is subtracted once when calculating remaining scope. The backend owns session placement. It receives the goal, Assessment outcomes and evidence, completed work, self-reported confirmations, settings, exact windows for the first planning week and per-week capacity for the rest. The first planning week is the first configured planning week with usable capacity.
+The model owns gaps, priorities, prerequisite order, effort, milestones, task content and the deadline outcome. Milestone estimates include already saved work; completed effort is subtracted once when calculating remaining scope. The backend owns session placement. It receives the goal, Assessment outcomes and evidence, completed work, self-reported confirmations, settings, exact windows for the first planning week and per-week capacity for the rest. The first planning week is the first configured planning week with usable capacity. Unfinished milestones, checkpoints and routines dated before the planning start are moved up to it before validation, and the moved milestone keys are saved in `generation.clamped_milestones`.
 
 `app/planning/validator.py` returns every error, and the errors plus the rejected output go back to the model, for at most three attempts in total. A failure leaves the active plan, any earlier candidate and settings unchanged. Checks:
 
@@ -145,7 +150,7 @@ Adding, removing or moving milestone tasks, or accepting a revision with changed
 
 Existing `roadmap-v2` assignments are converted in memory for reads, with no migration on read; the first substantive task mutation saves the canonical tasks. Scheduled tasks linked to milestones project to the existing assignment shape. The older assignment-status endpoint updates the corresponding canonical task for single-segment sessions; split tasks require the task-status endpoint. Earlier untimed plans remain read-only. Existing clients need the new task endpoints to display unscheduled or in-progress work.
 
-Split-session compatibility keys are generated without colliding with primary assignment keys. Task and session IDs remain stable; secondary assignment keys may change on projection, including for old snapshots. No stored snapshot is migrated by a read.
+Split-session compatibility keys are generated without colliding with primary assignment keys. Task and session IDs remain stable: a slot's ID is derived from its position until the schedule is reordered by skipping one session, when the remaining slots save their IDs; secondary assignment keys may change on projection, including for old snapshots. No stored snapshot is migrated by a read.
 
 Revisions retain student-created, edited, started, completed and removed tasks and related dependency records. Model-generated keys do not establish semantic identity. Week validation rejects repeated saved task titles, including completed or removed work. The user reviews the generated tasks and every carry/split/defer/drop choice before acceptance. Changes to carried work or the target week invalidate that preview; unrelated progress does not.
 

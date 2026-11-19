@@ -194,7 +194,6 @@ def test_research_and_reviewed_chat_refinements_publish_through_shared_persisten
     assert [skill['name'] for skill in updated['goal']['skills']]==['SQL']
     assert updated['selection_version']==2 and len(seen)==2
     assert flow[1].career_goals.find_one({'_id':ObjectId(goal.id),'user_id':OWNER})
-    # Reload/poll cannot repeat an explicitly confirmed publication.
     flow[0].get(BASE+'/current',headers=headers())
     flow[0].get(f"{BASE}/{refined['id']}",headers=headers())
     assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()==updated
@@ -206,7 +205,7 @@ def test_quota_resume_reuses_searches_and_successful_extractions(flow):
     assert waiting['limit_scope']=='user' and waiting['retry_after']<=1
     searches=len(flow[3].calls);row=wait(flow,row)
     assert row['listings_analysed']==10 and len(flow[3].calls)==searches
-    assert flow[2].calls.count('discovery_extract')==5  # Four batches plus the denied second batch.
+    assert flow[2].calls.count('discovery_extract')==5
 
 
 def test_empty_sources_and_empty_supported_listings_are_honest(flow):
@@ -226,15 +225,12 @@ def test_refresh_preserves_evidence_snapshot_and_confirms_goal_replacement(flow)
 
 def test_schema_errors_are_bounded_and_leave_session_recoverable(flow):
     flow[2].fail=True;
-    # Fail research after the initial direction decision, not conversation.
     original=flow[2].generate
     async def generate(request,*args,**kwargs):
         flow[2].fail=request.stage!='discovery_turn'
         return await original(request,*args,**kwargs)
     flow[2].generate=generate
     row=start(flow);row=wait(flow,row,'failed')
-    # Section corrections belong to the adapter; the worker must not multiply
-    # its retry budget by regenerating the whole response again.
     assert row['error_code']=='invalid_output' and flow[2].calls.count('discovery_plan')==1
     assert flow[0].get('/api/v1/career/goals/current',headers=headers()).json()['goal'] is None
 
@@ -410,7 +406,7 @@ def test_forged_synthesis_references_fail_with_bounded_repair(flow):
     flow[2].result_override=override
     row=wait(flow,start(flow),'failed')
     assert row['review'] is None and row['error_code']=='invalid_output'
-    assert flow[2].calls.count('discovery_summary')==1  # No worker retry beyond adapter-owned section corrections.
+    assert flow[2].calls.count('discovery_summary')==1
 
 
 def test_chat_rejects_forged_citations_without_saving_messages(flow):
@@ -633,7 +629,6 @@ def test_introduction_is_display_only_and_never_sent_to_ai(flow):
         payload=flow[0].get(path,headers=headers()).json()
         assert INTRODUCTION not in json.dumps(payload,ensure_ascii=False)
         assert 'introduction' not in payload
-    # Previously created sessions may still contain the display-only message.
     flow[1].research_contexts.update_one({'_id':row['id']},
         {'$push':{'messages':{'$each':[{'role':'assistant','content':INTRODUCTION}],'$position':0}}})
     response=flow[0].post(f"{BASE}/{row['id']}/messages",headers=headers(),
@@ -689,7 +684,6 @@ def test_invalid_evidence_gets_one_new_search_and_keeps_other_results(flow,failu
     assert row['listings_analysed']==(14 if failure=='irrelevant' else 12)
     stored=flow[1].research_contexts.find_one({'_id':row['id']})
     assert stored['replacement_searches']==1
-    # Invalid ContextModel output is not regenerated with the same evidence.
     attempts=[request.context for request,data in flow[2].contexts if request.stage in ('discovery_assess','discovery_extract')]
     assert len(attempts)==len(set(attempts))
 
@@ -779,8 +773,6 @@ def test_replacement_shortfalls_keep_initial_usable_evidence(flow,replacement):
     assert sum('alternative employers' in query for query in flow[3].calls)==1
     stored=flow[1].research_contexts.find_one({'_id':row['id']})
     assert stored['replacement_searches']==1
-    # Original accepted sources are assessed/extracted once, including when the
-    # replacement fails extraction after the original extractions completed.
     for stage in ('discovery_assess','discovery_extract'):
         originals=[s['title'] for request,data in flow[2].contexts if request.stage==stage
                    for s in data['sources'] if 1<=int(s['title'].split()[1])<=9]

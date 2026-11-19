@@ -25,8 +25,6 @@ def main():
         assert target==url,target
         return 200,{'content-type':'text/html'},b'<html><head></head><body><div id="root"></div><script src="/app.js"></script></body></html>'
     output=io.StringIO()
-    # The worker imports the browser module after these patches; the renderer's
-    # real sandbox, limits and Chromium execution remain enabled.
     with patch.object(job_url,'request_page',fetch),patch('socket.getaddrinfo',lambda *a,**kw:[(2,1,6,'',('93.184.216.34',443))]),patch.object(sys,'argv',['browser_preview','20']),patch.object(sys,'stdin',io.TextIOWrapper(io.BytesIO(url.encode()))),redirect_stdout(output):
         browser_preview.main()
     result=json.loads(output.getvalue())

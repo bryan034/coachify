@@ -3,37 +3,36 @@ from copy import deepcopy
 from functools import partial
 import asyncio
 import json
-from uuid import uuid4, uuid5, NAMESPACE_URL
-import re
+from uuid import uuid4
 import httpx
 from bson import BSON
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from elo_shared.model_telemetry import operation_scope
 from app.conversation.presentation import review_reply
+from app.conversation import intake
+from app.conversation.interview import InterviewHarness, reconcile_memory, progress
+from app.conversation.interview_memory import evidence_for
+from app.conversation.review import guided_review
+from app.conversation.actions import LEASE_SECONDS, key, action_in, action_message, has_outstanding, apply_requested_purpose
 from app.domain.review_context import clarification_context
 from app.domain.baseline import visible_baseline_estimates
 from app.domain.capabilities import digest, effective_items, normalized_name
 from app.domain.errors import Conflict, CvError, Missing
+from app.domain.error_codes import error_code_of
 from app.domain.model_usage import ModelAdmissionError
-from app.domain.service import now, iso, HISTORY_LIMIT_BYTES
+from app.domain.service import now, iso, HISTORY_LIMIT_BYTES, REVIEW_FINISHED
 from app.domain.answer_capacity import preview_chat_answer
-from app.domain.attachments import source_fingerprint
 from app.clarification.service import answer, prepare, envelope, context_identity, retry_interpretation
 from app.schemas.cv import Mutation, AnswerMutation, ItemMutation, PrepareMutation, ConfirmedContext
 from app.schemas.conversation import ConversationRoute, ChatAction
 
 MAX_MESSAGES = 500
 MAX_SEGMENTS = 100
-LEASE_SECONDS = 90
-
-
-def key(value): return str(uuid5(NAMESPACE_URL, 'elo-cv-chat:' + value))
 
 
 def at_capacity(document):
-    # Reserve both user and assistant messages plus room for this turn's bounded
-    # action receipts. A capacity limit never deletes older factual provenance.
+    # Reserve both user and assistant messages plus room for this turn's bounded action receipts.
     return len(document['messages']) + 2 > MAX_MESSAGES or len(BSON.encode(document)) >= 6 * 1024 * 1024
 
 
@@ -42,7 +41,9 @@ def public_action(action):
     deadline = action.get('_lease_until') or action.get('_queued_at', now()) + LEASE_SECONDS
     if action['status'] == 'pending' and deadline <= now():
         result.update(status='failed', error='Processing was interrupted. Retry this saved action.',
-                      summary='Your message is saved. Retry to finish the interrupted action.')
+                      summary='Your message is saved. Retry to finish the interrupted action.', error_code='interrupted')
+    elif result.get('status') == 'failed':
+        result['error_code'] = error_code_of(action)
     return ChatAction.model_validate(result).model_dump(mode='json')
 
 
@@ -52,12 +53,22 @@ def view(document, before=None, limit=40):
     review = document.get('purpose') == 'skills_profile' and document.get('cv_id')
     active = deepcopy(document.get('active_question'))
     interview = deepcopy(document.get('interview_progress'))
-    if review:
-        if active: active['question'] = review_reply(active['question'])
-        if interview:
-            interview['estimates'] = visible_baseline_estimates(interview.get('estimates', []))
-            for estimate in interview.get('estimates', []):
-                estimate['explanation'] = review_reply(estimate['explanation'])
+    source_ids = [*(topic['id'] for topic in (interview or {}).get('topics') or []), *([active['item_id']] if active else [])]
+    legacy_question_message = None
+    if active and review:
+        legacy_question_message = next((message['id'] for message in reversed(document['messages'])
+                                        if message['role'] == 'assistant' and active['question'] in message['text']), None)
+    if active:
+        active['question'] = review_reply(active['question'], source_ids)
+        active['title'] = review_reply(active['title'], source_ids) or 'Experience'
+        if active.get('hints'):
+            active['hints'] = [clean for hint in active['hints'] if (clean := review_reply(hint, source_ids))]
+        if active.get('reason'):
+            active['reason'] = review_reply(active['reason'], source_ids) or None
+    if review and interview:
+        interview['estimates'] = visible_baseline_estimates(interview.get('estimates', []))
+        for estimate in interview.get('estimates', []):
+            estimate['explanation'] = review_reply(estimate['explanation'], source_ids)
     return {'id': document['_id'], 'cv_id': document['cv_id'], 'revision': document['revision'],
         'read_only': at_capacity(document),
         'previous_conversation_id': document.get('previous_conversation_id'),
@@ -66,7 +77,8 @@ def view(document, before=None, limit=40):
         'purpose': document.get('purpose'), 'reviewed_effective_version': document.get('reviewed_effective_version'),
         'context_error': document.get('context_error'),
         'messages': [{**{k: m[k] for k in ('id', 'sequence', 'role', 'text', 'created_at')},
-                      'text': review_reply(m['text']) if review and m['role'] == 'assistant' else m['text'],
+                      'text': review_reply(m['text'], source_ids) if m['role'] == 'assistant' else m['text'],
+                      'question_id': m.get('_question_id', active['id'] if active and m['id'] == legacy_question_message else None), 'status_only': bool(m.get('_status_only')),
                       'actions': [public_action(a) for a in m.get('actions', [])]} for m in window],
         'next_before': window[0]['sequence'] if len(messages) > len(window) else None}
 
@@ -87,17 +99,6 @@ def topic_request_allowed(conversation, mutation):
         raise Conflict('No topics are left to skip.')
 
 
-def action_in(document, identifier):
-    for message in document['messages']:
-        for action in message.get('actions', []):
-            if action['id'] == identifier: return action
-    raise Missing()
-
-
-def action_message(document, identifier):
-    return next(m for m in document['messages'] if any(a['id'] == identifier for a in m.get('actions', [])))
-
-
 def make_message(document, role, text, actions=None):
     return {'id': str(uuid4()), 'sequence': len(document['messages']) + 1, 'role': role, 'text': text,
             'created_at': iso(now()), 'actions': actions or []}
@@ -107,6 +108,28 @@ class ConversationService:
     def __init__(self, cv_service, provider):
         self.cv, self.repository, self.provider = cv_service, cv_service.repository.conversations, provider
         self.tasks = set()
+        self.rating = set()
+
+    async def schedule_skill_levels(self, account, cv_id):
+        """Retry due skill-level ratings for a finished CV review in the background, one run per CV at a time.
+
+        Ratings otherwise run only when a review reply is published, so a provider failure near the end of a
+        review would leave conservative assumed levels in place indefinitely.
+        """
+        if cv_id in self.rating or len(self.tasks) >= 16: return
+        conversation = await run_in_threadpool(self.repository.latest, account['id'], cv_id)
+        if (not conversation or conversation.get('purpose') != 'skills_profile'
+                or (conversation.get('interview_memory') or {}).get('status') not in REVIEW_FINISHED):
+            return
+        if cv_id in self.rating or len(self.tasks) >= 16: return
+        self.rating.add(cv_id)
+        task = asyncio.create_task(InterviewHarness(self).rate_skill_levels(account, conversation))
+        self.tasks.add(task)
+        def finished(completed):
+            self.tasks.discard(completed)
+            self.rating.discard(cv_id)
+            if not completed.cancelled(): completed.exception()
+        task.add_done_callback(finished)
 
     async def dispatch(self, operation, owner, identifier, action_id, token=None):
         if len(self.tasks) >= 16:
@@ -117,8 +140,6 @@ class ConversationService:
         self.tasks.add(task)
         def finished(completed):
             self.tasks.discard(completed)
-            # Storage can disappear before the coordinator can publish a failure.
-            # The durable lease remains recoverable; never log private task data.
             if not completed.cancelled(): completed.exception()
         task.add_done_callback(finished)
 
@@ -150,6 +171,7 @@ class ConversationService:
             previous = self.get(owner, identifier)
             document = deepcopy(previous)
             transform(document)
+            apply_requested_purpose(document)
             if document == previous: return previous
             document['revision'] += 1
             document['updated_at'] = now()
@@ -170,10 +192,7 @@ class ConversationService:
                 document = self._start(owner, mutation)
         if mutation.purpose and document.get('purpose') != mutation.purpose:
             def upgrade(current):
-                if any(a['status'] in {'pending', 'awaiting_confirmation', 'needs_source', 'failed'}
-                       for m in current['messages'] for a in m.get('actions', [])):
-                    return  # Retain the execution semantics of unfinished older actions.
-                current['purpose'] = mutation.purpose
+                current['requested_purpose'] = mutation.purpose
             document = self.update(owner, document['_id'], upgrade)
         return document
 
@@ -181,8 +200,7 @@ class ConversationService:
         if mutation.cv_id: self.cv.get(owner, mutation.cv_id)
         previous = self.repository.latest(owner, mutation.cv_id)
         if previous and not at_capacity(previous): return previous
-        if previous and any(a['status'] in {'pending', 'awaiting_confirmation', 'needs_source', 'failed'}
-                for m in previous['messages'] for a in m.get('actions', [])):
+        if previous and has_outstanding(previous):
             return previous  # Finish/cancel recoverable actions before rolling over.
         if self.repository.count(owner, mutation.cv_id) >= MAX_SEGMENTS:
             raise Conflict('This CV conversation has reached its history capacity. Saved history remains available.')
@@ -214,8 +232,7 @@ class ConversationService:
     async def refresh(self, app, account, identifier):
         previous = self.get(account['id'], identifier)
         if previous.get('purpose') == 'skills_profile' and not previous['cv_id']:
-            from app.conversation.intake import read_profile
-            profile = await read_profile(app, account)
+            profile = await intake.read_profile(app, account)
             def reconcile(current):
                 if current['revision'] != previous['revision']: return
                 if current.get('intake_profile_version') != profile['version']:
@@ -231,21 +248,18 @@ class ConversationService:
                 error = 'Career context is unavailable. Your conversation is saved; retry to prepare relevant questions.'
         document = self.cv.get(account['id'], previous['cv_id']) if previous['cv_id'] else None
         def transform(current):
-            # Source reads precede this CAS. A completed action may have published
-            # a question since those reads; only reconcile the captured revision.
+            # Only reconcile the captured revision.
             if current['revision'] != previous['revision']: return
             active = current.get('active_question')
             if current.get('purpose') == 'skills_profile':
                 if not document: return
                 if current.get('interview_memory'):
-                    from app.conversation.interview import reconcile_memory, progress
                     current['interview_memory'] = reconcile_memory(current, document)
                     current['interview_progress'] = progress(current['interview_memory'], document)
                 if active:
                     valid = next((q for q in document['clarifications'] if q['id'] == active['id']
                         and q['status'] == 'unanswered' and not q.get('reconciliation_required')), None)
                     source = next((item for item in effective_items(document) if item['id'] == active['item_id'] and not item['removed']), None)
-                    from app.conversation.interview_memory import evidence_for
                     if not valid or not source or not clarification_context(source, evidence_for(source))['clarification_targets']:
                         current['active_question'] = None
                 current['context'], current['context_error'] = context, error
@@ -303,8 +317,7 @@ class ConversationService:
                 raise Conflict('Your previous answer is still processing. Wait or retry its saved action first.')
         profile_version = None
         if previous.get('purpose') == 'skills_profile' and not previous['cv_id']:
-            from app.conversation.intake import read_profile
-            profile_version = (await read_profile(app, account))['version']
+            profile_version = (await intake.read_profile(app, account))['version']
             if previous.get('active_question') and previous.get('intake_profile_version') != profile_version:
                 raise Conflict('Your profile changed after this question was shown. Refresh the conversation and continue from the updated summary.')
         context = await self.context(app, account['authorization']) if previous['cv_id'] and previous.get('purpose') != 'skills_profile' else None
@@ -352,8 +365,7 @@ class ConversationService:
     def routing_payload(self, owner, conversation, route):
         document = self.cv.get(owner, conversation['cv_id']) if conversation['cv_id'] else None
         items = effective_items(document) if document else []
-        # Identity summaries establish references. Only a deliberately focused
-        # source gets its fuller context; the interpreter later sees that source.
+        # Only a deliberately focused source gets its fuller context.
         summaries = [{'id': i['id'], 'kind': i['kind'], 'title': i['title'],
             'description': i['description'][:120], 'skill_names': [n[:60] for n in i['skill_names'][:4]]}
             for i in items if not i['removed']]
@@ -385,11 +397,9 @@ class ConversationService:
         try:
             await self.authenticate(app, account)
             if conversation.get('purpose') == 'skills_profile' and not conversation['cv_id']:
-                from app.conversation.intake import process_intake
-                await process_intake(self, app, account, conversation, route, token)
+                await intake.process_intake(self, app, account, conversation, route, token)
                 return
             if conversation.get('purpose') == 'skills_profile' and conversation['cv_id']:
-                from app.conversation.interview import InterviewHarness, reconcile_memory
                 harness = InterviewHarness(self)
                 try:
                     await harness.process(app, account, conversation, route, token)
@@ -457,20 +467,22 @@ class ConversationService:
             await self.fail(owner, identifier, route_id, token, exc.detail, 'stale')
         except Exception as exc:
             message = str(exc) if isinstance(exc, ValueError) and not isinstance(exc, ValidationError) else 'Chat interpretation could not finish. Your message is saved; retry.'
-            await self.fail(owner, identifier, route_id, token, message[:1000])
+            await self.fail(owner, identifier, route_id, token, message[:1000], code=getattr(exc, 'code', None))
 
     @staticmethod
     def check_lease(action, token):
         if action.get('_token') != token or action.get('_lease_until', 0) <= now():
             raise Conflict('A newer attempt has taken over this saved message. Refresh its current status.')
 
-    async def fail(self, owner, identifier, action_id, token, message, status='failed'):
+    async def fail(self, owner, identifier, action_id, token, message, status='failed', code=None):
         def transform(document):
             action = action_in(document, action_id)
             if action['status'] in {'saved', 'cancelled'}: return
             if action.get('_token') != token: return
-            action.update(status=status, error=message, summary=message, _token=None, _lease_until=0)
-            if action['kind'] == 'route': action_message(document, action_id)['text'] = message
+            action.update(status=status, error=message, error_code=code, summary=message, _token=None, _lease_until=0)
+            if action['kind'] == 'route':
+                failed = action_message(document, action_id)
+                failed.update(text=message, _status_only=True)
         return await run_in_threadpool(self.update, owner, identifier, transform)
 
     def proposal(self, conversation, route, proposed, index, items, questions):
@@ -514,7 +526,6 @@ class ConversationService:
 
     async def guided(self, app, account, conversation, route, token):
         if conversation.get('purpose') == 'skills_profile' and conversation['cv_id']:
-            from app.conversation.review import guided_review
             return await guided_review(self, app, account, conversation, route, token)
         owner, command = account['id'], route['_command']
         await self.authenticate(app, account)
@@ -522,7 +533,6 @@ class ConversationService:
         document = self.cv.get(owner, conversation['cv_id']) if conversation['cv_id'] else None
         if document and any(key(route['id'] + suffix) in document['receipts'] for suffix in (':skip', ':prepare')):
             # Only receipts for this guided turn may advance its CV snapshot.
-            # Selection, extraction and confirmed target must still match.
             expected['cv_version'] = document['version']
         await self.check_snapshot(app, account, conversation, expected)
         active = conversation.get('active_question')
@@ -609,7 +619,6 @@ class ConversationService:
             created = bool(cv_document and key(action_id + ':question-create') in cv_document['receipts'])
             if applied or created:
                 # Recover only an exact durable operation belonging to this action.
-                # Extraction/selection/target identities are still checked below.
                 expected['cv_version'] = cv_document['version']
                 question_id = original.get('_saved_question_id') or key(action_id + ':question')
                 if any(q['id'] == question_id for q in cv_document['clarifications']):
@@ -646,7 +655,8 @@ class ConversationService:
                 question = next((q for q in saved['clarifications'] if q['id'] == current_action.get('_saved_question_id')), None)
                 pending = question and question.get('interpretation_status') != 'ready' and action['kind'] != 'skip'
                 current_action.update(status='failed' if pending else 'saved', summary=summary,
-                    error=question.get('interpretation_error') if pending else None, _token=None, _lease_until=0)
+                    error=question.get('interpretation_error') if pending else None,
+                    error_code=question.get('interpretation_error_code') if pending else None, _token=None, _lease_until=0)
                 current_action['_snapshot']['cv_version'] = saved['version']
                 current['last_item_id'] = item['id']
                 # Only our acknowledged write may advance sibling action snapshots.
@@ -657,9 +667,7 @@ class ConversationService:
                 if current.get('active_question') and current['active_question']['item_id'] == item['id']:
                     q = next((q for q in saved['clarifications'] if q['id'] == current['active_question']['id']), None)
                     if q and q['status'] in {'answered', 'skipped'}: current['active_question'] = None
-                # Publish the pending continuation with the saved answer. Otherwise a
-                # poll can observe no pending work between this write and planner
-                # admission, stop polling, and strand the chat without a question.
+                # Publish the pending continuation with the saved answer.
                 if current.get('purpose') == 'skills_profile':
                     turn = action_message(current, action_id)
                     parent = next((a for a in turn.get('actions', []) if a['kind'] == 'route'), None)
@@ -670,8 +678,7 @@ class ConversationService:
                                       _token=None, _lease_until=now() + LEASE_SECONDS)
             await run_in_threadpool(self.update, owner, identifier, completed)
         except Conflict as exc:
-            # The saved CV receipt may already exist after a process/response failure;
-            # recovery uses the stored exact mutation payload rather than a new write.
+            # Recovery reuses the stored exact mutation payload.
             latest_token = action_in(self.get(owner, identifier), action_id).get('_token')
             await self.fail(owner, identifier, action_id, token if latest_token == token else original.get('_token'), exc.detail, 'stale')
         except Exception as exc:
@@ -736,8 +743,7 @@ class ConversationService:
 
             def interpret(self, *args):
                 result = app.state.interpreter.interpret(*args)
-                # A provider request may outlive sign-out. Verify again immediately
-                # before returning facts to the existing fenced publication path.
+                # Verify the session again before returning facts.
                 asyncio.run_coroutine_threadsafe(coordinator.authenticate(app, account), loop).result(timeout=8)
                 return result
             def __getattr__(self, name):
@@ -772,9 +778,7 @@ class ConversationService:
         if any(q['item_id'] == item['id'] and q.get('interpretation_status') in {'pending', 'failed'}
                 and not q.get('reconciliation_required') for q in document['clarifications']):
             raise Conflict('An earlier explanation for this source still needs interpretation. Finish or retry it first; this new message remains saved.')
-        # An appended statement is a separate source-bound event, never replacement
-        # of the previous answer. Its interpretation changes only explicitly named
-        # fields; old evidence survives even after cumulative text exceeds 4000 chars.
+        # An appended statement is a separate source-bound event; its interpretation changes only named fields.
         if not recovered_unanswered and (not question or question['status'] != 'unanswered' or action['kind'] == 'correct'):
             parent = question or next((q for q in reversed(document['clarifications']) if q['item_id'] == item['id'] and not q.get('reconciliation_required')), None)
             question_id = key(action['id'] + ':question')
@@ -924,7 +928,6 @@ class ConversationService:
         if action['kind'] == 'route':
             await self.dispatch(self.process(app, account, identifier, action_id, token), owner, identifier, action_id, token)
         elif candidate['status'] == 'needs_source' and action['kind'] in {'correct', 'remove'}:
-            # Choosing the identity is not the same as approving a correction.
             return saved
         else:
             await self.dispatch(self.execute(app, account, identifier, action_id, mutation), owner, identifier, action_id)

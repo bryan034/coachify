@@ -30,12 +30,11 @@ def test_three_irrelevant_results_do_not_block_better_followup_sources(opportuni
         return await generate(request,operation,**kwargs)
     search.collect_opportunity_query=sources;primary.generate=evaluate
     ingest(flow);_,result,_=research(flow)
-    # Three searches per category: the plain query, the planned query and the follow-up.
     assert len(search.calls)==15 and result['status']=='completed'
     assert all(c['outcome']=='findings_found' and c['findings'] for c in result['categories'].values())
     assert all(s['title']=='Useful account' for s in result['sources'])
     job=flow[1].research_contexts.find_one({'kind':'opportunity_job'})
-    assert all(len(v)==6 for v in job['evidence'].values())  # The two unrelated searches return the same pages, which merge.
+    assert all(len(v)==6 for v in job['evidence'].values())
     assert all(len(v)<=3 for v in job['retained_sources'].values())
 
 

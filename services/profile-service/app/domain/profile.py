@@ -114,7 +114,6 @@ def revise_profile(previous: dict | None, patch: ProfilePatch) -> dict:
         review = bool(dependent_values_retained and not patch.confirm_education_context)
     current.update(education=education, education_review_required=bool(review))
     current = revise_planning(current, patch)
-    # A derived response field is not persisted as a stale second source of truth.
     current.pop("current_study_year", None)
     original.pop("current_study_year", None)
     current.pop("onboarding_state", None)

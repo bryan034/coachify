@@ -13,11 +13,11 @@ from uuid import NAMESPACE_URL, uuid5
 from fastapi import Depends, Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import Problem, authenticated, begin, digest, launch, operation_view, stamp
-from app.planning.capacity import Capacity, shortest_session, to_minute
+from app.planning.capacity import Capacity, Placer, shortest_session, to_minute
 from app.planning.milestone_membership import mark_plan_membership_changes
-from app.planning.placement import Placer, reservations, week_target
-from app.planning.generator import PLANNING_SECONDS, set_stage
-from app.planning.state import config_digest, planner_state, saved_config, schedule_digest, shape_digest, planning_source_changed
+from app.planning.placement import reservations, week_target
+from app.planning.generator import MAX_ATTEMPTS, PLAN_MAX_TOKENS, PLANNING_SECONDS, set_stage
+from app.planning.state import config_digest, evaluation_current, planner_state, saved_config, schedule_digest, shape_digest, planning_source_changed
 from app.planning.tasks import ensure_tasks, project_assignments
 from app.schemas.base import Mutation
 from app.schemas.planner import Workspace
@@ -30,7 +30,7 @@ Tasks. Advance this week's objective and the supplied milestones. Each task has 
 
 Adapting. progress and last_week show what the user actually did: completed, in-progress and unfinished tasks, their own difficulty and confidence ratings, and their feedback about workload. Use them to set this week's difficulty, pace and focus. Finishing a task is self-reported progress, not proof of skill.
 
-Unfinished work. For every task in progress.unfinished return one carryover entry with its task_id, a short reason the user can read, and an action: carry (do the whole task this week), split (do `minutes` of it this week and leave the rest in the backlog), defer (leave it in the backlog for a later week) or drop (it is no longer worth doing). Carried work counts towards this week's hours, and at most carry_limit_minutes may be carried. Follow settings.unfinished_default when it is carry or defer unless the progress clearly argues otherwise.
+Unfinished work. For every task in progress.unfinished return one carryover entry with its task_id, a short reason the user can read, and an action: carry (do the whole task this week), split (do `minutes` of it this week and leave the rest in the backlog), defer (leave it in the backlog for a later week) or drop (it is no longer worth doing). Saved sessions, including missed sessions, already count against the capacity of their scheduled week. Carried work also uses this week's available hours. Subtract any carried or split minutes scheduled this week from new_task_minutes, and carry at most carry_limit_minutes. Follow settings.unfinished_default when it is carry or defer unless the progress clearly argues otherwise.
 
 Later weeks. Only when this week's progress means a later week's objective no longer makes sense, return objective_changes for those weeks with the full replacement objective and a reason. Otherwise return none.
 
@@ -83,7 +83,7 @@ def unfinished(plan,capacity):
     return result
 
 def planning(state,now,config=None,ignore_candidate=False):
-    """Which week can be planned now, and why. The page shows this; the generate route enforces it."""
+    """Which week can be planned now, and why."""
     outline=state.get('outline_active');active=state.get('active')
     if not outline or not active:return None
     config=config or saved_config(state);capacity=Capacity(config,now)
@@ -110,7 +110,7 @@ def check_basis(state,source,outline,accepted=True):
     if not outline or (accepted and outline.get('status')!='accepted'):raise Problem('Accept a roadmap outline before planning a week.',409,'outline_required')
     if not source.get('ready') or source.get('input_hash')!=outline['assessment_hash']:
         raise Problem('Your goal or evidence changed. Review the outline first.',409,'inputs_changed')
-    if (source.get('evaluation') or {}).get('freshness','current')!='current':
+    if not evaluation_current(source):
         raise Problem('Update your skill evaluation before planning or accepting work.',409,'assessment_required')
     if shape_digest(saved_config(state))!=shape_digest(PlannerConfig.model_validate(outline['config'])):
         raise Problem('Your timeline or weekly hours changed. Review the outline first.',409,'settings_changed')
@@ -193,8 +193,7 @@ def carry_limit(config):
 
 def arrange(config,now,existing,start,end,routines,carryover,tasks):
     """Place carried work, then new tasks. What cannot fit is deferred or listed, never dropped or squeezed in."""
-    moved={entry['task_id'] for entry in carryover}
-    placer=Placer(config,now,reservations(existing,skip=moved)+[slot for task in routines for slot in task['schedule']],start,end)
+    placer=Placer(config,now,reservations(existing)+[slot for task in routines for slot in task['schedule']],start,end)
     limit=carry_limit(config);carried=0
     for entry in carryover:
         entry['schedule']=[]
@@ -249,7 +248,6 @@ def check_week(draft,outline,config,existing,routines,pending,target,scope,*,fee
         seen.add(entry.task_id)
         if entry.action=='split' and not (entry.minutes and shortest_session(config)<=entry.minutes<task['estimated_minutes']):
             errors.append(f"Carryover '{entry.task_id}' is split, so minutes must be less than its {task['estimated_minutes']} minutes and at least {shortest_session(config)}.")
-    # Invalid splits have already produced an actionable model validation error.
     carryover=build_carryover(draft,pending,config)
     carried=0
     for entry in carryover:
@@ -275,13 +273,11 @@ def check_week(draft,outline,config,existing,routines,pending,target,scope,*,fee
         if change.milestone_key not in milestones:errors.append(f'{label} has an unknown milestone.')
         if change.estimated_minutes>(config.weekly_minutes or 0):errors.append(f'{label} estimates more than the weekly hours.')
         if any(gap not in {g['id'] for g in outline['gaps']} for gap in change.gap_ids):errors.append(f'{label} names an unknown gap.')
-    changed_rows={change.week_start.isoformat():change for change in draft.objective_changes}
+    changed_rows={change.week_start.isoformat():change.model_dump(mode='json') for change in draft.objective_changes}
     projected=[changed_rows.get(row['week_start'],row) for row in outline.get('weeks',[])]
     estimates={}
     for row in projected:
-        key=row.milestone_key if hasattr(row,'milestone_key') else row['milestone_key']
-        minutes=row.estimated_minutes if hasattr(row,'estimated_minutes') else row['estimated_minutes']
-        estimates[key]=estimates.get(key,0)+minutes
+        estimates[row['milestone_key']]=estimates.get(row['milestone_key'],0)+row['estimated_minutes']
     for key,minutes in estimates.items():
         if key in milestones and minutes>milestones[key]['estimated_minutes']:errors.append(f"Future objectives exceed milestone '{key}' estimated effort.")
     # Revisions must obey the same date, skill and capacity rules as initial objectives.
@@ -299,7 +295,7 @@ def snapshot(task):
     return {key:copy.deepcopy(task.get(key)) for key in ('id','status','removed','schedule','anytime_date','estimated_minutes','title','instructions','description','completion_outcome','milestone_key','prerequisites','requirement_refs','overrides','history','notes','self_rating','definition_review_required')}
 
 def week_basis(outline,existing,week,pending):
-    """What a preview depends on: the outline, the target week's saved tasks and the unfinished work it moves. Progress elsewhere leaves it valid."""
+    """What a preview depends on: the outline, the target week's saved tasks and the unfinished work it moves."""
     tasks=ensure_tasks(copy.deepcopy(existing)) if existing else []
     inside=[snapshot(t) for t in tasks if any(week<=day_of(s['date'])<week+timedelta(days=7) for s in t.get('schedule',[])) or t.get('anytime_date') and week<=day_of(t['anytime_date'])<week+timedelta(days=7)]
     return digest({'outline':[outline['id'],outline['revision']],'week':sorted(inside,key=lambda t:t['id']),'pending':sorted([snapshot(t) for t in pending],key=lambda t:t['id'])})
@@ -330,9 +326,13 @@ def first_open_week(state,outline,config,now):
         if week_target(config,now,reservations(state.get('active')),start,end)['target_minutes']:return candidate_week
     return None
 
-async def prepare_week(app,row,account,read_context,*,initial=False):
-    """Write, check and place one week, and store it as the preview. A failure leaves every saved plan unchanged."""
-    state=planner_state(row);source=await read_context(account);now=app.state.clock()
+async def prepare_week(app,row,account,read_context,*,initial=False,into=None):
+    """Write, check and place one week, and store it as the preview in `into`, or in the planner state.
+
+    A failure leaves every saved plan unchanged. A checkpoint replaces the row's planner state, so it is read again before saving.
+    """
+    def destination():return planner_state(row) if into is None else into
+    state=destination();source=await read_context(account);now=app.state.clock()
     config=saved_config(state,periods=source.get('planning_defaults',{}).get('availability_periods'))
     outline=state.get('outline_candidate') if initial else state.get('outline_active')
     check_basis(state,source,outline,accepted=not initial)
@@ -349,7 +349,7 @@ async def prepare_week(app,row,account,read_context,*,initial=False):
     capacity=Capacity(config,now)
     pending=unfinished(existing,capacity)
     routines=routine_occurrences(outline,config,start,end,now,existing)
-    target={'week_start':week.isoformat(),**week_target(config,now,reservations(existing,skip={t['id'] for t in pending}),start,end)}
+    target={'week_start':week.isoformat(),**week_target(config,now,reservations(existing),start,end)}
     scope=remaining_scope(outline,existing,routines,end)
     first=not state.get('week_blocks') and not state.get('month_blocks') and not (existing or {}).get('editable_tasks')
     diagnostics=[g['id'] for g in outline['gaps'] if g.get('status')=='unknown' and g.get('plan_impact')=='material' and g.get('resolution')=='diagnostic'] if first else []
@@ -371,9 +371,9 @@ async def prepare_week(app,row,account,read_context,*,initial=False):
         'last_week':last_week_summary(existing,week),'feedback':feedback,
         'settings':{k:getattr(config,k) for k in ('learning_focus','learning_notes','learning_topics','unfinished_default')}}
     errors=[];operation_id=row['pending']['id']
-    for attempt in range(1,4):
+    for attempt in range(1,MAX_ATTEMPTS+1):
         if errors:await set_stage(app,row,account['id'],'correcting')
-        draft=await app.state.model.generate(WeekDraft,WEEK_INSTRUCTIONS,{**context,'validation_errors':errors},max_tokens=24000)
+        draft=await app.state.model.generate(WeekDraft,WEEK_INSTRUCTIONS,{**context,'validation_errors':errors},max_tokens=PLAN_MAX_TOKENS)
         errors=check_week(draft,outline,config,existing,routines,pending,target,scope,feedback=feedback,diagnostics=diagnostics)
         if errors:continue
         carryover=build_carryover(draft,pending,config)
@@ -400,8 +400,7 @@ async def prepare_week(app,row,account,read_context,*,initial=False):
         'tasks':routines+placed,'unplaced':[],'carryover':carryover,'objective_changes':changes,
         'created_at':stamp(),'generation':{'attempts':attempt,'prompt_version':'roadmap-week-v1'}}
     bounded_size(candidate,MAX_WEEK_BYTES,'This week is too large to review safely. Reduce the number or length of tasks and retry.')
-    # Checkpointing replaces the row's nested data with a persisted copy.
-    state=planner_state(row);state['config']=config.model_dump(mode='json');state['week_candidate']=candidate;state['week_notice']=None
+    state=destination();state['config']=config.model_dump(mode='json');state['week_candidate']=candidate;state['week_notice']=None
     return True
 
 def build_carryover(draft,pending,config):
@@ -491,7 +490,7 @@ def accept_week(state,source,identifier,now):
     if candidate.get('unplaced'):raise Problem('Some tasks no longer fit this week. Change a carry-over choice or generate a fresh preview.',409,'week_unplaced')
     # Sessions are placed by the service, but time has moved on since the preview: check each one again.
     start,end=week_interval(week,config,now)
-    placer=Placer(config,now,reservations(base,skip=moved),start,end)
+    placer=Placer(config,now,reservations(base),start,end)
     proposed=[slot for task in candidate['tasks'] for slot in task['schedule']]+[slot for entry in candidate['carryover'] if entry['action'] in ('carry','split') for slot in entry['schedule']]
     for slot in sorted(proposed,key=lambda slot:(slot['date'],slot['start_time'])):
         day=day_of(slot['date']);low=to_minute(slot['start_time'])
@@ -510,8 +509,7 @@ def accept_week(state,source,identifier,now):
         else:
             task['removed']=True;task['removal']={'at':at,'reason':entry['reason']}
         if entry['action']=='split':
-            # A reviewed split creates two explicit pieces. Completing this week's piece
-            # must never complete or lose the deferred remainder.
+            # A reviewed split creates two explicit pieces.
             remaining=task['estimated_minutes']-entry['minutes']
             remainder=copy.deepcopy(task)
             remainder.update(id=str(uuid5(NAMESPACE_URL,task['id']+':remainder:'+candidate['id'])),
@@ -596,7 +594,7 @@ def register_week_routes(app,context,mutate,worker):
 
     @app.post(prefix+'/{identifier}/discard',response_model=Workspace)
     async def discard(identifier:str,body:Mutation,request:Request,account=Depends(authenticated)):
-        def apply(row,source):
+        def apply(row,_source):
             state=planner_state(row);candidate=state.get('week_candidate')
             if not candidate or candidate['id']!=identifier:raise Problem('The week preview changed. Reload before discarding it.',409,'week_changed')
             state['week_candidate']=None

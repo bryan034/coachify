@@ -1,15 +1,7 @@
-"""Which extraction failures retry automatically, and what the model is told about the last one.
-
-Everything sent to the model is a fixed sentence or allowlisted validation feedback,
-never provider prose, exception text or CV content.
-"""
+"""Which extraction failures retry automatically, and what the model is told about the last one."""
 from app.domain.model_usage import GLOBAL_DAILY, OWNER_DAILY
 
 REJECTED_OUTPUT = frozenset({'schema_validation', 'evidence_validation'})
-# A rejected or malformed response is not a transient transport failure. The
-# graph already repairs validation errors once; rerunning it automatically
-# would silently create another extraction/repair cycle. Users can still make
-# an explicit retry after any terminal failure.
 _RETRYABLE = frozenset({'timeout', 'connection_error', 'transport_error'})
 _RETRYABLE_PROVIDER_REASONS = frozenset({'rate_limit_or_quota', 'provider_unavailable'})
 _GUIDANCE = {

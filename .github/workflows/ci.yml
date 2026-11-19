@@ -48,6 +48,7 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - run: npm run lint:skills-profile --workspace apps/frontend
       - run: npm run typecheck --workspace apps/frontend
       - run: npm run test --workspace apps/frontend
 
@@ -78,6 +79,23 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  lint:
+    name: Lint (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [career]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r tools/lint/requirements.txt
+      - run: python -m pytest tools/lint
+      - run: python tools/lint/quickfix_check.py services/${{ matrix.service }}-service
+
   backend:
     name: Backend tests (${{ matrix.service }})
     runs-on: ubuntu-latest
@@ -97,6 +115,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e ../../packages/elo-shared -e '.[test]'
+      - if: matrix.service == 'cv'
+        run: |
+          python -m pip install -e '.[lint]'
+          python -m ruff check app
       - name: Run shared package tests
         if: matrix.service == 'assessment'
         run: python -m pytest ../../packages/elo-shared/tests
@@ -114,9 +136,30 @@ jobs:
           fi
           exit "$status"
 
+  static-analysis:
+    name: Static analysis (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [roadmap]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e ../../packages/elo-shared -e '.[lint]'
+      - name: Ruff (unused arguments, nested imports, swallowed exceptions)
+        run: python -m ruff check app
+      - name: Vulture (unused code)
+        run: python -m vulture
+
   profile-integration:
     name: Profile MongoDB integration
-    # Keep the runner on a kernel supported by the MongoDB image. See docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     services:
@@ -140,7 +183,6 @@ jobs:
 
   analysis-integration:
     name: Analysis MongoDB contracts (${{ matrix.service }})
-    # Keep the runner on a kernel supported by the MongoDB image. See docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
@@ -176,7 +218,6 @@ jobs:
 
   local-ui-integration:
     name: Local UI and MongoDB integration
-    # Keep the runner on a kernel supported by the MongoDB image. See docs/testing.md.
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
@@ -233,24 +274,28 @@ jobs:
   test-gate:
     name: Test gate
     if: ${{ always() }}
-    needs: [database-artifacts, frontend-unit, frontend-e2e, backend, profile-integration, analysis-integration, local-ui-integration]
+    needs: [database-artifacts, lint, frontend-unit, frontend-e2e, backend, static-analysis, profile-integration, analysis-integration, local-ui-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require every test job to pass
         env:
           ARTIFACT_RESULT: ${{ needs.database-artifacts.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
           UNIT_RESULT: ${{ needs.frontend-unit.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
+          STATIC_RESULT: ${{ needs.static-analysis.result }}
           LOCAL_UI_RESULT: ${{ needs.local-ui-integration.result }}
           ANALYSIS_RESULT: ${{ needs.analysis-integration.result }}
           INTEGRATION_RESULT: ${{ needs.profile-integration.result }}
         run: |
           test "$ARTIFACT_RESULT" = success
+          test "$LINT_RESULT" = success
           test "$UNIT_RESULT" = success
           test "$E2E_RESULT" = success
           test "$BACKEND_RESULT" = success
+          test "$STATIC_RESULT" = success
           test "$INTEGRATION_RESULT" = success
           test "$LOCAL_UI_RESULT" = success
           test "$ANALYSIS_RESULT" = success

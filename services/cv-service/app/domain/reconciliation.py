@@ -2,7 +2,7 @@
 from copy import deepcopy
 from uuid import uuid4
 from app.domain.capabilities import digest, effective_items, effective_fingerprint
-from app.domain.errors import Conflict, Missing
+from app.domain.errors import Conflict
 from app.domain.service import bump, now
 from app.schemas.cv import validate_item_dates
 from app.domain.answer_capacity import release as release_answer_capacity
@@ -73,8 +73,7 @@ def resolve(service, owner, identifier, mutation):
         raise Conflict('Wait for processing to finish before resolving this comparison.')
     if previous['operation']['status'] == 'failed' and previous['operation'].get('error', {}).get('code') != 'reconciliation_required':
         raise Conflict('Resolve the processing failure before changing the source.')
-    # A replacement comparison captures immutable statements; newer source edits
-    # must be compared explicitly rather than silently transferring an older copy.
+    # A candidate from another CV must be compared explicitly.
     if mutation.action == 'accept_candidate' and candidate['source_cv_id'] != identifier:
         source = service.get(owner, candidate['source_cv_id'])
         if source['version'] != candidate['source_version']:

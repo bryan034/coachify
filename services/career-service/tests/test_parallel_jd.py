@@ -79,12 +79,10 @@ def test_public_research_starts_before_full_extraction_and_is_not_repeated(oppor
     assert result['status']=='completed' and len(search.calls)==(10 if changed_location or empty_first else 5)
     job=client.app.state.opportunities.store.latest(OWNER,completed['result']['current']['goal']['_id'])
     assert all(len(values)==(2 if empty_first and not changed_location else 1) for values in job['history'].values())
-    # A changed location discards the prefetched evidence: every category searches again after the change,
-    # even though the plain employer/role query carries no location and so repeats the same wording.
     if changed_location:assert {values[0] for values in job['history'].values()}<=set(search.calls[5:])
     assert 'research_complete' in job['activities']
     serialized=json.dumps(list(db.research_contexts.find({})),default=str)
-    assert SOURCE not in serialized  # raw input is never checkpointed or shared
+    assert SOURCE not in serialized
 
 
 @pytest.mark.parametrize('path',['/workspace/jd','/jd/extract'])

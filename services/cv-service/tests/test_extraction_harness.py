@@ -131,7 +131,6 @@ def test_valid_first_pass_needs_no_repair(harness, monkeypatch):
 @pytest.mark.parametrize('failure', ['schema', 'evidence'])
 def test_failed_repair_is_bounded_and_cannot_publish(harness, monkeypatch, failure):
     invalid, valid = candidates()
-    # Nothing in the final candidate verifies, so even the last attempt cannot keep a partial extraction.
     for item in invalid['items']: item['description'] = 'D' * 4001
     second = invalid if failure == 'schema' else deepcopy(valid)
     if failure == 'evidence':
@@ -231,7 +230,6 @@ def test_review_quote_repair_uses_exact_anchor_and_preserves_fact(harness, monke
 
 def test_repeated_nonexact_review_quote_fails_without_publishing(harness, monkeypatch):
     invalid, _ = review_quote_candidates()
-    # Only the unverifiable item remains, so there is nothing to keep.
     invalid['items'] = [{**invalid['items'][1], 'supporting_items': []}]
     client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, invalid])
     app.state.worker.run_once()
@@ -362,7 +360,6 @@ def test_other_information_rejects_invented_source_text(harness, monkeypatch):
     client, app, queued, calls = setup_provider(harness, monkeypatch, [invalid, {'supported': []}, invalid, {'supported': []}])
     app.state.worker.run_once()
     result = read_result(client, queued)
-    # The verified items are kept; the invented text never is, and the user is told it was left out.
     assert result['status'] == 'ready' and result['other_information'] == []
     assert any('left out' in notice for notice in result['notices'])
     assert len(calls) == 4
@@ -398,7 +395,6 @@ def test_failed_reprocessing_preserves_other_information(harness, monkeypatch):
 def test_decoding_schema_keeps_all_backend_constraints(harness, monkeypatch, defect):
     _, invalid = candidates()
     if defect == 'items_count': invalid['items'] *= 81
-    # Every item carries the defect, so nothing verifies and the whole extraction fails.
     elif defect == 'citation_count':
         for item in invalid['items']: item['evidence'] = [{'block_id': 'b1', 'excerpt': 'A'}] * 7
     elif defect == 'duration':

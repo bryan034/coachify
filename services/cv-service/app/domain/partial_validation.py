@@ -1,10 +1,8 @@
 """Keep the verified part of an extraction when only some items fail validation.
 
-This runs only after the repair attempt (and the automatic retries) failed. An item
-that cannot be verified is kept as unconfirmed context, flagged for the review chat,
-and never counts as demonstrated capability. Failures that cannot be pinned on one
-item (duplicate claims, circular relationships, nothing verifiable) still fail the
-whole extraction, as before.
+Runs only after the repair attempt and automatic retries failed. An item that cannot be
+verified is kept as unconfirmed context, flagged for the review chat, and never counts as
+demonstrated capability. Failures not specific to one item still fail the whole extraction.
 """
 from dataclasses import dataclass, field
 from pydantic import ValidationError
@@ -89,7 +87,6 @@ def salvage(candidate, blocks, cv_id, verify_evidence=None, support=None):
     """The kept items, or None when the failure is not item-specific or nothing verifies."""
     raw_items = candidate.get('items') if isinstance(candidate, dict) else None
     if not isinstance(raw_items, list) or not raw_items: return None
-    # The size of either list is a whole-output limit, not one item's fault.
     if len(raw_items) > MAX_ENTRIES or len(candidate.get('other_information') or []) > MAX_ENTRIES: return None
     source = {block['id']: block for block in blocks}
     outcome, pending = {}, {}
@@ -146,7 +143,6 @@ def salvage(candidate, blocks, cv_id, verify_evidence=None, support=None):
             ids[ref] for ref in (refs if isinstance(refs, list) else [])
             if type(ref) is int and ref != index and ref in ids))
     items = [kept[index] for index in sorted(kept)]
-    # A duplicated source claim or a circular relationship is not one item's fault.
     if len({item['id'] for item in items}) != len(items) or not _acyclic(items): return None
     other, other_dropped = [], 0
     for ref in other_refs:

@@ -9,8 +9,7 @@ async def focused_chat(request,account,row,body):
     """Route -> projected retrieval -> answer. Only ambiguous questions need routing AI."""
     from app.domain.questions import direct_route,REFUSAL
     from app.schemas.jd import JDReply
-    # Clarification answers belong to the active edit, even when they look like
-    # a standalone location/salary question. Keep the refusal guard first.
+    # Clarification answers belong to the active edit. Keep the refusal guard first.
     if row['workspace'].get('edit_draft'):
         chosen=direct_route(body.message)
         if chosen is not None and chosen.topic=='off_topic':return JDReply(reply=REFUSAL,proposed_skills=None)

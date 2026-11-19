@@ -33,7 +33,7 @@
 .blackout-time>label:not(.settings-check){flex:1 1 110px}
 .blackout-time .btn{height:38px;margin-left:auto}
 
-/* Runway: the ink panel used for targets elsewhere in elo */
+/* Runway panel */
 .settings-runway .small{color:rgb(255 255 255 / .82)}
 .settings-runway .settings-link{color:var(--mint)}
 .runway-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px;margin:0 0 16px}
@@ -152,7 +152,7 @@
 .use-tags li{padding:3px 10px;border-radius:99px;background:var(--cloud);font-size:12.5px;line-height:1.45;overflow-wrap:anywhere}
 .use-panel-link{justify-self:start;font-size:12.5px;font-weight:500;text-decoration:underline;text-underline-offset:3px}
 
-/* The plan as one sentence travelling down a road. The road is the page's one bold thing. */
+/* The plan as one sentence travelling down a road. */
 .road-intro{margin-bottom:-8px}
 .road-intro h2{font-size:20px;font-weight:500;margin:0 0 2px}
 .road-intro .small{margin:0}
@@ -218,7 +218,6 @@
 .block-others{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .block-others .block-chip{width:auto;min-width:130px}
 .block-hint{font-size:11px;color:#92400e}
-/* In a narrow week the chip's colour already says preferred or backup */
 @container (max-width:520px){
  .block-chip{padding:5px 3px;font-size:10px;text-align:center}
  .block-chip strong{font-size:11px}
@@ -454,7 +453,7 @@
 .note-choice input{accent-color:var(--forest)}
 .notes-status{margin:0;padding:6px 18px 10px}
 
-/* Add a task: a small page with a big title and a property list (redesign canvas). */
+/* Add a task: a small page with a big title and a property list. */
 .add-task-open{display:flex;align-items:center;gap:10px;width:100%;margin-top:12px;padding:12px 14px;border:1.5px dashed var(--line);border-radius:16px;background:transparent;font:inherit;font-size:14px;font-weight:500;color:var(--slate);cursor:pointer}
 .add-task-open:hover{border-color:var(--forest);background:var(--white);color:var(--ink)}
 .add-task-open span{display:grid;place-items:center;width:26px;height:26px;border:1.5px dashed currentColor;border-radius:50%;line-height:1}
@@ -490,7 +489,7 @@
 .roadmap-heading p strong{color:var(--ink);font-weight:600}
 
 
-/* To-do rows (redesign "Roadmap (after generation)"): one card per task, time and length as pills. */
+/* To-do rows: one card per task, time and length as pills. */
 .todo-list{display:flex;flex-direction:column;gap:10px;margin-top:8px}
 .todo-list>.todo,.todo-day .todo:first-child{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:6px 16px;align-items:center;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--white)}
 .todo.done{background:var(--snow)}
@@ -508,7 +507,7 @@
 .todo-day h3{font-size:15px}
 .todo-day-link{font-weight:600}
 @container (max-width:620px){.todo-list>.todo,.todo-day .todo:first-child{grid-template-columns:28px minmax(0,1fr)}.todo-when{grid-column:2;justify-content:flex-start}.todo-time{min-width:0}.todo-length{min-width:0}}
-/* Chat helper (redesign "Plan helper"): one Close button, composer footer never clips Send. */
+/* Chat helper: one Close button; the composer footer never clips Send. */
 .helper-launcher[hidden]{display:none!important}
 .adviser-composer .adviser-compose-foot{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .adviser-composer .adviser-compose-foot .btn{flex:none;white-space:nowrap}
@@ -516,7 +515,7 @@
 
 .prerequisite-list{list-style:none;padding:0;margin:16px 0 0}.prerequisite-list li{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line)}.prerequisite-list li>div{flex:1;min-width:0}.prerequisite-list p{font-size:13px;color:var(--mute);margin-top:2px}.prerequisite-mark{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--line);flex-shrink:0}.prerequisite-list .done .prerequisite-mark{background:var(--green);border-color:var(--green);color:#fff}@media(max-width:600px){.prerequisite-list li{flex-wrap:wrap}}
 
-/* Weekly review extends the existing road and review surfaces. */
+/* Weekly review */
 .weekly-journey{list-style:none;padding:0;margin:20px 0;display:grid;gap:16px}
 .weekly-journey>li{border-left:3px solid var(--forest);padding:4px 0 4px 20px}
 .weekly-journey>li.projected{border-left-style:dashed;border-left-color:var(--field-line)}

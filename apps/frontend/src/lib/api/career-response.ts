@@ -1,7 +1,4 @@
-/** Validate the fields used by the JD workspace before they reach React.
- * Additive server fields are allowed; invalid nested records are never coerced.
- * Canonical schemas remain in contracts/api and the Career Pydantic models.
- */
+/** Validate the fields used by the JD workspace before they reach React. */
 type Check=(value:unknown)=>boolean;
 type RecordValue=Record<string,unknown>;
 export const record=(value:unknown):value is RecordValue=>typeof value==='object'&&value!==null&&!Array.isArray(value);

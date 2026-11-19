@@ -163,7 +163,6 @@ td:first-child{white-space:nowrap}
   .monthwrap{overflow-x:auto}.month{min-width:640px}
 }
 
-/* Production integration of the supplied v1 draft. */
 :root{--ink:var(--text);--muted:var(--mute);--accent:var(--green)}
 body{line-height:1.5;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}button, input, select{font:inherit}button:disabled{cursor:not-allowed;opacity:.45;box-shadow:none}input:disabled{background:var(--soft);color:var(--mute)}a, button, input, select, summary{touch-action:manipulation}button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible{outline:2px solid var(--blue);outline-offset:4px}.nav a:focus-visible{outline:2px solid var(--blue)}
 .side{border-right:1px solid var(--line);background:var(--side)}.side .brand{flex-shrink:0}.side-bottom{margin-top:auto}.me{margin-top:0;align-items:flex-start}.me .small{font-size:11px;overflow-wrap:anywhere;max-width:150px}.me strong{font-size:12px}.profile-link{display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:12px;font-weight:600;color:var(--ink);border-radius:12px}.profile-link span{margin-left:auto}.profile-link:hover, .profile-link.on{background:var(--soft2);color:var(--text)}
@@ -181,11 +180,10 @@ body{line-height:1.5;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:
 .profile-shell button.primary:not(.btn):not(.chip){background:var(--fill);border-color:var(--fill);color:var(--on-fill)}
 @media(max-width:480px){.calendar-toolbar .grow{flex-basis:100%}.calendar-toolbar .seg{width:100%}.calendar-toolbar .seg .chip{flex:1}.sec-h{flex-wrap:wrap}}
 
-/* Revolut-inspired type rhythm; Inter is the bundled, licensed family. */
 h2, h3{font-family:var(--font-heading);letter-spacing:-.02em}
 .nav a{font-weight:500}
 
-/* P04–P06 planning inputs */
+/* Planning inputs */
 .planning-preferences{border-top:1px solid var(--line);margin-top:40px;padding-top:8px;scroll-margin-top:20px}
 .planning-description{margin-bottom:22px;max-width:720px;line-height:1.7}
 .planning-card{margin-bottom:20px}.planning-card h3{font-size:16px}.planning-card>p{margin:8px 0 18px}
@@ -198,7 +196,7 @@ h2, h3{font-family:var(--font-heading);letter-spacing:-.02em}
 .planning-readiness ul{padding-left:18px;margin:8px 0}.planning-readiness p{margin-top:10px}
 @media(max-width:600px){.planning-card>.row{align-items:stretch;flex-direction:column}.period-list li{align-items:stretch;flex-direction:column}.planning-card .row .btn{width:100%}}
 
-/* Public account entry uses the same typography, cards and controls as the workspace. */
+/* Public account entry */
 .access-page{min-height:100dvh;background:radial-gradient(ellipse at 18% 80%,var(--gbg),transparent 45%),var(--side)}
 .access-header{display:flex;align-items:center;justify-content:space-between;padding:28px 6vw;border-bottom:1px solid var(--line)}
 .access-header .brand{margin:0}
@@ -254,7 +252,7 @@ h2, h3{font-family:var(--font-heading);letter-spacing:-.02em}
 @media(max-width:740px){.onboarding-question, .onboarding-footer-inner{max-width:100%}.onboarding-header{height:76px;padding:0 24px}.onboarding-header-note{display:none}.onboarding-header .brand b{font-size:16px}.onboarding-header .brand span{font-size:10px}.onboarding-exit{height:38px;width:38px}.onboarding main.onboarding-main{padding:28px 24px 32px}.onboarding-question h1{font-size:34px}.onboarding-description{font-size:12px;margin:14px 0 26px}.onboarding-choice{padding:20px 16px}.onboarding-choices .onboarding-choice{min-height:146px}.onboarding-review dl>div{grid-template-columns:72px minmax(0,1fr) auto;gap:8px}.onboarding-review dl button{max-width:65px;text-align:right}.onboarding .school-results{max-height:260px}.onboarding-step-tag{margin-bottom:16px}.onboarding-footer{padding:16px 24px max(16px,env(safe-area-inset-bottom))}.onboarding-progress-note{font-size:9px}}
 @media(prefers-reduced-motion:reduce){.onboarding *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
-/* Profile summary keeps editing in a separate, deliberate view. */
+/* Profile summary */
 .profile-overview{display:flex;align-items:center;gap:20px;padding:28px;margin:26px 0;background:linear-gradient(110deg,var(--mint-mist),var(--white) 75%);box-shadow:none}.profile-overview-avatar{width:64px;height:64px;display:grid;place-items:center;background:var(--white);border:1px solid var(--line);border-radius:20px;color:var(--green)}.profile-overview-avatar svg{width:25px;height:25px}.profile-overview h2{font-size:25px;font-weight:500;margin:7px 0;letter-spacing:-.035em}.profile-overview .small{overflow-wrap:anywhere}.profile-occupation-pill{margin-left:auto;font-size:11px;background:var(--gbg);color:var(--ink);border-radius:99px;padding:8px 14px;white-space:nowrap}
 .profile-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px}.profile-summary{padding:28px;box-shadow:none}.profile-summary-title{display:flex;gap:14px;align-items:center;padding-bottom:24px;border-bottom:1px solid var(--line)}.profile-summary-title h2{font-weight:500;font-size:18px;margin-top:6px}.profile-summary-icon{display:grid;place-items:center;width:42px;height:42px;background:var(--gbg);color:var(--ink);border-radius:13px}.profile-summary-icon.employment{background:var(--bbg);color:var(--blue)}.profile-summary dl>div{padding-top:23px}.profile-summary dt{font-size:11px;color:var(--mute);margin-bottom:8px}.profile-summary dd{font-size:14px;line-height:1.7;overflow-wrap:anywhere}.profile-add-work{display:inline-block;margin-top:26px;font-size:12px}.profile-preferences-link{display:flex;gap:20px;justify-content:space-between;flex-wrap:wrap;padding:24px 0;color:var(--mute);font-size:11px;line-height:1.7}.profile-preferences-link a{color:var(--text)}
 .profile-development{margin-top:24px;padding:24px;background:var(--side);border:1px dashed var(--line);border-radius:16px;display:flex;align-items:center;justify-content:space-between;gap:20px}.profile-development h3{font-size:15px;font-weight:500;margin:14px 0 8px}.profile-development p{font-size:11px;line-height:1.7;color:var(--mute)}.profile-development .btn{flex-shrink:0}.profile-return{display:inline-block;margin-bottom:25px;font-size:12px}.employment-editor label{display:block;font-size:12px;margin-top:16px}.employment-editor input{display:block;width:100%;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:8px;background:var(--white)}.onboarding-preview-note{padding:9px 12px;background:var(--bbg);color:var(--ink);border-radius:9px;font-size:10px;margin-bottom:20px;line-height:1.6}
@@ -277,10 +275,10 @@ h2, h3{font-family:var(--font-heading);letter-spacing:-.02em}
 @media(max-width:900px){.target-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){.target-fields{grid-template-columns:minmax(0,1fr)}.target-skills fieldset{padding:14px}.target-list>article{padding:16px}.target-mode{gap:14px}}
 
-/* C-series interpretation and source reconciliation controls. */
+/* CV interpretation and source reconciliation controls. */
 .cv-workspace select{width:100%;min-width:0;max-width:100%;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--white);color:var(--text);font:inherit;font-size:13px;line-height:1.6}.cv-workspace select:focus-visible{outline:2px solid var(--blue);outline-offset:3px}.cv-workspace .cv-form input[type=checkbox]{width:auto;min-width:0;margin:0;padding:0;accent-color:var(--green)}.cv-workspace .cv-form label:has(input[type=checkbox]){display:flex;align-items:center;gap:10px}.cv-editor fieldset{min-width:0;border:1px solid var(--line);border-radius:10px;padding:16px}.cv-fields legend{padding:0 6px;font-size:12px;font-weight:600}.cv-fields>p{grid-column:1/-1}.cv-interpretation{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--side);font-size:13px;line-height:1.75}.cv-interpretation ul, .cv-section .cv-item ul{padding-left:20px;margin:12px 0}.cv-interpretation li{margin:8px 0}.cv-source-reconciliation label{display:grid;gap:8px;font-size:12px;font-weight:500}.cv-source-reconciliation summary{cursor:pointer;padding:12px 0;font-size:13px}.cv-attachment blockquote{border-left:2px solid var(--line);padding:8px 14px;margin:8px 0;background:var(--side);font-size:12px;line-height:1.7}.cv-attachment cite{font-size:10px;color:var(--mute);font-style:normal}
 
-/* CV conversation keeps the reading path quiet; source details are available on demand. */
+/* CV conversation and source details disclosure. */
 .cv-files-disclosure, .cv-summary-disclosure{border:1px solid var(--line);border-radius:16px;background:var(--side);margin-bottom:20px;min-width:0}
 .cv-viewing-notice{max-width:1100px;margin:0 auto 16px;font-size:12px;line-height:1.7;color:var(--mute)}
 .cv-chat-summary-mobile{display:none}.cv-chat-receipt{margin-top:12px;color:var(--ink);font-size:12px;line-height:1.75}.cv-chat-receipt .cv-chat-action-status{display:inline-block;margin-right:8px;font-size:10px;font-weight:600;color:var(--ink)}.cv-chat-receipt summary{cursor:pointer}.cv-chat-receipt p{margin-top:8px}.cv-chat-context button{border:0;padding:0;background:none;font:inherit}
@@ -336,7 +334,7 @@ h2, h3{font-family:var(--font-heading);letter-spacing:-.02em}
 
 .career-tools{margin-top:24px}.career-tools .row{flex-wrap:wrap;gap:12px}.interview-research{margin-top:24px;border-top:1px solid var(--border,var(--line));padding-top:20px}.interview-research label{display:grid;gap:8px;margin:12px 0}.interview-research textarea{width:100%;box-sizing:border-box}.interview-research details{margin:12px 0}.interview-research summary{cursor:pointer}.interview-research blockquote{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0;padding:12px;background:var(--bg,#f1f5f9);border-radius:12px}.interview-research a{overflow-wrap:anywhere}.interview-research .requirement-item{min-width:0}
 
-/* In-chat activity gives way to the response without a separate progress panel. */
+/* In-chat activity */
 .agent-activity{padding:6px 0;color:var(--mute);font-size:13px;line-height:1.6}
 .agent-activity-heading{display:flex;align-items:center;gap:10px;font-weight:500}
 .agent-activity-dot{width:9px;height:9px;flex-shrink:0;border-radius:50%;background:var(--blue);animation:agent-pulse 1.4s ease-in-out infinite}
@@ -378,7 +376,7 @@ h2, h3{font-family:var(--font-heading);letter-spacing:-.02em}
 .agent-markdown a.agent-citation:hover{text-decoration:underline;color:var(--text)}
 .agent-markdown a.agent-citation:focus-visible{outline:2px solid var(--text);outline-offset:2px}
 
-/* Skills Profile: an evidence summary first, with two deliberate intake choices. */
+/* Skills Profile */
 .cv-workspace [hidden]{display:none!important}
 .skills-home{margin-bottom:28px;max-width:1120px}
 .skills-home-intro{max-width:760px;margin:12px 0 28px}

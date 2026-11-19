@@ -1,6 +1,6 @@
 import type { Planner, PlanMilestone } from '@/features/roadmap/types';
 
-/** Pure reads of the saved roadmap for Home. Nothing here is stored or invented; every figure comes from the plan. */
+/** Pure reads of the saved roadmap for Home. */
 export type HomeSession = {
  id: string; taskId: string | null; title: string; instructions: string; criterion: string; date: string; startTime: string | null;
  minutes: number; done: boolean; completedAt: string | null; milestoneKey: string | null; skills: string[];

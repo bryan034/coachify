@@ -774,7 +774,7 @@ class EditableRoadmapTask {
     +String[] requirement_refs
     +String[] prerequisites
     +String milestone_key?
-    +Object[] schedule
+    +Object[] schedule [date, start_time, duration_minutes, id?]
     +String status [not_started|in_progress|completed]
     +Boolean removed
     +Object removal?
@@ -869,7 +869,7 @@ note for ReviewFact "self_rating is an explicitly stated skill-specific whole nu
 
 class SkillLevelInfo {
     +Integer level? [1_to_10]
-    +String status [rated_or_uncertain]
+    +String status [rated_assumed_or_uncertain]
     +String rationale
     +String source [cv_or_review]
     +Evidence[] evidence

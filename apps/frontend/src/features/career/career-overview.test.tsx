@@ -143,7 +143,6 @@ it('explains the target and the person’s level when a skill is opened',()=>{
  expect(within(row('SQL')).getByText('Wrote reporting queries in one internship.')).toBeVisible();
  fireEvent.click(within(row('SQL')).getByRole('button',{name:'See evidence'}));
  expect(screen.getAllByText('Wrote reporting queries in one internship.')).toHaveLength(1);
- // An evaluation's own target isn't explained by the goal's reason for a different level.
  rerender(<SkillsNeeded skills={[skill]} outcomes={{sql:outcome({demonstrated_score:6,required_score:7})}}/>);
  expect(within(row('SQL')).queryByText(/Why the target/)).not.toBeInTheDocument();
 });
@@ -151,7 +150,6 @@ it('reads a level from the skill’s own score, or from progress towards the tar
  expect(goalSkillLevel(sql,outcome({demonstrated_score:6,required_score:7}))).toEqual({level:6,target:7});
  expect(goalSkillLevel(sql,outcome({competence_score:5,required_score:8}))).toEqual({level:4,target:8});
  expect(goalSkillLevel(sql,undefined)).toEqual({level:null,target:8});
- // A skill the evaluation hasn't rated shows its Skills Profile level; an evaluated level still wins.
  expect(goalSkillLevel(sql,undefined,[{name:' sql ',level:4}])).toEqual({level:4,target:8});
  expect(goalSkillLevel(sql,outcome({demonstrated_score:6,required_score:7}),[{name:sql.name,level:4}])).toEqual({level:6,target:7});
  expect(goalSkillLevel(sql,undefined,[{name:'Python',level:4}])).toEqual({level:null,target:8});
@@ -167,7 +165,6 @@ it('lists the person’s skills that count towards a goal skill and the smaller 
  expect(within(counted).getAllByRole('listitem').map(item=>item.textContent)).toEqual(['Python5/10','Pandas6/10','pytest']);
  const parts=screen.getByRole('list',{name:'Python breaks down into'});
  expect(within(parts).getAllByRole('listitem').map(item=>item.textContent)).toEqual(['In your skills: pytest','Type hints']);
- // A goal skill matched only by its own name repeats nothing, so it shows no breakdown.
  expect(screen.queryByRole('list',{name:/towards SQL/})).not.toBeInTheDocument();
 });
 it('opens Talk it through for a skill and explains its target',()=>{

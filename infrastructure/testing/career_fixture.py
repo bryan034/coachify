@@ -1,4 +1,4 @@
-"""Opt-in disposable Career test application; never a production provider.
+"""Opt-in disposable Career test application.
 
 Public retrieval is replaced, and finite labelled OpenAI-compatible responses are
 served through the real SDK HTTP boundary.

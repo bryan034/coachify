@@ -32,12 +32,7 @@ class Batch(Contract):
     outcomes:list[Interpreted]=Field(min_length=1,max_length=8)
 
 def batch_schema(requirements, evidence):
-    """Bind the private model response schema to this captured batch's references.
-
-    Nested source IDs are context, not evidence handles. Enumerating the permitted
-    handles makes that distinction explicit in the prompt and schema validation.
-    The public API and persisted evidence continue to use the original schemas.
-    """
+    """Bind the private model response schema to this captured batch's references."""
     evidence_type=Literal[tuple(evidence)] if evidence else str
     component=create_model('EvidenceComponent',__base__=Component,
         evidence_refs=(list[evidence_type],Field(max_length=30 if evidence else 0)))

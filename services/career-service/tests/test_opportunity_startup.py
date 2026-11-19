@@ -33,7 +33,7 @@ def test_research_uses_configured_model_even_when_chat_is_disabled():
             context_model=AISettings(enabled=False,api_key='synthetic-key')
             router=opportunity_models(primary,None,context_model,OpportunitySettings(),client)
             assert router.context_enabled and router.context.settings.model=='openai/gpt-4o-mini'
-            assert not context_model.enabled  # Research does not enable the separate chat feature.
+            assert not context_model.enabled
             await router.generate(AIInput(stage='opportunity_plan',context='{}'),Operation('synthetic','1','opportunity_plan'),current_revision=lambda:'1')
         assert len(calls)==1 and calls[0].url.host=='openrouter.ai'
     asyncio.run(run())

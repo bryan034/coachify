@@ -26,6 +26,8 @@ const liveData = (url: string, o: Overrides = {}): any => {
  if (url.includes('/assessments/')) return { version: 0, stale: false, ready: true, model_available: true, result: null, operation: null, issues: [] };
  if (url.endsWith('/profile/skills-profile')) return { version: 0, status: 'empty', saved_at: null, areas: {}, entries: [] };
  if (url.endsWith('/profile/capabilities')) return { version: 1, declarations: [{ id: 'd1', name: 'Python', description: 'Synthetic.', skill_id: 'python', provenance: 'user_declared', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }], limits: { name: 120, description: 2000 }, skill_groups: { Python: 'Technical coding' } };
+ if (url.endsWith('/cv/skills')) return { cv_id:null, cv_version:null, profile_version:0, declarations_version:1,
+  skills:[{key:'python',name:'Python',basis:'declared',sources:[]}], skill_groups:{Python:'Technical coding'}, skill_subgroups:{} };
  if (url.endsWith('/api/v1/cv')) return { cvs: [], selection: { cv_id: null, version: 0 } };
  if (url.includes('/roadmaps/workspace')) return { version: 4, messages: [], operation: null, active: null, draft: null, assessment: null, stale: false, context: { ready: true, issues: [], model_available: true }, planner: planner() };
  if (url.endsWith('/jobs/applications')) return { items: [] };

@@ -43,8 +43,7 @@ def check_milestones(draft,capacity,completed,retained):
         state[key]='done'
         return cyclic
     if any(visit(key) for key in list(lookup)):errors.append(issue('prerequisite_cycle','Milestone prerequisites contain a cycle.'))
-    # Every window is tested against the milestones wholly inside it, which also catches a
-    # milestone that fits on its own but not alongside the others sharing its dates.
+    # Test every window against the milestones wholly inside it.
     found=[]
     for first in sorted({m.projected_start for m in draft.milestones}):
         for last in sorted({m.projected_end for m in draft.milestones}):

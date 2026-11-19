@@ -14,6 +14,11 @@ from app.domain.model_usage import ModelUsage
 from app.domain.deletion import CvDeletion
 from app.domain.review_summary import review_summary
 from app.domain.baseline import baseline_estimates, visible_baseline_estimates
+from app.domain.skill_levels import apply_skill_level_reviews
+from app.schemas.cv import Mutation
+
+
+REVIEW_FINISHED = {'reviewed', 'reviewed_with_gaps'}
 
 
 HISTORY_LIMIT_BYTES = 12 * 1024 * 1024
@@ -77,7 +82,6 @@ def detail(document):
     items = effective_items(document)
     for item in items: item['source_fingerprint'] = source_fingerprint(item)
     # Review-time skill levels are overlaid after fingerprints, so they never alter evidence identity.
-    from app.domain.skill_levels import apply_skill_level_reviews
     apply_skill_level_reviews(document, items)
     return {**summary(document),
         'skill_estimates': visible_baseline_estimates(baseline_estimates(items)),
@@ -120,19 +124,31 @@ class CvService:
             document['profile_reviewed_effective_version'] = document['effective_version']
         return self.mutate(owner, identifier, mutation, 'profile-review', transform)
 
-    def mark_reviewed_when_ready(self, owner, identifier):
-        """A finished guided review is the user's review of this CV. Best effort: pending interpretations leave it unmarked."""
-        from app.schemas.cv import Mutation
-        from uuid import uuid5
-        current = self.get(owner, identifier)
-        if current.get('profile_reviewed_effective_version') == current['effective_version']: return current
-        mutation_id = uuid5(NAMESPACE_URL, f"elo:review-complete:{identifier}:{current['version']}")
-        try: return self.mark_profile_reviewed(owner, identifier, Mutation(expected_version=current['version'], mutation_id=mutation_id))
-        except Conflict: return current
+    def complete_review(self, owner, identifier, current=None):
+        """Mark the CV reviewed once its guided review has finished and no saved interpretation is still open.
+
+        Called when the interview finishes and again whenever an interpretation settles, so an answer that was
+        still being interpreted at the end of the review does not leave the CV unreviewed.
+        """
+        current = current or self.get(owner, identifier)
+        for _ in range(3):
+            if current.get('profile_reviewed_effective_version') == current['effective_version']: return current
+            if current['operation']['status'] != 'ready' or current.get('candidate'): return current
+            if any(q.get('interpretation_status') in {'pending', 'failed'} and not q.get('reconciliation_required')
+                   for q in current['clarifications']):
+                return current
+            conversation = self.repository.conversations.latest(owner, identifier)
+            memory = (conversation or {}).get('interview_memory') or {}
+            if conversation is None or conversation.get('purpose') != 'skills_profile' or memory.get('status') not in REVIEW_FINISHED:
+                return current
+            mutation_id = uuid5(NAMESPACE_URL, f"elo:review-complete:{identifier}:{current['version']}")
+            try: return self.mark_profile_reviewed(owner, identifier, Mutation(expected_version=current['version'], mutation_id=mutation_id))
+            except Conflict:
+                current = self.get(owner, identifier)
+        return current
 
     def reopen_topic_skips(self, owner, identifier, item_id, mutation_id):
         """Let a skipped topic be reviewed again. The skipped questions stay in history but stop closing its targets."""
-        from app.schemas.cv import Mutation
         def transform(document):
             for question in document['clarifications']:
                 if question['item_id'] == item_id and question['status'] == 'skipped': question['reopened'] = True
@@ -161,8 +177,7 @@ class CvService:
                 return self._upload(owner, profile_version, name, file_type, data, mutation_id,
                                     cv_id, expected_version, source_hash, fingerprint, identifier)
             except Exception:
-                # An uncertain database commit must not delete its original. The
-                # same recovery path verifies the durable record before release.
+                # An uncertain database commit must not delete its original.
                 try: self.capacity.recover_one(identifier)
                 except Exception: pass
                 raise
@@ -273,16 +288,14 @@ class CvService:
                     patch['support_uncertain'] = True
                     patch['evidence'] = [{'id': 'correction:' + item_id, 'location': 'Your correction', 'excerpt': patch['description'][:500]}]
                 if item['kind'] == 'skill' and 'title' in patch:
-                    # Claim identity stays fixed; explicit renaming updates its canonical
-                    # label while retaining distinct evidence/source IDs on a name match.
+                    # Claim identity stays fixed; explicit renaming updates its canonical label.
                     patch['skill_ids'] = [skill_id(patch['title'])]
                     patch['skill_names'] = [patch['title']]
                     patch['evidence'] = [{'id': 'correction:' + item_id, 'location': 'Your correction', 'excerpt': patch.get('description', patch['title'])[:500]}]
             overlay = document['overlays'].setdefault(item_id, {})
             overlay.update(patch)
             overlay.setdefault('_field_sequences', {}).update({field: document['version'] + 1 for field in patch})
-            # Narrow factual edits do not invalidate an unrelated explanation of
-            # personal contribution. Text/identity/removal changes affect the source.
+            # Text/identity/removal changes affect the source; narrow factual edits do not.
             broad_change = bool(set(patch) & {'description', 'removed'}) or (
                 'title' in patch and normalized_name(patch['title']) != normalized_name(item['title']))
             affected_uncertainties = set()
@@ -314,8 +327,7 @@ class CvService:
         document['operation'].update(status='queued', attempt=0, lease_until=0, lease_token=None, error=None, auto_retries=0)
         document['operation'].pop('retry_at', None)
         document['operation'].pop('retry_reason', None)
-        # An explicit retry is a new bounded attempt, while automatic retries
-        # and worker recovery retain the existing operation budget.
+        # An explicit retry is a new bounded attempt.
         document['operation'].pop('model_call_attempts', None)
         document['receipts'][key] = fingerprint
         bump(document)

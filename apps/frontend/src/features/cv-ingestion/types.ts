@@ -3,11 +3,11 @@ export type ReviewFact = {field: ReviewField; skill_name: string | null; attribu
 export type SkillEstimate = {item_id: string; skill_name: string; level: 'insufficient_evidence' | 'guided_application' | 'independent_application' | 'complex_application'; explanation: string; evidence_refs: string[]};
 export type InterviewTopic = {id: string; title: string; status: 'pending' | 'current' | 'reviewed' | 'reviewed_with_gaps' | 'deferred'; validation?: 'unverified' | null};
 export type InterviewProgress = {topics?: InterviewTopic[]; status: 'reviewing' | 'reviewed' | 'reviewed_with_gaps' | 'paused'; reviewed_items: number; total_items: number; estimates: SkillEstimate[]};
-export type CvPolicy = { max_file_bytes: number; formats: ('pdf' | 'docx')[]; max_answer_chars: number; max_item_chars: number; extraction_configured: boolean; max_saved_cvs?: number; max_stored_original_bytes?: number };
+export type CvPolicy = { max_file_bytes: number; formats: ('pdf' | 'docx')[]; max_answer_chars: number; max_item_chars: number; extraction_configured: boolean; max_saved_cvs: number; max_stored_original_bytes: number };
 export type Evidence = { id: string; excerpt: string; location: string };
 export type Attribution = 'personal' | 'team' | 'observed' | 'denied' | 'unknown';
 export type Assistance = 'independent' | 'assisted' | 'supervised' | 'unknown';
-export type SkillLevelInfo = {level: number | null; status: 'rated' | 'uncertain'; rationale: string; source: 'cv' | 'review'; evidence: Evidence[]};
+export type SkillLevelInfo = {level: number | null; status: 'rated' | 'assumed' | 'uncertain'; rationale: string; source: 'cv' | 'review'; evidence: Evidence[]};
 export type SkillSource = { skill_level?: SkillLevelInfo | null; item_id: string; evidence_type: string; explicit: boolean; support_uncertain: boolean; attribution: Attribution; assistance: Assistance; proficiency: string | null; experience_months: number | null; evidence: Evidence[] };
 export type InterpretationClaim = { skill_level?: number | null; skill_level_rationale?: string | null; skill_id: string; name: string; attribution: Attribution; assistance: Assistance; proficiency: string | null; experience_months: number | null; evidence_excerpt: string | null; changed_fields: string[] };
 export type Interpretation = { review_evidence?: ReviewFact[]; claims: InterpretationClaim[]; remaining_uncertainties: string[]; resolved_uncertainties: string[]; summary: string; metadata: { provider: string; model: string; prompt_version: string; schema_version: string } };
@@ -28,7 +28,7 @@ export type ConfirmedTargetContext = { id: string; version: number; type: 'speci
 export type Questions = { questions: Clarification[]; deferred: boolean; reason: string | null; cv_version: number; context: ConfirmedTargetContext | null; prepared: boolean };
 export type PrepareQuestionsInput = { expected_version: number; mutation_id: string; career_target_id: string; career_target_version: number; career_target_selection_version: number };
 export type Declaration = { canonical_skill_id?: string | null; skill_registry_version?: string; id: string; name: string; description: string; skill_id: string; provenance: 'user_declared'; contributions?: { id: string; description: string; created_at: string }[]; attached_to?: CvMatch | null; created_at: string; updated_at: string };
-export type Declarations = { skill_groups?: Record<string, string>; skill_subgroups?:Record<string,string>; version: number; declarations: Declaration[]; limits?: { name: number; description: number } };
+export type Declarations = { skill_groups?: Record<string, string>; skill_subgroups?:Record<string,string>; version: number; declarations: Declaration[]; limits: { name: number; description: number } };
 export type CvMatch = { cv_id: string; item_id: string; cv_version: number };
 export type DeclarationLink = { declaration_id: string; status: 'standalone' | 'current' | 'changed' | 'removed' | 'unavailable' | 'unverified'; selected: boolean; current_cv_version: number | null };
 export type DeclarationLinks = { declarations_version: number; links: DeclarationLink[] };
@@ -37,13 +37,15 @@ export type ItemInput = { expected_version: number; mutation_id: string; action:
 
 export type ConversationActionKind = 'clarify' | 'correct' | 'remove' | 'add_capability' | 'choose_source' | 'route' | 'skip';
 export type ConversationActionStatus = 'awaiting_confirmation' | 'needs_source' | 'pending' | 'saved' | 'failed' | 'cancelled' | 'stale';
+export type ConversationErrorCode = 'unsupported_interpretation' | 'no_valid_next_step' | 'interrupted';
 export type ConversationAction = {
  id: string; kind: ConversationActionKind; status: ConversationActionStatus; title: string; summary: string;
- item_id?: string | null; item_title?: string | null; question_id?: string | null; error?: string | null;
+ item_id?: string | null; item_title?: string | null; question_id?: string | null; error?: string | null; error_code?: ConversationErrorCode | null;
  changes: {field: string; before: string | null; after: string | null}[];
  choices: {id: string; label: string; description: string; kind: 'item' | 'declaration'}[];
 };
-export type ConversationMessage = {id: string; sequence: number; role: 'user' | 'assistant'; text: string; created_at: string; actions: ConversationAction[]};
+/** `question_id`: the review question this message asks. `status_only`: the text only repeats a failure its actions already show. */
+export type ConversationMessage = {id: string; sequence: number; role: 'user' | 'assistant'; text: string; created_at: string; actions: ConversationAction[]; question_id?: string | null; status_only?: boolean};
 /** The open review question. Number, limit, hints and reason are absent on older saved questions. */
 export type ActiveQuestion = {id: string; item_id: string; title: string; question: string; number?: number | null; limit?: number | null; hints?: string[]; reason?: string | null};
 export type CvConversation = { interview?: InterviewProgress | null; purpose?: 'skills_profile' | null; reviewed_effective_version?: number | null;
@@ -62,3 +64,9 @@ export type IntakeField = {status: IntakeStatus; value: string | null; evidence:
 export type ProfileSkill = {canonical_skill_id?:string|null;skill_registry_version?:string;name: string; description: string; evidence: IntakeEvidence[]; dimensions: Record<string, IntakeField>};
 export type ProfileEntry = {id: string; kind: 'work' | 'project' | 'education' | 'interest'; title: string; fields: Record<string, IntakeField>; skills: ProfileSkill[]};
 export type SkillsProfile = {skill_groups?: Record<string, string>; skill_subgroups?:Record<string,string>; version: number; status: 'empty' | 'draft' | 'saved'; saved_at: string | null; areas: Partial<Record<ProfileEntry['kind'], IntakeStatus>>; entries: ProfileEntry[]};
+
+export type SkillListSource = {kind: 'cv' | 'chat' | 'declaration'; id: string; title?: string | null; item_kind?: string | null; attribution?: Attribution | null; assistance?: Assistance | null; description?: string | null; draft?: boolean; facts?: {field: string; value: string | null; status: string}[]; evidence?: {quote: string; location?: string | null}[]};
+export type ApplicationLevel = 'guided_application' | 'independent_application' | 'complex_application';
+/** One skill across every source, keyed by its canonical identity (or normalised name when the registry has none). */
+export type ListedSkill = {key: string; canonical_skill_id?: string | null; name: string; level?: SkillLevelInfo | null; application?: ApplicationLevel | null; proficiency?: string | null; basis: 'level' | 'application' | 'proficiency' | 'described' | 'draft' | 'declared' | 'none'; added_in_review?: boolean; note?: string | null; sources: SkillListSource[]};
+export type SkillList = {cv_id: string | null; cv_version: number | null; profile_version: number | null; declarations_version: number | null; unavailable?: ('chat' | 'declarations')[]; skills: ListedSkill[]; skill_groups?: Record<string, string>; skill_subgroups?: Record<string, string>};

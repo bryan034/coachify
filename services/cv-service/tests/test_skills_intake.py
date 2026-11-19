@@ -90,7 +90,6 @@ def test_manual_entry_semantic_paraphrase_save_resume_and_skip(harness):
     assert profile['entries'][0]['skills'][0]['name'] == 'Data processing'
     assert profile['entries'][0]['fields']['description']['value'] == 'Weekly data processing'
     assert chat['active_question']['question'].endswith('contribution?')
-    # No CV or career goal was created/required, and a partial profile is saveable.
     chat = send(client, chat, 'Save my reviewed profile', command='finish')
     assert profiles.records['Bearer owner-a']['status'] == 'saved'
     assert chat['active_question'] is None
@@ -270,7 +269,6 @@ def test_old_refresh_cannot_clear_a_concurrently_published_review_question(harne
     refreshed = asyncio.run(service.refresh(app, account, chat['id']))
     assert refreshed['active_question'] == active
     assert refreshed['revision'] == chat['revision']
-    # A fresh read still clears a question whose source really changed.
     document = original_cv_get('owner-a', cv['id'])
     from app.schemas.cv import AnswerMutation
     from app.clarification.service import answer
@@ -299,7 +297,6 @@ def test_old_profile_refresh_preserves_a_newer_intake_question(harness, monkeypa
 
     monkeypatch.setattr(intake, 'read_profile', old_profile)
     refreshed = asyncio.run(service.refresh(app, {'id': 'owner-a'}, chat['id']))
-    # The public view adds empty defaults for question numbering and hints that intake questions do not use.
     assert {**refreshed['active_question'], 'number': None, 'limit': None, 'hints': [], 'reason': None} == chat['active_question']
     assert refreshed['intake_profile_version'] == profiles.records['Bearer owner-a']['version']
     assert refreshed['revision'] == chat['revision']

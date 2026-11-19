@@ -46,7 +46,6 @@ test('logout failure stays locked across reload and old retry does not clear B',
  await expect(page.getByRole('button',{name:'Save background'})).toHaveCount(0);
  const b = await createLocalAccount(page,'Synthetic logout B');
  fail=false;
- // A's late termination retry is session-specific and cannot revoke B.
  expect((await page.request.post('/api/v1/profile/auth/logout',{headers:a.headers})).ok()).toBe(true);
  expect((await b.get('/api/v1/profile')).ok()).toBe(true);
  await page.reload();
@@ -56,7 +55,7 @@ test('logout failure stays locked across reload and old retry does not clear B',
 test('another tab signing out clears private UI and drafts', async ({ page, context }) => {
  await createLocalAccount(page,'Synthetic multi-tab');
  const other = await context.newPage();
- // Simulate opening a same-account tab; access secrets stay in sessionStorage, never localStorage.
+ // Simulate opening a same-account tab.
  const stored = await page.evaluate(() => sessionStorage.getItem('elo.session'));
  await other.goto('/');
  await other.evaluate(value => sessionStorage.setItem('elo.session',value!),stored);

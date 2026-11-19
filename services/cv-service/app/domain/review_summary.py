@@ -1,4 +1,4 @@
-"""What the CV review changed, derived on read from the saved CV so every page agrees after a review."""
+"""What the CV review changed, derived on read from the saved CV."""
 from app.domain.capabilities import effective_items, skills_for
 
 NOTE_LIMIT = 240

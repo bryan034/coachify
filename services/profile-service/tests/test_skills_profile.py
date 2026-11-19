@@ -41,7 +41,7 @@ def test_draft_save_and_confirmed_declaration_publication_preserve_account(repo)
     assert skills.current('bob')['entries'] == []
     assert all(repo.account('alice')[key] == value for key, value in original.items())
     skills.save('alice', write(saved['version'], status='saved', entries=[experience]))
-    assert repo.current('alice')['version'] == 1  # A review alone does not change effective declarations.
+    assert repo.current('alice')['version'] == 1
 
 
 def test_stale_profile_and_key_reuse_rejected_without_losing_declarations(repo):

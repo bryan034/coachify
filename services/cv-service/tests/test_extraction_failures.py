@@ -37,7 +37,7 @@ def test_provider_rejections_preserve_only_status(monkeypatch, status):
     assert (failure.stage, failure.category, failure.provider_status_code) == ('model_request', 'provider_http_error', status)
     assert PRIVATE not in str(failure)
     assert failure.__cause__ is None
-    assert len(calls) == 1  # SDK retries stay disabled.
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize('message,param,reason,parameter', [
@@ -108,7 +108,7 @@ def test_http_success_with_provider_error_is_saved_without_repair(harness, monke
     assert result['status'] == 'failed' and result['extraction_version'] == 0
     assert saved_error['failure_stage'] == 'response_decode'
     assert saved_error['failure_category'] == 'provider_http_error'
-    assert saved_error['provider_status_code'] is None  # Actual HTTP status was 200.
+    assert saved_error['provider_status_code'] is None
     assert saved_error['provider_reason'] == 'schema_rejected'
     assert not saved_error['repair_attempted'] and len(calls) == 1
     assert PRIVATE not in caplog.text + json.dumps(result)
@@ -145,7 +145,6 @@ def test_cv_chat_and_interpretation_reject_embedded_errors(monkeypatch, operatio
 
 @pytest.mark.parametrize('exception,category', [
     (httpx.ReadTimeout, 'timeout'), (httpx.ConnectTimeout, 'timeout'),
-    # The SDK wraps failures during send as connection errors.
     (httpx.ConnectError, 'connection_error'), (httpx.ReadError, 'connection_error'),
 ])
 def test_transport_failure_categories(monkeypatch, exception, category):
@@ -230,7 +229,6 @@ def test_failure_diagnostics_survive_poll_list_reload_and_retry(harness, monkeyp
     assert result['source_available'] and result['extraction_version'] == 0
     assert client.post('/api/v1/cv/operations/' + result['operation_id'] + '/retry',
                        json=mutation(result['version'])).status_code == 200
-    # A successful retry clears the prior failure instead of leaving stale diagnostics.
     app.state.worker.extractor = harness[2]
     app.state.worker.run_once()
     recovered = client.get('/api/v1/cv/' + result['id']).json()

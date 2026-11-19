@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from .base import Contract, Mutation, Text
 from .notes import NotesDocument
-from .tasks import EditableTask, RevisionReview, TaskReadiness, TaskSkill, TaskTitle
+from .tasks import EditableTask, RevisionReview, SavedTaskSlot, TaskReadiness, TaskSkill, TaskTitle, TaskWarning
 
 Day=date
 Clock=Annotated[str,StringConstraints(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')]
@@ -100,8 +100,7 @@ class PlannerConfig(Contract):
         if any(period.end_date<period.start_date for period in self.reduced_periods):raise ValueError('A reduced-availability period ends before it starts.')
         return self
 
-# The patch fields stay loose on purpose. A model mistake then reaches the merge step, where
-# it leaves the settings unchanged and is explained in chat, rather than failing the turn.
+# The patch fields stay loose; invalid patches are rejected at the merge step.
 class PatchBlock(Contract):
     day:int
     start_time:str
@@ -234,8 +233,22 @@ class RunwayRequest(Contract):
 class SaveConfig(Mutation):
     config:PlannerConfig
 class GeneratePlan(Mutation):
-    allow_partial_assessment:bool=False
+    allow_partial_assessment:bool=Field(default=False,deprecated=True,description='Ignored. Saved evaluations are reused only when current; kept so saved retry requests stay readable.')
     auto_accept:bool=Field(default=False,description='Activate the roadmap and first week in the generation operation, without a separate review.')
+class ConfirmEvidence(Mutation):
+    expected_declarations_version:int=Field(ge=0)
+    proposal_hash:str=Field(min_length=64,max_length=64)
+class EvidenceProposal(Contract):
+    """A completed session's note offered to the user as Skills Profile evidence. Nothing is written until confirmed."""
+    id:str
+    session_id:str
+    name:str
+    description:str
+    proposal_hash:str
+class EvidenceProposals(Contract):
+    version:int
+    declarations_version:int
+    items:list[EvidenceProposal]
 class AssignmentStatus(Mutation):
     assignment_id:str=Field(min_length=1,max_length=80)
     status:Literal['scheduled','completed']
@@ -280,8 +293,15 @@ class RunwayResolved(Contract):
     start_date:str
     target_date:str|None
     matched_duration:Duration|None
+class RunwayWindow(Contract):
+    """One free study window on a date: inside study blocks (preferred) or extra time (overflow)."""
+    date:str
+    start_time:str
+    end_time:str
+    kind:Literal['preferred','overflow']
+    minutes:int
 class Runway(Contract):
-    windows:list[dict]=Field(default_factory=list,max_length=10000)
+    windows:list[RunwayWindow]=Field(default_factory=list,max_length=10000)
     can_generate:bool
     issues:list[RunwayIssue]
     notices:list[RunwayIssue]=Field(default_factory=list,description='Explanations that do not block generation, such as study times that hold less than the weekly hours.')
@@ -303,7 +323,7 @@ class OperationView(Contract):
 class OperationAccepted(Contract):
     version:int
     operation:OperationView|None
-# Stored records can predate these models. Unexpected extras stay readable instead of failing the page.
+# Stored records can predate these models; unexpected extras stay readable.
 class SavedRecord(Contract):
     model_config=ConfigDict(extra='allow')
 class MilestoneOutcomeRecord(SavedRecord):
@@ -328,6 +348,7 @@ class PlanChanges(SavedRecord):
 class PlanGeneration(SavedRecord):
     prompt_version:str|None=None
     attempts:int|None=None
+    clamped_milestones:list[str]|None=Field(default=None,description='Milestones whose generated start was before the planning start and was moved up to it.')
 class ConfirmationRecord(SavedRecord):
     name:str|None=None
     question:str|None=None
@@ -547,11 +568,17 @@ class CarryoverEntry(SavedRecord):
     minutes:int|None=None
     reason:str
     adjusted:bool=Field(default=False,description='The service changed the proposal because the work could not be placed or exceeded the carry-over limit.')
-    schedule:list[dict]=Field(default_factory=list)
-    previous_schedule:list[dict]=Field(default_factory=list)
+    schedule:list[SavedTaskSlot]=Field(default_factory=list)
+    previous_schedule:list[SavedTaskSlot]=Field(default_factory=list)
 class ObjectiveRevision(SavedWeekObjective):
     reason:str
     previous:SavedWeekObjective|None=None
+class WeekFeedback(Contract):
+    """Optional, self-reported. It shapes the next week and never changes assessed skills."""
+    workload:Literal['too_much','about_right','too_light']|None=None
+    difficulty:Literal['too_hard','about_right','too_easy']|None=None
+    note:str=Field(default='',max_length=500)
+
 class SavedWeek(SavedRecord):
     id:str
     week_start:str
@@ -564,7 +591,7 @@ class SavedWeek(SavedRecord):
     created_at:str
     accepted_at:str|None=None
     summary:str=''
-    feedback:dict|None=None
+    feedback:WeekFeedback|None=None
     target:WeekTarget|None=None
     tasks:list[EditableTask]|None=None
     unplaced:list[EditableTask]=Field(default_factory=list,description='New tasks left out because a carry-over choice used their time.')
@@ -578,7 +605,7 @@ class SavedWeek(SavedRecord):
 class RetryWeek(Mutation):
     week_start:date
     revision:bool=False
-    feedback:dict|None=None
+    feedback:WeekFeedback|None=None
 class WeekPlanning(Contract):
     """Which week can be planned now. `available` is false while next week is still waiting for the planning day."""
     current_week_start:str
@@ -606,7 +633,7 @@ class PlannerView(Contract):
     inputs:PlanInputs
     active:PlannedRoadmap|None
     active_review:PlanReview|None
-    task_warnings:list[dict]=Field(default_factory=list)
+    task_warnings:list[TaskWarning]=Field(default_factory=list)
     active_sessions:list[SessionView]=Field(default_factory=list)
     preview_sessions:list[SessionView]=Field(default_factory=list,description='The week preview as to-do rows: new tasks and carried work at their proposed times.')
     outline_candidate:SavedOutline|None=None

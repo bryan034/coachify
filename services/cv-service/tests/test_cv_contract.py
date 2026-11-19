@@ -28,8 +28,15 @@ def test_failure_diagnostics_openapi_matches_runtime(harness):
     _, app, *_ = harness
     artifact = Path(__file__).resolve().parents[3] / 'contracts/api/cv.yaml'
     contract = json.loads(artifact.read_text())['components']['schemas']
-    for name in ('ErrorInfo', 'ExtractionMetadata', 'CvDetail', 'ReconciliationView', 'InterviewProgress', 'InterviewTopic', 'CvSummary', 'ProcessingProgress', 'ActiveQuestion', 'ConversationSend'):
+    for name in ('ErrorInfo', 'ExtractionMetadata', 'CvDetail', 'ReconciliationView', 'InterviewProgress', 'InterviewTopic', 'CvSummary', 'ProcessingProgress', 'ActiveQuestion', 'ConversationSend',
+                 'ChatAction', 'ChatMessage', 'SkillLevelInfo', 'SkillList', 'ListedSkill', 'SkillListSource'):
         assert app.openapi()['components']['schemas'][name] == contract[name]
+
+
+def test_skill_list_route_matches_contract(harness):
+    _, app, *_ = harness
+    contract = json.loads((Path(__file__).resolve().parents[3] / 'contracts/api/cv.yaml').read_text())
+    assert contract['paths']['/api/v1/cv/skills'] == app.openapi()['paths']['/api/v1/cv/skills']
 
 
 def test_deletion_contract_matches_runtime(harness):

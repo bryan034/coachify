@@ -7,7 +7,6 @@ bearer = HTTPBearer(auto_error=False)
 
 
 async def current_account(request: Request, credentials: HTTPAuthorizationCredentials | None = None):
-    # Called by the dependency below so tests can replace one explicit boundary.
     if credentials is None:
         raise HTTPException(401, 'Sign in to import a job description.')
     try:
@@ -25,8 +24,7 @@ async def current_account(request: Request, credentials: HTTPAuthorizationCreden
             raise ValueError
     except (ValueError, AttributeError) as exc:
         raise HTTPException(503, 'Account verification is unavailable. Please retry.') from exc
-    # A verified account may still be in initial setup. Read Profile's canonical
-    # completion marker rather than trusting a browser flag or populated fields.
+    # Read Profile's canonical completion marker.
     try:
         response = await request.app.state.profile_client.get('/api/v1/profile',
             headers={'Authorization': 'Bearer ' + credentials.credentials})

@@ -18,7 +18,6 @@ def config(**changes):
 def test_partial_week_blackout_overlap_and_cap_are_calculated_from_real_dates():
     report=Capacity(config(),NOW).report()
     assert report['can_generate'] and report['calendar']=={'days':19,'weeks':2,'extra_days':5,'label':'2 weeks, 5 days','partial_first_week':True}
-    # Week 1 only has Wednesday (90); Saturday is blacked out. Later weeks have 390 merged minutes, capped at 300.
     assert [(w['preferred_minutes'],w['overflow_minutes'],w['usable_minutes']) for w in report['weeks']]==[(90,0,90),(300,0,300),(300,0,300)]
     assert report['study']=={'preferred_minutes':690,'overflow_minutes':0,'usable_minutes':690}
     assert report['weeks'][0]['partial'] and not report['weeks'][1]['partial']
@@ -32,7 +31,6 @@ def test_retired_backup_blocks_are_dropped_unless_they_were_switched_on():
 
 def test_extra_time_fills_only_what_study_blocks_cannot_and_respects_blackouts():
     report=Capacity(config(allow_overflow=True),NOW).report()
-    # Week 1: Wednesday's block holds 90; extra time on the other free days covers the rest of the 300.
     assert [(w['preferred_minutes'],w['overflow_minutes'],w['usable_minutes']) for w in report['weeks']]==[(90,210,300),(300,0,300),(300,0,300)]
     capacity=Capacity(config(allow_overflow=True),NOW)
     assert capacity.days[date(2030,1,12)]=={'preferred':[],'overflow':[]}
@@ -44,9 +42,7 @@ def test_breaks_session_length_daily_limit_and_rest_days_reduce_what_a_week_can_
     evening=[{'day':d,'start_time':'18:00','duration_minutes':180} for d in range(7)]
     week=lambda **changes:Capacity(config(blocks=evening,blackouts=[],weekly_minutes=3000,start_date='2030-01-14',target_date='2030-01-20',**changes),NOW).report()['weeks'][0]['usable_minutes']
     assert week()==7*180
-    # 60 + 10 break + 60 + 10 break + 40 fits in three hours.
     assert week(break_minutes_per_hour=10)==7*160
-    # 90-minute sessions earn a 15-minute break: 90 + 15 + 75.
     assert week(break_minutes_per_hour=10,preferred_session_minutes=90)==7*165
     assert week(max_daily_minutes=60)==7*60
     assert week(rest_days_per_week=2)==5*180
@@ -130,10 +126,8 @@ def test_daily_blackout_covers_a_range_and_honours_its_interval():
 
 def test_monthly_blackout_repeats_on_the_day_and_clamps_to_short_months():
     assert usable({'frequency':'monthly','start_date':'2030-01-15'})==[0,120,120,120,120,120]
-    # 2030-02-12 is a Tuesday: the 12th of each month from an earlier start.
     assert usable({'frequency':'monthly','start_date':'2029-12-12'})==[120,120,120,120,0,120]
     assert usable({'frequency':'monthly','interval':3,'start_date':'2029-12-12'})==[120]*6
-    # The 31st falls back to 28 February 2030, a Thursday.
     capacity=Capacity(config(start_date='2030-01-14',target_date='2030-03-05',blocks=[{**EVENING,'day':3}],blackouts=[{'frequency':'monthly','start_date':'2030-01-31'}]),NOW)
     assert capacity.blackout_windows(date(2030,2,28))==[(0,1440)] and capacity.blackout_windows(date(2030,2,27))==[]
 

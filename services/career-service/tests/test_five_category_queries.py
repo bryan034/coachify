@@ -37,7 +37,6 @@ def test_model_writes_all_five_initial_queries_before_brave(role,field,terms,com
             assert len(plans)==1;calls.append(query);return []
     engine=SimpleNamespace(ai=AI(),source=Search(),slots=asyncio.Semaphore(3),settings=SimpleNamespace(timeout_seconds=30,max_searches=2))
     result=asyncio.run(prefetch(engine,identity,'synthetic-owner','synthetic-revision'))
-    # A plain employer/role query runs first; the model's targeted query follows.
     public={'company':company,'role':role}
     planned={category:[broad_query(public,category),*values] for category,values in expected.items()}
     assert set(calls)=={values[0] for values in planned.values()}

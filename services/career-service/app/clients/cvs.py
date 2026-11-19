@@ -9,7 +9,7 @@ from app.schemas.goals import CvSummary
 
 STATUS = {'queued': 'pending', 'processing': 'processing', 'ready': 'succeeded', 'failed': 'failed'}
 MAPPING_VERSION = 'cv-source-identities-v1'
-MAX_CV_RESPONSE_BYTES = 512 * 1024  # Existing Career document admission limit.
+MAX_CV_RESPONSE_BYTES = 512 * 1024
 MAX_CV_LIST_PAGES = 100
 SIZE_LIMIT_MESSAGE = ('Career can read CV data up to 512 KiB. Choose a smaller saved CV or continue without a CV. '
                       'Your saved CV and its evidence are unchanged.')
@@ -46,8 +46,7 @@ def saved_snapshot(row, owner):
         if not isinstance(evidence, list): raise ValueError('Invalid source evidence.')
         excerpts = [item['excerpt'] for item in evidence]
         joined = '\n'.join(excerpts)
-        # Keep full excerpts separately when the legacy compact field cannot
-        # represent them; never truncate evidence to fit a different contract.
+        # Keep full excerpts separately when the compact field cannot represent them.
         skills.append({**{key: skill[key] for key in ('skill_id', 'name', 'category', 'experience_months',
             'context', 'evidence_type', 'explicit', 'item_ids', 'sources', 'conflicting_fields')},
             'proficiency': proficiency if proficiency in {'beginner', 'intermediate', 'advanced', 'expert'} else None,
@@ -57,8 +56,6 @@ def saved_snapshot(row, owner):
         'file_name': summary.file_name, 'file_type': row['file_type'], 'skills': skills,
         'extraction_status': summary.extraction_status, 'extraction_version': summary.extraction_version,
         'profile_version': row['profile_version'], 'created_at': row['created_at'], 'updated_at': row['updated_at'],
-        # C source IDs are intentionally not claimed to be Career registry IDs.
-        # Existing assessment validation rejects mismatched mapping versions.
         'skill_mapping_version': MAPPING_VERSION})
 
 
@@ -67,8 +64,7 @@ class CvClient:
         self.client = client
 
     async def read(self, path, token, *, budget=None):
-        # Bound bytes before JSON decoding, including chunked responses. The
-        # current CV authority has no aggregate skill/excerpt count limit.
+        # Bound bytes before JSON decoding, including chunked responses.
         async with self.client.stream('GET', path, headers={'Authorization': token}, follow_redirects=False) as response:
             if response.status_code != 200: return response.status_code, None
             size = response.headers.get('content-length')
@@ -88,7 +84,6 @@ class CvClient:
                 status, body = await self.read(path, token, budget=budget)
                 if status != 200: raise ValueError
                 if 'cvs' not in body:
-                    # Existing deployed read-only CV responses remain compatible.
                     if items: raise ValueError('CV list contract changed during pagination.')
                     return [CvSummary.model_validate(row) for row in body['items']]
                 page=[saved_summary(row) for row in body['cvs']]

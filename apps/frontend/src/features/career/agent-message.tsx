@@ -16,7 +16,6 @@ export function AgentMarkdown({children}:{children:string}){
  }}>{humaniseText(children)}</Markdown></div>;
 }
 
-/** Observable work only: no simulated reasoning, timers or invented tool results. */
 export function AgentActivity({label,detail,step=false}:{label:string;detail?:string;step?:boolean}){
  return <div className="agent-activity" role="status" aria-live="polite">
   {step&&<p className="small">Current step</p>}
@@ -97,7 +96,7 @@ export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry'
  </div>;
 }
 
-/** Display animation after a validated response arrives; this is not provider streaming. */
+/** Animates a reply after a validated response arrives. */
 export function AgentReply({children,animate=true,onProgress}:{children:string;animate?:boolean;onProgress?:()=>void}){
  const [shown,setShown]=useState({text:children,count:1});
  const [reduced,setReduced]=useState(()=>typeof window!=='undefined'&&!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);

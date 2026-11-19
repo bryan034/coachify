@@ -128,7 +128,6 @@ def main():
             assert runway['can_generate'] and runway['weeks'][0]['partial'] and runway['weeks'][0]['usable_minutes']==180
             assert (runway['weeks'][0]['preferred_minutes'],runway['weeks'][0]['overflow_minutes'])==(60,120)
             assert state['planner']['inputs']['experience'] and not state['planner']['outline_candidate']
-            # The user explicitly evaluates skills before generating a roadmap from that saved assessment.
             assessment_url=f'http://127.0.0.1:{assess_port}/api/v1/assessments'
             before=http.get(assessment_url+'/current')
             before.raise_for_status()
@@ -161,7 +160,6 @@ def main():
             state=read();assert state['planner']['active']==completed and state['planner']['active']['assignments'][0]['evidence_note']=='Explanation written.' and len(state['messages'])==2
             assert http.get('/api/v1/roadmaps/history/'+completed['id']).json()['schema_version']=='roadmap-v2'
             assert http.get('/api/v1/roadmaps/history/'+completed['id'],headers={'Authorization':'Bearer synthetic-other'}).status_code==404
-            # Old settings written by earlier versions are removed from storage on the next start.
             old={'buffer_percent':20,'checkin_day':4,'checkin_time':'18:00'}
             before=read()
             database=client[prefix+'_roadmap'];saved=database.workspaces.find_one({'planner.active.id':completed['id']})

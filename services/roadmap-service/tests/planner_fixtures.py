@@ -1,7 +1,6 @@
 """Synthetic scenario shared by the validator and flow tests. Wednesday 2030-01-09, 08:00 Singapore.
 
-BLOCKS keeps the retired `kind` field, as saved settings may: the Sunday backup block is dropped on read.
-Breaks are off here so the arithmetic stays plain; test_placement.py covers breaks.
+BLOCKS keeps the retired `kind` field: the Sunday backup block is dropped on read. Breaks are off here.
 """
 import copy
 from datetime import datetime, timezone

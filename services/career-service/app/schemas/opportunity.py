@@ -11,7 +11,7 @@ BOLD=re.compile(r'\*\*(?=\S)([^*\n]{1,40}?)(?<=\S)\*\*')
 
 
 def plain_text(text):
-    """Drop the **key term** markers; used wherever wording is compared, cited or fed back to a model."""
+    """Drop the **key term** markers."""
     return BOLD.sub(r'\1',text or '').replace('*','')
 
 
@@ -75,7 +75,6 @@ class CategoryResult(Model):
     model_calls:int=Field(default=0,ge=0)
     latency_ms:int=Field(default=0,ge=0)
     estimated_cost_usd:float|None=Field(default=None,ge=0)
-    # No guessed prices or costs; provider numeric token metrics stay in existing usage logs.
 
 class Summary(Model):
     overview_refs:list[str]=Field(default_factory=list,max_length=3)
@@ -91,7 +90,7 @@ class SkillLevelRating(Model):
     """The level a role needs in one skill on elo's shared 1-10 understanding scale, rated from research."""
     skill:Annotated[str,StringConstraints(strip_whitespace=True,min_length=1,max_length=200)]
     level:int=Field(ge=1,le=10,strict=True)
-    # What the employer expects in this skill; absent on ratings saved before it was asked for.
+    # What the employer expects in this skill.
     employer_demand:Text|None=None
     reported_examples:list[SkillLevelExample]=Field(default_factory=list,max_length=2)
     # Why elo rated the role at this level.

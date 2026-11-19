@@ -1,9 +1,7 @@
 """Atomic embedded account declarations, with recoverable mutation receipts.
 
-The account document is the authority. Receipts hold immutable input/result
-snapshots and are operational history, never an alternative capability store.
-The last receipt is sealed before another mutation can publish, so a process
-failure after account publication remains an idempotent replay.
+The account document is the authority; receipts hold immutable input/result snapshots.
+The last receipt is sealed before another mutation can publish.
 """
 import hashlib
 import json
@@ -96,8 +94,7 @@ class CapabilityRepository:
                 raise CapabilityConflict("This request key was already used for different changes. Use a new key.", "mutation_conflict")
         if candidate.get("completed"):
             return self.current(owner)
-        # Even no-ops publish their receipt under the expected-version boundary.
-        # They never increment the version used by downstream consumers.
+        # Even no-ops publish their receipt under the expected-version boundary, without incrementing the version.
         version_filter = ({"$or": [{"declarations_version": 0}, {"declarations_version": {"$exists": False}}]}
                           if request.expected_version == 0 else {"declarations_version": request.expected_version})
         result = self.accounts.update_one({"id": account["id"], **version_filter,

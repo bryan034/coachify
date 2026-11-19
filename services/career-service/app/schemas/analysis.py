@@ -1,7 +1,7 @@
-"""SCRUM-310: bounded, application-owned MongoDB and AI contracts.
+"""Bounded, application-owned MongoDB and AI contracts.
 
-No raw JD field is accepted. Account IDs remain Profile UUIDs; domain IDs are
-ObjectIds represented as hex strings at the API boundary.
+Account IDs remain Profile UUIDs; domain IDs are ObjectIds represented as hex strings
+at the API boundary.
 """
 from __future__ import annotations
 
@@ -59,8 +59,6 @@ DomainId = Annotated[str, BeforeValidator(object_id), StringConstraints(pattern=
 
 
 def cv_reference(value):
-    # CV owns its identifier format. Existing ObjectId references retain BSON
-    # identity; new saved-CV UUIDs remain their original strings.
     if isinstance(value, ObjectId): return str(value)
     if isinstance(value, str) and re.fullmatch('[0-9a-f]{24}', value): return value
     if isinstance(value, str) and str(UUID(value)) == value: return value
@@ -135,7 +133,7 @@ class CvSkill(Contract):
     evidence: Evidence | None = None
     evidence_type: Literal['cv', 'user_declaration', 'explicit', 'inferred', 'user_corrected', 'user_clarified', 'uncertain', 'mixed']
     explicit: bool = Field(strict=True)
-    # Original extraction and current contribution remain distinct. No proof required.
+    # Original extraction and current contribution remain distinct.
     original_evidence: Evidence | None = None
     source_evidence: list[CvSourceEvidence] = Field(default_factory=list)
     reported_proficiency: CvText | None = None
@@ -439,7 +437,6 @@ class ResearchContext(Contract):
 
 
 class ResearchCoverage(Contract):
-    # Keep historical mixed-provider records readable beside configured search.
     platform: Literal['brave','reddit']
     status: Literal['succeeded','no_findings','unavailable','not_connected']
     round: int = Field(default=0,ge=0,le=5)
@@ -618,9 +615,7 @@ def mongo_document(model: Document):
             data['inputs'][name] = data['inputs'][name] if name == 'cv_id' and len(str(data['inputs'][name])) != 24 else ObjectId(data['inputs'][name])
         for ref in data['inputs']['research']:
             ref['id'] = ObjectId(ref['id'])
-    # Preserve the retired unique(user_id, create_key) index without modifying
-    # legacy records or dropping constraints. All canonical goal/draft IDs share
-    # one stable namespaced key, including in-place draft promotion.
+    # Preserve the retired unique(user_id, create_key) index with one stable namespaced key.
     if isinstance(model, CareerGoal) or data.get('record_type') in {'exploration_draft','requirement_review'}:
         data['create_key']='canonical:'+str(model.id)
     # Mongo stores datetimes in UTC; ISO strings are reserved for API JSON.

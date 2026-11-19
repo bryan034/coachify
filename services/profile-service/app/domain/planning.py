@@ -40,7 +40,7 @@ def revise_period(previous, operation, identifier, changes):
         if existing is not None:
             rows.remove(existing)
         else:
-            return previous  # Repeated removal cannot affect another period.
+            return previous
     else:
         if operation == "edit" and existing is None:
             raise PeriodNotFound
@@ -78,7 +78,7 @@ def planning_inputs(profile, zone, start=None, end=None):
         issues.append({"field": "application_date", "message": "The saved application date is today or earlier. Update it before generating a new roadmap."})
     if base is None:
         issues.append({"field": "weekly_hours", "message": "Set your normal weekly availability."})
-    # Historical rates retain their original meaning; only applicable dates block planning.
+    # Only applicable dates block planning.
     cutoff = max(capacity_today, start) if start else capacity_today
     conflicts = [row["id"] for row in rows if row["end_date"] >= cutoff.isoformat()
                  and (end is None or row["start_date"] <= end.isoformat())
@@ -91,7 +91,6 @@ def planning_inputs(profile, zone, start=None, end=None):
             raise ProfileValidationError("end_date", "Provide a window end on or after its start.")
         hours = None
         if base is not None and not conflicts:
-            # Rational arithmetic avoids rounding each day's fractional allocation.
             total = Fraction(str(base)) * ((end - start).days + 1) / 7
             for row in rows:
                 a, b = max(start, date.fromisoformat(row["start_date"])), min(end, date.fromisoformat(row["end_date"]))

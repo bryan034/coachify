@@ -69,13 +69,10 @@ def test_openrouter_request_asks_the_model_to_search_natively_and_keeps_cited_pu
     assert {s.url for s in sources}=={'https://example.test/a','https://example.test/b'}
     first=next(s for s in sources if s.url=='https://example.test/a')
     second=next(s for s in sources if s.url=='https://example.test/b')
-    # Without a provider excerpt, the cited answer line (minus link markup) is the evidence,
-    # labelled as model wording so it is never mistaken for a page quote.
     assert first.evidence.startswith(search_sources.SUMMARY_LABEL)
     assert 'three interview rounds' in first.evidence and 'https://' not in first.evidence and '](' not in first.evidence
     assert first.title=='Interview report' and first.source_id.startswith('brave-')
     assert 'hiring manager is reported by candidates' in second.evidence
-    # A provider excerpt is used on its own, without the model's answer line.
     assert search_sources.SUMMARY_LABEL not in second.evidence and 'behavioural interview with a hiring manager' not in second.evidence
 
 
@@ -225,7 +222,7 @@ def test_environment_selects_openrouter_with_brave_fallback(monkeypatch):
     api=SourceAPIs.from_environment(None)
     assert (api.backend,api.fallback,api.brave_key,api.openrouter_key)==('openrouter','brave','synthetic-brave','synthetic-shared')
     assert (api.search_model,api.max_tool_calls,api.search_timeout)==('openai/gpt-5-mini',4,15)
-    assert api.provider=='brave'  # persisted channel identifier is unchanged
+    assert api.provider=='brave'
 
 
 def test_environment_defaults_match_the_template(monkeypatch):

@@ -8,12 +8,16 @@ from fastapi import Depends,Request
 from starlette.concurrency import run_in_threadpool as thread
 from elo_shared.runtime import application,authenticated,Problem,begin,launch,operation_view,stamp,digest
 from app.schemas import Message,OperationAccepted,Workspace,Plan,PlannedRoadmap
-from app.planning.generator import PLANNING_SECONDS,chat_turn
+from app.planning.chat import chat_turn
+from app.planning.generator import PLANNING_SECONDS
+from app.planning.outlines import accept_outline, prepare_outline
 from app.planning.retired_settings import remove_retired_settings
 from app.planning.routes import register_planner
-from app.planning.state import planner_state,planner_view,retry_body
+from app.planning.state import planner_state,retry_body
 from app.planning.state import plan_review, planning_source_changed
 from app.planning.tasks import ensure_tasks,project_assignments,task_readiness
+from app.planning.views import planner_view
+from app.planning.weeks import prepare_week
 from app.schemas.roadmap import DashboardSource
 
 ROADMAP_CONTEXT_BYTES=250000
@@ -37,7 +41,7 @@ def create_app(store=None,upstream=None,model=None,clock=None):
         return {**source,'model_available':app.state.model.configured,'planning_defaults':{
             'application_date':profile.get('application_date'),'weekly_hours':profile.get('weekly_hours'),
             'availability_periods':profile.get('availability_periods',[])}}
-    async def assessment(account,operation_id,allow_partial):
+    async def assessment(account):
         token=account['token']
         current=await app.state.upstream.read('assessment','/api/v1/assessments/current',token)
         def usable(value):
@@ -62,46 +66,34 @@ def create_app(store=None,upstream=None,model=None,clock=None):
     async def worker(row,account):
         kind=row['pending']['kind']
         if kind=='outline_generate':
-            from app.planning.outlines import accept_outline, prepare_outline
-            from app.planning.weeks import prepare_week
-            automatic=row['pending']['body'].get('auto_accept',False)
-            try:
+            if not row['pending']['body'].get('auto_accept',False):
                 await prepare_outline(app,row,account,assessment,context)
-                try:week_prepared=await prepare_week(app,row,account,context,initial=True)
+                try:await prepare_week(app,row,account,context,initial=True)
                 except Problem as error:
-                    if automatic:raise
                     planner_state(row)['outline_candidate']['first_week_error']=error.detail
-                if automatic:
-                    # Publish a copy only once both the outline and first week validate.
-                    # A failed activation must not leave a partly accepted plan behind.
-                    state=copy.deepcopy(planner_state(row))
-                    latest=await app.state.upstream.account(account['token'])
-                    if latest['id']!=account['id']:raise Problem('Your account changed during creation.',401,'session')
-                    source=await context(latest)
-                    # Existing weeks can already cover the complete roadmap. A failed
-                    # generation still raises above; only a genuine no-op needs no week.
-                    accept_outline(state,source,state['outline_candidate']['id'],app.state.clock(),
-                        require_first_week=week_prepared or state['active'] is None)
-                    latest=await app.state.upstream.account(account['token'])
-                    if latest['id']!=account['id']:raise Problem('Your account changed during creation.',401,'session')
-                    fresh=await context(latest)
-                    if planning_source_changed(source,fresh):
-                        raise Problem('Your inputs changed during creation. Retry creating your roadmap.',409,'inputs_changed')
-                    active=state['active']
-                    # A failed publication may leave a captured snapshot. A new lease
-                    # must not reuse that attempt's tasks with a newly generated outline.
-                    active['id']=str(uuid5(NAMESPACE_URL,account['id']+':roadmap:'+row['pending']['id']+':'+row['pending']['token']))
-                    active.update(pace_baseline_id=active['id'],updated_at=stamp(),request_hash=row['pending']['hash'])
-                    state['active']=await thread(app.state.store.save_result,account['id'],active)
-                    row['planner']=state
-            except Exception:
-                if automatic:
-                    state=planner_state(row)
-                    state['outline_candidate']=None;state['week_candidate']=None
-                    await thread(app.state.store.checkpoint,account['id'],row,30)
-                raise
+                return row
+            # Previews are written to a working copy that is published only once the outline and first week validate.
+            state={**planner_state(row)}
+            await prepare_outline(app,row,account,assessment,context,into=state)
+            week_prepared=await prepare_week(app,row,account,context,initial=True,into=state)
+            state=copy.deepcopy(state)
+            latest=await app.state.upstream.account(account['token'])
+            if latest['id']!=account['id']:raise Problem('Your account changed during creation.',401,'session')
+            source=await context(latest)
+            accept_outline(state,source,state['outline_candidate']['id'],app.state.clock(),
+                require_first_week=week_prepared or state['active'] is None)
+            latest=await app.state.upstream.account(account['token'])
+            if latest['id']!=account['id']:raise Problem('Your account changed during creation.',401,'session')
+            fresh=await context(latest)
+            if planning_source_changed(source,fresh):
+                raise Problem('Your inputs changed during creation. Retry creating your roadmap.',409,'inputs_changed')
+            active=state['active']
+            # A new lease never reuses a failed attempt's tasks.
+            active['id']=str(uuid5(NAMESPACE_URL,account['id']+':roadmap:'+row['pending']['id']+':'+row['pending']['token']))
+            active.update(pace_baseline_id=active['id'],updated_at=stamp(),request_hash=row['pending']['hash'])
+            state['active']=await thread(app.state.store.save_result,account['id'],active)
+            row['planner']=state
         elif kind=='week_generate':
-            from app.planning.weeks import prepare_week
             await prepare_week(app,row,account,context)
         elif kind=='message':await chat_turn(app,row,account,assessment,context)
         else:raise Problem('This kind of request is no longer supported. Start it again from the roadmap page.',409,'operation_retired')
@@ -126,8 +118,7 @@ def create_app(store=None,upstream=None,model=None,clock=None):
 
     @app.get('/api/v1/roadmaps/dashboard-source',response_model=DashboardSource)
     async def dashboard_source(request:Request,account=Depends(authenticated)):
-        # Unlike workspace and progress, this read never resumes pending work or
-        # queries other source services. Existing snapshots are projected in memory.
+        # This read never resumes pending work or queries other source services.
         row=await thread(app.state.store.load,account['id'])
         active=copy.deepcopy(planner_state(row)['active'])
         if not active:return {'version':row['version'],'active':None,'active_review':None,'task_readiness':{}}
@@ -146,8 +137,7 @@ def create_app(store=None,upstream=None,model=None,clock=None):
 
     async def mutate(body,account,action,operation=None,mark_baseline=False):
         row=await thread(app.state.store.load,account['id']);payload=body.model_dump(mode='json');key=payload['mutation_id']
-        # Existing receipts retain their original fingerprint. New task actions
-        # include their operation so a key cannot replay a different endpoint.
+        # New task actions include their operation in the fingerprint.
         fingerprint=digest({'operation':operation,'payload':payload}) if operation else digest(payload)
         prior=next((r for r in row['receipts'] if r['id']==key),None)
         if prior:

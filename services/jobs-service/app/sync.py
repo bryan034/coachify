@@ -30,7 +30,6 @@ def sync_source(store, source, fetch, now, interval):
         records, rejected = read_board(source, fetch)
         documents = [d for d in (build(source, r) for r in records) if d is not None]
         rejected += len(records) - len(documents)
-        # A record that failed validation might be one of the postings it would otherwise close.
         store.publish(identifier, documents, now, close_missing=rejected == 0)
     except ProviderUnavailable as error:
         delay = min(MAX_BACKOFF, interval * 2 ** store.failures(identifier))

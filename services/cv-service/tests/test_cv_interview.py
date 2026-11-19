@@ -422,7 +422,6 @@ def test_finish_requires_coverage_and_team_output_cannot_support_personal_comple
     context['evidence_index'] = {'team': {'item_id': source, **fact('personal_contribution', 'The team built it', 'Team output', attribution='team')},
                                  'task': {'item_id': source, **fact('task_scope', 'A reporting API', 'Reporting API')}}
     team_only = {'action': 'finish', 'reply': 'All done.', 'coverage': [{'item_id': source, 'status': 'reviewed', 'evidence_refs': ['team', 'task']}]}
-    # Downgrading never closes a topic nobody has discussed.
     with pytest.raises(ValueError, match='Discuss an experience'):
         validate_decision(team_only, context, memory)
     memory['questions'][0]['answer_status'] = 'answered'
@@ -482,7 +481,6 @@ def test_finish_keeps_saved_labels_for_topics_closed_earlier(harness):
     memory['questions'] = [{**q, 'item_id': second, 'answer_status': 'answered'} for q in memory['questions']]
     context = build_context(stored, document, memory, focus_id=second)
     assert 'fact:closed-earlier' not in context['evidence_index']
-    # Echoing or relabelling a closed topic neither blocks completion nor changes it.
     for status in ('reviewed', 'reviewed_with_gaps', 'deferred'):
         _, coverage = validate_decision({'action': 'finish', 'reply': 'Review complete.', 'coverage': [
             {'item_id': first, 'status': status, 'evidence_refs': ['fact:closed-earlier']},
@@ -665,7 +663,6 @@ def test_compact_memory_survives_rollover_and_filters_processing_placeholders(ha
         {'id': 'pending', 'role': 'assistant', 'text': 'Your message is saved. Working on it…'}]
     context = build_context(conversation, document, reconcile_memory(conversation, document))
     assert [m['text'] for m in context['recent_messages']] == [f'Recent answer {n}' for n in range(4)]
-    # A new segment inherits durable memory, without copying the old transcript.
     conversation['messages'] = []
     rebuilt = build_context(conversation, document, reconcile_memory(conversation, document))
     assert rebuilt['memory']['discussion'] == discussion_summary(memory)
@@ -855,7 +852,6 @@ def test_followup_updates_only_addressed_fields_and_preserves_known_ownership(ha
     after = client.get('/api/v1/cv/'+cv['id']).json()
     previous = next(i for i in before['items'] if i['id'] == source)
     current = next(i for i in after['items'] if i['id'] == source)
-    # Finishing the topic may add a derived rating; the source claims themselves stay unchanged.
     without_rating = lambda claims: [{k: v for k, v in claim.items() if k != 'skill_level'} for claim in claims]
     assert without_rating(current['skill_claims']) == without_rating(previous['skill_claims'])
     assert next(f for f in current['review_evidence'] if f['field'] == 'personal_contribution')['value'] == 'Built the Python API'
@@ -961,7 +957,6 @@ def test_progress_advances_on_transition_and_stays_stable_through_next_topic(har
     assert chat['interview']['status'] == 'reviewed_with_gaps'
     assert client.get(PREFIX + '/' + chat['id']).json()['interview'] == chat['interview']
 
-    # Explicit source corrections still reopen the affected topic.
     from app.schemas.cv import ItemMutation
     service = app.state.conversations.cv
     document = service.get('owner-a', cv['id'])
@@ -1020,7 +1015,7 @@ def test_planner_options_use_the_same_unknown_and_attempt_policy_as_validation(h
     options = next(o for o in question_options(item, memory) if o['skill_name'] is None)
     assert options['closed_fields']['responsibilities'] == 'closed'
     assert options['closed_fields']['complexity'] == 'exhausted'
-    assert 'task_scope' not in options['open_fields']  # Missing but irrelevant to this current clarification.
+    assert 'task_scope' not in options['open_fields']
     for field in ('responsibilities', 'complexity'):
         assert target_availability(item, memory, field, max_attempts=1) != 'open'
         with pytest.raises(ValueError, match='already known'):
@@ -1038,7 +1033,6 @@ def test_provider_schema_rejection_replans_without_resubmitting_saved_answer(har
     provider.evaluation = evaluate
 
     def malformed(_):
-        # The real adapter validates before returning, outside validate_decision.
         return InterviewDecision.model_validate({'action': 'private-invalid-provider-value', 'reply': 'Private provider prose.'})
 
     provider.plans = [malformed]
@@ -1141,7 +1135,6 @@ def test_evidence_references_are_removed_from_delivered_prose_not_structured_dat
     assert chat['active_question']['question'] == 'What was the task scope?'
     assert chat['messages'][-1]['text'] == 'What was the task scope?'
     assert chat['active_question']['item_id']
-    # Read projection also cleans legacy prose without rewriting history or user messages.
     def legacy(current):
         current['messages'][-1]['text'] += f' [{ref}]'
         next(m for m in current['messages'] if m['role'] == 'user')['text'] = f'My exact reference: {ref}'
@@ -1293,7 +1286,6 @@ def test_question_counts_rebuild_from_all_group_receipts(harness, scope, expecte
     cv, chat, _ = start_two_topics(harness, scope=scope)
     document = app.state.conversations.cv.get('owner-a', cv['id'])
     topics = [i['id'] for i in effective_items(document) if i['kind'] == 'project']
-    # A durable receipt from another conversation still consumes its group's allowance.
     existing = document['clarifications'][0]
     document['clarifications'].append({**existing, 'id': 'other-receipt', 'item_id': topics[1], 'status': 'skipped'})
     stored = app.state.conversations.get('owner-a', chat['id'])
@@ -1360,7 +1352,6 @@ def test_skipped_ownership_is_uncertain_and_cannot_block_a_topic_transition(harn
     assert target_availability(source, memory, 'personal_contribution') == 'declined'
     assert target_availability(source, memory, 'personal_contribution', 'Python') == 'declined'
     assert client.get(PREFIX + '/' + chat['id']).json()['interview'] == chat['interview']
-    # A single skip cannot mark an unvisited second project complete.
     context = build_context(service.get('owner-a', chat['id']), document, memory)
     with pytest.raises(ValueError, match='Unvisited'):
         validate_decision({'action': 'finish', 'reply': 'Finish everything.'}, context, memory)
@@ -1445,7 +1436,6 @@ def test_skip_topic_defers_the_current_topic_and_asks_about_the_next(harness):
     stored = app.state.conversations.get('owner-a', chat['id'])['interview_memory']
     assert stored['deferred_topics'][first] == {'reason': 'user_skip', 'remaining_ownership': 'uncertain'}
     after = app.state.conversations.cv.get('owner-a', cv['id'])
-    # The open question is recorded as skipped; no answer or fact is invented.
     assert next(q for q in after['clarifications'] if q['item_id'] == first)['status'] == 'skipped'
     assert after['effective_version'] == before['effective_version']
     assert not any(c['task'] == 'cv_interview_interpret' for c in provider.calls)
@@ -1579,7 +1569,6 @@ def test_topic_ends_early_once_ownership_and_skill_use_are_known(harness):
                 'resolved_uncertainties': ['personal_contribution'], 'remaining_uncertainties': []}]}
 
     provider.evaluation = complete
-    # The planner would keep asking about assistance; the backend ends the topic first.
     provider.plans = [{'action': 'ask', 'item_id': first, 'reply': 'Did anyone help?', 'targets': [{'field': 'assistance', 'skill_name': 'Python'}]},
                       {'action': 'ask', 'item_id': second, 'reply': 'What did you personally analyse?', 'targets': [{'field': 'personal_contribution'}]}]
     chat = send(client, chat, 'I personally built the Python and SQL pipeline and wrote its tests. I rate both skills 5/10.')

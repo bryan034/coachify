@@ -19,14 +19,13 @@ BROAD_TOPICS={
 }
 
 def broad_query(public,category):
-    """A plain search that runs before the model's targeted queries, which are often too specific to match."""
+    """A plain search that runs before the model's targeted queries."""
     if not public:return None
     who=' '.join(' '.join((public.get(key) or '').split()) for key in ('company','role')).strip()
     return f'{who[:140]} {BROAD_TOPICS[category]}' if who else None
 
 def planned_queries(plan,limit,public=None):
-    # Each required category has a nonempty validated QueryPlan list. Keep category
-    # boundaries even when two categories happen to use the same public query.
+    # Each required category has a nonempty validated QueryPlan list.
     def queries(category):
         broad=broad_query(public,category)
         return list(dict.fromkeys(' '.join(q.split()) for q in [*([broad] if broad else []),*getattr(plan,category)]))[:limit]

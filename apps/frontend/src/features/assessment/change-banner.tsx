@@ -21,14 +21,13 @@ export function describeChange(before: InputRevisions | undefined, now: InputRev
 type Roadmap = { active: { assessment_hash: string } | null } | null;
 const DISMISSED = 'elo:change-banner-dismissed';
 const remembered = () => { try { return window.sessionStorage.getItem(DISMISSED); } catch { return null; } };
-/** Input hashes an automatic update was already started for in this page load, so a failure never loops. */
+/** Input hashes an automatic update was already started for in this page load. */
 const attempted = new Set<string>();
 /** Test hook: forget automatic attempts between cases. */
 export function resetAutomaticEvaluations() { attempted.clear(); }
 
 /** Career Goal and Skills Profile keep the skill evaluation in step with the goal and CV automatically. */
 const evaluates = (path: string) => path === '/cv' || path.startsWith('/cv/') || path === '/career-goal' || path.startsWith('/career-goal/');
-/** Full-screen chats keep the viewport for the conversation. */
 const showsProgress = (path: string) => evaluates(path) && !path.startsWith('/career-goal/chat') && !path.startsWith('/career-goal/discovery');
 const isHome = (path: string) => path === '/dashboard';
 
@@ -64,7 +63,6 @@ export function ChangeBanner() {
  const running = !!operation && ['pending', 'running'].includes(operation.status);
  const outdated = !!previous && !!context?.ready && !!context.input_hash && previous.input_hash !== context.input_hash;
  const auto = evaluates(pathname) && outdated && !running && !c.busy && !c.error;
- // New skills must be rated before they are compared with the goal: wait for the CV review and goal research.
  const ready = auto && context!.cv_reviewed !== false && !context!.research_pending && context!.model_available && !operation?.retry_after;
  const hash = context?.input_hash;
  useEffect(() => {
@@ -72,7 +70,6 @@ export function ChangeBanner() {
   attempted.add(hash);
   void c.compare();
  }, [ready, hash, c]);
- // Goal research finishing is not announced: re-check while an automatic update waits for it.
  const waitingForResearch = auto && !!context?.research_pending;
  useEffect(() => {
   if (!waitingForResearch) return;
@@ -100,7 +97,7 @@ export function ChangeBanner() {
  if (!isHome(pathname) || !roadmap?.active || !hash || roadmap.active.assessment_hash === hash) return null;
  const key = `roadmap:${hash}`;
  if (dismissed === key) return null;
- const dismiss = () => { setDismissed(key); try { window.sessionStorage.setItem(DISMISSED, key); } catch { /* remembered for this page only */ } };
+ const dismiss = () => { setDismissed(key); try { window.sessionStorage.setItem(DISMISSED, key); } catch {} };
  return <section className="evaluate-banner change-banner" aria-labelledby="change-banner-title">
   <span className="evaluate-banner-mark" aria-hidden="true">↻</span>
   <div><h2 id="change-banner-title">Your roadmap is out of date</h2><p>Your CV, skills or career goal changed. Regenerate your roadmap to build a plan from your latest information. You can review the new plan before accepting it.</p></div>

@@ -1,8 +1,4 @@
-"""Fair bounded provider admission, held inside the synchronous provider call.
-
-An account's OS lock stays held while its provider thread runs, including
-after cancellation of an async waiter. All processes share the same volume.
-"""
+"""Fair bounded provider admission, held inside the synchronous provider call."""
 from copy import deepcopy
 from datetime import date, datetime, timezone
 import fcntl
@@ -25,7 +21,6 @@ class ModelAdmissionError(ValueError):
 UNAVAILABLE = 'CV model usage could not be reserved. Your saved inputs are safe; retry shortly.'
 OWNER_BUSY = 'Another CV model request for your account is still running. Your saved inputs are safe; retry shortly.'
 OWNER_DAILY = 'Your daily CV model-call limit has been reached. Your saved inputs are safe; retry after the next UTC day.'
-# Recognise this message in extraction failures persisted by older releases.
 GLOBAL_DAILY = 'The daily CV model-call capacity has been reached. Your saved inputs are safe; retry after the next UTC day.'
 
 
@@ -97,7 +92,6 @@ class ModelUsage:
 
     def run(self, owner, callback, *args, configured=True):
         if configured is False:
-            # Preserve the provider's normal disabled-configuration response.
             return callback(*args)
         if not isinstance(owner, str) or not 1 <= len(owner) <= 200: raise ModelAdmissionError(UNAVAILABLE)
         owner_hash = hashlib.sha256(owner.encode('utf-8')).hexdigest()
@@ -106,8 +100,7 @@ class ModelUsage:
             try: self._consume(owner_hash)
             except ModelAdmissionError: raise
             except Exception as exc:
-                # A write may have committed. Never refund or call the provider
-                # after an uncertain reservation, and do not disclose DB details.
+                # A write may have committed: never refund or call the provider.
                 raise ModelAdmissionError(UNAVAILABLE) from exc
             with budget_owner(owner):
                 return callback(*args)

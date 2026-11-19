@@ -151,13 +151,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   function changed(event: StorageEvent) {
    if (event.key === EPOCH) { cancelAccess(); clear(); setLoading(false); }
    if (event.key === 'elo.setup-completed' && event.newValue && currentAccount.current && !latestProfile.current?.onboarding_complete) {
-    try { const hint = JSON.parse(event.newValue); if (hint.account_id === currentAccount.current.id) reload(); } catch { /* Ignore malformed non-secret hints. */ }
+    try { const hint = JSON.parse(event.newValue); if (hint.account_id === currentAccount.current.id) reload(); } catch {}
    }
   }
   function expired(event: Event) {
    if ((event as CustomEvent).detail === activeToken.current) signOut();
   }
-  // Keep drafts mounted while revalidating access; the workspace guard masks them until the check completes.
   function visible() { if (document.visibilityState === 'visible') void validateSession(); }
   function restored(event: PageTransitionEvent) { if (event.persisted) void validateSession(true); }
   window.addEventListener('storage', changed); window.addEventListener('elo:expired', expired);

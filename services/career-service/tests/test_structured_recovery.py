@@ -39,7 +39,6 @@ def test_graph_repairs_repeated_schema_json_and_truncated_responses_then_display
             graph=StateGraph(dict);graph.add_node('interpret',structured_node(interpret));graph.add_edge(START,'interpret');graph.add_edge('interpret',END)
             enabled=recover_responses.set(True);observer=validation_progress.set(feedback.append);quota=quota_progress.set(lambda _:None)
             try:
-                # Repairs stay within the same graph node, not graph recursion steps.
                 with tracing_context(enabled=False): result=await graph.compile().ainvoke({},config={'recursion_limit':3})
             finally:
                 quota_progress.reset(quota);validation_progress.reset(observer);recover_responses.reset(enabled)
@@ -47,7 +46,7 @@ def test_graph_repairs_repeated_schema_json_and_truncated_responses_then_display
         assert sum(waits)==7 and all(0<pause<=5 for pause in waits)
         assert {'field':'company','issue':'missing'} in feedback[0]['violations']
         assert {'field':'skills.0.category','issue':'missing'} in feedback[1]['violations']
-        assert calls[2]==calls[3]  # A quota wait preserves the current corrective payload.
+        assert calls[2]==calls[3]
         prompt=calls[2]['messages'][0]['content']
         latest=json.loads(prompt.split('Latest validation issues: ')[1])
         assert latest['fields']==['skills','category'] and latest['violations']==[{'field':'skills.0.category','issue':'missing'}]

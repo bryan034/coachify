@@ -53,8 +53,6 @@ def test_oversized_extraction_saves_bounded_failure_and_preserves_prior_evidence
     request = upload(client, cv_id=cv['id'], expected_version=padded['version'])
     assert request.status_code == 202, request.text
     other = send(app.state.service, 'owner-b')
-    # A requeued CV may be before the saved sweep cursor; the next bounded
-    # sweep still must publish its failure and process the other owner's source.
     app.state.worker.run_once()
     app.state.worker.run_once()
     result = app.state.repository.get('owner-a', cv['id'])

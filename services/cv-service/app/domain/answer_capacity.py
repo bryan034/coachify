@@ -29,9 +29,7 @@ def reserved_bytes(document):
     if any(type(value) is not int or not 0 <= value <= RETRY_BYTES for value in remaining):
         raise CvError('Saved interpretation capacity needs review. Your existing answers are retained.', 409)
     count = len(pending)
-    # Each result adds one full clarification/overlay snapshot. Earlier results
-    # also enlarge the snapshots needed by later pending results; reserve that
-    # triangular growth instead of counting only today's snapshot size.
+    # Reserve one full snapshot per result plus the triangular growth of later snapshots.
     return count * len(BSON.encode(snapshot(document))) + RESULT_BYTES * count * (count + 1) // 2 + sum(remaining)
 
 
@@ -58,9 +56,7 @@ def preview_chat_answer(document, question_id, text, maximum):
                     interpretation_status='pending', interpretation_token='0' * 36,
                     interpretation_lease_until=1.0)
     reserve(question, question['interpretation_token'])
-    # These are conservative copies of the two pre-answer snapshots. Real writes
-    # use the earlier, smaller states. The private padding covers two receipts,
-    # history labels and version fields and is never persisted.
+    # Conservative copies of the two pre-answer snapshots; the padding is never persisted.
     for _ in range(2): candidate['history'].append(deepcopy(snapshot(document)))
     candidate['_admission_padding'] = 'x' * 4096
     if len(BSON.encode(candidate)) + reserved_bytes(candidate) > maximum:

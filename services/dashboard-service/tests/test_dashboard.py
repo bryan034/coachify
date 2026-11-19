@@ -135,7 +135,6 @@ def test_explicit_not_demonstrated_acknowledges_removal_but_keeps_outcome_unconf
 
 def test_period_boundaries_follow_plan_zone_and_do_not_duplicate_split_task():
     with client() as c:
-        # 02:00 UTC is already January 10 in Singapore.
         daily=c.get('/api/v1/dashboard?period=daily',headers=H).json()
         assert daily['period']['focus_date']=='2030-01-10' and daily['progress']['planned_minutes']==30
         monthly=c.get('/api/v1/dashboard?period=monthly&focus_date=2030-02-16',headers=H).json()
@@ -231,7 +230,6 @@ def test_completion_note_changes_do_not_change_completion_time():
         result=c.get('/api/v1/dashboard',headers=H).json()['pace']['items'][0]
         assert result['completed_at']=='2030-01-09T10:00:00+00:00'
         assert result['classification']=='completed_early'
-    # A same-state edit must never supply a missing original effort snapshot.
     task['history'][0].pop('estimated_minutes_at_completion')
     with client(fake) as c:
         assert c.get('/api/v1/dashboard',headers=H).json()['pace']['items'][0]['classification']=='non_comparable'
@@ -259,7 +257,7 @@ def test_source_transport_forwards_only_bearer_and_bounds_response():
                 else:assert False, path
     asyncio.run(run())
     assert all(request.headers['Authorization']=='Bearer synthetic' for request in seen)
-    assert len(seen)==5  # A redirect was not followed.
+    assert len(seen)==5
 
 
 def test_period_includes_unscheduled_tasks_once_and_keeps_milestone_source_result():
@@ -302,7 +300,7 @@ def test_legacy_assignment_baseline_is_projected_in_memory():
     with client(fake) as c:
         result=c.get('/api/v1/dashboard',headers=H).json()['pace']
         assert result['state']=='available' and result['items'][0]['classification']=='completed_on_time'
-    assert fake.baseline==before  # The snapshot remains untouched.
+    assert fake.baseline==before
     fake.roadmap['active']['editable_tasks'][0]['history'][0].pop('estimated_minutes_at_completion')
     with client(fake) as c:assert c.get('/api/v1/dashboard',headers=H).json()['pace']['items'][0]['classification']=='non_comparable'
 

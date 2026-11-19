@@ -10,6 +10,7 @@ test('saved briefing accordions, guided refinement, replacement and CV handoff o
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/skills-profile'))return route.fulfill({json:{version:0,status:'empty',saved_at:null,areas:{},entries:[]}});
   if(path.endsWith('/policy'))return route.fulfill({json:policy});
+  if (path === '/api/v1/cv/skills') return route.fallback();
   if(path==='/api/v1/cv')return route.fulfill({json:{cvs:[],selection:{cv_id:null,version:0}}});
   return route.fallback();
  });
@@ -152,7 +153,6 @@ test('the grouped skill list supports keyboard disclosure, long lists, confirmed
  });
  await page.setViewportSize({width:1440,height:1000});await page.goto('/career-goal');
  await expect(page.locator('#priorities-title')).toHaveText('Skills needed');
- // Skills sit under category headings, most important group first, coloured by importance.
  const rows=page.locator('.ws-skill');
  await expect(rows).toHaveCount(9);
  await expect(page.locator('.ws-cat')).toHaveText(['Product Management','AI']);

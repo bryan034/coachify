@@ -1,4 +1,4 @@
-/* Roadmap views: Today, Week, Month, Milestones, Progress and the plan preview. Colours are elo tokens or tints of them. */
+/* Roadmap views: Today, Week, Month, Milestones, Progress and the plan preview. */
 .rv{--rv-fill:var(--mint);--rv-track:var(--cloud);--rv-edge:rgb(71 85 105 / .35);--rv-hair:rgb(71 85 105 / .14);--rv-amber-line:color-mix(in srgb,var(--growing-ink) 28%,var(--growing-bg));--rv-amber-wash:color-mix(in srgb,var(--growing-bg) 45%,var(--white));--rv-mint-soft:color-mix(in srgb,var(--mint) 45%,var(--white));--rv-grey:color-mix(in srgb,var(--slate) 22%,var(--white));display:flex;flex-direction:column;gap:24px;color:var(--ink)}
 .rv :is(button,a,input,select,textarea,[contenteditable]):focus-visible{outline:2px solid var(--forest);outline-offset:2px}
 .rv-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px}

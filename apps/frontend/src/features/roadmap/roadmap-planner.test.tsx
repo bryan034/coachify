@@ -55,7 +55,6 @@ it('labels incomplete research without blocking generation', async () => {
  const generate = await screen.findByRole('button', { name: 'Create roadmap' });
  expect(generate).toBeEnabled(); expect(screen.getByText(/Using available evidence/)).toBeVisible();
  expect(screen.queryByRole('checkbox',{name:/Continue with available evidence/})).not.toBeInTheDocument();
- // Filling in the planner runs no comparison, so the helper needs no choice until a plan exists.
  await openHelper(); fireEvent.change(screen.getByRole('textbox', { name: 'Answer here' }), { target: { value: 'Help me plan.' } });
  expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
 });

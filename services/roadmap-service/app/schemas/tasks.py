@@ -26,6 +26,16 @@ class TaskSlot(Contract):
         if hour*60+minute+self.duration_minutes>1440:raise ValueError('A scheduled segment must end by midnight.')
         return self
 
+class SavedTaskSlot(TaskSlot):
+    """A saved schedule slot. id is set by the service once a session must keep its identity when the schedule is reordered."""
+    id:str|None=Field(default=None,max_length=80)
+
+    @model_serializer(mode='wrap')
+    def without_unset_id(self, handler):
+        serialized=handler(self)
+        if serialized.get('id') is None:serialized.pop('id',None)
+        return serialized
+
 class TaskSkill(Contract):
     """A skill a task works on. Identity is canonical_skill_id; gap_id links a skill gap of this plan."""
     name:Title
@@ -85,8 +95,7 @@ class SavedTaskObject(Contract):
 
     @model_serializer(mode='wrap')
     def present_fields_only(self, handler):
-        # Existing histories are sparse dictionaries. Do not add nulls/defaults
-        # when reading them through a typed public response.
+        # Serialize sparse histories without added nulls/defaults.
         serialized=handler(self)
         present=set(self.model_fields_set)
         for name in self.model_fields_set:
@@ -103,7 +112,7 @@ class TaskPrevious(SavedTaskObject):
     requirement_refs:list[str]|None=None
     prerequisites:list[str]|None=None
     milestone_key:str|None=None
-    schedule:list[TaskSlot]|None=None
+    schedule:list[SavedTaskSlot]|None=None
     skills:list[TaskSkill]|None=None
     anytime_date:str|None=None
 
@@ -154,7 +163,7 @@ class EditableTask(Contract):
     requirement_source_id:str|None=None
     prerequisites:list[str]=Field(default_factory=list)
     milestone_key:str|None=None
-    schedule:list[TaskSlot]=Field(default_factory=list)
+    schedule:list[SavedTaskSlot]=Field(default_factory=list)
     status:Literal['not_started','in_progress','completed']
     completed_at:str|None=None
     evidence_note:str|None=None

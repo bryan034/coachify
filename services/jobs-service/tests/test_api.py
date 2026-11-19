@@ -88,7 +88,6 @@ def test_filter_by_job_type_industry_workplace_and_company(client):
 
 
 def test_filter_by_posted_date_uses_singapore_calendar_days(client):
-    # 00:00 on 1 November in Singapore is still 31 October in UTC, so a UTC day boundary would miss it.
     assert titles(client, posted_from='2026-11-04', posted_to='2026-11-04') == ['Quant Intern']
     assert titles(client, posted_from='2026-11-01', posted_to='2026-11-01') == ['Data Analyst']
     assert titles(client, posted_within_days=2) == ['Quant Intern']

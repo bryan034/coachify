@@ -47,14 +47,12 @@ def validate_decision(decision, context, memory, *, user_stop=False, max_attempt
     previous = memory.get('focus_item_id')
     leaving = previous if decision.action == 'ask' and previous != decision.item_id else None
     if decision.action == 'ask':
-        # A follow-up keeps the whole topic open, even if the model proposes
-        # coverage for some of the fields it has just learned.
+        # A follow-up keeps the whole topic open.
         coverage.pop(decision.item_id, None)
     for item in decision.coverage:
         if decision.action != 'finish' and item.item_id != leaving: continue
         if item.item_id not in sources: raise DecisionRejected('coverage_source', 'Coverage refers to an unavailable experience.')
-        # Only open review topics take a new label. A closed topic keeps its saved
-        # label: its facts are no longer in evidence_index, so it cannot be re-cited.
+        # Only open review topics take a new label; a closed topic keeps its saved label.
         if item.item_id in memory['coverage'] or item.item_id not in memory.get('topic_ids', sources):
             continue
         skipped_ownership = (any(t['field'] in {'personal_contribution', 'responsibilities'}
@@ -62,12 +60,11 @@ def validate_decision(decision, context, memory, *, user_stop=False, max_attempt
                              or any(f['field'] in {'personal_contribution', 'responsibilities'}
                                     and f['status'] in {'unknown', 'skipped', 'not_applicable'}
                                     for f in sources[item.item_id].get('fields', [])))
-        # Unusable citations prove nothing, so they are dropped rather than blocking the turn.
+        # Drop unusable citations.
         valid_refs = [ref for ref in item.evidence_refs if index.get(ref, {}).get('item_id') == item.item_id]
         item = item.model_copy(update={'evidence_refs': valid_refs})
         if item.status == 'reviewed':
-            # `reviewed` is an optional navigation label and never feeds skill estimates.
-            # Without proof the topic closes with uncertainty; the next step stands.
+            # Without proof the topic closes with uncertainty.
             reason = 'skipped_ownership' if skipped_ownership else unproven_reason(item.item_id, [index[r] for r in valid_refs], index)
             if reason:
                 logger.warning('CV interview coverage downgraded reason=%s action=%s', reason, decision.action)
@@ -77,8 +74,7 @@ def validate_decision(decision, context, memory, *, user_stop=False, max_attempt
         coverage[item.item_id] = item.model_dump(mode='json')
     if (leaving in memory.get('topic_ids', []) and leaving not in coverage
             and topic_discussed(memory, leaving)):
-        # Moving on closes a discussed topic; omitted coverage makes no claim
-        # that all evidence is known or that the user has mastered a skill.
+        # Moving on closes a discussed topic with gaps.
         coverage[leaving] = {'item_id': leaving, 'status': 'reviewed_with_gaps', 'evidence_refs': []}
     if decision.action == 'recall':
         raise DecisionRejected('recall_unresolved', 'Recall requests must be resolved before publishing a reply.')

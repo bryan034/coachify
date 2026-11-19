@@ -93,9 +93,7 @@ def exact_question_findings(focus,facts,links,*,require_focus=True):
 def scoped_question_findings(focus,links,goal,*,terms=None,require_focus=True):
     """Split exact passages into verified job facts and unverified candidates.
 
-    Verified passages pass every deterministic check in source_scope and are the
-    only ones that may be saved. Candidates, including passages about another
-    market (scope related_location), may inform an answer but are never stored.
+    Only verified passages may be saved; candidates may inform an answer but are never stored.
     """
     sources=link_sources(links)
     verified=[];candidates=[]

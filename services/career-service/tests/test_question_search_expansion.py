@@ -65,7 +65,6 @@ def test_empty_queries_continue_until_third_search_finds_salary(monkeypatch):
 def test_specific_question_retries_irrelevant_results_and_saves_only_verified_passage(monkeypatch):
     async def run():
         def answer(context,saved):
-            # Only the deterministically verified passage is ever stored.
             assert all(f.value==ALLOWANCE for _,findings,_ in saved for f in findings)
             supported=[f['ref'] for f in context['facts'] if f['data']['value']==ALLOWANCE]
             return FocusedAnswer(reply='Housing support is reported.',references=supported) if supported else FocusedAnswer(status='not_found',reply='Not found.')
@@ -167,8 +166,6 @@ def test_expanded_question_appends_json_preserves_other_focus_and_reuses_after_r
     housing=next(item for item in supplements if item['focus']=='workplace')
     assert [item['value'] for item in housing['findings']]==[ALLOWANCE]
     assert all('weekly' not in str(item) for item in supplements)
-    # New repository instances and API reads retain exact evidence; another turn
-    # answers from saved JSON rather than paying for the same searches again.
     restored=QuestionMemory(repo,client.app.state.research_store).entries(OWNER,repo.row(OWNER))
     assert {f.value for item in restored for f in item.question_findings}=={salary.evidence,ALLOWANCE}
     second=client.post(BASE+'/messages',headers=headers(),json=command)

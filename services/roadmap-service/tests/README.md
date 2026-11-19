@@ -8,5 +8,7 @@ The shared runtime also has disposable MongoDB CAS/lease/result tests. `infrastr
 
 `test_editable_tasks.py` covers owner-scoped mutations, retries, stale versions and requirement links, unscheduled work, readiness, history, removal and revision decisions. `test_revision_reservations.py` checks saved schedule reservations and revision preservation, including multi-segment tasks. `test_task_schedule_warnings.py` checks conflict warnings and bounded overlap processing. These tests use synthetic accounts and model responses.
 
+`test_review_followups.py` covers fail-closed evaluation checks, stable session IDs after a skip, batch-move conflicts, partial-recovery deadline claims, permitted requirement refs, clamped milestones, per-period reduced-availability validation and the capacity search. `test_code_rules.py` rejects branching on error text, permissive defaults for gate fields, `hasattr` shape checks, duplicated session-ID derivation, routes without a response model and untyped objects in published schemas.
+
 `test_dashboard_source.py` verifies the passive owner-scoped projection, no pending-operation launch or read-time migration, and immutable pace-baseline identity across acceptance, task progress, revision and retry.
 `test_preview_receipts.py` verifies action-bound accept/discard retries and safe rejection of ambiguous older preview receipts.

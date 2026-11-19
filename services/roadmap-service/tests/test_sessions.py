@@ -139,8 +139,8 @@ def test_a_missed_session_waits_in_the_backlog_and_elo_proposes_a_free_study_tim
         free = client.post(PREFIX + '/sessions/free-times', headers=H, json={'duration_minutes': 60, 'session_id': row['id']}).json()
         days = {d['date']: d for d in free['days']}
         assert free['today'] == '2030-01-10' and list(days)[0] == '2030-01-10' and list(days)[-1] == '2030-01-20'
-        assert days['2030-01-10']['rest_day'] and days['2030-01-10']['kind'] == 'none' and days['2030-01-10']['starts']==[]  # extra time is disabled
-        assert days['2030-01-12']['kind'] == 'none' and days['2030-01-12']['starts'] == []  # a whole-day blackout
+        assert days['2030-01-10']['rest_day'] and days['2030-01-10']['kind'] == 'none' and days['2030-01-10']['starts']==[]
+        assert days['2030-01-12']['kind'] == 'none' and days['2030-01-12']['starts'] == []
         assert days['2030-01-14']['starts'] == ['19:00', '19:15', '19:30', '19:45', '20:00'] and days['2030-01-14']['kind'] == 'study'
         state = save(client, '/sessions/move', state, moves=[{'session_id': row['id'], 'date': '2030-01-14', 'start_time': '19:00'}])
         moved = only(state)
@@ -158,7 +158,7 @@ def test_a_full_study_block_offers_times_after_it_and_two_backlog_items_spread_o
         state = save(client, '/sessions/move', state, moves=[{'session_id': m['session_id'], 'date': '2030-01-16', 'start_time': t} for m, t in zip(moves, ('19:00', '19:45'))])
         free = client.post(PREFIX + '/sessions/free-times', headers=H, json={'duration_minutes': 30}).json()
         wednesday = next(d for d in free['days'] if d['date'] == '2030-01-16')
-        assert wednesday['kind'] == 'none' and wednesday['starts']==[]  # overflow requires explicit permission
+        assert wednesday['kind'] == 'none' and wednesday['starts']==[]
 
 
 def test_moves_never_overlap_cross_a_blackout_or_go_into_the_past():
@@ -176,7 +176,7 @@ def test_moves_never_overlap_cross_a_blackout_or_go_into_the_past():
         both = call(client, '/sessions/move', state, moves=[{'session_id': first['id'], 'date': '2030-01-14', 'start_time': '19:00'},
                                                              {'session_id': second['id'], 'date': '2030-01-14', 'start_time': '19:30'}])
         assert both.status_code == 409 and both.json()['code'] == 'slot_taken'
-        assert sessions(read(client)) == sessions(state)  # a refused batch moves nothing
+        assert sessions(read(client)) == sessions(state)
         assert call(client, '/sessions/move', state, moves=[{'session_id': 'unknown', 'date': '2030-01-13', 'start_time': '19:00'}]).status_code == 404
 
 

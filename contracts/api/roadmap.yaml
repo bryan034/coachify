@@ -3515,7 +3515,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceProposals"
+                }
               }
             }
           },
@@ -4819,16 +4821,14 @@
           },
           "schedule": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/SavedTaskSlot"
             },
             "type": "array",
             "title": "Schedule"
           },
           "previous_schedule": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/SavedTaskSlot"
             },
             "type": "array",
             "title": "Previous Schedule"
@@ -5749,7 +5749,7 @@
           },
           "schedule": {
             "items": {
-              "$ref": "#/components/schemas/TaskSlot"
+              "$ref": "#/components/schemas/SavedTaskSlot"
             },
             "type": "array",
             "title": "Schedule"
@@ -6001,6 +6001,68 @@
         ],
         "title": "ErrorView"
       },
+      "EvidenceProposal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "proposal_hash": {
+            "type": "string",
+            "title": "Proposal Hash"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "name",
+          "description",
+          "proposal_hash"
+        ],
+        "title": "EvidenceProposal",
+        "description": "A completed session's note offered to the user as Skills Profile evidence. Nothing is written until confirmed."
+      },
+      "EvidenceProposals": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "declarations_version": {
+            "type": "integer",
+            "title": "Declarations Version"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceProposal"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "declarations_version",
+          "items"
+        ],
+        "title": "EvidenceProposals"
+      },
       "ExperienceConfirmation": {
         "properties": {
           "expected_version": {
@@ -6160,7 +6222,9 @@
           "allow_partial_assessment": {
             "type": "boolean",
             "title": "Allow Partial Assessment",
-            "default": false
+            "description": "Ignored. Saved evaluations are reused only when current; kept so saved retry requests stay readable.",
+            "default": false,
+            "deprecated": true
           },
           "auto_accept": {
             "type": "boolean",
@@ -6604,7 +6668,9 @@
           "allow_partial_assessment": {
             "type": "boolean",
             "title": "Allow Partial Assessment",
-            "default": false
+            "description": "Ignored. Saved evaluations are reused only when current; kept so saved retry requests stay readable.",
+            "default": false,
+            "deprecated": true
           }
         },
         "additionalProperties": false,
@@ -7676,6 +7742,21 @@
               }
             ],
             "title": "Attempts"
+          },
+          "clamped_milestones": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clamped Milestones",
+            "description": "Milestones whose generated start was before the planning start and was moved up to it."
           }
         },
         "additionalProperties": true,
@@ -8607,8 +8688,7 @@
           },
           "task_warnings": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/TaskWarning"
             },
             "type": "array",
             "title": "Task Warnings"
@@ -8942,14 +9022,12 @@
           "feedback": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/WeekFeedback"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Feedback"
+            ]
           }
         },
         "additionalProperties": false,
@@ -9143,8 +9221,7 @@
         "properties": {
           "windows": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/RunwayWindow"
             },
             "type": "array",
             "maxItems": 10000,
@@ -9397,6 +9474,45 @@
           "partial"
         ],
         "title": "RunwayWeek"
+      },
+      "RunwayWindow": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "start_time": {
+            "type": "string",
+            "title": "Start Time"
+          },
+          "end_time": {
+            "type": "string",
+            "title": "End Time"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "preferred",
+              "overflow"
+            ],
+            "title": "Kind"
+          },
+          "minutes": {
+            "type": "integer",
+            "title": "Minutes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "start_time",
+          "end_time",
+          "kind",
+          "minutes"
+        ],
+        "title": "RunwayWindow",
+        "description": "One free study window on a date: inside study blocks (preferred) or extra time (overflow)."
       },
       "SaveConfig": {
         "properties": {
@@ -9723,6 +9839,47 @@
         ],
         "title": "SavedOutline"
       },
+      "SavedTaskSlot": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "start_time": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Start Time"
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "maximum": 480.0,
+            "minimum": 1.0,
+            "title": "Duration Minutes"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "start_time",
+          "duration_minutes"
+        ],
+        "title": "SavedTaskSlot",
+        "description": "A saved schedule slot. id is set by the service once a session must keep its identity when the schedule is reordered."
+      },
       "SavedWeek": {
         "properties": {
           "id": {
@@ -9784,14 +9941,12 @@
           "feedback": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/WeekFeedback"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Feedback"
+            ]
           },
           "target": {
             "anyOf": [
@@ -11438,7 +11593,7 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/TaskSlot"
+                  "$ref": "#/components/schemas/SavedTaskSlot"
                 },
                 "type": "array"
               },
@@ -11689,7 +11844,7 @@
           },
           "schedule": {
             "items": {
-              "$ref": "#/components/schemas/TaskSlot"
+              "$ref": "#/components/schemas/SavedTaskSlot"
             },
             "type": "array",
             "title": "Schedule"

@@ -1,12 +1,12 @@
 import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {beforeEach, expect, it, vi} from 'vitest';
 import {SkillsOverview,targetGap} from './skills-overview';
-import {evaluatedSkill, profileSkillGroups, profileSkillList, skillStatus} from './skill-cards';
+import {evaluatedSkill, skillCards, skillCardGroups, skillStatus} from './skill-cards';
 import type {Comparison} from '@/features/assessment/comparison';
 import {rateSkill, reevaluateSkill, skillRatings} from '@/lib/api/assessment';
 
 vi.mock('@/lib/api/assessment', async original => ({...await original<typeof import('@/lib/api/assessment')>(), skillRatings: vi.fn(), rateSkill: vi.fn(), reevaluateSkill: vi.fn()}));
-import type {CvDetail, CvSkill, Declarations, SkillEstimate, SkillsProfile} from './types';
+import type {CvDetail, CvSkill, ListedSkill, SkillEstimate, SkillList} from './types';
 import type {Assessment} from '@/features/roadmap/types';
 
 const skill = (name: string, category = 'unspecified', item = 'project-one'): CvSkill => ({skill_id: name.toLowerCase(), name, category, proficiency: null, experience_months: null, context: null, evidence: [], evidence_type: 'explicit', explicit: true, item_ids: [item],
@@ -16,7 +16,6 @@ const groups = {Python: 'Technical coding', FastAPI: 'Technical coding', SQL: 'D
 const cv = (skills: CvSkill[], skill_estimates: SkillEstimate[] = []) => ({skills, skill_estimates, skill_groups: groups, items: [{id: 'project-one', kind: 'project', title: 'Reporting API'}]}) as unknown as CvDetail;
 
 import {cvApi} from '@/lib/api/cv';
-const profile = (status: 'draft' | 'saved', name = 'Data processing') => ({status, entries: [{id: 'entry-one', kind: 'work', title: 'Weekly reports', fields: {}, skills: [{name, description: 'Described in chat.', dimensions: {}, evidence: []}]}]}) as unknown as SkillsProfile;
 const outcome = (changes: Partial<Assessment['job_skill_gaps'][number]>) => ({ref: 'job:x', name: 'X', match_status: 'partial' as const, components: [], ...changes});
 const comparison = (job_skill_gaps: Assessment['job_skill_gaps']) => ({job_skill_gaps, evidence: {}} as unknown as Assessment);
 const judged = (skills: Partial<NonNullable<Assessment['skill_profile']>['skills'][number]>[]) => ({job_skill_gaps: [], evidence: {}, skill_profile: {status: 'evaluated', rubric_version: 'skill-profile-llm-v1',
@@ -25,7 +24,23 @@ const judged = (skills: Partial<NonNullable<Assessment['skill_profile']>['skills
 beforeEach(()=>{vi.mocked(skillRatings).mockResolvedValue({version:0,ratings:[]});vi.mocked(rateSkill).mockReset();});
 const noComparison={current:null,context:null,result:null,matches:null,outcomes:null,error:'',busy:false,compare:vi.fn(),retry:vi.fn()} as unknown as Comparison;
 const ready=(goal:object|null=null)=>({status:'ready' as const,data:{goal,selection_version:1,dependent_results_need_review:false}}) as never;
-const view=(detail:CvDetail|null,profileValue:SkillsProfile|null=null,declarations:Declarations|null=null,assessment:Assessment|null=null,goal=ready())=>render(<SkillsOverview token="synthetic" skills={profileSkillList(detail,profileValue,declarations)} categories={profileSkillGroups(detail,profileValue,declarations)} assessment={assessment} comparison={noComparison} goal={goal} goalRole="Product Manager"/>);
+const listed = (name: string, fields: Partial<ListedSkill> = {}): ListedSkill => ({
+ key: name.toLowerCase(), name, basis: 'none', sources: [], ...fields,
+});
+const response = (data: ListedSkill[], categories = groups): SkillList => ({
+ cv_id: null, cv_version: null, profile_version: 0, declarations_version: 0, skills: data,
+ skill_groups: categories, skill_subgroups: {},
+});
+const fromCv = (detail: CvDetail | null) => response((detail?.skills ?? []).map(skill => {
+ const estimate = detail?.skill_estimates?.find(value => value.skill_name === skill.name)?.level;
+ const application = estimate === 'insufficient_evidence' ? null : estimate;
+ return listed(skill.name, {canonical_skill_id: skill.canonical_skill_id, level: skill.skill_level, application,
+  basis: skill.skill_level ? 'level' : application ? 'application' : 'none', note: detail?.review_summary?.skill_notes?.[skill.skill_id]});
+}), {...Object.fromEntries((detail?.skills ?? []).filter(skill => skill.category !== 'unspecified').map(skill => [skill.name, skill.category])), ...groups});
+const view=(detail:CvDetail|null,_profile:null=null,_declarations:null=null,assessment:Assessment|null=null,goal=ready())=>{
+ const data = fromCv(detail);
+ return render(<SkillsOverview token="synthetic" skills={skillCards(data)} categories={skillCardGroups(data)} assessment={assessment} comparison={noComparison} goal={goal} goalRole="Product Manager"/>);
+};
 const chip=(name:string)=>screen.getByRole('button',{name:new RegExp(`^${name},`)});
 const dialog=(name:string)=>screen.getByRole('dialog',{name});
 
@@ -34,12 +49,11 @@ it('before a comparison, lists every skill under the backend’s categories with
  expect(screen.getAllByRole('heading',{level:3}).map(heading=>heading.textContent)).toEqual(['Technical coding','Data & analytics']);
  expect(within(screen.getByRole('region',{name:'Technical coding'})).getAllByRole('button').map(button=>button.getAttribute('aria-label')?.split(',')[0])).toEqual(['Python','FastAPI']);
  expect(screen.queryByRole('button',{name:/Show all skills/})).not.toBeInTheDocument();
- expect(profileSkillList(cv([skill('Python')],[estimate('Python','independent_application')]),null,null)[0].label).toBe('Independent');
+ expect(skillCards(fromCv(cv([skill('Python')],[estimate('Python','independent_application')])))[0].label).toBe('Independent');
 });
 
 it('shows only the skills the goal needs with level and target, and the rest behind Show all skills',()=>{
  const detail=cv([{...skill('Python'),canonical_skill_id:'python'},skill('SQL'),skill('Tableau')]);
- // Tableau is rated but not on the goal, so it stays behind Show all skills even if the evaluation thought it relevant.
  const goal=ready({skills:[{name:'Python',canonical_skill_id:'python',priority:'required'},{name:'SQL',priority:'unspecified'}]});
  view(detail,null,null,judged([
   {name:'Python',relevance:'high',competence_score:6,required_score:8},
@@ -47,7 +61,6 @@ it('shows only the skills the goal needs with level and target, and the rest beh
   {name:'Tableau',category:'Data & analytics',relevance:'medium',competence_score:3}]),goal);
  expect(chip('Python')).toHaveTextContent('Python6/8');
  expect(chip('SQL')).toHaveTextContent('SQL8/8');
- // The badge colour says how far the level is from the target: 6/8 is within 2, 8/8 meets it.
  expect(chip('Python').querySelector('.lv')?.className).toBe('lv near');expect(chip('SQL').querySelector('.lv')?.className).toBe('lv met');
  expect(chip('Python')).toHaveClass('important');
  expect(screen.queryByRole('button',{name:/^Tableau/})).not.toBeInTheDocument();
@@ -64,7 +77,7 @@ it('shows the CV review level without a comparison and never invents one for ins
  expect(chip('Python')).toHaveAccessibleName('Python, Level 2 out of 10. Talk it through');
  expect(chip('SQL')).toHaveAccessibleName('SQL, Not rated. Talk it through');
  expect(screen.queryByText(/insufficient/i)).not.toBeInTheDocument();
- expect(profileSkillList(cv([skill('SQL')],[estimate('SQL','insufficient_evidence')]),null,null)[0].established).toBe(false);
+ expect(skillCards(fromCv(cv([skill('SQL')],[estimate('SQL','insufficient_evidence')])))[0].established).toBe(false);
 });
 
 it('opens the Skills Helper on a skill, with the role’s target, review note and where the level comes from',()=>{
@@ -150,13 +163,19 @@ it('adds goal skills the CV does not show with a dotted outline, explained in th
  expect(dialog('Kubernetes')).toBeVisible();
 });
 
-it('merges the same skill from several sources into one chip and labels described and added skills',()=>{
- view(cv([skill('Python')],[estimate('Python','guided_application')]),profile('saved','python'));
- expect(screen.getAllByRole('button',{name:/^Python,/i})).toHaveLength(1);
- expect(profileSkillList(cv([skill('Python')],[estimate('Python','guided_application')]),profile('saved','python'),null)[0].label).toBe('Guided');
- const declarations={version:1,declarations:[{id:'manual-one',name:'Technical writing',description:'Wrote synthetic guides.'}]} as unknown as Declarations;
- expect(profileSkillList(null,profile('draft'),declarations).find(item=>item.name==='Data processing')?.label).toBe('Proposed — review before saving');
- expect(profileSkillList(null,profile('draft'),declarations).find(item=>item.name==='Technical writing')?.label).toBe('Added by you');
+it('renders the merged skill once and labels the evidence returned by the service',()=>{
+ const data = response([
+  listed('Python', {basis:'application', application:'guided_application', sources:[
+   {kind:'cv', id:'one', title:'Reporting API'}, {kind:'chat', id:'two', title:'Weekly reports'},
+  ]}),
+  listed('Data processing', {basis:'draft'}),
+  listed('Technical writing', {basis:'declared'}),
+ ]);
+ const cards = skillCards(data);
+ expect(cards.map(item => [item.name, item.label])).toEqual([
+  ['Python', 'Guided'], ['Data processing', 'Proposed — review before saving'], ['Technical writing', 'Added by you'],
+ ]);
+ expect(cards[0].sources).toEqual(['Reporting API', 'Weekly reports']);
 });
 
 it.each([
@@ -164,13 +183,13 @@ it.each([
  ['a requirement the review has not covered',[outcome({canonical_skill_id:'python',score_status:'not_reviewed',relevance:'high'})],'not_recorded'],
  ['a requirement without enough evidence',[outcome({canonical_skill_id:'python',score_status:'insufficient_evidence',relevance:'medium'})],'unknown'],
 ])('reads exactly one state for %s',(_,gaps,state)=>{
- const [python]=profileSkillList(cv([{...skill('Python'),canonical_skill_id:'python'}]),null,null);
+ const [python]=skillCards(fromCv(cv([{...skill('Python'),canonical_skill_id:'python'}])));
  expect(skillStatus(python,comparison(gaps)).state).toBe(state);
  expect(skillStatus(python,null).state).toBe('not_compared');
 });
 
 it('uses the comparison’s per-skill judgement, falling back to requirement outcomes for skills it does not cover',()=>{
- const [python,sql]=profileSkillList(cv([{...skill('Python'),canonical_skill_id:'python'},skill('SQL')]),null,null);
+ const [python,sql]=skillCards(fromCv(cv([{...skill('Python'),canonical_skill_id:'python'},skill('SQL')])));
  const value={...judged([{name:'SQL',relevance:'medium',competence_score:5,required_score:7}]),job_skill_gaps:[outcome({canonical_skill_id:'python',relevance:'low',competence_score:4,required_score:6,score_status:'estimated'})]} as Assessment;
  expect(evaluatedSkill(sql,value)?.name).toBe('SQL');
  expect(skillStatus(sql,value)).toMatchObject({relevance:'medium',state:'score',score:5,need:7});
@@ -185,4 +204,13 @@ it('shows a saved own rating on the chip when elo has no score for the skill',as
 
 it('colours a rating by its distance from the target',()=>{
  expect([targetGap(9,8),targetGap(8,8),targetGap(6,8),targetGap(5,8),targetGap(2,9),targetGap(4,null)]).toEqual(['met','met','near','far','far',null]);
+});
+
+it('labels assumed CV ratings as estimates on the skill chip', () => {
+ const python = {...skill('Python'), skill_level:{level:2, status:'assumed' as const, rationale:'Limited evidence.', source:'review' as const, evidence:[]}};
+ view(cv([python]));
+ expect(chip('Python')).toHaveAccessibleName('Python, Estimated level 2 out of 10. Talk it through');
+ expect(chip('Python')).toHaveTextContent('est.');
+ fireEvent.click(chip('Python'));
+ expect(within(dialog('Python')).getByRole('heading', {name:'Why is Python estimated at 2 out of 10?'})).toBeVisible();
 });

@@ -69,7 +69,6 @@ it('groups interview findings by round, keeping process-wide facts as headlines'
  const headlines=await screen.findByRole('list',{name:'Interview headline facts'});
  expect(within(headlines).getByText('Three stages are reported.')).toBeVisible();
  expect(screen.getByText('Sources describe 2 rounds.')).toBeVisible();
- // Source round numbers can skip; the badges count the rounds shown.
  expect([...document.querySelectorAll('.round-num')].map(n=>n.textContent)).toEqual(['1','2']);
  expect(screen.queryByRole('button',{name:/Online assessment/})).not.toBeInTheDocument();
  expect(screen.getByText('Reverse a linked list.')).toBeVisible();

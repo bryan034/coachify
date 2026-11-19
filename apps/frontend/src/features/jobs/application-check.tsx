@@ -21,11 +21,11 @@ function writeVisits(accountId:string,visits:Visit[]){
  try{
   if(visits.length)localStorage.setItem(storageKey(accountId),JSON.stringify(visits));
   else localStorage.removeItem(storageKey(accountId));
- }catch{/* Without storage the question still appears while this page stays open. */}
+ }catch{}
 }
 const adding=(visits:Visit[],visit:Visit)=>[...visits.filter(other=>other.id!==visit.id),visit].slice(-MAX_VISITS);
 
-/** Remembers that the user left for an employer's form. Opening the form says nothing about whether they applied. */
+/** Remembers that the user left for an employer's form. */
 export function noteApplyVisit(accountId:string,{id,title,company}:Posting){
  const visit={id,title,company};
  writeVisits(accountId,adding(readVisits(accountId),visit));

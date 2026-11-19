@@ -26,9 +26,7 @@ SUBJECT_BOUNDARIES=QUALIFICATION_WORDS|{'a','an','the','in','of','or','and','eit
 def qualification_terms(description):
     """Source-derived subject phrases establish relevance, never equivalence.
 
-    A CV may name Computer Science without naming the requested diploma. Retain
-    that exact subject so its unresolved qualification can be clarified. Fixed
-    function words and credential names bound phrases; no subjects are invented.
+    Fixed function words and credential names bound phrases.
     """
     text=unicodedata.normalize('NFKC',description)
     subjects=[];start=None;end=None
@@ -47,8 +45,7 @@ def qualification_terms(description):
         end=match.end()
     flush()
     nouns=[word for word in ('degree','diploma','bachelor','master','phd','certificate','certification') if word in text.casefold()]
-    # Derived search phrases are bounded; the complete original condition remains
-    # separately preserved in description/evidence and is never truncated.
+    # Derived search phrases are bounded.
     return list(dict.fromkeys(subjects))[:7] or nouns or [description]
 
 
@@ -56,8 +53,6 @@ def project(goal, selection_version):
     conditions=[]
     for requirement in goal.non_skill_requirements:
         qualification=requirement.category == 'qualification'
-        # Generic requirements are retained, but exact text matching cannot infer
-        # eligibility, location or work-condition claims from unrelated CV items.
         terms=[requirement.description]
         if qualification:
             terms=qualification_terms(requirement.description)
@@ -70,8 +65,6 @@ def project(goal, selection_version):
             'source_requirement_id':requirement.requirement_id,'source_category':requirement.category,
             'source_priority':requirement.priority,'source_origin':requirement.origin,
             'group_id':requirement.group_id,'group_operator':requirement.group_operator})
-    # This identity is a name-based relevance key, not a claimed registry mapping
-    # or an assessment of the user's competence. Preserve every requirement above.
     skills=list(dict.fromkeys(canonical_name(skill.name) for skill in goal.skills))
     return CvConfirmedContext(id=goal.id,version=goal.version,type=goal.target_type,skill_ids=skills,
         selection_version=selection_version,role=goal.role,field=goal.field,conditions=conditions).model_dump(mode='json')
@@ -119,7 +112,6 @@ class CvConfirmationService:
         for receipt in state.get('cv_confirmation_receipts',[]):
             if receipt['key']==key:
                 if receipt['hash']!=digest: raise GoalError('This confirmation key was used with different details.')
-                # Re-read instead of replaying an obsolete context after a goal edit.
                 current=self.view(owner)
                 if not current['confirmed']: raise GoalError('Your Career goal changed. Review it again before confirming.')
                 return current

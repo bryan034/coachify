@@ -15,6 +15,7 @@ from app.domain.extraction_errors import ExtractionFailure
 from app.clients.extraction_schema import extraction_schema
 from app.clients.provider_errors import provider_failure, classified_provider_failure
 
+
 PROMPT_VERSION = 'cv-extraction-14'
 SCHEMA_VERSION = '7'
 REPAIR_INSTRUCTIONS = '''
@@ -70,8 +71,7 @@ EXAMPLE = {
          'proficiency': 'native', 'evidence': [{'block_id': 'example2', 'excerpt': 'English (native)'}]},
     ]},
 }
-# The worked response must include the same full property set required by the
-# provider's strict schema, including explicit nulls and empty default lists.
+# The worked example includes the full property set, with explicit nulls and empty lists.
 EXAMPLE['extraction'] = Extraction.model_validate(EXAMPLE['extraction']).model_dump()
 
 
@@ -154,8 +154,7 @@ class Extractor:
         if not self.configured:
             raise ExtractionFailure('CV extraction is not configured. Ask the administrator to configure the CV model, then retry this saved upload.',
                                     'model_request', 'not_configured')
-        # Main's full decoder schema remains authoritative. JSON-only mode
-        # needs the schema in prose; strict mode receives it in response_format.
+        # JSON-only mode puts the schema in the prompt; strict mode sends it in response_format.
         schema_in_prompt = self.response_mode == 'json_object'
         decoding_schema = extraction_schema()
         response_format = ({'type': 'json_schema', 'json_schema': {'name': 'cv_extraction', 'strict': True, 'schema': decoding_schema}}
@@ -211,8 +210,7 @@ class Extractor:
                              'response_mode': self.response_mode}
         except ModelResponseError as exc:
             failure = classified_provider_failure(exc.reason, exc.parameter, stage)
-            # Permanent credit exhaustion cannot recover via the worker's
-            # temporary-rate-limit retry loop. This flag stays in memory.
+            # Credit exhaustion disables automatic retries.
             failure.auto_retry_allowed = not exc.quota_exhausted
             raise failure from None
         except httpx.HTTPStatusError as exc:

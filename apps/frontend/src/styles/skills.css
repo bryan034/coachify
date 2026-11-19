@@ -1,5 +1,4 @@
-/* Skills Profile: a share bar reads the whole profile; cards read each category.
-   Category tones run in the backend's order (largest first, Other last) and never cycle. */
+/* Skills Profile: a share bar for the whole profile; cards per category. Category tones follow the backend's order. */
 .skills-home{--cat-1:var(--ink);--cat-2:var(--mint);--cat-3:var(--slate);--cat-4:color-mix(in srgb,var(--mint) 45%,var(--ink));--cat-5:color-mix(in srgb,var(--slate) 55%,var(--white));--cat-rest:color-mix(in srgb,var(--slate) 28%,var(--white))}
 .cv-workspace .skills-hero{display:grid;grid-template-columns:minmax(0,1fr);padding:0;margin-bottom:16px;background:transparent;border:0;border-radius:0}
 .cv-workspace .skills-hero-copy{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 24px;align-items:start}
@@ -74,7 +73,7 @@
 .cv-quick-replies{display:flex;flex-wrap:wrap;gap:6px;margin-right:auto}
 .cv-quick-replies .chip{min-height:30px;padding:0 10px;font-size:12px}
 
-/* ---- Skills Profile redesign: compact header, CV switcher, relevance chips, skill panel ---- */
+/* ---- Skills Profile: compact header, CV switcher, relevance chips, skill panel ---- */
 .skills-hero-compact{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px;padding:0 0 20px}
 .skills-hero-line{margin:6px 0 0;color:var(--slate)}
 .skills-hero-line a{color:var(--forest);font-weight:600}
@@ -85,9 +84,9 @@
 
 .cv-library-disclosure .cv-library-scroll{max-height:480px}
 
-/* Redesign "Skills Profile": cards keep their inner padding; the skill list is one bordered card. */
+/* Skills Profile cards; the skill list is one bordered card. */
 
-/* CV review (redesign "CV review chat"): topics rail on the left, transcript on the right. */
+/* CV review: topics rail on the left, transcript on the right. */
 .cv-review-rail{display:grid;align-content:start;gap:16px;padding:12px 16px;border-bottom:1px solid var(--line)}
 .cv-review-rail .cv-review-progress{padding:0;background:none;border:0}
 .cv-review-rail .cv-topic-checklist{padding:0;border:0}
@@ -113,10 +112,9 @@
  .cv-review-screen .cv-chat:has(.cv-review-rail)>.cv-chat-messages{grid-row:4;min-height:0}
  .cv-review-screen .cv-chat:has(.cv-review-rail)>.cv-chat-composer-wrap{grid-row:5}
 }
-/* Phones keep the transcript tall: the segmented bar stands in for the topic list. */
+/* Phones: the segmented bar stands in for the topic list. */
 @media (max-width:899px){.cv-review-rail{padding:6px 14px;gap:4px}.cv-review-rail .cv-topic-checklist{display:none}.cv-review-rail .cv-inline-confirmation{padding:0;border:0;background:none;font-size:12px;line-height:1.4}}
 
-/* Skills Profile, matched to the design reference. */
 .skills-home{display:flex;flex-direction:column;gap:20px}
 .skills-hero-compact{padding:0;margin:0}
 
@@ -210,8 +208,7 @@
 .cv-upload-panel .skills-dropzone .skills-drop-choose svg{width:16px;height:16px;flex:none}
 .skills-first-side>.card{padding:24px;border-radius:20px}
 
-/* CV review chat, redesigned: white header and rail on a snow page, forest for what is done,
-   mint for what is current, one green-tinted bubble for the user. Scoped above the theme. */
+/* CV review chat: white header and rail on a snow page, forest for done, mint for current, a green-tinted user bubble. */
 .cv-workspace .cv-chat{background:var(--snow);box-shadow:none}
 .cv-workspace .cv-chat .cv-chat-header{gap:12px;padding:14px 28px;background:var(--white);border-bottom:1px solid var(--line)}
 .cv-workspace .cv-chat .cv-chat-header h2{margin:0;font-size:17px;font-weight:600;letter-spacing:0}
@@ -301,7 +298,7 @@
 @media (max-width:700px){.cv-chat-logo, .cv-chat-divider{display:none}}
 .cv-chat-done-actions a.btn{min-height:44px;padding:0 20px;border:1px solid rgb(71 85 105 / .35);border-radius:999px;background:var(--white);color:var(--ink);font-weight:600;text-decoration:none}
 .cv-chat-done-actions a.btn:hover{background:var(--cloud)}
-/* Keep the transcript tall: the composer is compact so history keeps most of the viewport. */
+/* Compact chat header and composer. */
 .cv-workspace .cv-chat .cv-chat-header{padding-top:10px;padding-bottom:10px}
 .cv-workspace .cv-chat .cv-chat-composer-wrap{padding-top:10px;padding-bottom:8px}
 .cv-workspace .cv-chat .cv-chat-composer textarea{height:52px;min-height:52px;padding:10px 14px}
@@ -332,7 +329,7 @@
  .cv-workspace .cv-chat .cv-chat-composer-wrap{padding:8px 16px 6px}
 }
 
-/* Sections that could not be verified: yellow, with a text label so colour is never the only cue. */
+/* Sections that could not be verified: yellow, with a text label. */
 .cv-review-rail, .cv-item{--flag-bg:#fff6d6;--flag-line:#e3bd3c;--flag-ink:#5c4600}
 .cv-rail-warning{margin:0;padding:10px 12px;border:1px solid var(--flag-line);border-radius:10px;background:var(--flag-bg);color:var(--flag-ink);font-size:13px;line-height:1.5}
 .cv-topic-checklist li.is-warning .cv-topic-mark{background:var(--flag-bg);border-color:var(--flag-line);color:var(--flag-ink);font-weight:700}
@@ -367,7 +364,7 @@
 .cv-answer-hints{margin-top:12px;padding:10px 14px;border-radius:10px;background:var(--snow)}
 .cv-answer-hints p{margin:0 0 4px;font-size:12px;font-weight:600;color:var(--slate)}
 .cv-answer-hints ul{margin:0;padding-left:18px;color:#334155}
-/* Phone widths: the three quick replies stay on one scrollable row so the composer keeps its height. */
+/* Phone widths: quick replies on one scrollable row. */
 @media (max-width:700px){
  .cv-workspace .cv-chat .cv-quick-replies{flex:1 1 0;min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
  .cv-workspace .cv-chat .cv-quick-replies::-webkit-scrollbar{display:none}
@@ -419,9 +416,9 @@
 .skills-locked li strong{display:block;font-weight:600}
 .skills-locked li>span:last-child>span{color:var(--slate)}
 @media (max-width:700px){.skills-unfinished-top, .skills-unfinished-progress, .skills-locked{padding-left:20px;padding-right:20px}.skills-unfinished-foot{padding:8px 20px 20px}.skills-unfinished-top h2{font-size:24px}.skills-unfinished-topics{grid-template-columns:minmax(0,1fr)}}
-/* Saved CVs sit beside the upload panel instead of behind a disclosure; a chosen file turns the dropzone into a clear "selected" state. */
+/* Saved CVs beside the upload panel; a chosen file shows a selected dropzone. */
 .cv-top-grid>.cv-library.cv-saved{margin:0}
-/* On the Skills Profile the upload panel lives beside the CV card, so Your CVs spans the full width. */
+/* Library-only grid: Your CVs spans the full width. */
 .cv-top-grid.is-library-only{grid-template-columns:minmax(0,1fr);margin-top:40px}
 .cv-upload-panel .skills-dropzone.has-file{border-style:solid;border-color:var(--forest,#116149);background:var(--mint-mist,#ecfdf5)}
 .skills-drop-icon.is-done{background:var(--forest,#116149);color:#fff}

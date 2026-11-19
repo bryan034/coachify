@@ -15,8 +15,7 @@ class CurrentCareerGoal(Contract):
     goal:CareerGoal|None
     dependent_results_need_review:bool=False
     review_selection:ReviewReference|None=None
-    # Display categories by skill name, derived on read. Kept off CareerGoal because its dump is
-    # stored and hashed for CV confirmation; see elo_shared.skill_groups.
+    # Display categories by skill name, derived on read.
     skill_groups:dict[str,str]=Field(default_factory=dict)
     @model_validator(mode='after')
     def display_groups(self):

@@ -1,4 +1,4 @@
-"""J08/J09 private drafts, bounded conversational context and explicit selection."""
+"""Private drafts, bounded conversational context and explicit selection."""
 from app.schemas.analysis import EmploymentType
 
 from typing import Literal
@@ -142,7 +142,7 @@ class SaveGoal(Contract):
     replace_current: bool = False
     review_id: DomainId | None = None
     expected_review_version: int | None = Field(default=None, strict=True, ge=1)
-    # Skills/provenance are server-owned; later J03/J10 workers supply them.
+    # Skills/provenance are server-owned.
 
     @model_validator(mode='after')
     def draft_version(self):

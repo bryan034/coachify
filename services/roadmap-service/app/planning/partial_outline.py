@@ -1,12 +1,13 @@
 """Conservative, backend-owned recovery of an outline with invalid requirement IDs."""
+from elo_shared.runtime import digest
 from app.schemas.outlines import OutlineDraft
 
 
 def recover_outline(draft,assessment,existing=None):
     """Drop invalid reference rows and their dependants, retaining an audit for review.
 
-    This never edits the Assessment, guesses an ID or waives scheduling checks.
-    The recovered draft must still pass normal validation before it can be shown.
+    The recovered draft must still pass normal validation before it can be shown. The model's
+    deadline claim is never rewritten: a recovery that would contradict it fails instead.
     """
     data=draft.model_dump(mode='json')
     originally_placed={key for m in data['milestones']+data['beyond_deadline'] for key in m['gap_ids']}
@@ -20,7 +21,6 @@ def recover_outline(draft,assessment,existing=None):
     invalid_exclusions=[e for e in data['exclusions'] if e['requirement_ref'] not in allowed]
     for exclusion in invalid_exclusions:record('exclusion',exclusion['requirement_ref'],exclusion['requirement_ref'],'The generated exclusion references an unknown requirement.',exclusion['requirement_ref'])
     if not bad and not invalid_exclusions:return None,None
-    # Duplicate identities cannot be safely disambiguated during recovery.
     if len({g['id'] for g in data['gaps']})!=len(data['gaps']):return None,None
     if len({m['key'] for m in data['milestones']})!=len(data['milestones']):return None,None
     data['gaps']=[g for g in data['gaps'] if g['id'] not in bad]
@@ -30,7 +30,7 @@ def recover_outline(draft,assessment,existing=None):
         dependent={m['key'] for m in data['milestones'] if removed.intersection(m['prerequisite_keys'])}
         if dependent<=removed:break
         removed.update(dependent)
-    # Recovery must not remove milestones attached to saved work or progress.
+    # Never remove milestones attached to saved work or progress.
     if any(t.get('milestone_key') in removed for t in ((existing or {}).get('editable_tasks') or [])):return None,None
     if any(a.get('milestone_key') in removed for a in (existing or {}).get('assignments',[])):return None,None
     if any(m['key'] in removed and ((m.get('outcome') or {}).get('demonstrated') or any(c.get('reached_at') for c in m.get('checkpoints',[]))) for m in (existing or {}).get('milestones',[])):return None,None
@@ -57,12 +57,13 @@ def recover_outline(draft,assessment,existing=None):
     beyond=[]
     for item in data['beyond_deadline']:
         if item['gap_ids'] and set(item['gap_ids'])<=bad:
-            record('beyond_deadline',str(len(omitted)),item['title'],'Its learning gaps were omitted.')
+            record('beyond_deadline','beyond:'+digest(item)[:16],item['title'],'Its learning gaps were omitted.')
         else:
             item['gap_ids']=[key for key in item['gap_ids'] if key not in bad]
             beyond.append(item)
     data['beyond_deadline']=beyond
     if not data['milestones'] or not data['weeks']:return None,None
+    if draft.beyond_deadline and not beyond and not data['deadline_outcome']['fits_in_runway']:return None,None
     covered_ids={key for m in data['milestones']+data['beyond_deadline'] for key in m['gap_ids']}
     orphaned={g['id'] for g in data['gaps'] if g['id'] in originally_placed and g['id'] not in covered_ids}
     for gap in data['gaps']:
@@ -71,9 +72,7 @@ def recover_outline(draft,assessment,existing=None):
     covered_refs={g['requirement_ref'] for g in data['gaps'] if g['id'] in covered_ids}
     excluded={e['requirement_ref'] for e in data['exclusions']}
     uncovered=[ref for ref in assessment.get('priorities',[]) if ref not in covered_refs|excluded]
-    # Removed beyond-deadline rows no longer establish that remaining work exceeds the deadline.
     data['summary']='This is a partial roadmap. Review the retained milestones and weekly objectives; omitted items are listed separately.'
     data['deadline_outcome']['summary']='Only the retained milestones are planned. This partial roadmap does not establish complete coverage of your career goal.'
     data['deadline_outcome']['achievable_by_target']=[m['demonstrable_outcome'] for m in retained]
-    if len(beyond)!=len(draft.beyond_deadline):data['deadline_outcome']['fits_in_runway']=not bool(beyond)
     return OutlineDraft.model_validate(data),{'omitted_items':omitted,'uncovered_requirements':uncovered}

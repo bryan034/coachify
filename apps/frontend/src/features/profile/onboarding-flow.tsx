@@ -36,7 +36,6 @@ export function OnboardingFlow({ preview = false }: { preview?: boolean }) {
   const initial = preview ? { ...profile!, occupational_status: null, school_category: null, no_previous_education: false, education: {}, previously_employed: null, employment: { employer: null, role: null, industry: null } } : profile!;
   const reviewRequired = !preview && !!profile?.education_review_required &&
     [profile?.education.institution, profile?.education.course, profile?.education.study_year, profile?.education.graduation_year].some(value => value != null);
-  // The guard mounts this component only after canonical profile/session readback.
   const [step, setStep] = useState<Step>(() => preview ? 'status' : resumeStep(profile!));
   const [status, setStatus] = useState<OccupationalStatus | ''>(initial?.occupational_status || '');
   const [category, setCategory] = useState<SchoolCategory | ''>(initial?.school_category || '');
@@ -63,7 +62,7 @@ export function OnboardingFlow({ preview = false }: { preview?: boolean }) {
   const latest = useRef(profile);
   latest.current = profile;
   const pending = useRef<{ signature: string; key: string } | null>(null);
-  useEffect(() => { alive.current = true; setCountry(profile?.education.institution?.country_code || suggestedCountry()); return () => { alive.current = false; transition.current?.cancel(); }; }, []); // Account-scoped component; no persistent browser drafts.
+  useEffect(() => { alive.current = true; setCountry(profile?.education.institution?.country_code || suggestedCountry()); return () => { alive.current = false; transition.current?.cancel(); }; }, []);
   useEffect(() => { heading.current?.focus(); panel.current?.closest('.onboarding-body')?.scrollTo?.({ top: 0, behavior: 'instant' }); }, [step]);
   const student = status === 'student';
   const needsGraduation = status === 'unemployed' && previouslyEmployed === false;
@@ -108,14 +107,13 @@ export function OnboardingFlow({ preview = false }: { preview?: boolean }) {
       latest.current = saved; pending.current = null;
       setSaveNote('Progress saved to your account.');
       if (!finish) go(next);
-      // The shared guard routes only after server-confirmed completion.
     } catch (e) {
       if (!alive.current) return;
       if (finish && (!(e instanceof ApiError) || e.status >= 500)) {
         try { const saved = await profileApi<Profile>('', {}, token);
           if (!alive.current) return;
           if (saved.onboarding_complete && setProfile(saved)) return;
-        } catch { /* Keep draft and request key for an uncertain completion retry. */ }
+        } catch {}
       }
       if (!alive.current) return;
       setConflict(e instanceof ApiError && e.status === 409);
@@ -152,7 +150,6 @@ export function OnboardingFlow({ preview = false }: { preview?: boolean }) {
   }
   function saveEducation(value: EducationEditor, next: Step) {
     setEditor(value);
-    // Retained education in a new context is confirmed as a whole on the review screen.
     if (reviewRequired) {
       setSaveNote('Review your changed education before saving these answers.'); go(next); return;
     }

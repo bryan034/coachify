@@ -16,7 +16,6 @@ describe('roadmap calendar', () => {
  });
  it('lists every week that touches a month', () => {
   expect(monthWeeks('2030-01-15')).toEqual(['2029-12-31', '2030-01-07', '2030-01-14', '2030-01-21', '2030-01-28']);
-  // February 2027 starts on a Monday and fills exactly four weeks.
   expect(monthWeeks('2027-02-10')).toEqual(['2027-02-01', '2027-02-08', '2027-02-15', '2027-02-22']);
  });
  it('lists the months between two dates', () => {

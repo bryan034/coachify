@@ -8,11 +8,7 @@ import requests
 
 
 def isolate_application_settings():
-    """Never inherit a developer's application connections in synthetic tests.
-
-    MONGODB_TEST_URI is an explicit disposable-test opt-in. Individual tests can
-    still inject a database, mock transport or synthetic settings after setup.
-    """
+    """Never inherit a developer's application connections in synthetic tests."""
     for name in tuple(os.environ):
         if name == 'MONGODB_TEST_URI':
             continue
@@ -28,8 +24,7 @@ async def blocked_async_http(*args, **kwargs):
     raise AssertionError('Synthetic tests must use an explicit mock HTTP transport.')
 
 
-# Run before importing test modules: module-level app construction and live-test
-# decorators must never observe inherited production settings.
+# Run before importing test modules.
 isolate_application_settings()
 httpx.HTTPTransport.handle_request = blocked_http
 httpx.AsyncHTTPTransport.handle_async_request = blocked_async_http

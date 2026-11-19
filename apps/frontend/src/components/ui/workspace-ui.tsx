@@ -3,10 +3,9 @@ import { useId, useState, type ReactNode } from 'react';
 import { Icon } from './icon';
 export function PageTitle({ title, children, info }: { title: string; children?: ReactNode; info?: ReactNode }) {
  if (!info) return <div className="ptitle"><h1>{title}</h1>{children}</div>;
- // The tip sits beside the heading, not inside it, so the heading's name stays the page title.
  return <div className="ptitle"><div className="ptitle-heading"><h1>{title}</h1><InfoTip label={`About ${title}`}>{info}</InfoTip></div>{children}</div>;
 }
-/** The one place on a page for caveats and disclaimers, so cards don't repeat them. */
+/** Info tooltip for a page's caveats and disclaimers. */
 export function InfoTip({ label, children }: { label: string; children: ReactNode }) {
  const [open, setOpen] = useState(false);
  const id = useId();

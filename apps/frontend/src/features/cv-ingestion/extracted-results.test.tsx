@@ -10,8 +10,8 @@ function reviewedCv(): CvDetail {
  const skill = (id: string, name: string, itemIds: string[]) => ({ ...base.skills[0], skill_id: id, name, item_ids: itemIds });
  return {
   ...base, display_name: 'Synthetic Resume',
-  skill_groups: { python: 'Technical coding', excel: 'Business and finance', agentic: 'AI and ML' },
-  skill_subgroups: { python: 'Languages' },
+  skill_groups: { Python: 'Technical coding', Excel: 'Business and finance', 'Agentic AI': 'AI and ML' },
+  skill_subgroups: { Python: 'Languages' },
   items: [
    { ...project, skill_ids: ['python', 'excel'], start_date: '2026-06', end_date: '2026-08' },
    { ...project, id: 'work-1', kind: 'experience', title: 'Analyst at Synthetic Co', description: 'Built models.', skill_ids: ['excel'], start_date: '2025', ongoing: true },

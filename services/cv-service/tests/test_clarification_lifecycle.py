@@ -43,8 +43,6 @@ def test_corrected_source_archives_old_facts_and_accepts_fresh_questions(harness
     reverted = client.patch(f"/api/v1/cv/{cv['id']}/items/{question['item_id']}",
         json=mutation(repeated['version'], action='update', title=original_title)).json()
     _, questions = prepare_context(harness, reverted)
-    # Editing a source cannot reset the two issued-question allowance. The
-    # original answers remain in history even though both need reconciliation.
     assert not any(q['item_id'] == question['item_id'] and not q['reconciliation_required'] for q in questions)
     assert {q['id'] for q in questions if q['item_id'] == question['item_id']} == {question['id'], current['id']}
 
@@ -307,7 +305,6 @@ def test_legacy_excess_questions_are_not_republished_and_saved_answer_still_work
     assert question['id'] in {q['id'] for q in visible}
     assert extra[0]['id'] in {q['id'] for q in visible}
     assert extra[1]['id'] not in {q['id'] for q in visible}
-    # A client that already holds an older question can still submit its answer.
     response = client.put('/api/v1/cv/' + cv['id'] + '/clarifications/' + extra[1]['id'],
                           json=mutation(cv['version'], action='skip'))
     assert response.status_code == 200

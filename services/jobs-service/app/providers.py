@@ -14,7 +14,7 @@ WORKPLACE_METADATA = re.compile(r'workplace|location type|remote', re.I)
 
 
 class ProviderUnavailable(Exception):
-    """The whole board could not be read, so existing postings must not be treated as missing."""
+    """The whole board could not be read."""
 
 
 def _text(value):
@@ -35,7 +35,6 @@ def _greenhouse(job):
         'department': department,
         'employment': [m.get('value') for m in metadata if EMPLOYMENT_METADATA.search(m['name'])],
         'workplace': [m.get('value') for m in metadata if WORKPLACE_METADATA.search(m['name'])],
-        # updated_at changes on any edit, so it is not a posting date.
         'posted_at': job.get('first_published'),
         'application_deadline': job.get('application_deadline'),
         'description': plain_text(job.get('content'), escaped=True),

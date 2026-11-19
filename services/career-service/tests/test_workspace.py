@@ -119,7 +119,6 @@ def test_jd_graph_autosaves_current_goal_and_gates_chat_on_both_inputs(flow):
     assert ingest(flow,key=key).json()['session_id']==current['session_id']
     assert len([r for r in ai.calls if r.stage=='jd_extraction'])==1
     assert db.career_checkpoints.count_documents({})>0
-    # Raw source and private transcript never enter checkpoint documents/writes.
     raw=str(list(db.career_checkpoints.find({})))+str(list(db.career_checkpoint_writes.find({})))
     assert 'SQL is required.' not in raw and 'What should I practise?' not in raw
     assert client.get(BASE,headers=headers(other=True)).json()['session_id'] is None
@@ -157,7 +156,7 @@ def test_quota_pause_resumes_failed_node_without_repeating_search(flow):
 def test_empty_research_is_explicit_and_checkpoint_expiry_keeps_saved_goal(flow):
     client,db,ai,sources=flow;sources.empty=True;ingest(flow);value=wait(flow)
     assert saved_research(flow,value)['research_status']=='no_findings'
-    assert len(sources.calls)==2 # Brave only, at most one extra query round
+    assert len(sources.calls)==2
     assert not any(r.stage=='interview_synthesis' for r in ai.calls)
     db.career_state.update_one({'_id':OWNER},{'$set':{'workspace.expires_at':now()-timedelta(seconds=1)}})
     expired=client.get(BASE,headers=headers()).json();assert expired['phase']=='expired' and expired['current']['goal']
@@ -236,7 +235,7 @@ def test_brave_summary_survives_graph_storage_and_cross_user_cache_reuse(flow):
     assert saved_research(flow,value)['summaries'][0]['text']==text and saved_research(flow,value)['skills'][0]['evidence_origin']=='brave_summary'
     assert saved_research(flow,value)['skills'][0]['interview_stage']=='technical screen'
     assert saved_research(flow,value)['sources'][0]['evidence']!=text
-    assert len(sources.calls)==1  # A supported answer does not need another broad search.
+    assert len(sources.calls)==1
     assert client.post(BASE+'/jd',headers=headers(other=True),json={'text':'SQL is required.'}).status_code==202
     for _ in range(100):
         other=client.get(BASE,headers=headers(other=True)).json()

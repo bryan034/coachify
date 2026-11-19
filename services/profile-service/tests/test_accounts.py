@@ -86,7 +86,6 @@ def test_cv_review_policy_is_the_same_for_all_accounts(setup):
     a, headers, _, _ = register(client)
     b, other, _, _ = register(client)
     assert client.get(BASE + '/auth/session', headers=headers).json()['cv_review_scope'] == 'item'
-    # A legacy stored section policy cannot reduce the new shared allowance.
     repo.accounts.update_one({'id': a['id']}, {'$set': {'cv_review_scope': 'section', 'cv_review_policy_version': 1}})
     policy = client.get(BASE + '/auth/session', headers=headers).json()
     assert (policy['cv_review_scope'], policy['cv_review_policy_version']) == ('item', 1)
@@ -227,7 +226,6 @@ def test_concurrent_google_creation_has_one_account(setup):
     client, repo = setup
     google(client)
     attempts = [begin(client), begin(client)]
-    # Stub only Google's cryptographic boundary; MongoDB uniqueness remains real.
     def verify(credential, audience, nonce):
         return {'sub': 'same-subject', 'name': 'Synthetic', 'email':'same@example.test','email_verified':True}
     with patch('app.api.v1.accounts.verify_google', side_effect=verify):
@@ -239,8 +237,6 @@ def test_concurrent_google_creation_has_one_account(setup):
             assert pending.status_code == 200
             proofs.append({**access, 'challenge_id': pending.json()['challenge_id'], 'code': repo.mailer.messages[-1][1]})
     assert repo.accounts.count_documents({}) == 0
-    # Account creation now races at mailbox-proof publication. Capture each
-    # synthetic email before racing, so one attempt cannot read another's code.
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda proof: client.post(BASE + '/auth/verify-email', json=proof).status_code, proofs))
     assert sorted(results) == [200, 409]
@@ -500,7 +496,6 @@ def test_pending_registration_retries_keep_one_candidate_and_cannot_change_crede
     assert repo.flows.find_one({'_id': flow['_id']})['registration_candidate'] == flow['registration_candidate']
     assert repo.accounts.count_documents({}) == 0
     login, _ = complete(client, begin(client, 'login'), email=body['email'])
-    # An unverified registration candidate has not created an account yet.
     assert login.status_code == 404
     assert client.post(BASE + '/auth/verify-email', json=proof).status_code == 200
 

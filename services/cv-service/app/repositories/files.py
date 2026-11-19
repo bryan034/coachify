@@ -25,11 +25,7 @@ class FileStore:
 
     @contextmanager
     def lock(self, identifier, blocking=True):
-        """Bounded stable lock files; collisions merely serialize unrelated CVs.
-
-        Never unlink lock files: replacing their inodes would defeat flock across
-        processes. All deployments must share this POSIX-locking upload volume.
-        """
+        """Bounded stable lock files; collisions merely serialize unrelated CVs. Lock files are never unlinked."""
         UUID(identifier)
         stripe = int(hashlib.sha256(identifier.encode()).hexdigest()[:8], 16) % 256
         mutex = self._locks[stripe]
@@ -67,8 +63,7 @@ class FileStore:
             if path.exists():
                 if path.read_bytes() != data: raise FileExistsError('Saved original bytes differ.')
                 return
-            # A crashed writer's deterministic temporary is covered by the same
-            # reservation. Its replacement never consumes a second file allowance.
+            # Remove a crashed writer's deterministic temporary.
             temporary.unlink(missing_ok=True)
             descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:

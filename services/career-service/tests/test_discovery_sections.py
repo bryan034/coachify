@@ -64,7 +64,7 @@ def test_each_understanding_answer_and_memory_list_can_recover_independently():
     assert result.data.memory.preferences==['Flexible hours'] and result.data.memory.interests==['Finance']
     assert result.data.understanding.field.value=='Finance'
     assert result.data.understanding.career_stage.status=='unanswered'
-    assert result.data.action=='ANSWER' # Incomplete control context cannot start research.
+    assert result.data.action=='ANSWER'
     assert set(calls[-1][1]['response_format']['json_schema']['schema']['properties'])=={'understanding.career_stage'}
 
 

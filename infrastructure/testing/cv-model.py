@@ -1,7 +1,6 @@
 """Synthetic OpenAI-compatible HTTP boundary for disposable integration tests.
 
-Refuses non-fixture documents. Never deployed by the application Compose file.
-It tests transport/schema validation and persistence, not model intelligence.
+Refuses non-fixture documents.
 """
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,7 +13,7 @@ CHAT_PARTIAL_FAILURE = CHAT_MIXED_ANSWER + ' I cannot clarify my internship yet.
 
 
 def conversation_fixture(value):
-    """Reviewed fixed chat cases; never a general natural-language interpreter."""
+    """Reviewed fixed chat cases."""
     message = value['message']
     items = value.get('items', [])
     if any(item.get('title') not in {'Team dashboard', 'Synthetic reporting internship', 'Python', 'SQL', 'Synthetic University'} for item in items):
@@ -62,7 +61,7 @@ def conversation_fixture(value):
 
 
 def interpret_fixture(value):
-    """Fixed labelled examples, not a substitute for live semantic evaluation."""
+    """Fixed labelled examples."""
     item, question, answer = value['source_item'], value['question'], value['answer']
     if item['title'] not in {'Team dashboard', 'Synthetic reporting internship', 'Python', 'SQL', 'Synthetic University'}:
         raise ValueError('Only known synthetic source items are accepted')
@@ -70,7 +69,7 @@ def interpret_fixture(value):
         if item['title'] == 'Synthetic reporting internship':
             raise RuntimeError('Deliberate synthetic second-action interpretation outage')
         if item['title'] != 'Team dashboard': raise ValueError('Unknown synthetic partial-failure source')
-        answer = CHAT_MIXED_ANSWER  # Excerpts still occur verbatim in the actual full message.
+        answer = CHAT_MIXED_ANSWER
     claims = []
     ids = list(dict.fromkeys(item['skill_ids'] + [c['skill_id'] for c in item.get('skill_claims', [])]))
     names = {key: key.removeprefix('skill:').title() for key in ids}
@@ -129,7 +128,7 @@ def interpret_fixture(value):
 
 
 def semantic_fixture(value):
-    """Approve only reviewed text/claim pairs, never arbitrary model output."""
+    """Approve only reviewed text/claim pairs."""
     if any('SYNTHETIC_SECOND_ACTION_FAILURE' in block['text'] and 'I cannot clarify my internship yet.' in block['text'] for block in value['source_blocks']):
         raise RuntimeError('Deliberate synthetic second-action evidence outage')
     labelled_answers = [CHAT_MIXED_ANSWER, CHAT_EXTRA_CONTEXT,
@@ -179,15 +178,13 @@ def review_question_fixture(value):
 
 
 def interview_fixture(value):
-    """Finite labelled cases for the new interview protocol, not an agent fallback."""
+    """Finite labelled cases for the interview protocol."""
     source = value.get('focused_source') or {}
     known = {'Team dashboard', 'Synthetic reporting internship', 'Python', 'SQL', 'Synthetic University'}
     if source.get('title') not in known:
         raise ValueError('Unknown synthetic interview source')
     if value['task'] == 'cv_interview_plan':
-        # The backend owns admissible targets. In particular, an answered
-        # ownership target can close a differently worded responsibility target.
-        # Follow its projected options rather than inferring gaps from raw facts.
+        # Follow the backend's projected options.
         options = value.get('question_options', [])
         choice = next(((option.get('skill_name'), field) for option in options
                        for field in option.get('open_fields', [])), None)

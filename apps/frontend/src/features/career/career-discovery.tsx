@@ -59,7 +59,6 @@ function DiscoveryConversation({token}:{token:string|undefined}){
   if(input)resumeFollow();
   if(!token||!view?.available||!input||sending.current||busy)return;
   sending.current=true;setBusy(true);setError('');setPending(input);setFailedMessage('');
-  // Clear immediately; leave the composer editable while the response is pending.
   if(!retry)setMessage('');
   try{let current=currentView.current?.session;
    if(!current){const started=await post<View>('/discoveries',{consent:true});current=started.session;receive(started);}

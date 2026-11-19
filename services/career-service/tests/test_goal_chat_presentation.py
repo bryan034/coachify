@@ -88,7 +88,6 @@ def test_summary_links_research_topics_to_their_career_goal_tabs():
         interview='Find out more on the [Interview preparation](/career-goal/interview) page.'
         role='Find out more on the [About the role](/career-goal/role) page.'
         assert reply.count(interview)==1 and reply.count(role)==1
-        # Each link follows the last topic it covers, before the next heading.
         assert reply.index('An interview is reported.')<reply.index(interview)<reply.index('#### Internship insights')
         assert reply.index('Teams are small.')<reply.index(role)<reply.index('Ask me anything about this goal set!')
     asyncio.run(run())
@@ -152,8 +151,6 @@ def test_summary_requires_research_linked_to_the_current_goal_revision(status):
         reads=[]
         def read(owner,goal_id,research_id,**kwargs):
             reads.append((owner,goal_id,research_id,kwargs))
-            # An immutable report from the previous revision remains historical,
-            # but cannot supply a presentation for the current goal.
             return None if kwargs.get('current') else record
         request.app.state.research_store.read=read
         with pytest.raises(GoalError):await summarize(request,'owner',body)
@@ -236,8 +233,6 @@ def test_followup_is_scoped_cited_and_never_exports_conversation(monkeypatch,top
             assert 'Example Analyst' in searches[0] and 'location' in searches[0]
             assert 'private' not in searches[0] and '@' not in searches[0]
             assert 'https://example.test/job' in result.reply
-            # The passage names neither the role nor an office location, so it may
-            # answer as public context but is never saved as a verified job fact.
             assert events==['understanding_question','searching_question','answering_question']
             assert len(checks)>=3
     asyncio.run(run())

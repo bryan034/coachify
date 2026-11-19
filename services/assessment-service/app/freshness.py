@@ -1,4 +1,4 @@
-"""Read-time status of the saved evaluation; never persist a freshness flag."""
+"""Read-time status of the saved evaluation."""
 from app.competence import RUBRIC_VERSION
 
 

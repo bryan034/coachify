@@ -8,7 +8,8 @@ from app.domain.baseline import estimate_skill
 from app.domain.capabilities import validate_extraction, evidence_requiring_semantic_check, interpretation_semantic_checks
 from app.domain.extraction_errors import EvidenceValidationError
 from app.domain.extraction_feedback import feedback_for
-from app.domain.review_context import evidence_for, clarification_context
+from app.domain.review_context import clarification_context
+from app.domain.evidence_ledger import evidence_for
 from app.schemas.interview_evidence import fact_statement
 from tests.conftest import docx, upload
 
@@ -33,8 +34,6 @@ def payload():
 
 def validate(value):
     blocks = [{'id': 'b1', 'location': 'Paragraph 1', 'text': TEXT}]
-    # Explicit synthetic semantic verdicts; exact quote anchors still undergo
-    # the production checks even when the interpreted descriptions are approved.
     approved = frozenset((r['block_id'], r['excerpt']) for r in evidence_requiring_semantic_check(value, blocks))
     return validate_extraction(value, blocks, 'synthetic-cv', approved)[0]
 

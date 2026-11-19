@@ -168,7 +168,6 @@ def test_evidence_free_unknown_exception_cannot_change_proficiency_answer_scope(
 def test_resolved_flag_requires_the_corresponding_fact(uncertainty):
     payload = valid()
     payload['resolved_uncertainties'] = [uncertainty]
-    # A stated personal attribution alone cannot resolve unrelated numeric/date facts.
     payload['claims'][0]['changed_fields'] = ['attribution']
     payload['claims'][0]['experience_months'] = None
     q = question()

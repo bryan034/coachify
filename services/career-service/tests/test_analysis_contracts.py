@@ -46,7 +46,6 @@ def test_objectids_roundtrip_bson_without_changing_account_uuid(documents):
     assert isinstance(data['user_id'], str)
     restored = BSON(BSON.encode(data)).decode(codec_options=CodecOptions(tz_aware=True))
     assert restored['create_key']=='canonical:'+goal.id
-    # create_key is storage-only compatibility metadata, not a public field.
     with pytest.raises(ValidationError):CareerGoal.model_validate(restored)
     assert read_stored_goal(restored)==goal
     assert 'create_key' not in read_stored_goal(restored).model_dump()

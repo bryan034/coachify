@@ -30,7 +30,10 @@ async def start(mutation: ConversationStart, request: Request, account=Depends(a
 @router.get('/{conversation_id}', response_model=ConversationView)
 async def read(conversation_id: str, request: Request, before: int | None = Query(default=None, ge=1),
         limit: int = Query(default=40, ge=1, le=100), account=Depends(authenticated)):
-    return view(await request.app.state.conversations.refresh(request.app, account, conversation_id), before, limit)
+    service = request.app.state.conversations
+    document = await service.refresh(request.app, account, conversation_id)
+    if document['cv_id']: await service.schedule_skill_levels(account, document['cv_id'])
+    return view(document, before, limit)
 
 
 @router.post('/{conversation_id}/messages', response_model=ConversationView)

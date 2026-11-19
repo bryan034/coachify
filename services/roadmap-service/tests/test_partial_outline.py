@@ -22,7 +22,7 @@ def test_two_attempts_then_partial_preview_without_a_third_outline_model_call():
         assert [m['key'] for m in outline['milestones']]==['m1']
         assert [w['week_start'] for w in outline['weeks']]==['2030-01-07','2030-01-14']
         assert {item['kind'] for item in outline['partial_review']['omitted_items']}=={'gap','milestone','week'}
-        assert state['planner']['active'] is None  # explicit acceptance remains required
+        assert state['planner']['active'] is None
         state=accept_outline(client,state)
         assert state['planner']['active'] is not None
         assert state['planner']['outline_active']['partial_review']==outline['partial_review']

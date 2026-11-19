@@ -23,8 +23,7 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.auth_settings = auth_settings()
-        # Attachments call CV, which authenticates back through Profile. Reserve
-        # separate capacity so these waits cannot exhaust the auth/DB thread pool.
+        # Separate capacity for CV attachment calls.
         app.state.capability_limiter = CapacityLimiter(8)
         client = None
         if repository is None:
@@ -53,8 +52,7 @@ def create_app(repository=None, accounts=None, mailer=None, capabilities=None):
     app.include_router(skills_profile_router)
 
     if dev_reset_enabled():
-        # Development only and absent from the published contract. Keeps the account, session and onboarding;
-        # clears the manual skill declarations and Skills Profile intake so the user can start afresh.
+        # Development only: clears manual skill declarations and Skills Profile intake; keeps the account, session and onboarding.
         @app.post("/api/v1/profile/dev/reset", include_in_schema=False)
         def dev_reset(request: Request, owner: Annotated[str, Depends(current_owner)]):
             capabilities = request.app.state.capabilities

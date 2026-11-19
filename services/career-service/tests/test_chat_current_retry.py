@@ -26,7 +26,6 @@ def test_changed_workspace_releases_chat_during_long_quota_wait(monkeypatch,work
         row={'workspace':{'review_id':'goal','phase':'ready','research_id':'research','revision':1},'goal_id':'goal'}
         def check(owner,session,version):
             if current['session']!=session:raise GoalError('Conversation replaced.')
-            # Exercise the separate canonical-review check as well as session fencing.
             return row
         review=NS(content=JDExtraction(role='Data Analyst',field='Data',company=None,skills=[]),target_type='specific_job')
         goal=NS(id='goal',version=1,role='Data Analyst',field='Data',company=None)
@@ -85,8 +84,6 @@ def test_public_research_quota_rechecks_current_workspace(monkeypatch,outcome):
         row={'workspace':{'review_id':'goal','revision':1},'goal_id':'goal'}
         def check(owner,session,version):
             if session!=current['session']:raise GoalError('Conversation replaced.')
-            # A canonical edit can precede workspace activation. Keep this row
-            # unchanged so only the review authority can detect that race.
             return row
         repo=NS(check=check,reviews=NS(version=lambda *args:current['version']))
         class Questions:
@@ -111,7 +108,6 @@ def test_public_research_quota_rechecks_current_workspace(monkeypatch,outcome):
             assert quota_reason.get()=={'provider':'brave','limit_scope':'provider'}
             if outcome=='revision':current['version']=2
             if outcome=='session':current['session']='replacement'
-        # Replace only this module's clock, preserving graph/task scheduling.
         monkeypatch.setattr('app.workflows.goal_question.asyncio',NS(sleep=pause))
         async with httpx.AsyncClient(transport=httpx.MockTransport(model_response)) as model_client, httpx.AsyncClient(transport=httpx.MockTransport(search_response)) as search_client:
             ai=AIAdapter(AISettings(enabled=True,model='fixture',api_key='fixture'),model_client)

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useProfile } from '@/features/profile/profile-provider';
 import { Skeleton, SkeletonLine } from '@/components/ui/workspace-ui';
-/** `inShell` keeps the sidebar on screen while the session is checked, so pages don't flash blank. */
+/** `inShell` keeps the sidebar on screen while the session is checked. */
 export function WorkspaceGuard({ children, inShell = false }: { children: ReactNode; inShell?: boolean }) {
  const { account, token, profile, loading, configError, loadError, sessionError, sessionChecking, retrySession, reload, signOut, developmentToolsEnabled } = useProfile();
  const router = useRouter(); const pathname=usePathname();

@@ -70,7 +70,6 @@ def test_real_planning_atomicity_replay_and_reconnect():
             results=list(pool.map(add,range(2)))
         assert sorted(map(str,results))==['3','conflict']
         latest=repo.current('alice');row=latest['availability_periods'][0]
-        # Exact replay succeeds despite an old expected version; it never adds a second row.
         winner=results.index(3)
         assert repo.change_period('alice','add',None,2,changes,'add-'+str(winner))==latest
         with pytest.raises(MutationConflict):
@@ -78,7 +77,6 @@ def test_real_planning_atomicity_replay_and_reconnect():
         unchanged=repo.update('alice',ProfilePatch(expected_version=3,weekly_hours=14),'noop')
         assert unchanged['version']==3
         assert client[name].profile_versions.count_documents({'owner':'alice'})==3
-        # Replay a recorded no-op after a different edit without reverting that edit.
         newer=repo.update('alice',ProfilePatch(expected_version=3,weekly_hours=15),'newbase')
         assert repo.update('alice',ProfilePatch(expected_version=3,weekly_hours=14),'noop')==newer
         deleted=repo.change_period('alice','delete',row['id'],4,{},'delete')

@@ -68,7 +68,7 @@ function Planner({ token }: { token: string }) {
   try { const value = await roadmapApi<Workspace>(workspacePath(), token, undefined, signal); if (mounted.current && order === sequence.current) { receive(value); setError(''); if (pendingRef.current && value.operation?.id === pendingRef.current.mutation_id) { pendingRef.current = null; setPending(null); } } }
   catch (failure) { if (mounted.current && !signal?.aborted && order === sequence.current) setError(explanation(failure)); }
  }
- useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); /* account/token remounts this component */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
+ useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort();  }, []); // eslint-disable-line react-hooks/exhaustive-deps
  useEffect(() => {
   const refresh = () => { if (document.visibilityState !== 'hidden' && idle.current && !saving.current && !draftRef.current && !latest.current?.operation?.retry_after && !['pending','running'].includes(latest.current?.operation?.status ?? '')) void load(); };
   window.addEventListener('focus', refresh);
@@ -91,7 +91,7 @@ function Planner({ token }: { token: string }) {
  const running = workspace?.operation?.status === 'pending' || workspace?.operation?.status === 'running';
  const settled = !busy && !running && !error && !unknown && !pending && !workspace?.operation?.retry_after;
  idle.current = settled;
- // Saves quietly, without freezing the form, so a refresh always shows the latest settings.
+ // Saves quietly, without freezing the form.
  function persist(draft: PlannerConfig) {
   const previous = saving.current;
   const task = (async () => {
@@ -136,7 +136,6 @@ function Planner({ token }: { token: string }) {
   }, 1500);
   return () => clearTimeout(timer);
  }, [workspace, running]); // eslint-disable-line react-hooks/exhaustive-deps
- // A saved message that failed can only be retried from the helper, so bring it into view.
  const failedMessageId = workspace?.operation?.status === 'failed' && workspace.retry_request ? workspace.operation.id : null;
  useEffect(() => { if (failedMessageId) setHelperOpen(true); }, [failedMessageId]);
  function closeHelper() { helperDismissed.current = true; setHelperOpen(false); requestAnimationFrame(() => launcher.current?.focus()); }
@@ -147,7 +146,7 @@ function Planner({ token }: { token: string }) {
  useEffect(() => {
   const wide = window.matchMedia?.('(min-width: 1101px)');
   if (!planning || !wide) return;
-  // On narrow screens the helper covers the page, so it only stays open there if the user opened it.
+  // On narrow screens the helper only stays open if the user opened it.
   const fit = () => {
    if (helperDismissed.current) return;
    if (wide.matches) { helperTakesFocus.current = false; setHelperOpen(true); }
@@ -169,7 +168,6 @@ function Planner({ token }: { token: string }) {
    return false;
   } finally { if (mounted.current) setBusy(false); }
  }
- // Settings are saved first so the model and the panel always share one confirmed record.
  async function saveSettings() {
   await saving.current;
   const planner = latest.current?.planner; const config = draftRef.current || settings.config; if (!config || !planner) return false;
@@ -209,9 +207,8 @@ function Planner({ token }: { token: string }) {
  const review = preview ? planner.candidate_review : planner.active_review;
  const showOutline = !!(planner.outline_candidate || planner.outline_active) && !configuring;
  const showRoadmap = !!plan && !!review && !configuring;
- // Without both an extracted CV and a Career goal there is nothing to plan from, so only the checklist is shown.
+ // Without both an extracted CV and a Career goal, only the checklist is shown.
  const blocked = !context.ready && context.availability !== 'unavailable' && !showRoadmap && !showOutline;
- // The accepted roadmap has its own header and keeps plan notices on the planning page; a count on Plan settings points to them.
  const activeView = showRoadmap && !preview;
  const signals = planner.signals.filter(signal => !sourceChanged || signal.kind !== 'evidence');
  const updates = (sourceChanged ? 1 : 0) + signals.length + (context.availability === 'unavailable' ? 1 : 0);
@@ -272,7 +269,7 @@ function Planner({ token }: { token: string }) {
 }
 
 const stages = [['assessing', 'Comparing your skills with your goal', 30], ['writing', 'Writing your weekly objectives', 50], ['scheduling', 'Scheduling your first week', 75], ['correcting', 'Fixing what the schedule check found', 88]] as const;
-/** Stage-based progress: it only moves when the service reports a new stage, so it never claims more than is known. */
+/** Stage-based progress: it only moves when the service reports a new stage. */
 export function generationProgress(stage?: string) {
  const index = stages.findIndex(([key]) => key === stage);
  if (index < 0) return { percent: 8, label: 'Starting', step: 0 };

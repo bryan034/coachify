@@ -1,6 +1,6 @@
 """Source-specific CV baseline estimates, never practical assessment results."""
 from app.domain.capabilities import digest, normalized_name
-from app.domain.review_context import evidence_for
+from app.domain.evidence_ledger import evidence_for
 
 
 def skill_facts(item, name):
@@ -75,7 +75,6 @@ def baseline_targets(item):
         supported = {f['field'] for f in facts if f['status'] == 'supported'}
         owner_missing |= 'personal_contribution' not in supported
         # Establish a concrete relevant application before probing its support.
-        # Related skills can be covered by one responsibility/example question.
         if 'skill_use' not in supported:
             result.append({'field': 'skill_use', 'skill_name': claim['name'], 'reason': 'baseline_skill_evidence'})
         elif 'assistance' not in supported:

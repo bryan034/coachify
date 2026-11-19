@@ -89,7 +89,7 @@ def build(rows, seeds, snapshot_date):
                           'country_codes': countries, **({'singapore_based': True} if identifier in singapore_ids else {}),
                           **({'employee_count_note': note} if note else {})})
     ranked = sorted(companies, key=lambda row: (-(row['employees'] or 0), row['name'].casefold(), row['id']))
-    # The UI saves a declared name; identical display names need only one suggestion.
+    # Identical display names need only one suggestion.
     unique = {}
     for row in ranked:
         unique.setdefault(' '.join(row['name'].casefold().split()), row)

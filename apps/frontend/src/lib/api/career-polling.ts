@@ -1,7 +1,6 @@
 import {ApiError} from './profile';
 
 function interrupted(cause:unknown){
- // Model/validation failures are terminal operation results, not lost reads.
  return cause instanceof TypeError||cause instanceof ApiError&&
   !('code' in cause&&cause.code)&&[408,500,502,503,504].includes(cause.status);
 }

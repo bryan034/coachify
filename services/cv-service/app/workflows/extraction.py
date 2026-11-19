@@ -62,8 +62,7 @@ class ExtractionHarness:
         try:
             pending = evidence_requiring_semantic_check(state['candidate'], blocks)
             support = self.verify_evidence(blocks, pending) if pending and self.verify_evidence else frozenset()
-            # Approval is scoped to the exact source/summary pair, never a broad
-            # permission to accept later model output or a different source.
+            # Approval is scoped to the exact source/summary pair.
             candidate = state['candidate']
             items = validate_extraction(candidate, blocks, self.cv_id, support)
             other = validate_other_information(Extraction.model_validate(candidate).other_information, blocks, support)
@@ -71,7 +70,7 @@ class ExtractionHarness:
             raise
         except (ValidationError, ValueError) as error:
             if state['repair_attempts'] >= 1:
-                # Out of retries: keep what verified, flag what did not, rather than losing the upload.
+                # Out of retries: keep what verified and flag what did not.
                 kept = salvage(state['candidate'], blocks, self.cv_id, self.verify_evidence, support) if self.allow_partial else None
                 if kept is None: raise
                 return {'items': kept.items, 'other_information': kept.other_information,
@@ -95,13 +94,11 @@ class ExtractionHarness:
     def run(self, original):
         self.original = original
         config = {'configurable': {'thread_id': self.thread_id}, 'recursion_limit': 8, 'callbacks': []}
-        # Disable inherited callbacks as well as LangSmith tracing. Never stream
-        # graph state or put private content into metadata.
+        # Disable inherited callbacks and LangSmith tracing.
         with tracing_context(enabled=False):
             saved = self.graph.get_state(config)
             if self.rewind_rejected and saved.next == ('validate',) and saved.values.get('repair_attempts'):
-                # Output rejected after repair would only fail again. Keep the parsed
-                # document and ask the model again, rather than repeating finished work.
+                # Keep the parsed document and ask the model again.
                 self.graph.update_state(config, {'candidate': None, 'feedback': [], 'needs_repair': False, 'repair_attempts': 0}, as_node='parse')
                 saved = self.graph.get_state(config)
             self.repair_attempted = bool(saved.values.get('repair_attempts'))

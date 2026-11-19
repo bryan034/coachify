@@ -17,8 +17,6 @@ DOCKER = shutil.which('docker')
 
 
 def render(tmp_path, env_file, overrides):
-    # An explicit env file and isolated project directory prevent Compose from
-    # loading the developer's private infrastructure/docker/.env.
     env = {'PATH': os.environ.get('PATH', ''), 'HOME': os.environ.get('HOME', str(tmp_path))}
     env.update({name: 'synthetic-password' for name in (
         'MONGO_ROOT_PASSWORD', 'PROFILE_DB_PASSWORD', 'CAREER_DB_PASSWORD', 'CV_DB_PASSWORD',

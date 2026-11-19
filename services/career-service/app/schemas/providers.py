@@ -1,4 +1,4 @@
-"""Public provider names; historical unsupported providers are not exposed."""
+"""Public provider names."""
 from typing import Annotated, Literal
 from pydantic import BeforeValidator
 

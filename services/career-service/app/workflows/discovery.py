@@ -219,8 +219,6 @@ class DiscoveryEngine:
         if not self.rows.update_one(query,{'$set':{**values,'updated_at':now()}}).matched_count:raise GoalError('This research scope changed; open the current discovery.')
 
     async def model(self,row,stage,data,validate=None):
-        # The adapter owns initial generation plus at most two section repairs.
-        # Worker replay must not add another whole-response correction loop.
         token=quota_progress.set(None)
         try:
             result=await self.ai.generate(AIInput(stage=stage,context=json.dumps(data,separators=(',',':'),ensure_ascii=False)),
@@ -253,8 +251,7 @@ class DiscoveryEngine:
                     'scope':row.get('scope'),'reply':social_reply,'question':question,'source_ids':[]})
                 return {'decision':decision.model_dump(mode='json'),'digest':digest}
             direction={k:v for k,v in previous.items() if k in ('scope','excluded_skills','requested_skills')}
-            # Preserve whole recent exchanges; the adapter selects the newest ones
-            # that fit its token budget alongside current input and saved memory.
+            # Preserve whole recent exchanges.
             history=[DiscoveryHistoryMessage(**m) for m in messages[-28:]]
             request=AIInput(stage='discovery_turn',context=json.dumps({
                 'previous':direction,'memory':previous.get('memory',{}),'understanding':DiscoveryUnderstanding.model_validate(previous.get('understanding',{})).model_dump(mode='json'),'scope':row.get('scope'),
@@ -362,7 +359,7 @@ class DiscoveryEngine:
     def publication_selection(self,row):
         store=self.app.state.goal_store
         selection=store.state.find_one({'_id':row['owner']}) or {}
-        # Adopt the latest pre-upgrade chat once; a new JD explicitly clears this marker.
+        # Adopt the latest pre-upgrade chat once.
         if 'active_discovery' not in selection and (self.current(row['owner']) or {}).get('_id')==row['_id']:
             current=store.current(row['owner'])['goal']
             same_chat=current and current.discovery and current.discovery.research_id.split(':')[0]==row['_id']
@@ -419,7 +416,7 @@ class DiscoveryEngine:
 
     def research_queries(self,row):
         scope=Scope.model_validate(row['scope'])
-        # Retried older plans also gain field context to disambiguate role names.
+        # Retried older plans also gain field context.
         initial=[q if normal(scope.field) in normal(q) else scope.field+' '+q for q in row['plan']['queries']]
         prefix=' '.join(v for v in (scope.field,scope.area,scope.location,
             scope.career_stage.replace('_',' ') if scope.career_stage!='unspecified' else None,str(now().year)) if v)
@@ -436,8 +433,7 @@ class DiscoveryEngine:
         queries,initial=self.research_queries(row)
         remaining=[q for q in initial if q not in searched]
         if not remaining:
-            # A quota/restart resume must finish existing assessment/extraction
-            # before deciding whether additional paid searches are necessary.
+            # A quota/restart resume finishes existing assessment/extraction first.
             if not row.get('followup_requested'):return state
             remaining=[q for q in queries if q not in searched][:2]
         async def fetch(query):
@@ -647,8 +643,7 @@ class DiscoveryEngine:
         return state
 
     async def target(self,state):
-        # A chat answer may arrive while synthesis runs. Re-synthesise against its
-        # new memory; never publish recommendations for an older conversation.
+        # Re-synthesise if a chat answer arrives while synthesis runs.
         for _ in range(3):
             row=await thread(self.research_row,state);result=row['aggregate'];scope=Scope.model_validate(row['scope'])
             if 'publication_selection_version' not in row:

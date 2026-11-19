@@ -6,11 +6,12 @@ from uuid import uuid4
 from pydantic import ValidationError
 from app.domain.capabilities import digest, effective_items, effective_fingerprint, normalized_name, validate_interpretation, validate_review_interpretation, interpretation_semantic_checks
 from app.domain.errors import Conflict, Missing
+from app.domain.error_codes import CodedError
 from app.domain.service import bump, now
 from app.schemas.cv import ConfirmedContext, SavedInterpretation
 from app.domain.answer_capacity import reserve, release, CAPACITY_MESSAGE
-from app.domain.review_policy import effective_policy, map_legacy_counts, migrate_snapshot, validate_policy
-from app.conversation.interview_memory import MAX_TOPIC_QUESTIONS, durable_review_questions, question_groups, review_group
+from app.domain.review_policy import effective_policy, map_legacy_counts, validate_policy
+from app.conversation.interview_memory import MAX_TOPIC_QUESTIONS, durable_review_questions, question_groups, review_group, migrate_snapshot
 
 
 class DeferredTargetProvider:
@@ -30,8 +31,7 @@ def prepared_snapshot(document, context):
 
 
 def question_key(document, item_id, uncertainty):
-    # The immutable historical IDs identify the retired source generation. Answers,
-    # provider retries and unrelated edits do not change the next generation's key.
+    # Historical IDs identify the retired source generation.
     historical = sorted(q['id'] for q in document['clarifications']
         if q['item_id'] == item_id and q['uncertainty'] == uncertainty and q.get('reconciliation_required'))
     identity = {'item_id': item_id, 'uncertainty': uncertainty}
@@ -172,7 +172,6 @@ def prepare(service, owner, identifier, mutation, raw_context, policy=None):
                 if key in existing: continue
                 if counts.get(group, 0) >= MAX_TOPIC_QUESTIONS: break
                 # An explicit inability to clarify ends this line of questioning.
-                # Other previously prepared questions remain voluntarily available.
                 if any(q.get('resolution') == 'unanswerable' for q in source_questions): continue
                 kind = 'project' if item['kind'] == 'project' else 'work' if item['kind'] == 'experience' else 'other'
                 descriptions = {
@@ -212,8 +211,7 @@ def _question(document, question_id):
 
 def _interpret(service, owner, identifier, question_id, saved, interpreter, prepared=None):
     question, _ = _question(saved, question_id)
-    # The source/question/revision identity stays stable across retries. Preserve
-    # the parent chat turn when this interpretation originates in conversation.
+    # The source/question/revision identity stays stable across retries.
     operation_id = f"cv-answer:{identifier}:{question_id}:{question['answer_revision']}"
     with operation_scope(operation_id, inherit=True):
         return _interpret_scoped(service, owner, identifier, question_id, saved, interpreter, prepared)
@@ -221,6 +219,7 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter, prep
 
 def _interpret_scoped(service, owner, identifier, question_id, saved, interpreter, prepared=None):
     question, item = _question(saved, question_id)
+    error_code = None
     try:
         if interpreter is None: raise ValueError('Interpretation is not configured. Your answer is saved; retry after configuration.')
         if prepared is None:
@@ -239,7 +238,7 @@ def _interpret_scoped(service, owner, identifier, question_id, saved, interprete
                 supported = service.model_usage.run(owner, partial(interpreter.verify_evidence, timeout_seconds=20), blocks, refs,
                     configured=getattr(interpreter, 'configured', True))
                 if any((ref['block_id'], ref['excerpt']) not in supported for ref in refs):
-                    raise ValueError('Some interpreted skill details are not supported by your answer. Your answer is saved; clarify or retry interpretation.')
+                    raise CodedError('unsupported_interpretation', 'Some interpreted skill details are not supported by your answer. Your answer is saved; clarify or retry interpretation.')
                 semantic_support = frozenset(fields)
         result = (validate_review_interpretation(payload, item, question) if review_statement else
                   validate_interpretation(payload, item, question, semantic_support))
@@ -250,7 +249,7 @@ def _interpret_scoped(service, owner, identifier, question_id, saved, interprete
     except ValidationError:
         result, error = None, 'Interpretation returned an invalid structure. Your answer is saved; retry interpretation.'
     except ValueError as exc:
-        result, error = None, str(exc)[:1000]
+        result, error, error_code = None, str(exc)[:1000], getattr(exc, 'code', None)
     except Exception:
         result, error = None, 'Interpretation could not finish. Your answer is saved; retry interpretation.'
     current = service.get(owner, identifier)
@@ -268,9 +267,10 @@ def _interpret_scoped(service, owner, identifier, question_id, saved, interprete
     updated['interpretation_lease_until'] = 0
     release(updated)
     if error:
-        updated.update(interpretation_status='failed', interpretation_error=error, resolution='unresolved')
+        updated.update(interpretation_status='failed', interpretation_error=error,
+                       interpretation_error_code=error_code, resolution='unresolved')
     else:
-        updated.update(interpretation_status='ready', interpretation_error=None,
+        updated.update(interpretation_status='ready', interpretation_error=None, interpretation_error_code=None,
                        interpretation=result, resolution=result['resolution'])
     after = effective_fingerprint(document)
     if before != after: document['effective_version'] += 1
@@ -278,7 +278,8 @@ def _interpret_scoped(service, owner, identifier, question_id, saved, interprete
         'operation': 'interpret:' + question_id, 'clarifications': deepcopy(current['clarifications']),
         'overlays': deepcopy(current['overlays']), 'at': now()})
     bump(document)
-    return service.repository.replace(current, document)
+    published = service.repository.replace(current, document)
+    return service.complete_review(owner, identifier, published)
 
 
 def answer(service, owner, identifier, question_id, mutation, interpreter=None, prepared=None):
@@ -302,10 +303,8 @@ def answer(service, owner, identifier, question_id, mutation, interpreter=None, 
             interpretation_status='pending', interpretation_error=None, resolution='unresolved',
             interpretation_token=invocation_token, interpretation_lease_until=now() + 90)
     saved = service.mutate(owner, identifier, mutation, 'answer:' + question_id, transform)
-    # Receipt replay never reruns a provider. Pending/failed answers have a separate
-    # retry mutation, which also recovers after a process dies between these writes.
+    # Receipt replay never reruns a provider.
     if replay or not changed_answer: return saved
-    # A same-key CAS loser may receive the winner's saved document from mutate.
     # Only the call whose private token actually won may perform provider work.
     if _question(saved, question_id)[0].get('interpretation_token') != invocation_token:
         return service.get(owner, identifier)
@@ -326,9 +325,7 @@ def retry_interpretation(service, owner, identifier, question_id, mutation, inte
         if question.get('interpretation_status') == 'pending' and question.get('interpretation_lease_until', 0) > now():
             raise Conflict('This answer is still being interpreted. Wait briefly before retrying; interrupted work becomes retryable after 90 seconds.')
         if not reserve(question, invocation_token, retry=True):
-            # Repeated interrupted claims may use up their bounded receipt room.
-            # Publish a definitive failure from the reserved result space instead
-            # of leaving an accepted answer permanently pending at the size limit.
+            # Publish a definitive failure from the reserved result space when receipt room runs out.
             document['history'].append({'version': document['version'], 'effective_version': document['effective_version'],
                 'operation': 'interpret:' + question_id, 'clarifications': deepcopy(document['clarifications']),
                 'overlays': deepcopy(document['overlays']), 'at': now()})
@@ -342,9 +339,7 @@ def retry_interpretation(service, owner, identifier, question_id, mutation, inte
                         answer_revision=max(1, question.get('answer_revision', 0)),
                         answer_sequence=document['version'] + 1, interpretation_token=invocation_token,
                         interpretation_lease_until=now() + 90)
-    # A retry changes the lease/receipt, not the user's literal explanation or
-    # prior interpretation. Preserve existing snapshots; append the result's
-    # snapshot on publication rather than duplicating content for every claim.
+    # Preserve existing snapshots; append the result's snapshot on publication.
     saved = service.mutate(owner, identifier, mutation, 'interpretation-retry:' + question_id, transform,
                            record_history=False)
     if replay or not requested: return saved

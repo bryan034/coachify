@@ -15,9 +15,7 @@ def evidence_items(request):
     items=[]
     for source in request.sources:
         if source.evidence:
-            # Saved retrieval can contain 2,400 characters; citation quotes still
-            # use the existing 600-character contract. Split on text boundaries
-            # before token selection, retaining exact substrings and provenance.
+            # Split saved retrieval on text boundaries before token selection, retaining exact substrings and provenance.
             remaining=source.evidence
             while remaining:
                 end=min(600,len(remaining))
@@ -36,7 +34,7 @@ def evidence_items(request):
             if ids:
                 items.append({'ref':f'e{len(items)+1}','origin':'brave_summary','text':claim.text,
                     'source_ids':ids,'summary_id':summary.summary_id})
-    # Preserve complete excerpts and attribution; do not truncate a claim mid-sentence.
+    # Preserve complete excerpts and attribution.
     unique=[];seen=set()
     for item in items:
         key=(item['origin'],re.sub(r'\s+',' ',item['text']).strip().casefold())

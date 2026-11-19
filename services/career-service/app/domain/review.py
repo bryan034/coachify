@@ -46,7 +46,7 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
                         try: item['skill_id'] = canonical_skill_id(item['name'], item['category'], ALIASES)
                         except ValueError: item['skill_id'] = None
                 if item.get('skill_id') in mapped_ids:
-                    item['skill_id']=None  # Keep ambiguous duplicate mentions for review, never invent an identity.
+                    item['skill_id']=None  # Keep ambiguous duplicate mentions for review.
                 if item.get('skill_id'): mapped_ids.add(item['skill_id'])
                 if item['origin'] == 'employer' and item['priority'] == 'suggested':
                     raise GoalError('Label inferred skills as suggested guidance.', 422)
@@ -68,14 +68,13 @@ def prepare(content, previous=None, *, extracted=False, map_skills=True):
             item['correction'] = 'extracted' if extracted else old.get(item[key], {}).get('correction', 'user') if comparable == original else 'user'
     result=JDExtraction.model_validate(data)
     from app.domain.competence import target_for
-    # A target depends on the skill's wording, importance and experience and on the goal's role, band and employer;
-    # untouched skills keep their saved target, any change to those inputs recomputes it.
+    # Untouched skills keep their saved target; a change to the skill's or goal's target inputs recomputes it.
     role_same=previous is not None and all(getattr(previous,key)==getattr(result,key) for key in ('role','seniority_level','employment_type','field','company'))
     for skill in result.skills:
         prior=old.get(skill.item_id)
         unchanged=role_same and prior and all(getattr(skill,key)==prior.get(key) for key in
             ('name','evidence','context','origin','priority','required_proficiency','required_experience_months'))
-        # A goal skill is never left unrated: a missing saved target is computed rather than retained.
+        # A missing saved target is computed rather than retained.
         kept=prior.get('competence_target') if unchanged and not extracted else None
         skill.competence_target=kept or target_for(skill,goal=result)
     # Revalidate retained nested target dictionaries as well as freshly derived ones.

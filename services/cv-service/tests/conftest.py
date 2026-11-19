@@ -47,12 +47,9 @@ class FakeExtractor:
         return deepcopy(self.payload or {'items': items}), {'provider': 'synthetic-test', 'model': 'fixture', 'prompt_version': '1', 'schema_version': '1'}
 
     def verify_evidence(self, blocks, refs, *, timeout_seconds=None):
-        # Synthetic negative default; semantic-positive tests provide explicit verdicts.
         return frozenset()
 
     def repair(self, blocks, candidate, feedback, *, timeout_seconds=None, previous_failure=None):
-        # Deliberately preserve configured invalid responses so recovery cannot
-        # turn existing negative tests into synthetic successes.
         return self.extract(blocks, timeout_seconds=timeout_seconds)
 
 
@@ -166,3 +163,8 @@ def ready(harness):
 
 
 def mutation(version, **fields): return {'expected_version': version, 'mutation_id': str(uuid4()), **fields}
+
+
+def select(client, cv_id):
+    version = client.get('/api/v1/cv').json()['selection']['version']
+    return client.put('/api/v1/cv/selection', json=mutation(version, cv_id=cv_id))

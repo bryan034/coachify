@@ -31,10 +31,9 @@ def clarification_bundle(understanding):
 
 
 def grounded_understanding(proposed, previous, messages, *, changed_field=False, current_message=''):
-    """Missing is never converted to unsure. Only user-backed updates are kept.
+    """Keep only user-backed updates; missing is never converted to unsure.
 
-    Meaning/inference is assessed by the model; Python verifies the supplied evidence
-    actually belongs to this chat. Old explicit answers survive bounded history.
+    Python verifies the supplied evidence actually belongs to this chat.
     """
     result=DiscoveryUnderstanding.model_validate(previous or {})
     if changed_field:

@@ -17,11 +17,7 @@ class ModelRouter:
 
 
 def opportunity_models(primary,context,configured,settings,client):
-    """Use the same configured model for planning, evaluation and summaries.
-
-    Injected test/custom adapters retain the existing router interface. Production
-    supplies model settings and never falls back to another provider or key.
-    """
+    """Use the same configured model for planning, evaluation and summaries."""
     if configured is not None:
         return ModelRouter(primary,primary)
     return ModelRouter(primary,context) if context is not None else primary

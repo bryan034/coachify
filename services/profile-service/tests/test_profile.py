@@ -81,7 +81,6 @@ def test_versions_conflict_and_owner_isolation(client):
     second = client.patch("/api/v1/profile", json=payload(expected_version=1, occupational_status="employed")).json()
     assert second["education_review_required"]
     assert client.get("/api/v1/profile/versions/1").json() == first
-    # No-op saves do not invent new history.
     assert client.patch("/api/v1/profile", json=payload(expected_version=2, occupational_status="employed")).json()["version"] == 2
     client.app.dependency_overrides[current_owner] = lambda: "google:bob"
     assert client.get("/api/v1/profile").json()["version"] == 0
@@ -97,7 +96,6 @@ def test_status_switch_preserves_education_and_other_fields():
     assert revised["availability"] == 10
     assert revised["education_context"] == "last"
     assert revised["education_review_required"]
-    # Retained data is awaiting review, not automatically reclassified as past.
     assert revised["education"]["context"] == "current"
 
 
@@ -239,7 +237,7 @@ def test_independent_field_updates_history_and_context_review(client):
     assert third["current_study_year"] is None
     assert third["education_review_required"]
     fourth = client.patch("/api/v1/profile", json={"expected_version": 3, "occupational_status": "student"}).json()
-    assert fourth["current_study_year"] is None  # Not silently reactivated.
+    assert fourth["current_study_year"] is None
     rejected = client.patch("/api/v1/profile", json={"expected_version": 4, "education": {"course": "New course"}})
     assert rejected.status_code == 422
     confirmed = client.patch("/api/v1/profile", json={"expected_version": 4, "confirm_education_context": True}).json()
@@ -332,7 +330,6 @@ def test_employed_completion_requires_both_work_fields_and_does_not_reset_old_co
             complete_onboarding(None, ProfilePatch(**base,employment=employment))
     completed = complete_onboarding(None, ProfilePatch(**base, employment={'employer':'Synthetic company','role':'Synthetic role','industry':'Synthetic industry'}))
     assert completed['onboarding_complete']
-    # Earlier completed accounts stay completed and can add details voluntarily.
     old = {**completed}; old.pop('employment')
     assert complete_onboarding(old, ProfilePatch(expected_version=1,occupational_status='employed')) == old
 
@@ -412,7 +409,6 @@ def test_graduation_year_round_trip_version_history_and_completion():
     assert finished['education']['graduation_year'] == 2024
     assert finished['education']['course'] is None
     assert finished['onboarding_complete']
-    # Other branches and explicit no-education do not require a graduation year.
     assert complete_onboarding(None, ProfilePatch(expected_version=0, occupational_status='unemployed', previously_employed=False,
                                                 school_category=None, no_previous_education=True))['onboarding_complete']
 

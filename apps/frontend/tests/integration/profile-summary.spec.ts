@@ -46,7 +46,6 @@ test('employed summary persists work details and development preview never chang
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByText('Synthetic analyst', { exact: true })).toBeVisible();
   expect(await (await api.get('/api/v1/profile')).json()).toEqual(saved);
-  // Employment also remains editable through the ordinary versioned Profile API.
   await page.getByRole('button', { name: 'Edit profile', exact: false }).click();
   await page.getByRole('textbox', { name: 'Role', exact: true }).fill('Synthetic senior analyst');
   await page.setViewportSize({width:1280,height:1000});

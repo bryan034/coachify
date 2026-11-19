@@ -1,13 +1,11 @@
-"""Role targets are planning standards on the shared 1-10 competence scale, never employer pass marks.
+"""Role targets on the shared 1-10 competence scale.
 
 Levels rate understanding of the subject: 1-3 basic, 4-6 moderate, 7-8 good, 9-10 expert.
-The research model decides the level from everything it knows about the role. It is given a weighted
-reference score as a guideline, not a rule: a baseline for the role's seniority, adjusted by how selective the hiring
-is, the skill's importance, whether it defines the role, the experience asked for, and how widely and
-how deeply public research discusses it. Seniority sets expected experience, not the hiring bar, so a
-selective internship's core skills can reach any level up to 10. Until the model has rated a skill, that reference is the target. A level the
-employer states outright is a floor (or, for basic wording, a ceiling) on either. Every weight lives
-in the tables below.
+The research model decides the level, given a weighted reference score as a guideline: a baseline for the
+role's seniority, adjusted by how selective the hiring is, the skill's importance, whether it defines the
+role, the experience asked for, and how widely and deeply public research discusses it. Until the model
+has rated a skill, that reference is the target. A level the employer states outright is a floor (or,
+for basic wording, a ceiling) on either. Every weight lives in the tables below.
 """
 import re
 from elo_shared.competence_scale import MIN_LEVEL, MAX_LEVEL
@@ -29,14 +27,12 @@ EMPLOYMENT_BASE = {'internship': (5, 'internship'), 'full_time': (5, 'full-time 
                    'contract': (5, 'contract role'), 'unknown': (5, 'role')}
 PRIORITY_WEIGHT = {'required': (2, 'essential to the role'), 'preferred': (2, 'essential to the role'),
                    'unspecified': (1, 'nice to have'), 'suggested': (1, 'nice to have'), 'conflicting': (0, None)}
-# A skill sharing a significant word with the role title (e.g. "Quantitative problem solving" for a
-# "Quant Trading Intern") defines the role. Generic title words never count.
+# A skill sharing a significant word with the role title defines the role.
 CORE_WEIGHT = (2, 'core to the role title')
 GENERIC_TITLE_WORDS = frozenset('''intern internship trainee graduate junior senior lead principal staff head manager associate
     analyst specialist officer executive assistant consultant engineer engineering developer scientist summer
     winter spring autumn off cycle programme program role position team and of the for with in to'''.split())
-# Highly selective hiring screens core aptitude hard even for interns; matched against the role,
-# field and company. Applies once per goal, to every skill.
+# Highly selective hiring, matched against the role, field and company; applies once per goal, to every skill.
 SELECTIVE_HIRING = (
     (r'\b(quant|quantitative)\b.{0,40}\b(trad\w*|research\w*|analyst|developer|strateg\w*)\b|\b(market.mak\w*|prop(rietary)? trading|algorithmic trading|high.frequency trading)\b',
      'quantitative trading or research'),

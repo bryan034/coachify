@@ -105,8 +105,7 @@ class ReviewStore:
         values = {'content':content.model_dump(mode='python'),'metadata_origins':origins,'requirements_need_review':needs_review}
         if changed: values.update(version=draft.version+1,updated_at=now())
         try:
-            # Validate the whole resulting document, including its provenance,
-            # before a successful write can replace the previous valid review.
+            # Validate the whole resulting document before writing.
             RequirementReview.model_validate({**draft.model_dump(mode='python'),**values})
         except ValidationError:
             raise GoalError('This review is too large or inconsistent. Shorten the edited context and retry.',422) from None
@@ -171,8 +170,7 @@ class ReviewStore:
         if existing:return self.get(identifier,owner)
         stamp=now()
         prepared=prepare(content,extracted=True)
-        # Trusted server aggregation supplies these URLs; generic preview prepare()
-        # deliberately strips client-supplied evidence URLs on new items.
+        # Restore trusted server-aggregated source URLs.
         for old,new in zip(content.skills,prepared.skills):new.source_urls=old.source_urls
         for old,new in zip(content.non_skill_requirements,prepared.non_skill_requirements):new.source_urls=old.source_urls
         review=RequirementReview(_id=identifier,user_id=owner,version=1,skill_mapping_version=MAPPING_VERSION,

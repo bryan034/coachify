@@ -22,7 +22,7 @@ CONTEXT={'role':'Analyst','field':'Data','company':None,'location':'Singapore','
          'summary':'Analyse information for business decisions.','responsibilities':['Query and interpret data.'],
          'skills':[SKILL]}
 class MemoryReviews:
-    """API boundary fixture; test_requirement_reviews covers actual MongoDB."""
+    """API boundary fixture."""
     def __init__(self):
         stamp=now();context=JDExtraction.model_validate(CONTEXT)
         self.rows={REVIEW_ID:RequirementReview(_id=REVIEW_ID,user_id=OWNER,version=1,skill_mapping_version='skills-v1',created_at=stamp,updated_at=stamp,content=context,generation=None)}
@@ -127,7 +127,7 @@ def test_chat_explains_and_proposes_labelled_additions_without_publishing(flow):
     import json
     assert json.loads(provider.inputs[-1].context)['career_goal']['responsibilities']==CONTEXT['responsibilities']
     assert SOURCE not in provider.inputs[-1].model_dump_json()
-    assert 'skills' not in result.json() # Explicit proposals, not an applied/saved result.
+    assert 'skills' not in result.json()
     provider.output['proposed_skills'][1].update(origin='employer',evidence='This is fabricated')
     assert client.post('/api/v1/career/jd/messages',headers=AUTH,json=body).status_code==503
 

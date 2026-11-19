@@ -43,9 +43,7 @@ class ResearchStore:
         result=[]
         for identifier in linked:
             meta=metadata.get(identifier,{})
-            # Pre-upgrade links have no revision stamp. Only an unchanged first
-            # revision can be proven current; all other history stays readable
-            # explicitly and can be attached afresh through normal acquisition.
+            # Only an unchanged first revision without a revision stamp is current.
             if meta.get('goal_version',1)!=goal.version:continue
             context_key=meta.get('context_key')
             if context_key is None:
@@ -107,8 +105,6 @@ class ResearchStore:
         matched=self.state.update_one({'_id':owner,'version':selection,'goal_id':ObjectId(goal_id)},
             {'$set':{'research_link_meta.'+goal_id+'.'+record.id:{'reused':reused,'goal_version':goal_version,'context_key':record.context_key}},'$addToSet':{'research_links.'+goal_id:record.id},'$push':{'research_receipts':{'$each':[receipt],'$slice':-100}}})
         if not matched.matched_count:raise GoalError('The selected goal changed. Research was not attached to your goal.')
-        # MongoDB is standalone: a concurrent edit may land between the goal
-        # check and state CAS. Its stamped link is historical, never current.
         self.goal(owner,goal_id,goal_version)
 
     def replay(self,owner,key,digest):

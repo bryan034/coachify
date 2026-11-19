@@ -103,7 +103,7 @@ class JobsStore:
 
     # Sync
     def claim_source(self, source_id, now, lease_seconds=600):
-        """Atomic per-board lease, so several workers never sync one board at once."""
+        """Atomic per-board sync lease."""
         self.sources.update_one({'_id': source_id}, {'$setOnInsert': {'failures': 0, 'next_attempt_at': EPOCH, 'lease_until': EPOCH, 'last_synced_at': None}}, upsert=True)
         token = str(uuid4())
         row = self.sources.find_one_and_update(

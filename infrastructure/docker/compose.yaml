@@ -289,7 +289,7 @@ services:
       - profile_data:/data/db
       - ../mongodb/init-profile.js:/docker-entrypoint-initdb.d/init-profile.js:ro
     healthcheck:
-      # The initialization server only listens on loopback. Wait for the server reachable by the service containers.
+      # Wait for the server reachable by the service containers.
       test: ["CMD", "mongosh", "--host", "mongodb", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 5s
       timeout: 5s

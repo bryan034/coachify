@@ -27,12 +27,10 @@ test('Home shows the saved comparison read-only and sends the person to Career G
  });
  await page.goto('/dashboard');
  await expect(page.getByRole('heading',{name:'Welcome back, Synthetic.'})).toBeVisible();
- // Sections keep the artifact's 18px rhythm; `.page.on` must not collapse the flex gap.
  expect(await page.evaluate(() => { const hero = document.querySelector('.ws-hero')!; return Math.round(hero.nextElementSibling!.getBoundingClientRect().top - hero.getBoundingClientRect().bottom); })).toBe(18);
  const match = page.getByRole('article',{name:/Goal match/});
  await expect(match.getByRole('link',{name:'Compare my skills'})).toHaveAttribute('href','/career-goal');
  await expect(match.getByText('Your skills haven’t been compared with this role yet.')).toBeVisible();
- // The saved comparison is shown once it exists; Home never starts one.
  compared = true;
  await page.reload();
  await expect(match.getByText(/of 1 goal skill you already have/)).toBeVisible();

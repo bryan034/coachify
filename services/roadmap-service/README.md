@@ -16,6 +16,7 @@ Prepares a personal study roadmap towards the user's career goal. A fixed planne
 | T01–T06 / SCRUM-57–62 | `POST /planner/tasks/status` starts, completes or reopens a task. `POST /planner/assignments/status` remains available for compatible single-session tasks; `POST /planner/milestones/outcome` records a self-reported outcome. `GET /workspace` restores the active roadmap. None of these actions verifies a capability. |
 | Session planning | `POST /planner/sessions/free-times` and `/backlog-plan` calculate available times and proposed backlog moves without saving. `/move` applies reviewed moves atomically; `/save` edits a session’s name, completion criterion, skills, schedule, notes and self-ratings; `/add` creates a timed or anytime task; `/skip` removes a missed task. Writes use workspace version checks and mutation receipts. |
 | Checkpoints | `POST /planner/milestones/checkpoint` records or clears a self-reported checkpoint. Generated milestones include dated checkpoints and sessions include short task names and skill links. |
+| Evidence suggestions | `GET /planner/evidence-proposals` lists completed-session notes that could become Skills Profile evidence. `POST /planner/evidence-proposals/{proposal_id}/confirm` writes one to Profile only after explicit confirmation. |
 
 New and edited task titles accept 1–19 whitespace-separated words and at most 160 characters. Existing titles remain readable; scripts without word-separating spaces are limited by characters.
 
@@ -29,8 +30,10 @@ Each service has its own `*_LLM_BASE_URL`, `*_LLM_MODEL` and `*_LLM_API_KEY`;
 `*_LLM_ALLOW_HTTP` permits plain HTTP only for synthetic fixture providers in
 development. JSON/domain validation stays mandatory. See [model setup](../../docs/setup.md#career-model-and-search-configuration).
 
-Roadmap reuses the saved current Assessment and Skills Profile judgements. Missing or outdated evaluations need an explicit update; an already-running evaluation can be reconnected. Freshness is rechecked before publication and preview acceptance.
+Roadmap reuses the saved current Assessment and Skills Profile judgements. Missing or outdated evaluations need an explicit update; an already-running evaluation can be reconnected. Freshness is rechecked before publication and preview acceptance, and an evaluation without an explicit `current` status is treated as outdated. `allow_partial_assessment` is deprecated and ignored.
 
 Generated tasks have actionable titles under 12 words and a `description` containing numbered steps and practical completion guidance. Descriptions are saved and returned with task and session views; older tasks may have a null description. Existing task edits accept descriptions and enforce the title limit for new or changed titles.
 
-The roadmap UI creates and activates plans in one operation with `auto_accept: true` on outline generation. The first week must validate before activation; failures keep saved tasks intact and can be retried. Clients omitting this option retain the preview lifecycle.
+The roadmap UI creates and activates plans in one operation with `auto_accept: true` on outline generation. The first week must validate before activation; failures keep saved tasks and any existing preview intact and can be retried. Clients omitting this option retain the preview lifecycle.
+
+Static analysis: `python -m ruff check app` (unused arguments, nested imports, swallowed exceptions) and `python -m vulture` (unused code) run in CI with `.[lint]` installed. `tests/test_code_rules.py` adds checks they do not cover.

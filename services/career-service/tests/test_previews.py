@@ -98,7 +98,6 @@ def test_supported_documents_through_real_child_process(extension,mime,data,expe
         assert result['kind']=='document' and result['source_name']=='role'+extension
         assert response.headers['Cache-Control']=='no-store'
         assert 'id' not in result
-        # No read/save API exists: preview content cannot be recovered from the service.
         assert client.get('/api/v1/career/sources').status_code==404
 
 

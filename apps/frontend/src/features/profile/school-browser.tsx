@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { profileApi } from '@/lib/api/profile';
 import type { Institution, SchoolCategory, SchoolResults } from './types';
 
-// A suggestion only: browser settings do not establish the user's physical location.
 export function suggestedCountry() {
   try {
     if (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Singapore') return 'SG';
@@ -32,7 +31,6 @@ export function SchoolBrowser({ category, onSelect, initialCountry = '', onCount
       .then(items => {
         if (controller.signal.aborted) return;
         setCountries(items);
-        // A locale outside the directory must not leave an invisible active filter.
         setCountry(value => items.some(c => c.code === value) ? value : '');
       }).catch(e => { if (e.name !== 'AbortError') setCountryError('Countries could not load. Retry the directory.'); });
     return () => controller.abort();

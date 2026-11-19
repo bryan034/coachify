@@ -1,1 +1,1 @@
-"""Versioned identities and transport primitives; service domain logic stays in its owner."""
+"""Versioned identities and transport primitives shared by services."""

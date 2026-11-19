@@ -7,7 +7,7 @@ import '@/styles/evaluate.css';
 type Page = '/career-goal' | '/cv';
 type Step = { title: string; text: string; href: Page; action: string };
 
-/** The one setup step still open, if any. A goal comes first: without it there is nothing to evaluate against. */
+/** The one setup step still open, if any; a goal comes first. */
 function setupStep(c: Comparison): Step | null {
  const context = c.context!;
  const issues = context.issues ?? [];
@@ -27,11 +27,9 @@ function setupStep(c: Comparison): Step | null {
 export function EvaluateBanner({ comparison: c, here }: { comparison: Comparison; here: Page }) {
  if (c.error && !c.current) return <section className="evaluate-banner is-setup" role="alert"><div><h2>Your evaluation could not be loaded</h2><p>{c.error}</p></div><div className="evaluate-banner-actions"><button type="button" className="btn" onClick={c.retry}>Reload</button></div></section>;
  if (!c.current || !c.context || c.result) return null;
- // An earlier evaluation from changed inputs is updated automatically by ChangeBanner.
  if (c.current.result && c.context.ready && c.current.result.input_hash !== c.context.input_hash) return null;
  const role = c.context.goal?.role;
  const operation = c.current.operation;
- // Progress is shown once, at the top of the page, by ChangeBanner.
  if (operation && ['pending', 'running'].includes(operation.status)) return null;
  const step = setupStep(c);
  if (step) return <section className="evaluate-banner is-setup" aria-labelledby="evaluate-banner-title">

@@ -71,7 +71,6 @@ def test_stale_question_terms_and_programming_languages():
     assert 'question' in check(housing,focus='workplace',terms='relocation flights').reasons
     php='Grab software engineering intern in Singapore uses PHP; salary is SGD 3,000 per month.'
     assert check(php).verified
-    # The store's re-check covers scope only; question relevance is decided at retrieval.
     assert check(housing,focus='workplace',terms='relocation flights',scope_only=True).verified
     assert not check(AU,scope_only=True).verified
 

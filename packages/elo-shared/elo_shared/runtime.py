@@ -50,7 +50,6 @@ class Upstream:
     async def write(self, service, path, token, body):
         return await self.request('POST',service,path,token,json=body)
     async def request(self, method, service, path, token, **options):
-        # Service and path are application-owned. Never accept URLs from model/user data.
         base = os.getenv(service.upper() + '_SERVICE_URL', 'http://' + service + '-service:8000')
         try:
             async with self.client.stream(method, base + path, headers={'Authorization': token}, **options,
@@ -76,7 +75,7 @@ class Upstream:
         if profile.get('onboarding_complete') is not True: raise Problem('Finish your profile setup before planning.',403,'onboarding')
         return {**account, 'profile': profile, 'token':token}
 
-# Default per-request input ceiling. A service may pass a larger one to `application` for its own Model.
+# Default per-request input ceiling.
 MAX_CONTEXT_BYTES=120000
 
 class Model:
@@ -197,7 +196,7 @@ class Store:
         return {k:v for k,v in row.items() if k not in ('_id','user_id')}
 
 class MemoryStore(Store):
-    """Explicit test adapter only; production never falls back to memory."""
+    """Explicit test adapter only."""
     def __init__(self):
         from threading import RLock
         self.data={}; self.results={}; self.lock=RLock()
@@ -257,8 +256,6 @@ def application(title,prefix,*,store=None,upstream=None,model=None,max_context_b
             for task in tasks: task.cancel()
             if tasks: await asyncio.gather(*tasks,return_exceptions=True)
             if mongo is not None: mongo.close()
-    # Python's HTTPStatus phrases for 413/422 differ between supported runtimes.
-    # Keep the published OpenAPI contract independent of the interpreter version.
     errors={401:'Unauthorized',403:'Forbidden',404:'Not Found',409:'Conflict',
             413:'Content Too Large',422:'Unprocessable Content',429:'Too Many Requests',
             502:'Bad Gateway',503:'Service Unavailable'}
@@ -279,7 +276,7 @@ def application(title,prefix,*,store=None,upstream=None,model=None,max_context_b
     @app.get('/health')
     async def health(): return {'status':'ok'}
     if dev_reset_enabled():
-        # Development only and absent from the published contract: wipe the caller's own data to start afresh.
+        # Development only: wipe the caller's own data.
         path={'ASSESSMENT':'assessments','ROADMAP':'roadmaps','JOBS':'jobs'}.get(prefix,prefix.lower())
         @app.post(f'/api/v1/{path}/dev/reset',include_in_schema=False)
         async def dev_reset(account=Depends(authenticated)):
@@ -342,7 +339,7 @@ async def run_operation(app,owner,token,worker):
             working=copy.deepcopy(row)
             with operation_scope(pending['id']), budget_owner(owner):
                 updated=await asyncio.wait_for(worker(working,account),timeout=worker_seconds)
-            # Revalidate the revocable bearer before publication, never store it.
+            # Revalidate the bearer before publication.
             account=await app.state.upstream.account(token)
             if account['id']!=owner: raise Problem('The account changed.',401,'session')
             current=await run_in_threadpool(app.state.store.load,owner)
@@ -353,7 +350,6 @@ async def run_operation(app,owner,token,worker):
         except asyncio.CancelledError: raise
         except Exception as exc:
             error=exc if isinstance(exc,Problem) else Problem('The operation could not finish. Retry your saved request.',503,'operation_failed')
-            # Error details and exception tracebacks may contain private plan or model input.
             logging.getLogger('uvicorn.error').warning('Operation %s failed (%s)',
                                                       pending.get('kind'), error.code)
             current=await run_in_threadpool(app.state.store.load,owner)
@@ -366,7 +362,7 @@ async def run_operation(app,owner,token,worker):
 def launch(app,owner,token,worker):
     existing=app.state.tasks.get(owner)
     if existing is None or existing.done():
-        if len(app.state.tasks)>=12:return  # Saved work stays pending until an authenticated reconnect.
+        if len(app.state.tasks)>=12:return
         task=asyncio.create_task(run_operation(app,owner,token,worker)); app.state.tasks[owner]=task
         # Consume failures without logging private context or retaining tracebacks.
         def completed(done):

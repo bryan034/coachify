@@ -24,8 +24,7 @@ export async function setupChatScenario(page: Page) {
       buffer: readFileSync(path.resolve(__dirname, '../fixtures/synthetic-clarification-cv.docx'))}}});
   expect(upload.status()).toBe(202); const cvId = (await upload.json()).id as string;
   await expect.poll(async () => (await (await account.get(`/api/v1/cv/${cvId}`)).json()).status, {timeout: 40_000}).toBe('ready');
-  expect((await page.request.put('/api/v1/cv/selection', {headers: account.headers,
-    data: {mutation_id: crypto.randomUUID(), expected_version: 0, cv_id: cvId}})).ok()).toBeTruthy();
+  await expect.poll(async () => (await (await account.get('/api/v1/cv')).json()).selection.cv_id).toBe(cvId);
   return {account, cvId, targetId: target.id};
 }
 
@@ -51,7 +50,7 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   await page.goto('/cv');
   await page.getByRole('button', {name: /^(Continue review|Start review|Refine)$/}).first().click();
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
-  await chapter('1. Review your saved CV through a conversation', 'This is a synthetic account and model, using real local services and saves. The CV and Career target were explicitly selected before this walkthrough.', chat);
+  await chapter('1. Review your saved CV through a conversation', 'This is a synthetic account and model, using real local services and saves. The first CV became active after extraction, and the Career goal was confirmed before this walkthrough.', chat);
   await expect(chat.locator('.cv-chat-transcript .cv-chat-message-assistant').last()).toContainText('Team dashboard');
   await expect(chat.getByRole('button',{name:'Skip this question',exact:true})).toBeEnabled();
   await chapter('2. One focused question', 'elo asks about the project contribution independently of the saved Career target. You can answer naturally, ask why, or skip.', chat.locator('.cv-chat-transcript .cv-chat-message-assistant').last());
@@ -97,7 +96,6 @@ export async function chatWorkflow(page: Page, scenario: Awaited<ReturnType<type
   await expect(page.locator('.cv-chat-action-pending')).toHaveCount(0, {timeout: 35_000});
   const beforeReload = await readChat(account, cvId);
   await page.reload();
-  // The full-page review URL restores the mounted chat directly.
   await expect(page.getByRole('textbox', {name: 'Message elo', exact: true})).toBeEnabled();
   const resumed = await readChat(account, cvId);
   expect(resumed.id).toBe(beforeReload.id); expect(resumed.messages).toEqual(beforeReload.messages);

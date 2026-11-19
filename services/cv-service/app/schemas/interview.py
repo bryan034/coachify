@@ -2,7 +2,7 @@
 from typing import Annotated, Literal
 from pydantic import Field, model_validator
 from app.schemas.cv import StrictModel, InterpretedClaim, InterpretedDates
-from app.schemas.conversation import ConversationRoute, SkillEstimate, InterviewProgress
+from app.schemas.conversation import ConversationRoute, SkillEstimate
 from app.schemas.interview_evidence import ReviewFact, ReviewField, ReviewQuote
 
 

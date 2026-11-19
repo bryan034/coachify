@@ -28,13 +28,12 @@ def test_research_rates_every_goal_skill_and_sets_its_target(opportunity_flow):
     assert ingest(flow).status_code == 202
     workspace, result, _ = research(flow)
     assert result['status'] == 'completed' and len(calls) == 1
-    # Only public role facts, skill names with the employer's stated context, and validated findings are sent: no whole job text or CV.
     assert set(calls[0]) == {'opportunity', 'skills', 'findings'}
     assert all(set(s) == {'name', 'priority', 'stated_proficiency', 'required_experience_months', 'employer_context', 'reference_level', 'reference_factors'}
                for s in calls[0]['skills'])
     assert all(s['reference_factors'][0].endswith(f"baseline {s['reference_level']}") or len(s['reference_factors']) > 1 for s in calls[0]['skills'])
     skills = [s for s in workspace['current']['goal']['skills'] if s['origin'] != 'user_declaration']
-    assert skills and all(s['competence_target']['level'] >= 4 for s in skills)  # Stated floors can lift a rating.
+    assert skills and all(s['competence_target']['level'] >= 4 for s in skills)
     rated = [s['competence_target'] for s in skills if s['competence_target']['level'] == 4 and s['competence_target']['basis'] == 'research']
     assert rated and all(t['source_urls'] for t in rated)
     assert all(t['employer_demand'] == 'Use it in daily analysis work.' and t['rating_reason'] == 'Interviews test this in practice.'
@@ -48,7 +47,7 @@ def test_a_failed_rating_keeps_the_research_and_the_weighted_reference_targets(o
     flow = opportunity_flow; calls = rate(flow, error=RuntimeError('provider down'))
     assert ingest(flow).status_code == 202
     workspace, result, _ = research(flow)
-    assert result['status'] == 'completed' and len(calls) == 1  # Not retried by durable recovery.
+    assert result['status'] == 'completed' and len(calls) == 1
     assert flow[1].interview_research.find_one({'intelligence': {'$ne': None}})['intelligence']['skill_levels'] == []
     assert all(s['competence_target']['basis'] in ('job_description', 'inferred') for s in workspace['current']['goal']['skills'])
 

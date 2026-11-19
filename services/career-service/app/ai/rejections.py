@@ -27,8 +27,7 @@ def classify(raw,status,provider):
     error={}
     try:
         payload=json.loads(raw)
-        # Some endpoints wrap their error in a list. Only unwrap a single error
-        # envelope, never arbitrary nested content.
+        # Some endpoints wrap their error in a list; unwrap only a single error envelope.
         if isinstance(payload,list) and len(payload)==1:payload=payload[0]
         if isinstance(payload,dict) and isinstance(payload.get('error'),dict):error=payload['error']
     except (ValueError,UnicodeError,TypeError,RecursionError):pass
@@ -52,8 +51,7 @@ def classify(raw,status,provider):
         violations=item.get('fieldViolations',item.get('field_violations',[]))
         for violation in violations[:20] if isinstance(violations,list) else []:
             if isinstance(violation,dict):field_path(violation.get('field'))
-    # Some compatibility errors identify rejected fields only in prose. Extract
-    # names from fixed error forms; never return or log the rest of that prose.
+    # Extract rejected field names from fixed error forms only.
     message=error.get('message')
     if isinstance(message,str):
         message=message[:8192]

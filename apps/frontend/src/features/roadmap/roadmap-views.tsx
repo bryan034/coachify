@@ -13,7 +13,7 @@ import '@/styles/roadmap-views.css';
 const tabs: [ViewName, string][] = [['day', 'Today'], ['week', 'Week'], ['month', 'Month'], ['milestones', 'Milestones'], ['progress', 'Progress']];
 const isDay = (value: string | null): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`));
 
-/** Skills a task can name: this plan's gaps first, then the whole Skills Profile. The service checks the same lists. */
+/** Skills a task can name: this plan's gaps first, then the whole Skills Profile. */
 export function skillCatalog(plan: PlannedRoadmap, planner: Planner): SkillOption[] {
  const seen = new Set<string>(); const options: SkillOption[] = [];
  const add = (name: string | null | undefined, group: string) => { const key = name?.trim().toLowerCase(); if (key && !seen.has(key)) { seen.add(key); options.push({ name: name!.trim(), group }); } };
@@ -22,7 +22,7 @@ export function skillCatalog(plan: PlannedRoadmap, planner: Planner): SkillOptio
  planner.inputs.skills.forEach(skill => add(skill.name, 'Skills Profile'));
  return options;
 }
-/** The view and date live in the address, e.g. /roadmap?view=day&date=2026-11-26, so a day can be linked and reloaded. */
+/** The view and date live in the address, e.g. /roadmap?view=day&date=2026-11-26. */
 function readAddress(today: string): { view: ViewName; date: string } {
  if (typeof window === 'undefined') return { view: 'day', date: today };
  const params = new URLSearchParams(window.location.search); const view = params.get('view'); const date = params.get('date');

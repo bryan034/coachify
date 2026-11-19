@@ -24,7 +24,7 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
   let id = '';
   await expect.poll(async () => { const data = await (await account.get('/api/v1/cv')).json(); const cv = data.cvs.find((cv: {id: string}) => !before.includes(cv.id)); id = cv?.id ?? ''; return cv?.status; }, { timeout: 40_000 }).toBe('ready');
   await openCvReviewTools(page);
-  await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // Skills Profile rechecks saved CVs when the window regains focus.
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   return id;
  }
  const question = (heading: string) => page.locator('.cv-question').filter({ has: page.getByRole('heading', { name: heading, exact: true }) });
@@ -87,7 +87,6 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  expect(dated.clarifications.find(question => question.item_id === projectId)).toMatchObject({reconciliation_required: false, answer: mixedAnswer});
  await expect(projectQuestion()).toContainText(mixedAnswer);
 
- // Source changes require fresh preparation while retaining unrelated saved facts.
  await page.getByRole('button', {name: 'Prepare relevant questions', exact: true}).click();
  const pending = page.locator('.cv-question').filter({has: page.getByRole('button', {name: 'Save explanation', exact: true})});
  await expect(pending.getByRole('textbox', {name: 'Your explanation', exact: true})).toBeVisible();
@@ -97,7 +96,6 @@ export async function completionWorkflow(page: Page, account: Account, chapter: 
  expect(reprepared.clarifications.find(question => question.item_id === projectId)).toEqual(dated.clarifications.find(question => question.item_id === projectId));
  await expect(projectQuestion()).toContainText(mixedAnswer);
 
- // Deliberate model outage keeps the raw answer; retry never submits another answer revision.
  await pending.getByRole('textbox', {name: 'Your explanation', exact: true}).fill('SYNTHETIC_INTERPRETATION_FAILURE');
  await pending.getByRole('button', {name: 'Save explanation', exact: true}).click();
  const failed = question('How would you describe your current familiarity with this skill? Unknown is fine.');

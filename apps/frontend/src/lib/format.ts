@@ -3,7 +3,6 @@
 const toDate = (value: string | Date) => value instanceof Date ? value : /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00Z`) : new Date(value);
 const dateOnly = (value: string | Date) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
-/** Each field is formatted on its own, so the output never depends on a locale's punctuation. */
 function parts(value: string | Date, options: Intl.DateTimeFormatOptions) {
  const date = toDate(value);
  if (Number.isNaN(date.getTime())) return null;

@@ -1,7 +1,6 @@
 """Current CV review policy and non-destructive legacy snapshot upgrades."""
 from copy import deepcopy
 
-from app.domain.capabilities import digest
 from app.domain.errors import Conflict
 
 CURRENT_REVIEW_POLICY = {'scope': 'item', 'version': 1}
@@ -31,35 +30,6 @@ def map_legacy_counts(document, source):
         for choice in entry.get('choices', []):
             old, target = choice.get('item_id'), choice.get('target_item_id')
             if target and old != target and old in counts:
-                # Multiple explicitly mapped sources may converge on one item.
-                # Without receipts proving overlap, reserve both allowances
-                # conservatively rather than allowing an accidental third ask.
+                # Explicitly mapped sources converging on one item reserve both allowances, capped at two.
                 counts[target] = min(2, counts.get(target, 0) + counts.pop(old))
     return counts
-
-
-def migrate_snapshot(document, previous, legacy_counts=None):
-    """Upgrade a snapshot in an existing versioned write without changing receipts."""
-    from app.conversation.interview_memory import durable_review_questions
-
-    stored = document.get('review_policy_snapshot')
-    if stored is not None and stored != previous:
-        raise Conflict('Your review policy changed. Continue with the latest review.')
-    current = effective_policy(previous)
-    if previous and previous != current:
-        ids = sorted(q['id'] for q in durable_review_questions(document))
-        document.setdefault('review_policy_migrations', []).append({
-            'from': deepcopy(previous), 'to': deepcopy(current),
-            'question_count': len(ids), 'receipt_basis': digest(ids)})
-    # Some older conversations retained a per-item count even when CV receipts
-    # were incomplete. Carry only bounded numeric counts into the CV aggregate
-    # so target-specific preparation cannot forget an already-used allowance.
-    if legacy_counts:
-        known = {item['id'] for item in document.get('original_items', [])}
-        counts = document.setdefault('review_legacy_counts', {})
-        for item_id, count in map_legacy_counts(document, legacy_counts).items():
-            if item_id in known and type(count) is int and count > 0:
-                existing = counts.get(item_id, 0)
-                counts[item_id] = max(existing if type(existing) is int and existing >= 0 else 0, min(count, 2))
-    document['review_policy_snapshot'] = current
-    return current

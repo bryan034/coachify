@@ -18,7 +18,7 @@ export const longDate = (value: string) => formatDate(value);
 const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? '' : 's'}`;
 const focuses: [LearningFocus, string][] = [['interview_practice', 'Interview practice'], ['portfolio_work', 'Portfolio work'], ['hands_on_projects', 'Hands-on projects'], ['courses_and_reading', 'Courses and reading'], ['certification', 'Certification'], ['networking', 'Networking']];
 
-/** The unsaved settings draft. All numbers shown beside it come from the backend's runway. */
+/** The unsaved settings draft. */
 export function useSettingsDraft(workspace: Workspace | null, token: string) {
  const planner = workspace?.planner;
  const [draft, setDraft] = useState<PlannerConfig | null>(null);
@@ -42,7 +42,7 @@ export function useSettingsDraft(workspace: Workspace | null, token: string) {
   calculating: !!draft && !current && !previewError,
   update: (patch: Partial<PlannerConfig>) => { if (config) setDraft({ ...config, ...patch }); },
   clear: () => setDraft(null),
-  // Only clears the version that was saved, so edits made during the save are kept.
+  // Only clears the version that was saved.
   clearIf: (saved: PlannerConfig) => setDraft(current => current === saved ? null : current),
  };
 }
@@ -51,11 +51,11 @@ export function useSettingsDraft(workspace: Workspace | null, token: string) {
 function DateToken({ name, value, shown, warn, required, onChange }: { name: string; value: string; shown: string; warn?: boolean; required?: boolean; onChange: (value: string) => void }) {
  return <label className={`token date-token${warn ? ' warn' : ''}${value ? '' : ' empty'}`}>
   <span aria-hidden="true">{shown}{warn && <i> ⚠</i>}</span>
-  <input aria-label={name} type="date" required={required} value={value} onChange={event => onChange(event.target.value)} onClick={event => { try { event.currentTarget.showPicker?.(); } catch { /* The browser only allows this on a direct click. */ } }} />
+  <input aria-label={name} type="date" required={required} value={value} onChange={event => onChange(event.target.value)} onClick={event => { try { event.currentTarget.showPicker?.(); } catch {} }} />
  </label>;
 }
 
-/** Sizes an input to its text. Digits differ in width, so a width from the digit count leaves gaps. */
+/** Sizes an input to its text. */
 function FittedInput({ value, ...input }: React.InputHTMLAttributes<HTMLInputElement> & { value: number | '' }) {
  return <span className="token-fit"><span className="token-ghost" aria-hidden="true">{value === '' ? '0' : value}</span><input type="number" placeholder="0" value={value} {...input} /></span>;
 }
@@ -96,7 +96,7 @@ function BlockRow({ block, index, change, remove, close }: { block: StudyBlock; 
  </div>;
 }
 
-/** Breaks after the dash, so a narrow week shows the start above the end instead of cutting them off. */
+/** Breaks after the dash, so a narrow week shows the start above the end. */
 const Hours = ({ text }: { text: string }) => { const [from, to] = text.split('–'); return <strong>{to ? <>{from}–<wbr />{to}</> : text}</strong>; };
 
 /** The week of study blocks and blocked times. Choosing one opens its details underneath. */
@@ -258,7 +258,6 @@ export function SettingsPanel({ workspace, settings, partial, setPartial, frozen
     {planner.inputs.goal?.company && <span className="use-chip">{planner.inputs.goal.company}</span>}
     {!!planner.inputs.goal?.skills?.length && <UseMenu label={`${count(planner.inputs.goal.skills.length, 'skill')} in this goal`}><ul className="use-tags">{planner.inputs.goal.skills.map(skill => <li key={skill.name}>{skill.name}</li>)}</ul></UseMenu>}
     {planner.inputs.cv?.name && <span className="use-chip">{planner.inputs.cv.name}</span>}
-    {/* Counts come from the Skills Profile itself; the roadmap's evidence list repeats a skill once per source. */}
     <UseMenu label={profileSkills?.status === 'ready' ? `Skills profile · ${count(profileSkills.data.total, 'skill')}, ${count(profileSkills.data.experiences, 'experience')}` : 'Skills profile'}>
      {profileSkills?.status === 'ready' ? <>
       {!profileSkills.data.total && <p className="small">No skills are saved in your Skills Profile yet.</p>}

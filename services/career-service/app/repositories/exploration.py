@@ -1,4 +1,4 @@
-"""Private CAS records. Authentication and consent belong to future API handlers."""
+"""Private CAS records."""
 from bson import ObjectId
 from bson.codec_options import CodecOptions
 from pymongo.errors import DuplicateKeyError

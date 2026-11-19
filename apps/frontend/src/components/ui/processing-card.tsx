@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 export type ProcessingStep = { label: string; state: 'done' | 'now' | 'next'; note?: string };
 
-/** Percent complete from known step states; a running step counts as half, so it never claims more than is known. */
+/** Percent complete from known step states; a running step counts as half. */
 export function stepPercent(steps: ProcessingStep[]) {
  if (!steps.length) return 0;
  const score = steps.reduce((sum, step) => sum + (step.state === 'done' ? 1 : step.state === 'now' ? 0.5 : 0), 0);

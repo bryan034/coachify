@@ -8,8 +8,7 @@ def workspace_revision(repository, owner, session, expected_version):
     async def current():
         try:
             row = await thread(repository.check, owner, session, expected_version)
-            # Compatibility review edits can change the canonical goal before
-            # the workspace pointer is activated. Check that authority as well.
+            # Also check the active review's canonical goal.
             identifier = row['workspace'].get('review_id')
             if identifier:
                 return str(await thread(repository.reviews.version, identifier, owner))

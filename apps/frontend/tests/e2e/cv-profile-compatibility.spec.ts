@@ -39,7 +39,8 @@ async function workspace(page: Page) {
     if (path.includes('/conversations')) return route.fallback();
     if (route.request().method() !== 'GET') writes.push(path);
     if (path.endsWith('/policy')) return route.fulfill({ json: policy });
-    if (path === '/api/v1/cv') return route.fulfill({ json: { cvs: [cv], selection: { cv_id: cv.id, version: 1 } } });
+    if (path === '/api/v1/cv/skills') return route.fallback();
+  if (path === '/api/v1/cv') return route.fulfill({ json: { cvs: [cv], selection: { cv_id: cv.id, version: 1 } } });
     if (path.endsWith('/clarifications')) return route.fulfill({ json: clarificationState(cv, confirmedTarget, true) });
     return route.fulfill({ json: cv });
   });
@@ -99,7 +100,6 @@ test('C-series drafts survive tab changes and connection recovery with no idle t
   session.hold();
   await visibility(page, 'visible');
   await expect(page.getByRole('heading', { name: 'Checking your session' })).toBeVisible();
-  // The private subtree remains mounted, but neither forms nor navigation are available.
   await expect(page.locator('.cv-workspace')).toHaveCount(1);
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Career Goal', exact: true })).toHaveCount(0);
@@ -113,7 +113,6 @@ test('C-series drafts survive tab changes and connection recovery with no idle t
   await page.getByRole('button', { name: 'Retry session', exact: true }).click();
   await expectDrafts(page);
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toBeFocused();
-  // A foreground tab may revalidate, but six minutes alone must never discard work or demand refresh.
   await page.clock.fastForward(6 * 60_000);
   await expectDrafts(page);
   await expect(page.getByRole('heading', { name: 'Connection interrupted' })).toHaveCount(0);

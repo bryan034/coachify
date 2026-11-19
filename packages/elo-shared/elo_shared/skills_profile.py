@@ -1,4 +1,4 @@
-"""Shared Profile-owned skills intake contract; model output is never a write patch."""
+"""Shared Profile-owned skills intake contract."""
 from typing import Annotated, Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator

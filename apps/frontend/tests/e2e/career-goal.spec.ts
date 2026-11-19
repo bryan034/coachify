@@ -107,7 +107,6 @@ test('a paused JD extraction shows the processing screen at once, survives same-
  await expect(page.getByRole('region',{name:'Skills needed'})).toBeVisible();
  await expect(page.getByRole('status')).toContainText('Waiting for the research service to resume');
  expect(keys).toHaveLength(1);
- // Leaving does not prompt or cancel; returning reconnects with the same request key.
  page.on('dialog',dialog=>{throw new Error(`Unexpected dialog: ${dialog.message()}`);});
  await page.goto('/profile');
  await page.goto('/career-goal');

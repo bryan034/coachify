@@ -114,8 +114,6 @@ def test_completed_section_review_reopens_unasked_project_after_reload(harness, 
         conversation['active_question'] = None
     service.update('owner-a', chat['id'], completed)
     if prepare_first:
-        # A target-specific request can persist the new policy before the
-        # conversation is reloaded; reopening must still see the old scope.
         current = service.cv.get('owner-a', cv['id'])
         request = PrepareMutation.model_validate(mutation(current['version'], career_target_id='target', career_target_version=1))
         clarification.prepare(service.cv, 'owner-a', cv['id'], request,
@@ -193,7 +191,7 @@ def test_legacy_counts_still_share_non_project_section_budget(monkeypatch):
 @pytest.mark.parametrize('second_mapping', [False, True])
 def test_legacy_count_follows_same_cv_reconciliation_for_chat_and_target_paths(monkeypatch, second_mapping):
     from app.conversation import interview_memory as memory
-    from app.domain.review_policy import migrate_snapshot
+    from app.conversation.interview_memory import migrate_snapshot
     target = 'C' if second_mapping else 'B'
     history = [accepted('cv', [], 'A', 'B')]
     if second_mapping:
@@ -221,7 +219,7 @@ def test_legacy_count_follows_same_cv_reconciliation_for_chat_and_target_paths(m
 
 def test_legacy_count_is_not_transferred_from_a_different_cv(monkeypatch):
     from app.conversation import interview_memory as memory
-    from app.domain.review_policy import migrate_snapshot
+    from app.conversation.interview_memory import migrate_snapshot
     document = {'_id': 'new-cv', 'history': [accepted('old-cv', [], 'A', 'B')],
         'original_items': [{'id': 'B', 'kind': 'project', 'removed': False}],
         'clarifications': [], 'review_policy_snapshot': {'scope': 'section', 'version': 1},
@@ -242,7 +240,7 @@ def test_legacy_count_is_not_transferred_from_a_different_cv(monkeypatch):
 
 def test_merged_same_cv_sources_do_not_lose_legacy_question_counts(monkeypatch):
     from app.conversation import interview_memory as memory
-    from app.domain.review_policy import migrate_snapshot
+    from app.conversation.interview_memory import migrate_snapshot
     entry = accepted('cv', [], 'A', 'C')
     entry['choices'].append({'item_id': 'B', 'target_item_id': 'C'})
     document = {'_id': 'cv', 'history': [entry], 'original_items': [
@@ -399,8 +397,7 @@ def test_retained_question_recovers_after_target_prepare_changes_policy_or_ledge
     before_retry = service.cv.get('owner-a', cv['id'])
     assert before_retry['review_policy_snapshot'] == CURRENT
     if publication.endswith('_changed'):
-        # A different source changes after the question was staged. This must
-        # not make retry lose an already-issued question or loop on stale data.
+        # A different source changes after the question was staged.
         unrelated = next(item for item in before_retry['original_items'] if item['kind'] == 'skill')
         response = client.patch(f"/api/v1/cv/{cv['id']}/items/{unrelated['id']}",
                                 json=mutation(before_retry['version'], action='update', title='Synthetic SQL reporting'))

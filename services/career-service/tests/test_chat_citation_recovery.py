@@ -279,6 +279,5 @@ def test_real_adapter_accepts_structured_summary_points_and_supplies_json_contex
 
 def test_summary_emphasis_keeps_only_balanced_bold_keywords():
     assert summary_text_with_emphasis('Use **SQL** and **Python**.')=='Use **SQL** and **Python**.'
-    # Bold content stays escaped, so model text can never create links or HTML.
     assert summary_text_with_emphasis('**[x](http://e.test)**')=='**\\[x\\]\\(http://e.test\\)**'
     assert summary_text_with_emphasis('Unbalanced **bold and *single*')=='Unbalanced \\*\\*bold and \\*single\\*'

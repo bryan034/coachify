@@ -1,4 +1,5 @@
 """One evidence vocabulary for CV extraction, clarification and interview memory."""
+from app.domain.names import normalized_name
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -35,7 +36,6 @@ class ReviewFact(BaseModel):
 
 
 def fact_key(fact):
-    from app.domain.capabilities import normalized_name
     return fact['field'], normalized_name(fact.get('skill_name') or '')
 
 
@@ -60,16 +60,13 @@ def facts_closed(facts):
 
 
 def fact_group_value(facts):
-    # Preserve existing attempt signatures for a single saved fact.
     return facts[0] if len(facts) == 1 else facts if facts else None
 
 
 def fact_statement(fact):
     subject = f"For the user's {fact['skill_name']} work" if fact.get('skill_name') else 'For this experience'
     statement = f"{subject}, {fact['field']} is {fact['value']}" if fact['value'] is not None else f"{subject}, the user says {fact['field']} is {fact['status']}."
-    # Unknown attribution is an absence of an ownership claim. Asking the
-    # verifier to prove that the CV declares it unknown rejects valid task
-    # descriptions whose ownership simply has not been established.
+    # Unknown attribution is an absence of an ownership claim.
     if fact.get('attribution') not in (None, 'unknown'):
         statement += f" Attribution is {fact['attribution']}; personal/shared means the user personally performed the stated work, team means teammates only, observed means watching only."
     return statement

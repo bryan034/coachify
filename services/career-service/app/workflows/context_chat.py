@@ -43,8 +43,7 @@ async def semantic_chat(request,account,row,body):
         async def check():
             if await current()!=revision:raise AIError('stale_input',True)
         await check()
-        # Completed queries are recorded for this turn; quota waits retry only the
-        # unfinished request inside research_question, without advancing the budget.
+        # Completed queries are recorded for this turn; quota waits retry only the unfinished request.
         with budget_owner(account):result=await research_question(request,title,focus,check,query=query)
         search_count+=1
         return result
@@ -60,8 +59,7 @@ async def semantic_chat(request,account,row,body):
         activity('understanding_question')
         goal,research=await thread(store.fetch,account,row,'overview')
         index=context_index(goal,research,row['workspace'].get('edit_draft'))
-        # A role listed in one market may be based in another; places the saved JD
-        # names widen public search and tell the answer model which markets relate.
+        # Places the saved JD names widen public search and tell the answer model which markets relate.
         descriptions=[item.get('description') for item in goal.get('non_skill_requirements',[])]
         places=related_places(goal,[goal.get('summary'),*goal.get('responsibilities',[]),*descriptions])
         if places:index['goal']={**index['goal'],'related_locations':places}
@@ -81,7 +79,6 @@ async def semantic_chat(request,account,row,body):
     async def retrieve(state):
         plan=state['plan']
         if plan.topic in ('edit','off_topic','career_guidance') or plan.clarification:return state
-        # Fixed projections and owner/linked-research checks remain backend-owned.
         from app.domain.context import PREFIXES
         topics=list(dict.fromkeys([plan.topic,*plan.related_topics,*[PREFIXES[ref[0]][0] for ref in plan.item_refs]]))
         if 'overview' in topics:topics=['overview']
@@ -93,8 +90,7 @@ async def semantic_chat(request,account,row,body):
         # Saved findings about another market remain context but are never trusted job facts.
         facts=[market_scoped(fact,state['title'],links[fact['ref']]) for fact in facts]
         focus=plan.research_focus or PUBLIC_FOCUS.get(plan.topic)
-        # Database first: direct salary/location lookups search only when no trusted
-        # (JD-sourced or verified) fact is saved; other questions when nothing relevant is.
+        # Database first: search only when no trusted fact (direct lookups) or nothing relevant (other questions) is saved.
         untrusted=state.get('direct') and not any(trusted_fact(fact) for fact in facts)
         queries=question_queries(state['title'],focus,plan.public_search_terms) if focus else []
         return {**state,'facts':facts,'links':links,'partial':partial,'focus':focus,'queries':queries,'saved_facts':facts,'saved_links':links,
@@ -114,8 +110,7 @@ async def semantic_chat(request,account,row,body):
         verified,verified_sources,unverified,unverified_sources=scoped_question_findings(
             state['focus'],state['retrieved_links'],state['title'],terms=state['plan'].public_search_terms,
             require_focus=bool(state.get('direct')))
-        # Only passages that pass every deterministic scope check become saved job
-        # facts. Unverified candidates may inform this answer but are never stored.
+        # Only passages that pass every deterministic scope check become saved job facts.
         known={f.finding_id for f in state.get('candidates',[])}
         fresh=[f for f in verified if f.finding_id not in known]
         if fresh:await persist(state,fresh,[s for s in verified_sources if s.source_id in {i for f in fresh for i in f.source_ids}])
@@ -138,7 +133,7 @@ async def semantic_chat(request,account,row,body):
     async def answer(state):
         plan=state['plan']
         if plan.topic=='off_topic':return {'result':JDReply(reply=REFUSAL,proposed_skills=None)}
-        if plan.topic=='edit':return {'result':None}  # Existing validated edit workflow.
+        if plan.topic=='edit':return {'result':None}
         if plan.clarification:return {'result':JDReply(reply=plan.clarification,proposed_skills=None)}
         if plan.topic=='career_guidance':
             activity('answering_question')

@@ -33,7 +33,6 @@ def test_session_projects_same_current_review_policy_for_all_accounts():
             assert response.status_code == 200
             assert response.json()['cv_review_scope'] == 'item'
             assert response.json()['cv_review_policy_version'] == 1
-    # Project the policy on read without rewriting existing account records.
     assert accounts.records['free-token']['cv_review_scope'] == 'section'
     assert accounts.records['paid-token']['cv_review_policy_version'] == 1
 

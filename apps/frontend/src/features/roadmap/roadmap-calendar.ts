@@ -1,5 +1,5 @@
 import { formatDate } from '@/lib/format';
-/** Calendar arithmetic on plain YYYY-MM-DD dates. Plans hold local dates, so nothing here uses the device time zone. */
+/** Calendar arithmetic on plain YYYY-MM-DD dates, independent of the device time zone. */
 const parse = (value: string) => new Date(`${value}T12:00:00Z`);
 const iso = (date: Date) => date.toISOString().slice(0, 10);
 const format = (value: string, options: Intl.DateTimeFormatOptions) => parse(value).toLocaleDateString('en-SG', { ...options, timeZone: 'UTC' });

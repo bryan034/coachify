@@ -13,8 +13,6 @@ class Message(Contract):
 
 
 class DiscoveryHistoryMessage(Message):
-    # Saved Discovery replies can include research summaries and server citations.
-    # Keep their full validated storage limit without widening public chat inputs.
     content: Annotated[str, Field(min_length=1, max_length=12000)]
 
 
@@ -46,7 +44,6 @@ class AIInput(Contract):
     stage: Literal['goal_summary', 'interview_prep', 'role_summary', 'jd_scope', 'extraction', 'chat', 'guidance', 'research', 'gap_analysis', 'exploration', 'jd_extraction', 'jd_chat', 'jd_edit', 'role_guidance', 'interview_synthesis', 'workspace_chat', 'question_route', 'focused_answer', 'goal_edit', 'context_route', 'context_answer', 'career_guidance', 'research_plan', 'research_assess', 'opportunity_plan','opportunity_structure','opportunity_skill_levels','discovery_turn','discovery_plan','discovery_assess','discovery_extract','discovery_summary']
     source_text: str | None = Field(default=None, min_length=1, max_length=8000, repr=False)
     conversation: list[Message | DiscoveryHistoryMessage] = Field(default_factory=list, max_length=30, repr=False)
-    # Callers build this from authenticated, approved structured snapshots.
     context: str = Field(default='', max_length=40000, repr=False)
     sources: list[ResearchSource] = Field(default_factory=list, max_length=100)
     summaries: list[BraveAnswer] = Field(default_factory=list,max_length=2)
@@ -63,7 +60,6 @@ class AIInput(Contract):
     @model_validator(mode='after')
     def input_for_stage(self):
         if self.stage != 'discovery_turn':
-            # The longer stored-message type is internal to Discovery history.
             for message in self.conversation:Message.model_validate(message.model_dump())
         if (self.search_queries or self.research_hints) and self.stage not in ('research_plan','research_assess'):
             raise ValueError('Search planning fields belong to public research only.')

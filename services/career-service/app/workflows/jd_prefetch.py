@@ -18,8 +18,7 @@ import json
 IDENTITY=('role','field','company','location','seniority_level','employment_type')
 
 def matches(identity,goal):
-    # The inferred job-family label is not part of the retrieval query; every
-    # employer/title/location/position value actually used in that query must match.
+    # Every employer/title/location/position value used in the retrieval query must match.
     def normalized(value):return ' '.join((value or '').casefold().split())
     return all(normalized(getattr(identity,k))==normalized(getattr(goal,k)) for k in IDENTITY if k!='field')
 
@@ -27,14 +26,12 @@ async def prefetch(engine,identity,owner,revision):
     context=ResearchContext(**{k:(identity.field or identity.role) if k=='field' else getattr(identity,k) for k in IDENTITY if k!='employment_type'})
     result={'queries':{category:[] for category in CATEGORIES},'history':{},'evidence':{},'waits':{},'source_provider':getattr(engine.source,'provider','brave')}
     # Plan before retrieval while full JD extraction proceeds independently.
-    # If planning fails, the durable job retries; never substitute template queries.
     recovery=recover_responses.set(False)
     waiting=quota_progress.set(None)
     activity('planning_research')
     try:
         model_settings=getattr(engine.ai,'settings',None)
-        # Planning is inference, not a search-provider HTTP request. It needs
-        # the same per-call deadline as the durable planner (60s by default).
+        # Planning uses the durable planner's per-call deadline (60s by default).
         seconds=getattr(model_settings,'timeout_seconds',60)
         async with asyncio.timeout(seconds):
             plan=await engine.ai.generate(AIInput(stage='opportunity_plan',context=json.dumps({
@@ -59,8 +56,6 @@ async def prefetch(engine,identity,owner,revision):
         except SourceRateLimit as error:
             result['waits'][category]=now()+timedelta(seconds=error.retry_after)
         except Exception:
-            # A speculative retrieval cannot fail JD saving. The durable worker
-            # owns normal bounded retry/quota handling after the goal is saved.
             return
     token=quota_progress.set(None)
     try:await asyncio.gather(*(retrieve(category) for category in CATEGORIES))

@@ -21,7 +21,6 @@ it('preserves the reading position during new content and follows again only aft
  expect(screen.queryByRole('button',{name:/Jump to latest/})).toBeNull();
  height=1400;view.rerender(<Chat text="Another word"/>);
  expect(scroll).toHaveBeenLastCalledWith({top:1400,behavior:'instant'});
- // Native touch/scrollbar movement also pauses following.
  log.scrollTop=300;fireEvent.scroll(log);scroll.mockClear();
  act(()=>{height=1600;});view.rerender(<Chat text="Next reply"/>);
  expect(scroll).not.toHaveBeenCalled();
