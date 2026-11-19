@@ -1,4 +1,5 @@
 """Checkpointed fan-out/fan-in research with durable jobs and independently saved branches."""
+from elo_shared.model_budget import budget_owner
 import asyncio
 import json
 import logging
@@ -72,7 +73,8 @@ def merge(left,right):return {**left,**right}
 def valid_levels(levels,categories):
     # A rating may only cite findings that survived into the saved report.
     ids={f.finding_id for result in categories.values() for f in result.findings}
-    return [{**level,'finding_ids':[i for i in level.get('finding_ids',[]) if i in ids]} for level in levels or []][:60]
+    return [{**level,'finding_ids':[i for i in level.get('finding_ids',[]) if i in ids],
+             'reported_examples':[e for e in level.get('reported_examples',[]) if e.get('finding_id') in ids]} for level in levels or []][:60]
 
 class State(TypedDict,total=False):
     job_id:str
@@ -158,7 +160,7 @@ class OpportunityEngine:
         if all(v['status'] in ('completed','not_applicable') for v in job['categories'].values()):return {}
         if job['queries'] and (not job.get('prefetched') or job.get('queries_planned')):return {}
         plan=await self.generate(job,'opportunity_plan',{'opportunity':job['public'],'recruitment_year':now().year,'previous_queries':job.get('history',{})})
-        queries=planned_queries(plan,self.settings.max_searches)
+        queries=planned_queries(plan,self.settings.max_searches,job['public'])
         if job.get('prefetched'):
             # Successful paid prefetch stays first, so evaluation resumes its exact query.
             queries={category:list(dict.fromkeys([*job.get('queries',{}).get(category,[]),*queries[category]]))[:self.settings.max_searches] for category in CATEGORIES}
@@ -173,7 +175,7 @@ class OpportunityEngine:
         started=time.monotonic();stamp=now();queries=job['queries'].get(category,[]);history=job.get('history',{}).get(category,[])
         evidence=pool([*job.get('evidence',{}).get(category,[]),*job.get('retained_sources',{}).get(category,[])])
         evaluated=list(job.get('evaluated',{}).get(category,[]))
-        findings=old.findings;rejected=0;model_calls=0;error_code=None;pending=False
+        findings=old.findings;rejected=0;model_calls=0;error_code=None;pending=False;round_error=None
         relevant_ids=set(job.get('relevant_sources',{}).get(category,[]))|set(old.source_ids)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'categories.{category}.status':'running'})
         try:
@@ -190,7 +192,8 @@ class OpportunityEngine:
                         try:
                             async with self.slots:
                                 async with asyncio.timeout(self.settings.timeout_seconds):
-                                    sources=await self.source.collect_opportunity_query(ResearchContext.model_validate(job['context']),query)
+                                    with budget_owner(job['owner']):
+                                        sources=await self.source.collect_opportunity_query(ResearchContext.model_validate(job['context']),query)
                             break
                         except (GoalError,TimeoutError) as error:
                             # Retry only transient network/server errors, never credentials/parameters/billing.
@@ -214,7 +217,13 @@ class OpportunityEngine:
                 context=structure_input(job['public'],category,selected,findings)
                 if not context['evidence']:break
                 model_calls+=1
-                output=await self.generate(job,'opportunity_structure',context,validate)
+                try:output=await self.generate(job,'opportunity_structure',context,validate)
+                except AIError as error:
+                    # One unusable round must not end the category: record it and try the next search.
+                    if error.code not in ('invalid_output','incomplete_output'):raise
+                    round_error=error.code;evaluated.append(history[index])
+                    await thread(self.store.update,job['_id'],job['worker_token'],**{f'evaluated.{category}':evaluated})
+                    continue
                 relevant_ids.update(selected[ref].source_id for ref in output.relevant_refs)
                 current,discarded=supported_claims(output,category,selected,job['public']);rejected+=discarded
                 findings=dedupe_findings(category,[*findings,*current])
@@ -247,6 +256,8 @@ class OpportunityEngine:
         except (GoalError,TimeoutError,ValueError) as error:
             error_code='source_timeout' if isinstance(error,TimeoutError) else 'source_unavailable'
             logger.warning('category=%s error_code=%s exception_type=%s',category,error_code,type(error).__name__)
+        # Every round failed validation and nothing was kept: report it as before rather than as "not found".
+        if round_error and not findings and not error_code and not pending:error_code=round_error
         findings,retained=retain_useful(category,findings,evidence,relevant_ids)
         await thread(self.store.update,job['_id'],job['worker_token'],**{f'retained_sources.{category}':[s.model_dump(mode='json') for s in retained]})
         outcome=None if pending else 'validation_failed' if error_code in ('invalid_output','incomplete_output') else 'provider_failed' if error_code else 'findings_found' if findings else 'information_not_found' if relevant_ids else 'no_relevant_sources'

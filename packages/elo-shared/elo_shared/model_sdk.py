@@ -9,7 +9,7 @@ import os
 from urllib.parse import urlsplit
 
 import httpx
-from openai import OpenAI, AsyncOpenAI, APIConnectionError, APIStatusError, APITimeoutError, Omit
+from openai import OpenAI, AsyncOpenAI, APIConnectionError, APIStatusError, APITimeoutError
 
 
 def resolve_model_api_key(base_url, service_key):
@@ -63,7 +63,8 @@ class ProviderHTTPClient(httpx.AsyncClient):
 def model_client(settings, http_client):
     return AsyncOpenAI(
         base_url=settings.base_url,
-        api_key=settings.api_key.get_secret_value() or 'local-no-key',
+        # Disabled AI still builds a client; it never sends this placeholder.
+        api_key=settings.api_key.get_secret_value() or 'not-configured',
         http_client=ProviderHTTPClient(http_client),
         max_retries=0,
         timeout=settings.timeout_seconds,
@@ -71,22 +72,11 @@ def model_client(settings, http_client):
 
 
 @asynccontextmanager
-async def _completion_response(client, payload, *, local=False, responses=False):
+async def _completion_response(client, payload):
     parameters = dict(payload)
-    # DeepSeek documents Responses at the unversioned provider root. Preserve
-    # configured custom/proxy paths; normalize only its standard /v1 alias.
-    if responses and client.base_url.host=='api.deepseek.com' and client.base_url.path.rstrip('/')=='/v1':
-        client=client.with_options(base_url=str(client.base_url.copy_with(path='/')))
-    # OpenAI-compatible vendor extensions travel through the SDK's explicit
-    # extension field, rather than changing the shared Chat Completions shape.
-    extra = {key: parameters.pop(key) for key in ('thinking',) if key in parameters}
     rejection=None
     try:
-        create=client.responses.with_streaming_response.create if responses else client.chat.completions.with_streaming_response.create
-        async with create(
-            **parameters, extra_body=extra or None,
-            extra_headers={'Authorization': Omit()} if local else None,
-        ) as response:
+        async with client.chat.completions.with_streaming_response.create(**parameters) as response:
             yield response.http_response
     except APIStatusError as error:
         rejection=error.response
@@ -126,18 +116,14 @@ class SyncProviderHTTPClient(httpx.Client):
 
 
 @contextmanager
-def _sync_model_response(http_client, base_url, api_key, timeout, payload, *, local=False):
+def _sync_model_response(http_client, base_url, api_key, timeout, payload):
     parameters = dict(payload)
-    extra = {key: parameters.pop(key) for key in ('thinking',) if key in parameters}
     rejection = None
     try:
-        with OpenAI(base_url=base_url, api_key='local-no-key' if local else api_key,
+        with OpenAI(base_url=base_url, api_key=api_key,
                     http_client=SyncProviderHTTPClient(http_client),
                     max_retries=0, timeout=timeout) as client:
-            with client.chat.completions.with_streaming_response.create(
-                **parameters, extra_body=extra or None,
-                extra_headers={'Authorization': Omit()} if local else None,
-            ) as response:
+            with client.chat.completions.with_streaming_response.create(**parameters) as response:
                 yield response.http_response
     except APIStatusError as error:
         rejection = error.response
@@ -150,13 +136,13 @@ def _sync_model_response(http_client, base_url, api_key, timeout, payload, *, lo
 
 
 @asynccontextmanager
-async def completion_response(client, payload, *, local=False, responses=False, telemetry=None):
+async def completion_response(client, payload, *, telemetry=None):
     labels = dict(telemetry or {})
     labels.setdefault('provider', client.base_url.host)
     measurement = Measurement(payload, labels)
     failure = None
     try:
-        async with _completion_response(client, payload, local=local, responses=responses) as response:
+        async with _completion_response(client, payload) as response:
             measurement.status = response.status_code
             yield measurement.wrap_async(response)
     except BaseException as exc:
@@ -167,13 +153,13 @@ async def completion_response(client, payload, *, local=False, responses=False, 
 
 
 @contextmanager
-def sync_model_response(http_client, base_url, api_key, timeout, payload, *, local=False, telemetry=None):
+def sync_model_response(http_client, base_url, api_key, timeout, payload, *, telemetry=None):
     labels = dict(telemetry or {})
     labels.setdefault('provider', urlsplit(base_url).hostname)
     measurement = Measurement(payload, labels)
     failure = None
     try:
-        with _sync_model_response(http_client, base_url, api_key, timeout, payload, local=local) as response:
+        with _sync_model_response(http_client, base_url, api_key, timeout, payload) as response:
             measurement.status = response.status_code
             yield measurement.wrap_sync(response)
     except BaseException as exc:
@@ -184,9 +170,9 @@ def sync_model_response(http_client, base_url, api_key, timeout, payload, *, loc
 
 
 @asynccontextmanager
-async def async_model_response(http_client, base_url, api_key, timeout, payload, *, local=False, telemetry=None):
-    async with AsyncOpenAI(base_url=base_url, api_key='local-no-key' if local else api_key,
+async def async_model_response(http_client, base_url, api_key, timeout, payload, *, telemetry=None):
+    async with AsyncOpenAI(base_url=base_url, api_key=api_key,
                           http_client=ProviderHTTPClient(http_client),
                           max_retries=0, timeout=timeout) as client:
-        async with completion_response(client, payload, local=local, telemetry=telemetry) as response:
+        async with completion_response(client, payload, telemetry=telemetry) as response:
             yield response

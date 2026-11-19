@@ -169,15 +169,14 @@ function Conversation({ skill, onClose, token, goalLabel, mode, onRoadmapChanged
  return <>
   <div className="ws-msgs" ref={list} aria-live="polite">
    <HelperOpening title={skill.level == null ? `Why isn’t ${skill.name} rated?` : `Why is ${skill.name} rated ${skill.level} out of 10?`}>
-    <p>{ratingReason(skill)}{skill.target != null ? ` The target for ${goalLabel ?? 'your goal'} is ${skill.target}.` : ''}</p>
-    <p>If your CV review doesn’t show solid evidence, elo assumes you used complete guidance, so it doesn’t assume you understand this topic.</p>
-    <p><b>Want elo to take another look?</b> Tell me about this skill, in your own words:</p>
+    <p>{ratingReason(skill)}{skill.target != null ? ` Target: ${skill.target}.` : ''}</p>
+    <p>Without clear evidence, elo assumes you had guidance.</p>
+    <p><b>Want a re-rating?</b> Tell me about:</p>
     <ul>
-     <li>Projects outside your CV where you’ve used it</li>
-     <li>How confident you feel with it</li>
-     <li>What you built or solved on your own, without step-by-step guidance</li>
+     <li>Projects not on your CV</li>
+     <li>What you did unguided</li>
+     <li>How confident you feel</li>
     </ul>
-    <p>elo will add it to your Skills Profile and re-evaluate your level.</p>
    </HelperOpening>
    {messages.map(message => message.kind === 'result'
     ? <div key={message.id} className="ws-m result">{message.body}</div>

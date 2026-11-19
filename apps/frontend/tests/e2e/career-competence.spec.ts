@@ -29,7 +29,10 @@ test('role-relative skill progress stays readable on desktop and mobile',async({
  }
  await page.getByRole('button',{name:/^Python/}).click();
  await expect(page.getByText(/3 more to reach the target of 8 for this essential skill\./)).toBeVisible();
- await page.getByRole('button',{name:'See evidence'}).click();
- await expect(page.getByText('Target 8 / 10. Familiarity requires role-ready application at level 8.')).toBeVisible();
+ await expect(page.getByText('Why the target is 8 / 10')).toBeVisible();
+ await expect(page.getByText(/Familiarity requires role-ready application at level 8\./)).toBeVisible();
+ await expect(page.getByText('Why you’re at 5 / 10')).toBeVisible();
  await expect(page.getByText('Independent successful project delivery.')).toBeVisible();
+ await page.getByRole('button',{name:'See evidence'}).click();
+ await expect(page.getByText('Independent successful project delivery.')).toHaveCount(1);
 });

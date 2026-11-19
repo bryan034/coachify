@@ -10,12 +10,16 @@ from app.schemas.jd import JDExtraction
 import json
 
 
+# Saved goals always carry a role target; edits must leave untouched skills' targets alone.
+TARGET={'level':6,'basis':'inferred','explanation':'Estimated from the role.'}
+
+
 def goal():
     return JDExtraction(role='Analyst',field='Data',company='Example',location='Singapore',skills=[
         {'item_id':'sql','skill_id':'language.sql','name':'SQL','category':'Technical','priority':'required','origin':'employer','evidence':'SQL required.',
-         'group_id':'languages','group_operator':'any'},
+         'group_id':'languages','group_operator':'any','competence_target':TARGET},
         {'item_id':'python','skill_id':'language.python','name':'Python','category':'Technical','priority':'preferred','origin':'employer','evidence':'Python preferred.',
-         'group_id':'languages','group_operator':'any'}],responsibilities=['Analyse data','Build reports'],
+         'group_id':'languages','group_operator':'any','competence_target':TARGET}],responsibilities=['Analyse data','Build reports'],
         non_skill_requirements=[{'requirement_id':'degree','category':'qualification','description':'A degree','priority':'required','evidence':'A degree is required.'}])
 
 

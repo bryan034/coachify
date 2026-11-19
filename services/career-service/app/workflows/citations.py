@@ -83,6 +83,11 @@ def summary_text(text):
     return re.sub(r'([\\`*_{}\[\]()<>#!|+\-])',r'\\\1',text)
 
 
+def summary_text_with_emphasis(text):
+    """Like summary_text, but keeps balanced **keyword** pairs as bold; their content stays escaped."""
+    return re.sub(r'\\\*\\\*((?:(?!\\\*)[^\n]){1,80}?)\\\*\\\*',r'**\1**',summary_text(text))
+
+
 def render_citations(reply, sources):
     return re.sub(r'\[([^\]\n]+)\]',lambda m:source_links([m[1]],sources) if m[1] in sources else m[0],reply)
 

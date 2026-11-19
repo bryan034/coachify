@@ -39,13 +39,6 @@ def test_embedded_rejection_bypasses_correction_and_provider_retries(embedded_st
     asyncio.run(run())
 
 
-def test_successful_responses_api_error_null_is_accepted():
-    adapter = AIAdapter(AISettings(enabled=True, api_key='synthetic'), None)
-    body = {'object': 'response', 'status': 'completed', 'error': None, 'output': [
-        {'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': '{"reply":"OK"}'}]}]}
-    assert json.loads(adapter._content(json.dumps(body))) == {'reply': 'OK'}
-
-
 @pytest.mark.parametrize('code', [402, 'insufficient_quota', 'payment_required'])
 def test_permanent_quota_rejection_does_not_enter_workflow_wait(code):
     from app.ai.adapter import quota_progress

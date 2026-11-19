@@ -85,11 +85,13 @@ describe('temporary Career Goal inputs',()=>{
 
 describe('extracting a career goal',()=>{
  const type=()=>fireEvent.change(screen.getByRole('textbox',{name:'Job description'}),{target:{value:'Backend engineer — build APIs with Python.'}});
- it('extracts on this page and opens the chat only after success',async()=>{
+ it('shows the processing screen as soon as extraction starts and opens the chat after success',async()=>{
   push.mockClear();vi.mocked(careerOperation).mockResolvedValueOnce({} as never);
   renderPage(<CareerGoal/>);
   expect(screen.getByRole('button',{name:'Extract career goal'})).toBeDisabled();
   type();fireEvent.click(screen.getByRole('button',{name:'Extract career goal'}));
+  expect(screen.getByRole('region',{name:'Skills needed'})).toBeInTheDocument();
+  expect(screen.queryByRole('textbox',{name:'Job description'})).not.toBeInTheDocument();
   await waitFor(()=>expect(push).toHaveBeenCalledWith('/career-goal/chat?source=jd'));
   expect(importCareer).not.toHaveBeenCalled();
  });
@@ -104,6 +106,25 @@ describe('extracting a career goal',()=>{
   await waitFor(()=>expect(push).toHaveBeenCalledWith('/career-goal/chat?source=jd'));
   const keys=vi.mocked(careerOperation).mock.calls.map(c=>(c[2].headers as Record<string,string>)['Idempotency-Key']);
   expect(keys[0]).toBe(keys[1]);
+ });
+ it('lets the user leave during extraction and reconnects to the same operation on return',async()=>{
+  push.mockClear();sessionStorage.clear();vi.mocked(careerOperation).mockClear();
+  const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+  vi.mocked(careerOperation).mockImplementationOnce(()=>new Promise(()=>{})).mockResolvedValueOnce({} as never);
+  const first=renderPage(<><a href="/dashboard">Home</a><CareerGoal/></>);type();
+  fireEvent.click(screen.getByRole('button',{name:'Extract career goal'}));
+  expect(screen.getByText(/You can leave this page\. elo keeps working/)).toBeVisible();
+  fireEvent.click(screen.getByRole('link',{name:'Home'}));
+  expect(confirm).not.toHaveBeenCalled();
+  first.unmount();
+  renderPage(<CareerGoal/>);
+  expect(screen.getByRole('region',{name:'Skills needed'})).toBeInTheDocument();
+  await waitFor(()=>expect(push).toHaveBeenCalledWith('/career-goal/chat?source=jd'));
+  const calls=vi.mocked(careerOperation).mock.calls;
+  expect(calls).toHaveLength(2);
+  expect((calls[1][2].headers as Record<string,string>)['Idempotency-Key']).toBe((calls[0][2].headers as Record<string,string>)['Idempotency-Key']);
+  expect(calls[1][2].body).toBe(calls[0][2].body);
+  expect(sessionStorage.getItem('elo-career-extraction')).toBeNull();
  });
 });
 

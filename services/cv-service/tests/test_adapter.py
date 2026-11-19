@@ -30,20 +30,6 @@ def test_http_requires_explicit_development_setting(monkeypatch):
 
 
 @pytest.mark.parametrize('provider_class',[Extractor,ConversationRouter,Interpreter])
-@pytest.mark.parametrize('key',['','preserved-cloud-key'])
-def test_local_ollama_is_keyless_and_never_forwards_cloud_credentials(monkeypatch,provider_class,key):
-    monkeypatch.setenv('APP_ENV','development')
-    monkeypatch.setenv('CV_LLM_BASE_URL','http://host.docker.internal:11434/v1')
-    monkeypatch.setenv('CV_LLM_ALLOW_HTTP','true')
-    monkeypatch.setenv('CV_LLM_MODEL','elo-deepseek-r1:1.5b')
-    monkeypatch.setenv('CV_LLM_API_KEY',key)
-    provider=provider_class()
-    assert provider.configured and provider._provider_headers()=={}
-    assert provider._provider_options()=={}
-    assert provider._request_timeout(90)==120 and provider._request_timeout(20)==60
-
-
-@pytest.mark.parametrize('provider_class',[Extractor,ConversationRouter,Interpreter])
 @pytest.mark.parametrize('base,override,expected',[
     ('https://openrouter.ai/api/v1','','synthetic-shared'),
     ('https://openrouter.ai/api/v1','synthetic-specific','synthetic-specific'),
@@ -104,24 +90,16 @@ def test_compatible_provider_contract_and_incomplete_output(monkeypatch, finish,
         with pytest.raises(ValueError): extractor.extract([])
 
 
-@pytest.mark.parametrize('base_url,deepseek', [
-    ('https://api.deepseek.com', True),
-    ('https://api.deepseek.com/v1/', True),
-    ('https://API.DEEPSEEK.COM', True),
-    ('https://api.groq.com/openai/v1', False),
-    ('https://openrouter.ai/api/v1', False),
-    ('https://openrouter.ai.example/v1', False),
-    ('https://api.openai.com/v1', False),
-    ('https://api.deepseek.com.example/v1', False),
-    ('https://proxy.example/api.deepseek.com', False),
-    ('https://deepseek.com', False),
+@pytest.mark.parametrize('base_url', [
+    'https://api.groq.com/openai/v1',
+    'https://openrouter.ai/api/v1',
+    'https://api.openai.com/v1',
 ])
 @pytest.mark.parametrize('operation', ['extract', 'route', 'interpret'])
-def test_vendor_options_are_host_scoped_for_all_cv_requests(monkeypatch, base_url, deepseek, operation):
+def test_cv_requests_send_no_vendor_extensions_for_any_host(monkeypatch, base_url, operation):
     configure(monkeypatch)
     monkeypatch.setenv('CV_LLM_BASE_URL', base_url)
-    # A model name alone must not send DeepSeek options to another provider.
-    monkeypatch.setenv('CV_LLM_MODEL', 'deepseek-flash')
+    monkeypatch.setenv('CV_LLM_MODEL', 'synthetic-cloud-model')
     outputs = {
         'extract': {'items': []},
         'route': {'reply': 'Please describe your contribution.', 'actions': []},
@@ -145,14 +123,14 @@ def test_vendor_options_are_host_scoped_for_all_cv_requests(monkeypatch, base_ur
         output, metadata = Interpreter().interpret({'id': 'item-1'},
             {'id': 'question-1', 'uncertainty': 'proficiency', 'question': 'What did you do?'}, 'I do not know.', 1)
     assert output == outputs[operation]
-    assert metadata['model'] == 'deepseek-flash'
+    assert metadata['model'] == 'synthetic-cloud-model'
     assert len(captured) == 1
     request = captured[0]
     payload = json.loads(request.content)
     assert request.method == 'POST'
     assert request.url.path.endswith('/chat/completions')
     assert request.headers['Authorization'] == 'Bearer synthetic-test-key'
-    assert payload['model'] == 'deepseek-flash'
+    assert payload['model'] == 'synthetic-cloud-model'
     assert payload['temperature'] == 0
     if operation == 'extract':
         assert payload['response_format']['type'] == 'json_schema'
@@ -160,10 +138,7 @@ def test_vendor_options_are_host_scoped_for_all_cv_requests(monkeypatch, base_ur
     else:
         assert payload['response_format'] == {'type': 'json_object'}
     assert payload['max_tokens'] == (12000 if operation == 'extract' else 5000)
-    if deepseek:
-        assert payload['thinking'] == {'type': 'disabled'}
-    else:
-        assert 'thinking' not in payload
+    assert 'thinking' not in payload
     assert 'reasoning_effort' not in payload
 
 

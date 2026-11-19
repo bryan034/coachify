@@ -15,7 +15,7 @@ FIELDS=frozenset({'model','messages','response_format','json_schema','schema','s
 
 def safe_diagnostic(value):
     if not isinstance(value,dict) or type(value.get('http_status')) is not int or not 100<=value['http_status']<=599:return None
-    result={'http_status':value['http_status'],'provider':value.get('provider') if value.get('provider') in ('deepseek','local','compatible') else 'other'}
+    result={'http_status':value['http_status'],'provider':value.get('provider') if value.get('provider')=='compatible' else 'other'}
     code=value.get('code')
     if isinstance(code,str) and code in CODES:result['code']=code
     fields=value.get('fields')
@@ -68,5 +68,4 @@ def classify(raw,status,provider):
     elif code=='json_validate_failed':result='invalid_output'
     elif code=='context_length_exceeded':result='context_limit'
     elif status in (401,403):result='provider_auth'
-    elif provider=='local' and status==404:result='model_unavailable'
     return result,diagnostic

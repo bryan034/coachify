@@ -11,7 +11,7 @@ from app.repositories.goals import GoalError
 from app.workflows.activity import activity
 from app.workflows.structured import structured_node
 from app.workflows.current import workspace_revision
-from app.workflows.citations import summary_text, source_links
+from app.workflows.citations import summary_text, summary_text_with_emphasis, source_links
 from app.schemas.opportunity import plain_text
 
 CATEGORY_LABELS={
@@ -21,6 +21,17 @@ CATEGORY_LABELS={
     'conversion_outcomes':'Conversion rates',
     'company_intelligence':'Company culture',
 }
+# Career Goal tabs that hold the full research behind each summary topic.
+INTERVIEW_TAB=('Interview preparation','/career-goal/interview')
+ROLE_TAB=('About the role','/career-goal/role')
+CATEGORY_TABS={'interview_intelligence':INTERVIEW_TAB,'internship_insights':ROLE_TAB,'career_progression':ROLE_TAB,
+    'conversion_outcomes':ROLE_TAB,'company_intelligence':ROLE_TAB}
+LABEL_TABS={CATEGORY_LABELS[name]:tab for name,tab in CATEGORY_TABS.items()}
+
+def find_out_more(tab):
+    label,href=tab
+    return f'Find out more on the [{label}]({href}) page.'
+
 FAILURE_EXPLANATIONS={
     'context_limit':'The research request exceeded the model context or token allowance.',
     'invalid_output':'The model response could not be validated.',
@@ -69,11 +80,12 @@ def saved_evidence_summary(goal,record):
             selected=skills[:10]
             points.append(cited('**'+label+':** '+summary_text(', '.join(skill.name for skill in selected)),
                 [url for skill in selected for url in getattr(skill,'source_urls',[])]))
-            if len(skills)>10:points.append('More skills are available in **Role and research details**.')
+            if len(skills)>10:points.append('More skills are listed on the [Skills needed](/career-goal) page.')
     if getattr(goal,'requirements_need_review',False):
         points.append('**Requirements:** Your goal changed; review its saved requirements.')
     sources={s.source_id:s.url for s in record.sources}
     points.append('## Research findings')
+    last_point={}
     for name,category in record.intelligence.categories.items():
         points.append('### '+CATEGORY_LABELS.get(name,'Research category'))
         findings=[finding for finding in category.findings if getattr(finding,'value',None)]
@@ -83,13 +95,14 @@ def saved_evidence_summary(goal,record):
             if getattr(finding,'confidence',None):qualifiers.append(finding.confidence.replace('_',' ')+' confidence')
             citations=source_links(finding.source_ids,sources)
             points.append('- '+summary_text(plain_text(finding.value))+(' ('+', '.join(qualifiers)+')' if qualifiers else '')+(' '+citations if citations else ''))
-        if len(findings)>2:points.append('More findings are available in **Role and research details**.')
         if category.status in ('failed','partial'):
             points.append('**Coverage:** '+FAILURE_EXPLANATIONS.get(getattr(category,'error_code',None),'Research coverage is incomplete for this category.'))
         elif category.status=='not_applicable':points.append('**Coverage:** This category does not apply to the saved goal.')
         elif not findings:points.append('**Coverage:** No supported findings were found in the retrieved sources.')
         missing=getattr(category,'missing_fields',[])
         if missing:points.append('**Missing information:** '+summary_text(', '.join(field.replace('_',' ') for field in missing))+'.')
+        if findings:last_point[CATEGORY_TABS.get(name,ROLE_TAB)]=len(points)-1
+    for tab,index in last_point.items():points[index]+='\n\n'+find_out_more(tab)
     points.append(SUMMARY_CLOSING)
     return {'reply':'\n\n'.join(points)}
 
@@ -111,7 +124,7 @@ async def summarize(request, account, body):
         return goal, record
 
     goal, record = await snapshot()
-    cache_key=hashlib.sha256(json.dumps([str(goal.id),goal.version,body.expected_version,str(getattr(record,'id',body.research_id)),getattr(record,'version',0),str(getattr(record,'updated_at',None)),'presentation-v2']).encode()).hexdigest()
+    cache_key=hashlib.sha256(json.dumps([str(goal.id),goal.version,body.expected_version,str(getattr(record,'id',body.research_id)),getattr(record,'version',0),str(getattr(record,'updated_at',None)),'presentation-v4']).encode()).hexdigest()
     cache_rows=getattr(repo,'rows',None)
     cached=await thread(cache_rows.find_one,{'_id':account,'goal_summary.key':cache_key},{'goal_summary':1}) if cache_rows is not None else None
     if cached and isinstance(cached.get('goal_summary',{}).get('reply'),str):
@@ -194,16 +207,20 @@ async def summarize(request, account, body):
         return saved_evidence_summary(goal,record)
     await snapshot()  # A replaced goal/research must never publish a stale overview.
     points=[]
+    last_point={}
     research_heading=False
     for block in result.blocks:
         if not research_heading and any(ref.startswith(('research_','coverage_')) for ref in block.references):
             points.append('### Research findings')
             research_heading=True
-        text=summary_text(block.text.replace(SUMMARY_CLOSING,''))
+        text=summary_text_with_emphasis(block.text.replace(SUMMARY_CLOSING,''))
         ids=list(dict.fromkeys(identifier for ref in block.references for identifier in references[ref]))
         citations=source_links(ids,sources)
         point=text+(' '+citations if citations else '')
-        points.append('**'+block.label+':** '+point)
+        points.append('#### '+block.label+'\n\n'+point)
+        if block.label in LABEL_TABS:last_point[LABEL_TABS[block.label]]=len(points)-1
+    # Point to the tab with the full research once per tab, after its last summarised topic.
+    for tab,index in last_point.items():points[index]+='\n\n'+find_out_more(tab)
     reply='## Your career goal\n\n'+'\n\n'.join(points)+'\n\n'+SUMMARY_CLOSING
     await snapshot()
     if cache_rows is not None:await thread(cache_rows.update_one,{'_id':account,'workspace.session_id':body.session_id,'workspace.revision':body.expected_version},

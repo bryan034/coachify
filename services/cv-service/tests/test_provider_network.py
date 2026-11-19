@@ -122,21 +122,6 @@ def test_cloud_calls_use_https_proxy_and_its_trusted_ca(monkeypatch, provider_ce
     assert requests[-1][2]['Authorization'] == 'Bearer synthetic-provider-key'
 
 
-@pytest.mark.parametrize('provider_class', OUTPUTS)
-def test_local_calls_bypass_proxy_and_do_not_send_cloud_keys(monkeypatch, provider_class):
-    requests, proxy_requests = [], []
-    with serve(handler_for({}, proxy_requests)) as proxy_port:
-        with serve(handler_for(OUTPUTS[provider_class], requests)) as local_port:
-            configure_proxy(monkeypatch, proxy_port)
-            monkeypatch.setenv('APP_ENV', 'development')
-            monkeypatch.setenv('CV_LLM_ALLOW_HTTP', 'true')
-            monkeypatch.setenv('CV_LLM_BASE_URL', f'http://127.0.0.1:{local_port}/v1')
-            assert invoke(provider_class) == OUTPUTS[provider_class]
-    assert proxy_requests == []
-    assert len(requests) == 1 and requests[0][:2] == ('POST', '/v1/chat/completions')
-    assert 'Authorization' not in requests[0][2]
-
-
 def test_cloud_calls_still_reject_an_untrusted_proxy_certificate(monkeypatch, provider_certificate):
     certificate, key = provider_certificate
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -154,8 +139,7 @@ def test_cloud_calls_still_reject_an_untrusted_proxy_certificate(monkeypatch, pr
 
 
 @pytest.mark.parametrize('prefix', ['ASSESSMENT', 'ROADMAP'])
-@pytest.mark.parametrize('local', [False, True])
-def test_planning_service_uses_proxy_for_cloud_and_direct_client_for_local(monkeypatch, tmp_path, provider_certificate, prefix, local):
+def test_planning_service_uses_proxy_for_cloud_models(monkeypatch, tmp_path, provider_certificate, prefix):
     from elo_shared.model_budget import budget_owner
 
     class Answer(BaseModel):
@@ -164,12 +148,10 @@ def test_planning_service_uses_proxy_for_cloud_and_direct_client_for_local(monke
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.load_cert_chain(certificate, key)
     requests = []
-    with serve(handler_for({'reply': 'Synthetic answer'}, requests, None if local else tls)) as port:
+    with serve(handler_for({'reply': 'Synthetic answer'}, requests, tls)) as port:
         configure_proxy(monkeypatch, port)
         monkeypatch.setenv('SSL_CERT_FILE', str(certificate))
-        monkeypatch.setenv('APP_ENV', 'development')
-        monkeypatch.setenv(prefix + '_LLM_ALLOW_HTTP', 'true' if local else 'false')
-        monkeypatch.setenv(prefix + '_LLM_BASE_URL', f'http://127.0.0.1:{port}/v1' if local else 'https://provider.example.invalid/v1')
+        monkeypatch.setenv(prefix + '_LLM_BASE_URL', 'https://provider.example.invalid/v1')
         monkeypatch.setenv(prefix + '_LLM_MODEL', 'synthetic-model')
         monkeypatch.setenv(prefix + '_LLM_API_KEY', 'synthetic-provider-key')
         monkeypatch.setenv('MODEL_BUDGET_PATH', str(tmp_path / 'ledger.sqlite3'))
@@ -182,5 +164,5 @@ def test_planning_service_uses_proxy_for_cloud_and_direct_client_for_local(monke
         with TestClient(app) as client:
             result = client.portal.call(generate)
         assert result.reply == 'Synthetic answer'
-    assert [method for method, _, _ in requests] == (['POST'] if local else ['CONNECT', 'POST'])
-    assert ('Authorization' in requests[-1][2]) is not local
+    assert [method for method, _, _ in requests] == ['CONNECT', 'POST']
+    assert requests[-1][2]['Authorization'] == 'Bearer synthetic-provider-key'

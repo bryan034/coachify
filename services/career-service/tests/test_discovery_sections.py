@@ -11,36 +11,30 @@ from app.ai.contracts import AIInput
 from app.ai.discovery_contracts import OUTPUTS
 
 
-def settings(provider='local',**updates):
-    return AISettings(**{'enabled':True,'provider':provider,'api_key':'synthetic' if provider!='local' else '',
-        'base_url':'http://127.0.0.1:11434/v1' if provider=='local' else 'https://example.test/v1',
-        'model':'synthetic','response_mode':'json_object','context_tokens':32768,**updates})
+def settings(**updates):
+    return AISettings(**{'enabled':True,'api_key':'synthetic','base_url':'https://example.test/v1',
+        'model':'synthetic','response_mode':'json_schema_strict','context_tokens':32768,**updates})
 
 
-def generate(stage,context,responses,provider='local',**overrides):
+def generate(stage,context,responses,**overrides):
     calls=[]
     def handler(request):
         calls.append((str(request.url),json.loads(request.content)))
         result=responses[min(len(calls)-1,len(responses)-1)]
         if isinstance(result,httpx.Response):return result
         if isinstance(result,int):return httpx.Response(result)
-        if provider=='deepseek':
-            return httpx.Response(200,json={'object':'response','status':'completed','output':[
-                {'type':'message','role':'assistant','content':[{'type':'output_text','text':json.dumps(result)}]}],
-                'usage':{'input_tokens':200,'output_tokens':30,'total_tokens':230}})
         return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(result)}}]})
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            adapter=AIAdapter(settings(provider,**overrides),client)
+            adapter=AIAdapter(settings(**overrides),client)
             request=AIInput(stage=stage,context=json.dumps(context),conversation=[{'role':'user','content':'Compare career directions.'}] if stage=='discovery_turn' else [])
             return await adapter.generate(request,Operation('synthetic-owner','1',stage),current_revision=lambda:'1')
     return asyncio.run(run()),calls
 
 
-@pytest.mark.parametrize('provider',['local','compatible','deepseek'])
 @pytest.mark.parametrize('stage',list(OUTPUTS))
-def test_every_discovery_stage_uses_schema_constraints(provider,stage):
-    payload=AIAdapter(settings(provider,**({'response_mode':'json_schema_strict'} if provider=='compatible' else {})),None)._payload(AIInput(stage=stage,context='{}'))
+def test_every_discovery_stage_uses_schema_constraints(stage):
+    payload=AIAdapter(settings(),None)._payload(AIInput(stage=stage,context='{}'))
     response=payload['response_format']
     assert response['type']=='json_schema'
     schema=response['json_schema']['schema']
@@ -135,22 +129,11 @@ def test_truncated_repairs_do_not_discard_the_initial_valid_reply():
     assert result.data.reply=='We can compare careers.'
 
 
-def test_deepseek_uses_responses_schema_transport_not_json_only_chat():
-    result,calls=generate('discovery_turn',{},[
-        {'action':'ANSWER','scope':None,'question':None,'reply':'We can explore careers.'}],provider='deepseek')
-    assert result.data.reply=='We can explore careers.' and len(calls)==1
-    url,payload=calls[0]
-    assert url=='https://example.test/v1/responses'
-    assert payload['text']['format']['type']=='json_schema'
-    assert payload['text']['format']['schema']['additionalProperties'] is False
-    assert 'response_format' not in payload and 'messages' not in payload
-
-
-def test_official_deepseek_v1_alias_uses_documented_responses_root():
-    _,calls=generate('discovery_turn',{},[
-        {'action':'ANSWER','scope':None,'question':None,'reply':'We can explore careers.'}],
-        provider='deepseek',base_url='https://api.deepseek.com/v1')
-    assert calls[0][0]=='https://api.deepseek.com/responses'
+@pytest.mark.parametrize('mode',['json_object','json_schema'])
+def test_discovery_requires_strict_schema_output(mode):
+    with pytest.raises(AIError) as error:
+        AIAdapter(settings(response_mode=mode),None)._payload(AIInput(stage='discovery_turn',context='{}'))
+    assert error.value.code=='unsupported_structured_output'
 
 
 def test_unresolved_classification_cannot_publish_an_unrelated_answer():

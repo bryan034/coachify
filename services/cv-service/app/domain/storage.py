@@ -111,17 +111,13 @@ class UploadCapacity:
                     return current['generation']
             owner_entries = [entry for entry in entries.values() if entry['owner'] == owner]
             new_record = current is None
-            saved_count = sum(entry['owner'] is not None for entry in entries.values())
-            if new_record and (saved_count >= self.settings.max_saved_cvs_global or len(entries) >= MAX_LEDGER_ENTRIES):
-                raise CapacityError('Saved CV capacity is full. Existing sources remain available; contact the administrator before uploading another CV.')
+            if new_record and len(entries) >= MAX_LEDGER_ENTRIES:
+                raise CapacityUnavailable()
             if new_record and len(owner_entries) >= self.settings.max_saved_cvs_per_owner:
                 raise CapacityError('You have reached the saved CV limit. Existing sources remain available; reuse a saved source or contact the administrator.')
             owner_bytes = sum(entry['bytes'] for entry in owner_entries)
-            global_bytes = sum(entry['bytes'] for entry in entries.values()) + document['untracked_bytes']
             if owner_bytes + byte_count > self.settings.max_original_bytes_per_owner:
                 raise CapacityError('Your private upload storage is full. Existing CVs are safe; wait for original-file expiry before uploading more.')
-            if global_bytes + byte_count > self.settings.max_original_bytes_global:
-                raise CapacityError('Private upload storage is full. Existing CVs are safe; retry after original-file cleanup or contact the administrator.')
             generation = str(uuid4())
             entries[identifier] = {'owner': owner, 'record': bool(current or existing), 'bytes': byte_count,
                 'generation': generation, 'state': 'pending', 'key': key, 'fingerprint': fingerprint, 'at': time()}

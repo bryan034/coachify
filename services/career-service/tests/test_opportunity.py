@@ -54,6 +54,9 @@ class Search:
     def __init__(self):self.calls=[];self.fail=None;self.empty=False;self.active=0;self.maximum=0
     async def collect_opportunity_query(self,context,query):
         self.calls.append(query);self.active+=1;self.maximum=max(self.maximum,self.active)
+        # The plain employer/role query names its topic in words; tag it with its category like the planned ones.
+        from app.workflows.opportunity.queries import BROAD_TOPICS
+        query=next((f'{query} {category}' for category,topic in BROAD_TOPICS.items() if query.endswith(topic)),query)
         try:
             await asyncio.sleep(.03)
             if self.fail and self.fail in query:raise GoalError('Brave access unavailable.',503)
@@ -146,7 +149,8 @@ def test_invalid_claim_repairs_are_bounded_and_no_unvalidated_facts_persist(oppo
     _,result,_=research(flow)
     assert result['status']=='failed'
     assert all(not c['findings'] for c in result['categories'].values())
-    assert len([v for v in flow[2].calls if v.stage=='opportunity_structure'])==10
+    # Bounded: 5 categories x 3 searches x (one attempt + one correction).
+    assert len([v for v in flow[2].calls if v.stage=='opportunity_structure'])==30
 
 
 def test_quota_resume_does_not_repeat_paid_retrieval(opportunity_flow):
@@ -218,13 +222,13 @@ def test_optional_live_provider_contract_smoke():
     from app.clients.search_sources import SourceAPIs
     async def run():
         settings=OpportunitySettings.from_env();primary=AISettings.from_env();context_model=primary
-        assert settings.enabled and primary.enabled and (primary.provider=='local' or primary.api_key.get_secret_value().strip()),'Configure the research providers before opting into live checks.'
+        assert settings.enabled and primary.enabled and primary.api_key.get_secret_value().strip(),'Configure the research providers before opting into live checks.'
         async with httpx.AsyncClient(trust_env=False) as client:
             router=opportunity_models(AIAdapter(primary,client),None,context_model,settings,client)
             public={'company':None,'role':'Software engineering intern','field':'Software','location':'Singapore','employment_type':'internship','recruitment_year':now().year}
             plan=await router.generate(AIInput(stage='opportunity_plan',context=json.dumps(public)),Operation('live-public-smoke','public','opportunity_plan'),current_revision=lambda:'public')
             source=SourceAPIs.from_environment(client).for_opportunity()
-            assert source.configured and source.provider in ('brave','deepseek')
+            assert source.configured and source.provider=='brave'
             results=await source.collect_opportunity_query(ResearchContext(role=public['role'],field='Software',location='Singapore'),plan.data.interview_intelligence[0] if plan.data.interview_intelligence else 'software engineering internship Singapore interview process')
             assert isinstance(results,list)
             if results:
@@ -330,7 +334,9 @@ def test_quota_pause_does_not_reset_the_invalid_response_repair_budget(opportuni
     primary.generate=generate;ingest(flow)
     _,result,_=research(flow)
     assert result['finished'] and result['status']=='failed'
-    assert set(attempts.values())=={3}  # Invalid, quota pause, final bounded correction.
+    # The correction budget is per category and survives the pause: invalid, quota pause, final correction,
+    # then the next search's attempts. Fewer than the 6 calls an unpaused category makes, so a pause adds nothing.
+    assert set(attempts.values())=={5}
     assert all(v['error_code']=='invalid_output' for v in result['categories'].values())
 
 

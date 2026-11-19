@@ -14,9 +14,9 @@ skinparam databaseBackgroundColor #EFF6FA
 actor "User browser" as Browser
 component "Existing Profile / account APIs\nAuthentication, onboarding, planning inputs\nAccount-owned manual skills intake + capability declarations" as Profile
 cloud "Configured CV model API\nOpenAI-compatible extraction, routing and interpretation" as CVLLM
-cloud "Career model router\nLocal OpenAI-compatible / DeepSeek cloud / OpenRouter\nShared adapter: extraction, chat, research coordination" as LLM
+cloud "Career model API\nOpenAI-compatible HTTPS (OpenRouter default)\nShared adapter: extraction, chat, research coordination" as LLM
 cloud "Public employer job boards\nGreenhouse / Lever / Ashby" as JobBoards
-cloud "Public search API\nBrave LLM Context (testing) / DeepSeek Search (production)" as Sources
+cloud "Public search API\nBrave LLM Context" as Sources
 
 node "Docker Compose — focused design" {
   node "Next.js / React / TypeScript" as Web <<Docker container>>
@@ -96,8 +96,7 @@ note bottom of Career
   Automatic goal saves do not silently confirm CV context.
   company may be null. Interview research is reusable public context;
   private CV/chat data must not enter that shared research.
-  Validate scope/evidence; cloud identity overlaps full JD extraction with public retrieval.
-  Local R1 uses a narrow document classifier; retrieval starts after full metadata extraction.
+  Validate scope/evidence; identity overlaps full JD extraction with public retrieval.
   Matching early evidence seeds the existing research job after goal saving.
   Cards update on extraction; chat retains observed activity until both results succeed.
   The configured model writes one cited overview from JD details and completed research.
@@ -125,17 +124,18 @@ legend bottom
   Current implementation: Profile/auth, temporary Career JD previews,
   optional-CV exploration, one autosaved current goal/chat, LangGraph research, saved CV upload/review/chat and data contracts.
   Importance review, advisory skills and versioned research orchestration/review are implemented.
-  Brave uses LLM Context; DeepSeek uses /v1/tools/search page content. Historical attribution remains readable.
+  Brave uses LLM Context. Historical attribution remains readable.
   Source-linked CV interpretation is implemented; Assessment comparison and Roadmap adviser are implemented with synthetic verification; live quality remains unverified.
   Synthetic tests do not establish live-provider quality or deployed readiness.
   career_state (including version-bound CV acknowledgement) and research_contexts are operational metadata.
   career_checkpoints / career_checkpoint_writes retain safe graph state for 24h.
-  Selected model/search provider quotas and task context/output/time limits remain enforced.
+  The model services share a per-account daily call allowance.
+  Provider quotas and task context/output/time limits also apply.
   Opportunity Intelligence embeds typed categories/findings/summary in interview_research.
   Durable category jobs/receipts reuse research_contexts; no duplicate domain collections.
   The configured model plans, evaluates cited evidence and selects validated summaries using unchanged JSON models.
   Career, CV, Assessment and Roadmap use the OpenAI Python SDK with independent endpoint settings.
-  The deployment template selects OpenRouter; a local 1.5B Ollama server remains optional.
+  The deployment template selects OpenRouter.
   Collection and embedded-object schemas: sibling mongodb_*.mmd files.
 endlegend
 @enduml

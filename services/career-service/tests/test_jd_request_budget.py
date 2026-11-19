@@ -15,11 +15,10 @@ def jd_text():
 
 
 def settings(mode='json_object',**overrides):
-    return AISettings(**{'provider':'local','base_url':'http://host.docker.internal:11434/v1',
-        'response_mode':mode,'context_tokens':16384,**overrides})
+    return AISettings(**{'response_mode':mode,'context_tokens':16384,**overrides})
 
 
-@pytest.mark.parametrize('stage,cap',[('jd_scope',8192),('jd_extraction',8192)])
+@pytest.mark.parametrize('stage,cap',[('jd_scope',4096),('jd_extraction',8192)])
 @pytest.mark.parametrize('mode',['json_object','json_schema','json_schema_strict'])
 @pytest.mark.parametrize('repair',[False,True])
 def test_full_8000_character_jd_fits_with_instructions_schema_output_and_margin(stage,cap,mode,repair):
@@ -41,7 +40,7 @@ def test_full_8000_character_jd_fits_with_instructions_schema_output_and_margin(
     if repair:assert 'Latest validation issues:' in payload['messages'][0]['content']
 
 
-@pytest.mark.parametrize('stage,cap',[('jd_scope',8192),('jd_extraction',8192)])
+@pytest.mark.parametrize('stage,cap',[('jd_scope',4096),('jd_extraction',8192)])
 @pytest.mark.parametrize('mode',['json_object','json_schema','json_schema_strict'])
 def test_context_boundary_uses_the_entire_prompt_not_just_the_jd(stage,cap,mode):
     request=AIInput(stage=stage,source_text=jd_text())
@@ -75,7 +74,6 @@ def test_explicit_global_output_ceiling_is_still_respected():
         assert adapter._payload(AIInput(stage=stage,source_text=jd_text()))['max_tokens']==2048
 
 
-@pytest.mark.parametrize('provider',['deepseek','compatible'])
-def test_cloud_identification_keeps_its_existing_output_budget(provider):
-    adapter=AIAdapter(AISettings(provider=provider,response_mode='json_object'),None)
+def test_identification_keeps_its_existing_output_budget():
+    adapter=AIAdapter(AISettings(response_mode='json_object'),None)
     assert adapter._payload(AIInput(stage='jd_scope',source_text=jd_text()))['max_tokens']==4096

@@ -39,7 +39,8 @@ export const loadGoal = (token: string, signal: AbortSignal) => careerApi<Curren
  * so Home, Roadmap and Search Jobs never count differently from Skills Profile.
  */
 export type ProfileLevel = { name: string; canonicalId?: string | null; level: number };
-export type SkillsSummary = { reviewNeeded?: boolean; total: number; experiences: number; levels?: ProfileLevel[]; groups: { name: string; count: number; skills: string[] }[] };
+/** `skills`: every Skills Profile entry, rated or not, so goal skills can list the person's skills that count towards them. */
+export type SkillsSummary = { reviewNeeded?: boolean; total: number; experiences: number; levels?: ProfileLevel[]; skills?: { name: string; canonicalId?: string | null; level: number | null }[]; groups: { name: string; count: number; skills: string[] }[] };
 export async function loadSkills(token: string, signal: AbortSignal): Promise<SkillsSummary> {
  const [profile, declarations, list, ratings] = await Promise.all([cvApi.skillsProfile(token, signal), cvApi.declarations(token, signal), cvApi.list(token, signal),
   // The person's own ratings are optional here: without them only the CV and review levels are shown.
@@ -51,8 +52,9 @@ export async function loadSkills(token: string, signal: AbortSignal): Promise<Sk
  const experiences = (cv ? cv.items.filter(item => !item.removed && item.kind !== 'skill').length : 0) + profile.entries.length;
  const own = new Map((ratings?.ratings ?? []).map(rating => [rating.key, rating.score]));
  // The level the Skills Profile shows for a skill: the CV or review level, else the person's own rating.
- const levels = skills.flatMap((skill): ProfileLevel[] => { const level = skill.ownLevel?.level ?? own.get(ratingKey(skill)); return level == null ? [] : [{ name: skill.name, canonicalId: skill.canonicalId, level }]; });
- return { levels, reviewNeeded: Boolean(cv && cv.profile_reviewed_effective_version !== cv.effective_version), total: skills.length, experiences, groups: groups.map(group => ({ name: group.name, count: group.items.length, skills: group.items.map(skill => skill.name) })) };
+ const all = skills.map(skill => ({ name: skill.name, canonicalId: skill.canonicalId, level: skill.ownLevel?.level ?? own.get(ratingKey(skill)) ?? null }));
+ const levels = all.flatMap((skill): ProfileLevel[] => skill.level == null ? [] : [{ ...skill, level: skill.level }]);
+ return { levels, skills: all, reviewNeeded: Boolean(cv && cv.profile_reviewed_effective_version !== cv.effective_version), total: skills.length, experiences, groups: groups.map(group => ({ name: group.name, count: group.items.length, skills: group.items.map(skill => skill.name) })) };
 }
 
 export async function loadRoadmap(token: string, signal: AbortSignal) {

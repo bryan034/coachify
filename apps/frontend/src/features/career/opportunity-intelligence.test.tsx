@@ -16,17 +16,20 @@ it('keeps role research visible when interviews fail, with claims, labels and ci
  expect(within(card).getByText('SGD 1500 per month')).toBeVisible();
  expect(within(card).queryByText('low confidence')).toBeNull();
  expect(within(card).getByText('Conflicting reports')).toBeVisible();
- expect(within(card).getByRole('link',{name:'Intern report ↗'})).toHaveAttribute('href','https://example.test/intern');
+ expect(within(card).getByRole('link',{name:'Source 1: Intern report'})).toHaveAttribute('href','#a-src-1');
+ expect(within(screen.getByRole('contentinfo')).getByRole('link',{name:'Intern report ↗'})).toHaveAttribute('href','https://example.test/intern');
  expect(screen.getByRole('note')).toHaveTextContent('may be inaccurate or out of date');
-  const empty=within(screen.getByRole('region',{name:'Not filled yet'}));
+ expect(screen.getByRole('note')).toHaveTextContent('from 1 public source by AI');
+  const empty=within(screen.getByRole('region',{name:'Not found yet'}));
   expect(empty.getByText('Benefits')).toBeVisible();
 });
 const roleCards=[{card_id:'work',title:'What you would work on',icon:'code',items:[{ref:'summary',text:'Build reporting for finance. Partner with analysts on weekly reviews.',urls:['https://example.test/job']}]}];
 it('splits role text into bullets per card until the AI summary is ready',async()=>{
  render(<OpportunityIntelligence section="role" goalId="goal" version={1} selectionVersion={2} roleCards={roleCards}/>);
  const work=(await screen.findByRole('heading',{name:'What you would work on'})).closest('article')!;
- expect(within(work).getAllByRole('listitem').map(li=>li.textContent)).toEqual(['Build reporting for finance.','Partner with analysts on weekly reviews.']);
- expect(within(work).getByRole('link',{name:'example.test ↗'})).toHaveAttribute('href','https://example.test/job');
+ expect(within(work).getAllByRole('listitem').map(li=>li.querySelector('span')!.textContent)).toEqual(['Build reporting for finance.','Partner with analysts on weekly reviews.']);
+ expect(within(work).getAllByRole('link',{name:'Source 1: example.test'})).toHaveLength(2);
+ expect(screen.getByRole('link',{name:'example.test ↗'})).toHaveAttribute('href','https://example.test/job');
  expect(within(work).queryByText(/Summarised by AI/)).not.toBeInTheDocument();
 });
 it('shows the cited AI digest as bullets once research settles',async()=>{
@@ -44,7 +47,8 @@ it('shows the cited AI digest as bullets once research settles',async()=>{
  expect(within(salary).getByText(/a month \(reported\) <b>x<\/b>/)).toBeVisible();
  expect(within(salary).queryByText('low confidence')).toBeNull();
  expect(within(salary).getByText('Summarised by AI from the sources')).toBeVisible();
- expect(within(salary).getByRole('link',{name:'Intern report ↗'})).toBeVisible();
+ expect(within(salary).getByRole('link',{name:/^Source \d: Intern report$/})).toBeVisible();
+ expect(document.querySelector('.role-glance')).toHaveTextContent('SalarySGD 1500 a month');
  expect(screen.queryByText('Build reporting for finance.')).not.toBeInTheDocument();
  const benefits=screen.getByRole('heading',{name:/Benefits/}).closest('article')!;
  expect(within(benefits).getByText('Typically standard cover')).toBeVisible();
@@ -52,7 +56,7 @@ it('shows the cited AI digest as bullets once research settles',async()=>{
  expect(benefits).toHaveTextContent('Not publicly reported; typically medical cover and leave');
  expect(within(benefits).getByRole('img',{name:/not found in any sources/})).toBeInTheDocument();
  expect(within(salary).queryByRole('img',{name:/not found in any sources/})).not.toBeInTheDocument();
- expect(screen.getByText(/Fields marked with this icon were made by an AI model/)).toBeVisible();
+ expect(screen.getByRole('note')).toHaveTextContent('Items marked Estimated were filled in by AI');
 });
 it('groups interview findings by round, keeping process-wide facts as headlines',async()=>{
  value.categories.interview_intelligence=interview([
@@ -71,7 +75,10 @@ it('groups interview findings by round, keeping process-wide facts as headlines'
  expect(screen.getByText('Reverse a linked list.')).toBeVisible();
  expect(screen.getByText('Revise OOP basics.')).toBeVisible();
  expect(screen.getAllByText('Not filled yet.')).toHaveLength(2);
- expect(within(headlines).getAllByText('Not filled yet')).toHaveLength(2);
+ expect(within(headlines).getAllByText('Not filled yet')).toHaveLength(1);
+ const process=screen.getByRole('region',{name:'The process'});
+ expect(within(process).getByText('Timeline: not filled yet')).toBeVisible();
+ expect(within(process).getByText('Online assessment')).toBeVisible();
  expect(screen.getAllByText('Three stages are reported.')).toHaveLength(1);
 });
 it('bolds key terms in interview findings and AI predictions without showing asterisks',async()=>{
@@ -109,7 +116,7 @@ it('fills empty interview slots with labelled AI predictions once research settl
  vi.mocked(careerApi).mockImplementation(async(path:string,_t,init)=>(path.endsWith('/interview-prep')?init?.method==='POST'?generated:suggestions:value) as never);
  render(<OpportunityIntelligence goalId="goal" version={4} selectionVersion={5}/>);
  expect(await screen.findByText('Practise timed array problems')).toBeVisible();
- expect(screen.getByText(/Fields marked with this icon were made by an AI model/)).toBeVisible();
+ expect(screen.getByRole('note')).toHaveTextContent('Items marked Estimated were filled in by AI');
  expect(within(screen.getByText('Practise timed array problems').closest('div')!).getByRole('img',{name:/not found in any sources/})).toBeInTheDocument();
  expect(screen.getByText('Reverse a linked list.')).toBeVisible();
  const post=vi.mocked(careerApi).mock.calls.find(call=>call[0]==='/goals/goal/interview-prep'&&call[2]?.method==='POST')!;
@@ -143,7 +150,8 @@ it.each(['no_relevant_sources','information_not_found','validation_failed','prov
   items:[{round_number:null,field:'difficulty',value:'Likely moderate: two technical rounds'},{round_number:null,field:'interview_questions',value:'Why this team?'}]}};
  render(<OpportunityIntelligence goalId="goal" version={1} selectionVersion={2}/>);
  expect(await screen.findByText('Likely moderate: two technical rounds')).toBeVisible();
- expect(screen.getByText(/Fields marked with this icon were made by an AI model based on the context it was provided/)).toBeVisible();
+ expect(screen.getByRole('note')).toHaveTextContent('Items marked Estimated were filled in by AI');
+ expect(screen.getByRole('img',{name:'Average, on a scale of easy, average, difficult'})).toBeVisible();
  expect(screen.getAllByRole('img',{name:/not found in any sources/}).length).toBeGreaterThanOrEqual(3);
  expect(screen.queryByText(/Relevant sources were found|did not find sources|could not be verified|could not complete the request|Part of this research could not finish/)).not.toBeInTheDocument();
 });

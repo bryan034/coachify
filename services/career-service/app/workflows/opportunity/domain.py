@@ -47,11 +47,33 @@ def citation_error(index,field,issue):
         violations=({'field':f'findings.{index}.{field}','issue':issue},))
 
 
+NUMBER=re.compile(r'(?<![\d.,])[-+]?(?:\d+(?:[,.]\d+)*|[.,]\d+)(?:[eE][-+]?\d+)?(?:\s?[KkMm](?!\w))?')
+
+
+def number_value(token):
+    """8k, 8K, 8,000 and 8000 are one amount; years and other plain numbers keep their value."""
+    token=token.replace(' ','');scale={'k':1_000,'m':1_000_000}.get(token[-1:].lower(),1)
+    digits=token[:-1] if scale>1 else token
+    # A comma followed by exactly three digits groups thousands; otherwise it is a decimal comma.
+    digits=re.sub(r',(?=\d{3}(?!\d))','',digits).replace(',','.')
+    try:return round(float(digits)*scale,2)
+    except ValueError:return None
+
+
 def numeric_support(value,evidence,index):
-    """Numbers must be present verbatim in the cited source excerpts."""
-    numbers=lambda text:re.findall(r'(?<![\d.,])[-+]?(?:\d+(?:[,.]\d+)*|[.,]\d+)(?:[eE][-+]?\d+)?(?:[KkMm](?!\w))?',text)
-    available=set(numbers(evidence))
-    if any(number not in available for number in numbers(plain_text(value))):
+    """Every number shown must come from the cited passage, written in any common format.
+
+    The one derived number allowed is a monthly amount computed from an annual figure in the passage,
+    and only when that annual figure is also shown in the value.
+    """
+    words={w:i for i,w in enumerate('zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty'.split())}
+    available={number_value(n) for n in NUMBER.findall(evidence)}-{None}
+    available|={float(words[w]) for w in re.findall(r'[a-z]+',evidence.casefold()) if w in words}
+    shown=[number_value(n) for n in NUMBER.findall(plain_text(value))]
+    stated={n for n in shown if n in available}
+    for number in shown:
+        if number in stated:continue
+        if number is not None and any(abs(annual/12-number)<=max(1,annual/12*.01) for annual in stated if annual>=1000):continue
         raise citation_error(index,'value','unsupported_number')
 
 
@@ -101,8 +123,9 @@ def compatibility(categories,sources=()):
 
 
 def rating_skills(goal):
-    """Skill names and stated expectations only; never the job text, CV or user notes."""
-    return [{'name':s.name,'priority':s.priority,'stated_proficiency':s.required_proficiency,'required_experience_months':s.required_experience_months}
+    """Skill names and the employer's stated expectations for each; never the whole job text, CV or user notes."""
+    return [{'name':s.name,'priority':s.priority,'stated_proficiency':s.required_proficiency,'required_experience_months':s.required_experience_months,
+             'employer_context':s.context if s.origin=='employer' else None}
             for s in goal.skills if s.origin!='user_declaration'][:60]
 
 
@@ -110,7 +133,7 @@ def weighted_skills(skills,public,categories):
     """Rating input: each skill with elo's weighted reference score and the weights behind it."""
     from types import SimpleNamespace
     from app.domain.competence import reference
-    role=SimpleNamespace(**{k:public.get(k) for k in ('role','seniority_level','employment_type')})
+    role=SimpleNamespace(**{k:public.get(k) for k in ('role','seniority_level','employment_type','field','company')})
     rows=[]
     for s in skills:
         level,factors=reference(SimpleNamespace(name=s['name'],priority=s.get('priority'),required_experience_months=s.get('required_experience_months')),role,categories)
@@ -125,7 +148,12 @@ def validated_skill_levels(output,skills,finding_ids):
         key=' '.join(rated.skill.casefold().split())
         if key not in wanted or key in seen:problems.append({'field':f'levels.{index}.skill','issue':'unknown_or_repeated_skill'});continue
         if any(i not in finding_ids for i in rated.finding_ids):problems.append({'field':f'levels.{index}.finding_ids','issue':'unknown_finding'});continue
-        seen[key]={'skill':wanted[key],'level':rated.level,'rationale':plain_text(rated.rationale),'finding_ids':list(dict.fromkeys(rated.finding_ids))}
+        # A reported example must restate a finding of this report; it is never the model's own claim.
+        if any(e.finding_id not in finding_ids for e in rated.reported_examples):problems.append({'field':f'levels.{index}.reported_examples','issue':'unknown_finding'});continue
+        seen[key]={'skill':wanted[key],'level':rated.level,
+                   'employer_demand':plain_text(rated.employer_demand) if rated.employer_demand else None,
+                   'reported_examples':[{'text':plain_text(e.text),'finding_id':e.finding_id} for e in rated.reported_examples],
+                   'rationale':plain_text(rated.rationale),'finding_ids':list(dict.fromkeys(rated.finding_ids))}
     if problems or len(seen)!=len(wanted):
         raise AIError('invalid_output',True,reason='schema_validation',fields=('levels',),
             violations=problems or [{'field':'levels','issue':'missing_skill'}])

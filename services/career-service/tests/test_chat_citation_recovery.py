@@ -8,7 +8,7 @@ from app.ai.adapter import AIError
 from app.ai.goal_summary import GoalSummary
 from app.ai.recovery import validation_feedback
 from app.schemas.analysis import ResearchSource
-from app.workflows.citations import normalize_citations, render_citations
+from app.workflows.citations import normalize_citations, render_citations, summary_text_with_emphasis
 from app.workflows.goal_summary import summarize
 from app.workflows.operations import Operations
 from tests.test_goal_chat_presentation import environment
@@ -204,20 +204,20 @@ def test_structured_summary_places_each_points_citations_next_to_its_text():
             payloads.append(payload)
             output=GoalSummary(blocks=[
                 {'label':'Role','text':'An Analyst internship.','references':['goal']},
-                {'label':'Required skills','text':'SQL [required] for this role.','references':['skill_0']},
+                {'label':'Required skills','text':'**SQL** [required] for this role.','references':['skill_0']},
                 {'label':'Interview expectations','text':'Reported interview experience.','references':['research_0','research_0']},
             ])
             kwargs['validate_output'](output)
             return NS(data=output)
         request.app.state.ai=NS(generate=generate)
         reply=(await summarize(request,'owner',body))['reply']
-        assert reply.startswith('## Your career goal\n\n**Role:** An Analyst internship.')
-        assert len([line for line in reply.splitlines() if line.startswith('**')])==3
+        assert reply.startswith('## Your career goal\n\n#### Role\n\nAn Analyst internship.')
+        assert len([line for line in reply.splitlines() if line.startswith('#### ')])==3
         assert not any(line.startswith('- ') for line in reply.splitlines())
-        assert '**Required skills:** SQL' in reply
-        assert '**Interview expectations:** Reported interview experience.' in reply
+        assert '#### Required skills\n\n**SQL**' in reply
+        assert '#### Interview expectations\n\nReported interview experience.' in reply
         assert 'An Analyst internship. [Source](<https://example.test/jobs_(internship)>)' in reply
-        assert 'SQL \\[required\\] for this role. [Source](<https://example.test/qualifications_(SQL)>)' in reply
+        assert '**SQL** \\[required\\] for this role. [Source](<https://example.test/qualifications_(SQL)>)' in reply
         assert 'Reported interview experience. [Source](<https://example.test/job>)' in reply
         assert reply.count('https://example.test/job>')==1
         assert reply.endswith('Ask me anything about this goal set!')
@@ -275,3 +275,10 @@ def test_real_adapter_accepts_structured_summary_points_and_supplies_json_contex
         assert 'Reported interview experience. [Source](<https://example.test/job>)' in reply
         assert len(calls)==1
     asyncio.run(run())
+
+
+def test_summary_emphasis_keeps_only_balanced_bold_keywords():
+    assert summary_text_with_emphasis('Use **SQL** and **Python**.')=='Use **SQL** and **Python**.'
+    # Bold content stays escaped, so model text can never create links or HTML.
+    assert summary_text_with_emphasis('**[x](http://e.test)**')=='**\\[x\\]\\(http://e.test\\)**'
+    assert summary_text_with_emphasis('Unbalanced **bold and *single*')=='Unbalanced \\*\\*bold and \\*single\\*'

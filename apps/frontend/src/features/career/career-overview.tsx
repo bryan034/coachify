@@ -6,7 +6,7 @@ import {useRouter,useSearchParams} from 'next/navigation';
 import {useProfile} from '@/features/profile/profile-provider';
 import {careerApi,refreshWorkspace,type CareerWorkspace,type ReviewSkill} from '@/lib/api/career';
 import {useCareerSession} from './career-session';
-import {CareerGoal} from './career-goal';
+import {CareerGoal,pendingExtraction} from './career-goal';
 import {OpportunityIntelligence,type RoleCardInput} from './opportunity-intelligence';
 import {CvGoalConfirmationCard} from './cv-goal-confirmation';
 import {sourceLink} from './source-links';
@@ -17,6 +17,7 @@ import { announceInputsChanged, useComparison } from '@/features/assessment/comp
 import { EvaluateBanner } from '@/features/assessment/evaluate-banner';
 import { LEVEL_COLORS, LEVEL_LABELS, levelStatus, namesSkill, type LevelStatus } from '@/features/assessment/levels';
 import { TalkItThrough, type TalkSkill } from '@/features/assessment/talk-it-through';
+import { linkedProfileSkills, skillParts, type ProfileSkillRef } from '@/features/assessment/goal-breakdown';
 import { PageFlow } from '@/components/ui/page-flow';
 import { loadRoadmap, loadSkills, useSection, type ProfileLevel } from '@/lib/api/workspace-summary';
 import { ProcessingCard, type ProcessingStep } from '@/components/ui/processing-card';
@@ -27,9 +28,12 @@ import { PageSkeleton } from '@/components/ui/workspace-ui';
 const processing=['research_pending','researching','waiting_quota'];
 export type GoalView='skills'|'interview'|'role';
 export function CareerGoalHome({view='skills'}:{view?:GoalView}={}){
- const {token}=useProfile(),params=useSearchParams();
+ const {token,account}=useProfile(),params=useSearchParams();
  const [workspace,setWorkspace]=useState<CareerWorkspace>(),[error,setError]=useState(''),[attempt,setAttempt]=useState(0);
- const creating=params.get('new')==='1';
+ // An extraction this tab started keeps running after the user leaves; reopen its progress.
+ const [extracting]=useState(()=>typeof window!=='undefined'&&Boolean(pendingExtraction(account?.id||'')));
+ const creating=params.get('new')==='1'||extracting;
+ const replacingGoal=params.get('new')==='1';
  useEffect(()=>{
   if(creating)return;
   const refresh=()=>{if(document.visibilityState==='visible')setAttempt(value=>value+1);};
@@ -49,6 +53,7 @@ export function CareerGoalHome({view='skills'}:{view?:GoalView}={}){
   }catch{if(!abort.signal.aborted)setError('Your saved goal could not be loaded. Please retry.');}}
   void load();return()=>{abort.abort();clearTimeout(timer);};
  },[token,creating,attempt]);
+ if(creating&&!replacingGoal)return <CareerGoal/>;
  if(creating)return <><div className="goal-return"><Link href="/career-goal">← Back to saved goal</Link><p className="small">Your current goal stays saved until the new description is successfully extracted.</p></div><CareerGoal replacing/></>;
  if(!workspace)return <section className="page on ws-page"><h1>Career Goal</h1>{error?<><p role="alert">{error}</p><button className="btn pri" onClick={()=>setAttempt(v=>v+1)}>Retry loading goal</button></>:<PageSkeleton label="Opening your career goal…"/>}</section>;
  if(!workspace.current?.goal)return <CareerGoal/>;
@@ -81,7 +86,8 @@ export function goalSkillLevel(skill:ReviewSkill,outcome?:Requirement,profileLev
  const profile=profileLevels.find(item=>namesSkill([item],{name:skill.name,canonicalId:skill.canonical_skill_id}))?.level;
  return {level:evaluated??profile??null,target};
 }
-type Row={skill:ReviewSkill;outcome?:Requirement;level:number|null;target:number|null;status:LevelStatus;key:string;pending:boolean};
+/** `linked`: the person's skills that count towards this one. `parts`: the smaller skills it breaks down into, and whether the person has each. */
+type Row={skill:ReviewSkill;outcome?:Requirement;level:number|null;target:number|null;status:LevelStatus;key:string;pending:boolean;linked:ProfileSkillRef[];parts:{name:string;reason:string;has:boolean}[]};
 
 /** Everything the evaluation and the goal hold about one skill; opened by "See evidence". */
 function Evidence({row,evidence}:{row:Row;evidence?:Record<string,{name?:string;text:string}>}){
@@ -91,7 +97,8 @@ function Evidence({row,evidence}:{row:Row;evidence?:Record<string,{name?:string;
  return <div className="ws-evidence">
   <div>
    <h4>Your evidence</h4>
-   {outcome?.score_explanation?<p>{outcome.score_explanation}</p>:<p>{outcome?'elo found no evidence for this skill in your CV and review.':'Evaluate your skills to see the evidence elo used.'}</p>}
+   {/* The level's explanation sits above, in the opened row. */}
+   {!outcome?.score_explanation?.trim()&&<p>{outcome?'elo found no evidence for this skill in your CV and review.':'Evaluate your skills to see the evidence elo used.'}</p>}
    {refs.map((item,index)=><blockquote key={index}>{item.name?<><b>{item.name}.</b> </>:null}{item.text}</blockquote>)}
    {outcome&&<><h4>From your Skills Profile</h4>{linked.length?<ul>{linked.map(item=><li key={item.canonical_skill_id||item.name}><Link href="/cv">{item.name}</Link>{item.competence_score!=null?` · ${item.competence_score} / 10`:''}</li>)}</ul>:<p>No skill in your Skills Profile covers this yet.</p>}</>}
   </div>
@@ -100,13 +107,36 @@ function Evidence({row,evidence}:{row:Row;evidence?:Record<string,{name?:string;
    {skill.context&&<p>{skill.context}</p>}
    <p>{importanceLabels[importance]}. {inferred?'The job description doesn’t say, so elo inferred this from the description and research.':skill.origin==='market_research'?'From sampled job listings.':skill.origin==='user_declaration'||skill.correction==='user'?'Set in your refinement.':'Stated in the job description.'}</p>
    {(skill.required_proficiency||skill.required_experience_months!=null)&&<p>{[skill.required_proficiency?`${sentence(skill.required_proficiency)} level expected`:null,skill.required_experience_months!=null?`${skill.required_experience_months} months’ experience`:null].filter(Boolean).join(' · ')}</p>}
-   {skill.competence_target&&<><p>Target {skill.competence_target.level} / 10. {skill.competence_target.explanation}</p><RequirementSources urls={skill.competence_target.source_urls}/></>}
+   {skill.competence_target&&<RequirementSources urls={skill.competence_target.source_urls}/>}
    {skill.group_id&&<p>{skill.group_operator==='any'?'Alternative requirement: one of the linked skills is needed.':'Part of a combined requirement.'}</p>}
    {skill.evidence&&skill.origin!=='employer'&&<blockquote>{skill.evidence}</blockquote>}
    <p>{originLabel(skill)}</p><RequirementSources urls={skill.source_urls}/>
    {!!skill.learning_items?.length&&<><h4>What to learn</h4><ul>{skill.learning_items.map(item=><li key={item.item_id}><b>{item.name}.</b> {item.reason}</li>)}</ul></>}
   </div>
  </div>;
+}
+const TARGET_BASIS:Record<NonNullable<ReviewSkill['competence_target']>['basis'],string>={job_description:'From the job description',research:'From role research',inferred:'Estimated by elo'};
+/** The employer's expectation, what people reported about the skill, and why elo chose the level. */
+function TargetReasons({target}:{target:NonNullable<ReviewSkill['competence_target']>}){
+ const examples=(target.reported_examples??[]).filter(item=>item.text.trim());
+ return <>
+  {target.employer_demand?.trim()&&<p><b>What the employer expects.</b> {target.employer_demand}</p>}
+  {examples.length>0&&<><p><b>What people report.</b></p><ul>{examples.map((item,index)=>{const link=item.source_url?sourceLink(item.source_url):null;
+   return <li key={index}>{item.text}{link&&<> <a href={link.url} target="_blank" rel="noopener noreferrer">{link.domain} ↗</a></>}</li>;})}</ul></>}
+  <p><b>Why elo rated it {target.level}.</b> {target.rating_reason?.trim()||target.explanation} <small>{TARGET_BASIS[target.basis]}</small></p>
+ </>;
+}
+/** Why the row shows its numbers: what the role's target rests on and why the person's level is what it is. */
+function RatingReasons({row}:{row:Row}){
+ const {skill,outcome,level,target,status}=row,goal=skill.competence_target;
+ // An evaluation can carry its own target; the goal's explanation only describes the goal's level.
+ const targetReason=goal&&target===goal.level&&goal.explanation.trim()?goal:null;
+ const levelReason=status!=='unrated'?outcome?.score_explanation?.trim():null;
+ if(!targetReason&&!levelReason)return null;
+ return <dl className="ws-why">
+  {targetReason&&<div><dt>Why the target is {target} / 10</dt><dd><TargetReasons target={targetReason}/></dd></div>}
+  {levelReason&&<div><dt>Why you’re at {level} / 10</dt><dd>{levelReason}</dd></div>}
+ </dl>;
 }
 function SkillRow({row,evidence,talk}:{row:Row;evidence?:Record<string,{name?:string;text:string}>;talk:(row:Row,mode:'talk'|'build')=>void}){
  const [open,setOpen]=useState(false),[showEvidence,setShowEvidence]=useState(false),id=useId();
@@ -118,25 +148,43 @@ function SkillRow({row,evidence,talk}:{row:Row;evidence?:Record<string,{name?:st
    {status==='unrated'
     ?<span className="ws-lvlbar" aria-hidden="true">{target!=null&&<span className="target" style={{left:`${target*10}%`}}/>}</span>
     :<span className="ws-lvlbar" role="img" aria-label={`${level} out of 10${target!=null?`, target ${target}`:''}`}><span className="fill" style={{width:`${level!*10}%`,background:LEVEL_COLORS[status]}}/>{target!=null&&<span className="target" style={{left:`${target*10}%`}}/>}</span>}
-   <span className="ws-score">{status==='unrated'?'Not rated':<>{level} <small>/ {target??10}</small></>}</span>
+   <span className="ws-score">{status==='unrated'?<>Not rated{target!=null&&<small> / {target}</small>}</>:<>{level} <small>/ {target??10}</small></>}</span>
    <svg className="ws-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
   </button>
   <div className="ws-sk-more" id={id} hidden={!open}>
    {status==='unrated'
     ?<p>{row.outcome?'elo didn’t find enough in your CV to rate this yet. Tell elo where you’ve used it and it will be rated.':'This skill hasn’t been compared with your Skills Profile yet.'}</p>
     :<p><b>{LEVEL_LABELS[status]}.</b> {status==='ready'?'You’ve met the target for this role.':short!=null?`${short} more to reach the target of ${target} for this ${importance.toLowerCase()} skill.`:'The role’s target for this skill isn’t set yet.'}</p>}
+   <RatingReasons row={row}/>
    <button className="ws-mini solid" type="button" onClick={()=>talk(row,'talk')}>{status==='unrated'?'Rate this skill':'Talk it through'}</button>
    <button className="ws-mini" type="button" aria-expanded={showEvidence} onClick={()=>setShowEvidence(value=>!value)}>{showEvidence?'Hide evidence':'See evidence'}</button>
    {status!=='ready'&&!row.pending&&<button className="ws-mini" type="button" onClick={()=>talk(row,'build')}>Add to roadmap</button>}
    {showEvidence&&<Evidence row={row} evidence={evidence}/>}
   </div>
+  <SkillBreakdown row={row}/>
  </li>;
+}
+/** The person's skills behind a goal skill and the smaller skills it breaks into. Hidden when it would only repeat the skill's own name. */
+function SkillBreakdown({row}:{row:Row}){
+ const same=(name:string)=>name.trim().toLowerCase()===row.skill.name.trim().toLowerCase();
+ const linked=row.linked.some(item=>!same(item.name))?row.linked:[];
+ if(!linked.length&&!row.parts.length)return null;
+ return <div className="ws-sk-parts">
+  {linked.length>0&&<div><span className="ws-parts-t">Your skills that count</span><ul aria-label={`Your skills that count towards ${row.skill.name}`}>{linked.map(item=><li key={item.canonicalId||item.name} className="ws-part have">{item.name}{item.level!=null&&<small>{item.level}/10</small>}</li>)}</ul></div>}
+  {row.parts.length>0&&<div><span className="ws-parts-t">Breaks down into</span><ul aria-label={`${row.skill.name} breaks down into`}>{row.parts.map(part=><li key={part.name} className={`ws-part${part.has?' have':''}`} title={part.reason}>{part.has&&<span className="visually-hidden">In your skills: </span>}{part.name}</li>)}</ul></div>}
+ </div>;
 }
 const filters:{key:'all'|LevelStatus;label:string}[]=[{key:'all',label:'All'},{key:'ready',label:'Ready'},{key:'getting',label:'Getting there'},{key:'build',label:'To build'},{key:'unrated',label:'Not rated'}];
 /** Every skill the goal needs, grouped by category, with the person's level against the role's target. */
-export function SkillsNeeded({skills,categories,outcomes,profileLevels,evidence,pending=()=>false,talk=()=>{}}:{skills:ReviewSkill[];categories?:SkillGroupMap;outcomes?:Record<string,Requirement>|null;profileLevels?:ProfileLevel[];evidence?:Record<string,{name?:string;text:string}>;pending?:(skill:ReviewSkill)=>boolean;talk?:(row:Row,mode:'talk'|'build')=>void}){
+export function SkillsNeeded({skills,categories,outcomes,profileLevels,profileSkills=profileLevels??[],evidence,pending=()=>false,talk=()=>{}}:{skills:ReviewSkill[];categories?:SkillGroupMap;outcomes?:Record<string,Requirement>|null;profileLevels?:ProfileLevel[];profileSkills?:ProfileSkillRef[];evidence?:Record<string,{name?:string;text:string}>;pending?:(skill:ReviewSkill)=>boolean;talk?:(row:Row,mode:'talk'|'build')=>void}){
  const [filter,setFilter]=useState<'all'|LevelStatus>('all');
- const rows=new Map<ReviewSkill,Row>(skills.map(skill=>{const outcome=skill.item_id?outcomes?.[skill.item_id]:undefined,{level,target}=goalSkillLevel(skill,outcome,profileLevels);return [skill,{skill,outcome,level,target,status:levelStatus(level,target),key:skill.item_id||skill.name,pending:pending(skill)}];}));
+ const rows=new Map<ReviewSkill,Row>(skills.map(skill=>{
+  const outcome=skill.item_id?outcomes?.[skill.item_id]:undefined,{level,target}=goalSkillLevel(skill,outcome,profileLevels);
+  // Levels come from the Skills Profile, else from the evaluation's link.
+  const linked=linkedProfileSkills(skill,outcome,profileSkills).map(item=>({...item,level:item.level??outcome?.profile_skills?.find(other=>namesSkill([other],item))?.competence_score??null}));
+  const parts=skillParts(skill,skills).map(item=>({name:item.name,reason:item.reason,has:profileSkills.some(own=>namesSkill([item],{name:own.name}))}));
+  return [skill,{skill,outcome,level,target,status:levelStatus(level,target),key:skill.item_id||skill.name,pending:pending(skill),linked,parts}];
+ }));
  const count=(key:'all'|LevelStatus)=>key==='all'?skills.length:[...rows.values()].filter(row=>row.status===key).length;
  const ordered=[...skills].sort((a,b)=>priorityRank[a.priority]-priorityRank[b.priority]).filter(skill=>filter==='all'||rows.get(skill)!.status===filter);
  const best=(items:ReviewSkill[])=>Math.min(...items.map(skill=>priorityRank[skill.priority]));
@@ -211,7 +259,7 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
  const scheduled=useMemo(()=>(planner?.active_sessions??[]).filter(item=>item.status==='scheduled'),[planner]);
  const pending=(skill:ReviewSkill)=>scheduled.some(item=>item.origin==='user'&&namesSkill(item.skills,{name:skill.name,canonicalId:skill.canonical_skill_id}));
  const goalLabel=[goal.role,goal.company].filter(Boolean).join(' at ');
- const profileLevels=profile.state.status==='ready'?profile.state.data.levels:undefined;
+ const profileLevels=profile.state.status==='ready'?profile.state.data.levels:undefined,profileSkills=profile.state.status==='ready'?profile.state.data.skills:undefined;
  const talkSkill=useMemo(():TalkSkill|null=>{
   const skill=talking&&goal.skills.find(item=>(item.item_id||item.name)===talking.key);
   if(!skill)return null;
@@ -244,7 +292,7 @@ export function CareerGoalOverview({workspace,loadError='',onReload,view='skills
   {view==='skills'&&<>
    {!working&&<EvaluateBanner comparison={comparison} here="/career-goal"/>}
    <CvGoalConfirmationCard pill key={confirmationKey} goal={goal} selectionVersion={workspace.current.selection_version} token={token} onReload={onReload}/>
-   <SkillsNeeded key={`${goal._id}:${goal.version}`} skills={goal.skills} categories={workspace.current.skill_groups} outcomes={outcomes} profileLevels={profileLevels} evidence={current?comparison.result?.evidence:undefined} pending={pending} talk={(row,mode)=>setTalking({key:row.key,mode})}/>
+   <SkillsNeeded key={`${goal._id}:${goal.version}`} skills={goal.skills} categories={workspace.current.skill_groups} outcomes={outcomes} profileLevels={profileLevels} profileSkills={profileSkills} evidence={current?comparison.result?.evidence:undefined} pending={pending} talk={(row,mode)=>setTalking({key:row.key,mode})}/>
    <TalkItThrough skill={talkSkill} mode={talking?.mode} onClose={()=>setTalking(null)} token={token} goalLabel={goalLabel} comparison={comparison} onRoadmapChanged={roadmap.retry}/>
   </>}
   {view!=='skills'&&research(view)}

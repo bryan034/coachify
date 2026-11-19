@@ -139,7 +139,7 @@ UI behavior; they do not establish real model extraction accuracy.
 The full-screen CV chat gives the conversation at least 70% of the screen height.
 
 Entry now shows `skills-profile-summary.tsx`: header, how the pages connect, then `skills-overview.tsx`
-(skills as chips, goal skills first with level against target, and the shared **Skills Helper** drawer in
+(skills as chips; "Show fewer" lists only skills that count towards the goal, first and with level against target, and "Show all skills" adds the rest; a skill counts when it is a goal skill, one of the smaller skills a goal skill breaks down into (its learning items), or linked to one by the saved evaluation (`profile_skills`), the same rule as the Career Goal breakdown (`features/assessment/goal-breakdown.ts`); goal skills and smaller skills the person has no evidence for appear with a dotted outline; and the shared **Skills Helper** drawer in
 `features/assessment/talk-it-through.tsx`: the person describes their experience, it is saved to the Skills Profile, and only that skill is re-judged through `POST /assessments/skills/reevaluate`), the CV card with the upload panel, and experience by kind.
 Skills combine CV skills, skills described in chat and manually added capabilities (`skill-cards.tsx`).
 The backend assigns categories (`skill_groups` on each response) and

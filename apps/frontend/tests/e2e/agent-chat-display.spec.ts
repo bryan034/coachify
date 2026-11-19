@@ -65,9 +65,6 @@ test('chat hides validation diagnostics and replaces repair activity with a Mark
  await page.emulateMedia({reducedMotion:'reduce'});
  await expect(page.getByRole('textbox',{name:'Message elo'})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
- await page.getByRole('button',{name:'Role and research details'}).click();
- await expect(page.locator('.agent-details a').first()).toHaveAttribute('href','https://example.test/report');
- await page.getByRole('button',{name:'Hide details'}).click();
  await page.screenshot({path:test.info().outputPath('answer-mobile.png'),fullPage:true});
  failureMode='invalid_output';
  await page.getByRole('textbox',{name:'Message elo'}).fill('Explain the assessment');

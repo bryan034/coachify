@@ -269,7 +269,7 @@ def test_url_preview_has_only_temporary_metadata():
     assert 'id' not in result
 
 
-def test_concurrent_import_limit_precedes_document_parsing():
+def test_concurrent_imports_do_not_share_an_admission_quota():
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event, Lock
     entered=Event();release=Event();lock=Lock();count=0
@@ -277,18 +277,18 @@ def test_concurrent_import_limit_precedes_document_parsing():
         nonlocal count
         with lock:
             count+=1
-            if count==2:entered.set()
+            if count==3:entered.set()
         assert release.wait(5)
         return {'kind':'document','text':'Synthetic role','source_name':'role.txt','notices':[]}
-    with fixture_client(processor) as client,ThreadPoolExecutor(2) as pool:
-        jobs=[pool.submit(client.post,BASE+'/document',files={'file':('role.txt',TEXT,'text/plain')},headers=AUTH) for _ in range(2)]
+    with fixture_client(processor) as client,ThreadPoolExecutor(3) as pool:
+        jobs=[pool.submit(client.post,BASE+'/document',files={'file':('role.txt',TEXT,'text/plain')},headers=AUTH) for _ in range(3)]
         try:
             assert entered.wait(5)
             response=client.post(BASE+'/document',content=b'not even valid multipart',headers={**AUTH,'Content-Type':'multipart/form-data; boundary=x'})
-            assert response.status_code==429
-            assert count==2
+            assert response.status_code==400
+            assert count==3
         finally:release.set()
-        assert [job.result().status_code for job in jobs]==[200,200]
+        assert [job.result().status_code for job in jobs]==[200,200,200]
 
 
 def test_chunked_upload_is_bounded_even_without_content_length():

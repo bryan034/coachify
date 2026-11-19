@@ -1,5 +1,7 @@
 """Independent conversation trust-boundary checks using synthetic providers only."""
 from copy import deepcopy
+import hashlib
+import os
 import json
 import time
 from threading import Event
@@ -215,17 +217,14 @@ def test_busy_provider_capacity_keeps_message_without_starting_provider(harness)
     chat = open_chat(client)
     provider = Router()
     app.state.conversations.provider = provider
-    slots = app.state.conversations.slots
-    assert slots.acquire(blocking=False)
-    assert slots.acquire(blocking=False)
+    descriptor = app.state.service.model_usage._slot(hashlib.sha256(b'owner-a').hexdigest())
     try:
         value = send(client, chat, 'Please explain the saved information.')
         assert any(m['role'] == 'user' and m['text'] == 'Please explain the saved information.' for m in value['messages'])
         assert any(a['kind'] == 'route' and a['status'] == 'failed' for m in value['messages'] for a in m['actions'])
         assert provider.calls == []
     finally:
-        slots.release()
-        slots.release()
+        os.close(descriptor)
 
 
 def configure_http_router(monkeypatch, handler):

@@ -124,17 +124,17 @@ def test_semantic_edit_intent_still_uses_the_validated_primary_edit_workflow(flo
     assert response.json()['edit_status']=='saved' and [v.stage for v in flow[2].calls[before:]]==['goal_edit']
 
 
-@pytest.mark.parametrize('provider,model',[('compatible','openai/gpt-4o-mini'),('deepseek','deepseek-flash'),('local','deepseek-r1:1.5b')])
-def test_startup_wires_one_configured_adapter_for_all_stages(monkeypatch,provider,model):
+def test_startup_wires_one_configured_adapter_for_all_stages(monkeypatch):
+    model='openai/gpt-4o-mini'
     from app.main import create_app
     from fastapi.testclient import TestClient
     monkeypatch.delenv('MONGODB_URI',raising=False)
     monkeypatch.setenv('AI_ENABLED','true')
-    monkeypatch.setenv('CAREER_LLM_PROVIDER',provider)
-    monkeypatch.setenv('CAREER_LLM_API_KEY','synthetic-key' if provider!='local' else '')
+    monkeypatch.delenv('CAREER_LLM_MODEL',raising=False)
+    monkeypatch.setenv('CAREER_LLM_API_KEY','synthetic-key')
     upstream=httpx.AsyncClient(base_url='http://profile.test',transport=httpx.MockTransport(lambda _:httpx.Response(200,json={})))
     with TestClient(create_app(profile_client=upstream)) as client:
         router=client.app.state.ai
         assert router.context_enabled and router.primary.settings.model==model
-        assert router.context.settings.model==model and router.settings.provider==provider
+        assert router.context.settings.model==model and router.settings.provider=='compatible'
         assert router.primary is router.context

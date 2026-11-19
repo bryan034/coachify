@@ -92,7 +92,7 @@ skill_name must be one of the item's skill_names (or its title for a skill item)
 
 class Extractor:
     def reserve_dispatch(self, payload):
-        if self.reserve_call is not None and not self.local:
+        if self.reserve_call is not None:
             try:
                 self.reserve_call(current_budget_owner(), payload)
             except (ModelBudgetExceeded, ModelBudgetUnavailable) as exc:
@@ -106,27 +106,14 @@ class Extractor:
             raise RuntimeError('CV_LLM_RESPONSE_MODE must be json_schema or json_object.')
         self.base_url = os.getenv('CV_LLM_BASE_URL', 'https://openrouter.ai/api/v1').rstrip('/')
         parsed = urlparse(self.base_url)
+        # Plain HTTP is only for synthetic fixture providers in development.
         development_http = os.getenv('APP_ENV') == 'development' and os.getenv('CV_LLM_ALLOW_HTTP') == 'true' and parsed.scheme == 'http'
-        self.local=development_http and parsed.hostname in ('localhost','127.0.0.1','::1','host.docker.internal')
         if (parsed.scheme != 'https' and not development_http) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise RuntimeError('CV_LLM_BASE_URL must be an HTTPS provider URL without credentials, query or fragment.')
         self.api_key = resolve_model_api_key(self.base_url, os.getenv('CV_LLM_API_KEY', ''))
 
     @property
-    def configured(self): return bool(self.model and (self.api_key or self.local))
-
-    def _provider_headers(self):
-        return {} if self.local else {'Authorization':'Bearer '+self.api_key}
-
-    def _request_timeout(self,cloud_seconds):
-        # Stay below ingestion's 180s and clarification/chat's 90s leases.
-        return (120 if cloud_seconds==90 else 60) if self.local else cloud_seconds
-
-    def _provider_options(self):
-        # DeepSeek defaults to thinking; CV requests need bounded JSON answers.
-        if urlparse(self.base_url).hostname == 'api.deepseek.com':
-            return {'thinking': {'type': 'disabled'}}
-        return {}
+    def configured(self): return bool(self.model and self.api_key)
 
     def extract(self, blocks, *, timeout_seconds=None, previous_failure=None):
         return self._generate(blocks, timeout_seconds=timeout_seconds, previous_failure=previous_failure)
@@ -153,7 +140,7 @@ class Extractor:
                 if self.response_mode == 'json_schema' else {'type': 'json_object'}),
             'messages': [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': json.dumps({
                 'source_blocks': [block for block in blocks if block['id'] in ids],
-                'summaries': [{'index': index, **ref} for index, ref in enumerate(refs)]})}], **self._provider_options()}
+                'summaries': [{'index': index, **ref} for index, ref in enumerate(refs)]})}]}
         result, _ = self._complete(payload, timeout_seconds=timeout_seconds, usage_stage="evidence_verification")
         values = result.get('supported') if isinstance(result, dict) and set(result) == {'supported'} else None
         if (not isinstance(values, list) or len(values) > len(refs)
@@ -178,24 +165,23 @@ class Extractor:
                    'messages': [{'role': 'system', 'content': SYSTEM + json.dumps(EXAMPLE) + ('\nSchema: ' + json.dumps(extraction_schema()) if schema_in_prompt else '') + (REPAIR_INSTRUCTIONS if repair else '') + (PREVIOUS_FAILURE_INSTRUCTIONS if previous_failure else '')},
                                 {'role': 'user', 'content': json.dumps({'source_blocks': blocks, **(repair or {}),
                                     **({'previous_attempt_failure': previous_failure} if previous_failure else {})})}],
-                   'max_tokens': 12000, **self._provider_options()}
+                   'max_tokens': 12000}
         return self._complete(payload, timeout_seconds=timeout_seconds, usage_stage="extraction_repair" if repair else "extraction")
 
     def _complete(self, payload, *, timeout_seconds=None, usage_stage="extraction"):
         stage = 'model_request'
         unavailable = 'CV extraction is temporarily unavailable or returned an invalid result. Your saved inputs are safe; retry later.'
         try:
-            timeout = min(self._request_timeout(90), timeout_seconds) if timeout_seconds is not None else self._request_timeout(90)
+            timeout = min(90, timeout_seconds) if timeout_seconds is not None else 90
             if timeout <= 0:
                 raise ExtractionFailure('CV extraction timed out. Your upload is saved; retry later.', stage, 'timeout')
             deadline = time.monotonic() + timeout
             request_timeout = httpx.Timeout(timeout, connect=min(10, timeout))
-            # Cloud requests need the deployment's proxy and CA trust. Keep
-            # local model traffic direct, including when NO_PROXY is absent.
-            with Client(timeout=request_timeout, follow_redirects=False, trust_env=not self.local) as client:
+            # Cloud requests need the deployment's proxy and CA trust.
+            with Client(timeout=request_timeout, follow_redirects=False, trust_env=True) as client:
                 self.reserve_dispatch(payload)
                 with sync_model_response(client, self.base_url, self.api_key,
-                                         request_timeout, payload, local=self.local, telemetry={"service": "cv", "stage": usage_stage,
+                                         request_timeout, payload, telemetry={"service": "cv", "stage": usage_stage,
                                              "prompt_version": PROMPT_VERSION, "schema_version": SCHEMA_VERSION}) as response:
                     response.raise_for_status()
                     data = bytearray()

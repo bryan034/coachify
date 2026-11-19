@@ -797,8 +797,7 @@
         "platform": {
           "enum": [
             "brave",
-            "reddit",
-            "deepseek"
+            "reddit"
           ],
           "title": "Platform",
           "type": "string"
@@ -994,6 +993,28 @@
       "title": "ResearchSource",
       "type": "object"
     },
+    "SkillLevelExample": {
+      "additionalProperties": false,
+      "description": "Something people reported about a skill, restated from one finding of the same report.",
+      "properties": {
+        "text": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "finding_id"
+      ],
+      "title": "SkillLevelExample",
+      "type": "object"
+    },
     "SkillLevelRating": {
       "additionalProperties": false,
       "description": "The level a role needs in one skill on elo's shared 1-10 understanding scale, rated from research.",
@@ -1009,6 +1030,28 @@
           "minimum": 1,
           "title": "Level",
           "type": "integer"
+        },
+        "employer_demand": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Employer Demand"
+        },
+        "reported_examples": {
+          "items": {
+            "$ref": "#/$defs/SkillLevelExample"
+          },
+          "maxItems": 2,
+          "title": "Reported Examples",
+          "type": "array"
         },
         "rationale": {
           "maxLength": 600,

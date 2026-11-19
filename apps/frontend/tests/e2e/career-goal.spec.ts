@@ -81,7 +81,7 @@ function prepared(){
  return {session_id:'000000000000000000000071',revision:1,kind:'jd',phase:'ready',review:{review_id:'000000000000000000000081',version:1,target_type:'specific_job',extraction,metadata_origins:{},requirements_need_review:false,is_confirmed:false,generation:{}},current:{selection_version:1,goal:null,dependent_results_need_review:false},research:{_id:'000000000000000000000091',version:1,research_status:'succeeded',last_researched_at:'2026-01-01T00:00:00Z',skills:[{name:'SQL',category:'Technical',skill_id:null,interview_stage:'Technical interview',assessment_type:'SQL exercise',source_ids:['s1'],question_patterns:[],independent_report_count:0}],sources:[{source_id:'s1',platform:'reddit',title:'Public interview report',url:'https://example.test/report',evidence:'Reported SQL exercise',reliability:'anecdotal',role_match:'related',published_date:null}]},coverage:[{platform:'brave',status:'succeeded'},{platform:'reddit',status:'succeeded'}],error:null,retry_after:null,expires_at:null,exploration_id:null};
 }
 
-test('a paused JD extraction waits on the page, survives same-page navigation and reaches the saved goal without a 409 loop',async({page})=>{
+test('a paused JD extraction shows the processing screen at once, survives same-page navigation and reaches the saved goal without a 409 loop',async({page})=>{
  await workspace(page);let complete=false;const keys:string[]=[];
  const operation={operation_id:'e'.repeat(32),status:'waiting_quota',retry_after:1,result:null};
  await page.route('**/api/v1/career/**',route=>{
@@ -98,20 +98,29 @@ test('a paused JD extraction waits on the page, survives same-page navigation an
  await page.goto('/career-goal');
  await page.getByRole('textbox',{name:'Job description',exact:true}).fill('Synthetic analyst position. SQL is required.');
  await page.getByRole('button',{name:'Extract career goal'}).click();
+ await expect(page.getByRole('region',{name:'Skills needed'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Working out your career goal'})).toBeVisible();
  await expect(page.getByRole('status')).toContainText('Waiting for the research service to resume');
+ await expect(page.getByText('You can leave this page in the meantime.')).toBeVisible();
  await expect(page).toHaveURL(/\/career-goal$/);
  await page.getByRole('navigation').getByRole('link',{name:'Career Goal',exact:true}).click();
- await expect(page.getByRole('textbox',{name:'Job description',exact:true})).toHaveValue('Synthetic analyst position. SQL is required.');
- await expect(page.getByRole('button',{name:'Extracting career goal…'})).toBeDisabled();
+ await expect(page.getByRole('region',{name:'Skills needed'})).toBeVisible();
  await expect(page.getByRole('status')).toContainText('Waiting for the research service to resume');
  expect(keys).toHaveLength(1);
+ // Leaving does not prompt or cancel; returning reconnects with the same request key.
+ page.on('dialog',dialog=>{throw new Error(`Unexpected dialog: ${dialog.message()}`);});
+ await page.goto('/profile');
+ await page.goto('/career-goal');
+ await expect(page.getByRole('region',{name:'Skills needed'})).toBeVisible();
+ await expect(page.getByRole('status')).toContainText('Waiting for the research service to resume');
+ expect(keys.length).toBeGreaterThan(1);expect(new Set(keys).size).toBe(1);
  await page.setViewportSize({width:390,height:844});
  await page.screenshot({path:test.info().outputPath('paused-extraction-mobile.png'),fullPage:true});
  complete=true;
  await expect(page).toHaveURL(/\/career-goal\/chat\?source=jd$/);
  await expect(page.getByRole('log')).toContainText('Ask me anything about this goal set!');
  await expect(page.getByRole('textbox',{name:'Message elo'})).toBeEnabled();
- expect(keys).toHaveLength(1);
+ expect(new Set(keys).size).toBe(1);
  await page.getByRole('button',{name:'← Career Goal',exact:true}).click();
  await expect(page).toHaveURL(/\/career-goal$/);
  await expect(page.getByRole('heading',{name:'Analyst',exact:true})).toBeVisible();

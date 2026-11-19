@@ -495,16 +495,14 @@ Assessment's `evaluate.py` is a separate paid-provider opt-in (`RUN_LIVE_ASSESSM
 
 Compact progress polling is checked separately from full workspace reads. Provider cooldowns persist across retries; a new message key cannot bypass the saved delay. Reconciled task editors retain their original definition and apply only changed fields after reload, preserving concurrent edits to other fields while rejecting same-field conflicts.
 
-## Career extraction with a local model
+## Career extraction journey
 
-The isolated fixture/live-model browser runner and its prerequisites are documented
+The isolated fixture browser runner and its prerequisites are documented
 in [Career tests](../services/career-service/tests/README.md#reproduce-the-complete-career-extraction-journey).
-It never loads private environment files. Live inference uses `deepseek-r1:1.5b`;
-public retrieval is controlled, so the run does not establish live-search quality.
+It never loads private environment files. A finite synthetic model and controlled
+public retrieval are used, so the run does not establish live-model or live-search quality.
 Each run retains a uniquely named JSON attempt report and browser artifacts;
-`--repeat 3` records three fixed attempts per mode without discarding failures.
-Current exact-model limitations are recorded in the
-[local-model verification](../services/career-service/tests/LOCAL_MODEL_VERIFICATION.md).
+`--repeat 3` records three fixed attempts without discarding failures.
 
 Chat display browser tests distinguish safe terminal failure explanations from raw
 provider diagnostics: invalid answers show an actionable Retry alert while private

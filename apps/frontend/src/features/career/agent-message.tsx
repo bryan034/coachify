@@ -57,6 +57,13 @@ export function AgentProgress({steps}:{steps:string[]}){
 export function isTokenLimit(code:unknown){return code==='rate_limited'||code==='input_limit'||code==='model_daily_allowance';}
 export function errorCode(cause:unknown){return cause&&typeof cause==='object'&&'code' in cause&&typeof cause.code==='string'?cause.code:'';}
 
+/** Whole hours and minutes (rounded up), for waits that last until the daily allowance resets. */
+export function formatWait(seconds:number){
+ const total=Math.max(1,Math.ceil(seconds/60)),hours=Math.floor(total/60),minutes=total%60;
+ const part=(n:number,unit:string)=>`${n} ${unit}${n===1?'':'s'}`;
+ return [hours&&part(hours,'hour'),minutes&&part(minutes,'minute')].filter(Boolean).join(' ');
+}
+
 /** Explain known failures without repeating raw provider diagnostics. */
 export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry',seconds}:{message:string;code:string;onRetry:()=>void;disabled?:boolean;label?:string;seconds?:number}){
  const tokenLimit=isTokenLimit(code);
@@ -84,7 +91,7 @@ export function AgentRecovery({message,code,onRetry,disabled=false,label='Retry'
   {unavailable&&<p>AI is disabled. Configure the Career service to enable the assistant, then retry.</p>}
   {conflict&&<p>{code==='operation_in_progress'?'Another request is still being processed. Wait for it to finish before submitting different input.':'This request changed after it started. Return to Career Goal and submit the updated description again.'}</p>}
   {tokenLimit&&<p>{code==='model_daily_allowance'?'The daily model allowance has been reached. It resets at midnight UTC.':seconds!==undefined?message.replace(/ Retry after [\d.]+ seconds\./,''):message}</p>}
-  {tokenLimit&&seconds!==undefined&&<p role="status">{seconds>0?`Try again in ${seconds} seconds.`:'You can retry now.'}</p>}
+  {tokenLimit&&seconds!==undefined&&<p role="status">{seconds>0?`Try again in ${code==='model_daily_allowance'?formatWait(seconds):`${seconds} seconds`}.`:'You can retry now.'}</p>}
   {!tokenLimit&&!conflict&&!unavailable&&!scope&&<p>{explanations[code]||'The request could not be completed because of a connection or service problem. Retry your request.'}</p>}
   <button className="btn ghost sm" disabled={disabled} onClick={onRetry}>{label}</button>
  </div>;

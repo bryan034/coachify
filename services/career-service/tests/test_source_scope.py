@@ -10,7 +10,6 @@ import httpx
 import pytest
 from app.ai.context_contracts import ContextPlan
 from app.ai.qa_contracts import FocusedAnswer
-from app.clients.deepseek_search import DeepSeekSearch
 from app.clients.search_sources import SourceAPIs
 from app.domain.source_scope import verify,target_place,related_places
 from app.domain.question_memory import market_scoped
@@ -112,18 +111,6 @@ def test_overseas_base_named_by_the_goal_is_searched():
     assert related_places({'location':'Singapore'},['This role sits with our Kuala Lumpur hub.','Remote'])==['kuala lumpur']
     assert related_places({'location':'London, UK'})==[]
     assert related_places({'location':'London'},['Paris headquarters. This role is based in Singapore.'])==['singapore','paris']
-
-
-def test_deepseek_truncation_keeps_singapore_anchor():
-    async def run():
-        calls=[]
-        def handler(request):calls.append(request);return httpx.Response(200,json={'results':[]})
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            await DeepSeekSearch(client,api_key='synthetic').search(
-                'Very Long Employer Name Holdings '*2+'Senior Software Engineering Intern Singapore salary compensation benefits SGD per month')
-        query=json.loads(calls[0].content)['query']
-        assert len(query)<=128 and 'Singapore' in query and query.endswith('SGD per month')
-    asyncio.run(run())
 
 
 def setup(monkeypatch,batch,*,saved_research=None,reply=None,goal=None):

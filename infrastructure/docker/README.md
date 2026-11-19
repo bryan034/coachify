@@ -16,21 +16,13 @@ The public [`.env.example`](.env.example) lists deployment inputs. Keep private 
 
 The shared OpenRouter credential is injected only into the four services that use it. Each service uses its own non-empty `*_LLM_API_KEY` first; the shared key is used only for HTTPS `openrouter.ai` on the default port or port 443. Future model-backed services should explicitly inject `OPENROUTER_API_KEY` only when needed, use `resolve_model_api_key(base_url, service_key)` from `packages/elo-shared/elo_shared/model_sdk.py` before creating the model client, and test that credentials cannot be sent to other endpoints. Do not inject it into the frontend, unrelated services or images. Configuration is not automatically inherited by new features.
 
-The local profile uses `elo-deepseek-r1:1.5b` (an Ollama alias with 16,384 context
-tokens), `AI_CONTEXT_TOKENS=16384`, `CAREER_LOCAL_TIMEOUT_SECONDS=45` and
-`OPPORTUNITY_RUN_SECONDS=600`. Model calls are serialized per Career worker;
-cloud providers ignore the local deadline setting. Create the alias and apply private
-values using the setup guide above, then rebuild/recreate Career and restart the
-gateway for its 610-second Career model-route read timeout. Alias creation reuses
-existing weights and does not run inference.
-
 Career service-specific credentials are named `CAREER_LLM_API_KEY` and `CAREER_RESEARCH_API_KEY`.
 Rename the previous `BRAVE_API_KEY` entry yourself, preserving
 its value when retaining Brave. Compose requires these canonical names; it no
 longer relabels a legacy credential when providers change. Direct non-Compose
 processes still support each legacy alias only for its own provider and only when
 the canonical key is absent. An explicitly blank canonical key suppresses the old provider alias; when Career uses OpenRouter, a blank model key can still fall back to `OPENROUTER_API_KEY`. The research key remains exclusive to Career; the shared OpenRouter key is explicitly injected only into the four model services.
-CV extraction/repair defaults to schema-constrained decoding with `CV_LLM_RESPONSE_MODE=json_schema`. Rebuild the CV image to install its LangGraph runtime, then retry saved uploads. Only providers that support schema output should use this mode; DeepSeek Chat Completions requires explicitly setting `CV_LLM_RESPONSE_MODE=json_object` yourself, which opts out of constrained decoding. The runtime allows one validated repair within the existing worker lease and shared model budgets.
+CV extraction/repair defaults to schema-constrained decoding with `CV_LLM_RESPONSE_MODE=json_schema`. Rebuild the CV image to install its LangGraph runtime, then retry saved uploads. Only providers that support schema output should use this mode; providers without it require explicitly setting `CV_LLM_RESPONSE_MODE=json_object` yourself, which opts out of constrained decoding. The runtime allows one validated repair within the existing worker lease and shared model budgets.
 
 CV may use the shared OpenRouter key or its own `CV_LLM_API_KEY` override; no service-specific `.env` file is needed for Compose. Fixed internal API URLs/database wiring and the CV volume path remain
 in Compose. Code-level constants and scaffold services do not gain unused variables.
@@ -45,8 +37,7 @@ After recreating backend containers, restart the gateway once every upstream ser
 is running. NGINX resolves the configured service names on startup/reload; an unchanged
 gateway can keep old container addresses and return 502 for Profile account access.
 If a service has exited, fix its startup error first: a missing upstream DNS record
-can prevent the gateway from reloading. CV requires its per-owner model concurrency
-limit to be strictly lower than its global limit (defaults `1` and `3`).
+can prevent the gateway from reloading.
 
 The implemented services communicate through authenticated APIs. CV receives `CAREER_SERVICE_URL`; Profile receives `CV_SERVICE_URL` for explicit source attachment; Career receives its CV API URL. No service reads another service's database. Tests use `compose.test.yaml` and deterministic synthetic model responses, with explicit synthetic settings and `--env-file /dev/null` in isolated projects.
 
@@ -146,19 +137,17 @@ This improves JavaScript-page support; it does not guarantee access to blocked s
 
 The active stack now includes separately scoped Assessment and Roadmap services/databases. Apply the [new required settings](../../docs/setup.md#assessment-and-roadmap-adviser) yourself before rebuilding. Their gateway routes stay on `/api/v1`; no additional service host ports are opened. `init-planning.js` creates missing scoped users without resetting existing credentials. Profile/CV/Career images now build from repository root to install the shared skill registry package. Runtime app source mounts remain `/service/app`; shared-package changes require rebuilding the images. No environment files need to be mounted in an image or test.
 
-The all-service local profile points Career, CV, Assessment and Roadmap at the same
-1.5B Ollama alias. Assessment/Roadmap receive only their own model endpoint and
-HTTP-permission settings plus APP_ENV; local requests do not use the shared cloud credential. HTTP is explicitly
-development-only and local requests omit cloud credentials. Profile, Dashboard and
-Review have no active model calls. See the setup guide for switching back to HTTPS.
+Assessment/Roadmap receive only their own model endpoint and HTTP-permission settings
+plus APP_ENV. HTTP is only for synthetic fixture providers in development stacks.
+Profile, Dashboard and Review have no active model calls.
 
 ## Disposable Career flow verification
 
-Use `python infrastructure/testing/run-career-flow.py --mode both` from repository
+Use `python infrastructure/testing/run-career-flow.py` from repository
 root. It applies `compose.career-test.yaml` only to its own disposable project, uses
 `--env-file /dev/null` and synthetic settings, and cleans up its volumes. The test-only
-factory provides controlled empty public retrieval; fixture mode additionally serves
-finite labelled SDK responses, while local mode calls `deepseek-r1:1.5b`. Never apply
+factory provides controlled empty public retrieval and serves finite labelled SDK
+responses over HTTP (`CAREER_LLM_ALLOW_HTTP` is set only in that override). Never apply
 this override to a normal deployment. See [Career test instructions](../../services/career-service/tests/README.md#reproduce-the-complete-career-extraction-journey).
 
 CV interview probing uses `CV_INTERVIEW_MAX_TARGET_ATTEMPTS` (default 2, range 1–5),

@@ -20,7 +20,7 @@ def source(index,company='Employer'):
         company=company,title=f'{company} Portfolio Manager',evidence=f'{company} Portfolio Manager manages investment portfolios. Bloomberg is required.')
 
 
-def test_discovery_requests_five_ranked_url_contexts_without_changing_opportunity_budgets():
+def test_discovery_requests_five_ranked_url_contexts_independently_of_opportunity_budgets():
     async def run():
         calls=[]
         def handler(request):
@@ -34,12 +34,12 @@ def test_discovery_requests_five_ranked_url_contexts_without_changing_opportunit
             context=ResearchContext(field='Finance',role='Portfolio Management')
             found=await provider.collect_discovery_query(context,'Finance Portfolio Management employer vacancy')
             old=await provider.collect_opportunity_query(context,'Portfolio Management interview')
-        assert len(found)==5 and len(old)==3
+        assert len(found)==5 and len(old)==5
         assert {v.url for v in found}=={f'https://example.test/job/{i}' for i in (7,14,19,22,29)}
         assert calls[0]['count']=='50' and calls[0]['maximum_number_of_urls']=='5'
         assert calls[0]['maximum_number_of_tokens']=='16384' and calls[0]['maximum_number_of_tokens_per_url']=='2048'
         assert calls[0]['context_threshold_mode']=='strict'
-        assert calls[1]['count']=='30' and calls[1]['maximum_number_of_tokens']=='8192' and calls[1]['context_threshold_mode']=='balanced'
+        assert calls[1]['count']=='50' and calls[1]['maximum_number_of_tokens']=='16384' and calls[1]['context_threshold_mode']=='lenient'
     asyncio.run(run())
 
 

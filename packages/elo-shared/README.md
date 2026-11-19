@@ -13,10 +13,9 @@ Examples: Python → `language.python`; SQL / Structured Query Language → `lan
 
 Assessment/Roadmap model endpoints are independently configured using each service's
 `*_LLM_BASE_URL`, `*_LLM_MODEL`, `*_LLM_API_KEY` and explicit development
-`*_LLM_ALLOW_HTTP` flag. Local requests omit credentials and serialize per model
-instance. All providers (OpenRouter, local, DeepSeek)
-receive JSON Output with authoritative schema/domain checks after generation.
-Synthetic endpoint/credential/concurrency tests live in `tests/test_model.py`.
+`*_LLM_ALLOW_HTTP` flag (synthetic fixture providers only). Every provider receives
+JSON Output with authoritative schema/domain checks after generation.
+Synthetic endpoint/credential tests live in `tests/test_model.py`.
 
 `model_sdk.py` supplies bounded sync/async OpenAI SDK transport for all four AI
 services, including Career's existing adapter. It disables SDK retries, prevents

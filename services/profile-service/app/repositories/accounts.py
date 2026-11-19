@@ -29,26 +29,29 @@ class AccountRepository:
 
     def begin(self, data, settings):
         key = digest(data.flow_id)
-        existing = self.flows.find_one({'_id': key})
-        if existing and existing['generation'] >= data.generation:
-            if (existing['generation'] == data.generation and existing['attempt'] == digest(data.attempt_id)
-                and existing['status'] == 'pending' and existing['intent'] == data.intent and existing.get('auth_mode') == settings.mode
-                and existing['attempt_expires_at'].replace(tzinfo=now().tzinfo) > now()):
-                return {'nonce': existing['nonce']}
-            raise HTTPException(409, 'This access attempt is no longer current. Start again.')
-        record = {'_id': key, 'generation': data.generation, 'attempt': digest(data.attempt_id), 'intent': data.intent,
-                  'auth_mode': settings.mode, 'nonce': token_urlsafe(32), 'status': 'pending',
-                  'expires_at': now() + timedelta(minutes=10), 'attempt_expires_at': now() + timedelta(minutes=10), 'active_session': None}
-        if existing:
-            changed = self.flows.replace_one({'_id': key, 'generation': existing['generation']}, record).modified_count
-            if not changed:
-                raise HTTPException(409, 'Another access attempt started. Please retry.')
-        else:
-            try:
-                self.flows.insert_one(record)
-            except DuplicateKeyError:
-                raise HTTPException(409, 'Another access attempt started. Please retry.')
-        return {'nonce': record['nonce']}
+        # Concurrent begins share one flow id (the browser reuses it). When a race is lost, re-read the
+        # winner and decide again: a newer generation still replaces it, an older one is rejected as stale.
+        for _ in range(5):
+            existing = self.flows.find_one({'_id': key})
+            if existing and existing['generation'] >= data.generation:
+                if (existing['generation'] == data.generation and existing['attempt'] == digest(data.attempt_id)
+                    and existing['status'] == 'pending' and existing['intent'] == data.intent and existing.get('auth_mode') == settings.mode
+                    and existing['attempt_expires_at'].replace(tzinfo=now().tzinfo) > now()):
+                    return {'nonce': existing['nonce']}
+                raise HTTPException(409, 'This access attempt is no longer current. Start again.')
+            record = {'_id': key, 'generation': data.generation, 'attempt': digest(data.attempt_id), 'intent': data.intent,
+                      'auth_mode': settings.mode, 'nonce': token_urlsafe(32), 'status': 'pending',
+                      'expires_at': now() + timedelta(minutes=10), 'attempt_expires_at': now() + timedelta(minutes=10), 'active_session': None}
+            if existing:
+                if self.flows.replace_one({'_id': key, 'generation': existing['generation']}, record).modified_count:
+                    return {'nonce': record['nonce']}
+            else:
+                try:
+                    self.flows.insert_one(record)
+                    return {'nonce': record['nonce']}
+                except DuplicateKeyError:
+                    pass
+        raise HTTPException(409, 'Another access attempt started. Please retry.')
 
     def attempt(self, data, settings):
         flow = self.flows.find_one({'_id': digest(data.flow_id), 'attempt': digest(data.attempt_id)})

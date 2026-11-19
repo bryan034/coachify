@@ -1,5 +1,4 @@
 """Authenticated previews, LangGraph research and one autosaved career workspace."""
-import asyncio
 import os
 from contextlib import asynccontextmanager
 from pathlib import PurePosixPath
@@ -73,7 +72,6 @@ class BodyLimit:
 def create_app(profile_client=None, processor=run_preview, database=None, ai=None, cv_client=None, review_store=None, research_client=None, context_ai=None, target_repository=None):
     @asynccontextmanager
     async def lifespan(app):
-        app.state.slots = asyncio.Semaphore(2)
         # Explicit legacy test adapter only. Production uses the canonical goal.
         if target_repository is not None:
             from anyio import CapacityLimiter
@@ -97,9 +95,9 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
                 if mongo is not None: mongo.close()
                 raise RuntimeError('Career storage could not connect. Check database setup.') from None
         # Model egress needs the deployment proxy/CA; internal API clients below
-        # stay direct. Explicit local inference keeps its direct transport.
+        # stay direct.
         model_settings=AISettings.from_env() if ai is None else None
-        async with httpx.AsyncClient(trust_env=model_settings is None or model_settings.provider!='local', follow_redirects=False) as ai_client:
+        async with httpx.AsyncClient(trust_env=True, follow_redirects=False) as ai_client:
             # One configured model serves every reasoning/extraction/chat stage.
             primary=ai or AIAdapter(model_settings,ai_client,reserve_call=reserve_provider_call)
             context=primary if ai is None else context_ai
@@ -238,37 +236,25 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     async def authenticated(request: Request, credentials=Depends(bearer)):
         return await current_account(request, credentials)
 
-    @asynccontextmanager
-    async def slot(request):
-        try:
-            await asyncio.wait_for(request.app.state.slots.acquire(), timeout=0.05)
-        except TimeoutError:
-            raise HTTPException(429, 'Other previews are processing. Please retry shortly.')
-        try:
-            yield
-        finally:
-            request.app.state.slots.release()
-
     @app.get('/health', include_in_schema=False)
     async def health(): return {'status':'ok'}
 
     if dev_reset_enabled():
         # Development only and absent from the published contract: delete the caller's goal, chats and research.
         @app.post('/api/v1/career/dev/reset', include_in_schema=False)
-        async def dev_reset(request: Request, account=Depends(authenticated)):
+        async def dev_reset(request: Request, owner: str = Depends(authenticated)):
             store = request.app.state.goal_store
             if store is None: raise HTTPException(503, 'Career storage is not configured.')
-            return {'deleted': await run_in_threadpool(reset_owner_data, store.db, account['id'])}
+            return {'deleted': await run_in_threadpool(reset_owner_data, store.db, owner)}
 
     errors = {status: {'model': ImportErrorView} for status in (400,401,403,413,415,422,429,503)}
 
     @app.post('/api/v1/career/imports/url', response_model=JDPreview, responses=errors, tags=['J06 URL preview'])
-    async def url(data: UrlInput, request: Request, account=Depends(authenticated)):
-        async with slot(request):
-            result = await run_in_threadpool(processor, 'url', data.url.encode('utf-8'), '')
-            if len(result['text']) > MAX_JD_TEXT:
-                raise HTTPException(422, 'The job description exceeds 8,000 characters. Paste a shorter description; nothing was truncated.')
-            return result
+    async def url(data: UrlInput, account=Depends(authenticated)):
+        result = await run_in_threadpool(processor, 'url', data.url.encode('utf-8'), '')
+        if len(result['text']) > MAX_JD_TEXT:
+            raise HTTPException(422, 'The job description exceeds 8,000 characters. Paste a shorter description; nothing was truncated.')
+        return result
 
     @app.post('/api/v1/career/explorations/cv/document', response_model=Preview, tags=['J08 temporary CV context'])
     @app.post('/api/v1/career/imports/document', response_model=JDPreview, responses=errors, tags=['J07 document preview'],
@@ -278,7 +264,7 @@ def create_app(profile_client=None, processor=run_preview, database=None, ai=Non
     async def document(request: Request, account=Depends(authenticated)):
         if not request.headers.get('content-type','').lower().startswith('multipart/form-data;'):
             raise HTTPException(415, 'Upload one PDF, DOCX or TXT file as multipart form data.')
-        async with slot(request), request.form(max_files=1, max_fields=0) as form:
+        async with request.form(max_files=1, max_fields=0) as form:
             file = form.get('file')
             if len(form.multi_items()) != 1 or not isinstance(file, UploadFile):
                 raise HTTPException(422, 'Choose one file in the file field.')

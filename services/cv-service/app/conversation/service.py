@@ -106,8 +106,6 @@ def make_message(document, role, text, actions=None):
 class ConversationService:
     def __init__(self, cv_service, provider):
         self.cv, self.repository, self.provider = cv_service, cv_service.repository.conversations, provider
-        # Share the CV interpreter's global provider limit, including routing calls.
-        self.slots = cv_service.interpretation_slots
         self.tasks = set()
 
     async def dispatch(self, operation, owner, identifier, action_id, token=None):
@@ -278,28 +276,18 @@ class ConversationService:
         return current
 
     def route(self, owner, payload):
-        if not self.slots.acquire(blocking=False):
-            raise ValueError('Chat interpretation is busy. Your message is saved; retry shortly.')
-        try:
-            return self.cv.model_usage.run(owner, self.provider.route, payload,
-                configured=getattr(self.provider, 'configured', True))
-        finally: self.slots.release()
+        return self.cv.model_usage.run(owner, self.provider.route, payload,
+            configured=getattr(self.provider, 'configured', True))
 
     def rate_skill_levels(self, owner, payload):
         """One provider call rating skills by themselves; None when the provider cannot rate."""
         rate = getattr(self.provider, 'rate_skill_levels', None)
-        if rate is None or not self.slots.acquire(blocking=False): return None
-        try:
-            return self.cv.model_usage.run(owner, rate, payload, configured=getattr(self.provider, 'configured', True))
-        finally: self.slots.release()
+        if rate is None: return None
+        return self.cv.model_usage.run(owner, rate, payload, configured=getattr(self.provider, 'configured', True))
 
     def verify_intake(self, owner, blocks, refs):
-        if not self.slots.acquire(blocking=False):
-            raise ValueError('Evidence validation is busy. Your message is saved; retry shortly.')
-        try:
-            return self.cv.model_usage.run(owner, partial(self.provider.verify_evidence, timeout_seconds=20), blocks, refs,
-                configured=getattr(self.provider, 'configured', True))
-        finally: self.slots.release()
+        return self.cv.model_usage.run(owner, partial(self.provider.verify_evidence, timeout_seconds=20), blocks, refs,
+            configured=getattr(self.provider, 'configured', True))
 
     async def send(self, app, account, identifier, mutation):
         owner, receipt_id = account['id'], str(mutation.mutation_id)

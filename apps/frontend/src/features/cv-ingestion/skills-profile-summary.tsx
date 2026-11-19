@@ -19,10 +19,19 @@ import { ReviewComplete, ReviewNotFinished, useReviewTopics } from './skills-sta
 const labels: Record<string, string> = {education:'Education',work:'Work and internships',project:'Projects',interest:'Interests'};
 const cvKind = (kind: string) => kind === 'work' ? 'experience' : kind;
 const readable = (value: string) => value.replaceAll('_', ' ');
+// Skills taken from the role and from answered review questions, never the answers themselves.
+export const skillsUsed = (cv: CvDetail, item: CvDetail['items'][number]) => {
+ const names = [
+  ...cv.skills.filter(skill => skill.item_ids.includes(item.id)).map(skill => skill.name),
+  ...(item.review_evidence ?? []).filter(fact => fact.status === 'supported' && fact.skill_name && !['team', 'observed', 'denied'].includes(fact.attribution ?? '')).map(fact => fact.skill_name!),
+ ];
+ const seen = new Set<string>();
+ return names.filter(name => { const key = name.trim().toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; });
+};
 
-export function SkillsProfileSummary({token, title, profile, cv, recentReview, declarations, error, upload, build, review, retry, save, saving, saveCv, savingCv, pending, chat, chatOpen=false, firstUpload=false, cvs=[], activeCvId=null, viewCv, makeActive, removeCv, busy=false, uploadPanel, onSkillsChanged}: {
+export function SkillsProfileSummary({token, title, profile, cv, recentReview, declarations, error, upload, build, review, retry, save, saving, saveCv, savingCv, pending, chat, firstUpload=false, cvs=[], activeCvId=null, viewCv, makeActive, removeCv, busy=false, uploadPanel, onSkillsChanged}: {
  uploadPanel?: ReactNode; onSkillsChanged?: () => void;
- chat?:()=>void; chatOpen?: boolean; firstUpload?: boolean; cvs?: CvSummary[]; activeCvId?: string|null; viewCv?: (id: string) => void; makeActive?: (id: string) => void; removeCv?: (cv: CvSummary) => void; busy?: boolean; token?: string; title?: ReactNode; profile: SkillsProfile | null; cv: CvDetail | null; declarations: Declarations | null; error: string;
+ chat?:()=>void; firstUpload?: boolean; cvs?: CvSummary[]; activeCvId?: string|null; viewCv?: (id: string) => void; makeActive?: (id: string) => void; removeCv?: (cv: CvSummary) => void; busy?: boolean; token?: string; title?: ReactNode; profile: SkillsProfile | null; cv: CvDetail | null; declarations: Declarations | null; error: string;
  recentReview?: CvSummary;
  upload: () => void; build: () => void; review: (id: string) => void; retry: () => void;
  save: () => void; saving: boolean;
@@ -76,7 +85,7 @@ export function SkillsProfileSummary({token, title, profile, cv, recentReview, d
     {skills.length > 0 && <p className="ws-sum"><b>{skills.length} {skills.length === 1 ? 'skill' : 'skills'}</b> from <b>{experiences} {experiences === 1 ? 'experience' : 'experiences'}</b>{goalRole ? <>, compared with <Link href="/career-goal">{goalRole}</Link></> : null}</p>}
     {profile && profile.status !== 'empty' && <p className="ws-sub">{profile.status === 'saved' ? 'Saved profile' : 'Draft saved'}</p>}
    </div>
-   <button type="button" className="ws-btn dark" aria-expanded={chatOpen} onClick={chat ?? build}><Icon name="chat"/>{chatOpen ? 'Close chat' : 'Chat to edit'}</button>
+   <button type="button" className="ws-btn dark" onClick={chat ?? build}><Icon name="chat"/>Chat to edit</button>
   </div>
   <PageFlow current="/cv">Your skills are measured against your Career Goal. Anything below its target becomes a task in your Roadmap, and finishing tasks raises your levels here.</PageFlow>
   {error && <div role="alert" className="ws-error"><p>{error}</p><button type="button" className="ws-mini" onClick={retry}>Retry skills profile</button></div>}
@@ -102,7 +111,7 @@ export function SkillsProfileSummary({token, title, profile, cv, recentReview, d
    <div className="ws-exp">{columns.map(column => <section className="ws-expcol" key={column.kind}>
     <h3>{column.label} <span>{column.items.length + column.entries.length}</span></h3>
     <ul>
-     {column.items.map(item => <li key={item.id}><details><summary>{item.title}</summary><dl>{dateSpan(item.start_date, item.end_date, item.ongoing) && <div><dt>Dates</dt><dd>{dateSpan(item.start_date, item.end_date, item.ongoing)}</dd></div>}<div><dt>What you did</dt><dd>{item.description}</dd></div><div><dt>Skills used</dt><dd>{cv!.skills.filter(skill => skill.item_ids.includes(item.id)).map(skill => skill.name).join(', ') || 'Not recorded'}</dd></div>{cv!.clarifications.filter(q => q.item_id === item.id && q.status !== 'unanswered' && !q.reconciliation_required).map(q => <div key={q.id}><dt>{q.question}</dt><dd>{q.answer ?? 'Skipped. This detail remains unknown.'}{q.interpretation_status === 'failed' ? ' Interpretation needs attention before saving this review.' : ''}</dd></div>)}</dl></details></li>)}
+     {column.items.map(item => <li key={item.id}><details><summary>{item.title}</summary><dl>{dateSpan(item.start_date, item.end_date, item.ongoing) && <div><dt>Dates</dt><dd>{dateSpan(item.start_date, item.end_date, item.ongoing)}</dd></div>}<div><dt>What you did</dt><dd>{item.description}</dd></div><div><dt>Skills used</dt><dd>{skillsUsed(cv!, item).join(', ') || 'Not recorded'}</dd></div>{cv!.clarifications.some(q => q.item_id === item.id && q.interpretation_status === 'failed' && !q.reconciliation_required) && <div><dt>Review</dt><dd>An answer could not be summarised into skills yet. Retry it from Refine CV.</dd></div>}</dl></details></li>)}
      {column.entries.map(entry => <li key={entry.id}><details><summary>{entry.title}</summary><dl>{Object.entries(entry.fields).map(([field, value]) => <div key={field}><dt>{readable(field)}</dt><dd>{value.value ?? readable(value.status)}</dd></div>)}</dl></details></li>)}
     </ul>
    </section>)}</div>

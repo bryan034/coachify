@@ -3,6 +3,7 @@
 The resumable graph contains only owner-scoped record references and bounded
 public evidence. No secrets, raw documents or chat transcripts enter checkpoints.
 """
+from elo_shared.model_budget import budget_owner
 import asyncio
 import operator
 import logging
@@ -190,6 +191,9 @@ class CareerWorkflow:
 
     async def platform(self,state,platform):
         goal=await self.goal(state);provider=self.app.state.research_client
+        with budget_owner(state['owner']):return await self._platform(state,platform,goal,provider)
+
+    async def _platform(self,state,platform,goal,provider):
         try:
             if state.get('smart_search'):
                 await research_search.renew(self,state)
@@ -292,8 +296,7 @@ class CareerWorkflow:
                 if not job['finished']:opportunity.launch(job['_id'])
                 return  # The durable worker owns its wait/status; polling must not restart the legacy graph.
         config=self.config(owner,w);session=w['session_id'];run=w['run_id']
-        local=getattr(getattr(self.app.state.ai,'settings',None),'provider',None)=='local'
-        lease_seconds=660 if local else 180
+        lease_seconds=180
         # A database lease prevents duplicate graph execution by API replicas.
         leased=await thread(self.db.career_state.update_one,{'_id':owner,'workspace.run_id':run,'$or':[{'workspace.worker_until':{'$exists':False}},{'workspace.worker_until':{'$lt':now()}}]},
             {'$set':{'workspace.worker_until':now()+timedelta(seconds=lease_seconds)}})
@@ -324,7 +327,7 @@ class CareerWorkflow:
             recovery=recover_responses.set(True);observer=validation_progress.set(repairing)
             try:
                 with tracing_context(enabled=False):
-                    seconds=600 if local else 180 if research_search.enabled(self) or state.values.get('smart_search') else 60
+                    seconds=180 if research_search.enabled(self) or state.values.get('smart_search') else 60
                     async with asyncio.timeout(seconds) as budget:
                         timer=validation_budget.set(budget)
                         try:await self.graph.ainvoke(value,config=config,durability='sync')

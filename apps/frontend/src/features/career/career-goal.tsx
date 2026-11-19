@@ -9,6 +9,8 @@ import { importCareer, type CareerPreview, type CareerWorkspace } from '@/lib/ap
 import { careerOperation } from '@/lib/api/career-operation';
 import { AgentProgress } from './agent-message';
 import { errorText } from '@/lib/errors';
+import { ProcessingCard, type ProcessingStep } from '@/components/ui/processing-card';
+import '@/styles/goal.css';
 
 const methods = [
  { id: 'text', label: 'Paste description', icon: 'doc', hint: 'Bring the opportunity into focus.', detail: 'Copy the complete description from one job listing, including responsibilities and requirements.' },
@@ -21,23 +23,45 @@ const MAX_TEXT = 8_000, MAX_FILE = 10 * 1024 * 1024;
 // Career returns this message whenever a website refuses or blocks automated reading.
 const BLOCKED_SITE = 'could not be extracted from this website';
 const empty = (): Record<Method,Draft> => ({text:{text:''},url:{text:''},document:{text:''}});
+
+// Extraction runs as a server-side Career operation. This tab remembers its request
+// (body + idempotency key) so leaving and returning reconnects to the same operation
+// instead of starting another one. Records expire and are scoped to the account.
+const PENDING='elo-career-extraction', PENDING_TTL=2*60*60*1000;
+type PendingExtraction={owner:string;body:string;key:string;method:Method;draft:Draft;at:number};
+export function pendingExtraction(owner:string):PendingExtraction|null{
+ try{
+  const value=JSON.parse(window.sessionStorage.getItem(PENDING)||'null') as PendingExtraction|null;
+  if(value&&value.owner===owner&&Date.now()-value.at<PENDING_TTL&&typeof value.body==='string'&&typeof value.key==='string'&&methods.some(m=>m.id===value.method)&&typeof value.draft?.text==='string')return value;
+  if(value)window.sessionStorage.removeItem(PENDING);
+ }catch{/* unavailable storage: extraction still finishes server-side */}
+ return null;
+}
+function rememberExtraction(value:PendingExtraction){try{window.sessionStorage.setItem(PENDING,JSON.stringify(value));}catch{/* in-page only */}}
+function forgetExtraction(){try{window.sessionStorage.removeItem(PENDING);}catch{/* nothing stored */}}
+
 export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
- const { token } = useProfile();
+ const { token, account } = useProfile(); const owner=account?.id||'';
  const router=useRouter();const {jd,chooseJD}=useCareerSession();
  useEffect(()=>{if(new URLSearchParams(window.location.search).get('explore')==='1')router.replace('/career-goal/chat');},[router]);
- const [method,setMethod] = useState<Method>(()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).has('job_url')?'url':'text');
- const [drafts,setDrafts] = useState(()=>{const values=empty();if(jd)values.text={text:jd.text};return values;});
+ const [resume]=useState(()=>typeof window!=='undefined'?pendingExtraction(owner):null);
+ const [method,setMethod] = useState<Method>(()=>resume?resume.method:typeof window!=='undefined'&&new URLSearchParams(window.location.search).has('job_url')?'url':'text');
+ const [drafts,setDrafts] = useState(()=>{const values=empty();if(jd)values.text={text:jd.text};if(resume)values[resume.method]=resume.draft;return values;});
  const [url,setUrl] = useState(()=>typeof window!=='undefined'?new URLSearchParams(window.location.search).get('job_url')||'':''); const [file,setFile] = useState<File>();
  const [error,setError] = useState(''); const [busy,setBusy] = useState(false);
- const [extracting,setExtracting]=useState(false),[extractError,setExtractError]=useState(''),[extractSteps,setExtractSteps]=useState<string[]>([]);
+ const [extracting,setExtracting]=useState(Boolean(resume)),[extractError,setExtractError]=useState(''),[extractSteps,setExtractSteps]=useState<string[]>([]);
  const [extractWait,setExtractWait]=useState('');
- const extractController=useRef<AbortController|null>(null),extractKey=useRef<{body:string;key:string}|null>(null);
+ const extractController=useRef<AbortController|null>(null),extractKey=useRef<{body:string;key:string}|null>(resume&&{body:resume.body,key:resume.key});
  const controller = useRef<AbortController | null>(null); const request = useRef(0); const input = useRef<HTMLInputElement>(null);
  const active = methods.find(m=>m.id===method)!; const draft=drafts[method];
  const count=Array.from(draft.text).length; const tooLong=count>MAX_TEXT;
  const hasWork=Boolean(url||file||Object.values(drafts).some(d=>d.text));
- const work = useRef(hasWork); work.current=hasWork;
+ // While extracting, the description is already with Career, so leaving loses nothing.
+ const work = useRef(hasWork); work.current=hasWork&&!extracting;
+ // Unmounting only stops polling; the server keeps extracting.
  useEffect(()=>()=>{request.current++;controller.current?.abort();extractController.current?.abort();},[]);
+ // Reconnect once per mount to an extraction started before the user left.
+ useEffect(()=>{if(resume&&token)void runExtraction(resume.body);},[token]);
  useEffect(()=>{
   const warning='Your Career Goal preview is temporary. Leave this page and discard it?';
   function unload(event:BeforeUnloadEvent){if(work.current){event.preventDefault();event.returnValue='';}}
@@ -51,7 +75,7 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
   window.addEventListener('beforeunload',unload);document.addEventListener('click',link,true);
   return()=>{window.removeEventListener('beforeunload',unload);document.removeEventListener('click',link,true);};
  },[]);
- function changeMethod(next:Method){extractController.current?.abort();setExtracting(false);setExtractError('');request.current++;controller.current?.abort();setBusy(false);setError('');setMethod(next);}
+ function changeMethod(next:Method){if(extracting)forgetExtraction();extractController.current?.abort();setExtracting(false);setExtractError('');request.current++;controller.current?.abort();setBusy(false);setError('');setMethod(next);}
  function keyboard(event:KeyboardEvent<HTMLButtonElement>,index:number){
   const move=event.key==='ArrowRight'?(index+1)%3:event.key==='ArrowLeft'?(index+2)%3:event.key==='Home'?0:event.key==='End'?2:null;
   if(move===null)return;event.preventDefault();changeMethod(methods[move].id);document.getElementById(`goal-tab-${methods[move].id}`)?.focus();
@@ -77,16 +101,40 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
   if(!token||extracting||!draft.text.trim()||tooLong)return;
   const body=JSON.stringify({text:draft.text,source_url:draft.preview?.source_url||null,source_kind:method});
   if(extractKey.current?.body!==body)extractKey.current={body,key:crypto.randomUUID()};
+  rememberExtraction({owner,body,key:extractKey.current.key,method,draft,at:Date.now()});
+  await runExtraction(body);
+ }
+ async function runExtraction(body:string){
+  if(!token||!extractKey.current)return;
   extractController.current?.abort();const abort=new AbortController();extractController.current=abort;
   setExtracting(true);setExtractError('');setExtractSteps([]);setExtractWait('');
   try{
    await careerOperation<CareerWorkspace>('/workspace/jd',token,{signal:abort.signal,method:'POST',headers:{'Idempotency-Key':extractKey.current.key},body},job=>{setExtractWait(job.status==='waiting_quota'?(job.limit_scope==='user'?'Waiting for the AI service to resume. Extraction continues automatically.':'Waiting for the research service to resume. Extraction continues automatically.'):'');setExtractSteps(previous=>[...new Set([...previous,...(job.activities||[])])]);});
    if(abort.signal.aborted)return;
-   chooseJD(null);router.push('/career-goal/chat?source=jd');
-  }catch(cause){if(!abort.signal.aborted)setExtractError(errorText(cause,'Could not extract a career goal from this description.'));}
+   forgetExtraction();chooseJD(null);router.push('/career-goal/chat?source=jd');
+  }catch(cause){if(!abort.signal.aborted){forgetExtraction();setExtractError(errorText(cause,'Could not extract a career goal from this description.'));}}
   finally{if(!abort.signal.aborted)setExtracting(false);}
  }
  function clear(){if(hasWork&&!window.confirm('Clear this temporary input and preview?'))return;request.current++;controller.current?.abort();setBusy(false);setError('');setDrafts(p=>({...p,[method]:{text:''}}));if(method==='url')setUrl('');if(method==='document'){setFile(undefined);if(input.current)input.current.value='';}}
+ // Show the same processing screen as the goal conversation from the moment extraction starts.
+ if(extracting){
+  const steps:ProcessingStep[]=[
+   {label:'Read the job description',state:'now',note:extractWait?'Waiting to resume':'Extracting your career goal'},
+   {label:'Listing the skills',state:'next'},
+   {label:'Researching the role',state:'next'},
+   {label:'Preparing your summary',state:'next'},
+  ];
+  return <section className="page on goal-overview career-briefing" aria-busy="true">
+   <section className="briefing-target goal-header" aria-label="Your target role">
+    <div className="briefing-target-copy"><p className="briefing-eyebrow">Working towards</p><h1>Working out your career goal</h1></div>
+    <div className="briefing-target-actions"><button type="button" className="btn goal-header-btn" onClick={()=>changeMethod(method)}>← Career Goal</button></div>
+   </section>
+   <ProcessingCard title="Skills needed" intro="elo is working out what this role needs." progressLabel="Reading the job description" steps={steps}
+    footer={<p>{extractWait?`${extractWait} You can leave this page in the meantime.`:'You can leave this page. elo keeps working, and your goal conversation will open here when it’s done.'}</p>}>
+    <AgentProgress steps={extractSteps}/>
+   </ProcessingCard>
+  </section>;
+ }
  return <section className="page on career-goal">
   <div className="ptitle"><div><h1>Career Goal</h1><p className="small goal-lede">Bring a job description that interests you. Start with its text, a link or a document.</p></div><div className="goal-title-actions">{!replacing&&<button type="button" className="btn ghost" onClick={()=>router.push('/career-goal/chat')}>Continue career conversation</button>}<button type="button" className="btn ghost" onClick={()=>{chooseJD(null);router.push('/career-goal/discovery');}}>Explore careers</button></div></div>
   <div className="goal-grid"><div className="card goal-editor">
@@ -98,7 +146,6 @@ export function CareerGoal({replacing=false}:{replacing?:boolean}={}) {
      {(method==='url'||!!error)&&<button className="btn pri" disabled={busy||(method==='url'?!url:!file)}>{busy?'Preparing preview…':method==='url'?'Import job page':'Retry reading document'}</button>}
     </form>}
     {busy&&<p role="status" className="goal-status">Preparing a temporary preview. You can switch methods to cancel.</p>}
-    {extracting&&<div role="status" className="goal-status"><p>{extractWait||'Extracting your career goal. This can take a moment.'}</p><AgentProgress steps={extractSteps}/></div>}
     {extractError&&<div role="alert" className="goal-error"><p>{extractError}</p><p className="small">Your description is still here. Retry, edit it or choose another source.</p></div>}
     {error&&(method==='url'&&error.includes(BLOCKED_SITE)
      ?<div role="alert" className="goal-error"><p>The information could not be extracted from this website.</p><p className="small">Open the job listing, copy its description and paste it instead.</p><div className="row"><button type="button" className="btn pri sm" onClick={()=>changeMethod('text')}>Paste description</button></div></div>

@@ -1,4 +1,5 @@
 """Transient public-only retrieval alongside full JD extraction; never persists raw JD."""
+from elo_shared.model_budget import budget_owner
 import asyncio
 from datetime import timedelta
 from app.clients.search_sources import SourceRateLimit
@@ -39,7 +40,7 @@ async def prefetch(engine,identity,owner,revision):
             plan=await engine.ai.generate(AIInput(stage='opportunity_plan',context=json.dumps({
                 'opportunity':{k:getattr(identity,k) for k in IDENTITY},'recruitment_year':now().year})),
                 Operation(owner,revision,'opportunity_plan'),current_revision=lambda:revision)
-        result['queries']=planned_queries(plan.data,engine.settings.max_searches)
+        result['queries']=planned_queries(plan.data,engine.settings.max_searches,{k:getattr(identity,k) for k in IDENTITY})
         result['queries_planned']=True
     except Exception:
         return result
@@ -51,7 +52,7 @@ async def prefetch(engine,identity,owner,revision):
         try:
             async with engine.slots:
                 async with asyncio.timeout(engine.settings.timeout_seconds):
-                    values=await engine.source.collect_opportunity_query(context,query)
+                    with budget_owner(owner):values=await engine.source.collect_opportunity_query(context,query)
             result['history'][category]=[query]
             result['evidence'][category]=[s.model_dump(mode='json') for s in values]
             activity('checking_sources')

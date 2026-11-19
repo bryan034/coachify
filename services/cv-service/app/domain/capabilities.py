@@ -329,10 +329,11 @@ def effective_items(document):
         item['uncertainties'] = [u for u in item.get('uncertainties', []) if u not in resolved]
         for uncertainty in result['remaining_uncertainties']:
             if uncertainty not in item['uncertainties']: item['uncertainties'].append(uncertainty)
+        # A clarified statement supports the item as evidence; it never replaces the
+        # CV's own description with the user's answer verbatim.
         if result.get('statement_excerpt'):
-            item['description'] = result['statement_excerpt']
-            item['evidence'] = [{'id': 'answer:' + question['id'], 'location': 'Your clarification',
-                                 'excerpt': result['statement_excerpt']}]
+            item['evidence'] = [e for e in item['evidence'] if e.get('id') != 'answer:' + question['id']] + [
+                {'id': 'answer:' + question['id'], 'location': 'Your clarification', 'excerpt': result['statement_excerpt']}]
     # Extraction is acyclic. Recursion makes propagation independent of item order
     # and narrows only the matching derived skill, never every skill on the item.
     done = set()

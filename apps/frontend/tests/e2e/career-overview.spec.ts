@@ -118,11 +118,12 @@ test('research tabs keep partial results, citations and refresh on mobile',async
  await expect(page).toHaveURL(/\/career-goal\/interview$/);
  await expect(page.getByText('Part of this research could not finish. Other results are preserved; refresh to retry.')).toHaveCount(0);
  await tabs.getByRole('link',{name:'About the role'}).click();
- const salary=page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Salary',exact:true})});
+ const salary=page.locator('.role-item').filter({has:page.getByRole('heading',{name:'Salary',exact:true})});
  await expect(salary).toContainText('SGD 1500 per month');await expect(salary).not.toContainText('low confidence');
- await expect(salary.getByRole('link',{name:'Public intern report ↗'})).toHaveAttribute('href','https://example.test/report');
- await expect(page.locator('.fact-card').filter({has:page.getByRole('heading',{name:'Full-time salary'})})).toContainText('SGD 5000 monthly base salary, 2025');
- await expect(page.getByRole('region',{name:'Not filled yet',exact:true})).toContainText('Conversion rate');
+ await expect(salary.getByRole('link',{name:'Source 1: Public intern report'})).toHaveAttribute('href','#a-src-1');
+ await expect(page.locator('.research-sources').getByRole('link',{name:'Public intern report ↗'})).toHaveAttribute('href','https://example.test/report');
+ await expect(page.locator('.role-item').filter({has:page.getByRole('heading',{name:'Full-time salary'})})).toContainText('SGD 5000 monthly base salary, 2025');
+ await expect(page.getByRole('region',{name:'Not found yet',exact:true})).toContainText('Conversion rate');
  await expect(page.getByRole('note')).toContainText('may be inaccurate or out of date');
  await page.getByRole('button',{name:'Refresh research'}).click();
  await expect.poll(()=>refreshed).toBe(null);

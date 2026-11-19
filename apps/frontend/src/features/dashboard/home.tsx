@@ -279,6 +279,9 @@ const tipCategories = ['internship_insights', 'company_intelligence', 'career_pr
 const dayIndex = (today: string) => Math.floor(Date.parse(`${today}T00:00:00Z`) / 86400000);
 const usable = (finding: IntelligenceFinding) => finding.value.trim().length > 20 && finding.value.length < 400 && finding.confidence !== 'insufficient_evidence';
 
+/** Research text may carry **bold** markers; show them as bold instead of literal asterisks. */
+const boldMarks = (text: string) => text.split(/\*\*(.+?)\*\*/g).map((part, index) => index % 2 ? <strong key={index}>{part}</strong> : part);
+
 /** One cited tip and one interview question from the saved research on the goal. Reading never starts research. */
 function DailyCard({ goal, today }: { goal: Section<CurrentGoal>; today: string }) {
  const { token } = useProfile();
@@ -309,7 +312,7 @@ function DailyCard({ goal, today }: { goal: Section<CurrentGoal>; today: string 
    <button type="button" role="tab" aria-selected={shown === 'tip'} disabled={!items.tip} onClick={() => setKind('tip')}>Tip of the day</button>
    <button type="button" role="tab" aria-selected={shown === 'pq'} disabled={!items.pq} onClick={() => setKind('pq')}>Practice question</button>
   </div>
-  <div className="ws-pq-body" role="tabpanel" aria-live="polite"><span className="ws-pq-text">{item.text}</span><span className="ws-pq-src">{item.source}</span></div>
+  <div className="ws-pq-body" role="tabpanel" aria-live="polite"><span className="ws-pq-text">{boldMarks(item.text)}</span><span className="ws-pq-src">{item.source}</span></div>
   {item.external ? <a className="ws-apply" href={item.href} target="_blank" rel="noopener noreferrer">{item.cta}</a> : <Link className="ws-apply" href={item.href}>{item.cta}</Link>}
  </section>;
 }

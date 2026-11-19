@@ -30,11 +30,12 @@ def test_three_irrelevant_results_do_not_block_better_followup_sources(opportuni
         return await generate(request,operation,**kwargs)
     search.collect_opportunity_query=sources;primary.generate=evaluate
     ingest(flow);_,result,_=research(flow)
-    assert len(search.calls)==10 and result['status']=='completed'
+    # Three searches per category: the plain query, the planned query and the follow-up.
+    assert len(search.calls)==15 and result['status']=='completed'
     assert all(c['outcome']=='findings_found' and c['findings'] for c in result['categories'].values())
     assert all(s['title']=='Useful account' for s in result['sources'])
     job=flow[1].research_contexts.find_one({'kind':'opportunity_job'})
-    assert all(len(v)==6 for v in job['evidence'].values())
+    assert all(len(v)==6 for v in job['evidence'].values())  # The two unrelated searches return the same pages, which merge.
     assert all(len(v)<=3 for v in job['retained_sources'].values())
 
 
@@ -47,6 +48,17 @@ def test_relevant_sources_without_supported_facts_have_distinct_outcome(opportun
     primary.generate=evaluate;ingest(flow);_,result,_=research(flow)
     assert result['status']=='completed' and result['sources']
     assert all(c['outcome']=='information_not_found' and not c['findings'] for c in result['categories'].values())
+
+
+def test_a_round_that_fails_validation_moves_on_to_the_next_search(opportunity_flow):
+    flow=opportunity_flow;primary=flow[2];generate=primary.generate;failed=[]
+    async def evaluate(request,operation,**kwargs):
+        if request.stage=='opportunity_structure' and json.loads(request.context)['category']=='interview_intelligence' and not failed:
+            failed.append(True);raise AIError('invalid_output',True,reason='provenance')
+        return await generate(request,operation,**kwargs)
+    primary.generate=evaluate;ingest(flow);_,result,_=research(flow)
+    interview=result['categories']['interview_intelligence']
+    assert failed and interview['status']=='completed' and interview['outcome']=='findings_found' and interview['findings']
 
 
 @pytest.mark.parametrize('code,outcome',[('invalid_output','validation_failed'),('unavailable','provider_failed'),('timeout','provider_failed')])

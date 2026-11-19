@@ -33,13 +33,13 @@ def claim(**changes):
 
 
 @pytest.mark.parametrize('category',CATEGORIES)
-@pytest.mark.parametrize('provider',['local','compatible','deepseek'])
-def test_decoding_schema_is_bound_to_actual_category_sources_and_passages(category,provider):
+@pytest.mark.parametrize('mode',['json_schema_strict','json_object'])
+def test_decoding_schema_is_bound_to_actual_category_sources_and_passages(category,mode):
     sources=[source(0,('A complete sentence about mentorship. '*25)),source(1)]
     context=structure_input({},category,sources)
-    settings=AISettings(provider=provider,response_mode='json_object' if provider=='deepseek' else 'json_schema_strict')
+    settings=AISettings(response_mode=mode)
     payload=AIAdapter(settings,None)._payload(AIInput(stage='opportunity_structure',context=json.dumps(context)))
-    if provider=='deepseek':
+    if mode=='json_object':
         schema=json.loads(payload['messages'][0]['content'].split('JSON schema: ',1)[1])
         assert payload['response_format']=={'type':'json_object'}
     else:
@@ -139,7 +139,7 @@ def test_adapter_and_bounded_repair_use_the_same_catalogue_and_preserve_safe_fee
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             engine=object.__new__(OpportunityEngine)
-            engine.ai=AIAdapter(AISettings(enabled=True,provider='local'),client)
+            engine.ai=AIAdapter(AISettings(enabled=True,api_key='synthetic'),client)
             engine.settings=SimpleNamespace(schema_repairs=1)
             engine.store=SimpleNamespace(update=lambda *a,**kw:None,rows=SimpleNamespace(update_one=lambda *a:None))
             result=await engine.generate({'_id':'synthetic','owner':'synthetic','goal_id':'synthetic','worker_token':'synthetic'},
@@ -154,7 +154,7 @@ def test_adapter_and_bounded_repair_use_the_same_catalogue_and_preserve_safe_fee
 
 def test_passage_catalogue_is_never_silently_truncated_to_fit_context():
     context=structure_input({},'internship_insights',[source(text='資料 '*1400)])
-    adapter=AIAdapter(AISettings(provider='local',context_tokens=8192),None)
+    adapter=AIAdapter(AISettings(context_tokens=8192),None)
     with pytest.raises(AIError,match='context_limit'):
         adapter._payload(AIInput(stage='opportunity_structure',context=json.dumps(context,ensure_ascii=False)))
 
@@ -173,7 +173,7 @@ def test_referenced_provider_findings_persist_and_remain_readable_through_existi
                 'relevant_refs':[passage['source_ref']],'follow_up_query':None}
         return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output)}}]})
     transport=httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    adapter=AIAdapter(AISettings(enabled=True,provider='local'),transport)
+    adapter=AIAdapter(AISettings(enabled=True,api_key='synthetic'),transport)
     async def generate(request,operation,**kwargs):
         if request.stage=='opportunity_structure':return await adapter.generate(request,operation,**kwargs)
         return await original(request,operation,**kwargs)
@@ -229,3 +229,19 @@ def test_bold_markers_do_not_change_identity_numbers_or_dedupe():
     plain,bold=out('Interns receive SGD 1500 monthly.')[0],out('Interns receive **SGD 1500** monthly.')[0]
     assert plain.finding_id==bold.finding_id and bold.value=='Interns receive **SGD 1500** monthly.'
     assert len(dedupe_findings('internship_insights',[plain,bold]))==1
+
+
+@pytest.mark.parametrize('value,passage,supported',[
+    ('Interns earn **SGD 8,000/month**','Interns earn S$8k a month',True),
+    ('About **SGD 8,000/month** (SGD 96,000 a year)','Base pay is SGD 96,000 per year',True),
+    ('About SGD 8,000/month','Base pay is SGD 96,000 per year',False),
+    ('Reported: roughly **70%** got return offers','about 70% of us got return offers',True),
+    ('**3** interview rounds','There were three rounds.',True),
+    ('**8.5k** a month','8,500 SGD monthly',True),
+    ('Interns receive SGD 9000 monthly.','Example interns report weekly mentorship.',False),
+])
+def test_numbers_match_in_any_common_format_and_monthly_pay_keeps_its_annual_source(value,passage,supported):
+    from app.workflows.opportunity.domain import numeric_support
+    if supported:numeric_support(value,passage,0)
+    else:
+        with pytest.raises(AIError):numeric_support(value,passage,0)

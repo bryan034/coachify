@@ -26,6 +26,7 @@ const paths: Record<string, ReactNode> = {
  lock: <><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></>,
  bookmark: <path d="M7 3h10v18l-5-4-5 4z"/>,
  warn: <path d="M12 3l10 18H2zM12 10v5M12 18h.01"/>,
+ refresh: <><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></>,
 };
 export function Icon({ name, style }: { name: string; style?: CSSProperties }) {
  return <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>{paths[name] || paths.doc}</svg>;

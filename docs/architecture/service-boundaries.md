@@ -69,13 +69,13 @@ CV also owns the bounded `cv_upload_capacity` operational ledger. Its journaled
 CAS reservation covers record counts and private original bytes before filesystem
 publication. Shared POSIX file locks and generation-bound recovery preserve the
 standalone MongoDB deployment. Capacity is released only after original bytes are
-removed; saved evidence/history remains. Owner/global limits and legacy bootstrap
+removed; saved evidence/history remains. Per-account quotas and legacy bootstrap
 rules are specified in the CV service, and public listings use projected keyset
 pages rather than loading every full history.
 
 The separate CV-owned `cv_model_usage` operational document bounds daily provider
-attempts using hashed account identities. A fixed shared POSIX slot pool holds
-per-account/global concurrency through each synchronous provider callback.
+attempts using hashed account identities. Account-specific POSIX lock files enforce
+per-account concurrency through each synchronous provider callback.
 Routing, extraction and clarification use the same guard; cancellation cannot
 release a slot while its thread continues. No Career budget or new capability
 authority is introduced.
@@ -150,7 +150,7 @@ The Roadmap adviser now supports reviewed plan generation and daily workloads th
 
 ## Career research and discovery
 
-LangGraph runs inside Career. Career model inference supports local OpenAI-compatible, DeepSeek cloud and OpenRouter adapters; search independently selects Brave LLM Context or DeepSeek Search. Public retrieval uses only permitted public role/employer context, with owner-linked reports and typed citations. Private CV evidence, manual declarations and CV conversation messages do not enter shared research. Discovery and JD intake publish through the same goal persistence path automatically, including validated Discovery refinements. Discovery publication checks the captured selection revision and active conversation marker; newer chats/JDs or goals prevent stale replacement. CV-context acknowledgement remains separate. Discovery resumes its latest owner-scoped `research_contexts` conversation after refresh/re-entry; only explicit New chat creates a replacement conversation once one exists. Messages outlive workflow checkpoints, and starting a new chat preserves earlier conversations and saved goals. Current goals use owner/version-checked edits; research revisions remain immutable and compact progress/evidence reads avoid repeating full source payloads.
+LangGraph runs inside Career. Career model inference uses an HTTPS OpenAI-compatible adapter (OpenRouter by default); search uses Brave LLM Context. Public retrieval uses only permitted public role/employer context, with owner-linked reports and typed citations. Private CV evidence, manual declarations and CV conversation messages do not enter shared research. Discovery and JD intake publish through the same goal persistence path automatically, including validated Discovery refinements. Discovery publication checks the captured selection revision and active conversation marker; newer chats/JDs or goals prevent stale replacement. CV-context acknowledgement remains separate. Discovery resumes its latest owner-scoped `research_contexts` conversation after refresh/re-entry; only explicit New chat creates a replacement conversation once one exists. Messages outlive workflow checkpoints, and starting a new chat preserves earlier conversations and saved goals. Current goals use owner/version-checked edits; research revisions remain immutable and compact progress/evidence reads avoid repeating full source payloads.
 
 Career's 512 KiB CV transport/projection admission limit is separate from CV's 12 MiB stored-record boundary and conversation limits. An over-limit response is actionable failure, not an empty CV or permission to truncate sources. Model-specific context selection remains separately bounded. Synthetic provider tests do not measure live-provider quality, cost or comparative usability.
 

@@ -1,10 +1,9 @@
 # Opportunity Intelligence
 
-Current provider configuration (31 October 2026): all model stages use the selected
-Career model, including local OpenAI-compatible or DeepSeek cloud inference. Retrieval
-uses Brave LLM Context for testing or DeepSeek Search for production. Earlier model/Brave
-names below describe the original path. DeepSeek retrieval accepts original page content
-only, leaves missing employer metadata unknown and uses a distinct cache policy. See
+Current provider configuration: all model stages use the configured HTTPS
+OpenAI-compatible Career model (OpenRouter by default). Retrieval uses Brave LLM
+Context, the only search provider. Earlier model/Brave names below describe the
+original path. Missing employer metadata stays unknown. See
 [model/search setup](../../docs/setup.md#career-model-and-search-configuration).
 
 
@@ -50,8 +49,14 @@ is the master switch; `OPPORTUNITY_ENABLED` (true by default) enables public res
 Every stage uses the same configured Career model; see [setup](../../docs/setup.md#career-model-and-search-configuration).
 The Brave client always uses LLM Context with the existing key.
 Every research workflow uses this endpoint; legacy modes are ignored.
-Opportunity requests consider 30 results and return at most three URLs per query.
-Weak coverage can trigger a focused follow-up within the existing two-search default.
+Opportunity requests consider 30 results and return at most five URLs per query, with up to
+12 passages per page and Brave's lenient relevance cut-off, so useful text that does not repeat
+the query words is kept. Each category runs a plain employer + role + topic query first (no
+location or year, as a person would search), then the model's targeted queries; weak coverage
+can trigger focused follow-ups within the three-search default. A round whose structured output
+still fails validation after its corrections is recorded and research moves on to the next query;
+the category fails only when no round produced a validated finding. Each category still cites at
+most three retained pages.
 Candidate evidence remains checkpointed; final categories retain at most three useful
 sources selected by validated field coverage, role match, confidence and source type.
 Follow-up URLs lead the next evaluation, including after quota/restart recovery.
@@ -185,13 +190,13 @@ and recreate the service yourself; no credentials go into the frontend.
 | Setting | Default | Meaning |
 |---|---:|---|
 | `OPPORTUNITY_ENABLED` | true | Enable when primary, the model and LLM Context are available |
-| `OPPORTUNITY_MAX_SEARCHES` | 2 | Maximum distinct successful queries/category |
-| `OPPORTUNITY_MAX_FOLLOWUPS` | 1 | Maximum targeted follow-ups/category |
+| `OPPORTUNITY_MAX_SEARCHES` | 3 | Maximum distinct successful queries/category (the plain query counts as one) |
+| `OPPORTUNITY_MAX_FOLLOWUPS` | 2 | Maximum targeted follow-ups/category |
 | `OPPORTUNITY_CONCURRENCY` | 3 | Concurrent Brave requests across branches |
 | `OPPORTUNITY_TIMEOUT_SECONDS` | 30 | Total deadline for each Brave attempt |
 | `OPPORTUNITY_RETRIES` | 1 | Bounded transient retries with exponential backoff / 429 delay |
 | `OPPORTUNITY_SCHEMA_REPAIRS` | 1 | Additional model attempts for schema/citation failure |
-| `OPPORTUNITY_EVIDENCE_TOKENS` | 8192 | Bounded exact passages per reasoning call (256–32768) |
+| `OPPORTUNITY_EVIDENCE_TOKENS` | 12288 | Bounded exact passages per reasoning call (256–32768) |
 | `OPPORTUNITY_FRESHNESS_HOURS` | 168 | Complete category freshness |
 | `OPPORTUNITY_INCOMPLETE_HOURS` | 1 | Missing/error coverage freshness |
 | `OPPORTUNITY_RUN_SECONDS` | 300 | Execution deadline per durable worker attempt |
@@ -287,8 +292,9 @@ remain readable using their original three-category/field contract. A new cache 
 prevents old three-category results from satisfying new research. Unfinished legacy
 jobs acquire the missing categories without deleting paid evidence.
 
-Conversion percentages must be explicitly sourced; retain historical intern cohort/year
-context when supplied. Anecdotes never establish a percentage. Offers, acceptance and joining
+Conversion percentages, intake sizes and salaries may be rough figures reported by candidates,
+forums or salary/review sites; they are labelled reported/approximate at low or medium confidence,
+and vague wording ("most") never becomes a number. Retain historical intern cohort/year context when supplied. Offers, acceptance and joining
 remain distinct. Salary evidence retains currency, pay period, year and base/bonus
 context; related graduate pay is not labelled an actual conversion offer. No unsupported
 figures or rates are computed. Missing evidence stays missing in every category.
@@ -399,7 +405,8 @@ Python prepares numbered exact source passages of at most 600 characters, retain
 their source index. Each finding selects one passage; Python copies its text and
 resolves its source ID. The model never generates citation quotes or source bindings.
 Finding values may paraphrase that selected passage, but their numbers must occur
-there. Identical findings from different passages can merge their verified citations.
+there, in any common format (8k = 8,000 = S$8,000; "three" = 3). The only derived number is a
+monthly amount from an annual figure in the passage, and the annual figure must also be shown. Identical findings from different passages can merge their verified citations.
 Invalid references/fields are excluded without discarding independently valid claims;
 a wholly invalid batch receives the existing bounded repairs. Passage catalogues are
 never silently shortened after numbering to fit a model request.

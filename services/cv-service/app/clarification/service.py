@@ -221,11 +221,7 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter, prep
 
 def _interpret_scoped(service, owner, identifier, question_id, saved, interpreter, prepared=None):
     question, item = _question(saved, question_id)
-    acquired = False
     try:
-        acquired = service.interpretation_slots.acquire(blocking=False)
-        if not acquired:
-            raise ValueError('Interpretation is busy. Your answer is saved; retry interpretation shortly.')
         if interpreter is None: raise ValueError('Interpretation is not configured. Your answer is saved; retry after configuration.')
         if prepared is None:
             payload, metadata = service.model_usage.run(owner, interpreter.interpret,
@@ -257,8 +253,6 @@ def _interpret_scoped(service, owner, identifier, question_id, saved, interprete
         result, error = None, str(exc)[:1000]
     except Exception:
         result, error = None, 'Interpretation could not finish. Your answer is saved; retry interpretation.'
-    finally:
-        if acquired: service.interpretation_slots.release()
     current = service.get(owner, identifier)
     latest, _ = _question(current, question_id)
     if (current['version'] != saved['version'] or current['extraction_version'] != saved['extraction_version']

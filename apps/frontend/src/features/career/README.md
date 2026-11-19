@@ -98,7 +98,7 @@ disappears once the summary arrives.
 
 Career chats give the conversation at least 70% of the screen height, on any screen size. Short screens scroll the page rather than shrinking it.
 
-The saved-goal overview is a dark header (role, facts, a ring of skills by importance, Refine goal / Set a new goal), a line showing how Career Goal, Skills Profile and Roadmap feed each other, the three goal pages as one pill-shaped tab group, a one-line goal confirmation for CV review, and **Skills needed**: every skill under its category, most important first, with the person's level against the role's target (the tick), filters for Ready / Getting there / To build / Not rated, **Talk it through** and **See evidence** per skill. A yellow chip warns when the roadmap ends after the job's start date. Levels come from the saved evaluation (`demonstrated_score` against `required_score`); nothing is scored in the browser. Categories come from
+The saved-goal overview is a dark header (role, facts, a ring of skills by importance, Refine goal / Set a new goal), a line showing how Career Goal, Skills Profile and Roadmap feed each other, the three goal pages as one pill-shaped tab group, a one-line goal confirmation for CV review, and **Skills needed**: every skill under its category, most important first, with the person's level against the role's target (the tick), filters for Ready / Getting there / To build / Not rated, **Talk it through** and **See evidence** per skill. Opening a skill also says why it has its numbers: why the target was set (what the employer expects, up to two things people reported about the skill with their source, and why elo rated it that level, labelled job description, role research or elo's estimate; hidden when the evaluation set a different target) and the evaluation's explanation for the person's level. Under each skill, "Your skills that count" lists every Skills Profile skill that counts towards it (same skill, one of its parts, or linked by the evaluation) and "Breaks down into" lists its smaller skills (learning items), marking the ones the person already has; the Skills Profile uses the same links. A yellow chip warns when the roadmap ends after the job's start date. Levels come from the saved evaluation (`demonstrated_score` against `required_score`); nothing is scored in the browser. Categories come from
 `current.skill_groups`. Importance (Required, Preferred and so on) is a label on each
 row, most important first, with any level the job states.
 
@@ -158,10 +158,29 @@ Refine goal and Set a new goal): **Skills needed** (`/career-goal`), **Interview
   card was removed on 11 November 2026.
 - Both research tabs carry the accuracy warning. The per-finding quote disclosure and the
   per-category refresh buttons were removed; refresh covers the tab's research.
+- Research tabs restyled from the 19 November 2026 design canvas. Each tab is one card: a
+  header line (research date, number of cited sources, the accuracy warning and, when AI filled
+  anything, what the **Estimated** chip means) beside **Refresh research**. Sources are cited as
+  numbered pills that jump to one Sources list at the foot of the card, numbered in reading
+  order. AI-made fields carry an amber **Estimated** chip in place of the orange icon and
+  legend. Interview preparation shows a dark process timeline (rounds in order, with the
+  timeline), Difficulty (on an Easy / Average / Difficult scale when the wording says which) and
+  Stages tiles, then **Stage by stage**: each round's format, questions, preparation and
+  candidate quotes. About the role shows an at-a-glance strip of AI headlines (salary,
+  conversion rate, role after the internship, intake), then one labelled row per group (The role,
+  Pay and benefits, Day to day, After the internship, Team and culture) and **Not found yet**.
 
-After **Extract career goal**, the goal conversation (`job-review-chat.tsx`) shows the shared
-"Skills needed" processing screen (`ProcessingCard`) while the goal is extracted, the role is
-researched and the summary is prepared. Steps and progress come from the observed workspace phase
+As soon as **Extract career goal** is pressed, Career Goal (`career-goal.tsx`) replaces the form
+with the shared "Skills needed" processing screen (`ProcessingCard`) while the goal is extracted;
+failures return to the form with the draft and a retry. The screen tells the user they can
+leave: extraction runs as a server-side Career operation, the leave-page warning is skipped, and
+the tab keeps the request body and idempotency key in `sessionStorage` (account-scoped, two-hour
+expiry, cleared on success, failure or **← Career Goal**). Returning to Career Goal reopens the
+processing screen and reconnects to the same operation with that key, then opens the goal
+conversation once it finishes. A new tab or another browser does not reconnect; the goal still
+saves server-side. Once saved, the goal conversation
+(`job-review-chat.tsx`) shows the same screen while the role is researched and the summary is
+prepared. Steps and progress come from the observed workspace phase
 and server activities. The chat and composer open once the summary is ready; refinement
 (`?refine=1`) and failed or empty states go straight to the chat.
 

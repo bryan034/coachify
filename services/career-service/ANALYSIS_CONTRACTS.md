@@ -17,7 +17,7 @@ coverage can be summarised with its limitations; actively running categories sti
 Technical failure offers retry; no-findings explicitly means insufficient evidence.
 
 A query plan uses public role/field/company/location/seniority. Missing company means
-general role research. Every Brave acquisition uses `GET /res/v1/llm/context`; DeepSeek uses `POST /v1/tools/search` with page content requested;
+general role research. Every Brave acquisition uses `GET /res/v1/llm/context`;
 legacy `BRAVE_SEARCH_MODE` values are ignored. Web Search and Answers acquisition
 are removed; historical saved answer attribution remains readable.
 At most six deduplicated sources reach synthesis across the workflow. The model plans
@@ -43,9 +43,9 @@ The persisted contract still stores evidence_origin and summary_id. No AI answer
 wording is passed off as a website quotation or verified employer fact. The UI exposes
 the summary and original links with explicit labels. The UI uses provider-neutral labels while retaining evidence links and AI attribution.
 LLM Context uses a 30-second HTTP timeout, bounded responses and a 40-second node
-timeout; the 180-second cloud-planned/60-second cloud-legacy execution budget (600 seconds for local inference) excludes
+timeout; the 180-second planned/60-second legacy execution budget excludes
 quota waits and corrective model turns. No silent fallback occurs after denied access.
-Brave LLM Context is the default testing acquisition API; DeepSeek Search can be selected for production. Source pages may include public forum reports.
+Brave LLM Context is the only acquisition API. Source pages may include public forum reports.
 Historical source/coverage labels remain readable. Updated retrieval cache policies
 refresh earlier shallow or alternate-mode results. No Reddit credentials or direct
 Reddit API calls are used.
@@ -53,12 +53,11 @@ API permission, access and storage rights must cover the deployed use case.
 
 ## Model/search configuration — 31 October 2026
 
-The public template selects the model inference through the OpenAI Python SDK plus
-Brave search. Local inference and DeepSeek cloud/Search remain optional. Earlier model/Brave-specific descriptions below refer
-to that original provider path. Search summaries are never converted to original source
-quotes: DeepSeek findings use returned page content only. Search providers have distinct
-cache policies and independent keys; no provider fallback occurs. See
-[local/cloud settings](../../docs/setup.md#career-model-and-search-configuration).
+The public template selects HTTPS model inference through the OpenAI Python SDK plus
+Brave search. Earlier model/Brave-specific descriptions below refer to that original
+provider path. Search summaries are never converted to original source quotes. The
+search key is independent of the model key; no provider fallback occurs. See
+[model/search settings](../../docs/setup.md#career-model-and-search-configuration).
 
 ## Focused JD questions
 
@@ -106,7 +105,11 @@ The model selects roughly 120-180 words in 6-8 short, single-idea blocks when en
 evidence exists. Python renders each as a separate `**Label:** text` paragraph, including
 the first role overview. Unsupported topics are omitted; the supplied career field uses
 the Field label. This presentation applies only to the initial overview, not follow-up answers.
-Omitted findings do not require references. Python appends exactly one closing line:
+Omitted findings do not require references. Python links research topics to the Career Goal
+tab holding the full findings, once per tab after its last topic: interview expectations to
+`[Interview preparation](/career-goal/interview)`, and internship, progression, conversion and
+culture topics to `[About the role](/career-goal/role)`. The saved-evidence fallback does the same.
+Python appends exactly one closing line:
 `Ask me anything about this goal set!`
 Async summary presentation uses bounded repair (up to six corrections), with owner/version
 checks before each generation and publication. Only presentation is retried; saved research
@@ -126,7 +129,7 @@ no raw conversation, additional domain records or persisted summaries are introd
 
 Configured-model context routing can select a public research focus for missing/current details or explicit
 further research: location, compensation, eligibility, dates, role details, interviews,
-workplace, career progression or conversion. Python searches the selected Brave LLM Context or DeepSeek Search API using
+workplace, career progression or conversion. Python searches the Brave LLM Context API using
 saved public employer/role/location and the selected focus. The router additionally extracts
 `public_search_terms`, a concise public keyword phrase (3–100 English letters/spaces/hyphens).
 Raw user messages, resolved questions, conversation and CV data are not passed to search.
@@ -224,26 +227,23 @@ extra proposal call within its original operation deadline. Prompt/schema output
 
 | Process variable | Default / purpose |
 |---|---|
-| `AI_ENABLED` | Enabled when a model key is supplied; explicit true permits keyless local testing; false disables model operations |
-| `CAREER_LLM_API_KEY` | Server-only model credential; optional only for explicit local inference |
+| `AI_ENABLED` | Enabled when a model key is supplied; explicit true without a key fails startup; false disables model operations |
+| `CAREER_LLM_API_KEY` | Server-only model credential; blank uses `OPENROUTER_API_KEY` only for the exact OpenRouter host |
 | `CAREER_LLM_MODEL` | the configured `OPENROUTER_MODEL`; one explicit model override shared by every stage |
-| `CAREER_LLM_PROVIDER` | `compatible` (OpenRouter) code/Compose/public-template default; optional `local` or `deepseek` |
-| `CAREER_LLM_BASE_URL` | Provider default; HTTP permitted only for `local`; no credentials/query/fragment |
-| `CAREER_LLM_RESPONSE_MODE` | `json_schema_strict` for OpenRouter and every local stage, `json_object` for DeepSeek; local job identification, JD extraction and goal summaries upgrade JSON Object mode to native strict JSON Schema; backend validation always applies |
-| `AI_MAX_OUTPUT_TOKENS` | 8192; overall completion ceiling; local JD identification/extraction use up to 8192 each; cloud identification up to 4096; existing smaller stage caps still apply |
-| `AI_CONTEXT_TOKENS` | 16384 for local / 65536 for cloud when unset; public template is 32768; match the actual model context |
-| `AI_TIMEOUT_SECONDS`, `AI_RETRIES` | Cloud: 60-second model-call deadline (maximum 60), one bounded 5xx retry |
-| `CAREER_LOCAL_TIMEOUT_SECONDS` | Local only: 60-second default model-call deadline after queue admission (range 1–300); cloud ignores it |
+| `CAREER_LLM_BASE_URL` | OpenRouter by default; HTTPS only (HTTP only with `CAREER_LLM_ALLOW_HTTP=true` and `APP_ENV=development` for synthetic fixtures); no credentials/query/fragment |
+| `CAREER_LLM_RESPONSE_MODE` | `json_schema_strict` by default; `json_object` puts the schema in the prompt for providers without native schema support (Discovery then reports `unsupported_structured_output`); backend validation always applies |
+| `AI_MAX_OUTPUT_TOKENS` | 8192; overall completion ceiling; JD extraction uses up to 8192 and identification up to 4096; existing smaller stage caps still apply |
+| `AI_CONTEXT_TOKENS` | 65536 when unset; public template is 32768; match the actual model context |
+| `AI_TIMEOUT_SECONDS`, `AI_RETRIES` | 60-second model-call deadline (maximum 60), one bounded 5xx retry |
 | `CAREER_LLM_TOKEN_PARAMETER` | `max_tokens`; select `max_completion_tokens` for compatible models requiring it |
-| Legacy provider/model switches | `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`, `AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL`, `OPPORTUNITY_GEMINI_MODEL` (obsolete) ignored by production reasoning |
-| `CAREER_RESEARCH_PROVIDER` | `brave` for testing (default), `deepseek` for production Search API |
-| `CAREER_RESEARCH_API_KEY` | Server-only key for the selected search provider; never inherited from another provider |
+| Legacy provider/model switches | `CAREER_LLM_PROVIDER`, `CAREER_LOCAL_TIMEOUT_SECONDS`, `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_RESPONSE_MODE`, `AI_TOKEN_PARAMETER`, `GEMINI_ENABLED`, `GEMINI_MODEL`, `OPPORTUNITY_GEMINI_MODEL` (obsolete) ignored by production reasoning |
+| `CAREER_RESEARCH_PROVIDER` | `brave` (default and only supported value) |
+| `CAREER_RESEARCH_API_KEY` | Server-only Brave key; never inherited from the model provider |
 | `BRAVE_SEARCH_MODE` | Deprecated and ignored; every Brave request uses LLM Context |
 
 Every production stage uses the configured Career model, with one shared adapter for reasoning
-and coordination. `CAREER_LLM_API_KEY` is its canonical credential setting. Local inference has one in-flight call per shared adapter/worker, with queue time
-outside the per-call inference deadline. Cloud calls stay concurrent. There is no local
-token-per-minute admission limit. Unleased pending jobs for unsupported model
+and coordination. `CAREER_LLM_API_KEY` is its canonical credential setting. Model calls
+stay concurrent. There is no local token-per-minute admission limit. Unleased pending jobs for unsupported model
 providers become due on the model recovery; checkpoints/cursors remain intact and
 Brave/model waits are retained.
 Model/Brave provider quotas, task output ceilings, context guards and timeouts remain.
@@ -254,14 +254,13 @@ HTTP 429 progress uses the actual provider retry delay; no artificial local cool
 is introduced. The model identifier and runtime override are
 documented in [setup](../../docs/setup.md#career-model-and-search-configuration).
 
-Local `goal_summary` requests upgrade `json_object` to `json_schema` with `strict=true`
-and the `GoalSummary` shape with request-specific reference enums. This constrains the top-level `blocks` array
-and nested label/text/references objects instead of accepting arbitrary JSON keys.
-The local prompt includes the schema for grounding and explicitly requests an
-instance, not a schema definition or copied goal/categories input. Full summary
-instructions, input, schema and repair feedback are token-budgeted together with
-reserved output and the existing safety margin. Cloud JSON Object settings and
-other local stages retain their configured response modes. Unsupported native
+`goal_summary` requests use the `GoalSummary` shape with request-specific reference
+enums, natively under JSON Schema modes or in the prompt under JSON Object mode. This
+constrains the top-level `blocks` array and nested label/text/references objects
+instead of accepting arbitrary JSON keys. The prompt explicitly requests an instance,
+not a schema definition or copied goal/categories input. Full summary instructions,
+input, schema and repair feedback are token-budgeted together with reserved output and
+the existing safety margin. JSON Object settings are not upgraded. Unsupported native
 schema responses fail explicitly; no schema-free fallback is introduced. Backend
 validation still rejects unknown references, missing research references and invalid
 block sizes/labels before attaching saved citation links.
@@ -534,8 +533,8 @@ entire serialized provider request in token units, including system instructions
 source text, response schema (in the prompt or native response format), metadata
 and repair feedback. They reserve the selected output budget plus the larger of
 1,024 tokens or 10% of the configured context window. A representative full-length
-English JD fits both stages in the local 16,384-token window with the new caps.
-Tokenization is an estimate rather than DeepSeek's exact tokenizer; unusually dense
+English JD fits both stages in a 16,384-token window with the current caps.
+Tokenization is an estimate rather than the provider's exact tokenizer; unusually dense
 Unicode or larger overhead can require more context. The source JD is never truncated:
 requests that cannot fit fail context admission before the provider call. Existing
 context-handling policies for other stages remain unchanged. The scope prompt explicitly
@@ -584,7 +583,7 @@ old AI_MODEL/GEMINI_MODEL/OPPORTUNITY_GEMINI_MODEL settings remain ignored.
 
 ### Combined initial response
 
-The cloud public identity gate starts category retrieval alongside full JD extraction. Local R1 preflight checks document type and source evidence only; it defers retrieval until full extraction supplies the public role metadata.
+The public identity gate starts category retrieval alongside full JD extraction.
 Successful extraction uses the existing goal persistence path immediately; research
 continues automatically, without a normal-path resume command. Workspace phase becomes
 `ready` only when all categories are completed/not applicable and summary selection
@@ -664,11 +663,6 @@ Per the user's revised architecture, new runtime comparison is owned by `service
 
 JD extraction also accepts bounded `job_dates` with kind, exact text and exact source evidence. The provider schema contains only kind/text/evidence; normalized `date` is backend-derived. The prompt/schema require evidence to be an exact source excerpt containing the date text verbatim, and the adapter validates excerpts before raw JD disposal. Only recognized complete date wording normalizes to a calendar date; ranges/partial/relative wording remain text. These dates do not silently replace Profile's application date or the Roadmap user's preparation target. Existing stored goals are not backfilled from discarded raw sources.
 
-Local R1 scope preflight uses a two-field document-type/evidence response, native
-JSON Schema and temperature zero. It converts to the existing JobIdentity boundary
-only after typed decoding; exact source evidence and backend task guards remain
-mandatory. Full JD extraction owns local role/employer/location metadata and starts
-public research after validation; cloud identity/prefetch and public APIs are unchanged.
 
 ## SDK and browser JSON boundaries
 
@@ -687,12 +681,10 @@ and zero revisions without repeatedly downloading the full workspace.
 
 ### Career reliability — 1 November 2026
 
-Model calls default to 60 seconds for local and cloud providers. Cloud retains its
-60-second maximum; search HTTP and full-workflow budgets are independent. Early
+Model calls default to 60 seconds, with a 60-second maximum; search HTTP and full-workflow budgets are independent. Early
 research planning uses this model deadline too. Opportunity planning and structuring
-each reserve up to 4,096 output tokens under the existing global ceiling. Local
-research upgrades JSON Object mode to strict schema decoding and includes the schema
-in the prompt. All five plan categories, query bounds, source references and evidence
+each reserve up to 4,096 output tokens under the existing global ceiling. JSON Object
+mode includes the research schema in the prompt. All five plan categories, query bounds, source references and evidence
 checks remain authoritative. Research repair logs include only safe field paths and
 issue codes; truncation feedback is distinguished from schema failure.
 

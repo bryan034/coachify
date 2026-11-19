@@ -12,7 +12,7 @@
 
 .cv-workspace .skills-jump-links{display:flex;flex-wrap:wrap;gap:6px;padding:0;margin:0 0 16px;border:0}
 .cv-workspace .skills-jump-links a{padding:6px 14px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-size:12.5px;font-weight:500;color:var(--ink);text-decoration:none}
-.cv-workspace .skills-jump-links a:hover{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.cv-workspace .skills-jump-links a:hover{background:var(--fill);border-color:var(--fill);color:var(--on-fill)}
 .cv-workspace .skills-cv-actions .btn{border-radius:999px}
 .cv-workspace .skills-summary-heading{align-items:center;margin-bottom:12px}
 .cv-workspace .skills-summary-heading h2{font-size:18px;font-weight:500;letter-spacing:-.02em}
@@ -50,7 +50,7 @@
 .cv-workspace .skill-group .skill-row summary{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;width:auto;padding:5px 11px;border-radius:999px;background:var(--cloud);font-size:12.5px;font-weight:500;line-height:1.3;cursor:pointer}
 .cv-workspace .skill-group .skill-row summary::after{display:none}
 .cv-workspace .skill-group .skill-row summary:hover{background:color-mix(in srgb,var(--slate) 18%,var(--white))}
-.cv-workspace .skill-group .skill-row.is-levelled summary{padding-right:5px;background:var(--ink);color:var(--white)}
+.cv-workspace .skill-group .skill-row.is-levelled summary{padding-right:5px;background:var(--fill);color:var(--on-fill)}
 .cv-workspace .skill-group .skill-row.is-levelled summary:hover{background:var(--slate)}
 .cv-workspace .skill-group .skill-row.has-source:not(.is-levelled) summary::before{content:"";order:2;width:6px;height:6px;border-radius:50%;background:var(--mint)}
 .cv-workspace .skill-group .skill-level-meter{display:none}
@@ -68,14 +68,11 @@
 /* Highlight only evidence actually referenced by the current Assessment. */
 .skill-row.goal-relevant{ background: var(--mint-mist, #ecfdf5); }
 
-.cv-has-dock{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,40%);gap:20px;align-items:start;}
-.cv-chat-dock{position:sticky;top:12px;max-height:calc(100dvh - 24px);overflow:auto;}
 .cv-library-row{padding:12px!important;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;}
 .cv-library-row .cv-actions{grid-column:1/-1;}.cv-top-grid:has(.cv-upload-panel[hidden]){grid-template-columns:1fr;}
 .cv-topic-checklist{padding:12px;border-bottom:1px solid var(--line);}.cv-topic-checklist ol{display:flex;gap:12px;flex-wrap:wrap;list-style:none;padding:0;}.cv-topic-checklist li{font-size:12px;}
 .cv-quick-replies{display:flex;flex-wrap:wrap;gap:6px;margin-right:auto}
 .cv-quick-replies .chip{min-height:30px;padding:0 10px;font-size:12px}
-@media(max-width:900px){.cv-has-dock{display:block}.cv-chat-dock{position:fixed;inset:72px 12px 12px;max-height:none;z-index:20;background:var(--white)}}
 
 /* ---- Skills Profile redesign: compact header, CV switcher, relevance chips, skill panel ---- */
 .skills-hero-compact{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px;padding:0 0 20px}
@@ -166,7 +163,7 @@
 .skills-run-meter p{margin:0;font-weight:600}
 .skills-run-meter .skills-run-percent{font-size:22px;letter-spacing:-.01em}
 .skills-run-percent span{font-size:13px;font-weight:500;color:var(--slate)}
-.skills-run-track{height:12px;border-radius:6px;background:#e2e8f0;overflow:hidden}
+.skills-run-track{height:12px;border-radius:6px;background:var(--haze);overflow:hidden}
 .skills-run-track span{display:block;height:100%;border-radius:6px;background:var(--ready-ink,#116149);transition:width 250ms linear}
 .skills-run-track.is-indeterminate span{animation:skills-slide 1.8s ease-in-out infinite alternate}
 .skills-run-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:18px 24px}
@@ -175,7 +172,7 @@
 .skills-run-steps li>span:last-child>span{font-size:13px;color:var(--slate)}
 .skills-run-mark{display:grid;place-items:center;width:22px;height:22px;margin-top:1px;border-radius:50%;color:#fff}
 .skills-run-mark.is-done{background:var(--ready-ink,#116149)}
-.skills-run-mark.is-now{border:6px solid var(--ready-ink,#116149);background:#fff}
+.skills-run-mark.is-now{border:6px solid var(--ready-ink,#116149);background:var(--white)}
 .skills-run-mark.is-todo{border:1.5px solid #64748b}
 .skills-run-note{margin:20px 0 0;padding-top:16px;border-top:1px solid rgb(71 85 105 / .14);color:var(--slate)}
 .skills-run-grid{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
@@ -196,7 +193,7 @@
 .skills-run-skills>div:first-child p{margin:0;font-size:13px;color:var(--slate)}
 .skills-run-row{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;padding:16px 20px;border-top:1px solid rgb(71 85 105 / .14)}
 .skills-run-row>span{display:flex;flex-wrap:wrap;gap:8px}
-.skills-sk{display:block;height:12px;border-radius:8px;background:linear-gradient(90deg,#eef2f6 0%,#f8fafc 50%,#eef2f6 100%);background-size:200% 100%}
+.skills-sk{display:block;height:12px;border-radius:8px;background:linear-gradient(90deg,var(--haze-soft) 0%,var(--snow) 50%,var(--haze-soft) 100%);background-size:200% 100%}
 .skills-sk.is-chip{height:32px;border-radius:999px}
 @keyframes skills-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 @keyframes skills-slide{from{transform:translateX(-100%)}to{transform:translateX(185%)}}
@@ -231,7 +228,7 @@
 .cv-review-rail .cv-review-count{margin:0 10px 10px;font-size:13px;color:var(--slate)}
 .cv-review-rail .cv-review-percent{margin:6px 10px 16px;font-size:12px;color:var(--slate)}
 .cv-review-rail .cv-review-segments{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:3px;margin:0 10px}
-.cv-review-rail .cv-review-segments>span{height:6px;border-radius:3px;background:#e2e8f0}
+.cv-review-rail .cv-review-segments>span{height:6px;border-radius:3px;background:var(--haze)}
 .cv-review-rail .cv-review-segments>span.covered{background:var(--forest)}
 .cv-review-rail .cv-review-segments>span.current{background:var(--mint)}
 .cv-workspace .cv-chat .cv-review-rail .cv-topic-checklist ol{flex-direction:column;flex-wrap:nowrap;gap:2px;margin:0}
@@ -261,12 +258,12 @@
 .cv-workspace .cv-chat .cv-chat-message-assistant .cv-chat-bubble{padding:12px 16px;border:1px solid rgb(71 85 105 / .18);border-radius:4px 16px 16px 16px;background:var(--white)}
 .cv-workspace .cv-chat .cv-chat-message-assistant.is-question .cv-chat-bubble{border-color:var(--forest);box-shadow:inset 0 0 0 1px var(--forest)}
 .cv-workspace .cv-chat .cv-chat-message-user{max-width:540px}
-.cv-workspace .cv-chat .cv-chat-message-user .cv-chat-bubble{padding:12px 16px;border:1px solid #a7f3d0;border-radius:16px 4px 16px 16px;background:var(--mint-mist)}
+.cv-workspace .cv-chat .cv-chat-message-user .cv-chat-bubble{padding:12px 16px;border:1px solid var(--mint-line);border-radius:16px 4px 16px 16px;background:var(--mint-mist)}
 .cv-workspace .cv-chat .cv-chat-receipt{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:center;margin:0;color:var(--ink);font-size:14px}
 .cv-chat-receipt-mark{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--forest);color:var(--white)}
 .cv-workspace .cv-chat .cv-chat-receipt .cv-chat-action-status{font-size:14px;font-weight:600;color:var(--ink)}
 .cv-workspace .cv-chat .cv-chat-action{margin-top:12px;padding:14px 16px;border:1px solid rgb(71 85 105 / .18);border-radius:12px;background:var(--snow)}
-.cv-workspace .cv-chat .cv-chat-action-saved{border-color:#a7f3d0;background:var(--mint-mist)}
+.cv-workspace .cv-chat .cv-chat-action-saved{border-color:var(--mint-line);background:var(--mint-mist)}
 .cv-workspace .cv-chat .cv-chat-action-heading>strong{font-size:14px}
 .cv-workspace .cv-chat .cv-chat-action-status{font-size:12px;font-weight:600;color:var(--slate)}
 .cv-workspace .cv-chat .cv-chat-action>p{font-size:14px;line-height:1.5}
@@ -284,10 +281,10 @@
 .cv-workspace .cv-chat .cv-chat-composer-footer{margin-top:10px}
 .cv-workspace .cv-chat .cv-chat-composer-footer p{font-size:12px;color:var(--slate)}
 .cv-workspace .cv-chat .cv-chat-composer-footer .btn{min-height:44px;padding:0 20px;border-radius:999px;font-size:14px}
-.cv-workspace .cv-chat .cv-chat-composer-footer .btn:disabled{border-color:#e2e8f0;background:var(--cloud);color:#64748b}
+.cv-workspace .cv-chat .cv-chat-composer-footer .btn:disabled{border-color:var(--haze);background:var(--cloud);color:#64748b}
 .cv-workspace .cv-chat .cv-chat-footnote{margin-top:10px;font-size:12px;color:var(--slate)}
 
-.cv-chat-done{max-width:700px;margin:18px 0;overflow:hidden;border:1px solid #a7f3d0;border-radius:20px;background:var(--white)}
+.cv-chat-done{max-width:700px;margin:18px 0;overflow:hidden;border:1px solid var(--mint-line);border-radius:20px;background:var(--white)}
 .cv-chat-done-head{display:grid;grid-template-columns:36px minmax(0,1fr);gap:14px;align-items:start;padding:20px 24px;background:var(--mint-mist)}
 .cv-chat-done-head>span{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--forest);color:var(--white)}
 .cv-chat-done-head h3{margin:0 0 2px;font-size:18px;font-weight:600}
@@ -367,7 +364,7 @@
 .cv-skip-chat .cv-skip-confirm p{font-size:14px;color:var(--ink);max-width:56ch}
 .cv-question-topic{margin:0;font-size:12px;font-weight:600;color:var(--forest-ink,#0b5a43)}
 .cv-question-count{margin:0 0 8px;font-size:12px;color:var(--slate)}
-.cv-answer-hints{margin-top:12px;padding:10px 14px;border-radius:10px;background:#f8fafc}
+.cv-answer-hints{margin-top:12px;padding:10px 14px;border-radius:10px;background:var(--snow)}
 .cv-answer-hints p{margin:0 0 4px;font-size:12px;font-weight:600;color:var(--slate)}
 .cv-answer-hints ul{margin:0;padding-left:18px;color:#334155}
 /* Phone widths: the three quick replies stay on one scrollable row so the composer keeps its height. */
@@ -382,14 +379,14 @@
 /* CV read, review not finished: amber means "waiting on you"; forest means done. */
 .skills-unfinished-page{display:flex;flex-direction:column;gap:20px;max-width:none;width:100%}
 .skills-unfinished{display:flex;flex-direction:column;gap:20px}
-.skills-unfinished-hero{padding:0;overflow:hidden;border-color:#fcd34d;border-radius:20px}
-.skills-unfinished-top{padding:28px 32px 24px;background:#fffbeb;border-bottom:1px solid #fde68a}
+.skills-unfinished-hero{padding:0;overflow:hidden;border-color:var(--warn-line-strong);border-radius:20px}
+.skills-unfinished-top{padding:28px 32px 24px;background:var(--warn-bg);border-bottom:1px solid var(--warn-line)}
 .skills-unfinished-top>p:first-child{margin:0 0 12px}
-.skills-unfinished-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid #f59e0b;border-radius:999px;background:#fef3c7;color:#78350f;font-size:13px;font-weight:600}
+.skills-unfinished-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid #f59e0b;border-radius:999px;background:var(--growing-bg);color:#78350f;font-size:13px;font-weight:600}
 .skills-unfinished-top h2{margin:0 0 8px;max-width:24ch;font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1.25}
 .skills-unfinished-copy{margin:0 0 20px;max-width:62ch;color:#422006}
 .skills-unfinished-actions{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:center;color:#422006}
-.skills-unfinished-cta{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 28px;border:1px solid var(--ink);border-radius:999px;background:var(--ink);color:var(--white);font:inherit;font-size:16px;font-weight:600;cursor:pointer}
+.skills-unfinished-cta{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 28px;border:1px solid var(--fill);border-radius:999px;background:var(--fill);color:var(--on-fill);font:inherit;font-size:16px;font-weight:600;cursor:pointer}
 .skills-unfinished-cta:hover{background:#1f2937}
 .skills-unfinished-cta:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
 .skills-unfinished-progress{padding:22px 32px 8px}
@@ -397,7 +394,7 @@
 .skills-unfinished-count p{margin:0;font-weight:600}
 .skills-unfinished-count p+p{font-size:13px;font-weight:400;color:var(--slate)}
 .skills-unfinished-segs{display:grid;gap:4px;margin-bottom:22px}
-.skills-unfinished-segs span{height:8px;border-radius:4px;background:#e2e8f0}
+.skills-unfinished-segs span{height:8px;border-radius:4px;background:var(--haze)}
 .skills-unfinished-segs .is-done{background:var(--forest)}
 .skills-unfinished-segs .is-skipped{background:repeating-linear-gradient(135deg,#116149 0 2px,#a7f3d0 2px 5px)}
 .skills-unfinished-segs .is-next{background:var(--mint)}
@@ -424,9 +421,11 @@
 @media (max-width:700px){.skills-unfinished-top, .skills-unfinished-progress, .skills-locked{padding-left:20px;padding-right:20px}.skills-unfinished-foot{padding:8px 20px 20px}.skills-unfinished-top h2{font-size:24px}.skills-unfinished-topics{grid-template-columns:minmax(0,1fr)}}
 /* Saved CVs sit beside the upload panel instead of behind a disclosure; a chosen file turns the dropzone into a clear "selected" state. */
 .cv-top-grid>.cv-library.cv-saved{margin:0}
+/* On the Skills Profile the upload panel lives beside the CV card, so Your CVs spans the full width. */
+.cv-top-grid.is-library-only{grid-template-columns:minmax(0,1fr);margin-top:40px}
 .cv-upload-panel .skills-dropzone.has-file{border-style:solid;border-color:var(--forest,#116149);background:var(--mint-mist,#ecfdf5)}
 .skills-drop-icon.is-done{background:var(--forest,#116149);color:#fff}
-.skills-file-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;margin:0 0 8px;padding:8px 14px;border:1px solid var(--forest,#116149);border-radius:999px;background:#fff;color:var(--ink,#0f172a);font-size:14px}
+.skills-file-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;margin:0 0 8px;padding:8px 14px;border:1px solid var(--forest,#116149);border-radius:999px;background:var(--white);color:var(--ink,#0f172a);font-size:14px}
 .skills-file-chip svg{width:16px;height:16px;flex:none;color:var(--forest,#116149)}
 .skills-file-chip strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .skills-file-chip span{color:var(--slate);font-size:12px}
@@ -444,7 +443,7 @@
 .results-strip{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:14px 20px;background:var(--snow)}
 .results-strip h2{margin:0;font-size:15px;font-weight:600}
 .results-strip svg{color:var(--slate);flex:none}
-.results-readonly{padding:3px 10px;border-radius:999px;border:1px solid #cbd5e1;background:var(--cloud);color:#334155;font-size:12px;font-weight:600}
+.results-readonly{padding:3px 10px;border-radius:999px;border:1px solid var(--haze-strong);background:var(--cloud);color:#334155;font-size:12px;font-weight:600}
 .results-strip-meta{margin-left:auto;font-size:13px;color:var(--slate)}
 .results-body{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
 .results-skills{flex:999 1 560px;min-width:0;padding:0;overflow:hidden}
@@ -453,7 +452,7 @@
 .results-sort{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--slate)}
 .results-sort>div{display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--cloud)}
 .results-sort button{min-height:34px;padding:0 14px;border:0;border-radius:999px;background:transparent;color:var(--slate);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.results-sort button[aria-pressed=true]{background:var(--ink);color:var(--white)}
+.results-sort button[aria-pressed=true]{background:var(--fill);color:var(--on-fill)}
 .results-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:0;padding:0 20px 14px;font-size:12px;color:var(--slate)}
 .results-legend>span:first-child{font-weight:600}.results-legend>span{display:flex;align-items:center;gap:6px}
 .results-key{display:inline-block;width:14px;height:14px;border-radius:5px;flex:none}
@@ -494,3 +493,18 @@
 
 /* Skill level outline: green 8.5+, orange 6–8.4, yellow below 6, grey when no level is known. */
 :root{--level-strong:#16a34a;--level-developing:#f97316;--level-early:#eab308;--level-uncertain:#94a3b8}
+
+/* ---- Skills Profile fills the workspace width like Career Goal; reading measures stay capped. ---- */
+.app>main:has(.cv-workspace:not(.cv-review-screen)){max-width:none;padding:28px clamp(16px,3vw,40px) 56px}
+.page.cv-workspace, .cv-workspace .ws-page, .cv-workspace .skills-home, .cv-workspace .cv-results-page{width:100%;max-width:none}
+.cv-workspace .ws-head{gap:12px 24px}
+.cv-workspace .ws-head>div{min-width:0}
+.cv-workspace :is(.ws-lead, .ws-sum, .ws-cvcard p, .ws-expcol dd, .skills-hero-line, .skills-home-intro){max-width:80ch}
+@media (min-width:1440px){
+ .cv-workspace .ws-cv{grid-template-columns:minmax(0,2fr) minmax(320px,1fr)}
+ .cv-workspace .ws-exp{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+}
+@media (max-width:640px){
+ .cv-workspace .ws-head{align-items:stretch}
+ .cv-workspace .ws-head>.ws-btn{width:100%;justify-content:center}
+}
