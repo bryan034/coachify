@@ -1,6 +1,6 @@
 """Source-specific CV baseline estimates, never practical assessment results."""
 from app.domain.capabilities import digest, normalized_name
-from app.domain.review_context import evidence_for
+from app.domain.evidence_ledger import evidence_for
 
 
 def skill_facts(item, name):

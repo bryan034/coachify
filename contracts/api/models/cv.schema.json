@@ -460,7 +460,7 @@
             }
           ],
           "default": null,
-          "description": "Highest rated level across this skill's sources; uncertain only when no source could be rated."
+          "description": "Highest level across this skill's sources, preferring rated over assumed levels; uncertain only when no source could be rated."
         },
         "context": {
           "anyOf": [
@@ -1505,7 +1505,7 @@
       "type": "object"
     },
     "SkillLevelInfo": {
-      "description": "The skill's own 1-10 level on the shared competence scale (not a goal comparison).\n\n`uncertain` means the CV and review were not conclusive; the level is then null.",
+      "description": "The skill's own 1-10 level on the shared competence scale (not a goal comparison).\n\n`uncertain` means the CV and review were not conclusive; the level is then null.\n`assumed` is a conservative level used when no supported rating is available yet.",
       "properties": {
         "level": {
           "anyOf": [
@@ -1524,6 +1524,7 @@
           "default": "rated",
           "enum": [
             "rated",
+            "assumed",
             "uncertain"
           ],
           "title": "Status",

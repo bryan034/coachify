@@ -7,7 +7,7 @@ from pydantic_core import PydanticCustomError
 from app.domain.service import detail, now
 from app.domain.errors import Conflict
 from app.workers.ingestion import _log_invalid_extraction
-from tests.conftest import ready, upload, mutation, docx
+from tests.conftest import ready, upload, mutation, docx, select
 
 
 def test_saved_sparse_upload_reload_and_idempotency(harness):
@@ -25,7 +25,7 @@ def test_saved_sparse_upload_reload_and_idempotency(harness):
     assert result.json()['skills'] == []
     assert result.json()['items'][0]['kind'] == 'education'
     assert result.headers['cache-control'] == 'no-store'
-    assert client.get('/api/v1/cv').json()['selection'] == {'cv_id': None, 'version': 0}
+    assert client.get('/api/v1/cv').json()['selection'] == {'cv_id': first.json()['id'], 'version': 1}
     saved = app.state.repository.get('owner-a', first.json()['id'])
     assert 'blocks' not in saved and 'text' not in saved and 'file_url' not in saved
 
@@ -50,7 +50,7 @@ def test_owner_isolation_revocation_and_onboarding(harness):
 def test_explicit_selection_failure_preserves_previous_result(harness):
     client, app, extractor, *_ = harness
     first = ready(harness)
-    selected = client.put('/api/v1/cv/selection', json=mutation(0, cv_id=first['id'])).json()
+    selected = select(client, first['id']).json()
     second = upload(client)
     assert second.json()['id'] != first['id']
     assert client.put('/api/v1/cv/selection', json=mutation(selected['version'], cv_id=second.json()['id'])).status_code == 409
@@ -65,7 +65,60 @@ def test_explicit_selection_failure_preserves_previous_result(harness):
     assert client.post('/api/v1/cv/operations/' + failed['operation_id'] + '/retry', json=request).status_code == 200
     assert client.post('/api/v1/cv/operations/' + failed['operation_id'] + '/retry', json=request).status_code == 200
     app.state.worker.run_once()
+    assert client.get('/api/v1/cv').json()['selection'] == {'cv_id': second.json()['id'], 'version': selected['version'] + 1}
+
+
+def test_newest_ready_upload_is_selected_once_and_an_explicit_choice_stays(harness):
+    client, app, *_ = harness
+    first, second = ready(harness), ready(harness)
+    assert client.get('/api/v1/cv').json()['selection']['cv_id'] == second['id']
+    chosen = select(client, first['id']).json()
+    assert chosen['cv_id'] == first['id']
+    assert upload(client, cv_id=second['id'], expected_version=second['version']).status_code == 202
+    app.state.worker.run_once()
+    assert client.get('/api/v1/cv/' + second['id']).json()['status'] == 'ready'
+    assert client.get('/api/v1/cv').json()['selection'] == chosen
+
+
+def test_activation_recovers_after_an_interruption_without_overriding_a_later_choice(harness, monkeypatch):
+    client, app, *_ = harness
+    first = ready(harness)
+    worker = app.state.worker
+    second = upload(client).json()
+    repository = app.state.repository
+
+    def interrupted(*args):
+        raise RuntimeError('Simulated interruption after saving the extraction')
+
+    with monkeypatch.context() as patch:
+        patch.setattr('app.workers.ingestion.auto_select', interrupted)
+        worker.run_once()
+
+    assert repository.get('owner-a', second['id'])['operation']['status'] == 'ready'
     assert client.get('/api/v1/cv').json()['selection']['cv_id'] == first['id']
+    worker.run_once()
+    assert client.get('/api/v1/cv').json()['selection']['cv_id'] == second['id']
+
+    third = upload(client, data=docx(['Another synthetic CV'])).json()
+    with monkeypatch.context() as patch:
+        patch.setattr('app.workers.ingestion.auto_select', interrupted)
+        worker.run_once()
+
+    chosen = select(client, first['id']).json()
+    worker.run_once()
+    assert client.get('/api/v1/cv').json()['selection'] == chosen
+    assert 'auto_selection_revision' not in repository.get('owner-a', third['id'])
+
+
+def test_an_older_upload_finishing_later_does_not_take_the_selection(harness):
+    client, app, *_ = harness
+    older = upload(client).json()
+    newer = upload(client, data=docx(['A different synthetic CV'])).json()
+    worker = app.state.worker
+    repository = app.state.repository
+    worker.process(worker.claim(repository.get('owner-a', newer['id'])))
+    worker.process(worker.claim(repository.get('owner-a', older['id'])))
+    assert client.get('/api/v1/cv').json()['selection']['cv_id'] == newer['id']
 
 
 def test_corrections_noops_replay_stale_write_and_reprocessing(harness):
@@ -108,9 +161,9 @@ def test_invalid_known_months_and_blank_edits(harness):
 def test_capability_snapshot_selection_and_declaration_races(harness):
     client, app, _, _, profile = harness
     cv = ready(harness)
+    stale = f"/api/v1/cv/{cv['id']}/capability-input?expected_version={cv['version']}&expected_selection_version=2&expected_declarations_version=1"
+    assert client.get(stale).status_code == 409
     path = f"/api/v1/cv/{cv['id']}/capability-input?expected_version={cv['version']}&expected_selection_version=1&expected_declarations_version=1"
-    assert client.get(path).status_code == 409
-    client.put('/api/v1/cv/selection', json=mutation(0, cv_id=cv['id']))
     result = client.get(path)
     assert result.status_code == 200, result.text
     assert result.json()['declarations'][0]['name'] == 'Pandas'

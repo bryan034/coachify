@@ -10,12 +10,16 @@ _SHORT_GROUP = r'(?:evidence|source|item|ref)(?:[_ ](?:ids?|refs?))?\s*[:=]?\s*b
 _GROUP = rf'(?:{_LONG_GROUP}|{_SHORT_GROUP})'
 
 
-def review_reply(text):
+def review_reply(text, source_ids=()):
+    """Remove internal references, including bare occurrences of the conversation's own source IDs."""
     text = re.sub(rf'\s*\[\s*{_GROUP}\s*\]', '', text, flags=re.I)
     text = re.sub(rf'\s*\(\s*{_GROUP}\s*\)', '', text, flags=re.I)
     text = re.sub(r'\s*\[\s*b\d+\s*\]', '', text)
     text = re.sub(rf'\b(?:evidence|source|item)[_ ](?:ids?|refs?)\s*[:=]\s*(?:{_REFERENCE}|b\d+)', '', text, flags=re.I)
     text = re.sub(rf'\b(?:(?:fact|evidence|source|item):[a-f0-9]{{24,64}}|answer:{_UUID})\b', '', text, flags=re.I)
+    for source_id in source_ids:
+        if isinstance(source_id, str) and re.fullmatch(_OPAQUE, source_id, flags=re.I):
+            text = re.sub(rf'\b{re.escape(source_id)}\b', '', text, flags=re.I)
     text = re.sub(r'\s*[\[(]\s*[\])]', '', text)
     return re.sub(r' +([,.;:!?])', r'\1', re.sub(r' {2,}', ' ', text)).strip()
 

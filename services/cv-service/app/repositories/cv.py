@@ -1,7 +1,7 @@
 """Whole-document CAS publication works on standalone MongoDB without transactions."""
 from copy import deepcopy
 from threading import RLock
-from pymongo import ASCENDING, ReturnDocument
+from pymongo import ASCENDING
 from pymongo.errors import DuplicateKeyError
 from app.domain.errors import Conflict
 from app.repositories.conversations import ConversationRepository, MemoryConversationRepository
@@ -28,6 +28,7 @@ class CvRepository:
         self.collection.create_index([('user_id', ASCENDING), ('upload_key', ASCENDING)], unique=True)
         self.collection.create_index([('operation.id', ASCENDING)], unique=True)
         self.collection.create_index([('operation.status', ASCENDING), ('operation.lease_until', ASCENDING)])
+        self.collection.create_index('auto_selection_revision', sparse=True)
         self.collection.create_index([('user_id', ASCENDING), ('created_at', ASCENDING)])
         self.collection.create_index([('user_id', ASCENDING), ('created_at', -1), ('_id', -1)])
 
@@ -83,6 +84,10 @@ class CvRepository:
             {'operation.status': 'processing', 'operation.lease_until': {'$lte': now}}]}
         if after is not None: query['_id'] = {'$gt': after}
         return list(self.collection.find(query, {'_id': 1, 'user_id': 1}).sort('_id', 1).limit(10))
+
+    def pending_auto_selections(self):
+        query = {'auto_selection_revision': {'$exists': True}, **VISIBLE}
+        return list(self.collection.find(query, {'_id': 1, 'user_id': 1}).limit(10))
 
     def cleanup_candidates(self, now, after=None):
         query = {'original_expires_at': {'$lte': now}, 'original_available': True,
@@ -191,6 +196,11 @@ class MemoryCvRepository:
             return [{'_id': doc['_id'], 'user_id': doc['user_id']} for doc in sorted(self.documents.values(), key=lambda doc: doc['_id'])
                 if (after is None or doc['_id'] > after) and ((doc['operation']['status'] == 'queued' and doc['operation'].get('retry_at', 0) <= now) or
                 (doc['operation']['status'] == 'processing' and doc['operation']['lease_until'] <= now))][:10]
+
+    def pending_auto_selections(self):
+        with self.lock:
+            return [{'_id': cv['_id'], 'user_id': cv['user_id']} for cv in self.documents.values()
+                    if 'auto_selection_revision' in cv and not cv.get('deletion')][:10]
 
     def cleanup_candidates(self, now, after=None):
         with self.lock:

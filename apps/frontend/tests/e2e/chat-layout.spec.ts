@@ -1,5 +1,5 @@
 import {expect, test} from '@playwright/test';
-import {clarificationState, emptyDeclarations, policy, savedCv} from '../fixtures/cv';
+import {clarificationState, emptyDeclarations, emptySkillList, policy, savedCv} from '../fixtures/cv';
 
 for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:390,height:844}]) {
  test(`CV chat keeps question actions in the transcript at ${viewport.width}x${viewport.height}`, async ({page}, testInfo) => {
@@ -27,12 +27,14 @@ for (const viewport of [{width:1280,height:900},{width:1280,height:800},{width:3
     id:'layout-chat',cv_id:cv.id,purpose:'skills_profile',revision:1+turns*2,read_only:false,
     interview:{status:turns>=2?'reviewed_with_gaps':'reviewing',reviewed_items:Math.min(turns,2),total_items:2,estimates:[],topics:[{id:'dashboard',title:'Dashboard',status:turns>0?'reviewed':'current'},{id:'internship',title:'Internship',status:turns>=2?'reviewed_with_gaps':turns===1?'current':'pending'}]},
     previous_conversation_id:null,active_question:turns>=2?null:{id:'q1',item_id:cv.items[0].id,title:'Dashboard',question:turns===1?'What did you do in your internship?':question},context:null,
-    messages:[{id:'m1',sequence:1,role:'assistant',text:turns>=2?'Your review is complete. Some details remain uncertain.':turns===1?'What did you do in your internship?':question,actions:[],created_at:'2026-10-28T09:00:00Z'},
+    messages:[{id:'m1',sequence:1,role:'assistant',text:turns>=2?'Your review is complete. Some details remain uncertain.':turns===1?'What did you do in your internship?':question,actions:[],question_id:turns>=2?null:'q1',created_at:'2026-10-28T09:00:00Z'},
      {id:'m2',sequence:2,role:'user',text:'I built the screens.',actions:[],created_at:'2026-10-28T09:01:00Z'}],
     next_before:null,limits:{max_message_chars:4000,max_messages:500},
    }});}
    if(turns>=2)cv.profile_reviewed_effective_version=cv.effective_version;
    if(path.endsWith('/policy')) return route.fulfill({json:policy});
+   if(path==='/api/v1/cv/skills') return route.fulfill({json:{...emptySkillList,cv_id:cv.id,cv_version:cv.version,
+    skills:[{key:'name:python',name:'Python',basis:'none',sources:[]}],skill_groups:{Python:'Technical coding'}}});
    if(path==='/api/v1/cv') return route.fulfill({json:{cvs:[cv],selection:{cv_id:cv.id,version:1}}});
    if(path.endsWith('/clarifications')) return route.fulfill({json:clarificationState(cv)});
    return route.fulfill({json:cv});

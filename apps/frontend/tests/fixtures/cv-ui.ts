@@ -1,8 +1,13 @@
 import { expect, type Page } from '@playwright/test';
+import { emptySkillList } from './cv';
 
 /** Mocks an empty saved transcript. */
 export async function mockEmptyConversation(page: Page) {
   await page.route('**/api/v1/assessments/**', route => route.fulfill({json:{version:0,stale:false,ready:false,model_available:true,result:null,operation:null,issues:[]}}));
+  await page.route(url => url.pathname === '/api/v1/cv/skills', route => {
+    const cvId = new URL(route.request().url()).searchParams.get('cv_id');
+    return route.fulfill({json: {...emptySkillList, cv_id: cvId, cv_version: cvId ? 1 : null}});
+  });
   const saved = new Map<string, object>();
   await page.route('**/api/v1/cv/conversations{,/**}', route => {
     const request = route.request(), url = new URL(request.url());

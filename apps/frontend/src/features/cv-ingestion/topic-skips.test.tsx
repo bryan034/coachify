@@ -18,7 +18,7 @@ const chat = (): CvConversation => ({id: 'chat-one', cv_id: 'cv-one', revision: 
   hints: ['What you built or decided', 'Tools or methods you used'], reason: 'It shows which parts of the project you handled yourself.'},
  context: confirmedTarget, next_before: null, limits: {max_message_chars: 4000, max_messages: 500},
  interview: {status: 'reviewing', reviewed_items: 2, total_items: 4, estimates: [], topics},
- messages: [{id: 'm1', role: 'assistant', sequence: 1, created_at: '2026-11-12T02:55:00Z', actions: [], text: question}]});
+ messages: [{id: 'm1', role: 'assistant', sequence: 1, created_at: '2026-11-12T02:55:00Z', actions: [], text: question, question_id: 'q2'}]});
 const panel = () => <CvConversationPanel cvId="cv-one" detail={savedCv('cv-one')} token="synthetic-session" onChanged={vi.fn().mockResolvedValue(undefined)} onOpenSummary={vi.fn()} purpose="skills_profile" autoReview/>;
 beforeEach(() => {
  vi.clearAllMocks();

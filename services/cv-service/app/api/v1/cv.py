@@ -9,12 +9,15 @@ from app.domain.errors import Conflict, CvError
 from app.domain.service import detail, summary, selection_view
 from app.domain.pagination import decode_cursor, encode_cursor
 from app.schemas.cv import Mutation, RenameMutation, SelectionMutation, ItemMutation, AnswerMutation, PrepareMutation
-from app.schemas.cv import CvDetail, CvList, Selection, QuestionEnvelope, CapabilityInput, Policy, ApiError, ConfirmedContext, CvDeletionResult
+from app.schemas.cv import CvDetail, CvList, Selection, QuestionEnvelope, Policy, ApiError, ConfirmedContext, CvDeletionResult
 from app.clarification.service import answer, prepare, envelope, context_identity, retry_interpretation
 from app.domain import reconciliation
 from app.schemas.reconciliation import ReconcileMutation, ReconciliationView, CompareSourceMutation
 from app.schemas.handoff import AnalysisInput, SourceSnapshot, DeclarationLinks
 from app.domain.attachments import assess_links
+from app.domain.skill_list import skill_list
+from app.schemas.skill_list import SkillList
+from app.conversation.intake import read_profile
 
 ERROR_DESCRIPTIONS = {401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict',
     413: 'Content Too Large', 415: 'Unsupported Media Type', 422: 'Unprocessable Content', 503: 'Service Unavailable'}
@@ -66,6 +69,30 @@ async def declaration_links(request: Request, account=Depends(authenticated)):
     selection = await run_in_threadpool(repo.selection, account['id'])
     links = await run_in_threadpool(assess_links, repo, account['id'], manual['declarations'], selection['selected_cv_id'])
     return {'declarations_version': manual['version'], 'links': links}
+
+
+@router.get('/skills', response_model=SkillList)
+async def skills(request: Request, cv_id: str | None = Query(default=None, max_length=100), account=Depends(authenticated)):
+    """Skills from the given CV (default: the active CV), the chat-built Skills Profile and manual capabilities."""
+    if cv_id is None:
+        cv_id = (await run_in_threadpool(request.app.state.repository.selection, account['id']))['selected_cv_id']
+    document = await run_in_threadpool(service(request).get, account['id'], cv_id) if cv_id else None
+    cv = (CvDetail.model_validate(detail(document)).model_dump(mode='json')
+          if document and document['operation']['status'] == 'ready' else None)
+    if cv:
+        await request.app.state.conversations.schedule_skill_levels(account, cv_id)
+    unavailable = []
+    try: profile = await read_profile(request.app, account)
+    except CvError as exc:
+        if exc.status == 401: raise
+        profile = None
+        unavailable.append('chat')
+    try: manual = await declarations(request, account)
+    except HTTPException as exc:
+        if exc.status_code == 401: raise
+        manual = None
+        unavailable.append('declarations')
+    return skill_list(cv, profile, manual, unavailable)
 
 
 @router.post('/uploads', status_code=202, response_model=CvDetail, openapi_extra={'requestBody': {'required': True, 'content': {'multipart/form-data': {'schema': {'type': 'object', 'required': ['file', 'mutation_id'], 'properties': {'file': {'type': 'string', 'format': 'binary'}, 'mutation_id': {'type': 'string', 'format': 'uuid'}, 'cv_id': {'type': 'string', 'format': 'uuid'}, 'expected_version': {'type': 'integer', 'minimum': 0}}, 'additionalProperties': False}}}}})
@@ -122,7 +149,9 @@ async def select(mutation: SelectionMutation, request: Request, account=Depends(
 
 @router.get('/{cv_id}', response_model=CvDetail)
 async def read(cv_id: str, request: Request, account=Depends(authenticated)):
-    return detail(await run_in_threadpool(service(request).get, account['id'], cv_id))
+    document = await run_in_threadpool(service(request).get, account['id'], cv_id)
+    await request.app.state.conversations.schedule_skill_levels(account, cv_id)
+    return detail(document)
 
 
 @router.patch('/{cv_id}/title', response_model=CvDetail)

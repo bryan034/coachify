@@ -163,5 +163,5 @@ def apply_skill_level_reviews(document, items):
             if level and claim['attribution'] not in EXCLUDED:
                 claim['skill_level'] = {'rationale': level['rationale'], 'source': 'review', 'evidence': deepcopy(level['evidence']),
                     'level': None if level['level'] is None else clamp_level(level['level'], level_ceiling(item, claim, source['model']['review_answers'] != [])),
-                    'status': 'uncertain' if level['level'] is None else 'rated'}
+                    'status': 'uncertain' if level['level'] is None else 'assumed' if level.get('assumed') else 'rated'}
     return items

@@ -14,6 +14,7 @@ export function CvProcessingProgress({cv}: {cv: CvSummary}) {
 /** Smoothed, never-100-until-ready percentage shared by every processing view. */
 export function useProcessingPercent(cv: CvSummary) {
  const progress = cv.processing_progress;
+ const stage = progress?.stage;
  const actual = cv.status === 'ready' ? 100 : Math.min(progress?.percent ?? 0, 99);
  const [displayed, setDisplayed] = useState(actual);
  const [reducedMotion, setReducedMotion] = useState(false);
@@ -26,13 +27,13 @@ export function useProcessingPercent(cv: CvSummary) {
  }, []);
  useEffect(() => {
   setDisplayed(previous => cv.status === 'queued' || reducedMotion ? actual : Math.max(previous, actual));
-  if (cv.status !== 'processing' || !progress || reducedMotion) return;
-  const ceiling = Math.max(actual, Math.min(99, ceilings[progress.stage] ?? actual));
+  if (cv.status !== 'processing' || !stage || reducedMotion) return;
+  const ceiling = Math.max(actual, Math.min(99, ceilings[stage] ?? actual));
   const timer = window.setInterval(() => {
    setDisplayed(previous => previous >= ceiling ? previous : previous + (ceiling - previous) * .008);
   }, 250);
   return () => window.clearInterval(timer);
- }, [cv.status, actual, progress?.stage, Boolean(progress), reducedMotion]);
+ }, [cv.status, actual, stage, reducedMotion]);
  const percent = cv.status === 'ready' ? 100 : Math.min(99, Math.round(Math.max(actual, displayed)));
  const active = cv.status === 'queued' || cv.status === 'processing';
  const message = progress?.message ?? 'Reading your experience and skills…';

@@ -10,15 +10,20 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from app.domain.capabilities import effective_items, digest, normalized_name, validate_review_interpretation
 from app.domain.errors import Conflict, CvError
+from app.domain.error_codes import CodedError, error_code_of
 from app.domain.baseline import baseline_estimates
 from app.domain.review_context import clarification_context
-from app.domain.review_policy import effective_policy, migrate_snapshot
+from app.domain.review_policy import effective_policy
+from uuid import uuid5, NAMESPACE_URL
 from app.domain.service import now
-from app.schemas.cv import Mutation
+from app.domain.skill_levels import BATCH, pending_sources, rating_failure, rating_ready, validate_level_review
+from app.schemas.cv import Mutation, AnswerMutation
+from app.clarification.service import answer, group_counts
+from app.conversation.actions import LEASE_SECONDS, key, action_in, action_message
 from app.schemas.interview import InterviewTurn
-from app.schemas.interview_evidence import fact_key, fact_groups, fact_group_value
+from app.schemas.interview_evidence import fact_groups, fact_group_value
 from app.conversation.interview_memory import (build_context, reconcile_memory, progress, evidence_for, target_key,
-    topic_question_count, topic_discussed, topic_ids, enough_context, ownership_established, question_options, MAX_TOPIC_QUESTIONS, MAX_TARGET_ATTEMPTS)
+    topic_question_count, topic_discussed, topic_ids, enough_context, ownership_established, question_options, durable_review_questions, migrate_snapshot, MAX_TOPIC_QUESTIONS, MAX_TARGET_ATTEMPTS)
 from app.conversation.presentation import review_reply, safe_side_answer, unverified_notice
 from app.conversation.interview_policy import validate_decision, DecisionRejected
 
@@ -50,7 +55,6 @@ class InterviewHarness:
         self.requested_topic = None  # A topic the user asked to review; the next question must be about it.
 
     async def call(self, app, account, conversation_id, route_id, token, payload):
-        from app.conversation.service import action_in, LEASE_SECONDS
         service = self.service
         await service.authenticate(app, account)
         def renew(current):
@@ -64,7 +68,6 @@ class InterviewHarness:
         return result, metadata
 
     async def process(self, app, account, conversation, route, token):
-        from app.conversation.service import action_in, action_message, key
         service, owner, identifier = self.service, account['id'], conversation['_id']
         document = service.cv.get(owner, conversation['cv_id'])
         if document['operation']['status'] != 'ready' or document.get('candidate'):
@@ -90,7 +93,6 @@ class InterviewHarness:
         memory.pop('previous_review_policy', None)
         if previous_policy and previous_policy.get('scope') == 'section' and not retained:
             # Reopen only material job/project gaps the old shared section allowance exhausted.
-            from app.clarification.service import group_counts
             _, previous_counts = group_counts(document, previous_policy)
             reopened = False
             for item in effective_items(document):
@@ -108,7 +110,6 @@ class InterviewHarness:
                 memory['status'] = 'reviewing'
             active = conversation.get('active_question')
             if active and memory.get('item_groups', {}).get(active['item_id'], '').startswith('item:'):
-                from app.conversation.interview_memory import durable_review_questions
                 item_questions = [q for q in durable_review_questions(document) if q['item_id'] == active['item_id']]
                 ordinal = next((index for index, q in enumerate(item_questions, 1) if q['id'] == active['id']), None)
                 if ordinal and ordinal <= MAX_TOPIC_QUESTIONS:
@@ -134,7 +135,6 @@ class InterviewHarness:
                     recovered['review_policy'] = policy
                     recovered = reconcile_memory({**conversation, 'interview_memory': recovered}, document)
                     active = deepcopy(retained['active'])
-                    from app.conversation.interview_memory import durable_review_questions
                     item_questions = [q for q in durable_review_questions(document) if q['item_id'] == question['item_id']]
                     ordinal = next((index for index, q in enumerate(item_questions, 1) if q['id'] == question['id']), None)
                     if ordinal and ordinal <= MAX_TOPIC_QUESTIONS: active.update(number=ordinal, limit=MAX_TOPIC_QUESTIONS)
@@ -203,7 +203,7 @@ class InterviewHarness:
             else:
                 failed = next((a for m in reversed(conversation['messages']) for a in reversed(m.get('actions', []))
                     if a['kind'] == 'route' and a['status'] == 'failed'
-                    and (a.get('error') or '').startswith('The interview could not choose a valid next step.')), None)
+                    and error_code_of(a) == 'no_valid_next_step'), None)
                 deferred = route.get('_interview_defer')
                 source_id = (deferred or {}).get('item_id') or memory.get('focus_item_id')
                 if deferred and (deferred.get('extraction_version') != document['extraction_version']
@@ -227,7 +227,7 @@ class InterviewHarness:
                                 interpretations = (previous.get('_interview_evaluation') or {}).get('result', {}).get('interpretations', [])
                                 same_source = previous.get('_item_id') == source_id or any(i['item_id'] == source_id for i in interpretations)
                                 if (previous['kind'] == 'route' and previous['status'] in {'failed', 'pending'}
-                                        and ((previous.get('error') or '').startswith('The interview could not choose a valid next step.')
+                                        and (error_code_of(previous) == 'no_valid_next_step'
                                              or (failed and previous['id'] == failed['id']))
                                         and (same_source or (failed and previous['id'] == failed['id']))):
                                     previous.update(status='cancelled', error=None,
@@ -341,9 +341,10 @@ class InterviewHarness:
                 def waiting(current):
                     action_in(current, route['id'])['_interview_waiting'] = True
                 await run_in_threadpool(service.update, owner, identifier, waiting)
-                reply = 'Your answer is saved. We couldn’t finish processing it yet.' if any(a['status'] in {'failed', 'stale'} for a in remaining) else 'Your answer is saved and is still being processed.'
+                failed = any(a['status'] in {'failed', 'stale'} for a in remaining)
+                reply = 'Your answer is saved. We couldn’t finish processing it yet.' if failed else 'Your answer is saved and is still being processed.'
                 return await self.publish(account, identifier, route['id'], token, memory,
-                    reply, latest.get('active_question'), latest.get('interview_targets', []))
+                    reply, latest.get('active_question'), latest.get('interview_targets', []), status_only=failed)
             conversation = latest
             document = service.cv.get(owner, conversation['cv_id'])
             notes = memory['notes']
@@ -356,9 +357,6 @@ class InterviewHarness:
 
     async def skip_active(self, account, conversation, document, route, token, memory):
         """Record the active question as skipped; the same receipt makes a retry idempotent."""
-        from app.conversation.service import action_in, key
-        from app.clarification.service import answer
-        from app.schemas.cv import AnswerMutation
         service, owner, identifier = self.service, account['id'], conversation['_id']
         active = conversation['active_question']
         operation = route.get('_interview_skip') or {'expected_version': document['version'],
@@ -389,7 +387,6 @@ class InterviewHarness:
             # Check before mutating.
             if not any(option['open_fields'] for option in question_options(items[target], memory)):
                 raise Conflict('elo has no questions left for this topic. Your CV is used as written for it.')
-            from app.conversation.service import key
             document = await run_in_threadpool(self.service.cv.reopen_topic_skips, account['id'], document['_id'], target,
                 key(route['id'] + ':reopen:' + target))
             items = {i['id']: i for i in effective_items(document) if not i['removed']}
@@ -444,7 +441,6 @@ class InterviewHarness:
         return closed
 
     async def plan(self, app, account, conversation, document, route, token, memory):
-        from app.conversation.service import key
         memory['max_target_attempts'] = self.service.cv.settings.interview_max_target_attempts
         focus_id, feedback, recall_ids = None, [], []
         if not memory.get('topic_ids'):
@@ -474,7 +470,6 @@ class InterviewHarness:
         diagnostics = []
 
         async def record(code, action):
-            from app.conversation.service import action_in
             safe_action = action if isinstance(action, str) and action in {'ask', 'finish', 'pause', 'answer', 'recall'} else 'invalid'
             diagnostics.append({'reason': code, 'action': safe_action})
             def save(current):
@@ -573,7 +568,7 @@ class InterviewHarness:
             detail = explanations.get(reason, 'Its proposed next steps did not pass the review checks.')
             if reason.startswith('estimate_'):
                 detail = 'It proposed a skill estimate without the required supporting evidence.'
-            raise ValueError('The interview could not choose a valid next step. ' + detail + ' Your answers are saved; retry to continue.')
+            raise CodedError('no_valid_next_step', 'The interview could not choose a valid next step. ' + detail + ' Your answers are saved; retry to continue.')
         latest = self.service.cv.get(account['id'], document['_id'])
         if latest['version'] != document['version']: raise Conflict('Your CV changed while planning. Your answers are saved; retry with the latest evidence.')
         decision.reply = review_reply(decision.reply)
@@ -628,7 +623,6 @@ class InterviewHarness:
 
     async def save_question(self, account, conversation, document, route, token, memory, reply_text, active, targets, source):
         """Stage before writing so a retry publishes the same question and count exactly once."""
-        from app.conversation.service import action_in, key
         uncertainty = 'claim'
         question = {'id': active['id'], 'item_id': active['item_id'],
             'kind': 'project' if source['kind'] == 'project' else 'work' if source['kind'] == 'experience' else 'other',
@@ -661,11 +655,8 @@ class InterviewHarness:
     async def rate_skill_levels(self, account, conversation):
         """Rate the skills of every closed or skipped topic, and of every source once the review ends.
 
-        Runs after the reply is saved and is best effort. Levels are stored beside the CV and applied on read.
+        Runs after a reply is saved and when a finished review is read; failures back off and retry. Levels are stored beside the CV and applied on read.
         """
-        from uuid import uuid5, NAMESPACE_URL
-        from app.domain.skill_levels import BATCH, pending_sources, rating_failure, rating_ready, validate_level_review
-        from app.domain.service import now
         service, owner = self.service, account['id']
         try:
             memory = conversation.get('interview_memory') or {}
@@ -732,19 +723,19 @@ class InterviewHarness:
         memory['status'] = 'paused'
         return await self.publish(account, identifier, route_id, token, memory, reply, None, [])
 
-    async def publish(self, account, identifier, route_id, token, memory, reply, active, targets):
+    async def publish(self, account, identifier, route_id, token, memory, reply, active, targets, status_only=False):
         reply = review_reply(self.lead + reply)
         if not reply:
             raise ValueError('The review reply contained no readable text. Your answer is saved; retry to continue.')
         if active: active = {**active, 'question': review_reply(active['question']),
                              **({'hints': [h for h in (review_reply(x) for x in active['hints']) if h]} if active.get('hints') else {})}
-        from app.conversation.service import action_in, action_message
         def save(current):
             action = action_in(current, route_id)
             self.service.check_lease(action, token)
             action.pop('_resume_requested', None)
             action.update(status='saved', summary='Interview updated.', error=None, _token=None, _lease_until=0)
-            action_message(current, route_id)['text'] = reply
+            message = action_message(current, route_id)
+            message.update(text=reply, _status_only=status_only, _question_id=active['id'] if active else None)
             document = self.service.cv.get(account['id'], current['cv_id'])
             if document['effective_version'] != memory['evidence_version']:
                 raise Conflict('Your evidence changed before the interview reply was saved. Continue with the latest evidence.')
@@ -756,5 +747,5 @@ class InterviewHarness:
         saved = await run_in_threadpool(self.service.update, account['id'], identifier, save)
         await self.rate_skill_levels(account, saved)
         if memory.get('status') in {'reviewed', 'reviewed_with_gaps'}:
-            await run_in_threadpool(self.service.cv.mark_reviewed_when_ready, account['id'], saved['cv_id'])
+            await run_in_threadpool(self.service.cv.complete_review, account['id'], saved['cv_id'])
         return saved

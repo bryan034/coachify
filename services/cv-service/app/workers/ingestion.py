@@ -19,6 +19,7 @@ from app.parsing.process import isolated_parse
 from app.workflows.checkpoints import LatestStateSaver
 from app.workflows.extraction import ExtractionHarness, WORKFLOW_VERSION
 from app.domain.deletion import CvDeletion
+from app.domain.auto_selection import auto_select, first_ready
 
 logger = logging.getLogger(__name__)
 
@@ -286,6 +287,10 @@ class IngestionWorker:
             else:
                 operation.update(status='failed', error=error)
         operation.update(lease_token=None, lease_until=0)
+        select_after = first_ready(current, document)
+        if select_after:
+            selection = self.repository.selection(claimed['user_id'])
+            document['auto_selection_revision'] = selection.get('revision', 0)
         try:
             # Extraction/candidate/history content never consumes bookkeeping space.
             bump(document, operational=bool(error and items is None))
@@ -304,8 +309,10 @@ class IngestionWorker:
                 failure.get('provider_reason'), failure.get('provider_parameter'))
         try:
             self.repository.replace(current, document)
-            return True
         except Conflict: return False
+        if select_after and document['operation']['status'] == 'ready':
+            auto_select(self.repository, self.files, claimed['user_id'], claimed['_id'])
+        return True
 
     def cleanup(self):
         timestamp = now()
@@ -358,6 +365,11 @@ class IngestionWorker:
                 if current['operation']['status'] == 'processing' and current['operation']['lease_until'] > now(): continue
                 claimed = self.claim(current)
                 if claimed: self.process(claimed)
+            except Exception:
+                continue
+        for pending in self.repository.pending_auto_selections():
+            try:
+                auto_select(self.repository, self.files, pending['user_id'], pending['_id'])
             except Exception:
                 continue
         self.cleanup()

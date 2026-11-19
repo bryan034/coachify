@@ -4,11 +4,13 @@ import json
 from typing import get_args
 from app.domain.capabilities import effective_items, digest, normalized_name
 from app.domain.attachments import source_fingerprint
-from app.domain.review_context import clarification_context, evidence_for, review_target_skipped
+from app.domain.review_context import clarification_context, review_target_skipped
+from app.domain.evidence_ledger import evidence_for
 from app.domain.baseline import baseline_estimates, skill_facts
 from app.domain.review_policy import effective_policy, map_legacy_counts
-from app.schemas.interview import InterviewProgress
-from app.schemas.interview_evidence import fact_key, ReviewField, fact_groups, facts_closed, fact_group_value
+from app.domain.errors import Conflict
+from app.schemas.conversation import InterviewProgress
+from app.schemas.interview_evidence import ReviewField, fact_groups, facts_closed, fact_group_value
 
 MAX_CONTEXT_BYTES = 96 * 1024
 MAX_TARGET_ATTEMPTS = 2
@@ -327,3 +329,26 @@ def build_context(conversation, document, memory, *, focus_id=None, recall_ids=(
     if len(json.dumps(context, ensure_ascii=False).encode()) > MAX_CONTEXT_BYTES:
         raise ValueError('This review context is too large to process safely. Your conversation and evidence are saved.')
     return context
+
+
+def migrate_snapshot(document, previous, legacy_counts=None):
+    """Upgrade a snapshot in an existing versioned write without changing receipts."""
+    stored = document.get('review_policy_snapshot')
+    if stored is not None and stored != previous:
+        raise Conflict('Your review policy changed. Continue with the latest review.')
+    current = effective_policy(previous)
+    if previous and previous != current:
+        ids = sorted(q['id'] for q in durable_review_questions(document))
+        document.setdefault('review_policy_migrations', []).append({
+            'from': deepcopy(previous), 'to': deepcopy(current),
+            'question_count': len(ids), 'receipt_basis': digest(ids)})
+    # Carry only bounded numeric legacy counts into the CV aggregate.
+    if legacy_counts:
+        known = {item['id'] for item in document.get('original_items', [])}
+        counts = document.setdefault('review_legacy_counts', {})
+        for item_id, count in map_legacy_counts(document, legacy_counts).items():
+            if item_id in known and type(count) is int and count > 0:
+                existing = counts.get(item_id, 0)
+                counts[item_id] = max(existing if type(existing) is int and existing >= 0 else 0, min(count, 2))
+    document['review_policy_snapshot'] = current
+    return current

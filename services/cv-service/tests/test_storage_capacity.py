@@ -12,7 +12,7 @@ from app.domain.errors import Conflict
 from app.domain.service import CvService, now
 from app.domain.storage import CapacityError, CapacityUnavailable, UploadCapacity
 from app.repositories.files import FileStore
-from tests.conftest import docx, mutation, ready, upload
+from tests.conftest import docx, mutation, ready, upload, select
 
 
 def limits(app, **values):
@@ -188,7 +188,7 @@ def test_expired_generation_cannot_release_resupplied_bytes(harness):
 def test_legacy_overlimit_records_remain_readable_and_selected(harness):
     client, app, *_ = harness
     cvs = [ready(harness) for _ in range(3)]
-    client.put('/api/v1/cv/selection', json=mutation(0, cv_id=cvs[0]['id']))
+    select(client, cvs[0]['id'])
     for cv in cvs:
         original = app.state.repository.get('owner-a', cv['id'])
         legacy = deepcopy(original)

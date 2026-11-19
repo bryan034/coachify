@@ -6,11 +6,12 @@ from uuid import uuid4
 from pydantic import ValidationError
 from app.domain.capabilities import digest, effective_items, effective_fingerprint, normalized_name, validate_interpretation, validate_review_interpretation, interpretation_semantic_checks
 from app.domain.errors import Conflict, Missing
+from app.domain.error_codes import CodedError
 from app.domain.service import bump, now
 from app.schemas.cv import ConfirmedContext, SavedInterpretation
 from app.domain.answer_capacity import reserve, release, CAPACITY_MESSAGE
-from app.domain.review_policy import effective_policy, map_legacy_counts, migrate_snapshot, validate_policy
-from app.conversation.interview_memory import MAX_TOPIC_QUESTIONS, durable_review_questions, question_groups, review_group
+from app.domain.review_policy import effective_policy, map_legacy_counts, validate_policy
+from app.conversation.interview_memory import MAX_TOPIC_QUESTIONS, durable_review_questions, question_groups, review_group, migrate_snapshot
 
 
 class DeferredTargetProvider:
@@ -218,6 +219,7 @@ def _interpret(service, owner, identifier, question_id, saved, interpreter, prep
 
 def _interpret_scoped(service, owner, identifier, question_id, saved, interpreter, prepared=None):
     question, item = _question(saved, question_id)
+    error_code = None
     try:
         if interpreter is None: raise ValueError('Interpretation is not configured. Your answer is saved; retry after configuration.')
         if prepared is None:
@@ -236,7 +238,7 @@ def _interpret_scoped(service, owner, identifier, question_id, saved, interprete
                 supported = service.model_usage.run(owner, partial(interpreter.verify_evidence, timeout_seconds=20), blocks, refs,
                     configured=getattr(interpreter, 'configured', True))
                 if any((ref['block_id'], ref['excerpt']) not in supported for ref in refs):
-                    raise ValueError('Some interpreted skill details are not supported by your answer. Your answer is saved; clarify or retry interpretation.')
+                    raise CodedError('unsupported_interpretation', 'Some interpreted skill details are not supported by your answer. Your answer is saved; clarify or retry interpretation.')
                 semantic_support = frozenset(fields)
         result = (validate_review_interpretation(payload, item, question) if review_statement else
                   validate_interpretation(payload, item, question, semantic_support))
@@ -247,7 +249,7 @@ def _interpret_scoped(service, owner, identifier, question_id, saved, interprete
     except ValidationError:
         result, error = None, 'Interpretation returned an invalid structure. Your answer is saved; retry interpretation.'
     except ValueError as exc:
-        result, error = None, str(exc)[:1000]
+        result, error, error_code = None, str(exc)[:1000], getattr(exc, 'code', None)
     except Exception:
         result, error = None, 'Interpretation could not finish. Your answer is saved; retry interpretation.'
     current = service.get(owner, identifier)
@@ -265,9 +267,10 @@ def _interpret_scoped(service, owner, identifier, question_id, saved, interprete
     updated['interpretation_lease_until'] = 0
     release(updated)
     if error:
-        updated.update(interpretation_status='failed', interpretation_error=error, resolution='unresolved')
+        updated.update(interpretation_status='failed', interpretation_error=error,
+                       interpretation_error_code=error_code, resolution='unresolved')
     else:
-        updated.update(interpretation_status='ready', interpretation_error=None,
+        updated.update(interpretation_status='ready', interpretation_error=None, interpretation_error_code=None,
                        interpretation=result, resolution=result['resolution'])
     after = effective_fingerprint(document)
     if before != after: document['effective_version'] += 1
@@ -275,7 +278,8 @@ def _interpret_scoped(service, owner, identifier, question_id, saved, interprete
         'operation': 'interpret:' + question_id, 'clarifications': deepcopy(current['clarifications']),
         'overlays': deepcopy(current['overlays']), 'at': now()})
     bump(document)
-    return service.repository.replace(current, document)
+    published = service.repository.replace(current, document)
+    return service.complete_review(owner, identifier, published)
 
 
 def answer(service, owner, identifier, question_id, mutation, interpreter=None, prepared=None):

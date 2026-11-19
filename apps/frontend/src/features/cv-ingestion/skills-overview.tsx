@@ -9,7 +9,7 @@ import { skillOutcomes, skillRatings, ratingKey, type SkillRatings } from '@/lib
 import type { CurrentGoal, ReviewSkill } from '@/lib/api/career';
 import type { Section } from '@/lib/api/workspace-summary';
 import { groupSkills } from '@/lib/skill-groups';
-import { evaluatedSkill, skillStatus, type Relevance, type Skill, type Status } from './skill-cards';
+import { compareStrength, evaluatedSkill, skillStatus, type Relevance, type Skill, type Status } from './skill-cards';
 
 /** `missing`: a skill the Career Goal expects that none of the person's evidence shows yet. `parent`: the goal skill this one counts towards. */
 type Entry = { skill: Skill; status: Status; level: number | null; target: number | null; own: boolean; missing?: boolean; parent?: ReviewSkill };
@@ -49,7 +49,7 @@ export function SkillsOverview({ token, skills, categories, assessment, comparis
   const level = skill.ownLevel?.level ?? (status.state === 'score' ? status.score ?? null : self ?? null);
   return { skill, status, level, target: goalRelevant(status.relevance) ? status.need ?? null : null, own: skill.ownLevel?.level == null && status.state !== 'score' && self != null, parent: parentOf(skill) };
  });
- const placeholder = (key: string, name: string, label: string, canonicalId: string | null = null): Skill => ({ key, name, canonicalId, label, step: -1, established: false, sources: [], details: [] });
+ const placeholder = (key: string, name: string, label: string, canonicalId: string | null = null): Skill => ({ key, name, canonicalId, label, established: false, sources: [], details: [] });
  const active = goalSkills.filter(item => item.priority !== 'conflicting');
  // Goal skills none of the person's skills count towards yet. They can't be rated, only built.
  const missing = active.filter(item => !linkedProfileSkills(item, outcomeOf(item), skills).length)
@@ -73,7 +73,7 @@ export function SkillsOverview({ token, skills, categories, assessment, comparis
   return entry.parent.priority === 'required' ? 0 : entry.parent.priority === 'preferred' ? 1 : 2;
  };
  // The strongest evidence comes first within each category.
- const strongest = (a: Entry, b: Entry) => b.skill.step - a.skill.step || Number(b.skill.established) - Number(a.skill.established) || a.skill.name.localeCompare(b.skill.name);
+ const strongest = (a: Entry, b: Entry) => compareStrength(a.skill, b.skill) || a.skill.name.localeCompare(b.skill.name);
  // "Show fewer" keeps only the skills the goal needs; "Show all skills" adds the rest. Goal skills come first, most important first, then by strength.
  const hidden = entries.filter(entry => !importance(entry)).length, hasRelevant = hidden < entries.length || missing.length + parts.length > 0;
  const filtering = hasRelevant && !showAll;
@@ -86,15 +86,15 @@ export function SkillsOverview({ token, skills, categories, assessment, comparis
   if (!picked) return null;
   // A smaller skill has no target of its own; its note says which goal skill it belongs to.
   const match = picked.parent && namesSkill([picked.parent], picked.skill) ? picked.parent : goalSkills.find(item => namesSkill([item], { name: picked.skill.name, canonicalId: picked.skill.canonicalId }));
-  return { key: picked.skill.key, name: picked.skill.name, canonicalId: picked.skill.canonicalId, level: picked.level, target: picked.target ?? match?.competence_target?.level ?? null,
+  return { key: picked.skill.key, name: picked.skill.name, canonicalId: picked.skill.canonicalId, level: picked.level, estimated: picked.skill.ownLevel?.status === 'assumed', target: picked.target ?? match?.competence_target?.level ?? null,
    meaning: match?.competence_target?.explanation, sources: picked.skill.sources, note: picked.skill.note ?? (picked.skill.added ? 'Added in review from your answers.' : null), tasks: (match?.learning_items ?? []).map(item => ({ name: item.name, reason: item.reason })) };
  }, [picked, goalSkills]);
 
  const chip = (entry: Entry, minor: boolean) => {
-  const label = entry.missing ? `${entry.skill.label}, not in your skills yet${entry.target != null ? `, target ${entry.target}` : ''}` : entry.level == null ? (entry.target != null ? `Not rated, target ${entry.target}` : 'Not rated') : entry.target != null ? `Level ${entry.level} out of 10, target ${entry.target}` : `Level ${entry.level} out of 10${entry.own ? ', your rating' : ''}`;
+  const label = entry.missing ? `${entry.skill.label}, not in your skills yet${entry.target != null ? `, target ${entry.target}` : ''}` : entry.level == null ? (entry.target != null ? `Not rated, target ${entry.target}` : 'Not rated') : entry.target != null ? `${entry.skill.ownLevel?.status === 'assumed' ? 'Estimated level' : 'Level'} ${entry.level} out of 10, target ${entry.target}` : `${entry.skill.ownLevel?.status === 'assumed' ? 'Estimated level' : 'Level'} ${entry.level} out of 10${entry.own ? ', your rating' : ''}`;
   return <li key={entry.skill.key}><button type="button" className={`ws-sc${entry.missing ? ' missing' : ''}${minor ? ' minor' : ''}${importance(entry) ? ` ${importance(entry)}` : ''}`} aria-label={`${entry.skill.name}, ${label}. Talk it through`} onClick={() => setTalking(entry.skill.key)}>
    {entry.skill.name}
-   <span className={`lv ${entry.level == null ? 'unrated' : targetGap(entry.level, entry.target) ?? ''}`.trimEnd()}>{entry.missing ? '–' : entry.level ?? '?'}{entry.target != null && <small>/{entry.target}</small>}</span>
+   <span className={`lv ${entry.level == null ? 'unrated' : targetGap(entry.level, entry.target) ?? ''}`.trimEnd()}>{entry.missing ? '–' : entry.level ?? '?'}{entry.skill.ownLevel?.status === 'assumed' && <small> est.</small>}{entry.target != null && <small>/{entry.target}</small>}</span>
   </button></li>;
  };
  return <section className="ws-panel" id="your-skills" aria-labelledby="skills-title">

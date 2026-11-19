@@ -163,3 +163,8 @@ def ready(harness):
 
 
 def mutation(version, **fields): return {'expected_version': version, 'mutation_id': str(uuid4()), **fields}
+
+
+def select(client, cv_id):
+    version = client.get('/api/v1/cv').json()['selection']['version']
+    return client.put('/api/v1/cv/selection', json=mutation(version, cv_id=cv_id))

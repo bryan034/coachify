@@ -3,7 +3,7 @@ import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {ResumePreview} from './resume-preview';
 import {cvApi} from '@/lib/api/cv';
-import {policy,savedCv,emptyDeclarations,clarificationState} from '../../../tests/fixtures/cv';
+import {emptySkillList,policy,savedCv,emptyDeclarations,clarificationState} from '../../../tests/fixtures/cv';
 import type {CvConversation,SkillsProfile} from './types';
 
 vi.mock('@/features/profile/profile-provider',()=>({useProfile:()=>({token:'synthetic-token',account:{id:'synthetic-owner'}})}));
@@ -11,7 +11,7 @@ vi.mock('@/lib/api/cv',async original=>{const actual=await original<typeof impor
 const empty:SkillsProfile={version:0,status:'empty',saved_at:null,areas:{},entries:[]};
 const chat:CvConversation={id:'chat',cv_id:null,revision:1,read_only:false,previous_conversation_id:null,active_question:null,context:null,messages:[],next_before:null,limits:{max_message_chars:4000,max_messages:500}};
 beforeEach(()=>{window.history.replaceState(null,'','/cv');
- vi.clearAllMocks();
+ vi.clearAllMocks();vi.mocked(cvApi.skills).mockImplementation(async (_token,_signal,id)=>({...emptySkillList,cv_id:id??null,cv_version:id?1:null}));
  vi.mocked(cvApi.policy).mockResolvedValue(policy);
  vi.mocked(cvApi.list).mockResolvedValue({cvs:[],selection:{cv_id:null,version:0}});
  vi.mocked(cvApi.declarations).mockResolvedValue(emptyDeclarations);
@@ -64,11 +64,12 @@ it('shows a saved partial profile and its uncertainty without inventing a skill 
  vi.mocked(cvApi.skillsProfile).mockResolvedValue({...empty,version:3,status:'saved',saved_at:'2026-11-02T00:00:00Z',areas:{work:'not_applicable'},entries:[{
   id:'synthetic-entry',kind:'project',title:'Weekly reports',fields:{description:{status:'answered',value:'Combined sales spreadsheets',evidence:[{message_id:'turn',quote:'I combined sales spreadsheets.'}]}},
   skills:[{name:'Data processing',description:'Combined sales spreadsheets.',evidence:[{message_id:'turn',quote:'I combined sales spreadsheets.'}],dimensions:{independence:{status:'unknown',value:null,evidence:[]}}}]}]});
+ vi.mocked(cvApi.skills).mockResolvedValue({...emptySkillList,profile_version:3,skills:[{key:'data processing',name:'Data processing',basis:'described',sources:[]}]});
  render(<ResumePreview/>);
  expect(await screen.findByText('Saved profile')).toBeVisible();
  expect(screen.getByText('Weekly reports')).toBeVisible();
  expect(screen.queryByRole('region',{name:'Work and internships'})).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('button',{name:/^Data processing/}));
+ fireEvent.click(await screen.findByRole('button',{name:/^Data processing/}));
  expect(within(screen.getByRole('dialog',{name:'Data processing'})).getByText(/I couldn’t find enough in your CV to rate this/)).toBeVisible();
  expect(screen.queryByText('Advanced')).not.toBeInTheDocument();
  expect(cvApi.openConversation).not.toHaveBeenCalled();
@@ -77,6 +78,7 @@ it('shows a saved partial profile and its uncertainty without inventing a skill 
 it('saves a reviewed manual draft from the summary and retains retry identity on failure',async()=>{
  const draft={...empty,version:2,status:'draft' as const,areas:{work:'skipped' as const}};
  vi.mocked(cvApi.skillsProfile).mockResolvedValue(draft);
+ vi.mocked(cvApi.skills).mockResolvedValue({...emptySkillList,profile_version:3});
  vi.mocked(cvApi.saveSkillsProfile).mockRejectedValueOnce(new Error('Save interrupted.')).mockResolvedValueOnce({...draft,version:3,status:'saved',saved_at:'2026-11-02T00:00:00Z'});
  render(<ResumePreview/>);
  fireEvent.click(await screen.findByRole('button',{name:'Save profile'}));
@@ -125,6 +127,9 @@ it('says the review is complete and points at the roadmap and jobs once the acti
 it('reports what the review changed and shows the review note in the skill panel, from the backend summary',async()=>{
  const reviewed={...savedCv('done'),profile_reviewed_effective_version:1,review_summary:{answered_questions:21,experiences:8,skills_added:3,skills_corrected:2,skills_removed:1,added_skill_ids:[],skill_notes:{python:'You wrote the ETL scripts yourself.'}}};
  vi.mocked(cvApi.list).mockResolvedValue({cvs:[reviewed],selection:{cv_id:'done',version:1}});vi.mocked(cvApi.get).mockResolvedValue(reviewed);
+ vi.mocked(cvApi.skills).mockImplementation(async (_token,_signal,id) => id ? {
+  ...emptySkillList, cv_id:id, cv_version:1, skills:[{key:'python',name:'Python',basis:'none',sources:[],note:'You wrote the ETL scripts yourself.'}],
+ } : emptySkillList);
  render(<ResumePreview/>);
  const banner=await screen.findByRole('region',{name:'Your CV review is complete'});
  expect(banner).toHaveTextContent('You answered 21 questions across 8 experiences. From your answers, elo added 3 skills, corrected 2 and removed 1.');
